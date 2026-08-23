@@ -1,0 +1,18 @@
+// Business Listings — Prisma schema.
+//
+// Prisma owns every application table. Supabase owns only `auth.*` and `storage.*`.
+// Models arrive at handoff-0 checkpoint 3; see docs/data-model.md for the full shape
+// and the three non-negotiables it encodes:
+//   1. No `price` on Product. Prices exist only on QuoteLine.
+//   2. `verificationTier` is staff-write-only (ops_lead). Never a seller field.
+//   3. AuditEvent.reason is NOT NULL. Every staff mutation writes one.
+// There is no order table, no payment capture, no payout field. Ever.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/db/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}

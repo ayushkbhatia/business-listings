@@ -1,0 +1,90 @@
+# Business Listings
+
+UAE trade directory. Buyers find licensed suppliers and send enquiries; suppliers pay a
+subscription to be found and to answer faster.
+
+Not e-commerce. No cart, no order entity, no payment capture, no payouts. The conversion
+event is an **enquiry**; the terminal state is an **accepted quote**. Read
+[CLAUDE.md](CLAUDE.md) before writing anything.
+
+## Stack
+
+| Layer | Choice |
+|---|---|
+| Framework | Next.js 16 App Router, React 19, TypeScript strict |
+| Styling | Tailwind v4, tokens as CSS variables in `app/globals.css` |
+| Database | Supabase Postgres 17, `ap-south-1` (Mumbai) |
+| Schema | Prisma 7 — owns every application table |
+| Identity | Supabase Auth — phone OTP first-class, plus email |
+| Tests | Vitest + Testing Library, Playwright + axe |
+| Hosting | Vercel |
+
+Prisma owns the application schema. Supabase owns `auth.*` and `storage.*` only.
+Permission checks are server-side functions per capability, keyed off the matrix in
+`docs/design-system.md` §07 — not scattered role comparisons in components.
+
+## Layout
+
+```
+app/(public)/       buyer-facing, roomy density
+app/(dashboard)/    seller, comfortable density
+app/(admin)/        staff, compact density
+app/dev/gallery/    component gallery — the acceptance surface for handoff 0
+components/
+  primitives/       tier 1 — 18 components
+  structure/        tier 2 — 17 components
+  display/          tier 3 — 15 components (stubs)
+  domain/           tier 4 — 14 components (later handoffs)
+lib/
+  db/               prisma client + generated client
+  supabase/         browser, server and middleware clients
+  auth/             session, the nine roles, permission checks
+  i18n/             t(), string catalogue
+  audit/            writeAudit() — every staff mutation
+  format/           currency, dates, phone, TRN masking, sizes
+docs/               design system, routes, data model
+handoffs/           the design handoffs, verbatim
+```
+
+Density is set once on the shell via `data-density="roomy|comfortable|compact"` and
+inherited. Never a size prop on an individual component.
+
+## Getting started
+
+```bash
+pnpm install
+cp .env.example .env.local   # then fill in the four blanks
+pnpm dev
+```
+
+`.env.local` needs `SUPABASE_SECRET_KEY`, `DATABASE_URL` and `DIRECT_URL`. Copy the two
+connection strings verbatim from the Supabase dashboard → Connect; the pooler hostname
+is not the same on every project.
+
+## Scripts
+
+| Command | Does |
+|---|---|
+| `pnpm dev` | Dev server |
+| `pnpm build` | `prisma generate` then `next build` |
+| `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm lint` | ESLint, including the no-raw-hex rule |
+| `pnpm test` | Vitest |
+| `pnpm test:e2e` | Playwright |
+| `pnpm check:tokens` | Acceptance criteria 3 and 4 — raw hex, untranslated strings |
+| `pnpm check:schema` | Acceptance criterion 9 — no price on Product, no order table, no payout |
+| `pnpm verify` | All of the above, in order |
+| `pnpm db:migrate` | `prisma migrate dev` |
+| `pnpm db:seed` | Seed UAE-shaped fixture data |
+| `pnpm db:studio` | Prisma Studio |
+
+## The three things that become migrations if ignored
+
+1. A verification badge must never take a seller theme colour.
+2. A product must never gain a price field on a public surface.
+3. Every superadmin state change must write an audit row with a written reason.
+
+## Build order
+
+`handoffs/handoff-0-foundation/KICKOFF.md` sets the sequence and the review checkpoints.
+Handoffs 1–5 arrive one at a time.
