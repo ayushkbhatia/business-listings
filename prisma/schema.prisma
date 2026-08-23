@@ -1,12 +1,15 @@
 // Business Listings — Prisma schema.
 //
 // Prisma owns every application table. Supabase owns only `auth.*` and `storage.*`.
-// Models arrive at handoff-0 checkpoint 3; see docs/data-model.md for the full shape
-// and the three non-negotiables it encodes:
-//   1. No `price` on Product. Prices exist only on QuoteLine.
-//   2. `verificationTier` is staff-write-only (ops_lead). Never a seller field.
-//   3. AuditEvent.reason is NOT NULL. Every staff mutation writes one.
-// There is no order table, no payment capture, no payout field. Ever.
+//
+// Three shapes are load-bearing and each would be a migration to undo:
+//   1. Product has no price. `QuoteLine.unitPrice` is the only price in the schema.
+//   2. `Business.verificationTier` is staff-write-only, ops_lead role. No API path.
+//   3. `AuditEvent.reason` is NOT NULL. Every staff mutation writes one.
+// There is no order table, no payment capture, no payout, no commission, no escrow.
+//
+// Tables and columns are snake_case: ops work happens in the Supabase SQL editor and
+// in scheduled SQL jobs, and quoting "licenceNumber" everywhere is a tax on that.
 
 generator client {
   provider = "prisma-client"
@@ -15,4 +18,1045 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Identity
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Mirrors auth.users. The id IS the Supabase auth uuid — there is no second
+/// identity space. Roles live here and are copied into the JWT by an auth hook;
+/// they are never read from user_metadata, which the user can edit.
+model User {
+  id          String   @id @db.Uuid
+  phone       String?  @unique
+  email       String?  @unique
+  fullName    String?  @map("full_name")
+  roles       Role[]   @default([])
+  /// Set for a seller seat. Scopes every seller capability to one business.
+  businessId  String?  @map("business_id")
+  locale      String   @default("en")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  business          Business?         @relation("BusinessTeam", fields: [businessId], references: [id], onDelete: SetNull)
+  buyerCompanyId    String?           @map("buyer_company_id")
+  buyerCompany      BuyerCompany?     @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
+  enquiries         Enquiry[]
+  reviews           Review[]
+  auditEvents       AuditEvent[]
+  reportsFiled      SupplierReport[]  @relation("ReportReporter")
+  visitsMade        Business[]        @relation("BusinessVisitedBy")
+  messages          Message[]
+  contactReveals    ContactReveal[]
+  savedSearches     SavedSearch[]
+
+  @@index([businessId])
+  @@map("user")
+}
+
+enum Role {
+  buyer
+  seller_owner
+  seller_manager
+  seller_sales
+  seller_finance
+  staff_moderator
+  staff_field
+  staff_finance
+  staff_ops_lead
+
+  @@map("role")
+}
+
+/// A buyer's employer. Carries the TRN and the approval threshold a procurement
+/// team sets for itself — "orders over AED 25,000 need approval" is the buyer's
+/// own process, not a platform order entity.
+model BuyerCompany {
+  id                  String   @id @default(cuid())
+  name                String
+  trn                 String?
+  emirate             Emirate?
+  approvalThresholdAed Int?    @map("approval_threshold_aed")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  members   User[]
+  enquiries Enquiry[]
+
+  @@map("buyer_company")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Geography & taxonomy
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Emirate {
+  abu_dhabi
+  dubai
+  sharjah
+  ajman
+  umm_al_quwain
+  ras_al_khaimah
+  fujairah
+
+  @@map("emirate")
+}
+
+/// Areas and free zones are translatable records, not code strings. Arabic names
+/// live here from day one so the taxonomy is a data change, never a deploy.
+model Area {
+  id         String   @id @default(cuid())
+  emirate    Emirate
+  name       String
+  nameAr     String?  @map("name_ar")
+  slug       String   @unique
+  /// A free zone is a cross-cutting toggle, not a place in the area hierarchy.
+  isFreeZone Boolean  @default(false) @map("is_free_zone")
+  lat        Float?
+  lng        Float?
+  /// Landing pages publish only above the board 6f thresholds. Enforced in the
+  /// service layer, and unpublished automatically when supply drops below them.
+  publishedAt DateTime? @map("published_at")
+
+  locations Location[]
+
+  @@index([emirate])
+  @@map("area")
+}
+
+/// Self-referencing tree, two levels in use.
+model Category {
+  id                 String   @id @default(cuid())
+  parentId           String?  @map("parent_id")
+  name               String
+  nameAr             String?  @map("name_ar")
+  slug               String   @unique
+  /// Two-letter mono mark, e.g. "IN".
+  code               String
+  /// Query routing. Includes Arabic terms — صمامات must find valve suppliers.
+  synonyms           String[] @default([])
+  defaultTemplateId  String?  @map("default_template_id")
+  showOnHome         Boolean  @default(false) @map("show_on_home")
+  acceptsRfq         Boolean  @default(true) @map("accepts_rfq")
+  requiresExtraCheck Boolean  @default(false) @map("requires_extra_check")
+  /// Listings needed before landing pages publish.
+  publishThreshold   Int      @default(60) @map("publish_threshold")
+  verifiedShareMin   Float    @default(0.30) @map("verified_share_min")
+  sortOrder          Int      @default(0) @map("sort_order")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  parent          Category?          @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children        Category[]         @relation("CategoryTree")
+  defaultTemplate SpecTemplate?      @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
+  templates       SpecTemplate[]     @relation("TemplateCategory")
+  primaryFor      Business[]         @relation("BusinessPrimaryCategory")
+  businesses      BusinessCategory[]
+  products        Product[]
+  placements      PlacementSlot[]
+
+  @@index([parentId])
+  @@map("category")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Spec templates
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TemplateStatus {
+  draft
+  live
+  retired
+
+  @@map("template_status")
+}
+
+enum FieldType {
+  select
+  multiselect
+  number
+  number_range
+  text
+  boolean
+
+  @@map("field_type")
+}
+
+/// Platform-owned and versioned. A seller clones it; the clone maps back here so
+/// cross-seller comparison survives a rename.
+model SpecTemplate {
+  id         String         @id @default(cuid())
+  categoryId String         @map("category_id")
+  name       String
+  version    Int            @default(1)
+  status     TemplateStatus @default(draft)
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  category        Category         @relation("TemplateCategory", fields: [categoryId], references: [id], onDelete: Restrict)
+  defaultForCategories Category[]  @relation("CategoryDefaultTemplate")
+  fields          SpecField[]
+  sellerTemplates SellerTemplate[]
+
+  @@unique([categoryId, version])
+  @@index([categoryId])
+  @@map("spec_template")
+}
+
+model SpecField {
+  id           String    @id @default(cuid())
+  templateId   String    @map("template_id")
+  key          String
+  label        String
+  labelAr      String?   @map("label_ar")
+  type         FieldType
+  unit         String?
+  options      String[]  @default([])
+  required     Boolean   @default(false)
+  /// Drives the site-wide filter rail. Changing this changes the rail with no
+  /// code change — see handoff 1 acceptance criterion 4.
+  isFilterable Boolean   @default(false) @map("is_filterable")
+  sortOrder    Int       @default(0) @map("sort_order")
+
+  template SpecTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, key])
+  @@index([templateId, isFilterable])
+  @@map("spec_field")
+}
+
+/// A seller's clone. fieldMappings keeps seller field -> platform field, so a
+/// rename never silently drops the mapping.
+model SellerTemplate {
+  id                 String   @id @default(cuid())
+  businessId         String   @map("business_id")
+  platformTemplateId String   @map("platform_template_id")
+  name               String
+  fieldMappings      Json     @default("{}") @map("field_mappings")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  business         Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  platformTemplate SpecTemplate @relation(fields: [platformTemplateId], references: [id], onDelete: Restrict)
+
+  @@index([businessId])
+  @@map("seller_template")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Business & listing
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ClaimStatus {
+  unclaimed
+  claimed
+  disputed
+
+  @@map("claim_status")
+}
+
+enum ListingSource {
+  licence_import
+  self_added
+
+  @@map("listing_source")
+}
+
+enum TeamSizeBand {
+  b1_10
+  b11_50
+  b51_200
+  b201_500
+  b500_plus
+
+  @@map("team_size_band")
+}
+
+/// Licensing authority. The seven emirate departments plus the free zones.
+enum Authority {
+  DED
+  ADDED
+  SHJ
+  AJM
+  UAQ
+  RAK
+  FUJ
+  DMCC
+  JAFZA
+  SAIF
+  DAFZA
+  DSO
+  DIC
+  DMC
+  DHCC
+  DWC
+  DIFC
+  ADGM
+  KIZAD
+  HFZA
+  RAKEZ
+  UAQFTZ
+  FCC
+  MFZ
+  DUQE
+  IFZA
+  SPCFZ
+  AFZ
+  TWOFOUR54
+  MASDAR
+  ADAFZ
+  DPC
+  DTEC
+  IMPZ
+  JLT
+  TECOM
+
+  @@map("authority")
+}
+
+model Business {
+  id               String        @id @default(cuid())
+  /// Locked to the licence. Not seller-editable.
+  tradeName        String        @map("trade_name")
+  displayName      String        @map("display_name")
+  /// Immutable once published. A rename creates a 301, never an overwrite.
+  slug             String        @unique
+  licenceNumber    String        @map("licence_number")
+  licenceAuthority Authority     @map("licence_authority")
+  licenceExpiry    DateTime      @map("licence_expiry")
+  /// Fifteen digits. Masked on every surface except the seller's own.
+  trn              String?
+  establishedYear  Int?          @map("established_year")
+  teamSize         TeamSizeBand? @map("team_size")
+  languages        String[]      @default([])
+  description      String?
+
+  /// 0..4. STAFF WRITE ONLY, ops_lead role. There is no API path and no
+  /// seller-editable field. Drops to 2 automatically the day licenceExpiry
+  /// passes — a scheduled job, no grace period. Tier 3 also requires visitedAt.
+  verificationTier Int       @default(0) @map("verification_tier")
+  verifiedAt       DateTime? @map("verified_at")
+  visitedAt        DateTime? @map("visited_at")
+  visitedByStaffId String?   @db.Uuid @map("visited_by_staff_id")
+
+  claimStatus       ClaimStatus   @default(unclaimed) @map("claim_status")
+  planId            String?       @map("plan_id")
+  primaryCategoryId String        @map("primary_category_id")
+  source            ListingSource @default(licence_import)
+  importRunId       String?       @map("import_run_id")
+  suspendedAt       DateTime?     @map("suspended_at")
+  publishedAt       DateTime?     @map("published_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  /// Storefront theme preset, or a validated custom hex. Recolours the header,
+  /// headings, buttons, links and form focus only. Never a verification badge,
+  /// never a status tone, never platform chrome.
+  themePreset String? @map("theme_preset")
+  themeHex    String? @map("theme_hex")
+
+  // ── Derived. Computed by jobs, read-only everywhere else. No seller input;
+  //    that is what makes them worth showing. See data-model.md.
+  responseTimeMedianMs Int?      @map("response_time_median_ms")
+  profileStrength      Int?      @map("profile_strength")
+  specCompleteness     Float?    @map("spec_completeness")
+  quotedValueAed       Decimal?  @map("quoted_value_aed") @db.Decimal(14, 2)
+  ratingOverall        Float?    @map("rating_overall")
+  reviewCount          Int       @default(0) @map("review_count")
+  derivedAt            DateTime? @map("derived_at")
+
+  primaryCategory Category           @relation("BusinessPrimaryCategory", fields: [primaryCategoryId], references: [id], onDelete: Restrict)
+  categories      BusinessCategory[]
+  plan            Plan?              @relation(fields: [planId], references: [id], onDelete: SetNull)
+  visitedByStaff  User?              @relation("BusinessVisitedBy", fields: [visitedByStaffId], references: [id], onDelete: SetNull)
+  team            User[]             @relation("BusinessTeam")
+  locations       Location[]
+  products        Product[]
+  media           Media[]
+  documents       Document[]
+  sellerTemplates SellerTemplate[]
+  recipients      EnquiryRecipient[]
+  quotes          Quote[]
+  messages        Message[]
+  reviews         Review[]
+  reports         SupplierReport[]   @relation("ReportSubject")
+  subscription    Subscription?
+  invoices        Invoice[]
+  placements      PlacementSlot[]
+  contactReveals  ContactReveal[]
+  redirectsFrom   Redirect[]
+
+  @@index([primaryCategoryId])
+  @@index([claimStatus])
+  @@index([verificationTier])
+  @@index([publishedAt])
+  @@index([licenceExpiry])
+  @@map("business")
+}
+
+/// Additional categories beyond the primary one.
+model BusinessCategory {
+  businessId String   @map("business_id")
+  categoryId String   @map("category_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, categoryId])
+  @@index([categoryId])
+  @@map("business_category")
+}
+
+enum LocationType {
+  head_office
+  warehouse
+  trade_counter
+  depot
+  sales_office
+  workshop
+
+  @@map("location_type")
+}
+
+model Location {
+  id          String       @id @default(cuid())
+  businessId  String       @map("business_id")
+  type        LocationType
+  emirate     Emirate
+  areaId      String       @map("area_id")
+  addressLine String       @map("address_line")
+  lat         Float?
+  /// Null means unpinned. Excluded from map search entirely — a location is
+  /// never approximated to an area centroid, because a wrong pin is worse than
+  /// no pin and the gap is surfaced to the seller instead.
+  lng         Float?
+  phone       String?
+  whatsapp    String?
+  /// An unverified number is hidden from buyers.
+  phoneVerified   Boolean  @default(false) @map("phone_verified")
+  /// Per-day open/close, split shifts.
+  hours           Json     @default("{}")
+  /// Applied automatically on announced dates.
+  ramadanHours    Json?    @map("ramadan_hours")
+  serviceRadiusKm Int?     @map("service_radius_km")
+  published       Boolean  @default(false)
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  area           Area            @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  contactReveals ContactReveal[]
+
+  @@index([businessId])
+  @@index([areaId])
+  @@index([emirate])
+  @@map("location")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Products — no price, at any tier, on any surface
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum Availability {
+  in_stock
+  made_to_order
+  indent
+  out_of_stock
+
+  @@map("availability")
+}
+
+enum ProductStatus {
+  draft
+  live
+  out_of_stock
+
+  @@map("product_status")
+}
+
+model Product {
+  id           String        @id @default(cuid())
+  businessId   String        @map("business_id")
+  name         String
+  slug         String
+  sku          String?
+  categoryId   String        @map("category_id")
+  availability Availability
+  stockQty     Int?          @map("stock_qty")
+  leadTimeDays Int?          @map("lead_time_days")
+  minOrderQty  Int?          @map("min_order_qty")
+  /// Keyed by SpecField id. Normalised size tokens land in searchText so a
+  /// DN100 query finds a product the seller typed as 4".
+  specValues   Json          @default("{}") @map("spec_values")
+  /// Denormalised match surface: name, sku, spec values and every size synonym.
+  searchText   String?       @map("search_text")
+  description  String?
+  status       ProductStatus @default(draft)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  // NO price. NO currency. NO tier pricing. Prices live on quote_line only.
+
+  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category   Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  media      Media[]
+  documents  Document[]
+  quoteLines QuoteLine[]
+
+  @@unique([businessId, slug])
+  @@index([businessId])
+  @@index([categoryId])
+  @@index([availability])
+  @@map("product")
+}
+
+enum MediaKind {
+  logo
+  cover
+  gallery
+  product
+  review
+  storefront
+
+  @@map("media_kind")
+}
+
+model Media {
+  id         String    @id @default(cuid())
+  kind       MediaKind
+  /// Supabase Storage object path. The bucket is not in Prisma's schema.
+  storagePath String   @map("storage_path")
+  alt        String?
+  width      Int?
+  height     Int?
+  bytes      Int?
+  sortOrder  Int       @default(0) @map("sort_order")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  businessId String? @map("business_id")
+  productId  String? @map("product_id")
+  reviewId   String? @map("review_id")
+
+  business Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  review   Review?   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([productId])
+  @@map("media")
+}
+
+enum DocumentKind {
+  trade_licence
+  vat_certificate
+  datasheet
+  catalogue
+  certificate
+  enquiry_attachment
+
+  @@map("document_kind")
+}
+
+model Document {
+  id          String       @id @default(cuid())
+  kind        DocumentKind
+  storagePath String       @map("storage_path")
+  filename    String
+  bytes       Int?
+  mimeType    String?      @map("mime_type")
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  businessId String? @map("business_id")
+  productId  String? @map("product_id")
+  enquiryId  String? @map("enquiry_id")
+
+  business Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  enquiry  Enquiry?  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@index([productId])
+  @@index([enquiryId])
+  @@map("document")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The enquiry spine
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum PaymentTerms {
+  advance
+  cod
+  net_15
+  net_30
+  net_60
+  lc
+
+  @@map("payment_terms")
+}
+
+enum RecipientState {
+  delivered
+  opened
+  quoted
+  declined
+  no_response
+
+  @@map("recipient_state")
+}
+
+enum QuoteStatus {
+  draft
+  sent
+  read
+  accepted
+  lost
+  expired
+
+  @@map("quote_status")
+}
+
+model Enquiry {
+  id             String        @id @default(cuid())
+  /// ENQ-8841
+  ref            String        @unique
+  buyerId        String        @db.Uuid @map("buyer_id")
+  buyerCompanyId String?       @map("buyer_company_id")
+  requirement    String
+  deliverToArea  String?       @map("deliver_to_area")
+  neededBy       DateTime?     @map("needed_by")
+  termsWanted    PaymentTerms? @map("terms_wanted")
+  closesAt       DateTime      @map("closes_at")
+  /// Set only on acceptance. Releases contact to exactly one business.
+  contactReleasedToBusinessId String? @map("contact_released_to_business_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  buyer        User               @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  buyerCompany BuyerCompany?      @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
+  lines        EnquiryLine[]
+  /// 1..8 businesses.
+  recipients   EnquiryRecipient[]
+  attachments  Document[]
+  quotes       Quote[]
+  messages     Message[]
+  review       Review?
+
+  @@index([buyerId])
+  @@index([closesAt])
+  @@map("enquiry")
+}
+
+model EnquiryLine {
+  id          String  @id @default(cuid())
+  enquiryId   String  @map("enquiry_id")
+  description String
+  qty         Int
+  unit        String?
+  /// Free text as the buyer wrote it, e.g. `DN100` or `4"`.
+  size        String?
+  sortOrder   Int     @default(0) @map("sort_order")
+
+  enquiry Enquiry @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+
+  @@index([enquiryId])
+  @@map("enquiry_line")
+}
+
+model EnquiryRecipient {
+  enquiryId  String         @map("enquiry_id")
+  businessId String         @map("business_id")
+  state      RecipientState @default(delivered)
+  openedAt   DateTime?      @map("opened_at")
+  /// Enquiry-to-first-reply is what response time is measured from. Never a
+  /// seller-editable field.
+  firstReplyAt DateTime?    @map("first_reply_at")
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([enquiryId, businessId])
+  @@index([businessId, state])
+  @@map("enquiry_recipient")
+}
+
+model Quote {
+  id           String      @id @default(cuid())
+  /// QT-8841-R2
+  ref          String      @unique
+  enquiryId    String      @map("enquiry_id")
+  businessId   String      @map("business_id")
+  revision     Int         @default(1)
+  validityDays Int         @default(14) @map("validity_days")
+  note         String?
+  status       QuoteStatus @default(draft)
+  lostReason   String?     @map("lost_reason")
+  sentAt       DateTime?   @map("sent_at")
+  readAt       DateTime?   @map("read_at")
+  acceptedAt   DateTime?   @map("accepted_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  enquiry  Enquiry     @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  business Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  lines    QuoteLine[]
+  messages Message[]
+
+  @@unique([enquiryId, businessId, revision])
+  @@index([businessId, status])
+  @@map("quote")
+}
+
+model QuoteLine {
+  id           String  @id @default(cuid())
+  quoteId      String  @map("quote_id")
+  /// Null means a free-text line, flagged for manual pricing.
+  productId    String? @map("product_id")
+  description  String
+  qty          Int
+  /// THE ONLY PRICE FIELD IN THE SCHEMA. Private to one buyer and one seller.
+  unitPrice    Decimal @map("unit_price") @db.Decimal(12, 2)
+  leadTimeDays Int?    @map("lead_time_days")
+  sortOrder    Int     @default(0) @map("sort_order")
+
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([quoteId])
+  @@map("quote_line")
+}
+
+/// Belongs to an Enquiry + Business pair. Off-platform payment detection runs on
+/// the body — IBAN patterns, "transfer to" — and raises a SupplierReport with
+/// kind `off_platform_payment`, which skips the moderation queue.
+model Message {
+  id              String   @id @default(cuid())
+  enquiryId       String   @map("enquiry_id")
+  businessId      String   @map("business_id")
+  senderId        String   @db.Uuid @map("sender_id")
+  body            String
+  /// A revised quote appears inline in the thread.
+  quoteRevisionId String?  @map("quote_revision_id")
+  flaggedAt       DateTime? @map("flagged_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  enquiry       Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  sender        User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  quoteRevision Quote?   @relation(fields: [quoteRevisionId], references: [id], onDelete: SetNull)
+
+  @@index([enquiryId, businessId, createdAt])
+  @@map("message")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reviews & trust
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Review {
+  id             String   @id @default(cuid())
+  businessId     String   @map("business_id")
+  buyerId        String   @db.Uuid @map("buyer_id")
+  /// Gating: one review per enquiry, and the enquiry must exist.
+  enquiryId      String   @unique @map("enquiry_id")
+  overall        Int
+  quotedAccurate Int      @map("quoted_accurate")
+  onTime         Int      @map("on_time")
+  asDescribed    Int      @map("as_described")
+  responsiveness Int
+  body           String
+  showCompanyName Boolean @default(true) @map("show_company_name")
+  /// created + 14 days.
+  editableUntil  DateTime @map("editable_until")
+  /// One only, not editable after posting. Never seller-deletable.
+  sellerReply    String?  @map("seller_reply")
+  sellerRepliedAt DateTime? @map("seller_replied_at")
+  removedAt      DateTime? @map("removed_at")
+  /// Required when removedAt is set. Enforced by a check constraint in the
+  /// migration, not only by the service layer.
+  removalReason  String?  @map("removal_reason")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  buyer    User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  media    Media[]
+
+  @@index([businessId, removedAt])
+  @@map("review")
+}
+
+enum ReportKind {
+  closed
+  wrong_details
+  wrong_trade
+  claim_conflict
+  off_platform_payment
+  content
+  review_integrity
+
+  @@map("report_kind")
+}
+
+enum ReportOutcome {
+  seller_corrected
+  upheld
+  no_action
+
+  @@map("report_outcome")
+}
+
+/// The trust queue. Three reports on the same field auto-flag the listing.
+/// `off_platform_payment` skips the queue.
+model SupplierReport {
+  id                String         @id @default(cuid())
+  subjectBusinessId String         @map("subject_business_id")
+  reporterId        String?        @db.Uuid @map("reporter_id")
+  kind              ReportKind
+  /// Which field was reported, for the three-strikes auto-flag.
+  subjectField      String?        @map("subject_field")
+  detail            String?
+  outcome           ReportOutcome?
+  outcomeReason     String?        @map("outcome_reason")
+  resolvedAt        DateTime?      @map("resolved_at")
+  createdAt         DateTime       @default(now()) @map("created_at")
+
+  subjectBusiness Business @relation("ReportSubject", fields: [subjectBusinessId], references: [id], onDelete: Cascade)
+  reporter        User?    @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+
+  @@index([subjectBusinessId, outcome])
+  @@index([kind])
+  @@map("supplier_report")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Commercials — subscription and sponsored placement only
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum SubStatus {
+  trialing
+  active
+  past_due
+  cancelled
+  expired
+
+  @@map("sub_status")
+}
+
+enum InvoiceStatus {
+  draft
+  issued
+  paid
+  overdue
+  void
+
+  @@map("invoice_status")
+}
+
+model Plan {
+  id                String  @id
+  name              String
+  monthlyPriceAed   Int     @map("monthly_price_aed")
+  /// Null means unlimited.
+  enquiriesPerMonth Int?    @map("enquiries_per_month")
+  productLimit      Int?    @map("product_limit")
+  locationLimit     Int?    @map("location_limit")
+  photoLimit        Int?    @map("photo_limit")
+  teamSeats         Int     @map("team_seats")
+  rankingMultiplier Float   @default(1) @map("ranking_multiplier")
+  customDomain      Boolean @default(false) @map("custom_domain")
+  siteVisitIncluded Boolean @default(false) @map("site_visit_included")
+  sortOrder         Int     @default(0) @map("sort_order")
+
+  // NO commissionRate. NO transactionFee.
+
+  businesses    Business[]
+  subscriptions Subscription[]
+
+  @@map("plan")
+}
+
+model Subscription {
+  id         String    @id @default(cuid())
+  businessId String    @unique @map("business_id")
+  planId     String    @map("plan_id")
+  status     SubStatus @default(active)
+  startedAt  DateTime  @default(now()) @map("started_at")
+  renewsAt   DateTime  @map("renews_at")
+  cancelledAt DateTime? @map("cancelled_at")
+  /// Grandfathering: entitlements captured at signup, unless a plan change
+  /// explicitly sets "apply to existing".
+  entitlementSnapshot Json? @map("entitlement_snapshot")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  plan     Plan     @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([status, renewsAt])
+  @@map("subscription")
+}
+
+model PlacementSlot {
+  id              String    @id @default(cuid())
+  businessId      String    @map("business_id")
+  categoryId      String    @map("category_id")
+  emirate         Emirate?
+  monthlyPriceAed Int       @map("monthly_price_aed")
+  startsOn        DateTime  @map("starts_on")
+  endsOn          DateTime? @map("ends_on")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([categoryId, emirate, startsOn])
+  @@map("placement_slot")
+}
+
+/// Subscription and placement lines only. There is no buyer money here and
+/// nothing to refund — a correction is a subscription credit.
+model Invoice {
+  id         String        @id @default(cuid())
+  ref        String        @unique
+  businessId String        @map("business_id")
+  vatRate    Decimal       @default(0.05) @map("vat_rate") @db.Decimal(4, 4)
+  status     InvoiceStatus @default(draft)
+  issuedAt   DateTime?     @map("issued_at")
+  dueAt      DateTime?     @map("due_at")
+  paidAt     DateTime?     @map("paid_at")
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  lines    InvoiceLine[]
+
+  @@index([businessId, status])
+  @@map("invoice")
+}
+
+enum InvoiceLineKind {
+  subscription
+  placement
+  subscription_credit
+
+  @@map("invoice_line_kind")
+}
+
+model InvoiceLine {
+  id          String          @id @default(cuid())
+  invoiceId   String          @map("invoice_id")
+  kind        InvoiceLineKind
+  description String
+  qty         Int             @default(1)
+  amountAed   Decimal         @map("amount_aed") @db.Decimal(12, 2)
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_line")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Audit & platform events
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Write it in the service layer. A mutation that can reach the database
+/// without an audit row is a bug, and the suite proves it cannot.
+model AuditEvent {
+  id      String   @id @default(cuid())
+  actorId String   @db.Uuid @map("actor_id")
+  /// tier_change | review_removed | credit_issued | suspend | merge | boost |
+  /// view_as | report_resolved | queue_decided | visit_recorded |
+  /// taxonomy_changed | staff_changed
+  action  String
+  /// Entity type and id, e.g. `Business:clx123`.
+  subject String
+  /// REQUIRED. Not nullable, by design, in the schema and in the service layer.
+  reason  String
+  before  Json?
+  after   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([actorId, createdAt])
+  @@index([subject])
+  @@index([action, createdAt])
+  @@map("audit_event")
+}
+
+enum RevealChannel {
+  phone
+  whatsapp
+  email
+  website
+
+  @@map("reveal_channel")
+}
+
+/// Masking is not a growth trick. It is how the platform proves it delivered the
+/// enquiry — the answer to "what did my subscription buy" is a count of these.
+/// Deliberately not an AuditEvent: that log is staff acting on other people's
+/// data, and buyer behaviour would make it unreadable.
+model ContactReveal {
+  id         String        @id @default(cuid())
+  /// Null for an anonymous buyer. Most reveals happen before signup.
+  actorId    String?       @db.Uuid @map("actor_id")
+  businessId String        @map("business_id")
+  locationId String?       @map("location_id")
+  channel    RevealChannel
+  surface    String
+  createdAt  DateTime      @default(now()) @map("created_at")
+
+  actor    User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, createdAt])
+  @@map("contact_reveal")
+}
+
+/// Written on every search that returns nothing. Feeds the admin gap report and
+/// the recruitment call list. Required by handoff 1 acceptance criterion 6 —
+/// added here rather than at handoff 1 so it is never a retrofit.
+model ZeroResultQuery {
+  id         String    @id @default(cuid())
+  query      String
+  categoryId String?   @map("category_id")
+  emirate    Emirate?
+  /// The facet values that were set, so the gap report can name which filter to
+  /// suggest dropping.
+  filters    Json      @default("{}")
+  tab        String    @default("businesses")
+  actorId    String?   @db.Uuid @map("actor_id")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@index([query])
+  @@index([createdAt])
+  @@map("zero_result_query")
+}
+
+/// A saved search plus its alert cadence. /account/saved.
+model SavedSearch {
+  id        String   @id @default(cuid())
+  userId    String   @db.Uuid @map("user_id")
+  name      String
+  query     String
+  filters   Json     @default("{}")
+  alerts    Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("saved_search")
+}
+
+/// Slugs are immutable once published. A rename or a merge creates one of these
+/// automatically; deleting a page without one is blocked at the service layer.
+model Redirect {
+  id             String   @id @default(cuid())
+  fromPath       String   @unique @map("from_path")
+  toPath         String   @map("to_path")
+  statusCode     Int      @default(301) @map("status_code")
+  businessId     String?  @map("business_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  @@map("redirect")
 }
