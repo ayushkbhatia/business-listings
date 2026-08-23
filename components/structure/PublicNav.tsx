@@ -1,0 +1,69 @@
+import { cn } from "@/lib/cn";
+
+/**
+ * The 68px public bar. The search field lives *in* the bar, not under it — on
+ * a directory, search is the primary action of the whole site and putting it
+ * one scroll away costs more than any amount of hero.
+ */
+export interface PublicNavLink {
+  key: string;
+  label: string;
+  href: string;
+}
+
+export interface PublicNavProps {
+  /** The wordmark. Instrument Serif, per the type rules. */
+  brand: React.ReactNode;
+  brandHref?: string;
+  /** The SearchField, placed in the bar. */
+  search?: React.ReactNode;
+  links?: readonly PublicNavLink[];
+  /** Sign in, or the account menu. */
+  actions?: React.ReactNode;
+  label: string;
+}
+
+export function PublicNav({ brand, brandHref = "/", search, links, actions, label }: PublicNavProps) {
+  return (
+    <header className="sticky top-0 z-30 border-b border-line bg-paper/95 backdrop-blur">
+      <nav
+        aria-label={label}
+        className="mx-auto flex max-w-7xl items-center gap-4 px-5"
+        style={{ height: "68px" }}
+      >
+        <a
+          href={brandHref}
+          className={cn(
+            "shrink-0 rounded-tag font-serif text-h1-serif text-ink",
+            "focus-visible:outline-none focus-visible:shadow-focus",
+          )}
+        >
+          {brand}
+        </a>
+
+        {search && <div className="min-w-0 flex-1">{search}</div>}
+
+        {links && links.length > 0 && (
+          <ul className="hidden shrink-0 items-center gap-1 lg:flex">
+            {links.map((link) => (
+              <li key={link.key}>
+                <a
+                  href={link.href}
+                  className={cn(
+                    "rounded-ctl px-2.5 py-1.5 text-body-sm text-muted",
+                    "transition-colors duration-120 ease-out hover:bg-fill hover:text-ink",
+                    "focus-visible:outline-none focus-visible:shadow-focus",
+                  )}
+                >
+                  {link.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      </nav>
+    </header>
+  );
+}

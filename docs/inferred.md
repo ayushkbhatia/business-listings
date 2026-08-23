@@ -102,3 +102,62 @@ the variant changes. Nothing in production sets the attribute.
   size joins the top.
 - Icon set. These are drawn to a 16px grid at 1.5 stroke to sit with Geist at
   13px; the canvas may specify a different family.
+
+---
+
+## Tier 2 structure — checkpoint 5
+
+### DataTable, the rules that were stated
+Everything in README §3's DataTable paragraph is implemented literally: real
+table markup, mono uppercase heads on `--paper-sunk`, hairline row dividers,
+no vertical rules, no zebra, right-aligned tabular numbers, tone carrying
+meaning, one visible row action, sortable heads with a visible arrow,
+indeterminate select-all, a selection bar that replaces the toolbar, and
+pagination above 50. §03.1 is canvas-only, so anything below is inferred.
+
+### Row tone edge
+A 2px bar on the leading edge, drawn with a pseudo-element so it costs no
+column, alongside the tint. Inferred: the spec says the tint carries meaning
+but a tint alone is colour-alone, which the accessibility floor forbids.
+
+### Row menu is a disclosure, not a menu
+`<details>`/`<summary>` with plain buttons inside. `role="menu"` promises arrow
+keys and type-ahead; implementing the role without the interaction is worse for
+a screen reader than the plain truth. Revisit if the canvas draws menu-style
+keyboard behaviour.
+
+### `rowMenuLabel` is per row
+"More actions for Al Marwan Trading", not "More actions". Six identical
+triggers in a column is six identical announcements.
+
+### Card elevations
+`flat` (1px line, the default) · `raised` · `promoted`. Taken from the four
+elevation tokens; `overlay` belongs to Modal and Drawer, not to Card.
+
+### Panel `locked`
+Renders the real panel dimmed with a line naming what unlocks it. Stated as an
+interaction rule — "never hide the feature" — and given a shape here.
+
+### Modal and Drawer are native `<dialog>`
+The platform supplies the focus trap, the inert background, Escape and the top
+layer. Inferred, but hand-rolling those is the usual way a modal ends up with a
+tabbable page behind it.
+
+### Drawer sides are `start`/`end`
+Not left/right. No layout may assume LTR.
+
+### Sidebar width and header height
+236px and 58px, both stated in README §4. The nav groups themselves are derived
+from `docs/routes.md`, six per surface as stated.
+
+### Locked and later nav items
+A capability the actor lacks renders locked; a route named in `routes.md` but
+not yet built renders as "soon" and is not a link. Inferred from two stated
+rules: never hide a feature, and routes marked `later` are named so the nav
+shape is right now.
+
+### Still unknown here
+- The exact grouping and order of the sidebar, beyond "six groups".
+- Whether the results toolbar in PublicShell is part of the shell or a page
+  concern; it is a slot either way.
+- Whether pagination is bottom-only or also top on long admin tables.

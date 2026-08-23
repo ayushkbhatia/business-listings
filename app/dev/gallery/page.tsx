@@ -3,6 +3,9 @@ import { Actions } from "./_sections/Actions";
 import { Choice } from "./_sections/Choice";
 import { Numeric } from "./_sections/Numeric";
 import { TextEntry } from "./_sections/TextEntry";
+import { Overlays } from "./_sections/Overlays";
+import { Shells } from "./_sections/Shells";
+import { Structure } from "./_sections/Structure";
 import { Tokens } from "./_sections/Tokens";
 import { Upload } from "./_sections/Upload";
 
@@ -37,6 +40,28 @@ const TIER_1 = [
   "field-error",
 ] as const;
 
+const TIER_2 = [
+  "data-table",
+  "table-toolbar",
+  "selection-bar",
+  "pagination",
+  "key-value-panel",
+  "card",
+  "panel",
+  "tabs",
+  "breadcrumb",
+  "public-nav",
+  "app-sidebar",
+  "page-header",
+  "step-header",
+  "filter-rail",
+  "builder-chrome",
+  "drawer",
+  "modal",
+] as const;
+
+const SHELLS = ["shell-public", "shell-dashboard", "shell-admin", "builder-chrome"] as const;
+
 export default function Gallery() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -65,17 +90,21 @@ export default function Gallery() {
             </tr>
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono text-body-sm text-body">tier-2-structure</td>
-              <td className="px-3 py-1.5 text-right font-mono text-body-sm text-muted">0/17</td>
+              <td className="px-3 py-1.5 text-right font-mono text-body-sm text-ok-ink">
+                {TIER_2.length}/17
+              </td>
             </tr>
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono text-body-sm text-body">shells</td>
-              <td className="px-3 py-1.5 text-right font-mono text-body-sm text-muted">0/4</td>
+              <td className="px-3 py-1.5 text-right font-mono text-body-sm text-ok-ink">
+                {SHELLS.length}/4
+              </td>
             </tr>
           </tbody>
         </table>
 
         <nav aria-label={t("gallery.jump_to")} className="mt-4 flex flex-wrap gap-1.5">
-          {TIER_1.map((id) => (
+          {[...TIER_1, ...TIER_2].map((id) => (
             <a
               key={id}
               href={`#${id}`}
@@ -92,6 +121,9 @@ export default function Gallery() {
       <Choice />
       <Numeric />
       <Upload />
+      <Structure />
+      <Overlays />
+      <Shells />
       <Tokens />
     </main>
   );
