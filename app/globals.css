@@ -1,6 +1,21 @@
 @import "tailwindcss";
 
 /* ==========================================================================
+   Pinned states, for the gallery.
+
+   Acceptance criterion 1 asks that /dev/gallery render every documented state,
+   and hover and focus cannot be photographed on a static page. These override
+   the built-in variants so any element can be pinned with data-force="hover"
+   or data-force="focus" and show the real styles rather than a hand-copied
+   imitation that drifts the first time a variant changes.
+
+   Nothing in production sets data-force; the cost is a second selector.
+   ========================================================================== */
+@custom-variant hover (&:hover, &[data-force~="hover"]);
+@custom-variant focus-visible (&:focus-visible, &[data-force~="focus"]);
+@custom-variant focus (&:focus, &[data-force~="focus"]);
+
+/* ==========================================================================
    Self-hosted faces. Files live in public/fonts, downloaded once from Google
    Fonts and committed — no build-time network call, no runtime third party.
    Latin and Latin Extended only; Arabic is a later translation project and
@@ -329,6 +344,14 @@ a:hover { color: var(--moss-hover); }
   --color-disabled-text: var(--disabled-text);
   --color-track:         var(--track);
   --color-track-alt:     var(--track-alt);
+
+  /* Placeholders. `empty` is a dashed box waiting for something; `stripe` is a
+     real image that has not loaded. They are different states and different
+     colours, and swapping them makes a loading gallery look broken. */
+  --color-placeholder-empty-a:  var(--placeholder-empty-a);
+  --color-placeholder-empty-b:  var(--placeholder-empty-b);
+  --color-placeholder-stripe-a: var(--placeholder-stripe-a);
+  --color-placeholder-stripe-b: var(--placeholder-stripe-b);
 
   /* Map */
   --color-map-base:  var(--map-base);
