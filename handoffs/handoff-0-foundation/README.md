@@ -47,18 +47,14 @@ individual components.
 
 ### 2. Tokens
 
-Paste the CSS variable block from design-system §09.1 into `app/globals.css` under `:root`.
-Map them into `tailwind.config.ts` so `bg-paper`, `text-muted`, `border-line`, `rounded-card`
-resolve to the variables. **No raw hex anywhere in the codebase after this handoff** — add a
-lint rule that fails on `#[0-9a-f]{3,6}` outside `globals.css`.
+**`docs/tokens.css` is the complete, ready-to-paste block** — surfaces, the full text ramp,
+accent, four status tones with wash/surface/line, control states, map colours, radii,
+elevation with focus rings, motion, the type scale, the three density modes and the six
+seller storefront themes. Paste it into `app/globals.css` unchanged.
 
-Density tokens as a data-attribute block:
-
-```css
-[data-density="roomy"]       { --row-h: auto; --gutter: 18px; --section-pad: 48px; }
-[data-density="comfortable"] { --row-h: 46px; --gutter: 14px; --section-pad: 24px; }
-[data-density="compact"]     { --row-h: 38px; --gutter: 10px; --section-pad: 20px; }
-```
+Map the variables into `tailwind.config.ts` so `bg-paper`, `text-muted`, `border-line`,
+`rounded-card` resolve to them. **No raw hex anywhere in the codebase after this handoff** —
+add a lint rule that fails on `#[0-9a-f]{3,6}` outside `globals.css`.
 
 Fonts: Geist, Instrument Serif, JetBrains Mono, self-hosted with `font-display: swap` and
 `font-variant-numeric: tabular-nums` on the mono face.

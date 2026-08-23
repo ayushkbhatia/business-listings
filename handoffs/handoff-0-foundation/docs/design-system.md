@@ -23,7 +23,11 @@ Chapter map:
 
 ## Tokens
 
-Copy §09.1 verbatim into `globals.css`. Summary of intent:
+**The complete token block is `docs/tokens.css` in this folder.** Paste it into
+`app/globals.css` as-is — it carries every value, the density attributes, the six seller
+themes and the reduced-motion guard. Nothing else in the codebase may contain a raw hex.
+
+Summary of intent:
 
 **Neutrals.** `--paper #FAF9F6` is the page. `--card #FFFFFF` is a raised surface only —
 never a page background. `--ink #211F1B` is headings and dark surfaces. Pure black is never

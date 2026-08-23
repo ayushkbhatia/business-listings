@@ -12,6 +12,7 @@ Read these four files before writing any code:
 - `docs/routes.md` — the full route table for all three surfaces
 - `docs/data-model.md` — entities and the rules that live on them
 - `docs/design-system.md` — token, type, density and interaction rules
+- `docs/tokens.css` — the complete token block, paste it into `globals.css` unchanged
 
 You are building **handoff 0: foundation only**. No user-facing screens. When you are done a
 developer should be able to build any screen in the project without inventing a token, a
@@ -20,9 +21,9 @@ component, a route name or a database table.
 Work in this order and stop for review at each checkpoint:
 
 **1. Scaffold + tokens.** Next.js App Router, TypeScript strict, Tailwind, Prisma, Vitest,
-Playwright. Three route groups per `docs/routes.md`. Paste the CSS variable block from
-design-system §09.1 into `globals.css`, map it into `tailwind.config.ts`, add the density
-attribute block, self-host the three fonts. Add a lint rule that fails on any raw hex outside
+Playwright. Three route groups per `docs/routes.md`. Paste `docs/tokens.css` into
+`globals.css` unchanged, map the variables into `tailwind.config.ts`, self-host the three
+fonts. Add a lint rule that fails on any raw hex outside
 `globals.css`. **Checkpoint: show me `globals.css` and the Tailwind config.**
 
 **2. Formatters and plumbing.** `lib/format` (currency, counts, dates, relative time, 24-hour
