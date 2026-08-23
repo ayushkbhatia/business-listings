@@ -5,7 +5,60 @@
 // utility mapped to a CSS variable in globals.css. If a value here is wrong, the
 // token is wrong — there is nowhere else for it to come from.
 
+import {
+  formatAED,
+  formatCount,
+  formatDate,
+  formatDateRange,
+  formatDuration,
+  formatRelative,
+  formatShifts,
+  formatSize,
+  formatTimeRange,
+  maskPhone,
+  maskTRN,
+  formatPhone,
+  formatTRN,
+} from "@/lib/format";
+import { t } from "@/lib/i18n";
+
 type Swatch = { cls: string; token: string };
+
+// A fixed instant, so the gallery renders the same strings on every build and a
+// reviewer diffing two screenshots sees real changes only.
+const NOW = new Date("2026-08-14T12:00:00+04:00");
+
+const FORMATTERS: { call: string; out: string }[] = [
+  { call: "formatAED(15624)", out: formatAED(15624) },
+  { call: 'formatAED(15624, { style: "quote" })', out: formatAED(15624, { style: "quote" }) },
+  { call: "formatCount(41204)", out: formatCount(41204) },
+  { call: "formatDate(…)", out: formatDate(NOW) },
+  { call: "formatDateRange(14 Aug, 18 Aug)", out: formatDateRange(NOW, "2026-08-18T12:00:00+04:00") },
+  { call: "formatRelative(−4 min)", out: formatRelative(new Date(NOW.getTime() - 4 * 60_000), { now: NOW }) },
+  { call: "formatRelative(−2 d 4 h)", out: formatRelative(new Date(NOW.getTime() - 187_200_000), { now: NOW }) },
+  { call: "formatDuration(2 h 14 min)", out: formatDuration(8_040_000) },
+  { call: 'formatTimeRange("08:00", "18:00")', out: formatTimeRange("08:00", "18:00") },
+  { call: "formatShifts(split)", out: formatShifts([{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }]) },
+  { call: 'formatPhone("048834120")', out: formatPhone("048834120") },
+  { call: 'maskPhone("048834120")', out: maskPhone("048834120") },
+  { call: 'formatPhone("0506412288")', out: formatPhone("0506412288") },
+  { call: 'maskPhone("0506412288")', out: maskPhone("0506412288") },
+  { call: "formatTRN(…)", out: formatTRN("100123456783003") },
+  { call: "maskTRN(…)", out: maskTRN("100123456783003") },
+  { call: "formatSize({ dn: 100 })", out: formatSize({ dn: 100 }) },
+  { call: "formatSize({ dn: 40 })", out: formatSize({ dn: 40 }) },
+];
+
+const STRINGS: { key: string; out: string }[] = [
+  { key: "count.suppliers_in_area", out: t("count.suppliers_in_area", { count: 218, area: "Al Quoz" }) },
+  { key: "count.suppliers_in_area (1)", out: t("count.suppliers_in_area", { count: 1, area: "Al Quoz" }) },
+  { key: "availability.made_to_order", out: t("availability.made_to_order") },
+  { key: "availability.indent", out: t("availability.indent") },
+  { key: "response.median", out: t("response.median", { duration: formatDuration(8_040_000) }) },
+  { key: "term.quoted_value.note", out: t("term.quoted_value.note") },
+  { key: "error.phone.format", out: t("error.phone.format") },
+  { key: "error.reason.required", out: t("error.reason.required") },
+];
 
 const SURFACES: Swatch[] = [
   { cls: "bg-paper", token: "--paper" },
@@ -197,6 +250,56 @@ export default function Gallery() {
           <p className="text-body-sm text-body">interface copy, small</p>
           <p className="text-caption text-muted">caption</p>
           <p className="font-mono text-eyebrow uppercase text-faint">mono eyebrow</p>
+        </div>
+      </Section>
+
+      <Section id="formatters">
+        <div className="overflow-x-auto rounded-card border border-line bg-card">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-paper-sunk">
+                <th scope="col" className="px-4 py-2 text-left font-mono text-colhead uppercase text-muted">
+                  call
+                </th>
+                <th scope="col" className="px-4 py-2 text-right font-mono text-colhead uppercase text-muted">
+                  output
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {FORMATTERS.map(({ call, out }) => (
+                <tr key={call} className="border-t border-line">
+                  <td className="px-4 py-1.5 font-mono text-caption text-faint">{call}</td>
+                  <td className="px-4 py-1.5 text-right font-mono text-body-sm text-body">{out}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Section>
+
+      <Section id="strings through t()">
+        <div className="overflow-x-auto rounded-card border border-line bg-card">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="bg-paper-sunk">
+                <th scope="col" className="px-4 py-2 text-left font-mono text-colhead uppercase text-muted">
+                  key
+                </th>
+                <th scope="col" className="px-4 py-2 text-left font-mono text-colhead uppercase text-muted">
+                  english
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {STRINGS.map(({ key, out }) => (
+                <tr key={key} className="border-t border-line">
+                  <td className="px-4 py-1.5 font-mono text-caption text-faint">{key}</td>
+                  <td className="px-4 py-1.5 text-body-sm text-body">{out}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Section>
 

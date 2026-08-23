@@ -20,7 +20,8 @@
     "check:tokens": "./scripts/check-tokens.sh",
     "check:schema": "./scripts/check-schema-invariants.sh",
     "verify": "pnpm typecheck && pnpm lint && pnpm check:tokens && pnpm check:schema && pnpm test && pnpm build",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "matrix": "tsx scripts/print-matrix.mts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
@@ -31,6 +32,7 @@
     "pg": "^8.23.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
