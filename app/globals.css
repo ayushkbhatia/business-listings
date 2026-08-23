@@ -1,26 +1,418 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* ==========================================================================
+   Self-hosted faces. Files live in public/fonts, downloaded once from Google
+   Fonts and committed — no build-time network call, no runtime third party.
+   Latin and Latin Extended only; Arabic is a later translation project and
+   will need a face that has it (Geist does not).
+   ========================================================================== */
+
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/geist-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
 }
+@font-face {
+  font-family: 'Geist';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/geist-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/instrument-serif-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/instrument-serif-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/instrument-serif-latin-italic.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/instrument-serif-latin-ext-italic.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url('/fonts/jetbrains-mono-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ==========================================================================
+   Business Listings — design tokens
+   Paste into app/globals.css. Nothing in the codebase may contain a raw hex
+   after this file exists; add a lint rule failing on /#[0-9a-f]{3,6}/ outside
+   this file. Source of truth: design system canvas §01, §09.1.
+   ========================================================================== */
+
+:root {
+  /* ---- Surfaces -------------------------------------------------------- */
+  --paper:        #FAF9F6;   /* page background */
+  --paper-sunk:   #F6F4EE;   /* table heads, note blocks, footers */
+  --fill:         #F2F0EA;   /* chips, disabled, tiles */
+  --card:         #FFFFFF;   /* raised surface only — never a page background */
+  --ink:          #211F1B;   /* headings, dark surfaces */
+  --ink-raised:   #26241F;   /* a card sitting on ink */
+  --ink-line:     #3A382F;   /* borders on ink surfaces */
+
+  /* ---- Lines ----------------------------------------------------------- */
+  --line:         #E5E2D9;   /* default border */
+  --line-mid:     #DCD8CE;
+  --line-strong:  #CFCABD;   /* inputs, emphasis, promoted cards */
+
+  /* ---- Text ramp ------------------------------------------------------- */
+  --text-faint:   #A29D92;   /* labels, placeholders — 11.5px+ on paper only */
+  --text-muted:   #7C776C;   /* secondary copy */
+  --text-body:    #46433C;   /* body at small sizes */
+  --text-prose:   #33302A;   /* long-form reading */
+  --text-ink:     #211F1B;   /* headings */
+  --text-on-ink:  #FAF9F6;
+  --text-on-ink-muted: #A8A396;
+  --text-on-ink-faint: #8A857A;
+
+  /* ---- Accent — action only ------------------------------------------- */
+  --moss:         #46584A;
+  --moss-hover:   #3A4A3C;
+  --moss-wash:    #E7ECE7;
+  --moss-deep:    #2F4033;   /* text on moss-wash */
+  --moss-on-ink:  #8FA892;   /* the only accent permitted on dark surfaces */
+  --moss-on-ink-hover: #A3B9A6;
+  --moss-on-ink-text:  #1A221B;
+  --moss-muted:   #C3CEC4;   /* secondary chart series */
+
+  /* ---- Status — four tones, each with wash + surface + line ----------- */
+  --ok:           #2F7D4F;
+  --ok-ink:       #2A6B45;
+  --ok-wash:      #E6F0E8;
+  --ok-surface:   #F4F9F5;
+  --ok-line:      #CFDCD0;
+
+  --warn:         #B07D1A;
+  --warn-ink:     #8A6D12;
+  --warn-wash:    #F7EFDD;
+  --warn-surface: #FDF8EE;
+  --warn-line:    #ECDFC4;
+  --warn-line-strong: #DDD0B4;
+
+  --bad:          #B0453A;
+  --bad-ink:      #8F3A31;
+  --bad-hover:    #963A31;
+  --bad-wash:     #F6E6E3;
+  --bad-surface:  #FDF6F5;
+  --bad-line:     #F0D9D4;
+  --bad-line-strong: #D9A49C;
+  --bad-disabled: #E8D5D1;
+  --bad-disabled-text: #C99E97;
+
+  --info:         #3A5F8F;
+  --info-ink:     #2F5A86;
+  --info-wash:    #E7ECF2;
+  --info-surface: #F4F8FB;
+  --info-line:    #D4E0EA;
+  --info-line-strong: #B9CBDB;
+
+  /* ---- Control states ------------------------------------------------- */
+  --disabled-fill:  #E0DDD4;
+  --disabled-text:  #A29D92;
+  --track:          #E9E6DE;   /* progress and slider tracks */
+  --track-alt:      #EFECE5;   /* skeleton secondary */
+  --placeholder-stripe-a: #EEECE5;  /* image placeholder, 135deg */
+  --placeholder-stripe-b: #F5F3EE;
+  --placeholder-empty-a:  #F0EEE8;  /* genuinely absent, dashed border */
+  --placeholder-empty-b:  #F7F5F0;
+
+  /* ---- Map ------------------------------------------------------------ */
+  --map-base:     #F3F4F2;
+  --map-grid:     #EEF0EF;
+  --map-road:     #E7E4DC;
+  --map-water:    #E2EAEC;
+  --map-label:    #8D9490;
+
+  /* ---- Radii ---------------------------------------------------------- */
+  --r-tag:        3px;
+  --r-chip:       5px;
+  --r-ctl:        6px;    /* buttons, inputs, selects */
+  --r-card:       9px;
+  --r-card-lg:    10px;
+  --r-panel:      12px;
+  --r-pill:       999px;  /* status badges and filter chips only */
+
+  /* ---- Elevation ------------------------------------------------------ */
+  --e-flat:       none;                             /* 1px line, the default */
+  --e-raised:     0 1px 3px rgba(0,0,0,.06);        /* artboards, sticky bars */
+  --e-promoted:   0 4px 20px rgba(70,88,74,.10);    /* recommended plan, one per screen */
+  --e-overlay:    0 8px 34px rgba(0,0,0,.16);       /* modals, dropdowns, toasts */
+  --focus-ring:   0 0 0 2px var(--paper), 0 0 0 4px var(--moss);
+  --focus-ring-danger: 0 0 0 2px var(--paper), 0 0 0 4px var(--bad);
+  --focus-ring-on-ink: 0 0 0 2px var(--ink), 0 0 0 4px var(--moss-on-ink);
+  --focus-inset:  0 0 0 3px rgba(70,88,74,.12);     /* inside a focused input */
+
+  /* ---- Motion --------------------------------------------------------- */
+  --t-state:      120ms ease-out;
+  --t-reveal:     180ms ease-out;
+  --t-overlay:    220ms cubic-bezier(.2,.8,.2,1);
+  --t-skeleton:   1200ms ease-in-out;
+
+  /* ---- Type ----------------------------------------------------------- */
+  --f-serif: 'Instrument Serif', ui-serif, Georgia, serif;
+  --f-sans:  Geist, ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --f-mono:  'JetBrains Mono', ui-monospace, monospace;
+
+  /* size / line-height / tracking */
+  --t-display:   42px; --lh-display: 1.08; --ls-display: -.020em;
+  --t-h1-serif:  30px; --lh-h1s:     1.15; --ls-h1s:     -.015em;
+  --t-h1:        23px; --lh-h1:      1.25; --ls-h1:      -.015em;
+  --t-h2:        17px; --lh-h2:      1.30; --ls-h2:      -.015em;
+  --t-h3:      14.0px; --lh-h3:      1.35;
+  --t-prose:   14.5px; --lh-prose:   1.65; --measure-prose: 640px;
+  --t-body:    13.0px; --lh-body:    1.60;
+  --t-body-sm: 12.5px; --lh-body-sm: 1.55;
+  --t-caption: 11.5px; --lh-caption: 1.50;
+  --t-eyebrow:  9.5px; --ls-eyebrow: .11em;   /* mono 500, uppercase */
+  --t-colhead:  9.5px; --ls-colhead: .09em;   /* mono 500, uppercase */
+}
+
+/* ---- Density: set once on the shell, inherited ------------------------ */
+[data-density="roomy"]        { --row-h: auto;  --gutter: 18px; --section-pad: 48px; --card-pad: 20px; }
+[data-density="comfortable"]  { --row-h: 46px;  --gutter: 14px; --section-pad: 24px; --card-pad: 18px; }
+[data-density="compact"]      { --row-h: 38px;  --gutter: 10px; --section-pad: 20px; --card-pad: 16px; }
+
+/* ---- Seller storefront themes ----------------------------------------
+   Applied to a storefront root as [data-theme="…"]. Recolours header,
+   headings, buttons, links and form focus ONLY. Never verification badges,
+   never status tones, never platform chrome. A custom hex is contrast-checked
+   on save (>= 4.5:1 against white) and rejected with the reason shown.
+   --------------------------------------------------------------------- */
+[data-theme="industrial"] { --brand: #2F4A5C; --brand-ink: #1F3140; --brand-wash: #EAF0F3; --brand-line: #E3EAEE; --brand-muted: #7C9AAD; --brand-text: #3F5A6B; }
+[data-theme="default"]    { --brand: #46584A; --brand-ink: #2F4033; --brand-wash: #E7ECE7; --brand-line: #DBE3DB; --brand-muted: #8FA892; --brand-text: #46433C; }
+[data-theme="trade"]      { --brand: #7A4A2F; --brand-ink: #5A3622; --brand-wash: #F2E9E2; --brand-line: #E8DBD1; --brand-muted: #B08D74; --brand-text: #5A4438; }
+[data-theme="mono"]       { --brand: #1F1F1F; --brand-ink: #141414; --brand-wash: #EEEEEC; --brand-line: #E2E2DE; --brand-muted: #8A8A85; --brand-text: #3D3D39; }
+[data-theme="clinic"]     { --brand: #3D5A3A; --brand-ink: #2A3F28; --brand-wash: #E8EFE6; --brand-line: #DCE6DA; --brand-muted: #87A283; --brand-text: #41503E; }
+[data-theme="salon"]      { --brand: #5C3B52; --brand-ink: #40283A; --brand-wash: #F1E8EE; --brand-line: #E6D9E2; --brand-muted: #A5879B; --brand-text: #4E3A48; }
+
+/* ---- Base ------------------------------------------------------------- */
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--text-body);
+  font-family: var(--f-sans);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--moss); text-decoration: none; }
+a:hover { color: var(--moss-hover); }
+
+/* Mono always uses tabular figures — columns must align. */
+.mono, [class*="mono"] { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ==========================================================================
+   Tailwind mapping.
+
+   Tailwind v4 has no `tailwind.config.ts` — the theme is declared in CSS. The
+   handoff asks for the file by name; this block is the same thing in the shape
+   v4 actually reads. It is not a shortcut: `@theme inline` substitutes
+   `var(--brand)` straight into the utility, so `.bg-brand` resolves against
+   whatever `[data-theme]` scope the element sits in. A config file, or a
+   non-inline `@theme`, would resolve seller themes once on `:root` and every
+   storefront would come out the same colour.
+
+   Every name below points at a token above. Nothing here invents a value.
+   ========================================================================== */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* Surfaces */
+  --color-paper:        var(--paper);
+  --color-paper-sunk:   var(--paper-sunk);
+  --color-fill:         var(--fill);
+  --color-card:         var(--card);
+  --color-ink-surface:  var(--ink);
+  --color-ink-raised:   var(--ink-raised);
+  --color-ink-line:     var(--ink-line);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+  /* Lines */
+  --color-line:         var(--line);
+  --color-line-mid:     var(--line-mid);
+  --color-line-strong:  var(--line-strong);
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Text ramp */
+  --color-faint:        var(--text-faint);
+  --color-muted:        var(--text-muted);
+  --color-body:         var(--text-body);
+  --color-prose:        var(--text-prose);
+  --color-ink:          var(--text-ink);
+  --color-on-ink:       var(--text-on-ink);
+  --color-on-ink-muted: var(--text-on-ink-muted);
+  --color-on-ink-faint: var(--text-on-ink-faint);
+
+  /* Accent */
+  --color-moss:              var(--moss);
+  --color-moss-hover:        var(--moss-hover);
+  --color-moss-wash:         var(--moss-wash);
+  --color-moss-deep:         var(--moss-deep);
+  --color-moss-on-ink:       var(--moss-on-ink);
+  --color-moss-on-ink-hover: var(--moss-on-ink-hover);
+  --color-moss-on-ink-text:  var(--moss-on-ink-text);
+  --color-moss-muted:        var(--moss-muted);
+
+  /* Status */
+  --color-ok:         var(--ok);
+  --color-ok-ink:     var(--ok-ink);
+  --color-ok-wash:    var(--ok-wash);
+  --color-ok-surface: var(--ok-surface);
+  --color-ok-line:    var(--ok-line);
+
+  --color-warn:             var(--warn);
+  --color-warn-ink:         var(--warn-ink);
+  --color-warn-wash:        var(--warn-wash);
+  --color-warn-surface:     var(--warn-surface);
+  --color-warn-line:        var(--warn-line);
+  --color-warn-line-strong: var(--warn-line-strong);
+
+  --color-bad:              var(--bad);
+  --color-bad-ink:          var(--bad-ink);
+  --color-bad-hover:        var(--bad-hover);
+  --color-bad-wash:         var(--bad-wash);
+  --color-bad-surface:      var(--bad-surface);
+  --color-bad-line:         var(--bad-line);
+  --color-bad-line-strong:  var(--bad-line-strong);
+  --color-bad-disabled:     var(--bad-disabled);
+  --color-bad-disabled-text: var(--bad-disabled-text);
+
+  --color-info:             var(--info);
+  --color-info-ink:         var(--info-ink);
+  --color-info-wash:        var(--info-wash);
+  --color-info-surface:     var(--info-surface);
+  --color-info-line:        var(--info-line);
+  --color-info-line-strong: var(--info-line-strong);
+
+  /* Control states */
+  --color-disabled-fill: var(--disabled-fill);
+  --color-disabled-text: var(--disabled-text);
+  --color-track:         var(--track);
+  --color-track-alt:     var(--track-alt);
+
+  /* Map */
+  --color-map-base:  var(--map-base);
+  --color-map-grid:  var(--map-grid);
+  --color-map-road:  var(--map-road);
+  --color-map-water: var(--map-water);
+  --color-map-label: var(--map-label);
+
+  /* Seller storefront theme — scoped, see [data-theme] above */
+  --color-brand:       var(--brand);
+  --color-brand-ink:   var(--brand-ink);
+  --color-brand-wash:  var(--brand-wash);
+  --color-brand-line:  var(--brand-line);
+  --color-brand-muted: var(--brand-muted);
+  --color-brand-text:  var(--brand-text);
+
+  /* Radii */
+  --radius-tag:     var(--r-tag);
+  --radius-chip:    var(--r-chip);
+  --radius-ctl:     var(--r-ctl);
+  --radius-card:    var(--r-card);
+  --radius-card-lg: var(--r-card-lg);
+  --radius-panel:   var(--r-panel);
+  --radius-pill:    var(--r-pill);
+
+  /* Elevation */
+  --shadow-raised:    var(--e-raised);
+  --shadow-promoted:  var(--e-promoted);
+  --shadow-overlay:   var(--e-overlay);
+  --shadow-focus:     var(--focus-ring);
+  --shadow-focus-danger: var(--focus-ring-danger);
+  --shadow-focus-on-ink: var(--focus-ring-on-ink);
+  --shadow-focus-inset:  var(--focus-inset);
+
+  /* Families */
+  --font-sans:  var(--f-sans);
+  --font-serif: var(--f-serif);
+  --font-mono:  var(--f-mono);
+
+  /* Type scale — size paired with its line height and tracking */
+  --text-display:   var(--t-display);
+  --text-display--line-height:    var(--lh-display);
+  --text-display--letter-spacing: var(--ls-display);
+
+  --text-h1-serif:  var(--t-h1-serif);
+  --text-h1-serif--line-height:    var(--lh-h1s);
+  --text-h1-serif--letter-spacing: var(--ls-h1s);
+
+  --text-h1:        var(--t-h1);
+  --text-h1--line-height:    var(--lh-h1);
+  --text-h1--letter-spacing: var(--ls-h1);
+
+  --text-h2:        var(--t-h2);
+  --text-h2--line-height:    var(--lh-h2);
+  --text-h2--letter-spacing: var(--ls-h2);
+
+  --text-h3:        var(--t-h3);
+  --text-h3--line-height: var(--lh-h3);
+
+  --text-prose:     var(--t-prose);
+  --text-prose--line-height: var(--lh-prose);
+
+  --text-body:      var(--t-body);
+  --text-body--line-height: var(--lh-body);
+
+  --text-body-sm:   var(--t-body-sm);
+  --text-body-sm--line-height: var(--lh-body-sm);
+
+  --text-caption:   var(--t-caption);
+  --text-caption--line-height: var(--lh-caption);
+
+  --text-eyebrow:   var(--t-eyebrow);
+  --text-eyebrow--letter-spacing: var(--ls-eyebrow);
+
+  --text-colhead:   var(--t-colhead);
+  --text-colhead--letter-spacing: var(--ls-colhead);
+
+  /* Density — read by components, set once on the shell */
+  --spacing-gutter:      var(--gutter);
+  --spacing-section-pad: var(--section-pad);
+  --spacing-card-pad:    var(--card-pad);
+
+  /* Motion */
+  --transition-state:   var(--t-state);
+  --transition-reveal:  var(--t-reveal);
+  --transition-overlay: var(--t-overlay);
 }
