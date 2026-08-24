@@ -544,3 +544,56 @@ the handoff 2 README's scope block says `/enquiry/:id/compare` and
 `/enquiry/:id/accepted`. The README won — those pages are reachable by a buyer
 with no account, and nesting them under `/account` would promise a section such
 a buyer does not have. routes.md now matches.
+
+## Handoff 2, step 4 — the thread
+
+### Off-platform detection is context-dependent, and had to be
+Rule 5 says an IBAN in a message raises a `SupplierReport`. But payment here is
+*always* off-platform — buyers pay suppliers directly and we hold no funds — so
+a supplier sending bank details after their quote is accepted is doing exactly
+what comes next, not doing something wrong.
+
+So: money signals raise a report **before** contact is released, and do not
+after; steering language ("deal directly next time", "don't use the site")
+raises one either way, because disintermediation is wrong whenever it happens;
+and a flagged message is marked on the record in both cases, because rule 5's
+first sentence is that everything stays on the record.
+
+Reporting every post-acceptance invoice would make the queue mostly no-action,
+and a queue nobody reads is worse than no queue. Criterion 7's canonical case —
+bank details sent before acceptance — reports exactly as specified.
+
+### The detector's false positives were the harder half
+A TRN is fifteen digits, a UAE mobile is twelve, a letter of credit and a bank
+guarantee are ordinary trade instruments, and "50% advance, balance on
+delivery" is a payment term rather than a demand. All of them are stripped
+before anything else runs. A detector that flags a TRN trains sellers to ignore
+the warning, and then it catches nothing.
+
+### `nudgedAt` is a timestamp because a counter would permit two
+Board 11b says a second follow-up loses more deals than it wins. A column that
+cannot count cannot be made to offer three, whatever a future screen wants.
+There is a test asserting the column's type for that reason.
+
+### A closed enquiry still lets the accepted pair talk
+Cutting them off at the close date would push delivery arrangements — exactly
+the conversation this platform wants on the record — onto WhatsApp. Everybody
+else on the enquiry is done.
+
+### The revision delta is computed once, for both sides
+`lib/messaging/thread-view.ts`. If the seller's screen said the price came down
+six per cent and the buyer's said five, the record would be worth nothing.
+
+### `role="log"` on an `<ol>` removes its list role
+Which leaves every `<li>` without a list parent — axe says so, and a screen
+reader stops announcing "3 of 7". The live region is a wrapper now and the list
+stays a list. Caught by the buyer thread's axe test.
+
+### The seller's thread has no browser test, and cannot yet
+Playwright builds for production, where the development seller seat is
+deliberately inert, so `/dashboard` 404s under `next start`. Signing in for real
+needs an OTP, which needs the Supabase admin API, which CI has no key for. The
+seller side is covered by the integration tests and was checked by hand against
+the dev server — the board 11b warning and the single nudge both render. This
+is the second step where that gap has bitten; it closes when CI can sign a
+seller in.

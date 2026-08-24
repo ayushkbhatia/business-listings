@@ -23,7 +23,7 @@ they 404 until their handoff.
 /enquiry/:id                            Enquiry sent + tracking               [1i]  built h2s3
 /enquiry/:id/compare                    Compare quotes                        [1n]  built h2s3
 /enquiry/:id/accepted                   Accepted quote record                 [7c]  built h2s3
-/enquiry/:id/thread/:seller             Negotiation thread                   [10h]
+/enquiry/:id/thread/:seller             Negotiation thread                   [10h]  built h2s4
 /pricing                                Plans                                 [1l]
 /guides                                 Guide index                          [10b]
 /guides/:slug                           Guide article                         [6d]
@@ -67,7 +67,7 @@ they 404 until their handoff.
 /dashboard/templates/:slug              Spec template                         [3h]
 /dashboard/media                        Media library                         [3i]
 /dashboard/leads                        Leads & RFQ inbox                     [3j]  built h2s1
-/dashboard/leads/:id/thread             Seller message thread                [11b]  quote composer h2s1; messages h2s4
+/dashboard/leads/:id/thread             Seller message thread                [11b]  built h2s1 + h2s4
 /dashboard/quotes                       Quotes sent pipeline                  [3k]  built h2s1
 /dashboard/reviews                      Reviews                              [11c]
 /dashboard/analytics                    Analytics                             [3l]

@@ -84,7 +84,7 @@ if pnpm exec tsc --noEmit >/tmp/h1t.log 2>&1 && pnpm build >/tmp/h1b.log 2>&1; t
 else
   bad "$(tail -4 /tmp/h1t.log /tmp/h1b.log)"
 fi
-pw "every tier 1 to 4 component is on the page" && ok "gallery renders all 18 + 17 + 15 + 9 components" || bad "see /tmp/h1.log"
+pw "every tier 1 to 4 component is on the page" && ok "gallery renders all 18 + 17 + 15 + 10 components" || bad "see /tmp/h1.log"
 
 printf '\n\033[1m%s checks passed.\033[0m\n' "$pass"
 [ "$fail" -eq 0 ] || printf '\033[31m%s failing.\033[0m\n' "$fail"

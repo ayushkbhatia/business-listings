@@ -9,6 +9,13 @@ export { SpecTable, type SpecRow, type SpecTableProps } from "./SpecTable";
 export { CompletenessMeter, type CompletenessMeterProps } from "./CompletenessMeter";
 export { ResponseTime, type ResponseTimeProps } from "./ResponseTime";
 export {
+  Thread,
+  type ThreadLabels,
+  type ThreadMessageView,
+  type ThreadProps,
+  type ThreadQuoteView,
+} from "./Thread";
+export {
   EnquiryComposer,
   type EnquiryComposerLabels,
   type EnquiryComposerProps,
