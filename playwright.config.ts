@@ -1,7 +1,31 @@
+import { config as loadEnv } from "dotenv";
 import { defineConfig, devices } from "@playwright/test";
+
+// The config decides which projects exist from the environment, so it has to
+// read .env.local before it does. CI supplies the same names as secrets.
+loadEnv({ path: [".env.local", ".env"], quiet: true });
 
 const PORT = 3000;
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`;
+
+/**
+ * The seller projects need a real sign-in, which needs the Supabase admin API.
+ * Without a service key they are not registered at all, rather than registered
+ * and skipping — a suite that silently covers less than it claims is worse
+ * than one that is visibly smaller.
+ */
+const canSignIn = Boolean(
+  process.env.SUPABASE_SECRET_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL,
+);
+
+if (!canSignIn) {
+  console.warn(
+    "[playwright] the seller projects are not registered: set SUPABASE_SECRET_KEY " +
+      "and NEXT_PUBLIC_SUPABASE_URL to cover /dashboard.",
+  );
+}
+
+const SELLER_STATE = "tests/e2e/.auth/seller.json";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -17,8 +41,28 @@ export default defineConfig({
     locale: "en-AE",
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile", use: { ...devices["Pixel 7"] } },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+      // The dashboard needs a signed-in seller; the seller project owns it.
+      testIgnore: /dashboard\.spec\.ts/,
+    },
+    {
+      name: "mobile",
+      use: { ...devices["Pixel 7"] },
+      testIgnore: /dashboard\.spec\.ts/,
+    },
+    ...(canSignIn
+      ? [
+          { name: "setup", testMatch: /auth\.setup\.ts/ },
+          {
+            name: "seller",
+            testMatch: /dashboard\.spec\.ts/,
+            dependencies: ["setup"],
+            use: { ...devices["Desktop Chrome"], storageState: SELLER_STATE },
+          },
+        ]
+      : []),
   ],
   webServer: process.env.PLAYWRIGHT_BASE_URL
     ? undefined

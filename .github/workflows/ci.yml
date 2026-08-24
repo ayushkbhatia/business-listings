@@ -17,8 +17,14 @@ env:
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
   DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
   NEXT_PUBLIC_SUPABASE_URL: https://irywaycgqjeeoklfmzzd.supabase.co
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
   NEXT_PUBLIC_SITE_URL: http://localhost:3000
+
+  # Real keys, so the acceptance job can sign a seller in and cover /dashboard.
+  # The development seat is inert under `next start` — deliberately — so a
+  # signed-in session is the only way those five screens get a browser test.
+  # Both are repository secrets; neither is ever printed.
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
+  SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
 
 jobs:
   verify:
@@ -129,10 +135,16 @@ jobs:
       - name: Install Playwright chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      # Acceptance criterion 8 of handoff 0 and criterion 10 of handoff 1. The
-      # Playwright config builds and starts the app itself.
+      # Acceptance criterion 8 of handoff 0, criterion 10 of handoff 1 and
+      # criterion 11 of handoff 2. The Playwright config builds and starts the
+      # app itself.
+      #
+      # `seller` runs the /dashboard specs as a genuinely signed-in seller; its
+      # setup project provisions one against the real Supabase project. It is
+      # registered only when the keys are present, so a fork without them gets
+      # a smaller suite that says so rather than a failing one.
       - name: Axe and the acceptance surface
-        run: pnpm test:e2e --project=chromium
+        run: pnpm test:e2e --project=chromium --project=seller
 
       - uses: actions/upload-artifact@v4
         if: failure()

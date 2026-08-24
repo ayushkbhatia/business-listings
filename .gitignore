@@ -57,3 +57,4 @@ prisma/*.db-journal
 
 # prisma generated client
 /lib/db/generated/
+tests/e2e/.auth/

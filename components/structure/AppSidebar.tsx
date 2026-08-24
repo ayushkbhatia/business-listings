@@ -54,7 +54,13 @@ export function AppSidebar({
     >
       {mark && <div className="border-b border-ink-line px-4 py-3">{mark}</div>}
 
-      <div className="min-h-0 flex-1 overflow-y-auto py-2">
+      {/*
+        Focusable, because it scrolls. A scrollable region with no focusable
+        descendant cannot be scrolled by keyboard at all — and this one can end
+        up with none, since an item the actor cannot reach and an item whose
+        handoff has not landed both render as text rather than as a link.
+      */}
+      <div tabIndex={0} className="min-h-0 flex-1 overflow-y-auto py-2">
         {groups.map((group) => (
           <div key={group.key} className="px-2 py-1.5">
             <h3 className="px-2 py-1 font-mono text-eyebrow uppercase text-on-ink-faint">

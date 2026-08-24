@@ -67,32 +67,40 @@ export function resolveNav(
   }));
 }
 
-/** /dashboard — seller. Six groups, matching docs/routes.md. */
+/**
+ * /dashboard — seller. Six groups, matching docs/routes.md.
+ *
+ * Four screens exist: leads, quotes, reviews and settings. Everything else is
+ * marked `later`, which renders it named but not linked — the rule handoff 1
+ * set and AppSidebar already implements. It was not applied here, so the
+ * sidebar carried a dozen dead links; a browser test signed in as a seller
+ * found them the first time one existed.
+ */
 export const DASHBOARD_NAV: readonly NavGroup[] = [
   {
     key: "overview",
     labelKey: "nav.group.overview",
     items: [
-      { key: "dashboard", labelKey: "nav.dashboard", href: "/dashboard" },
-      { key: "setup", labelKey: "nav.setup", href: "/dashboard/setup" },
+      { key: "dashboard", labelKey: "nav.dashboard", href: "/dashboard" , later: true },
+      { key: "setup", labelKey: "nav.setup", href: "/dashboard/setup" , later: true },
     ],
   },
   {
     key: "listing",
     labelKey: "nav.group.listing",
     items: [
-      { key: "listing", labelKey: "nav.listing", href: "/dashboard/listing", capability: "listing.edit" },
-      { key: "locations", labelKey: "nav.locations", href: "/dashboard/locations", capability: "listing.edit" },
-      { key: "hours", labelKey: "nav.hours", href: "/dashboard/hours", capability: "listing.edit" },
-      { key: "verification", labelKey: "nav.verification", href: "/dashboard/verification" },
+      { key: "listing", labelKey: "nav.listing", href: "/dashboard/listing", capability: "listing.edit" , later: true },
+      { key: "locations", labelKey: "nav.locations", href: "/dashboard/locations", capability: "listing.edit" , later: true },
+      { key: "hours", labelKey: "nav.hours", href: "/dashboard/hours", capability: "listing.edit" , later: true },
+      { key: "verification", labelKey: "nav.verification", href: "/dashboard/verification" , later: true },
     ],
   },
   {
     key: "catalogue",
     labelKey: "nav.group.catalogue",
     items: [
-      { key: "products", labelKey: "nav.products", href: "/dashboard/products", capability: "product.edit" },
-      { key: "media", labelKey: "nav.media", href: "/dashboard/media", capability: "listing.edit" },
+      { key: "products", labelKey: "nav.products", href: "/dashboard/products", capability: "product.edit" , later: true },
+      { key: "media", labelKey: "nav.media", href: "/dashboard/media", capability: "listing.edit" , later: true },
     ],
   },
   {
@@ -110,49 +118,54 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
     key: "growth",
     labelKey: "nav.group.growth",
     items: [
-      { key: "analytics", labelKey: "nav.analytics", href: "/dashboard/analytics" },
-      { key: "promote", labelKey: "nav.promote", href: "/dashboard/promote" },
+      { key: "analytics", labelKey: "nav.analytics", href: "/dashboard/analytics" , later: true },
+      { key: "promote", labelKey: "nav.promote", href: "/dashboard/promote" , later: true },
     ],
   },
   {
     key: "account",
     labelKey: "nav.group.account",
     items: [
-      { key: "billing", labelKey: "nav.billing", href: "/dashboard/billing", capability: "billing.manage" },
-      { key: "team", labelKey: "nav.team", href: "/dashboard/team", capability: "team.manage" },
+      { key: "billing", labelKey: "nav.billing", href: "/dashboard/billing", capability: "billing.manage" , later: true },
+      { key: "team", labelKey: "nav.team", href: "/dashboard/team", capability: "team.manage" , later: true },
       { key: "settings", labelKey: "nav.settings", href: "/dashboard/settings" },
     ],
   },
 ];
 
-/** /admin — staff. Six groups, per docs/routes.md. */
+/**
+ * /admin — staff. Six groups, per docs/routes.md.
+ *
+ * None of it is built; the admin surface is handoff 4. Every item is `later`
+ * so the shape is visible and nothing is a dead link.
+ */
 export const ADMIN_NAV: readonly NavGroup[] = [
   {
     key: "overview",
     labelKey: "nav.group.overview",
     items: [
-      { key: "admin", labelKey: "nav.platform", href: "/admin" },
-      { key: "queue", labelKey: "nav.queue", href: "/admin/queue", badge: 34, capability: "queue.decide" },
-      { key: "reports", labelKey: "nav.reports", href: "/admin/reports", badge: 3, capability: "report.resolve" },
+      { key: "admin", labelKey: "nav.platform", href: "/admin" , later: true },
+      { key: "queue", labelKey: "nav.queue", href: "/admin/queue", badge: 34, capability: "queue.decide" , later: true },
+      { key: "reports", labelKey: "nav.reports", href: "/admin/reports", badge: 3, capability: "report.resolve" , later: true },
     ],
   },
   {
     key: "supply",
     labelKey: "nav.group.supply",
     items: [
-      { key: "businesses", labelKey: "nav.businesses", href: "/admin/businesses" },
-      { key: "ingest", labelKey: "nav.ingest", href: "/admin/ingest" },
-      { key: "visits", labelKey: "nav.visits", href: "/admin/visits", capability: "visit.record" },
-      { key: "crm", labelKey: "nav.crm", href: "/admin/crm" },
+      { key: "businesses", labelKey: "nav.businesses", href: "/admin/businesses" , later: true },
+      { key: "ingest", labelKey: "nav.ingest", href: "/admin/ingest" , later: true },
+      { key: "visits", labelKey: "nav.visits", href: "/admin/visits", capability: "visit.record" , later: true },
+      { key: "crm", labelKey: "nav.crm", href: "/admin/crm" , later: true },
     ],
   },
   {
     key: "taxonomy",
     labelKey: "nav.group.taxonomy",
     items: [
-      { key: "categories", labelKey: "nav.categories", href: "/admin/categories", capability: "taxonomy.write" },
-      { key: "spec-library", labelKey: "nav.spec_library", href: "/admin/spec-library", capability: "taxonomy.write" },
-      { key: "areas", labelKey: "nav.areas", href: "/admin/areas", capability: "taxonomy.write" },
+      { key: "categories", labelKey: "nav.categories", href: "/admin/categories", capability: "taxonomy.write" , later: true },
+      { key: "spec-library", labelKey: "nav.spec_library", href: "/admin/spec-library", capability: "taxonomy.write" , later: true },
+      { key: "areas", labelKey: "nav.areas", href: "/admin/areas", capability: "taxonomy.write" , later: true },
       { key: "attributes", labelKey: "nav.attributes", href: "/admin/attributes", later: true },
     ],
   },
@@ -160,27 +173,27 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     key: "demand",
     labelKey: "nav.group.demand",
     items: [
-      { key: "search", labelKey: "nav.search_ranking", href: "/admin/search" },
-      { key: "content", labelKey: "nav.content", href: "/admin/content/matrix" },
+      { key: "search", labelKey: "nav.search_ranking", href: "/admin/search" , later: true },
+      { key: "content", labelKey: "nav.content", href: "/admin/content/matrix" , later: true },
     ],
   },
   {
     key: "commercial",
     labelKey: "nav.group.commercial",
     items: [
-      { key: "subscriptions", labelKey: "nav.subscriptions", href: "/admin/subscriptions", capability: "revenue.read" },
-      { key: "revenue", labelKey: "nav.revenue", href: "/admin/revenue", capability: "revenue.read" },
-      { key: "dunning", labelKey: "nav.dunning", href: "/admin/dunning", badge: 5, capability: "revenue.read" },
+      { key: "subscriptions", labelKey: "nav.subscriptions", href: "/admin/subscriptions", capability: "revenue.read" , later: true },
+      { key: "revenue", labelKey: "nav.revenue", href: "/admin/revenue", capability: "revenue.read" , later: true },
+      { key: "dunning", labelKey: "nav.dunning", href: "/admin/dunning", badge: 5, capability: "revenue.read" , later: true },
     ],
   },
   {
     key: "platform",
     labelKey: "nav.group.platform",
     items: [
-      { key: "staff", labelKey: "nav.staff", href: "/admin/staff", capability: "staff.manage" },
-      { key: "audit", labelKey: "nav.audit", href: "/admin/audit", capability: "audit.read" },
-      { key: "support", labelKey: "nav.support", href: "/admin/support", capability: "support.view_as" },
-      { key: "compliance", labelKey: "nav.compliance", href: "/admin/compliance" },
+      { key: "staff", labelKey: "nav.staff", href: "/admin/staff", capability: "staff.manage" , later: true },
+      { key: "audit", labelKey: "nav.audit", href: "/admin/audit", capability: "audit.read" , later: true },
+      { key: "support", labelKey: "nav.support", href: "/admin/support", capability: "support.view_as" , later: true },
+      { key: "compliance", labelKey: "nav.compliance", href: "/admin/compliance" , later: true },
     ],
   },
 ];
