@@ -284,7 +284,15 @@ export function EnquiryComposer({
             <legend className="text-body-sm text-ink">{labels.lines}</legend>
             <p className="mt-1 mb-2 text-caption text-muted">{labels.linesHint}</p>
 
-            <div className="overflow-x-auto">
+            {/* `contain-paint` is not decoration. A scroll container nested in a
+                fieldset does not stop the document's own scroll width from
+                counting the content it clips, so on a 412px phone this table's
+                40rem floor made the page 693px wide: it panned sideways over
+                blank space, and taps landed on whatever the offset put under
+                the finger. Of the fifteen `overflow-x-auto` wrappers in the
+                app this is the only one inside a fieldset, and the only one
+                that did it. */}
+            <div className="overflow-x-auto contain-paint">
               <table className="w-full min-w-[40rem] border-collapse text-left">
                 <caption className="sr-only">{labels.lines}</caption>
                 <thead>

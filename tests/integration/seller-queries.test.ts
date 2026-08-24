@@ -57,7 +57,7 @@ function serialise(value: unknown): string {
   return JSON.stringify(value, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
 }
 
-describe("before acceptance", () => {
+describe("criterion 2 — before acceptance", () => {
   it("the leads inbox releases contact only where a quote was accepted", async () => {
     for (const businessId of [quotingBusinessId, otherRecipientId]) {
       const leads = await getLeadsForBusiness(businessId);
@@ -103,7 +103,7 @@ describe("before acceptance", () => {
   });
 });
 
-describe("scoping", () => {
+describe("criterion 2 — scoping", () => {
   it("a business the enquiry was not sent to gets null, not a permission error", async () => {
     // The same answer as an unknown id, so the route cannot be used to discover
     // which enquiries exist.
@@ -124,7 +124,7 @@ describe("scoping", () => {
   });
 });
 
-describe("after acceptance", () => {
+describe("criterion 2 — after acceptance", () => {
   it("releases the details to the accepted business and to nobody else", async () => {
     // ENQ-8802 is seeded already accepted, so nothing here mutates state.
     const accepted = await prisma.enquiry.findUniqueOrThrow({

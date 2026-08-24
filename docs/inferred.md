@@ -801,3 +801,116 @@ The e2e seller is `bl.e2e.seller@gmail.com` in the real Supabase project, and
 CI and a local run share it. The setup deletes any leftover before creating
 one, so at most one accumulates — but two runs at the same moment would race.
 Worth a per-run suffix if that ever bites.
+
+## Handoff 2, step 7 — the acceptance pass
+
+`pnpm acceptance:2` walks the twelve criteria from
+`handoffs/handoff-2-enquiry-engine/README.md` and prints one line per criterion.
+Seventeen checks, because five criteria have two halves that fail
+independently — criterion 5 is measured and rendered, criterion 7 is detected
+and warned about, criterion 11 is public and seller, criterion 12 is axe, build
+and gallery. It needs the app built and served on `:3000` and the seed loaded.
+
+### A name filter that matches nothing exits zero
+
+The first run reported sixteen passes and one failure. The failure was real
+enough — two `vi` call sites were missing their log-name argument, so `$3` was
+unbound under `set -u`. The passes were not all real. Criterion 2 ran
+
+```
+vitest run --project integration -t "criterion 2"
+```
+
+against `tests/integration/seller-queries.test.ts`, whose describes were named
+`before acceptance`, `scoping` and `after acceptance`. Nothing matched. Vitest
+skipped 110 tests, ran none, and exited zero. The walk read that as a pass and
+printed a criterion 2 line with a blank test count, which was the only visible
+symptom.
+
+This is the second time. Handoff 0's criterion 1 sat green for two commits
+after the tier-4 commit renamed the test it grepped for. The fix there was to
+change the grep, which fixed that instance and not the class. So both helpers
+now assert the run actually reported passing tests:
+
+```bash
+vi() {
+  pnpm exec vitest run --project "$1" -t "$2" >"$LOG/$3.log" 2>&1 || return 1
+  grep -qE 'Tests +[0-9]+ passed' "$LOG/$3.log" || {
+    printf '   \033[31mFAIL\033[0m  the filter "%s" matched no tests\n' "$2"
+    return 1
+  }
+}
+```
+
+A green acceptance line is a claim about the product. It should not be
+satisfiable by a typo. The describes in `seller-queries.test.ts` were renamed to
+carry the criterion number as well, matching the convention the other four
+integration suites already used — but the renaming is the convenience, and the
+guard is the fix.
+
+### What the walk asserts that the test suites do not
+
+Three criteria are checked in the browser rather than in a test, because what
+they forbid is a rendering, not a return value.
+
+- **Criterion 2** greps the served `/dashboard/leads` HTML for the buyer's
+  surname, phone number and company address. The query-layer tests prove the
+  columns are never selected; this proves no screen puts them back.
+- **Criterion 7's** second half greps the served page for the board 11b warning
+  text, to catch it being present in the markup but commented out or visually
+  hidden.
+- **Criterion 3** counts rows in every table before and after an acceptance.
+  The assertion is not that specific tables are untouched but that *no* table
+  outside the expected four moved. There is no order table in this schema, and
+  criterion 3 is the check that notices if one appears.
+
+### The walk did not look at a phone, and four specs were red
+
+Criterion 11 ran `--project=chromium --project=seller`. The mobile project was
+never in it, and `pnpm test:e2e` — which does run it — had four failures. One
+was the test's fault: `home-compare.spec.ts` asserted "Pricing" and "Guides"
+were visible on every viewport, but those live in the nav's `hidden lg:flex`
+list, so below 1024 they are correctly not shown. It now checks the footer's
+four at every width and the nav's two only where the nav is drawn, while the
+"named, not linked" assertion stays unconditional.
+
+The other three were the product's fault, and they were the buyer's primary
+flow: on a 412px phone the fan-out wizard's Continue button could not be
+pressed.
+
+### A scroll container inside a fieldset does not stop the page widening
+
+`/rfq/new` measured 693 CSS px wide inside a 412px viewport. Nothing visibly
+overflowed — every element outside a scroll container fitted, and
+`document.body.scrollWidth` was 412. Only `document.documentElement.scrollWidth`
+was 693, which is enough: the page pans sideways over blank space, and the
+offset between layout and hit-testing put a `<th>Qty</th>` and a stepper label
+under a tap aimed at a button several hundred pixels away. Playwright reported
+a different interceptor on almost every retry, which is what that looks like
+from the outside.
+
+Two separate causes, both needed fixing:
+
+- A `<fieldset>` defaults to `min-inline-size: min-content`. It will not narrow
+  below its widest child, so the `overflow-x-auto` wrapper inside it was laid
+  out at the table's full 640px and spilled out of a 276px card rather than
+  scrolling. `Radio.tsx` had already worked around this with `min-w-0` on its
+  own fieldset; `fieldset { min-inline-size: 0 }` now does it once for all four.
+- With that fixed the wrapper scrolled correctly — `clientWidth` 242,
+  `scrollWidth` 640 — and the document *still* reported 693. A scroll container
+  nested in a fieldset does not stop the document counting the width it clips.
+  `contain-paint` on the wrapper does. Of the fifteen `overflow-x-auto` wrappers
+  in the app it is the only one inside a fieldset, and a sweep of every public
+  route at 412px found it was the only route affected.
+
+`tests/e2e/viewport.spec.ts` asserts `scrollWidth === clientWidth` on ten public
+routes in both projects, so the third fieldset cannot repeat this quietly. The
+walk's criterion 11 gained the mobile project for the same reason.
+
+### What this does not fix
+
+Six inputs behind a 40rem floor is still a poor way to enter line items on a
+phone: the buyer now scrolls a 242px window sideways across the table instead
+of the whole page, which is correct behaviour and a bad experience. Stacking
+the row below some breakpoint is a board decision, not something to change
+inside an acceptance pass, and it is carried.

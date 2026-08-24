@@ -54,8 +54,21 @@ test.describe("home", () => {
     await page.goto("/");
     // docs/routes.md says a later route is named so the nav is shaped right.
     // Named, not linked — a dead link is worse than an honest greyed one.
-    for (const label of ["Pricing", "Guides", "Terms", "Privacy"]) {
+    //
+    // The footer names its four on every width. The nav's own three live in a
+    // `hidden lg:flex` list, so below 1024 they are not shown at all — which is
+    // the design, not a regression. Asserting visibility on both projects made
+    // this test fail on mobile for doing exactly what it should.
+    const footer = ["Terms", "Privacy"];
+    const nav = ["Pricing", "Guides"];
+    const width = page.viewportSize()?.width ?? 0;
+    const shown = width >= 1024 ? [...footer, ...nav] : footer;
+
+    for (const label of shown) {
       await expect(page.getByText(label, { exact: true })).toBeVisible();
+    }
+    // Never a link, at any width — that part does not depend on the viewport.
+    for (const label of [...footer, ...nav]) {
       await expect(page.getByRole("link", { name: label, exact: true })).toHaveCount(0);
     }
   });
