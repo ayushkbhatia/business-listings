@@ -959,3 +959,111 @@ Worth stating plainly: this is the third defect this handoff where a check
 reported success without having checked anything — the handoff 0 grep after a
 rename, the `-t` filter that matched no tests, and now this. All three were
 silent. A check that cannot fail is worse than no check, because it is counted.
+
+## Handoff 3, step 1 — the two overviews
+
+### The number board 11a argues from was never written down
+
+`lib/enquiry/fanout.ts` has always computed which suppliers the fan-out skipped,
+and its own comment says what for:
+
+> Who was left out for a reason worth recording. Not shown to the buyer — this
+> is for the seller's own "you missed N enquiries this month" nudge.
+
+`createEnquiry` returned `skipped` to its caller and wrote nothing. The list
+existed for the length of one request and then went away, so acceptance
+criterion 5 — "a Free-plan seller at their cap sees the missed-enquiry list with
+real dates and requirements" — had nothing to read. The roadmap for this handoff
+said those rows already existed. They did not.
+
+`MissedEnquiry` now carries them, written in the same transaction as the
+recipients: a seller who was left out was left out of *this* enquiry, and
+recording it afterwards means a crash in between produces an enquiry nobody was
+told they missed.
+
+### Not a RecipientState
+
+The obvious shape was a `skipped` value on `RecipientState`, and it is wrong.
+`enquiry_recipient` means the business received the enquiry. A capped seller did
+not, and three separate queries filter on that state — the leads inbox, the nav
+badges, and the response-time median. Each would have had to remember to exclude
+a delivery that never happened, and the one that forgot would have quietly
+counted a non-delivery as an unanswered lead or poisoned a public number.
+
+It is also the structural half of rule 1. `MissedEnquiry` has no buyer relation,
+so the board can show the requirement and the date and has no column to leak a
+name from. That is a fence rather than a `select` discipline.
+
+### Profile strength was the same lie, one column along
+
+`Business.profileStrength` was `int(38, 98)` in the seed. Handoff 2 caught
+exactly this in `responseTimeMedianMs` and gave it a measurement job; the column
+next to it kept its random number, and step 1 was about to render it at the top
+of the seller's own home screen.
+
+`lib/metrics/profile-strength.ts` is the pure function, `strength-job.ts` runs it
+over every business, and both the cron route and `pnpm measure` call it beside
+the response-time job. The seed derives it with the same function rather than a
+second implementation. That is criterion 11's second half, arriving in step 1
+because step 1 is what put the number on a screen.
+
+The weights are published: board 8a states what each setup task is worth in
+percentage points, so `WEIGHTS` has a test asserting it sums to a hundred. No
+seeded business reaches the 80% threshold, because the seed has **zero** media
+rows and photographs are twenty of those hundred points. That is honest, and it
+is what step 2's media library is for.
+
+### A locked panel has to name something real
+
+The first version dimmed "Analytics" and "Sponsored placement" and offered a
+plan for each. Neither is a column on `Plan`. Naming a price for an entitlement
+the schema does not hold is the kind of thing a seller discovers is untrue at
+the moment they pay, so the two locked panels are now `customDomain` and
+`siteVisitIncluded` — real booleans on real rows, and the sentence under each is
+checkable. Analytics and sponsored placement arrive in step 4, with whatever
+gates turn out to be true.
+
+`cheapestPlanUnlocking` returns null when there is nothing to sell, and the
+panel then opens rather than locking. A lock on a feature the seller already has
+is an advert for something already bought.
+
+### A fixture that contradicts the rule it demonstrates
+
+The free-plan fixture first read "8 of 3" under a panel saying a three-enquiry
+limit had been reached. Both numbers were true — `seedReplyHistory` spreads
+answered enquiries across ninety days and five of them landed in the current
+month — and together they made the board argue against itself.
+
+The seed now moves that supplier's earlier rows out of the month before adding
+exactly `enquiriesPerMonth` fresh ones, and throws if the count is not exactly
+the cap. Backdated rather than deleted: the response-time median is measured
+over ninety days and still wants them.
+
+### Two seats, because two plans
+
+Board 3a and board 11a cannot be checked from the same session. `auth.setup.ts`
+now provisions a Pro seat and a Free seat and saves two storage states, with a
+`seller-free` Playwright project for the second. Criterion 9 will want a third
+for the `sales` role.
+
+### Two tests that were passing by luck
+
+- `send-quote.test.ts` asked for "some other business with an owner" in no
+  particular order and called it a business the enquiry was never sent to. It
+  was not the same question: the row it picked *had* been sent the enquiry, so
+  it sailed past the recipient guard and failed on the catalogue check instead.
+  Seeding one extra user changed the physical row order and exposed it. It now
+  asks for `recipients: { none: { enquiryId } }` with an explicit `orderBy`.
+- A `testIgnore` of `/(dashboard|overview)\.spec\.ts/` does not match
+  `overview-free.spec.ts` — the hyphen falls outside the pattern — so the
+  signed-out projects picked up the signed-in spec and produced eighteen
+  failures across chromium and mobile.
+
+### The component count still does not add up
+
+`docs/design-system.md` says tier 4 is 14 and the four tiers make 64. Twelve are
+built and handoff 3's README names three more, which is 15 and 65. The gallery's
+denominator read `/7`, a number twelve components had already passed, and is now
+15 — the newest source rather than the one that makes 64 come out right.
+Criterion 12 counts to 64, so one of the two documents is wrong and it is worth
+settling before that check is treated as meaningful.

@@ -82,6 +82,18 @@ const TIER_3 = [
   "map-canvas",
 ] as const;
 
+/*
+ * Fifteen, and the number is contested. docs/design-system.md says tier 4 is
+ * 14 and that the four tiers make 64; twelve are built and handoff 3's README
+ * names three more — HoursEditor, EmirateAreaPicker and PlanCard — which is
+ * 15, and 65 in total. The denominator here read /7 until handoff 3 step 1,
+ * which twelve components had already passed.
+ *
+ * Set to what the newest source says rather than to the total that makes 64
+ * come out right. Handoff 3 criterion 12 counts to 64, so one of the two
+ * documents is wrong and it is worth knowing which before that check is
+ * treated as meaningful.
+ */
 const TIER_4 = [
   "verification-badge",
   "verification-ladder",
@@ -138,7 +150,7 @@ export default function Gallery() {
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono text-body-sm text-body">tier-4-domain</td>
               <td className="px-3 py-1.5 text-right font-mono text-body-sm text-ok-ink">
-                {TIER_4.length}/7
+                {TIER_4.length}/15
               </td>
             </tr>
             <tr className="border-t border-line">

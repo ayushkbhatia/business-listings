@@ -438,6 +438,7 @@ model Business {
   documents              Document[]
   sellerTemplates        SellerTemplate[]
   recipients             EnquiryRecipient[]
+  missedEnquiries        MissedEnquiry[]
   quotes                 Quote[]
   messages               Message[]
   reviews                Review[]
@@ -708,6 +709,7 @@ model Enquiry {
   lines          EnquiryLine[]
   /// 1..8 businesses.
   recipients     EnquiryRecipient[]
+  missedBy       MissedEnquiry[]
   attachments    Document[]
   quotes         Quote[]
   messages       Message[]
@@ -738,6 +740,40 @@ model EnquiryLine {
 
   @@index([enquiryId])
   @@map("enquiry_line")
+}
+
+/// A supplier the fan-out left out, and why.
+///
+/// Deliberately not a `RecipientState` on EnquiryRecipient. That table means
+/// "this business received this enquiry", and a capped seller did not: every
+/// query that filters on state — the leads inbox, the nav badges, the
+/// response-time median — would silently start counting a delivery that never
+/// happened unless each one remembered to exclude it.
+///
+/// It is also the structural half of rule 1. There is no buyer relation here at
+/// all, so the missed-enquiry list on board 11a can show the requirement and
+/// the date and has no column to leak a name from.
+model MissedEnquiry {
+  enquiryId  String     @map("enquiry_id")
+  businessId String     @map("business_id")
+  reason     SkipReason
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([enquiryId, businessId])
+  @@index([businessId, createdAt])
+  @@map("missed_enquiry")
+}
+
+/// Why a supplier was left off an enquiry. Only one reason today; it is an enum
+/// because "we ran out of slots" and "you were suspended" are different
+/// arguments to make to a seller, and board 11a's whole job is making one.
+enum SkipReason {
+  at_monthly_cap
+
+  @@map("skip_reason")
 }
 
 model EnquiryRecipient {

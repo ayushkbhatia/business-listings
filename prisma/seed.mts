@@ -162,7 +162,7 @@ async function main() {
       "notification_delivery","notification_template","notification_preference","review_request",
       "invoice_line","invoice","placement_slot","subscription",
       "supplier_report","review","message","quote_line","quote",
-      "enquiry_recipient","enquiry_line","enquiry",
+      "missed_enquiry","enquiry_recipient","enquiry_line","enquiry",
       "document","media","product","seller_template","location",
       "business_category","business","spec_field","spec_template",
       "category","area","plan","user","buyer_company"
@@ -352,7 +352,17 @@ async function main() {
          * fabricated reply time, and cheaper than churning every fixture.
          */
         ...(claimed ? (int(20, 2600), {}) : {}),
-        profileStrength: claimed ? int(38, 98) : 12,
+        /*
+         * Not set here. It is derived in recomputeDerived by the same function
+         * the scheduled job uses — see lib/metrics/profile-strength.ts. This
+         * column was `int(38, 98)` until handoff 3 step 1, which is the same
+         * shape of invention criterion 5 forbids for response time, sitting
+         * one column along and shown on the seller's own home screen.
+         *
+         * The draw is kept and discarded: removing it would shift every
+         * subsequent PRNG value and rename half the seed.
+         */
+        ...(claimed ? (int(38, 98), {}) : {}),
         specCompleteness: claimed ? Number((0.4 + rnd() * 0.6).toFixed(2)) : null,
         ratingOverall: null,
         reviewCount: 0,
@@ -415,6 +425,7 @@ async function main() {
   await seedProducts(prisma, businesses, catBySlug, fieldId, template.id);
   await seedEnquiries(prisma, businesses, buyer.id, buyerTwo.id, buyerCompany.id);
   await seedReplyHistory(prisma, businesses, buyerTwo.id);
+  await seedAtMonthlyCap(prisma, businesses, buyerTwo.id);
   await seedCommercials(prisma, businesses);
   await seedTrust(prisma, businesses, opsLead.id, moderator.id, buyer.id);
   await seedSignals(prisma, businesses, buyer.id, catBySlug);
@@ -1161,6 +1172,241 @@ async function seedReplyHistory(db: Db, businesses: Biz[], buyerId: string) {
   console.log(`   ${created} answered enquiries across ${claimed.length} businesses`);
 }
 
+/** The slug board 11a is demonstrated on. Free plan, and deliberately at its cap. */
+const FREE_AT_CAP_SLUG = "al-manara-equipment-trading-llc";
+
+/**
+ * A free-plan supplier who has used their three enquiries and is still being
+ * matched. Acceptance criterion 5 is about what that seller is shown.
+ *
+ * The rows are consistent with the rule rather than a picture of it. The three
+ * received enquiries are created first and counted; only if the count really
+ * has reached the plan's `enquiriesPerMonth` are the missed ones written. A
+ * fixture that claims a cap was hit while the recipient count says otherwise is
+ * how a screen ends up arguing from a number nothing produced — which is the
+ * mistake handoff 2 caught in `responseTimeMedianMs`.
+ *
+ * Dated inside the current month on purpose: the panel resets on the 1st, so a
+ * fixture pinned to a fixed day would empty itself as the month turned.
+ */
+async function seedAtMonthlyCap(db: Db, businesses: Biz[], buyerId: string) {
+  console.log("→ a free seller at their monthly cap");
+  const business = businesses.find((b) => b.slug === FREE_AT_CAP_SLUG);
+  if (!business) throw new Error(`the seed has no business ${FREE_AT_CAP_SLUG}`);
+
+  const plan = await db.plan.findUnique({
+    where: { id: "free" },
+    select: { enquiriesPerMonth: true },
+  });
+  const cap = plan?.enquiriesPerMonth;
+  if (cap == null) throw new Error("the free plan has no monthly enquiry cap to reach");
+
+  await db.business.update({ where: { id: business.id }, data: { planId: "free" } });
+
+  // Early in the month, so they are inside the window wherever today falls.
+  const monthStart = new Date(Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth(), 1));
+  const inMonth = (dayOfMonth: number, hour: number) => {
+    const at = new Date(monthStart);
+    at.setUTCDate(Math.min(dayOfMonth, NOW.getUTCDate()));
+    at.setUTCHours(hour, 0, 0, 0);
+    return at > NOW ? NOW : at;
+  };
+
+  /*
+   * Clear the month first. seedReplyHistory spreads answered enquiries across
+   * ninety days and some of them land in the current one, which left this
+   * supplier holding eight received enquiries against a cap of three — the
+   * board would have argued that a limit was reached while the counter beside
+   * it said the limit had been passed five times over. Backdated, not deleted:
+   * the response-time median is measured over ninety days and still wants them.
+   */
+  const movedOut = await db.enquiryRecipient.updateMany({
+    where: { businessId: business.id, createdAt: { gte: monthStart } },
+    data: { createdAt: new Date(monthStart.getTime() - 9 * 86_400_000) },
+  });
+
+  const RECEIVED = [
+    "Gate valves and companion flanges for a pump room at a district cooling plant.",
+    "Butterfly valves, lugged, for a chilled water riser in a Business Bay tower.",
+    "Strainers and check valves for a villa community irrigation upgrade.",
+  ].slice(0, cap);
+
+  for (const [i, requirement] of RECEIVED.entries()) {
+    const at = inMonth(2 + i * 2, 9 + i);
+    const enquiry = await db.enquiry.create({
+      data: {
+        ref: `ENQ-CAP${i}`,
+        buyerId,
+        requirement,
+        closesAt: new Date(at.getTime() + 7 * 86_400_000),
+        createdAt: at,
+        lines: { create: [{ description: "Valves, assorted", qty: 12 + i * 6, unit: "pcs", sortOrder: 0 }] },
+      },
+      select: { id: true },
+    });
+    await db.enquiryRecipient.create({
+      data: { enquiryId: enquiry.id, businessId: business.id, state: "quoted", createdAt: at },
+    });
+  }
+
+  const received = await db.enquiryRecipient.count({
+    where: { businessId: business.id, createdAt: { gte: monthStart } },
+  });
+  if (received !== cap) {
+    throw new Error(
+      `${FREE_AT_CAP_SLUG} has ${received} enquiries this month and the free cap is ${cap}. ` +
+        "The board argues from exactly that count, so a fixture that does not sit on it is " +
+        "showing a limit the numbers beside it contradict.",
+    );
+  }
+
+  // What arrived afterwards. Real requirements and real line items, because the
+  // board's argument is "here is the work you did not get to see", and a row
+  // reading "Historical enquiry" makes that argument badly.
+  const MISSED: { requirement: string; area: string; lines: [string, number, string][] }[] = [
+    {
+      requirement: "Resilient seated gate valves DN150 for a pump room upgrade in Mussafah.",
+      area: "Mussafah",
+      lines: [["Resilient seated gate valve, flanged, DN150", 24, "pcs"], ["Companion flange, PN16", 48, "pcs"]],
+    },
+    {
+      requirement: "Ductile iron butterfly valves and gearboxes for a chilled water plant retrofit.",
+      area: "Al Quoz",
+      lines: [["Butterfly valve, lugged, DN200", 16, "pcs"], ["Gearbox operator", 16, "pcs"]],
+    },
+    {
+      requirement: "Stainless steel ball valves, 316, for a food processing line in KIZAD.",
+      area: "KIZAD",
+      lines: [["Ball valve, SS316, 2 inch, three piece", 40, "pcs"]],
+    },
+    {
+      requirement: "Y-strainers and pressure gauges for a hotel plant room in Deira.",
+      area: "Deira",
+      lines: [["Y-strainer, cast iron, DN100", 12, "pcs"], ["Pressure gauge, 0-16 bar", 24, "pcs"]],
+    },
+  ];
+
+  for (const [i, missed] of MISSED.entries()) {
+    const at = inMonth(9 + i * 3, 10 + i);
+    const enquiry = await db.enquiry.create({
+      data: {
+        ref: `ENQ-MISS${i}`,
+        buyerId,
+        requirement: missed.requirement,
+        deliverToArea: missed.area,
+        neededBy: new Date(at.getTime() + (10 + i * 4) * 86_400_000),
+        // Two still open, two closed, so both states appear on the board.
+        closesAt: new Date(at.getTime() + (i < 2 ? 21 : 3) * 86_400_000),
+        createdAt: at,
+        lines: {
+          create: missed.lines.map(([description, qty, unit], j) => ({
+            description,
+            qty,
+            unit,
+            sortOrder: j,
+          })),
+        },
+      },
+      select: { id: true },
+    });
+
+    /*
+     * The enquiry still went out — to other suppliers. Without a recipient the
+     * board would be showing enquiries that reached nobody, which is a
+     * different and much worse story than the one it is making.
+     */
+    const others = businesses.filter((b) => b.claim === "claimed" && b.id !== business.id).slice(0, 3);
+    await db.enquiryRecipient.createMany({
+      data: others.map((o) => ({ enquiryId: enquiry.id, businessId: o.id, createdAt: at })),
+    });
+
+    await db.missedEnquiry.create({
+      data: {
+        enquiryId: enquiry.id,
+        businessId: business.id,
+        reason: "at_monthly_cap",
+        createdAt: at,
+      },
+    });
+  }
+
+  console.log(
+    `   ${FREE_AT_CAP_SLUG}: ${received} received (cap ${cap}), ${MISSED.length} missed, ` +
+      `${movedOut.count} earlier rows moved out of the month`,
+  );
+}
+
+/**
+ * The same pure function the job uses, over the seeded rows.
+ *
+ * Deliberately not a second implementation. A seed that computes a figure its
+ * own way is a seed that disagrees with production the first time either one
+ * changes, and the disagreement shows up as a screen nobody can reproduce.
+ */
+async function deriveProfileStrength(db: Db) {
+  const { profileStrength } = await import("../lib/metrics/profile-strength.js");
+
+  const businesses = await db.business.findMany({
+    select: {
+      id: true,
+      description: true,
+      establishedYear: true,
+      teamSize: true,
+      languages: true,
+      categories: { select: { categoryId: true } },
+      locations: { select: { hours: true } },
+      _count: { select: { team: true, products: true } },
+    },
+  });
+
+  const [products, media] = await Promise.all([
+    db.product.findMany({ select: { businessId: true, specValues: true } }),
+    db.media.findMany({
+      where: { reviewId: null },
+      select: { kind: true, businessId: true, product: { select: { businessId: true } } },
+    }),
+  ]);
+
+  const photos = new Map<string, number>();
+  const logos = new Set<string>();
+  const covers = new Set<string>();
+  for (const m of media) {
+    const owner = m.businessId ?? m.product?.businessId;
+    if (!owner) continue;
+    photos.set(owner, (photos.get(owner) ?? 0) + 1);
+    if (m.kind === "logo") logos.add(owner);
+    if (m.kind === "cover") covers.add(owner);
+  }
+
+  const withSpecs = new Map<string, number>();
+  for (const p of products) {
+    const values = p.specValues as Record<string, unknown> | null;
+    if (!values || Object.keys(values).length === 0) continue;
+    withSpecs.set(p.businessId, (withSpecs.get(p.businessId) ?? 0) + 1);
+  }
+
+  for (const b of businesses) {
+    const score = profileStrength({
+      hasDescription: (b.description ?? "").trim().length > 0,
+      hasLogo: logos.has(b.id),
+      hasCover: covers.has(b.id),
+      additionalCategories: b.categories.length,
+      hasEstablishedYear: b.establishedYear !== null,
+      hasTeamSize: b.teamSize !== null,
+      languages: b.languages.length,
+      locations: b.locations.length,
+      locationsWithHours: b.locations.filter(
+        (l) => typeof l.hours === "object" && l.hours !== null && Object.keys(l.hours).length > 0,
+      ).length,
+      products: b._count.products,
+      productsWithFilterableSpecs: withSpecs.get(b.id) ?? 0,
+      photos: photos.get(b.id) ?? 0,
+      teamSeats: b._count.team,
+    });
+    await db.business.update({ where: { id: b.id }, data: { profileStrength: score } });
+  }
+}
+
 /** The job's own functions, so the seed and production cannot disagree. */
 async function deriveResponseTimes(db: Db) {
   const since = windowStart(NOW);
@@ -1479,6 +1725,7 @@ async function recomputeDerived(db: Db) {
    * broken it.
    */
   await deriveResponseTimes(db);
+  await deriveProfileStrength(db);
 
   await db.$executeRawUnsafe(`
     update "business" b set

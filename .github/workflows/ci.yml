@@ -150,7 +150,7 @@ jobs:
       # on a phone. It is the same chromium binary with a Pixel 7 descriptor,
       # so the install step above already covers it.
       - name: Axe and the acceptance surface
-        run: pnpm test:e2e --project=chromium --project=mobile --project=seller
+        run: pnpm test:e2e --project=chromium --project=mobile --project=seller --project=seller-free
 
       - uses: actions/upload-artifact@v4
         if: failure()
