@@ -1,8 +1,10 @@
 "use client";
 
 import {
+  AuditRow,
   CompletenessMeter,
   EnquiryComposer,
+  ModerationRow,
   Thread,
   QuoteLineEditor,
   ListingCard,
@@ -22,6 +24,7 @@ import {
   type QuoteLineDraft,
   type QuoteLineEditorLabels,
 } from "@/components/domain";
+import { Button } from "@/components/primitives";
 import { formatAED, formatDate, formatDuration, formatSize } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { Frame, Section, Specimen, States } from "../_kit";
@@ -343,6 +346,8 @@ export function Domain() {
       <EnquiryComposerSpecimens />
 
       <ThreadSpecimens />
+
+      <ModerationSpecimens />
 
       <Section
         id="quote-line-editor"
@@ -763,5 +768,106 @@ export function ThreadSpecimens() {
         </Frame>
       </States>
     </Section>
+  );
+}
+
+/**
+ * The two rows handoff 2 writes and handoff 4 displays. Built now because this
+ * handoff is what creates them: an IBAN in a thread raises a supplier report,
+ * and a removed review writes an audit row.
+ */
+export function ModerationSpecimens() {
+  return (
+    <>
+      <Section id="moderation-row" title="ModerationRow" note="tier 4 · admin queues are handoff 4">
+        <States label="raised automatically, waiting for a decision" stack>
+          <Frame>
+            <ul className="rounded-card border border-line bg-card">
+              <ModerationRow
+                kindLabel={t("moderation.kind.supplier_report")}
+                reference="SR-4412"
+                subjectName="Al Marwan Industrial Supplies"
+                subjectHref="/b/al-marwan-industrial-supplies-llc"
+                groundLabel={t("moderation.ground.off_platform_payment")}
+                raisedAt="24 Aug 2026, 09:02"
+                raisedByLabel={t("moderation.raised_by_platform")}
+                quoted="To lock the stock please transfer the 50% advance to AE07033… today."
+                actions={
+                  <>
+                    <Button size="sm" variant="secondary">
+                      {t("action.save")}
+                    </Button>
+                    <Button size="sm" variant="ghost">
+                      {t("action.cancel")}
+                    </Button>
+                  </>
+                }
+              />
+              <ModerationRow
+                kindLabel={t("moderation.kind.review")}
+                reference="Review:clx99"
+                subjectName="Desert Anchor General Trading"
+                groundLabel={t("moderation.ground.private_information")}
+                raisedAt="22 Aug 2026, 15:40"
+                raisedByLabel={t("moderation.raised_by", { name: "Rashid" })}
+                quoted="Call the owner on his mobile, it is the fastest way to get a price."
+              />
+            </ul>
+          </Frame>
+        </States>
+
+        <States label="already decided" stack>
+          <Frame>
+            <ul className="rounded-card border border-line bg-card">
+              <ModerationRow
+                kindLabel={t("moderation.kind.review")}
+                reference="Review:clx41"
+                subjectName="Al Manara Equipment Trading"
+                groundLabel={t("moderation.ground.no_traceable_enquiry")}
+                raisedAt="14 Aug 2026, 11:20"
+                raisedByLabel={t("moderation.raised_by_platform")}
+                outcomeLabel={t("report.outcome.upheld")}
+                outcomeTone="ok"
+              />
+            </ul>
+          </Frame>
+        </States>
+      </Section>
+
+      <Section id="audit-row" title="AuditRow" note="tier 4 · the reason is never truncated">
+        <States label="a removal, a tier change, a suspension" stack>
+          <Frame>
+            <ul className="rounded-card border border-line bg-card">
+              <AuditRow
+                actionLabel={t("audit.action.review_removed")}
+                subject="Review:clx99"
+                subjectHref="/admin/reports"
+                actorName="Layla Haddad"
+                actorRoleLabel="staff_moderator"
+                at="24 Aug 2026, 10:14"
+                reason="private_information: the body quoted the buyer's mobile number, which the buyer asked us to take down."
+              />
+              <AuditRow
+                actionLabel={t("audit.action.tier_change")}
+                subject="Business:clx12"
+                actorName="Omar Rahman"
+                actorRoleLabel="staff_ops_lead"
+                at="21 Aug 2026, 16:03"
+                reason="Site visit completed at the Al Quoz yard; stock and trade licence both matched the listing."
+                change={{ from: "tier 2", to: "tier 3" }}
+              />
+              <AuditRow
+                actionLabel={t("audit.action.suspend")}
+                subject="Business:clx77"
+                actorName="Omar Rahman"
+                actorRoleLabel="staff_ops_lead"
+                at="19 Aug 2026, 08:47"
+                reason="Third upheld off-platform payment report in ninety days. Suspended pending a call with the owner."
+              />
+            </ul>
+          </Frame>
+        </States>
+      </Section>
+    </>
   );
 }

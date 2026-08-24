@@ -39,7 +39,7 @@ they 404 until their handoff.
 /account/suppliers                      Saved suppliers                       later
 /account/requirements                   Saved requirements                    later
 /account/company                        Company, TRN, team, approvals         [7b]
-/review/new?enq=                        Write a review                       [10f]
+/review/new?enq=                        Write a review                       [10f]  built h2s6
 ```
 
 ## Tenant — /dashboard
@@ -69,7 +69,7 @@ they 404 until their handoff.
 /dashboard/leads                        Leads & RFQ inbox                     [3j]  built h2s1
 /dashboard/leads/:id/thread             Seller message thread                [11b]  built h2s1 + h2s4
 /dashboard/quotes                       Quotes sent pipeline                  [3k]  built h2s1
-/dashboard/reviews                      Reviews                              [11c]
+/dashboard/reviews                      Reviews                              [11c]  built h2s6
 /dashboard/analytics                    Analytics                             [3l]
 /dashboard/billing                      Subscription & invoices               [3m]
 /dashboard/billing/change               Plan change                          [11f]

@@ -58,13 +58,31 @@ function serialise(value: unknown): string {
 }
 
 describe("before acceptance", () => {
-  it("the leads inbox carries no contact details for any recipient", async () => {
+  it("the leads inbox releases contact only where a quote was accepted", async () => {
     for (const businessId of [quotingBusinessId, otherRecipientId]) {
       const leads = await getLeadsForBusiness(businessId);
       expect(leads.length).toBeGreaterThan(0);
+
+      // This buyer has accepted nothing, so none of their details may appear
+      // in either inbox, whatever else is in it.
       const payload = serialise(leads);
       for (const secret of SECRETS) expect(payload).not.toContain(secret);
-      for (const lead of leads) expect(lead.buyer.released).toBe(false);
+
+      /*
+       * A lead is released only when that enquiry released to this business.
+       * Asserting every lead is unreleased was too broad — a seller who won an
+       * enquiry legitimately sees the buyer's details on it, and the seed now
+       * has one.
+       */
+      for (const lead of leads) {
+        const enquiry = await prisma.enquiry.findUniqueOrThrow({
+          where: { id: lead.enquiryId },
+          select: { contactReleasedToBusinessId: true },
+        });
+        expect(lead.buyer.released, `${lead.ref} for ${businessId}`).toBe(
+          enquiry.contactReleasedToBusinessId === businessId,
+        );
+      }
     }
   });
 

@@ -65,16 +65,26 @@ export interface AuditRow {
 }
 
 /**
+ * The transaction an audit row joins.
+ *
+ * Structural rather than Prisma's own type, so lib/audit stays free of a
+ * Prisma import and keeps being testable against a fake. Any client with an
+ * `auditEvent.create` satisfies it, which both `prisma` and a `$transaction`
+ * handle do.
+ */
+export interface AuditTransaction {
+  auditEvent: { create(args: { data: Record<string, unknown> }): Promise<unknown> };
+}
+
+/**
  * Persistence port.
  *
- * The AuditEvent table arrives with the schema at checkpoint 3. Until then the
- * service layer is complete and tested against a fake, and the Prisma writer
- * plugs in behind this interface without touching a call site.
- *
- * When it is wired, the write must share a transaction with the mutation it
- * records. A mutation that can reach the database without its audit row is a
- * bug, and the suite should prove it cannot.
+ * The write shares a transaction with the mutation it records. A mutation that
+ * can reach the database without its audit row is a bug — so the caller opens
+ * one transaction, does its work in it, and hands the same handle here.
+ * Without a handle the write stands alone, which is right for the few audited
+ * actions that are a single statement.
  */
 export interface AuditWriter {
-  write(row: AuditRow): Promise<void>;
+  write(row: AuditRow, tx?: AuditTransaction): Promise<void>;
 }
