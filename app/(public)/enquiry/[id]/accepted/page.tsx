@@ -133,7 +133,17 @@ export default async function AcceptedPage({
           </p>
         </Card>
 
-        <p>
+        <p className="flex flex-wrap gap-4">
+          <Link
+            href={
+              carry
+                ? `/review/new?enq=${record.enquiryId}&t=${carry}`
+                : `/review/new?enq=${record.enquiryId}`
+            }
+            className="rounded-tag text-body-sm text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+          >
+            {t("accepted.review")}
+          </Link>
           <Link
             href={carry ? `/enquiry/${record.enquiryId}?t=${carry}` : `/enquiry/${record.enquiryId}`}
             className="rounded-tag text-body-sm text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"

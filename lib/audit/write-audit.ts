@@ -1,5 +1,5 @@
 import { AuditReasonError } from "@/lib/auth/errors";
-import type { AuditRow, AuditWriter, WriteAuditInput } from "./types";
+import type { AuditRow, AuditTransaction, AuditWriter, WriteAuditInput } from "./types";
 
 /**
  * A reason has to be a sentence somebody wrote, not a keystroke to get past a
@@ -46,7 +46,10 @@ export function assertReason(action: string, reason: unknown): string {
  * never into a screen — a second screen doing the same mutation would otherwise
  * be one forgotten call away from an unlogged change.
  */
-export async function writeAudit(input: WriteAuditInput): Promise<AuditRow> {
+export async function writeAudit(
+  input: WriteAuditInput,
+  tx?: AuditTransaction,
+): Promise<AuditRow> {
   const reason = assertReason(input.action, input.reason);
 
   const row: AuditRow = {
@@ -59,6 +62,6 @@ export async function writeAudit(input: WriteAuditInput): Promise<AuditRow> {
   };
 
   if (!writer) throw new AuditNotConfiguredError();
-  await writer.write(row);
+  await writer.write(row, tx);
   return row;
 }

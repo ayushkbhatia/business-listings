@@ -92,6 +92,8 @@ const hours = (n: number) => new Date(NOW.getTime() + n * 3_600_000);
  */
 const PROVISIONAL_CLAIM_TOKEN = "seed-0000-4000-8000-provisional01";
 const PROVISIONAL_ENQUIRY_ID = "seedenquiryprovisional0001";
+/** Accepted, unreviewed — the subject of the review flow. */
+const PROVISIONAL_ACCEPTED_ENQUIRY_ID = "seedenquiryaccepted000001";
 
 /** Deterministic v4-shaped uuids, so seeded users keep their ids between runs. */
 function uuid(n: number): string {
@@ -974,6 +976,56 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
       data: { enquiryId: e3.id, businessId: b.id, state: "opened", openedAt: hours(-3), createdAt: hours(-5) },
     });
   }
+
+  /*
+   * Enquiry five: the same account-less buyer, already accepted and not yet
+   * reviewed. ENQ-8871 has to stay unaccepted so the compare screen has accept
+   * buttons to show, and the review flow has to start from an accepted quote —
+   * so they are two enquiries rather than one that cannot be both.
+   */
+  const e5 = await db.enquiry.create({
+    data: {
+      id: PROVISIONAL_ACCEPTED_ENQUIRY_ID,
+      ref: "ENQ-8879",
+      buyerId: anon.id,
+      requirement: "Gate valves and a strainer for a pump room, delivered to Mussafah.",
+      deliverToArea: "Mussafah Industrial",
+      closesAt: days(-2),
+      createdAt: days(-20),
+      contactReleasedToBusinessId: anonRecipients[0]!.id,
+      contactReleasedAt: days(-12),
+      lines: {
+        create: [
+          { description: "Resilient seated gate valve, flanged", qty: 8, unit: "pcs", size: "DN100", sortOrder: 0 },
+        ],
+      },
+      recipients: {
+        create: [{ businessId: anonRecipients[0]!.id, state: "quoted", openedAt: days(-19), firstReplyAt: days(-19) }],
+      },
+    },
+  });
+
+  await db.quote.create({
+    data: {
+      ref: "QT-8879-R1",
+      enquiryId: e5.id,
+      businessId: anonRecipients[0]!.id,
+      revision: 1,
+      validityDays: 14,
+      status: "accepted",
+      note: "Ex-stock, delivery within 48 hours.",
+      sentAt: days(-19),
+      readAt: days(-18),
+      acceptedAt: days(-12),
+      expiresAt: days(-5),
+      createdAt: days(-19),
+      lines: {
+        create: [
+          { description: "Resilient seated gate valve DN100, flanged PN16", qty: 8, unitPrice: "402.00", leadTimeDays: 2, sortOrder: 0 },
+        ],
+      },
+    },
+  });
 
   return { e1, e2, e3, accepted: recipients[2]!, buyerTwoId };
 }

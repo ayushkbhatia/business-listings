@@ -93,6 +93,8 @@ const TIER_4 = [
   "quote-line-editor",
   "enquiry-composer",
   "thread",
+  "moderation-row",
+  "audit-row",
 ] as const;
 
 export default function Gallery() {

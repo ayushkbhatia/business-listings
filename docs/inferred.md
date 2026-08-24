@@ -657,3 +657,56 @@ Unchanged from step 2, and now it matters more: WhatsApp templates are
 `sms` scope; email has no provider beyond the development SMTP's two messages
 an hour. The layer treats all three as a skip with a reason rather than a
 silent success, and board 7e says so to the seller in plain words.
+
+## Handoff 2, step 6 — reviews
+
+### The audit writer had never been wired
+`lib/audit` shipped in handoff 0 as a port with a note that the Prisma writer
+arrived "at checkpoint 3". `setAuditWriter` was never called, so `writeAudit`
+threw `AuditNotConfiguredError` and **no audited staff mutation could run at
+all**. Nothing had called one, so nothing noticed. Review removal is the first,
+and `lib/audit/prisma-writer.ts` closes it.
+
+The port's own comment asked for the audit row to share a transaction with the
+mutation it records. `AuditWriter.write` now takes an optional transaction and
+`staffMutation` passes it through, so a removal cannot reach the database
+without its explanation. The type is structural rather than Prisma's own, so
+lib/audit stays free of a Prisma import and keeps being testable against a fake.
+
+### The removal-reason constraint schema.prisma promised did not exist
+`Review.removalReason` carries the comment "Enforced by a check constraint in
+the migration, not only by the service layer" and no such constraint was ever
+written. It exists now, paired rather than merely non-null: a reason with no
+removal is as wrong as a removal with no reason. Same for the seller reply and
+its timestamp.
+
+### Composing the reason before validating it defeated the validation
+`removeReview` built `"${ground}: ${reason}"` and handed that to
+`staffMutation`, so an empty reason arrived as `"abuse: "` — seven characters
+containing letters, which passes. The moderator's own words are validated
+first now. Caught by the test for criterion 9's "removal without a reason
+throws", which is exactly what that criterion is for.
+
+### Radios, not stars
+A star widget is five buttons pretending to be one control: hard to reach by
+keyboard, ambiguous to a screen reader, and five small targets on a phone where
+one row of five would do. `RadioGroup` renders a fieldset with a legend, which
+is `role="group"` — the canonical HTML pattern, and axe clean.
+
+### A review page for an enquiry that does not exist is not a 404
+It renders "this enquiry is not yours to review", the same answer as somebody
+else's enquiry. The buyer arrived from a link somebody sent them and a blank
+404 helps nobody; the message is identical either way, so it enumerates
+nothing. This differs deliberately from the enquiry pages, which do 404 —
+there, the visitor navigated themselves.
+
+### Removed reviews stay on the seller's page
+Marked, with their reason. A supplier who cannot see that one was taken down
+cannot learn anything from it, and hiding it entirely would look like the
+review had never existed — which is the one thing a removal must not resemble.
+
+### The seed needed a second provisional enquiry
+ENQ-8871 has to stay unaccepted so the compare screen has accept buttons for
+its own tests; the review flow has to start from an accepted quote. One
+enquiry cannot be both, so ENQ-8879 is accepted and unreviewed. Three browser
+tests were skipping before that, which is a test suite quietly proving nothing.
