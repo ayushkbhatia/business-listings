@@ -25,7 +25,9 @@
     "check:contrast": "tsx scripts/contrast-audit.mts",
     "report:contrast": "tsx scripts/contrast-report.mts",
     "check:formatters": "tsx scripts/check-formatter-coverage.mts",
-    "acceptance": "./scripts/acceptance.sh"
+    "acceptance": "./scripts/acceptance.sh",
+    "acceptance:1": "./scripts/acceptance-handoff-1.sh",
+    "lighthouse": "./scripts/lighthouse.sh"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

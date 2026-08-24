@@ -68,7 +68,10 @@ export function FacetLinks({
           // says "this one is on" for an item in a set.
           aria-current={option.selected ? "true" : undefined}
           className={cn(
-            "flex items-center gap-2 rounded-tag py-0.5 text-body-sm",
+            // The accessibility floor is 44px on mobile and 32px on desktop.
+            // A 22px facet row is a fine mouse target and a bad thumb target,
+            // and a filter rail on a phone is all thumb.
+            "flex min-h-11 items-center gap-2 rounded-tag py-0.5 text-body-sm md:min-h-8",
             "transition-colors duration-120 ease-out",
             "focus-visible:outline-none focus-visible:shadow-focus",
             option.selected ? "text-ink" : "text-body hover:text-ink",

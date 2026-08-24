@@ -75,6 +75,8 @@ is not the same on every project.
 | `pnpm check:schema` | Acceptance criterion 9 — no price on Product, no order table, no payout |
 | `pnpm test:e2e` | Playwright + axe on the gallery |
 | `pnpm acceptance` | The ten handoff-0 criteria, walked in order |
+| `pnpm acceptance:1` | The twelve handoff-1 criteria, walked in order |
+| `pnpm lighthouse` | SEO, accessibility and best-practices on the three routes criterion 10 names |
 | `pnpm check:contrast` | Every token pairing against the §09.2 floor |
 | `pnpm report:contrast` | What axe finds on the running gallery, grouped by colour pair |
 | `pnpm check:formatters` | Every formatter has a test |

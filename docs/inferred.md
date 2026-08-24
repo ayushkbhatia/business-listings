@@ -326,3 +326,37 @@ read as an editorial endorsement.
   instance was converted where the Next lint rule fires; the rest is a
   mechanical sweep worth doing before launch, and it is a performance change,
   not a correctness one.
+
+---
+
+## Handoff 1, step 6 — SEO
+
+### The board 6f guard applies to subcategories, not top-level categories
+`routes.md` scopes the thresholds to "area landing pages and subcategory
+pages". A top-level category is core navigation that the home page links to
+directly, and holding it out of the sitemap while linking to it from the front
+page would be the worst of both. All four seeded subcategories are held back,
+which is the guard working.
+
+### Intro-word count is not enforced yet
+The 250-word floor is in `evaluatePublish` and tested, but the sitemap passes a
+constant for it because the intro-copy field arrives with the handoff 5 pages
+it belongs to. Only the supply floors bite today.
+
+### An unclaimed listing stays in the sitemap
+At priority 0.4 rather than 0.7, and without its catalogue, branches or reviews
+tabs, which it does not have. Thirty thousand unclaimed pages are how a
+supplier first finds us; excluding them would be excluding the acquisition
+funnel.
+
+### Lighthouse found a second §09.2 conflict
+Type size. 11.5px captions and 9.5px eyebrows are both deliberate and both under
+the 12px Lighthouse counts as legible, so only 30 to 40 per cent of a page
+clears it. Criterion 10 asks for **SEO** ≥ 95 and that is 100 everywhere, so
+this does not block — but it compounds with the contrast gap on exactly the same
+`--text-muted` metadata. Written up in docs/contrast.md with three ways out.
+
+### One real defect Lighthouse caught
+Facet rows in the filter rail were 22px tall against a stated floor of 44px on
+mobile. Fine with a mouse, bad with a thumb, and a filter rail on a phone is all
+thumb.

@@ -28,7 +28,12 @@ export interface VerificationBadgeProps {
   /** `tier {n}` in mono, already localised. */
   tierLabel?: string;
   size?: "sm" | "md" | "lg";
-  /** Badge only, without the checked line. For a dense row — never a storefront. */
+  /**
+   * The dense form, for a results row. It still carries what was checked and
+   * when — criterion 8 has no exceptions — with the date inline and the fuller
+   * sentence as the title and for assistive technology. What is dropped is the
+   * second visible line, not the information.
+   */
   compact?: boolean;
 }
 

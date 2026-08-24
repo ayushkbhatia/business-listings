@@ -102,3 +102,47 @@ fails contrast there". axe found 46 such nodes.
 
 The block is now wrapped in `@layer base`, byte-identical inside. That is the
 only edit, and it removed 46 of the original 521 failures.
+
+---
+
+# Type size — the other §09.2 conflict
+
+Lighthouse surfaced a second place where the design system and the
+accessibility floor disagree, and it is the same shape as the contrast one:
+measured, left unchanged, and needing a decision rather than a patch.
+
+| route | legible text | Lighthouse wants |
+|---|---:|---:|
+| `/c/:category` | 29.99% | 60% |
+| `/b/:slug` | 40.08% | 60% |
+
+Lighthouse counts text at **12px or larger** as legible on mobile and wants at
+least 60% of a page to clear it. The design system sets:
+
+- `--t-caption: 11.5px` — "the floor for anything a user must read"
+- `--t-eyebrow: 9.5px` — "mono only, for uppercase eyebrows and column heads"
+
+Both are deliberate and both are under the bar. On a directory page most of the
+text is metadata — an area, a licence number, a count, a response time — so the
+proportion below 12px is high by design, not by accident.
+
+**It does not affect criterion 10.** That asks for Lighthouse **SEO** ≥ 95, and
+SEO is 100 on all three required routes. Font size is scored under
+best-practices, which sits at 96.
+
+## Three ways out, same as before
+
+1. **Raise `--t-caption` to 12px and `--t-eyebrow` to 10px.** Two token values.
+   It shifts every dense surface slightly and is the smallest real change.
+2. **Keep the scale and accept the score.** Defensible: 11.5px on a 4.23:1
+   colour is a readability question, and 11.5px on a properly contrasting one
+   is largely fine. It stops being defensible if contrast is left as it is too,
+   because the two compound.
+3. **Raise `--t-caption` only.** Eyebrows are uppercase mono over short strings
+   and are the least harmed by being small; body-adjacent captions are the ones
+   a buyer actually reads.
+
+The one thing worth saying plainly: **contrast and type size compound.** Caption
+text at 11.5px and 4.23:1 is meaningfully harder to read than either problem
+alone suggests, and both currently apply to the same `--text-muted` metadata
+that carries most of a listing's facts.
