@@ -36,3 +36,10 @@ export {
 } from "./QuoteLineEditor";
 
 export { TIERS, tierSpec, isVerified, type TierSpec, type VerificationTier } from "./verification";
+
+export { HoursEditor, type HoursEditorProps } from "./HoursEditor";
+export {
+  EmirateAreaPicker,
+  type EmirateAreaPickerProps,
+  type AreaOption,
+} from "./EmirateAreaPicker";

@@ -1,0 +1,215 @@
+/**
+ * Trading hours, as they are actually kept in the Gulf.
+ *
+ * `Location.hours` is Json and has had a shape since the seed was written —
+ * `{ sun: [{ open, close }, ...], ..., sat: [] }` — read in exactly one place
+ * on the storefront. This module is that shape given a name, a validator and a
+ * week that starts on Sunday, so the editor writes what the storefront already
+ * reads rather than a second dialect of the same thing.
+ *
+ * Two things are not incidental:
+ *
+ *   - Split shifts are the norm, not an edge case. A trade counter in Sharjah
+ *     opens at eight, closes at one for the afternoon, and opens again at four.
+ *     An editor with one open and one close per day cannot describe that, and
+ *     a supplier who cannot describe their hours writes them in the description
+ *     field instead, where nothing can read them.
+ *   - Ramadan hours are a whole separate week, not a modifier. They apply for
+ *     about a month and revert on their own.
+ */
+
+/** The week starts on Sunday. The working week is Monday to Friday elsewhere. */
+export const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+export type Day = (typeof DAYS)[number];
+
+export interface Shift {
+  /** "08:00", 24-hour. */
+  open: string;
+  close: string;
+}
+
+/** A day with no shifts is closed. An absent day is also closed. */
+export type WeekHours = Partial<Record<Day, Shift[]>> & {
+  /**
+   * What the supplier does on a public holiday.
+   *
+   * Deliberately a statement of practice rather than a calendar. The UAE's
+   * public holidays include Eid, whose dates move with the moon and are
+   * announced by the government weeks out — a table of them here would be
+   * wrong within a year and would be wrong silently. What a buyer needs to know
+   * is whether this supplier trades on them at all, and the supplier is the
+   * authority on that.
+   *
+   * Stored alongside the days because the storefront reads this object by day
+   * key and ignores anything else in it.
+   */
+  publicHolidays?: "closed" | "reduced" | "normal";
+};
+
+/**
+ * Ramadan hours apply to every day the same way far more often than not, so the
+ * shape the seed already uses — `{ all: [...] }` — is kept, with per-day
+ * overrides possible alongside it.
+ */
+export interface RamadanHours extends WeekHours {
+  all?: Shift[];
+}
+
+const TIME = /^([01]\d|2[0-3]):([0-5]\d)$/;
+
+export function isTime(value: string): boolean {
+  return TIME.test(value);
+}
+
+/** Minutes since midnight, for comparing two times without parsing dates. */
+export function minutesOf(time: string): number {
+  const match = TIME.exec(time);
+  if (!match) return Number.NaN;
+  return Number(match[1]) * 60 + Number(match[2]);
+}
+
+export type HoursProblem =
+  | { day: Day; kind: "bad_time"; value: string }
+  | { day: Day; kind: "backwards"; open: string; close: string }
+  | { day: Day; kind: "overlap"; first: Shift; second: Shift };
+
+/**
+ * What is wrong, in terms a seller can act on.
+ *
+ * Overlap is checked because two shifts that overlap are almost always a
+ * mistyped afternoon — "16:00–20:00" entered as "06:00–20:00" — and silently
+ * merging them would publish hours the supplier does not keep.
+ *
+ * A close before an open is not treated as crossing midnight. A supplier who
+ * genuinely trades through midnight is rare enough that guessing wrong for the
+ * common case is the worse trade; they enter two shifts instead.
+ */
+export function problemsWith(hours: WeekHours): HoursProblem[] {
+  const problems: HoursProblem[] = [];
+
+  for (const day of DAYS) {
+    const shifts = hours[day] ?? [];
+    for (const shift of shifts) {
+      if (!isTime(shift.open)) problems.push({ day, kind: "bad_time", value: shift.open });
+      if (!isTime(shift.close)) problems.push({ day, kind: "bad_time", value: shift.close });
+      if (isTime(shift.open) && isTime(shift.close) && minutesOf(shift.close) <= minutesOf(shift.open)) {
+        problems.push({ day, kind: "backwards", open: shift.open, close: shift.close });
+      }
+    }
+
+    const ordered = [...shifts]
+      .filter((s) => isTime(s.open) && isTime(s.close))
+      .sort((a, b) => minutesOf(a.open) - minutesOf(b.open));
+    for (let i = 1; i < ordered.length; i += 1) {
+      const previous = ordered[i - 1]!;
+      const current = ordered[i]!;
+      if (minutesOf(current.open) < minutesOf(previous.close)) {
+        problems.push({ day, kind: "overlap", first: previous, second: current });
+      }
+    }
+  }
+
+  return problems;
+}
+
+/** Drop empty rows and sort each day, so two identical weeks compare equal. */
+export function normalise(hours: WeekHours): WeekHours {
+  const out: WeekHours = {};
+  if (hours.publicHolidays) out.publicHolidays = hours.publicHolidays;
+  for (const day of DAYS) {
+    const shifts = (hours[day] ?? [])
+      .filter((s) => s.open.trim() !== "" && s.close.trim() !== "")
+      .map((s) => ({ open: s.open.trim(), close: s.close.trim() }))
+      .sort((a, b) => minutesOf(a.open) - minutesOf(b.open));
+    out[day] = shifts;
+  }
+  return out;
+}
+
+/** Every day the same. What copy-to-all-branches and the Ramadan block use. */
+export function everyDay(shifts: Shift[]): WeekHours {
+  return Object.fromEntries(DAYS.map((day) => [day, shifts])) as WeekHours;
+}
+
+export function isClosedAllWeek(hours: WeekHours): boolean {
+  return DAYS.every((day) => (hours[day] ?? []).length === 0);
+}
+
+/**
+ * Ramadan, as Gregorian dates.
+ *
+ * Ramadan is lunar and its start depends on a moon sighting announced a day or
+ * two beforehand, so it cannot be computed to the day in advance and this does
+ * not pretend to. The dates below are the astronomical estimates published for
+ * the UAE; they are right to within a day at each end, which is close enough to
+ * switch a supplier's hours over automatically and not close enough to publish
+ * as fact. `ramadanFor` returns null past the table rather than extrapolating.
+ *
+ * Sourced per Hijri year. Extend it rather than computing it.
+ */
+const RAMADAN: Record<number, { from: string; to: string }> = {
+  2026: { from: "2026-02-17", to: "2026-03-19" },
+  2027: { from: "2027-02-07", to: "2027-03-08" },
+  2028: { from: "2028-01-27", to: "2028-02-25" },
+  2029: { from: "2029-01-15", to: "2029-02-13" },
+  2030: { from: "2030-01-05", to: "2030-02-03" },
+  2031: { from: "2031-12-15", to: "2032-01-13" },
+};
+
+export interface RamadanWindow {
+  year: number;
+  from: Date;
+  to: Date;
+  /** True when `now` falls inside it. */
+  active: boolean;
+  /** The estimate is a day either side; the UI says so rather than implying precision. */
+  approximate: true;
+}
+
+export function ramadanFor(year: number, now = new Date()): RamadanWindow | null {
+  const entry = RAMADAN[year];
+  if (!entry) return null;
+
+  const from = new Date(`${entry.from}T00:00:00Z`);
+  const to = new Date(`${entry.to}T23:59:59Z`);
+  return {
+    year,
+    from,
+    to,
+    active: now >= from && now <= to,
+    approximate: true,
+  };
+}
+
+/** The window covering or next following `now`, or null past the table. */
+export function nextRamadan(now = new Date()): RamadanWindow | null {
+  const years = Object.keys(RAMADAN)
+    .map(Number)
+    .sort((a, b) => a - b);
+  for (const year of years) {
+    const window = ramadanFor(year, now);
+    if (window && (window.active || window.to >= now)) return window;
+  }
+  return null;
+}
+
+/** Which week applies today. The switch is automatic, which is the whole point. */
+export function hoursInEffect(
+  hours: WeekHours,
+  ramadan: RamadanHours | null,
+  now = new Date(),
+): { hours: WeekHours; isRamadan: boolean } {
+  const window = nextRamadan(now);
+  if (!window?.active || !ramadan) return { hours, isRamadan: false };
+
+  const all = ramadan.all;
+  const week: WeekHours = all ? everyDay(all) : {};
+  for (const day of DAYS) {
+    const override = ramadan[day];
+    if (override) week[day] = override;
+  }
+
+  // A Ramadan block with nothing in it is not a reason to close the business.
+  if (isClosedAllWeek(week)) return { hours, isRamadan: false };
+  return { hours: week, isRamadan: true };
+}

@@ -89,10 +89,10 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
     key: "listing",
     labelKey: "nav.group.listing",
     items: [
-      { key: "listing", labelKey: "nav.listing", href: "/dashboard/listing", capability: "listing.edit" , later: true },
-      { key: "locations", labelKey: "nav.locations", href: "/dashboard/locations", capability: "listing.edit" , later: true },
-      { key: "hours", labelKey: "nav.hours", href: "/dashboard/hours", capability: "listing.edit" , later: true },
-      { key: "verification", labelKey: "nav.verification", href: "/dashboard/verification" , later: true },
+      { key: "listing", labelKey: "nav.listing", href: "/dashboard/listing", capability: "listing.edit" },
+      { key: "locations", labelKey: "nav.locations", href: "/dashboard/locations", capability: "listing.edit" },
+      { key: "hours", labelKey: "nav.hours", href: "/dashboard/hours", capability: "listing.edit" },
+      { key: "verification", labelKey: "nav.verification", href: "/dashboard/verification" },
     ],
   },
   {
