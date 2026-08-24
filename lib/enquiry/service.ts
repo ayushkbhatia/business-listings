@@ -2,6 +2,8 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { createProvisionalIdentity } from "@/lib/auth/flow";
 import { normaliseIdentifier } from "@/lib/auth/identity";
+import { onEnquiryDelivered, onQuoteAccepted } from "@/lib/notify/events";
+import { quoteTotalAed } from "@/lib/quote/money";
 import {
   MAX_RECIPIENTS,
   monthStart,
@@ -230,7 +232,39 @@ export async function createEnquiry(
     return created;
   });
 
+  /*
+   * After the transaction, never inside it. A carrier being slow must not hold
+   * a database transaction open, and a carrier being down must not roll back
+   * an enquiry that was successfully delivered to eight inboxes.
+   */
+  await onEnquiryDelivered({
+    enquiryId: enquiry.id,
+    businessIds: recipients.map((r) => r.businessId),
+    valueAed: estimatedValueAed(input.lines),
+  });
+
   return { ok: true, enquiryId: enquiry.id, ref: enquiry.ref, recipients, skipped, claimToken };
+}
+
+/**
+ * What the enquiry is roughly worth, for the quiet-hours override.
+ *
+ * From the buyer's own target prices, which are the only numbers an enquiry
+ * carries — there are no supplier prices yet, by definition. A line with no
+ * target contributes nothing, so this reads low rather than high, and a seller
+ * woken at midnight was woken for an enquiry that really is large.
+ */
+function estimatedValueAed(lines: readonly EnquiryLineInput[]): number | null {
+  let total = 0;
+  let known = false;
+  for (const line of lines) {
+    const target = Number(line.targetUnitPriceAed);
+    if (Number.isFinite(target) && target > 0) {
+      total += target * line.qty;
+      known = true;
+    }
+  }
+  return known ? Math.round(total) : null;
 }
 
 /**
@@ -270,6 +304,7 @@ export async function acceptQuote(
     select: {
       id: true,
       businessId: true,
+      ref: true,
       status: true,
       expiresAt: true,
       enquiry: { select: { id: true, buyerId: true, contactReleasedToBusinessId: true } },
@@ -283,7 +318,7 @@ export async function acceptQuote(
     return { ok: false, error: "quote_expired" };
   }
 
-  return prisma.$transaction(async (tx) => {
+  const accepted = await prisma.$transaction(async (tx) => {
     await tx.enquiry.update({
       where: { id: quote.enquiry.id },
       data: {
@@ -336,6 +371,21 @@ export async function acceptQuote(
       declined: declined.count,
     };
   });
+
+  if (accepted.ok) {
+    const total = await prisma.quoteLine.findMany({
+      where: { quoteId: quote.id },
+      select: { qty: true, unitPrice: true },
+    });
+    await onQuoteAccepted({
+      enquiryId: accepted.enquiryId,
+      businessId: accepted.businessId,
+      quoteRef: quote.ref,
+      totalAed: quoteTotalAed(total.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
+    });
+  }
+
+  return accepted;
 }
 
 export { CLOSES_IN_DAYS_CHOICES, MAX_RECIPIENTS };

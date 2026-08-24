@@ -77,7 +77,7 @@ they 404 until their handoff.
 /dashboard/invoice/:id                  Tax invoice                          [11f]
 /dashboard/promote                      Sponsored placement                  [11e]
 /dashboard/team                         Team & lead routing                   [7d]
-/dashboard/settings                     Settings & notifications              [7e]
+/dashboard/settings                     Settings & notifications              [7e]  built h2s5 (alerts only)
 ```
 
 ## Superadmin — /admin
@@ -114,6 +114,16 @@ they 404 until their handoff.
 /admin/api                              API keys & webhooks                  [12h]
 /admin/compliance                       PDPL data requests                   [12h]
 /admin/audit                            Audit log                             [4i]
+```
+
+## Development surfaces
+
+Not part of any of the three products. They exist so a person can see every
+state at once, which is the only way to notice that two of them disagree.
+
+```
+/dev/gallery                            Every component, every state          built h0-h2
+/dev/notifications                      Notification templates rendered [7f]  built h2s5
 ```
 
 ## Rules

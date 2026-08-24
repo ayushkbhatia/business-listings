@@ -597,3 +597,63 @@ seller side is covered by the integration tests and was checked by hand against
 the dev server — the board 11b warning and the single nudge both render. This
 is the second step where that gap has bitten; it closes when CI can sign a
 seller in.
+
+## Handoff 2, step 5 — notifications
+
+### Criterion 8 has two halves and only one is about templates
+The template guard checks that no template *names* a placeholder that could
+carry contact details. That is the easy half — a template is written once and
+reviewed once. The other half is `lib/notify/render.ts`: `{area}` is a
+perfectly safe placeholder and `{ area: "+971 50 641 2288" }` is a leak. Values
+are checked at the moment of substitution and a leak throws rather than sends.
+The check is deliberately tight — a formatted price has separators and a
+reference has a prefix, so neither trips it.
+
+### The delivery log records what did not happen
+A row is written for a skip and a defer as well as a send, with the reason. A
+seller asking "why did I not hear about that enquiry" deserves an answer, and
+the answer is usually one of their own settings. It is also how a WhatsApp
+template still waiting on Meta shows up as a visible gap rather than silence.
+
+### In-app is never deferred
+Quiet hours silence WhatsApp and SMS. In-app is not an interruption — nothing
+buzzes, and a notification waiting in a list at 07:00 is the same notification
+whether it arrived at 22:00 or at dawn. Deferring it would only make the list
+wrong.
+
+### Buyers have no notification matrix, so they have a default
+Board 7e is the seller's control panel and nothing in this handoff gives a
+buyer one. Buyer-facing events (`quote_received`, `quote_revised`) route
+through `BUYER_DEFAULT` in `lib/notify/events.ts`. Quiet hours still apply — a
+WhatsApp at two in the morning is rude whoever receives it — and there is no
+high-value override, because a buyer set no threshold to override.
+
+### An enquiry's value comes from the buyer's own targets
+For the quiet-hours override there has to be a number, and the only numbers on
+a fresh enquiry are the buyer's target prices — there are no supplier prices
+yet, by definition. Lines with no target contribute nothing, so the estimate
+reads low, and a seller woken at midnight was woken for an enquiry that really
+is large.
+
+### Notification dispatch is inline, and should not stay that way
+`createEnquiry` awaits the sends before returning. That is correct without a
+queue — in a serverless function, work that is not awaited may never run — but
+it means a buyer waits on eight suppliers' notifications. Batching the template
+lookups took it from thirty-two queries to one per recipient, which made it
+tolerable rather than right. A queue is the real answer and belongs with the
+response-time measurement job.
+
+### A `"use server"` module exporting a const array fails at runtime, not at build
+Next reports "A \"use server\" file can only export async functions, found
+object" at module evaluation. `next build` passes, so it ships and then fails
+on the first request that touches the page. This happened twice in this
+handoff — once with a pure function in step 3, once with a const array here.
+`tests/unit/server-actions.test.ts` now checks every action module in the unit
+suite, where it costs nothing.
+
+### What is still switched off
+Unchanged from step 2, and now it matters more: WhatsApp templates are
+`pending_meta` and cannot send; SMS has no carrier because the Bird key has no
+`sms` scope; email has no provider beyond the development SMTP's two messages
+an hour. The layer treats all three as a skip with a reason rather than a
+silent success, and board 7e says so to the seller in plain words.
