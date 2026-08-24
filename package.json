@@ -29,6 +29,7 @@
     "check:formatters": "tsx scripts/check-formatter-coverage.mts",
     "acceptance": "./scripts/acceptance.sh",
     "acceptance:1": "./scripts/acceptance-handoff-1.sh",
+    "acceptance:2": "./scripts/acceptance-handoff-2.sh",
     "lighthouse": "./scripts/lighthouse.sh"
   },
   "dependencies": {

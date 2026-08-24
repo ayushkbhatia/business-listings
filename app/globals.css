@@ -276,6 +276,22 @@
 }
 
 /* ==========================================================================
+   Ours, not the canvas's — kept out of the pasted block above so that block
+   stays a verbatim copy of docs/tokens.css.
+   ========================================================================== */
+@layer base {
+  /* A fieldset defaults to `min-inline-size: min-content`, so it refuses to
+     narrow below its widest child and an `overflow-x-auto` inside it never
+     scrolls. On /rfq/new that pushed the line-items table's `min-w-[40rem]`
+     out to the page, which widened the layout viewport to 725px on a 412px
+     phone: the whole wizard rendered zoomed out and the Continue button could
+     not be tapped. Radio.tsx had already patched around this with `min-w-0`
+     on its own fieldset; this is the same fix, once, for every fieldset. */
+  fieldset { min-inline-size: 0; }
+}
+
+
+/* ==========================================================================
    Tailwind mapping.
 
    Tailwind v4 has no `tailwind.config.ts` — the theme is declared in CSS. The
