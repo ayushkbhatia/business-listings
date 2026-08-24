@@ -115,6 +115,12 @@ export default async function EnquiryPage({
                         {quote.business.displayName}
                       </Link>
                       <span className="mt-0.5 block font-mono text-caption text-muted">{quote.ref}</span>
+                      <Link
+                        href={withToken(`/enquiry/${enquiry.id}/thread/${quote.business.slug}`)}
+                        className="mt-0.5 inline-block rounded-tag text-caption text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+                      >
+                        {t("thread.heading")}
+                      </Link>
                     </span>
                     <span className="font-mono tabular-nums text-body text-ink">
                       {formatAED(quote.totalAed)}
@@ -148,7 +154,7 @@ export default async function EnquiryPage({
               {enquiry.recipients.map((r) => (
                 <li key={r.businessId} className="flex flex-wrap items-baseline justify-between gap-2">
                   <Link
-                    href={`/b/${r.slug}`}
+                    href={withToken(`/enquiry/${enquiry.id}/thread/${r.slug}`)}
                     className="rounded-tag text-body-sm text-ink underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
                   >
                     {r.displayName}

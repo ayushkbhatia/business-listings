@@ -726,6 +726,50 @@ export const en = {
   "rfq.contact_name_hint": "Suppliers see your first name only.",
   "rfq.contact_required": "Add a UAE mobile so the quotes can reach you. It looks like 050 641 2288.",
 
+  // ── The thread [10h] buyer · [11b] seller ──
+  "thread.heading": "Messages",
+  "thread.log": "Messages with {supplier}",
+  "thread.log_buyer": "Messages with {buyer}",
+  "thread.empty": "Nothing yet. A question here is faster than a phone call, and it stays on the record.",
+  "thread.composer": "Write a message",
+  // Names the form landmark. Distinct from the field inside it, or the two
+  // collide and a screen reader offers the same name for both.
+  "thread.composer_form": "Reply on this thread",
+  "thread.placeholder": "Ask a question, or answer one.",
+  "thread.send": "Send",
+  "thread.sending": "Sending",
+  "thread.quick_replies": "Or start from one of these",
+  "thread.flagged": "Flagged",
+  "thread.flagged_explain": "This message looks like it moves payment off the platform. It has been passed to our review team.",
+  "thread.revision_of": "Revision {revision}",
+  "thread.was": "was",
+  "thread.delta_down": "{amount} lower, {percent}%",
+  "thread.delta_up": "{amount} higher, {percent}%",
+  "thread.delta_same": "Same total",
+  "thread.closed": "This enquiry has closed. The thread stays here as the record.",
+  "thread.not_yours": "This thread is not yours to write on. Open it from your enquiry.",
+  "thread.back_to_enquiry": "Back to the enquiry",
+  "thread.back_to_lead": "Back to the lead",
+  "thread.with_supplier": "Messages with {supplier}",
+
+  // Board 11b states this to the seller in plain words, and it is not decorative.
+  "thread.seller_warning_title": "Everything here is the record",
+  "thread.seller_warning_body": "If this deal goes wrong, this thread is the evidence — for you as much as for the buyer. Asking for payment to a bank account before a quote is accepted is flagged automatically and reviewed by a person.",
+
+  "thread.nudge": "Send one follow-up",
+  "thread.nudge_sent": "Follow-up sent {when}",
+  "thread.nudge_help": "One only. A second follow-up loses more deals than it wins.",
+  "thread.nudge_not_yet": "Send a quote first. There is nothing to follow up on yet.",
+
+  // Board 10h, buyer side.
+  "thread.chip.validity": "Can you hold this price a little longer?",
+  "thread.chip.datasheets": "Could you send datasheets for these?",
+  "thread.chip.credit": "What credit terms can you offer?",
+  // Board 11b, seller side.
+  "thread.chip.hold_price": "We can hold this price for 21 days.",
+  "thread.chip.site_survey": "We can do a free site survey before you decide.",
+  "thread.chip.certificate": "We can attach the CD certificate.",
+
   // ── Buyer: tracking an enquiry [1i] [1n] [7c] [10e] ──
   "enquiry.ref": "Enquiry {ref}",
   "enquiry.sent_title": "Enquiry sent",

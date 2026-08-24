@@ -3,6 +3,7 @@
 import {
   CompletenessMeter,
   EnquiryComposer,
+  Thread,
   QuoteLineEditor,
   ListingCard,
   ProductCard,
@@ -16,6 +17,8 @@ import {
   type ListingCardBusiness,
   type ListingContext,
   type EnquiryComposerLabels,
+  type ThreadLabels,
+  type ThreadMessageView,
   type QuoteLineDraft,
   type QuoteLineEditorLabels,
 } from "@/components/domain";
@@ -339,6 +342,8 @@ export function Domain() {
 
       <EnquiryComposerSpecimens />
 
+      <ThreadSpecimens />
+
       <Section
         id="quote-line-editor"
         title="QuoteLineEditor"
@@ -656,6 +661,104 @@ export function EnquiryComposerSpecimens() {
             shape="single"
             labels={{ ...ENQUIRY_LABELS, formLabel: "Enquiry — refused by the server" }}
             error={t("rfq.recipients_none")}
+          />
+        </Frame>
+      </States>
+    </Section>
+  );
+}
+
+/** Board 10h and 11b are two views of this. The chips and the notice differ. */
+const THREAD_LABELS: ThreadLabels = {
+  heading: t("thread.heading"),
+  formLabel: t("thread.composer_form"),
+  logLabel: t("thread.log", { supplier: "Al Marwan Industrial Supplies" }),
+  empty: t("thread.empty"),
+  composerLabel: t("thread.composer"),
+  placeholder: t("thread.placeholder"),
+  send: t("thread.send"),
+  sending: t("thread.sending"),
+  quickRepliesLabel: t("thread.quick_replies"),
+  flagged: t("thread.flagged"),
+  flaggedExplain: t("thread.flagged_explain"),
+  revisionOf: (revision) => t("thread.revision_of", { revision }),
+  wasLabel: t("thread.was"),
+};
+
+const THREAD_MESSAGES: ThreadMessageView[] = [
+  {
+    id: "m1",
+    body: "Can you bring the DN150 lead time inside two weeks?",
+    fromMe: false,
+    senderLabel: "Rashid",
+    at: "23 Aug 2026, 14:12",
+    flagged: false,
+  },
+  {
+    id: "m2",
+    body: "We can do seven days if you confirm this week. Revised quote attached.",
+    fromMe: true,
+    senderLabel: "Al Marwan Industrial Supplies",
+    at: "23 Aug 2026, 16:40",
+    flagged: false,
+    quote: {
+      ref: "QT-8841-R2",
+      revision: 2,
+      totalLabel: "AED 21,128",
+      previousTotalLabel: "AED 21,600",
+      deltaLabel: t("thread.delta_down", { amount: "AED 472", percent: "2.2" }),
+      direction: "down",
+    },
+  },
+];
+
+export function ThreadSpecimens() {
+  return (
+    <Section id="thread" title="Thread" note="boards 10h and 11b · one component, two sides">
+      <States label="a revision, with the previous total struck through" stack>
+        <Frame width="34rem">
+          <Thread
+            messages={THREAD_MESSAGES}
+            labels={{ ...THREAD_LABELS, logLabel: "Messages — revision", formLabel: "Reply — revision" }}
+            quickReplies={[t("thread.chip.validity"), t("thread.chip.datasheets")]}
+          />
+        </Frame>
+      </States>
+
+      <States label="a flagged message, with the seller's warning above it" stack>
+        <Frame width="34rem">
+          <Thread
+            labels={{ ...THREAD_LABELS, logLabel: "Messages — flagged", formLabel: "Reply — flagged" }}
+            quickReplies={[t("thread.chip.hold_price"), t("thread.chip.site_survey")]}
+            notice={
+              <div className="rounded-ctl border border-line bg-paper-sunk px-3 py-2.5">
+                <p className="text-body-sm text-ink">{t("thread.seller_warning_title")}</p>
+                <p className="mt-1 text-caption text-muted">{t("thread.seller_warning_body")}</p>
+              </div>
+            }
+            messages={[
+              {
+                id: "m3",
+                body: "To lock the stock please transfer the 50% advance to AE070331234567890123456 today.",
+                fromMe: true,
+                senderLabel: "Al Marwan Industrial Supplies",
+                at: "24 Aug 2026, 09:02",
+                flagged: true,
+              },
+            ]}
+          />
+        </Frame>
+      </States>
+
+      <States label="nothing said yet, and a closed thread" stack>
+        <Frame width="34rem">
+          <Thread messages={[]} labels={{ ...THREAD_LABELS, logLabel: "Messages — empty", formLabel: "Reply — empty" }} />
+        </Frame>
+        <Frame width="34rem">
+          <Thread
+            readOnly
+            messages={[THREAD_MESSAGES[0]!]}
+            labels={{ ...THREAD_LABELS, logLabel: "Messages — closed" }}
           />
         </Frame>
       </States>

@@ -5,19 +5,32 @@ import { StatusBadge } from "@/components/display/StatusBadge";
 import { Card, KeyValuePanel, Panel } from "@/components/structure";
 import type { MatchReason, QuoteLineDraft } from "@/components/domain/QuoteLineEditor";
 import { getLeadDetail, type LeadDetail } from "@/lib/db/queries/seller";
-import { formatAED, formatCount, formatCountdown, formatDate, formatRelative, isWithinRelativeWindow } from "@/lib/format";
+import {
+  formatAED,
+  formatCount,
+  formatCountdown,
+  formatDate,
+  formatDateTime,
+  formatRelative,
+  isWithinRelativeWindow,
+} from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../../../_shell";
 import { markLeadOpened } from "@/lib/db/mutations/lead";
+import { prisma } from "@/lib/db/client";
+import { getThread } from "@/lib/messaging/service";
+import { toThreadQuotes } from "@/lib/messaging/thread-view";
+import { SellerThread } from "./SellerThread";
 import { QuoteComposer } from "./QuoteComposer";
 
 /**
  * Board 11b — the seller's view of one enquiry, and the quote composer on it.
  *
- * The thread itself (messages, quick-reply chips, the nudge, off-platform
- * payment detection) is step 4 of this handoff. This is the half that had to
- * come first: the quote model is far easier to get right while the enquiry is
- * a fixture.
+ * Two halves. The quote composer came first in step 1, because the quote model
+ * is far easier to get right while the enquiry is a fixture; the thread lands
+ * here in step 4 beside it. They share a page because a seller pricing a line
+ * and a seller answering a question about it are the same person in the same
+ * minute.
  */
 export const dynamic = "force-dynamic";
 
@@ -31,9 +44,14 @@ const AVAILABILITY_LABEL = {
 export default async function LeadThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const seat = await requireSellerSeat();
-  const [lead, badges] = await Promise.all([
+  const [lead, badges, messages, recipient] = await Promise.all([
     getLeadDetail(seat.businessId, id),
     getNavBadges(seat.businessId),
+    getThread(id, seat.businessId),
+    prisma.enquiryRecipient.findUnique({
+      where: { enquiryId_businessId: { enquiryId: id, businessId: seat.businessId } },
+      select: { nudgedAt: true, state: true },
+    }),
   ]);
   if (!lead) notFound();
 
@@ -45,6 +63,31 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
   // Read once, at the top, rather than during render. Every relative label on
   // this page then measures from the same instant.
   const now = new Date();
+
+  // Every revision this seller has sent, so the thread can strike the previous
+  // total through. Computed by the same helper the buyer's side uses.
+  const quoteViews = toThreadQuotes(
+    lead.quotes.map((q) => ({
+      id: q.id,
+      ref: q.ref,
+      revision: q.revision,
+      lines: q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice })),
+    })),
+    (aed) => formatAED(aed),
+    {
+      down: (amount, percent) => t("thread.delta_down", { amount, percent }),
+      up: (amount, percent) => t("thread.delta_up", { amount, percent }),
+      same: t("thread.delta_same"),
+    },
+  );
+
+  /*
+   * A closed enquiry still lets the accepted pair talk: that is delivery being
+   * arranged, and cutting it off pushes exactly the conversation this platform
+   * wants on the record onto WhatsApp.
+   */
+  const closedToUs =
+    lead.closesAt.getTime() < now.getTime() && lead.state !== "quoted";
 
   return (
     <SellerPage
@@ -92,6 +135,36 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
           eyebrow={nextRevision > 1 ? t("lead.revision_title", { revision: nextRevision }) : undefined}
         >
           <QuoteComposer enquiryId={lead.enquiryId} lines={toDrafts(lead)} />
+        </Panel>
+
+        <Panel title={t("thread.heading")}>
+          <SellerThread
+            enquiryId={lead.enquiryId}
+            buyerFirstName={lead.buyer.firstName}
+            readOnly={closedToUs}
+            canNudge={recipient?.state === "quoted" && !recipient.nudgedAt}
+            nudgedLabel={
+              recipient?.nudgedAt
+                ? t("thread.nudge_sent", { when: formatRelative(recipient.nudgedAt, { now }) })
+                : null
+            }
+            messages={(messages ?? []).map((message) => {
+              const quote = message.quoteRevisionId
+                ? quoteViews.get(message.quoteRevisionId)
+                : undefined;
+              return {
+                id: message.id,
+                body: message.body,
+                fromMe: message.fromSeller,
+                senderLabel: message.fromSeller
+                  ? seat.businessName
+                  : lead.buyer.firstName,
+                at: formatDateTime(message.createdAt),
+                flagged: message.flagged,
+                ...(quote ? { quote } : {}),
+              };
+            })}
+          />
         </Panel>
 
         <div className="grid gap-[var(--gutter)] md:grid-cols-2 xl:grid-cols-3">

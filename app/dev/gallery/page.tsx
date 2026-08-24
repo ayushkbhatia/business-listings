@@ -92,6 +92,7 @@ const TIER_4 = [
   "response-time",
   "quote-line-editor",
   "enquiry-composer",
+  "thread",
 ] as const;
 
 export default function Gallery() {
