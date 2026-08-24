@@ -920,6 +920,61 @@ export const en = {
 
   "auth.legal": "By continuing you agree to the terms of use and the privacy notice.",
 
+  // ── Board 7f, the template specimen surface at /dev/notifications ──
+  "specimens.title": "Notification templates",
+  "specimens.lede": "Every template in the database, rendered with plausible values. Each one states what happened, what it is worth, and one action. None carries a buyer's phone number, email address or company name — asserted in tests/integration/notifications.test.ts, not left to a reading.",
+  "specimens.no_action": "No action",
+
+  // ── Seller: notification settings [7e] ──
+  "alerts.title": "Alerts",
+  "alerts.lede": "Where each thing reaches you. WhatsApp gets the fastest replies, which is why it is on for the events that need one.",
+  "alerts.matrix_heading": "What reaches you where",
+  "alerts.matrix_caption": "Notification channels by event",
+  "alerts.col.event": "When this happens",
+  "alerts.channel.whatsapp": "WhatsApp",
+  "alerts.channel.sms": "SMS",
+  "alerts.channel.email": "Email",
+  "alerts.channel.in_app": "In app",
+  "alerts.toggle": "{channel} for {event}",
+
+  "alerts.event.enquiry_received": "A new enquiry arrives",
+  "alerts.event.enquiry_unanswered": "An enquiry is still unanswered",
+  "alerts.event.enquiry_escalated": "An unanswered enquiry escalates to the owner",
+  "alerts.event.quote_accepted": "A buyer accepts your quote",
+  "alerts.event.quote_expiring": "A quote you sent is about to expire",
+  "alerts.event.review_posted": "Someone leaves a review",
+  "alerts.event.document_expiring": "A document is about to expire",
+  "alerts.event.weekly_digest": "The weekly summary",
+
+  "alerts.quiet_heading": "Quiet hours",
+  "alerts.quiet_body": "WhatsApp and SMS are held until the morning. In-app is never held — nothing buzzes, and the list is the same list at seven.",
+  "alerts.quiet_enabled": "Hold WhatsApp and SMS overnight",
+  "alerts.quiet_from": "From",
+  "alerts.quiet_to": "Until",
+  "alerts.quiet_sunday": "Hold them on Sundays too",
+  "alerts.quiet_hour": "{hour}:00",
+
+  "alerts.override_heading": "Wake me for a big one",
+  "alerts.override_body": "An enquiry worth at least this much comes through even inside quiet hours. Leave it empty and nothing does.",
+  "alerts.override_label": "Enquiry value, in AED",
+  "alerts.override_none": "Leave empty for never.",
+
+  "alerts.escalation_heading": "Escalation",
+  "alerts.escalation_body": "An enquiry nobody has answered after this long is sent to the owner as well.",
+  "alerts.escalation_minutes": "Escalate after",
+  "alerts.escalation_option": { one: "{count} minute", other: "{count} minutes" },
+
+  "alerts.nudge_heading": "Follow-up",
+  "alerts.nudge_body": "A single reminder to the buyer after a quote goes unanswered. One only — a second loses more deals than it wins.",
+  "alerts.nudge_enabled": "Offer me one follow-up per enquiry",
+  "alerts.nudge_after": "Offer it after",
+  "alerts.nudge_option": { one: "{count} hour", other: "{count} hours" },
+
+  "alerts.save": "Save alert settings",
+  "alerts.saving": "Saving",
+  "alerts.saved": "Saved {when}",
+  "alerts.whatsapp_pending": "WhatsApp alerts are built and waiting on Meta to approve the message templates. Until then these events fall back to the other channels you have on.",
+
   // ── The seat you are acting as, before sign-in exists. ──
   "dev.acting_as": "Acting as {business}. Development only — sign-in arrives in the next step.",
   "dev.no_seat_title": "No seller seat selected",

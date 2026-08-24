@@ -5,6 +5,7 @@ import type { Actor } from "@/lib/auth/roles";
 import { parseAedToFils } from "@/lib/quote/money";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { onQuoteSent } from "@/lib/notify/events";
 
 /**
  * Sending a quote — the service.
@@ -127,7 +128,7 @@ export async function sendQuoteForBusiness(
   const expiresAt = new Date(now.getTime() + validityDays * 24 * 3_600_000);
   const ref = await nextQuoteRef(input.enquiryId, businessId, revision);
 
-  return prisma.$transaction(async (tx) => {
+  const sent = await prisma.$transaction(async (tx) => {
     const created = await tx.quote.create({
       data: {
         ref,
@@ -165,6 +166,11 @@ export async function sendQuoteForBusiness(
 
     return { ok: true as const, quoteId: created.id, quoteRef: created.ref, revision: created.revision };
   });
+
+  // Outside the transaction: a carrier being slow must not hold one open.
+  await onQuoteSent({ enquiryId: input.enquiryId, businessId, revision: sent.revision });
+
+  return sent;
 }
 
 /**

@@ -46,7 +46,10 @@ export default defineConfig({
           // One database, shared. Parallel files would race on the rows they
           // write, and the suite is small enough that sequential is honest.
           fileParallelism: false,
-          testTimeout: 30_000,
+          // These do real work: fan-outs, transactions and notification
+          // dispatch against a real database. 30s was tight once the
+          // notification layer was wired in.
+          testTimeout: 60_000,
         },
       },
     ],
