@@ -75,6 +75,8 @@ model User {
   savedSearches  SavedSearch[]
   reviewRequests ReviewRequest[]
   importRuns     ImportRun[]
+  changeRequests ListingChangeRequest[] @relation("ChangeRequestActor")
+  changesDecided ListingChangeRequest[] @relation("ChangeRequestDecider")
 
   @@index([businessId])
   @@map("user")
@@ -443,6 +445,7 @@ model Business {
   missedEnquiries        MissedEnquiry[]
   importRuns             ImportRun[]
   importMappings         ImportMapping[]
+  changeRequests         ListingChangeRequest[]
   quotes                 Quote[]
   messages               Message[]
   reviews                Review[]
@@ -815,6 +818,66 @@ model ImportMapping {
   @@unique([businessId, name])
   @@index([businessId])
   @@map("import_mapping")
+}
+
+/// A change to a listing that a person has to look at before the public does.
+///
+/// Acceptance criterion 8: only trade name, category and licence details queue.
+/// Photographs, hours, products and descriptions publish immediately.
+///
+/// The narrowness is the design, not a phase-one compromise. Everything a
+/// seller edits is either something a buyer would be misled by if it were wrong
+/// — the name over the door, what they sell, the licence that says they may —
+/// or something the seller is simply the authority on. There are 41,000
+/// listings; a queue that gates the second kind is a queue that never empties,
+/// and a dashboard where nothing a seller does appears is a dashboard they stop
+/// opening.
+///
+/// Handoff 4 builds the screens that drain this. Handoff 3 fills it correctly,
+/// which is the half that has to be right first.
+model ListingChangeRequest {
+  id         String              @id @default(cuid())
+  businessId String              @map("business_id")
+  actorId    String              @map("actor_id") @db.Uuid
+  field      ModeratedField
+  /// What it says now. Kept so the queue can show the change, not just the ask.
+  beforeValue String?            @map("before_value")
+  afterValue  String             @map("after_value")
+  status     ChangeRequestStatus @default(pending)
+  /// Written by staff on approve or reject. NOT NULL is enforced by a check
+  /// constraint on the decided rows — see the migration.
+  decisionReason String?          @map("decision_reason")
+  decidedById    String?          @map("decided_by_id") @db.Uuid
+  decidedAt      DateTime?        @map("decided_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actor     User     @relation("ChangeRequestActor", fields: [actorId], references: [id], onDelete: Restrict)
+  decidedBy User?    @relation("ChangeRequestDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([businessId, status])
+  @@map("listing_change_request")
+}
+
+/// The only three fields that queue. Adding a fourth is a product decision, and
+/// making it an enum is what forces it to be one.
+enum ModeratedField {
+  trade_name
+  primary_category
+  licence
+
+  @@map("moderated_field")
+}
+
+enum ChangeRequestStatus {
+  pending
+  approved
+  rejected
+  /// The seller changed their mind before anybody looked.
+  withdrawn
+
+  @@map("change_request_status")
 }
 
 model MissedEnquiry {

@@ -1204,3 +1204,108 @@ the mapper, the catalogue, the template and the editor, but the media library's
 upload is exercised only by hand — verified in the browser with a generated PNG,
 which uploaded, stored and rendered back through the public URL. The library's
 read path is covered wherever the seed has media, and the seed has none.
+
+## Handoff 3, step 3 — listing maintenance
+
+### The narrowness is the feature
+
+Criterion 8 is two claims, and they fail in opposite directions. A change that
+should queue and does not is a listing saying something nobody checked. A change
+that should publish and queues instead is a dashboard where nothing a seller
+does appears — which, at 41,000 listings, is the one that kills the product.
+
+So `MODERATED` and `INSTANT` are both written out in `lib/listing/service.ts`
+rather than one being inferred from the other. A new field has to be put on a
+side deliberately; defaulting by omission would default towards moderating more,
+because moderating more always feels safer in the moment and only stops feeling
+safe at scale. `ModeratedField` is a Postgres enum for the same reason: adding a
+fourth is a migration, which makes it a product decision.
+
+The board draws both states on one screen and that is not a layout convenience.
+A seller who has only ever seen the moderated half assumes everything waits and
+stops editing, so "publishes as soon as you save" sits above the fields that do.
+
+### A pending request replaces the field, rather than sitting beside it
+
+While a change is queued the input is gone, replaced by what was asked for and a
+withdraw control. Leaving an editable box under a pending request invites a
+second submission — and a second submission supersedes the first, so a seller
+who does it twice has no idea which one a moderator is holding.
+
+`requestModeratedChange` withdraws any earlier pending request for the same
+field in the same transaction. Without it, two rows sit in the queue and a
+moderator approves the one the seller has already replaced.
+
+### Ramadan is a table, not a calculation
+
+Ramadan is lunar and begins on a moon sighting announced a day or two
+beforehand, so it cannot be computed to the day in advance. `RAMADAN` in
+`lib/trade/hours.ts` holds the published astronomical estimates per Hijri year,
+right to within a day at each end — close enough to switch a supplier's hours
+automatically, not close enough to state as fact. `ramadanFor` returns null past
+the table rather than extrapolating: a lunar calendar extrapolated by arithmetic
+drifts, and it drifts silently.
+
+Public holidays are handled the other way round, and deliberately. Eid moves
+with the moon too and is announced by the government weeks out, so a table of
+holiday *dates* would be wrong within a year. What a buyer needs to know is
+whether this supplier trades on them at all, and the supplier is the authority
+on that — so it is a three-way statement of practice, not a calendar.
+
+### Free zones were seeded unpublished, so the feature had no example
+
+`prisma/seed.mts` read `publishedAt: a.isFreeZone ? null : days(-120)`. Every
+free zone in the country was therefore absent from every area list in the
+product.
+
+Handoff 3's README makes free zone a cross-cutting toggle precisely because "a
+JAFZA company is in Dubai *and* in a free zone". With JAFZA unpublished the
+toggle filtered an empty list, no buyer could browse it, and the one seeded
+branch sitting in it could not be edited.
+
+Two fixes, and the second is the one that matters:
+
+- The seed publishes free zones. One area is held back on purpose so the
+  unpublished state still has an example.
+- **The picker offers published areas *plus* any the business already sits in.**
+  An area can legitimately be unpublished while the taxonomy is checked, and a
+  branch assigned to one would then have no matching option in the select — the
+  seller opens the branch, saves an unrelated field, and the area silently
+  becomes whatever the select fell back to. Losing a supplier's address by
+  editing their phone number is the kind of bug nobody reports, because nobody
+  sees it happen.
+
+### The emirate comes from the area
+
+`saveLocation` reads the emirate off the chosen `Area` rather than from the
+form. Two independent fields that must agree is two fields that eventually will
+not, and the disagreement shows up as a Sharjah supplier filed under Dubai.
+
+### An integration test ate the seed
+
+`saveHours` with `locationId: "all"` is a real feature and the tests exercise it,
+which means they overwrite every branch of a seeded business. Left alone, the
+next person to open `/dashboard/hours` sees six branches closed every day but
+Sunday and spends an hour looking for a bug in the editor.
+
+The suite now snapshots the locations in `beforeAll` and puts them back in
+`afterAll`. Restored rather than reseeded: a full reseed between suites would
+make the integration tests take minutes instead of seconds.
+
+### Two landmarks with the same name
+
+The verification page wrapped `VerificationLadder` — a `<section aria-label>` —
+inside a `Panel`, which is also a `<section>` named by its title. Both carried
+"The verification ladder", so a screen reader's landmark list had two identical
+entries. This is the same defect `tests/e2e/landmarks.spec.ts` guards on the
+gallery, arriving on a product page where that spec does not look; the axe check
+on the new route caught it. The ladder is now named by the tier, which is the
+more useful of the two names anyway.
+
+### Two `className`-less primitives, one layout bug
+
+`Input` deliberately takes no `className`, which is right — it stops call sites
+reaching into a primitive's styling. It also means a caller who needs a narrow
+field has to wrap it. Left unwrapped, the open and close times in HoursEditor
+filled the row and stacked, which reads as two separate questions rather than
+one time range. The width lives on a wrapper div.

@@ -175,8 +175,22 @@ async function main() {
   console.log("→ areas");
   const areaByslug = new Map<string, string>();
   for (const a of AREAS) {
+    /*
+     * Free zones are published too.
+     *
+     * This read `a.isFreeZone ? null : days(-120)`, which left every free zone
+     * out of every area list in the product. Handoff 3's README makes the free
+     * zone a cross-cutting toggle precisely because "a JAFZA company is in
+     * Dubai *and* in a free zone" — and an unpublished JAFZA means the toggle
+     * filters an empty list, no buyer can browse it, and the one seeded branch
+     * sitting in it could not be edited without losing its area.
+     *
+     * One is held back on purpose so the unpublished state still has an
+     * example, because the picker has to keep offering an area a location
+     * already uses whether or not it is published.
+     */
     const row = await prisma.area.create({
-      data: { ...a, publishedAt: a.isFreeZone ? null : days(-120) },
+      data: { ...a, publishedAt: a.slug === "saif-zone" ? null : days(-120) },
     });
     areaByslug.set(a.slug, row.id);
   }
