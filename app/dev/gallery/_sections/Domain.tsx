@@ -2,6 +2,7 @@
 
 import {
   CompletenessMeter,
+  QuoteLineEditor,
   ListingCard,
   ProductCard,
   ResponseTime,
@@ -13,8 +14,10 @@ import {
   type Availability,
   type ListingCardBusiness,
   type ListingContext,
+  type QuoteLineDraft,
+  type QuoteLineEditorLabels,
 } from "@/components/domain";
-import { formatDate, formatDuration, formatSize } from "@/lib/format";
+import { formatAED, formatDate, formatDuration, formatSize } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { Frame, Section, Specimen, States } from "../_kit";
 
@@ -331,6 +334,180 @@ export function Domain() {
           </div>
         </States>
       </Section>
+
+      <Section
+        id="quote-line-editor"
+        title="QuoteLineEditor"
+        note="tier 4 · seller side · an unmatched line is flagged, never silently blank"
+      >
+        <States label="two matched lines and one the catalogue cannot place" stack>
+          <Frame>
+            <QuoteLineEditor
+              lines={QUOTE_LINES}
+              labels={{ ...QUOTE_LABELS, formLabel: "Quote lines — three lines" }}
+              formatTotal={(aed) => formatAED(aed, { style: "quote" })}
+            />
+          </Frame>
+        </States>
+
+        <States label="a single line, nothing matched at all" stack>
+          <Frame>
+            <QuoteLineEditor
+              lines={[QUOTE_LINES[2]!]}
+              labels={{ ...QUOTE_LABELS, formLabel: "Quote lines — nothing matched" }}
+              formatTotal={(aed) => formatAED(aed, { style: "quote" })}
+            />
+          </Frame>
+        </States>
+
+        <States label="a revision, pre-filled from the last quote sent" stack>
+          <Frame>
+            <QuoteLineEditor
+              lines={QUOTE_LINES.map((line, i) => ({
+                ...line,
+                initialUnitPrice: ["62.00", "655.00", "19750.00"][i]!,
+                initialLeadTimeDays: [0, 2, 84][i]!,
+                ...(line.suggested ? { initialProductId: line.suggested.productId } : {}),
+              }))}
+              labels={{ ...QUOTE_LABELS, formLabel: "Quote lines — a revision" }}
+              initialNote="Revised after your call. Both stock sizes held at the same price."
+              initialValidityDays={10}
+              formatTotal={(aed) => formatAED(aed, { style: "quote" })}
+            />
+          </Frame>
+        </States>
+
+        <States label="submitting, and a failure the server sent back" stack>
+          <Frame>
+            <QuoteLineEditor
+              lines={[QUOTE_LINES[0]!]}
+              labels={{ ...QUOTE_LABELS, formLabel: "Quote lines — sending" }}
+              busy
+              formatTotal={(aed) => formatAED(aed, { style: "quote" })}
+            />
+          </Frame>
+          <Frame>
+            <QuoteLineEditor
+              lines={[QUOTE_LINES[0]!]}
+              labels={{ ...QUOTE_LABELS, formLabel: "Quote lines — refused by the server" }}
+              error={t("quote.error.closed", { when: "20 Aug 2026" })}
+              formatTotal={(aed) => formatAED(aed, { style: "quote" })}
+            />
+          </Frame>
+        </States>
+      </Section>
     </>
   );
 }
+
+/**
+ * The step 1 checkpoint state, as data: two lines the seller stocks — one of
+ * them catalogued in inches against a metric enquiry line — and one nothing on
+ * the shelf can answer.
+ */
+const QUOTE_LINES: QuoteLineDraft[] = [
+  {
+    key: "l1",
+    description: "Brass ball valve",
+    qty: 40,
+    unit: "pcs",
+    size: "DN25",
+    targetUnitPriceAed: "65.00",
+    suggested: {
+      productId: "p1",
+      name: "Brass ball valve DN25",
+      sku: "ALM-1028",
+      availabilityLabel: t("availability.indent"),
+      stockLabel: null,
+      leadTimeDays: 56,
+      reasons: ["size", "wording"],
+    },
+    alternatives: [],
+  },
+  {
+    key: "l2",
+    description: "Cast iron gate valve",
+    qty: 12,
+    unit: "pcs",
+    size: "DN150",
+    targetUnitPriceAed: "670.00",
+    suggested: {
+      // The buyer wrote DN150. The seller catalogued it as 6". Same valve.
+      productId: "p2",
+      name: 'Cast iron gate valve 6"',
+      sku: "ALM-90",
+      availabilityLabel: t("availability.in_stock"),
+      stockLabel: t("product.in_stock_qty", { qty: "64" }),
+      leadTimeDays: null,
+      reasons: ["size", "wording"],
+    },
+    alternatives: [
+      {
+        productId: "p3",
+        name: "Resilient seated gate valve DN150",
+        sku: "ALM-1000",
+        availabilityLabel: t("availability.in_stock"),
+        stockLabel: t("product.in_stock_qty", { qty: "212" }),
+        leadTimeDays: null,
+        reasons: ["size", "wording"],
+      },
+    ],
+  },
+  {
+    key: "l3",
+    description: "API 6D trunnion mounted ball valve, full bore, fire safe, flanged RF",
+    qty: 4,
+    unit: "pcs",
+    size: "DN600",
+    targetUnitPriceAed: "18500.00",
+    suggested: null,
+    alternatives: [],
+  },
+];
+
+const QUOTE_LABELS: QuoteLineEditorLabels = {
+  formLabel: t("quote.editor.form"),
+  caption: t("quote.editor.caption"),
+  colLine: t("quote.col.line"),
+  colProduct: t("quote.col.product"),
+  colQty: t("quote.col.qty"),
+  colUnitPrice: t("quote.col.unit_price"),
+  colLeadTime: t("quote.col.lead_time"),
+  colTotal: t("quote.col.total"),
+  manualFlag: t("quote.manual_flag"),
+  manualHelp: t("quote.manual_help"),
+  matchedBy: (reasons) => {
+    if (reasons.includes("sku")) return t("quote.matched_by.sku");
+    const size = reasons.includes("size");
+    const wording = reasons.includes("wording");
+    if (size && wording) return t("quote.matched_by.size_and_wording");
+    if (size) return t("quote.matched_by.size");
+    return t("quote.matched_by.wording");
+  },
+  priceByHand: t("quote.price_by_hand"),
+  chooseProduct: t("quote.choose_product"),
+  targetPrice: (amountAed) => t("quote.target_price", { amount: formatAED(amountAed) }),
+  leadTimeSuffix: t("quote.lead_time_suffix"),
+  unitPriceLabel: (line) => t("quote.unit_price_for", { line }),
+  leadTimeLabel: (line) => t("quote.lead_time_for", { line }),
+  productLabel: (line) => t("quote.product_for", { line }),
+  includeLabel: (line) => t("quote.product_for", { line }),
+  excluded: t("quote.excluded"),
+  excludeAction: t("quote.exclude"),
+  includeAction: t("quote.include"),
+  totalLabel: t("quote.total"),
+  currencyNote: t("quote.currency_note"),
+  noteLabel: t("quote.note_label"),
+  notePlaceholder: t("quote.note_placeholder"),
+  validityLabel: t("quote.validity_label"),
+  validityHelp: t("quote.validity_help"),
+  validityDayOptions: [7, 10, 14, 21, 30, 45, 60].map((days) => ({
+    value: String(days),
+    label: t("quote.validity_days", { count: days }),
+  })),
+  submit: t("quote.send"),
+  submitting: t("quote.sending"),
+  unpricedError: (lines) => t("quote.error.unpriced", { count: lines.length, lines: lines.join("; ") }),
+  badPriceError: (line) => t("quote.error.bad_price", { line }),
+  nothingIncludedError: t("quote.error.nothing_included"),
+};

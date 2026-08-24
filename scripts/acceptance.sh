@@ -12,7 +12,7 @@ ok()   { printf '   \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass+1)); }
 bad()  { printf '   \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail+1)); }
 
 note "1. /dev/gallery renders every tier 1 and tier 2 component"
-if pnpm exec playwright test --project=chromium -g "every tier 1 and tier 2 component" --reporter=dot >/tmp/a1.log 2>&1; then
+if pnpm exec playwright test --project=chromium -g "component is on the page" --reporter=dot >/tmp/a1.log 2>&1; then
   ok "18 tier 1 + 17 tier 2 + 4 shells present, asserted by id"
 else
   bad "see /tmp/a1.log"; fi

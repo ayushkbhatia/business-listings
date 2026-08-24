@@ -1,6 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    // ES2020 for BigInt. Quote totals add in integer fils rather than floats
+    // (lib/quote/money.ts), and a bigint literal needs ES2020 or later. Every
+    // browser Next.js 16 targets has supported BigInt since 2020; create-next-app
+    // ships ES2017 as a default, not as a constraint anything here relies on.
+    "target": "ES2020",
     "lib": [
       "dom",
       "dom.iterable",

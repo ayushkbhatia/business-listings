@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --project unit --passWithNoTests",
+    "test:integration": "vitest run --project integration",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "db:generate": "prisma generate",
@@ -19,7 +20,7 @@
     "db:seed": "prisma db seed",
     "check:tokens": "./scripts/check-tokens.sh",
     "check:schema": "./scripts/check-schema-invariants.sh",
-    "verify": "pnpm typecheck && pnpm lint && pnpm check:tokens && pnpm check:schema && pnpm test && pnpm build",
+    "verify": "pnpm typecheck && pnpm lint && pnpm check:tokens && pnpm check:schema && pnpm test && pnpm test:integration && pnpm build",
     "postinstall": "prisma generate",
     "matrix": "tsx scripts/print-matrix.mts",
     "check:contrast": "tsx scripts/contrast-audit.mts",
@@ -63,8 +64,7 @@
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
     "typescript": "^5",
-    "vitest": "^4.1.11",
-    "vitest-axe": "^0.1.0"
+    "vitest": "^4.1.11"
   },
   "packageManager": "pnpm@9.15.0",
   "description": "AI-powered UAE trade directory. Buyers find licensed suppliers and send enquiries; suppliers subscribe to be found.",

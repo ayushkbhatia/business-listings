@@ -22,4 +22,12 @@ export { PublicShell, type PublicShellProps } from "./PublicShell";
 export { DashboardShell, type DashboardShellProps } from "./DashboardShell";
 export { AdminShell, type AdminShellProps } from "./AdminShell";
 
-export { DASHBOARD_NAV, ADMIN_NAV, type NavGroup, type NavItem } from "./nav-config";
+export {
+  DASHBOARD_NAV,
+  ADMIN_NAV,
+  resolveNav,
+  type NavGroup,
+  type NavItem,
+  type ResolvedNavGroup,
+  type ResolvedNavItem,
+} from "./nav-config";

@@ -1,12 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  formatDate,
-  formatDateRange,
-  formatDateShort,
-  formatDateTime,
-  formatDuration,
-  formatRelative,
-} from "./date";
+import { formatCountdown, formatDate, formatDateRange, formatDateShort, formatDateTime, formatDuration, formatRelative, isWithinRelativeWindow } from "./date";
 
 const AUG_14 = new Date("2026-08-14T09:30:00+04:00");
 
@@ -128,5 +121,45 @@ describe("formatDuration", () => {
 
   it("rejects a negative duration", () => {
     expect(() => formatDuration(-1)).toThrow(TypeError);
+  });
+});
+
+describe("isWithinRelativeWindow", () => {
+  const now = "2026-08-24T12:00:00+04:00";
+
+  it("is true while formatRelative would still count", () => {
+    expect(isWithinRelativeWindow("2026-08-26T12:00:00+04:00", { now })).toBe(true);
+    expect(isWithinRelativeWindow("2026-08-20T12:00:00+04:00", { now })).toBe(true);
+  });
+
+  it("is false once formatRelative would print a date instead", () => {
+    // The two must agree, or a caller writes "Closes in 7 Sep 2026".
+    const far = "2026-09-07T12:00:00+04:00";
+    expect(isWithinRelativeWindow(far, { now })).toBe(false);
+    expect(formatRelative(far, { now })).toBe("7 Sep 2026");
+  });
+
+  it("turns over at exactly the documented threshold", () => {
+    expect(isWithinRelativeWindow("2026-08-31T11:59:00+04:00", { now })).toBe(true);
+    expect(isWithinRelativeWindow("2026-08-31T12:00:00+04:00", { now })).toBe(false);
+  });
+
+  it("takes a caller's own window", () => {
+    expect(isWithinRelativeWindow("2026-09-07T12:00:00+04:00", { now, absoluteAfterDays: 30 })).toBe(true);
+  });
+});
+
+describe("formatCountdown", () => {
+  const now = "2026-08-24T12:00:00+04:00";
+
+  it("drops the direction so a caller can write its own sentence", () => {
+    expect(formatCountdown("2026-08-30T09:00:00+04:00", { now })).toBe("5 d 21 h");
+    expect(formatCountdown("2026-08-24T10:00:00+04:00", { now })).toBe("2 h");
+  });
+
+  it("says the same thing in both directions", () => {
+    // "Closes in 2 h" and "replied 2 h ago" share a number.
+    expect(formatCountdown("2026-08-24T14:00:00+04:00", { now })).toBe("2 h");
+    expect(formatCountdown("2026-08-24T10:00:00+04:00", { now })).toBe("2 h");
   });
 });

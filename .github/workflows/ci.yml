@@ -80,6 +80,13 @@ jobs:
       - name: Unit tests
         run: pnpm test
 
+      # These talk to the postgres service above. They are the proof for
+      # acceptance criterion 2 — a seller cannot retrieve the buyer's contact
+      # details before acceptance — which the README asks to be shown at the
+      # query layer rather than by inspecting a template.
+      - name: Integration tests
+        run: pnpm test:integration
+
       - name: Build
         run: pnpm build
 

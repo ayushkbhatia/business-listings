@@ -26,6 +26,47 @@ export interface NavGroup {
   items: readonly NavItem[];
 }
 
+/**
+ * The same shape with its labels already resolved.
+ *
+ * AppSidebar is a client component and a server page cannot hand a client
+ * component a function, so `translate` cannot cross that boundary. Rather than
+ * make the sidebar import t() — which is what the config exists to avoid — the
+ * caller resolves the labels once and passes strings, as every other component
+ * in this codebase receives them.
+ */
+export interface ResolvedNavItem extends Omit<NavItem, "labelKey"> {
+  label: string;
+}
+
+export interface ResolvedNavGroup extends Omit<NavGroup, "labelKey" | "items"> {
+  label: string;
+  items: readonly ResolvedNavItem[];
+}
+
+/**
+ * @param badges Live counts by item key, overriding whatever the config holds.
+ *   A badge is a promise about what is behind the link; a placeholder that says
+ *   7 above a page listing 2 is worse than no badge at all. Pass a count for
+ *   every item whose screen exists, and delete the placeholder from the config
+ *   as each one lands.
+ */
+export function resolveNav(
+  groups: readonly NavGroup[],
+  translate: (key: string) => string,
+  badges: Readonly<Record<string, number>> = {},
+): ResolvedNavGroup[] {
+  return groups.map(({ labelKey, items, ...group }) => ({
+    ...group,
+    label: translate(labelKey),
+    items: items.map(({ labelKey: itemKey, ...item }) => ({
+      ...item,
+      label: translate(itemKey),
+      ...(item.key in badges ? { badge: badges[item.key] } : {}),
+    })),
+  }));
+}
+
 /** /dashboard — seller. Six groups, matching docs/routes.md. */
 export const DASHBOARD_NAV: readonly NavGroup[] = [
   {
@@ -58,8 +99,10 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
     key: "demand",
     labelKey: "nav.group.demand",
     items: [
-      { key: "leads", labelKey: "nav.leads", href: "/dashboard/leads", badge: 7, capability: "enquiry.respond" },
-      { key: "quotes", labelKey: "nav.quotes", href: "/dashboard/quotes", badge: 2, capability: "quote.send" },
+      // No placeholder counts: these two screens exist, so the shell passes
+      // the real numbers through resolveNav.
+      { key: "leads", labelKey: "nav.leads", href: "/dashboard/leads", capability: "enquiry.respond" },
+      { key: "quotes", labelKey: "nav.quotes", href: "/dashboard/quotes", capability: "quote.send" },
       { key: "reviews", labelKey: "nav.reviews", href: "/dashboard/reviews" },
     ],
   },

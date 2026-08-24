@@ -90,6 +90,14 @@ const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
+/**
+ * Past this many days `formatRelative` stops counting and prints the date.
+ * Exported because a caller that wraps the result in its own sentence needs to
+ * know which sentence to use — "closes in 6 d" and "closes 7 Sep 2026" are not
+ * the same phrase with a substitution.
+ */
+export const RELATIVE_WINDOW_DAYS = 7;
+
 export interface RelativeOptions extends ZoneOption {
   /** Injected so the ladder is testable. Defaults to the current time. */
   now?: DateInput;
@@ -129,6 +137,31 @@ export function formatRelative(value: DateInput, options: RelativeOptions = {}):
   const d = Math.floor(abs / DAY);
   const h = Math.floor((abs % DAY) / HOUR);
   return wrap(h === 0 ? `${d} d` : `${d} d ${h} h`);
+}
+
+/**
+ * Will `formatRelative` return a countdown rather than a date?
+ *
+ * Callers use this to pick between "Closes in {duration}" and "Closes {date}".
+ * Reading the answer off the same threshold means the two can never disagree.
+ */
+export function isWithinRelativeWindow(
+  value: DateInput,
+  { now, absoluteAfterDays = RELATIVE_WINDOW_DAYS }: RelativeOptions = {},
+): boolean {
+  const then = toDate(value);
+  const reference = now === undefined ? new Date() : toDate(now);
+  return Math.abs(then.getTime() - reference.getTime()) < absoluteAfterDays * DAY;
+}
+
+/**
+ * The countdown alone: `6 d 4 h`, with no `in` and no `ago`.
+ *
+ * For a caller writing its own sentence around it. Only meaningful when
+ * `isWithinRelativeWindow` is true.
+ */
+export function formatCountdown(value: DateInput, options: RelativeOptions = {}): string {
+  return formatRelative(value, options).replace(/^in /, "").replace(/ ago$/, "");
 }
 
 /** `2 d 4 h` from a duration in milliseconds. Median response time, SLA copy. */

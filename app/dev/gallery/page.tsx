@@ -90,6 +90,7 @@ const TIER_4 = [
   "spec-table",
   "completeness-meter",
   "response-time",
+  "quote-line-editor",
 ] as const;
 
 export default function Gallery() {

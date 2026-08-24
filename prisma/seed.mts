@@ -21,6 +21,8 @@ import {
   SUBCATEGORIES,
   VALVE_TEMPLATE_FIELDS,
 } from "./seed-data.mjs";
+import { DN_SYNONYMS, sizeAliases } from "../lib/trade/nominal-size.js";
+import { matchLine } from "../lib/quote/match.js";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL! }),
@@ -46,8 +48,37 @@ const pickN = <T,>(xs: readonly T[], n: number): T[] => {
 };
 const int = (min: number, max: number) => min + Math.floor(rnd() * (max - min + 1));
 
-/** Fixed "now" so relative timestamps in the UI are stable across runs. */
-const NOW = new Date("2026-08-14T12:00:00+04:00");
+/**
+ * The seed's clock: noon today, Asia/Dubai.
+ *
+ * This was a fixed instant, which made two runs byte-identical but let the
+ * fixtures rot — ten days after it was written, every "live" enquiry in the
+ * leads inbox rendered as Closed and the seller screens had nothing to act on.
+ * A fixture that expires is worse than one that moves.
+ *
+ * So: the PRNG stays fixed, which is what actually keeps content stable — the
+ * same businesses, products, prices and names every time. Only the timeline
+ * slides, anchored to the day the seed ran. Two runs on the same day are
+ * identical. Set SEED_NOW to an ISO instant to reproduce an exact dataset.
+ */
+const NOW = seedNow();
+
+function seedNow(): Date {
+  const override = process.env.SEED_NOW;
+  if (override) {
+    const at = new Date(override);
+    if (Number.isNaN(at.getTime())) throw new Error(`SEED_NOW is not an ISO instant: ${override}`);
+    return at;
+  }
+  // en-CA formats as YYYY-MM-DD, which is the one thing it is good for.
+  const today = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Dubai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  return new Date(`${today}T12:00:00+04:00`);
+}
 const days = (n: number) => new Date(NOW.getTime() + n * 86_400_000);
 const hours = (n: number) => new Date(NOW.getTime() + n * 3_600_000);
 
@@ -69,24 +100,10 @@ function slugify(s: string): string {
  * database. A seller who types 4" and a buyer who types DN100 mean one thing,
  * and the match surface has to carry both directions or the products tab is
  * worth nothing.
+ *
+ * The table itself lives in lib/trade/nominal-size.ts, because the quote-line
+ * matcher needs exactly the same one and two copies of it would drift.
  */
-const DN_SYNONYMS: Record<string, string[]> = {
-  DN15: ['1/2"', "1/2 inch", "half inch"],
-  DN20: ['3/4"', "3/4 inch"],
-  DN25: ['1"', "1 inch"],
-  DN32: ['1-1/4"', "1.25 inch"],
-  DN40: ['1-1/2"', "1.5 inch"],
-  DN50: ['2"', "2 inch"],
-  DN65: ['2-1/2"', "2.5 inch"],
-  DN80: ['3"', "3 inch"],
-  DN100: ['4"', "4 inch"],
-  DN125: ['5"', "5 inch"],
-  DN150: ['6"', "6 inch"],
-  DN200: ['8"', "8 inch"],
-  DN250: ['10"', "10 inch"],
-  DN300: ['12"', "12 inch"],
-};
-
 /** The reverse of DN_SYNONYMS: an imperial size back to its metric name. */
 const INCH_TO_DN: Record<string, string> = Object.fromEntries(
   Object.entries(DN_SYNONYMS).flatMap(([dn, names]) => names.map((n) => [n, dn])),
@@ -112,23 +129,12 @@ function buildSearchText(parts: {
   add(parts.name);
   add(parts.sku);
   add(parts.categoryName);
-  add(parts.size);
-  for (const syn of DN_SYNONYMS[parts.size ?? ""] ?? []) add(syn);
-  const metricOfSize = INCH_TO_DN[parts.size ?? ""];
-  if (metricOfSize) {
-    add(metricOfSize);
-    for (const syn of DN_SYNONYMS[metricOfSize] ?? []) add(syn);
-  }
+  for (const alias of sizeAliases(parts.size)) add(alias);
   for (const value of Object.values(parts.specValues)) {
     if (Array.isArray(value)) value.forEach(add);
     else add(value);
-    const key = String(value);
-    for (const syn of DN_SYNONYMS[key] ?? []) add(syn);
-    const metric = INCH_TO_DN[key];
-    if (metric) {
-      add(metric);
-      for (const syn of DN_SYNONYMS[metric] ?? []) add(syn);
-    }
+    // A spec value may itself be a size — nominal_diameter usually is.
+    for (const alias of sizeAliases(String(value))) add(alias);
   }
   return [...tokens].join(" ");
 }
@@ -240,13 +246,15 @@ async function main() {
       id: uuid(10),
       phone: "+971506412288",
       email: "procurement@harbourcontracting.example",
-      fullName: "Procurement Buyer",
+      // A person, not a job title. The seller sees a first name and nothing
+      // else until acceptance, so the first name has to read like one.
+      fullName: "Rashid Al Hameli",
       roles: ["buyer"],
       buyerCompanyId: buyerCompany.id,
     },
   });
   const buyerTwo = await prisma.user.create({
-    data: { id: uuid(11), phone: "+971552048817", fullName: "Site Buyer", roles: ["buyer"] },
+    data: { id: uuid(11), phone: "+971552048817", fullName: "Fatima Al Zaabi", roles: ["buyer"] },
   });
 
   console.log("→ businesses");
@@ -733,7 +741,200 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
     },
   });
 
-  return { e1, e2, accepted: recipients[2]!, buyerTwoId };
+  /*
+   * Link the quote lines above to the products they describe, where the seller
+   * actually has one.
+   *
+   * `QuoteLine.productId` is what the pipeline counts to say "1 priced by
+   * hand". Seeded with every line unlinked, every historical quote read as
+   * entirely hand-priced and the number told a reviewer nothing. Rather than
+   * hand-assign ids, the seed runs the same matcher the composer runs — so the
+   * fixture cannot claim a match the product code would not make, and a line
+   * with no match stays honestly unlinked.
+   */
+  await linkQuoteLinesToCatalogue(db, [first.id, second.id, recipients[2]!.id]);
+
+  /*
+   * Enquiry three: a live lead nobody has answered yet, and the subject of the
+   * handoff 2 step 1 checkpoint — a quote with a matched line and an unmatched
+   * line flagged for manual pricing.
+   *
+   * Two of the three lines are derived from what the first recipient actually
+   * stocks, read back out of the database rather than hardcoded. A fixture that
+   * hardcodes a product name proves the matcher can find a string somebody
+   * already wrote twice. Reading the catalogue proves it against whatever the
+   * seed happened to generate, and it stays true when the catalogue changes.
+   *
+   * The third line is the one nothing can match, and it is not invented for the
+   * occasion: `api 6d trunnion ball valve dn600` is already seeded as a
+   * zero-result search query. The search that found nothing becomes the enquiry
+   * line that has to be priced by hand, which is exactly how it happens.
+   */
+  const stocked = await db.product.findMany({
+    where: { businessId: first.id },
+    select: { name: true, specValues: true },
+    orderBy: { name: "asc" },
+  });
+
+  /** `Resilient seated gate valve DN100` -> `DN100`. */
+  const boreOf = (name: string): string | null => /\b(DN\d{2,4})\b/.exec(name)?.[1] ?? null;
+
+  /*
+   * A buyer's target price, per unit, from the bore.
+   *
+   * Fitted through the two prices already quoted in this seed — DN100 at 398
+   * and DN150 at 712 — then taken down six per cent, because a target the
+   * buyer expects to be met is not a target. The curve is quadratic because
+   * valve price follows the body casting, and a casting follows area.
+   */
+  const targetForBore = (bore: string): string => {
+    const dn = Number(bore.replace(/\D/g, ""));
+    const quoted = 0.0153333 * dn * dn + 2.44667 * dn;
+    return `${Math.round((quoted * 0.94) / 5) * 5}.00`;
+  };
+
+  /** A buyer writes a line in sentence case, not in a catalogue's title case. */
+  const asBuyerWroteIt = (productName: string, strip: RegExp): string => {
+    const text = productName.replace(strip, "").trim().toLowerCase();
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
+  const metricPick = stocked.find((p) => boreOf(p.name) !== null);
+  const imperialPick = stocked.find((p) => /\d+"/.test(p.name));
+
+  const derivedLines: {
+    description: string;
+    qty: number;
+    unit: string;
+    size: string;
+    targetUnitPriceAed: string;
+    sortOrder: number;
+  }[] = [];
+
+  if (metricPick) {
+    const bore = boreOf(metricPick.name)!;
+    derivedLines.push({
+      // The buyer's own words for it, not the seller's product name. Nobody
+      // types a supplier's SKU description into an enquiry.
+      description: asBuyerWroteIt(metricPick.name, new RegExp(`\\s*${bore}$`)),
+      qty: 40,
+      unit: "pcs",
+      size: bore,
+      targetUnitPriceAed: targetForBore(bore),
+      sortOrder: derivedLines.length,
+    });
+  }
+
+  if (imperialPick) {
+    // The same seller catalogued this one in inches. The buyer writes the
+    // metric name for the same bore, so the match has to cross the unit.
+    const inch = /(\d+)"/.exec(imperialPick.name)?.[1];
+    const metricName = inch ? INCH_TO_DN[`${inch}"`] : undefined;
+    derivedLines.push({
+      description: asBuyerWroteIt(imperialPick.name, /\s*\d+"\s*$/),
+      qty: 12,
+      unit: "pcs",
+      size: metricName ?? '4"',
+      targetUnitPriceAed: targetForBore(metricName ?? "DN100"),
+      sortOrder: derivedLines.length,
+    });
+  }
+
+  derivedLines.push({
+    description: "API 6D trunnion mounted ball valve, full bore, fire safe, flanged RF",
+    qty: 4,
+    unit: "pcs",
+    size: "DN600",
+    /*
+     * Off the curve on purpose. A trunnion mounted API 6D ball valve is a
+     * different class of thing from a cast iron gate valve of the same bore —
+     * forged body, fire-safe seats, a test certificate per unit — and the
+     * curve above would price it like a casting. This is what a buyer
+     * budgeting for one actually writes down.
+     */
+    targetUnitPriceAed: "18500.00",
+    sortOrder: derivedLines.length,
+  });
+
+  const e3 = await db.enquiry.create({
+    data: {
+      ref: "ENQ-8863",
+      buyerId,
+      buyerCompanyId,
+      requirement:
+        "Isolation valves for a pump room upgrade at a district cooling plant. Two sizes off the shelf, plus one large trunnion ball valve for the header. Site is Mussafah, delivery in two drops.",
+      deliverToArea: "Mussafah Industrial",
+      neededBy: days(31),
+      termsWanted: "net_30",
+      closesAt: days(6),
+      createdAt: hours(-5),
+      lines: { create: derivedLines },
+    },
+  });
+
+  // Delivered and unopened to the seller we act as, so the leads inbox opens on
+  // a lead that has genuinely not been answered and the response clock is live.
+  await db.enquiryRecipient.create({
+    data: { enquiryId: e3.id, businessId: first.id, state: "delivered", createdAt: hours(-5) },
+  });
+  for (const b of recipients.slice(1)) {
+    await db.enquiryRecipient.create({
+      data: { enquiryId: e3.id, businessId: b.id, state: "opened", openedAt: hours(-3), createdAt: hours(-5) },
+    });
+  }
+
+  return { e1, e2, e3, accepted: recipients[2]!, buyerTwoId };
+}
+
+/**
+ * Run the quote-line matcher over already-seeded quotes and attach product ids.
+ *
+ * Mirrors lib/db/queries/seller.ts: the same nominal-size read out of the spec
+ * JSON, the same matcher, the same floor.
+ */
+async function linkQuoteLinesToCatalogue(db: Db, businessIds: string[]) {
+  for (const businessId of businessIds) {
+    const products = await db.product.findMany({
+      where: { businessId },
+      select: { id: true, name: true, sku: true, searchText: true, specValues: true, availability: true, stockQty: true, leadTimeDays: true, minOrderQty: true },
+    });
+    const catalogue = products.map((p) => ({
+      id: p.id,
+      name: p.name,
+      sku: p.sku,
+      searchText: p.searchText ?? "",
+      size: nominalSizeOf(p.specValues),
+      availability: p.availability,
+      stockQty: p.stockQty,
+      leadTimeDays: p.leadTimeDays,
+      minOrderQty: p.minOrderQty,
+    }));
+    if (catalogue.length === 0) continue;
+
+    const lines = await db.quoteLine.findMany({
+      where: { quote: { businessId }, productId: null },
+      select: { id: true, description: true },
+    });
+
+    for (const line of lines) {
+      // The size is written into the description on a quote line, so the
+      // matcher reads it from there rather than from a separate column.
+      const size = /\bDN\d{2,4}\b/.exec(line.description)?.[0] ?? null;
+      const { best } = matchLine({ description: line.description, size }, catalogue);
+      if (best) await db.quoteLine.update({ where: { id: line.id }, data: { productId: best.product.id } });
+    }
+  }
+}
+
+/** The nominal bore out of a product's spec JSON, keyed by SpecField id. */
+function nominalSizeOf(specValues: unknown): string | null {
+  if (!specValues || typeof specValues !== "object") return null;
+  for (const value of Object.values(specValues as Record<string, unknown>)) {
+    if (typeof value !== "string") continue;
+    if (/^(dn\s?\d+|\d+(?:[.-]\d+(?:\/\d+)?)?\s*(?:"|\u2033|in|inch|inches))$/i.test(value.trim())) {
+      return value.trim();
+    }
+  }
+  return null;
 }
 
 async function seedCommercials(db: Db, businesses: Biz[]) {

@@ -4,7 +4,7 @@ import { cn } from "@/lib/cn";
 import type { Actor } from "@/lib/auth/roles";
 import { can } from "@/lib/auth/can";
 import { formatCount } from "@/lib/format";
-import type { NavGroup } from "./nav-config";
+import type { ResolvedNavGroup } from "./nav-config";
 
 /**
  * One sidebar, two surfaces. Dashboard and admin differ in the config they are
@@ -17,13 +17,15 @@ import type { NavGroup } from "./nav-config";
  *
  * A `later` route is named so the nav shape is right now, and is not a link
  * until its handoff lands. No dead links.
+ *
+ * Labels arrive resolved. Pass `resolveNav(DASHBOARD_NAV, t)` — the sidebar
+ * still never imports t(), and a server page can render it, which it could not
+ * when the API took a translate function across the client boundary.
  */
 export interface AppSidebarProps {
-  groups: readonly NavGroup[];
+  groups: readonly ResolvedNavGroup[];
   /** Current route, matched against item hrefs. */
   activeHref: string;
-  /** Resolves a catalogue key. Passed in so the sidebar never imports t() directly. */
-  translate: (key: string) => string;
   /** Gates items by capability. Omit to show everything unlocked. */
   actor?: Actor;
   /** The wordmark or admin mark at the top. */
@@ -38,7 +40,6 @@ export interface AppSidebarProps {
 export function AppSidebar({
   groups,
   activeHref,
-  translate,
   actor,
   mark,
   footer,
@@ -57,7 +58,7 @@ export function AppSidebar({
         {groups.map((group) => (
           <div key={group.key} className="px-2 py-1.5">
             <h3 className="px-2 py-1 font-mono text-eyebrow uppercase text-on-ink-faint">
-              {translate(group.labelKey)}
+              {group.label}
             </h3>
             <ul>
               {group.items.map((item) => {
@@ -67,7 +68,7 @@ export function AppSidebar({
 
                 const inner = (
                   <>
-                    <span className="truncate">{translate(item.labelKey)}</span>
+                    <span className="truncate">{item.label}</span>
                     {item.badge !== undefined && item.badge > 0 && reachable && (
                       <span
                         className={cn(

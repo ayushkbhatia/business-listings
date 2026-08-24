@@ -66,9 +66,9 @@ they 404 until their handoff.
 /dashboard/products/import              CSV import mapper                    [11d]
 /dashboard/templates/:slug              Spec template                         [3h]
 /dashboard/media                        Media library                         [3i]
-/dashboard/leads                        Leads & RFQ inbox                     [3j]
-/dashboard/leads/:id/thread             Seller message thread                [11b]
-/dashboard/quotes                       Quotes sent pipeline                  [3k]
+/dashboard/leads                        Leads & RFQ inbox                     [3j]  built h2s1
+/dashboard/leads/:id/thread             Seller message thread                [11b]  quote composer h2s1; messages h2s4
+/dashboard/quotes                       Quotes sent pipeline                  [3k]  built h2s1
 /dashboard/reviews                      Reviews                              [11c]
 /dashboard/analytics                    Analytics                             [3l]
 /dashboard/billing                      Subscription & invoices               [3m]

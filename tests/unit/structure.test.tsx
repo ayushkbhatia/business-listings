@@ -249,21 +249,21 @@ describe("TableToolbar", () => {
 });
 
 describe("AppSidebar", () => {
+  // Labels arrive resolved — see resolveNav in nav-config.
   const groups = [
     {
       key: "g",
-      labelKey: "Group",
+      label: "Group",
       items: [
-        { key: "leads", labelKey: "Leads", href: "/dashboard/leads", capability: "enquiry.respond" as const },
-        { key: "billing", labelKey: "Billing", href: "/dashboard/billing", capability: "billing.manage" as const },
-        { key: "later", labelKey: "Attributes", href: "/admin/attributes", later: true },
+        { key: "leads", label: "Leads", href: "/dashboard/leads", capability: "enquiry.respond" as const },
+        { key: "billing", label: "Billing", href: "/dashboard/billing", capability: "billing.manage" as const },
+        { key: "later", label: "Attributes", href: "/admin/attributes", later: true },
       ],
     },
   ];
   const base = {
     groups,
     activeHref: "/dashboard/leads",
-    translate: (k: string) => k,
     label: "Seller navigation",
     lockedLabel: "locked",
     laterLabel: "soon",

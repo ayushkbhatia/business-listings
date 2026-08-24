@@ -367,3 +367,62 @@ so the next `migrate dev` reads it as drift and generates a migration to drop
 it. Any future raw-SQL object needs `IF NOT EXISTS` on creation and `IF EXISTS`
 on removal, and the migration that follows it needs reading before it is
 applied. See docs/database.md.
+
+## Handoff 2, step 1 — the seller side
+
+### The seed's clock now moves
+`NOW` was a fixed instant, `2026-08-14T12:00:00+04:00`, which made two runs
+byte-identical. Ten days later every "live" enquiry in the leads inbox rendered
+as **Closed** and the seller screens had nothing to act on. A fixture that
+expires is worse than one that moves, so `NOW` is now noon today in Asia/Dubai.
+The PRNG stays fixed, which is what actually keeps content stable — the same
+businesses, products, prices and names every run. Only the timeline slides. Set
+`SEED_NOW` to an ISO instant to reproduce an exact dataset.
+
+### A match floor, set by hand
+`MATCH_FLOOR = 0.45` in `lib/quote/match.ts`. Nothing in the handoff states one.
+It is set against the seeded catalogue so that a line naming a product the
+seller stocks clears it and `API 6D trunnion ball valve DN600` clears nothing.
+The matcher errs towards **unmatched**: a matcher that always finds something is
+worse than none, because the seller stops reading the suggestions and one day
+sends a DN600 line at the DN100 price with their name on it.
+
+### The size veto is not a score
+If an enquiry line and a product both name a readable bore and the bores differ,
+the pair is removed rather than ranked last. "Gate valve DN100" and "Gate valve
+DN150" share every word that matters and are not substitutes. A veto cannot be
+reached by lowering a threshold; a low score can.
+
+### Quote arithmetic is integer fils
+`lib/quote/money.ts`. A quote total is what a buyer commits their company to,
+and `0.1 + 0.2` has no business appearing on a line that says AED. This needed
+`tsconfig.target` raised from create-next-app's ES2017 to ES2020 for bigint
+literals; every browser Next.js 16 targets has supported BigInt since 2020.
+
+### `AppSidebar` takes resolved labels
+It took a `translate` function, which a server component cannot pass to a client
+component. Rather than have the sidebar import `t()` — which the config exists
+to avoid — callers now pass `resolveNav(DASHBOARD_NAV, t)`. Labels arrive as
+strings, as they do for every other component here.
+
+### The dashboard's nav badges were lies
+`nav-config.ts` shipped `badge: 7` on leads and `badge: 2` on quotes as
+placeholders. With the screens built, the sidebar said 7 above a page listing 2.
+Both are now passed through `resolveNav` from real counts. The admin placeholders
+stay until handoff 4 builds their screens.
+
+### A development-only seller seat
+Step 1 builds the seller side before step 2 builds auth, on the README's own
+sequencing. `lib/auth/dev-seller.ts` resolves a seeded owner from
+`DEV_SELLER_SLUG`, returns null when `NODE_ENV === "production"` before reading
+anything, and is opt-in even locally. Step 2 deletes it. One consequence worth
+knowing: `pnpm test:e2e` builds for production, so the seller screens cannot be
+covered by Playwright until sign-in exists. Their proof lives in
+`tests/integration/` instead, against a real database.
+
+### Quote references
+`QT-8863-ALMR1` — enquiry number, the supplier's three-letter mark, revision.
+The seed's historical refs use an older positional shape (`QT-8841-B2R1`) and
+are left as they are. A numeric suffix is appended if two suppliers on one
+enquiry share a mark, because `Quote.ref` is unique and a clash must not lose a
+quote.

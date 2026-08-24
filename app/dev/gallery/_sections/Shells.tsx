@@ -15,6 +15,7 @@ import {
   Panel,
   PublicNav,
   PublicShell,
+  resolveNav,
   Tabs,
 } from "@/components/structure";
 import type { Actor } from "@/lib/auth/roles";
@@ -83,9 +84,8 @@ export function Shells() {
             <Viewport height={420}>
               <AppSidebar
                 label={`${t("nav.label.dashboard")} — seller_owner`}
-                groups={DASHBOARD_NAV}
+                groups={resolveNav(DASHBOARD_NAV, (key) => t(key as never))}
                 activeHref="/dashboard/leads"
-                translate={(key) => t(key as never)}
                 actor={SELLER}
                 lockedLabel={t("nav.locked")}
                 laterLabel={t("nav.later")}
@@ -95,9 +95,8 @@ export function Shells() {
             <Viewport height={420}>
               <AppSidebar
                 label={`${t("nav.label.dashboard")} — seller_sales`}
-                groups={DASHBOARD_NAV}
+                groups={resolveNav(DASHBOARD_NAV, (key) => t(key as never))}
                 activeHref="/dashboard/leads"
-                translate={(key) => t(key as never)}
                 actor={SALES}
                 lockedLabel={t("nav.locked")}
                 laterLabel={t("nav.later")}
@@ -113,9 +112,8 @@ export function Shells() {
             <Viewport height={520}>
               <AppSidebar
                 label={`${t("nav.label.admin")} — staff_moderator`}
-                groups={ADMIN_NAV}
+                groups={resolveNav(ADMIN_NAV, (key) => t(key as never))}
                 activeHref="/admin/queue"
-                translate={(key) => t(key as never)}
                 actor={MODERATOR}
                 lockedLabel={t("nav.locked")}
                 laterLabel={t("nav.later")}
@@ -132,9 +130,8 @@ export function Shells() {
             <Viewport height={520}>
               <AppSidebar
                 label={`${t("nav.label.admin")} — staff_ops_lead`}
-                groups={ADMIN_NAV}
+                groups={resolveNav(ADMIN_NAV, (key) => t(key as never))}
                 activeHref="/admin/audit"
-                translate={(key) => t(key as never)}
                 actor={OPS}
                 lockedLabel={t("nav.locked")}
                 laterLabel={t("nav.later")}
@@ -270,9 +267,8 @@ export function Shells() {
             sidebar={
               <AppSidebar
                 label={`${t("nav.label.dashboard")} — shell`}
-                groups={DASHBOARD_NAV}
+                groups={resolveNav(DASHBOARD_NAV, (key) => t(key as never))}
                 activeHref="/dashboard/leads"
-                translate={(key) => t(key as never)}
                 actor={SELLER}
                 lockedLabel={t("nav.locked")}
                 laterLabel={t("nav.later")}
@@ -307,9 +303,8 @@ export function Shells() {
             sidebar={
               <AppSidebar
                 label={`${t("nav.label.admin")} — shell`}
-                groups={ADMIN_NAV}
+                groups={resolveNav(ADMIN_NAV, (key) => t(key as never))}
                 activeHref="/admin/queue"
-                translate={(key) => t(key as never)}
                 actor={OPS}
                 lockedLabel={t("nav.locked")}
                 laterLabel={t("nav.later")}
