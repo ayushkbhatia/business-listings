@@ -286,3 +286,43 @@ found by a DN100 query, does. Both directions are now in the match surface.
 - Whether the results toolbar should carry a sort control. Nothing in the
   README mentions one, and ranking is the answer to sorting here.
 - What the sponsored slot looks like beyond "always labelled".
+
+---
+
+## Handoff 1, step 5 — home and compare
+
+### Unbuilt chrome routes are named, not linked
+`/categories`, `/guides`, `/pricing` and the four policy pages are board 10j and
+later handoffs. `docs/routes.md` says a later route is named so the nav config
+is shaped correctly now. They render as greyed text with a title, the same
+treatment AppSidebar gives an unbuilt admin route, rather than as links into a
+404. Turning them into links is a one-word change per entry when the pages land.
+
+### Compare is a real feature; only "Enquire with all" is disabled
+The README puts /compare in scope as a page and disables the enquire action
+specifically, so the Compare control on a listing card is a link rather than a
+disabled button.
+
+### The comparison tray lives in the URL
+`?compare=slug,slug` on a results page, `?p=slug,slug` on /compare. No client
+state and no cookie: adding a supplier is a navigation that preserves every
+other facet, and the whole flow works before JavaScript arrives. Capped at four
+because past that the table stops fitting on any screen a buyer has.
+
+### The comparison table is transposed
+Suppliers are columns and attributes are rows — the opposite of every other
+table in the product. Four across is what fits, and a buyer reads down one
+attribute at a time. Both `th scope="col"` and `th scope="row"` are used.
+
+### Home ordering never uses plan tier
+Featured suppliers are ordered by verification then reviews. Sponsored
+placement is sold per category and emirate; on the home page a paid slot would
+read as an editorial endorsement.
+
+### Still open
+- **`next/link` migration.** Everything is a plain `<a>`, which was deliberate
+  for the works-without-JavaScript property — but `next/link` renders a real
+  anchor too and adds prefetch and client-side navigation for free. One
+  instance was converted where the Next lint rule fires; the rest is a
+  mechanical sweep worth doing before launch, and it is a performance change,
+  not a correctness one.

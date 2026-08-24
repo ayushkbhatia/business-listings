@@ -22,7 +22,20 @@ interface Props {
 }
 
 export default async function SearchPage({ searchParams }: Props) {
-  const query = parseSearchQuery(await searchParams);
+  const sp = await searchParams;
+  const query = parseSearchQuery(sp);
+  // The comparison tray rides in the URL so adding a supplier is a navigation
+  // and keeps every other facet intact — no client state, works without JS.
+  const trayRaw = Array.isArray(sp.compare) ? (sp.compare[0] ?? "") : (sp.compare ?? "");
+  const tray = trayRaw
+    .split(",")
+    .filter(Boolean)
+    .slice(0, 4);
+  const search = new URLSearchParams(
+    Object.entries(sp).flatMap(([k, v]) =>
+      v === undefined ? [] : [[k, Array.isArray(v) ? v.join(",") : v] as [string, string]],
+    ),
+  ).toString();
 
   return (
     <PublicShell
@@ -45,7 +58,7 @@ export default async function SearchPage({ searchParams }: Props) {
       </header>
 
       <div className="mt-5">
-        <Results query={query} basePath="/search" />
+        <Results query={query} basePath="/search" tray={tray} search={search} />
       </div>
     </PublicShell>
   );

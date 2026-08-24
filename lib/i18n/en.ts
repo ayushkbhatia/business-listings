@@ -41,6 +41,11 @@ export const en = {
   "action.notify_me": "Notify me",
   "action.reveal_phone": "Show number",
   "action.compare": "Compare",
+  "action.in_compare": "In comparison",
+  "compare.tray": { one: "{count} supplier selected", other: "{count} suppliers selected" },
+  "compare.open": "Compare them",
+  "compare.clear": "Clear",
+  "compare.full": "Comparison is full",
   "action.retry": "Try again",
 
   // ── The four empty states. They are four different things. ──
@@ -335,6 +340,7 @@ export const en = {
   "chrome.footer_nav": "Policies",
   "chrome.footer_count": "{count} listed businesses across seven emirates.",
   "chrome.directory": "Directory",
+  "chrome.later": "Not in this release yet",
 
   // ── Emirates. Translatable records live in the database; these are the enum
   //    values rendered, which the schema owns rather than the taxonomy.
@@ -456,6 +462,50 @@ export const en = {
   "category.suppliers_in": "{category} suppliers in the UAE",
   "category.intro_count": "{count} listed suppliers, {verified} of them verified.",
   "seo.category_description": "{count} {category} suppliers across the UAE. Filter by verification, emirate and specification, then send one enquiry.",
+
+  // ── Home ──
+  "home.hero_title": "Find a supplier who actually has it",
+  "home.hero_body": "{listings} licensed UAE businesses, {verified} of them verified by us. Search by product, size or specification, then send one enquiry. No account needed, and no price until a supplier quotes you directly.",
+  "home.search_cta": "Search",
+  "home.browse_title": "Browse by trade",
+  "home.suppliers_in": { one: "{count} supplier", other: "{count} suppliers" },
+  "home.verified_title": "Recently verified",
+  "home.verified_body": "Suppliers whose trade licence we have checked, and in some cases whose premises we have visited.",
+  "home.geography_title": "By emirate",
+  "home.stat_listings": "listed businesses",
+  "home.stat_verified": "verified",
+  "home.stat_products": "products with specifications",
+  "home.stat_categories": "trades",
+  "home.how_title": "How this works",
+  "home.how_1_title": "Search or post a requirement",
+  "home.how_1_body": "Find a supplier yourself, or send one requirement to up to eight and let them come to you.",
+  "home.how_2_title": "They quote you directly",
+  "home.how_2_body": "Prices are between you and the supplier. We never see the number, never take a cut, and never hold your money.",
+  "home.how_3_title": "You accept one",
+  "home.how_3_body": "Accepting a quote releases your contact details to that supplier and closes the others. Nothing else happens.",
+  "seo.home_description": "{listings} licensed UAE suppliers across {categories} trades. Search by product, size or specification, then send one enquiry.",
+
+  // ── Compare ──
+  "compare.title": "Compare suppliers",
+  "compare.empty_title": "Nothing to compare yet",
+  "compare.empty_body": "Add suppliers from a search or a category page and they appear here side by side.",
+  "compare.browse": "Browse the directory",
+  "compare.enquire_all": { one: "Send one enquiry to {count} supplier", other: "Send one enquiry to all {count}" },
+  "compare.remove": "Remove {name} from the comparison",
+  "compare.attribute": "Attribute",
+  "compare.verification": "Verification",
+  "compare.response": "Typical reply",
+  "compare.products": "Products listed",
+  "compare.reviews": "Reviews",
+  "compare.branches": "Branches",
+  "compare.emirates": "Emirates covered",
+  "compare.established": "Trading since",
+  "compare.team": "Team size",
+  "compare.languages": "Languages",
+  "compare.licence": "Trade licence",
+  "compare.caption": "Suppliers compared side by side",
+  "compare.limit": "Up to {limit} suppliers at a time.",
+  "compare.no_price": "No prices here. A supplier quotes you privately once you send an enquiry.",
 
   // ── Trust ──
   "verification.tier": "Verification tier {tier}",

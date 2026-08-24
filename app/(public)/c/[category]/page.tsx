@@ -40,7 +40,20 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   const category = await getCategoryBySlug(slug);
   if (!category || category.parentId) notFound();
 
-  const query = parseSearchQuery(await searchParams);
+  const sp = await searchParams;
+  const query = parseSearchQuery(sp);
+  // The comparison tray rides in the URL so adding a supplier is a navigation
+  // and keeps every other facet intact — no client state, works without JS.
+  const trayRaw = Array.isArray(sp.compare) ? (sp.compare[0] ?? "") : (sp.compare ?? "");
+  const tray = trayRaw
+    .split(",")
+    .filter(Boolean)
+    .slice(0, 4);
+  const search = new URLSearchParams(
+    Object.entries(sp).flatMap(([k, v]) =>
+      v === undefined ? [] : [[k, Array.isArray(v) ? v.join(",") : v] as [string, string]],
+    ),
+  ).toString();
   const ids = categoryIdsFor(category);
   const crumbs = [{ label: t("chrome.directory"), href: "/" }, { label: category.name }];
 
@@ -87,6 +100,8 @@ export default async function CategoryPage({ params, searchParams }: Props) {
         <Results
           query={query}
           basePath={`/c/${category.slug}`}
+          tray={tray}
+          search={search}
           category={{ id: category.id, slug: category.slug, name: category.name, ids }}
         />
       </div>

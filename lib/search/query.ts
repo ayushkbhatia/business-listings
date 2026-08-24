@@ -28,6 +28,10 @@ export interface SearchQuery {
 const RESERVED = new Set([
   "q", "tab", "emirate", "area", "tier", "freeZone", "availability",
   "replyWithinHours", "yearsTrading", "page",
+  // The comparison tray rides in the URL alongside the query. It is not a
+  // facet and must never land in the spec bucket, or it becomes a filter on a
+  // SpecField id that does not exist.
+  "compare",
 ]);
 
 function list(value: string | string[] | undefined): string[] {

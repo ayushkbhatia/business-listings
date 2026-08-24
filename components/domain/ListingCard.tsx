@@ -58,6 +58,15 @@ export interface ListingCardProps {
   selected?: boolean;
   /** Labelled sponsor mark, already localised. */
   sponsoredLabel?: string;
+  /**
+   * Where "Compare" goes. Compare is a real feature this handoff — only the
+   * "Enquire with all 4" action on the tray is disabled — so this is a link,
+   * not a dead button. Defaults to starting a fresh tray with this supplier.
+   */
+  compareHref?: string;
+  /** Already in the tray: the control says so and removes instead. */
+  inCompare?: boolean;
+  compareLabel?: string;
 }
 
 function badgeDate(business: ListingCardBusiness): string | undefined {
@@ -73,6 +82,9 @@ export function ListingCard({
   href,
   selected = false,
   sponsoredLabel,
+  compareHref,
+  inCompare = false,
+  compareLabel,
 }: ListingCardProps) {
   const spec = tierSpec(business.verificationTier);
   const link = href ?? `/b/${business.slug}`;
@@ -204,9 +216,19 @@ export function ListingCard({
               <Button size="sm" disabled title={t("enquiry.disabled")}>
                 {t("product.enquire")}
               </Button>
-              <Button size="sm" variant="secondary" disabled title={t("enquiry.disabled")}>
-                {t("action.compare")}
-              </Button>
+              <a
+                href={compareHref ?? `/compare?p=${business.slug}`}
+                className={cn(
+                  "inline-flex h-8 items-center justify-center rounded-ctl border px-3 text-caption font-medium",
+                  "transition-colors duration-120 ease-out",
+                  "focus-visible:outline-none focus-visible:shadow-focus",
+                  inCompare
+                    ? "border-[1.5px] border-moss bg-moss-wash text-moss-deep"
+                    : "border-line-strong bg-card text-ink hover:bg-fill",
+                )}
+              >
+                {compareLabel ?? t("action.compare")}
+              </a>
               {business.establishedYear && (
                 <span className="font-mono text-eyebrow tabular-nums text-faint">
                   {t("listing.years", { year: business.establishedYear })}

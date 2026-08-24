@@ -113,13 +113,71 @@ export function ResultsTabs({
   );
 }
 
+/** Slugs already in the comparison tray, carried in the URL. */
+export const COMPARE_MAX = 4;
+
+export function CompareTray({
+  tray,
+  basePath,
+  search,
+}: {
+  tray: string[];
+  basePath: string;
+  search: string;
+}) {
+  if (tray.length === 0) return null;
+  const params = new URLSearchParams(search);
+  params.delete("compare");
+  const cleared = params.toString();
+
+  return (
+    <div
+      aria-live="polite"
+      className="flex flex-wrap items-center gap-3 rounded-card border-[1.5px] border-moss bg-moss-wash px-3 py-2"
+    >
+      <span className="font-mono text-caption tabular-nums text-moss-deep">
+        {t("compare.tray", { count: tray.length })}
+      </span>
+      <a
+        href={`/compare?p=${tray.join(",")}`}
+        className="rounded-ctl border border-moss bg-moss px-3 py-1 text-caption font-medium text-on-ink transition-colors duration-120 ease-out hover:bg-moss-hover focus-visible:outline-none focus-visible:shadow-focus"
+      >
+        {t("compare.open")}
+      </a>
+      <a
+        href={cleared ? `${basePath}?${cleared}` : basePath}
+        className="rounded-tag text-caption text-moss-deep underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+      >
+        {t("compare.clear")}
+      </a>
+    </div>
+  );
+}
+
 export function ResultsList({
   query,
   basePath,
   businesses,
   products,
   specFields = [],
-}: Pick<ResultsSurfaceProps, "query" | "basePath" | "businesses" | "products" | "specFields">) {
+  tray = [],
+  search = "",
+}: Pick<ResultsSurfaceProps, "query" | "basePath" | "businesses" | "products" | "specFields"> & {
+  tray?: string[];
+  search?: string;
+}) {
+  /** Toggle this supplier in the tray without leaving the results page. */
+  function compareHref(slug: string): string {
+    const params = new URLSearchParams(search);
+    const next = tray.includes(slug)
+      ? tray.filter((s) => s !== slug)
+      : [...tray, slug].slice(0, COMPARE_MAX);
+    if (next.length > 0) params.set("compare", next.join(","));
+    else params.delete("compare");
+    const qs = params.toString();
+    return qs ? `${basePath}?${qs}` : basePath;
+  }
+
   if (query.tab === "products" && products) {
     return (
       <>
@@ -189,6 +247,9 @@ export function ResultsList({
                     : undefined,
                   establishedYear: business.establishedYear,
                 }}
+                compareHref={compareHref(business.slug)}
+                inCompare={tray.includes(business.slug)}
+                compareLabel={tray.includes(business.slug) ? t("action.in_compare") : undefined}
               />
             </div>
           );

@@ -9,6 +9,12 @@ export interface PublicNavLink {
   key: string;
   label: string;
   href: string;
+  /**
+   * Named in docs/routes.md but not built yet. Rendered as text rather than a
+   * link, so the nav is the right shape now without a dead link in it — the
+   * same treatment AppSidebar gives an unbuilt admin route.
+   */
+  later?: boolean;
 }
 
 export interface PublicNavProps {
@@ -21,9 +27,19 @@ export interface PublicNavProps {
   /** Sign in, or the account menu. */
   actions?: React.ReactNode;
   label: string;
+  /** Tooltip on an unbuilt route, already localised. */
+  laterLabel?: string;
 }
 
-export function PublicNav({ brand, brandHref = "/", search, links, actions, label }: PublicNavProps) {
+export function PublicNav({
+  brand,
+  brandHref = "/",
+  search,
+  links,
+  actions,
+  label,
+  laterLabel,
+}: PublicNavProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-paper/95 backdrop-blur">
       <nav
@@ -45,20 +61,32 @@ export function PublicNav({ brand, brandHref = "/", search, links, actions, labe
 
         {links && links.length > 0 && (
           <ul className="hidden shrink-0 items-center gap-1 lg:flex">
-            {links.map((link) => (
-              <li key={link.key}>
-                <a
-                  href={link.href}
-                  className={cn(
-                    "rounded-ctl px-2.5 py-1.5 text-body-sm text-muted",
-                    "transition-colors duration-120 ease-out hover:bg-fill hover:text-ink",
-                    "focus-visible:outline-none focus-visible:shadow-focus",
-                  )}
-                >
-                  {link.label}
-                </a>
-              </li>
-            ))}
+            {links.map((link) =>
+              link.later ? (
+                <li key={link.key}>
+                  <span
+                    aria-disabled="true"
+                    title={laterLabel}
+                    className="cursor-not-allowed px-2.5 py-1.5 text-body-sm text-faint"
+                  >
+                    {link.label}
+                  </span>
+                </li>
+              ) : (
+                <li key={link.key}>
+                  <a
+                    href={link.href}
+                    className={cn(
+                      "rounded-ctl px-2.5 py-1.5 text-body-sm text-muted",
+                      "transition-colors duration-120 ease-out hover:bg-fill hover:text-ink",
+                      "focus-visible:outline-none focus-visible:shadow-focus",
+                    )}
+                  >
+                    {link.label}
+                  </a>
+                </li>
+              ),
+            )}
           </ul>
         )}
 

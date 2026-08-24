@@ -581,3 +581,87 @@ export async function getHomeCategories() {
     include: { _count: { select: { primaryFor: { where: PUBLIC_BUSINESS } } } },
   });
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Home and compare
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The numbers on the home page. Say the number, never "many suppliers" — a
+ * directory that will not tell you how big it is has told you something.
+ */
+export async function getDirectoryStats() {
+  const [listings, verified, categories, areas, products] = await Promise.all([
+    prisma.business.count({ where: PUBLIC_BUSINESS }),
+    prisma.business.count({ where: { ...PUBLIC_BUSINESS, verificationTier: { gte: 2 } } }),
+    prisma.category.count({ where: { parentId: null } }),
+    prisma.area.count(),
+    prisma.product.count({ where: { status: { not: "draft" }, business: PUBLIC_BUSINESS } }),
+  ]);
+  return { listings, verified, categories, areas, products };
+}
+
+/**
+ * Suppliers to show on the home page.
+ *
+ * Ordered by verification then reviews, and never by plan: the home page is
+ * the one surface where a paid slot would read as an editorial endorsement.
+ * Sponsored placement is sold per category and emirate, not here.
+ */
+export async function getFeaturedBusinesses(take = 6) {
+  return prisma.business.findMany({
+    where: { ...PUBLIC_BUSINESS, claimStatus: "claimed", verificationTier: { gte: 2 } },
+    include: {
+      primaryCategory: true,
+      locations: { where: { published: true }, include: { area: true }, take: 1 },
+      _count: { select: { products: { where: { status: { not: "draft" } } } } },
+    },
+    orderBy: [{ verificationTier: "desc" }, { reviewCount: "desc" }, { displayName: "asc" }],
+    take,
+  });
+}
+
+/** Emirates with a supplier count, for the home page's geography row. */
+export async function getEmirateCounts() {
+  const rows = await prisma.location.groupBy({
+    by: ["emirate"],
+    where: { published: true, business: PUBLIC_BUSINESS },
+    _count: { businessId: true },
+  });
+  return rows
+    .map((row) => ({ emirate: row.emirate, count: row._count.businessId }))
+    .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * The businesses in a comparison tray, in the order the buyer picked them.
+ *
+ * Capped at four. Past that the table stops fitting on any screen a buyer
+ * actually has, and a comparison nobody can read side by side is a list.
+ */
+export const COMPARE_LIMIT = 4;
+
+export async function getBusinessesForCompare(slugs: readonly string[]) {
+  const wanted = slugs.slice(0, COMPARE_LIMIT);
+  if (wanted.length === 0) return [];
+
+  const found = await prisma.business.findMany({
+    where: { slug: { in: [...wanted] }, ...PUBLIC_BUSINESS },
+    include: {
+      primaryCategory: true,
+      locations: { where: { published: true }, include: { area: true } },
+      _count: {
+        select: {
+          products: { where: { status: { not: "draft" } } },
+          reviews: { where: { removedAt: null } },
+        },
+      },
+    },
+  });
+
+  // Preserve the buyer's order rather than the database's.
+  const bySlug = new Map(found.map((business) => [business.slug, business]));
+  return wanted.map((slug) => bySlug.get(slug)).filter((b): b is NonNullable<typeof b> => Boolean(b));
+}
+
+export type CompareBusiness = Awaited<ReturnType<typeof getBusinessesForCompare>>[number];

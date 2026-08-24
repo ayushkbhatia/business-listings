@@ -23,10 +23,14 @@ export function DirectoryNav() {
           placeholder={t("search.placeholder")}
         />
       }
+      laterLabel={t("chrome.later")}
       links={[
-        { key: "categories", label: t("chrome.categories"), href: "/categories" },
-        { key: "guides", label: t("chrome.guides"), href: "/guides" },
-        { key: "pricing", label: t("chrome.pricing"), href: "/pricing" },
+        // Named so the nav is the right shape now, not linked until the
+        // handoff that builds them. docs/routes.md marks these later; a dead
+        // link is worse than an honest greyed one.
+        { key: "categories", label: t("chrome.categories"), href: "/categories", later: true },
+        { key: "guides", label: t("chrome.guides"), href: "/guides", later: true },
+        { key: "pricing", label: t("chrome.pricing"), href: "/pricing", later: true },
       ]}
       actions={
         <Button size="sm" disabled title={t("enquiry.disabled")}>
@@ -51,18 +55,21 @@ export function DirectoryFooter({ listingCount }: { listingCount?: number }) {
         </div>
         <nav aria-label={t("chrome.footer_nav")} className="flex flex-wrap gap-x-8 gap-y-2">
           {[
-            { key: "terms", label: t("chrome.terms"), href: "/terms" },
-            { key: "privacy", label: t("chrome.privacy"), href: "/privacy" },
-            { key: "verification", label: t("chrome.verification_policy"), href: "/verification-policy" },
-            { key: "reviews", label: t("chrome.review_policy"), href: "/review-policy" },
+            { key: "terms", label: t("chrome.terms") },
+            { key: "privacy", label: t("chrome.privacy") },
+            { key: "verification", label: t("chrome.verification_policy") },
+            { key: "reviews", label: t("chrome.review_policy") },
           ].map((link) => (
-            <a
+            // Policy pages are board 10j and belong to a later handoff. Named
+            // here so the footer is the right shape, not linked into a 404.
+            <span
               key={link.key}
-              href={link.href}
-              className="rounded-tag text-caption text-muted underline-offset-2 hover:text-ink hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+              aria-disabled="true"
+              title={t("chrome.later")}
+              className="cursor-not-allowed text-caption text-faint"
             >
               {link.label}
-            </a>
+            </span>
           ))}
         </nav>
       </div>
