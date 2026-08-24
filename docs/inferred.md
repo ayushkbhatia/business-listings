@@ -914,3 +914,48 @@ phone: the buyer now scrolls a 242px window sideways across the table instead
 of the whole page, which is correct behaviour and a bad experience. Stacking
 the row below some breakpoint is a board decision, not something to change
 inside an acceptance pass, and it is carried.
+
+### `pipefail` plus `grep -q` made criterion 9 a coin flip
+
+CI went red on this branch at a step nothing in the branch touched:
+
+```
+FAIL — QuoteLine exists but has no unitPrice. That is the only price in the schema.
+```
+
+`prisma/schema.prisma` was byte-identical to the run twenty minutes earlier
+that passed, and `pnpm check:schema` passed locally every time. The script ran
+
+```bash
+set -uo pipefail
+code() { sed -E 's://.*$::' "$SCHEMA" | grep -v '^[[:space:]]*$'; }
+if code | grep -qE '^model QuoteLine'; then
+  if code | grep -qE '^unitPrice'; then ...
+```
+
+`grep -q` exits the moment it matches. If the producer is still writing when it
+does, the producer takes SIGPIPE and exits 141, and under `pipefail` the whole
+pipeline reports 141 — a successful match returning failure. The schema is
+about the size of a pipe buffer, so which way it went depended on how loaded the
+machine was:
+
+```
+pipeline status with a producer still running: 0
+pipeline status when the producer outruns the pipe buffer: 141
+```
+
+Both branches were wrong in a different direction. The passing run never
+reached the inner check at all, because the outer `if` had already read 141 —
+so criterion 9's fourth assertion silently did not run. The failing run reached
+it and then read 141 from the inner one. The check has been able to false-pass
+and false-fail since it was written; the CI history just never showed it.
+
+The strip now happens once into a variable and every check greps that with a
+here-string, so there is no pipeline to race. The remaining `grep -q` calls in
+the scripts read files, and the `| head -n` pipelines are inside `$(...)` used
+for their output rather than their status, so neither can do this.
+
+Worth stating plainly: this is the third defect this handoff where a check
+reported success without having checked anything — the handoff 0 grep after a
+rename, the `-t` filter that matched no tests, and now this. All three were
+silent. A check that cannot fail is worse than no check, because it is counted.
