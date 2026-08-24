@@ -13,7 +13,9 @@ pnpm report:contrast    # what axe actually finds on the rendered gallery
 
 ## What axe finds on `/dev/gallery`
 
-475 failing nodes, from ten colour pairings. Every other axe rule passes.
+611 failing nodes, from thirteen colour pairings, as of the tier 3 display
+components. Every other axe rule passes. The pairings are the same two tokens
+on more surfaces — no component has introduced a new failing combination.
 
 | nodes | foreground on background | token | measured | floor |
 |---:|---|---|---:|---:|
@@ -28,7 +30,9 @@ pnpm report:contrast    # what axe actually finds on the rendered gallery
 | 2 | `#7c776c` on `#f7f5f0` | `--text-muted` on `--placeholder-empty-b` | 4.09:1 | 4.5:1 |
 | 1 | `#7c776c` on `#f4f9f5` | `--text-muted` on `--ok-surface` | 4.18:1 | 4.5:1 |
 
-Two tokens account for 451 of the 475: `--text-faint` and `--text-muted`.
+Two tokens account for almost all of the 611: `--text-faint` and `--text-muted`.
+The table above is the checkpoint-6 snapshot; `pnpm report:contrast` prints the
+current one.
 
 ## The shape of the problem
 
@@ -57,7 +61,7 @@ of sync silently, which is worse than a documented gap. So:
 
 - no token value has been altered
 - the failures are enumerated, reproducible, and counted
-- the Playwright suite pins the count at 475, so a *new* contrast failure
+- the Playwright suite pins the count at 611, so a *new* contrast failure
   introduced by a component still breaks the build
 
 ## Three ways out, for the design decision

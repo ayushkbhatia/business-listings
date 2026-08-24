@@ -15,7 +15,8 @@ const url = process.env.CONTRAST_URL ?? "http://localhost:3000/dev/gallery";
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
-await page.goto(url, { waitUntil: "networkidle" });
+await page.goto(url, { waitUntil: "domcontentloaded" });
+await page.locator("#map-canvas").waitFor({ state: "attached" });
 await page.addScriptTag({ content: axeSource });
 
 const grouped = await page.evaluate(async () => {

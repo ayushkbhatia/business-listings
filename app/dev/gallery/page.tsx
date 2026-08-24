@@ -1,6 +1,7 @@
 import { t } from "@/lib/i18n";
 import { Actions } from "./_sections/Actions";
 import { Choice } from "./_sections/Choice";
+import { Display } from "./_sections/Display";
 import { Numeric } from "./_sections/Numeric";
 import { TextEntry } from "./_sections/TextEntry";
 import { Overlays } from "./_sections/Overlays";
@@ -62,6 +63,24 @@ const TIER_2 = [
 
 const SHELLS = ["shell-public", "shell-dashboard", "shell-admin", "builder-chrome"] as const;
 
+const TIER_3 = [
+  "status-badge",
+  "plan-badge",
+  "filter-chip",
+  "tag",
+  "stat-card",
+  "progress-bar",
+  "step-progress",
+  "stacked-bar",
+  "funnel-bars",
+  "share-bars",
+  "waterfall",
+  "image-placeholder",
+  "logo-tile",
+  "category-mark",
+  "map-canvas",
+] as const;
+
 export default function Gallery() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -95,6 +114,16 @@ export default function Gallery() {
               </td>
             </tr>
             <tr className="border-t border-line">
+              <td className="px-3 py-1.5 font-mono text-body-sm text-body">tier-3-display</td>
+              <td className="px-3 py-1.5 text-right font-mono text-body-sm text-ok-ink">
+                {TIER_3.length}/15
+              </td>
+            </tr>
+            <tr className="border-t border-line">
+              <td className="px-3 py-1.5 font-mono text-body-sm text-body">tier-4-domain</td>
+              <td className="px-3 py-1.5 text-right font-mono text-body-sm text-muted">0/7</td>
+            </tr>
+            <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono text-body-sm text-body">shells</td>
               <td className="px-3 py-1.5 text-right font-mono text-body-sm text-ok-ink">
                 {SHELLS.length}/4
@@ -104,7 +133,7 @@ export default function Gallery() {
         </table>
 
         <nav aria-label={t("gallery.jump_to")} className="mt-4 flex flex-wrap gap-1.5">
-          {[...TIER_1, ...TIER_2].map((id) => (
+          {[...TIER_1, ...TIER_2, ...TIER_3].map((id) => (
             <a
               key={id}
               href={`#${id}`}
@@ -122,6 +151,7 @@ export default function Gallery() {
       <Numeric />
       <Upload />
       <Structure />
+      <Display />
       <Overlays />
       <Shells />
       <Tokens />

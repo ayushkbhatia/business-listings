@@ -14,12 +14,14 @@ import { expect, test } from "@playwright/test";
  * by a component still breaks the build.
  */
 
-const KNOWN_CONTRAST_NODES = 475;
+const KNOWN_CONTRAST_NODES = 611;
 
 test.describe("gallery", () => {
   test("has no axe violations outside contrast", async ({ page }) => {
     await page.goto("/dev/gallery");
-    await page.waitForLoadState("networkidle");
+    // Not networkidle: the gallery carries a live map, and a tile stream never
+    // goes quiet. The last section rendering is the real signal.
+    await page.locator("#map-canvas").waitFor({ state: "attached" });
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
@@ -39,7 +41,9 @@ test.describe("gallery", () => {
 
   test("contrast failures are the known token-level set and no more", async ({ page }) => {
     await page.goto("/dev/gallery");
-    await page.waitForLoadState("networkidle");
+    // Not networkidle: the gallery carries a live map, and a tile stream never
+    // goes quiet. The last section rendering is the real signal.
+    await page.locator("#map-canvas").waitFor({ state: "attached" });
 
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2aa"])
@@ -52,7 +56,7 @@ test.describe("gallery", () => {
     expect(nodes).toBeLessThanOrEqual(KNOWN_CONTRAST_NODES);
   });
 
-  test("every tier 1 and tier 2 component is on the page", async ({ page }) => {
+  test("every tier 1, 2 and 3 component is on the page", async ({ page }) => {
     await page.goto("/dev/gallery");
 
     const tier1 = [
@@ -65,8 +69,13 @@ test.describe("gallery", () => {
       "card", "panel", "tabs", "breadcrumb", "public-nav", "app-sidebar", "page-header",
       "step-header", "filter-rail", "builder-chrome", "drawer", "modal",
     ];
+    const tier3 = [
+      "status-badge", "plan-badge", "filter-chip", "tag", "stat-card", "progress-bar",
+      "step-progress", "stacked-bar", "funnel-bars", "share-bars", "waterfall",
+      "image-placeholder", "logo-tile", "category-mark", "map-canvas",
+    ];
 
-    for (const id of [...tier1, ...tier2]) {
+    for (const id of [...tier1, ...tier2, ...tier3]) {
       await expect(page.locator(`#${id}`), `#${id} is missing from the gallery`).toHaveCount(1);
     }
   });

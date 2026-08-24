@@ -249,6 +249,25 @@ export const en = {
   "shell.viewing_as": "Viewing as {name}. Every action is recorded.",
   "shell.results_count": { one: "{count} supplier", other: "{count} suppliers" },
 
+  // ── Display tier ──
+  "display.verified": "Verified",
+  "display.expiring": "Licence expiring",
+  "display.suspended": "Suspended",
+  "display.unclaimed": "Unclaimed",
+  "display.in_review": "In review",
+  "display.no_image": "No photo yet",
+  "display.map_empty": "No pinned locations to show",
+  "display.map_excluded": { one: "{count} branch has no map pin", other: "{count} branches have no map pin" },
+  "display.map_label": "Supplier locations",
+  "display.remove_filter": "Remove the {facet} filter",
+  "display.conversion": "{pct}% of the step before",
+  "display.profile_strength": "Profile strength",
+  "display.spec_completeness": "Spec completeness",
+  "display.fields_filled": "{filled} / {total} fields",
+  "display.setup_progress": "{done} of {total} done",
+  "display.setup": "Setup",
+  "display.self_reported": "Self-reported by the supplier",
+
   // ── Trust ──
   "verification.tier": "Verification tier {tier}",
   "verification.unverified": "Not yet verified",
