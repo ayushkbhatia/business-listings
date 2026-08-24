@@ -26,6 +26,8 @@ if (!canSignIn) {
 }
 
 const SELLER_STATE = "tests/e2e/.auth/seller.json";
+/** Board 11a only exists for a plan with a cap, so it needs its own session. */
+const FREE_SELLER_STATE = "tests/e2e/.auth/seller-free.json";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -44,22 +46,29 @@ export default defineConfig({
     {
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
-      // The dashboard needs a signed-in seller; the seller project owns it.
-      testIgnore: /dashboard\.spec\.ts/,
+      // The dashboard needs a signed-in seller; the seller projects own it.
+      testIgnore: /(dashboard|overview)[\w-]*\.spec\.ts/,
     },
     {
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testIgnore: /dashboard\.spec\.ts/,
+      testIgnore: /(dashboard|overview)[\w-]*\.spec\.ts/,
     },
     ...(canSignIn
       ? [
           { name: "setup", testMatch: /auth\.setup\.ts/ },
           {
             name: "seller",
-            testMatch: /dashboard\.spec\.ts/,
+            testMatch: /(dashboard|overview)[\w-]*\.spec\.ts/,
+            testIgnore: /overview-free\.spec\.ts/,
             dependencies: ["setup"],
             use: { ...devices["Desktop Chrome"], storageState: SELLER_STATE },
+          },
+          {
+            name: "seller-free",
+            testMatch: /overview-free\.spec\.ts/,
+            dependencies: ["setup"],
+            use: { ...devices["Desktop Chrome"], storageState: FREE_SELLER_STATE },
           },
         ]
       : []),

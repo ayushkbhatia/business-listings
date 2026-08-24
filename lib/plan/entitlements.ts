@@ -1,0 +1,125 @@
+/**
+ * What a plan allows, in one place.
+ *
+ * Every cap already lives on the `Plan` row as a real column — this does not
+ * restate them. It answers the two questions a screen actually asks, which the
+ * columns alone do not:
+ *
+ *   1. Is this seller allowed to do X right now, given what they have already
+ *      used this month?
+ *   2. If not, which plan is the cheapest one that would let them?
+ *
+ * The second question is board 11a's entire job. A locked panel that says
+ * "upgrade" is an advert; one that says "Basic, AED 349" is an answer.
+ *
+ * `null` on a cap means unlimited, matching the schema. Guard on `=== null`
+ * rather than falsiness: zero is a real cap and would read as unlimited.
+ */
+
+/** The subset of a Plan row this module needs. Structural, so tests need no database. */
+export interface PlanCaps {
+  id: string;
+  name: string;
+  monthlyPriceAed: number;
+  enquiriesPerMonth: number | null;
+  productLimit: number | null;
+  locationLimit: number | null;
+  photoLimit: number | null;
+  teamSeats: number;
+  rankingMultiplier: number;
+  customDomain: boolean;
+  siteVisitIncluded: boolean;
+  sortOrder: number;
+}
+
+/** The capped resources. Named because a screen asks about one of them by name. */
+export const METERED = ["enquiries", "products", "locations", "photos", "seats"] as const;
+export type Metered = (typeof METERED)[number];
+
+const CAP_OF: Record<Metered, (p: PlanCaps) => number | null> = {
+  enquiries: (p) => p.enquiriesPerMonth,
+  products: (p) => p.productLimit,
+  locations: (p) => p.locationLimit,
+  photos: (p) => p.photoLimit,
+  seats: (p) => p.teamSeats,
+};
+
+/** The plan's cap for one resource. `null` is unlimited. */
+export function capFor(plan: PlanCaps, what: Metered): number | null {
+  return CAP_OF[what](plan);
+}
+
+export interface Allowance {
+  /** How many more may be added. `null` when the plan does not cap this. */
+  remaining: number | null;
+  /** True when the plan caps this and the seller has reached it. */
+  atCap: boolean;
+  cap: number | null;
+  used: number;
+}
+
+/**
+ * What is left. `used` above the cap returns zero remaining rather than a
+ * negative — a plan downgrade can legitimately leave a seller over their cap,
+ * and "you have -12 products left" is not a sentence.
+ */
+export function allowance(plan: PlanCaps, what: Metered, used: number): Allowance {
+  const cap = capFor(plan, what);
+  if (cap === null) return { remaining: null, atCap: false, cap: null, used };
+  return { remaining: Math.max(0, cap - used), atCap: used >= cap, cap, used };
+}
+
+/**
+ * The cheapest plan that raises this cap above what the seller is using.
+ *
+ * Returns null when they are already on the best plan for it, which is the
+ * signal to render a limit as a plain fact rather than as an upsell. Never
+ * suggests a plan that would not actually help: a plan whose cap is the same
+ * or lower is not an upgrade for this resource, whatever it costs.
+ */
+export function cheapestPlanUnlocking(
+  plans: readonly PlanCaps[],
+  what: Metered,
+  used: number,
+  currentPlanId: string,
+): PlanCaps | null {
+  const current = plans.find((p) => p.id === currentPlanId);
+  const currentCap = current ? capFor(current, what) : 0;
+  if (currentCap === null) return null;
+
+  const better = plans
+    .filter((p) => p.id !== currentPlanId)
+    .filter((p) => p.monthlyPriceAed > (current?.monthlyPriceAed ?? 0))
+    .filter((p) => {
+      const cap = capFor(p, what);
+      return cap === null || (cap > currentCap && cap > used);
+    })
+    .sort((a, b) => a.monthlyPriceAed - b.monthlyPriceAed);
+
+  return better[0] ?? null;
+}
+
+/**
+ * The cheapest plan carrying a boolean feature the seller does not have.
+ * Same contract as above: null means nothing to sell.
+ */
+export function cheapestPlanWith(
+  plans: readonly PlanCaps[],
+  feature: "customDomain" | "siteVisitIncluded",
+  currentPlanId: string,
+): PlanCaps | null {
+  const current = plans.find((p) => p.id === currentPlanId);
+  if (current?.[feature]) return null;
+
+  return (
+    plans
+      .filter((p) => p[feature])
+      .filter((p) => p.monthlyPriceAed > (current?.monthlyPriceAed ?? 0))
+      .sort((a, b) => a.monthlyPriceAed - b.monthlyPriceAed)[0] ?? null
+  );
+}
+
+/** First day of the month a date falls in, in UTC. The cap is calendar-monthly. */
+export function monthStart(now: Date): Date {
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+}

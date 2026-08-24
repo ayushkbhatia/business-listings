@@ -229,6 +229,19 @@ export async function createEnquiry(
       data: recipients.map((r) => ({ enquiryId: created.id, businessId: r.businessId })),
     });
 
+    // In the same transaction as the recipients. A seller who was left out was
+    // left out of *this* enquiry, and recording it separately afterwards means
+    // a crash in between produces an enquiry nobody was told they missed.
+    if (skipped.length > 0) {
+      await tx.missedEnquiry.createMany({
+        data: skipped.map((s) => ({
+          enquiryId: created.id,
+          businessId: s.businessId,
+          reason: s.reason,
+        })),
+      });
+    }
+
     return created;
   });
 

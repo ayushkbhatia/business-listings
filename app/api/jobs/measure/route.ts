@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { measureResponseTimes } from "@/lib/metrics/job";
+import { measureProfileStrength } from "@/lib/metrics/strength-job";
 
 /**
  * The scheduled measurement run.
@@ -26,9 +27,15 @@ export async function GET(request: NextRequest) {
   const offered = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   if (!constantTimeEqual(offered, secret)) return new NextResponse(null, { status: 401 });
 
-  const result = await measureResponseTimes();
-  console.info("[jobs] response times measured", result);
-  return NextResponse.json(result);
+  /*
+   * Sequential, not parallel. Both write `Business.derivedAt` and running them
+   * at once means two updates racing for the same row on every business that
+   * changed in both. They take seconds; nothing is waiting on this.
+   */
+  const responseTimes = await measureResponseTimes();
+  const profileStrength = await measureProfileStrength();
+  console.info("[jobs] measured", { responseTimes, profileStrength });
+  return NextResponse.json({ responseTimes, profileStrength });
 }
 
 function constantTimeEqual(a: string, b: string): boolean {

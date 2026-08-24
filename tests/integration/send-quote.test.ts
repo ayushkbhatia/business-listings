@@ -199,8 +199,21 @@ describe("what a send writes", () => {
 
 describe("what a send refuses", () => {
   it("refuses a business the enquiry was never sent to", async () => {
+    /*
+     * Actually not a recipient, and deterministically the same one every run.
+     * This used to ask only for "some other business with an owner" in no
+     * particular order, which is not the same question: it picked a business
+     * that had been sent the enquiry, sailed past the recipient guard and
+     * failed on the catalogue check instead. It passed for as long as the
+     * physical row order happened to cooperate.
+     */
     const stranger = await prisma.business.findFirstOrThrow({
-      where: { id: { not: businessId }, team: { some: { roles: { has: "seller_owner" } } } },
+      where: {
+        id: { not: businessId },
+        team: { some: { roles: { has: "seller_owner" } } },
+        recipients: { none: { enquiryId } },
+      },
+      orderBy: { id: "asc" },
       select: { id: true, team: { where: { roles: { has: "seller_owner" } }, select: { id: true, roles: true }, take: 1 } },
     });
     const other: Actor = {
