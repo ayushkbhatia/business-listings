@@ -63,6 +63,23 @@ looks like, and never blame the user. Full rules in `docs/design-system.md` §08
 Next.js App Router · TypeScript strict · Postgres via Prisma · Tailwind with the tokens in
 §09 as CSS variables · Vitest + Playwright. No component library — the primitives are ours.
 
+## How work lands
+
+No direct pushes to `main`. One branch, one PR, one squash merge — the same
+cadence as the other projects in this workspace.
+
+- Branch off `main` as `feat/<short-kebab>` or `fix/<short-kebab>`. A phrase,
+  not a ticket number: `feat/buyer-enquiry-flow`, `fix/drift-units`.
+- The PR title is the commit subject in the usual voice — `type(scope): what
+  changed, in a sentence`. Squash merge puts it in the log with its `(#N)`.
+- The PR body is the commit body. Say what moved, what it cost, and anything
+  found on the way that was fixed in passing.
+- `pnpm verify` and `pnpm test:e2e` pass before the PR opens, not after. CI has
+  caught what local runs did not more than once; running both is cheaper than
+  a red `main`.
+- Claude opens the PR. A person merges it. The handoff checkpoints are the
+  review, and a PR is where that review has somewhere to sit.
+
 ## Definition of done for any component
 
 Renders in the gallery at `/dev/gallery` in all documented states · keyboard reachable with
