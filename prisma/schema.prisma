@@ -77,6 +77,7 @@ model User {
   importRuns     ImportRun[]
   changeRequests ListingChangeRequest[] @relation("ChangeRequestActor")
   changesDecided ListingChangeRequest[] @relation("ChangeRequestDecider")
+  invitesSent    TeamInvite[]           @relation("InviteSender")
 
   @@index([businessId])
   @@map("user")
@@ -219,6 +220,7 @@ model Category {
   products        Product[]
   placements      PlacementSlot[]
   importMappings  ImportMapping[]
+  placementWaitlist PlacementWaitlist[]
 
   @@index([parentId])
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
@@ -418,6 +420,12 @@ model Business {
   /// Storefront theme preset, or a validated custom hex. Recolours the header,
   /// headings, buttons, links and form focus only. Never a verification badge,
   /// never a status tone, never platform chrome.
+  /// How an incoming enquiry is put in front of the team. Board 7d, and the
+  /// setting that protects the response score.
+  leadRouting           LeadRouting @default(everyone) @map("lead_routing")
+  /// Minutes before an unanswered enquiry is escalated to the owner.
+  leadEscalationMinutes Int         @default(120) @map("lead_escalation_minutes")
+
   themePreset String? @map("theme_preset")
   themeHex    String? @map("theme_hex")
 
@@ -446,6 +454,8 @@ model Business {
   importRuns             ImportRun[]
   importMappings         ImportMapping[]
   changeRequests         ListingChangeRequest[]
+  teamInvites            TeamInvite[]
+  placementWaitlist      PlacementWaitlist[]
   quotes                 Quote[]
   messages               Message[]
   reviews                Review[]
@@ -880,6 +890,68 @@ enum ChangeRequestStatus {
   @@map("change_request_status")
 }
 
+/// How an incoming enquiry reaches a person.
+///
+/// Board 7d. Round-robin spreads them evenly between the sales seats;
+/// by-branch sends each to the branch nearest the buyer; everyone-sees-
+/// everything is the default because it is what a five-person supplier
+/// actually wants, and the other two only start paying off at scale.
+enum LeadRouting {
+  round_robin
+  by_branch
+  everyone
+
+  @@map("lead_routing")
+}
+
+/// A seat offered, before it is a seat taken.
+///
+/// Seats cost money and grant capabilities, so only the owner sends one —
+/// `team.manage` is owner-only in lib/auth/capabilities.ts. The invite carries
+/// the roles it will grant, so accepting cannot quietly grant more than was
+/// offered.
+model TeamInvite {
+  id         String     @id @default(cuid())
+  businessId String     @map("business_id")
+  email      String
+  roles      Role[]     @default([])
+  invitedById String    @map("invited_by_id") @db.Uuid
+  token      String     @unique
+  expiresAt  DateTime   @map("expires_at")
+  acceptedAt DateTime?  @map("accepted_at")
+  revokedAt  DateTime?  @map("revoked_at")
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invitedBy User     @relation("InviteSender", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, email])
+  @@index([businessId])
+  @@map("team_invite")
+}
+
+/// Waiting for a sponsored slot somebody else holds.
+///
+/// Board 11e: one slot per subcategory and emirate, not auctioned. Not
+/// auctioned is the decision — an auction would put the supplier with the
+/// deepest pockets at the top of every category, which is the thing this
+/// directory exists not to be. So a queue, in the order people joined it.
+model PlacementWaitlist {
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  categoryId String   @map("category_id")
+  emirate    Emirate?
+  createdAt  DateTime @default(now()) @map("created_at")
+  notifiedAt DateTime? @map("notified_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, categoryId, emirate])
+  @@index([categoryId, emirate, createdAt])
+  @@map("placement_waitlist")
+}
+
 model MissedEnquiry {
   enquiryId  String     @map("enquiry_id")
   businessId String     @map("business_id")
@@ -1131,6 +1203,14 @@ model Subscription {
   startedAt           DateTime  @default(now()) @map("started_at")
   renewsAt            DateTime  @map("renews_at")
   cancelledAt         DateTime? @map("cancelled_at")
+  /// When the cancellation takes effect. Criterion 10: a cancel drops to Free
+  /// at period end, never immediately, so the seller keeps what they paid for.
+  /// Paired with cancelledAt by a check constraint — a cancellation that does
+  /// not say when it ends is one nothing can act on.
+  endsAt              DateTime? @map("ends_at")
+  /// Whatever a payment provider calls this subscription. Null while billing
+  /// runs through the console provider — see lib/billing/provider.ts.
+  providerRef         String?   @map("provider_ref")
   /// Grandfathering: entitlements captured at signup, unless a plan change
   /// explicitly sets "apply to existing".
   entitlementSnapshot Json?     @map("entitlement_snapshot")

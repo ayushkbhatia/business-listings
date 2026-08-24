@@ -1,8 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import {
   AuditRow,
   CompletenessMeter,
+  EmirateAreaPicker,
+  HoursEditor,
+  PlanCard,
   EnquiryComposer,
   ModerationRow,
   Thread,
@@ -25,6 +29,7 @@ import {
   type QuoteLineEditorLabels,
 } from "@/components/domain";
 import { Button } from "@/components/primitives";
+import type { RamadanHours, WeekHours } from "@/lib/trade/hours";
 import { formatAED, formatDate, formatDuration, formatSize } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { Frame, Section, Specimen, States } from "../_kit";
@@ -868,6 +873,189 @@ export function ModerationSpecimens() {
           </Frame>
         </States>
       </Section>
+
+      <Section
+        id="hours-editor"
+        title="HoursEditor"
+        note="tier 4 · split shifts are the normal case, not an advanced option"
+      >
+        <States label="a trade counter that shuts for the afternoon, and Ramadan" stack>
+          <Frame>
+            <HoursEditorSpecimen />
+          </Frame>
+        </States>
+      </Section>
+
+      <Section
+        id="emirate-area-picker"
+        title="EmirateAreaPicker"
+        note="tier 4 · free zone is a filter, never an eighth emirate"
+      >
+        <States label="a JAFZA warehouse: in Dubai and in a free zone" stack>
+          <Frame>
+            <EmirateAreaPickerSpecimen />
+          </Frame>
+        </States>
+      </Section>
+
+      <Section
+        id="plan-card"
+        title="PlanCard"
+        note="tier 4 · the recommended card takes the tinted shadow, never a badge colour"
+      >
+        <States label="current, recommended, and one the seller does not have" stack>
+          <Frame>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <PlanCard
+                name="Free"
+                monthlyPriceAed={0}
+                priceLabel="Free"
+                summary="Be listed, and answer three enquiries a month."
+                current
+                currentLabel="Your plan"
+                features={[
+                  { label: "3 enquiries a month", included: true },
+                  { label: "10 products", included: true },
+                  { label: "1 location", included: true },
+                  { label: "Your own web address", included: false },
+                  { label: "A verification site visit", included: false },
+                ]}
+              />
+              <PlanCard
+                name="Basic"
+                monthlyPriceAed={349}
+                priceLabel="AED 349"
+                periodLabel="a month"
+                summary="For a supplier answering enquiries most weeks."
+                recommended
+                recommendedLabel="Recommended"
+                features={[
+                  { label: "40 enquiries a month", included: true },
+                  { label: "150 products", included: true },
+                  { label: "3 locations", included: true },
+                  { label: "Ranked 1.15× in search", included: true },
+                  { label: "Your own web address", included: false },
+                ]}
+                action={
+                  <Button size="sm" block>
+                    Move to Basic
+                  </Button>
+                }
+                note="AED 139.56 today, for the 12 days left in your month."
+              />
+              <PlanCard
+                name="Pro"
+                monthlyPriceAed={899}
+                priceLabel="AED 899"
+                periodLabel="a month"
+                summary="For a supplier whose catalogue is how they get found."
+                features={[
+                  { label: "Unlimited enquiries", included: true },
+                  { label: "Unlimited products", included: true },
+                  { label: "10 locations", included: true },
+                  { label: "Your own web address", included: true },
+                  { label: "A verification site visit", included: true },
+                ]}
+                action={
+                  <Button size="sm" block variant="secondary">
+                    Move to Pro
+                  </Button>
+                }
+              />
+            </div>
+          </Frame>
+        </States>
+      </Section>
     </>
+  );
+}
+
+/** Stateful, because an editor rendered with no state shows one frame of itself. */
+function HoursEditorSpecimen() {
+  const [hours, setHours] = useState<WeekHours>({
+    sun: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
+    mon: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
+    tue: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
+    wed: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
+    thu: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "18:00" }],
+    fri: [{ open: "08:00", close: "12:00" }],
+    sat: [],
+    publicHolidays: "closed",
+  });
+  const [ramadan, setRamadan] = useState<RamadanHours | null>({
+    all: [{ open: "09:00", close: "15:00" }],
+  });
+
+  return (
+    <HoursEditor
+      hours={hours}
+      ramadanHours={ramadan}
+      onChange={setHours}
+      onRamadanChange={setRamadan}
+      label="Trading hours"
+      dayLabels={{
+        sun: "Sunday",
+        mon: "Monday",
+        tue: "Tuesday",
+        wed: "Wednesday",
+        thu: "Thursday",
+        fri: "Friday",
+        sat: "Saturday",
+      }}
+      openLabel="Opens"
+      closeLabel="Closes"
+      closedLabel="Closed"
+      addShiftLabel="Add a second shift"
+      removeShiftLabel="Remove this shift"
+      copyAllLabel="Use these hours at every branch"
+      publicHolidaysLabel="On public holidays"
+      publicHolidayOptions={[
+        { value: "closed", label: "Closed" },
+        { value: "reduced", label: "Reduced hours" },
+        { value: "normal", label: "Open as usual" },
+      ]}
+      ramadanLabel="Ramadan hours"
+      ramadanHint="Applied automatically for the month and reverted afterwards."
+      ramadanWindowLabel="This year, about 7 Feb to 9 Mar — the exact dates follow the moon sighting."
+      ramadanOnLabel="Keep different hours during Ramadan"
+      problemLabel={(problem) =>
+        problem.kind === "backwards"
+          ? `${problem.open} to ${problem.close} closes before it opens.`
+          : "Check these times."
+      }
+      onCopyToAll={() => undefined}
+    />
+  );
+}
+
+function EmirateAreaPickerSpecimen() {
+  const [choice, setChoice] = useState<{ emirate: string | null; areaId: string | null }>({
+    emirate: "dubai",
+    areaId: "jafza",
+  });
+
+  return (
+    <EmirateAreaPicker
+      areas={[
+        { id: "quoz", name: "Al Quoz Industrial 1", emirate: "dubai", isFreeZone: false },
+        { id: "jafza", name: "Jebel Ali Free Zone", emirate: "dubai", isFreeZone: true },
+        { id: "deira", name: "Deira", emirate: "dubai", isFreeZone: false },
+        { id: "saif", name: "SAIF Zone", emirate: "sharjah", isFreeZone: true },
+      ]}
+      emirate={choice.emirate}
+      areaId={choice.areaId}
+      onChange={setChoice}
+      label="Where it is"
+      emirateLabel="Emirate"
+      areaLabel="Area"
+      emiratePlaceholder="Choose an emirate"
+      areaPlaceholder="Choose an area"
+      freeZoneFilterLabel="Only show free zones"
+      freeZoneTagLabel="Free zone"
+      freeZoneNote={(emirate, area) =>
+        `${area} is a free zone inside ${emirate}. Buyers looking in ${emirate} find you, and buyers looking for free-zone suppliers find you too.`
+      }
+      noAreasLabel="No areas match"
+    />
   );
 }

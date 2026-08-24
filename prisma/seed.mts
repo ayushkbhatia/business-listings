@@ -1135,6 +1135,19 @@ async function seedReplyHistory(db: Db, businesses: Biz[], buyerId: string) {
   const claimed = businesses.filter((b) => b.claim === "claimed");
   if (claimed.length === 0) return;
 
+  // Who could have sent each reply. Seeded by seedSellerAccounts, which runs
+  // first — a reply from nobody is what this whole block exists to stop.
+  const team = new Map<string, string[]>();
+  for (const member of await db.user.findMany({
+    where: { businessId: { in: claimed.map((b) => b.id) } },
+    select: { id: true, businessId: true },
+  })) {
+    if (!member.businessId) continue;
+    const list = team.get(member.businessId) ?? [];
+    list.push(member.id);
+    team.set(member.businessId, list);
+  }
+
   // Minutes to first reply. Index into this by position, so the fixed PRNG
   // gives the same supplier the same character every run.
   const PROFILES: readonly number[][] = [
@@ -1170,6 +1183,8 @@ async function seedReplyHistory(db: Db, businesses: Biz[], buyerId: string) {
         },
         select: { id: true },
       });
+      const repliedAt = new Date(deliveredAt.getTime() + minutes * 60_000);
+
       await db.enquiryRecipient.create({
         data: {
           enquiryId: enquiry.id,
@@ -1177,9 +1192,37 @@ async function seedReplyHistory(db: Db, businesses: Biz[], buyerId: string) {
           state: "quoted",
           createdAt: deliveredAt,
           openedAt: new Date(deliveredAt.getTime() + minutes * 30_000),
-          firstReplyAt: new Date(deliveredAt.getTime() + minutes * 60_000),
+          firstReplyAt: repliedAt,
         },
       });
+
+      /*
+       * The reply that stamped it.
+       *
+       * In production `firstReplyAt` is set *by* a message or a quote — see
+       * lib/messaging/service.ts. Writing the timestamp with neither behind it
+       * left 72 recipients claiming a reply that no person had sent, so board
+       * 7d's per-person figures had nothing to attribute and every seat read
+       * "not enough replies yet" under a business median of 32 minutes.
+       *
+       * Alternated between the seats so the owner is measurably slower on some
+       * accounts, which is the uncomfortable number the board asks for and not
+       * one worth faking in only one direction.
+       */
+      const seats = team.get(business.id) ?? [];
+      const sender = seats.length > 0 ? seats[(j + (i % 2)) % seats.length]! : null;
+      if (sender) {
+        await db.message.create({
+          data: {
+            enquiryId: enquiry.id,
+            businessId: business.id,
+            senderId: sender,
+            body: "Thanks for the enquiry — sending our quote across now.",
+            createdAt: repliedAt,
+          },
+        });
+      }
+
       created += 1;
     }
   }

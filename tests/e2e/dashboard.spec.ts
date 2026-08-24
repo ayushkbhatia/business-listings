@@ -175,10 +175,21 @@ test.describe("the seller shell", () => {
     await page.goto("/dashboard/leads");
     const nav = page.getByRole("navigation", { name: /Seller navigation/ });
     await expect(nav).toBeVisible();
-    // A seller has to know a screen exists before they can ask for access —
-    // and an unbuilt one is named without being a link. Both are the same rule.
-    await expect(nav.getByText("Analytics")).toBeVisible();
-    await expect(nav.getByRole("link", { name: /Analytics/ })).toHaveCount(0);
+    /*
+     * A seller has to know a screen exists before they can ask for access, and
+     * an unbuilt one is named without being a link. Both are the same rule.
+     *
+     * Setup, because it is still unbuilt — it arrives with onboarding in step 5.
+     * This asserted Analytics until step 4 built it, at which point the test was
+     * asserting a deferral that no longer existed. Worth naming: a test pinned
+     * to a *temporary* state fails the moment the work it was waiting for lands,
+     * which is the right failure but only if somebody reads it as one.
+     */
+    await expect(nav.getByText("Setup")).toBeVisible();
+    await expect(nav.getByRole("link", { name: /^Setup/ })).toHaveCount(0);
+
+    // And the built ones are links, which is the other half of the same rule.
+    await expect(nav.getByRole("link", { name: /Analytics/ })).toHaveCount(1);
   });
 
   test("every internal link in the dashboard resolves", async ({ page, request }) => {

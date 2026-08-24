@@ -153,6 +153,24 @@ export const CAPABILITIES = {
     source: "inferred",
     why: "/dashboard/team. Only the owner adds seats, because seats cost money and grant the capabilities above.",
   },
+  "plan.change": {
+    roles: ["seller_owner", "seller_finance"],
+    audited: false,
+    source: "inferred",
+    why: "/dashboard/billing/change and /cancel. Split from billing.manage because reading an invoice and moving the business onto a different plan are different-sized acts, even where the same two seats hold both today. Criterion 9 names plan changes separately from billing for the same reason.",
+  },
+  "placement.purchase": {
+    roles: ["seller_owner", "seller_finance"],
+    audited: false,
+    source: "inferred",
+    why: "/dashboard/promote. A sponsored slot is a purchase, so it sits with the seat that holds the card. Distinct from placement.boost, which is the staff side of the same object.",
+  },
+  "analytics.read": {
+    roles: ["seller_owner", "seller_manager", "seller_finance"],
+    audited: false,
+    source: "inferred",
+    why: "/dashboard/analytics. Not the sales seat: the per-person response stats on board 7d include the uncomfortable one, and a seat being measured is not the seat that should choose what the measurement says.",
+  },
 
   // ── Buyer ─────────────────────────────────────────────────────────────────
   "enquiry.create": {

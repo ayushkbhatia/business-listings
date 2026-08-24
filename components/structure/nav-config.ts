@@ -118,16 +118,16 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
     key: "growth",
     labelKey: "nav.group.growth",
     items: [
-      { key: "analytics", labelKey: "nav.analytics", href: "/dashboard/analytics" , later: true },
-      { key: "promote", labelKey: "nav.promote", href: "/dashboard/promote" , later: true },
+      { key: "analytics", labelKey: "nav.analytics", href: "/dashboard/analytics" },
+      { key: "promote", labelKey: "nav.promote", href: "/dashboard/promote" },
     ],
   },
   {
     key: "account",
     labelKey: "nav.group.account",
     items: [
-      { key: "billing", labelKey: "nav.billing", href: "/dashboard/billing", capability: "billing.manage" , later: true },
-      { key: "team", labelKey: "nav.team", href: "/dashboard/team", capability: "team.manage" , later: true },
+      { key: "billing", labelKey: "nav.billing", href: "/dashboard/billing", capability: "billing.manage" },
+      { key: "team", labelKey: "nav.team", href: "/dashboard/team", capability: "team.manage" },
       { key: "settings", labelKey: "nav.settings", href: "/dashboard/settings" },
     ],
   },

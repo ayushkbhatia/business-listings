@@ -1309,3 +1309,131 @@ reaching into a primitive's styling. It also means a caller who needs a narrow
 field has to wrap it. Left unwrapped, the open and close times in HoursEditor
 filled the row and stacked, which reads as two separate questions rather than
 one time range. The width lives on a wrapper div.
+
+## Handoff 3, step 4 — account
+
+### Criterion 9 is a claim about refusal, so it is tested against services
+
+A screen that does not render a button passes a manual check and fails the
+moment somebody posts the form directly, which is exactly what an unhappy
+employee with a sales seat would do. So `tests/integration/roles.test.ts` calls
+the service for every mutation the criterion names and asserts a
+`PermissionError` — never a page.
+
+`assertCan*` is the first line of each mutation rather than a check further
+down, because a check further down is one some future early return can skip, and
+because a guard that runs after the first query has already leaked whether a
+record exists.
+
+Three capabilities were added rather than reusing `billing.manage`:
+`plan.change`, `placement.purchase` and `analytics.read`. Reading an invoice and
+moving the business onto a different plan are different-sized acts even where
+the same two seats hold both today, and criterion 9 names them separately for
+the same reason. `analytics.read` excludes the sales seat: the per-person
+response stats on board 7d include the uncomfortable one, and a seat being
+measured is not the seat that should choose what the measurement says.
+
+### Proration is integer arithmetic, and floors in the seller's favour
+
+Money is whole fils, the same rule `lib/quote/money.ts` follows. A proration is
+a division, and a division in floats produces 349.00000000004 often enough to
+matter on an invoice a supplier keeps for their accountant.
+
+Both roundings go the seller's way on purpose. Days remaining are floored, so a
+part-day is not charged as a whole one. The daily rate is floored, so 349 over
+30 days is 1163 fils rather than 1164. Neither direction is neutral and the one
+that favours us is the one a supplier notices.
+
+The renewal date does not move. A change on the 12th swaps what is being paid
+for over the days that were left; it does not restart the month.
+
+A downgrade produces a credit, and the credit lands on the next invoice rather
+than being paid out — CLAUDE.md is explicit that this platform holds no funds
+and refunds none, and `subscription_credit` already existed as an
+`InvoiceLineKind` for exactly this.
+
+### The charge happens before the switch, outside the transaction
+
+A provider that is slow must not hold a database transaction open, and a
+provider that fails must not leave a seller on a plan they were never charged
+for. So the charge is first, and the entitlement change and the invoice follow
+it in one transaction only on success.
+
+`consoleProvider.live` is `false` and the billing screen reads it, saying "no
+card has been charged" rather than rendering a receipt for a payment that did
+not happen. A stub that pretends to succeed silently is how a staging
+environment convinces somebody the billing works.
+
+### Cancel is the screen a seller is most anxious about
+
+What is kept comes first and is the longer list, because everything the anxiety
+is about is in it: the catalogue is hidden rather than deleted, the reviews are
+untouched, the badge stays, and none of it happens on the day they click.
+
+Products drop to `draft` at period end — the same state the CSV importer uses,
+for the same reason. The verification tier is deliberately untouched: it records
+what we checked, and cancelling a subscription does not un-check it.
+
+No retention offer, which board 11f says deliberately. A discount offered at the
+moment somebody leaves buys a month and costs the only honest signal we get
+about whether the product is worth it. The e2e asserts the absence.
+
+### The seed stamped a reply that nobody had sent
+
+`seedReplyHistory` wrote `EnquiryRecipient.firstReplyAt` directly. In production
+that column is set *by* a message or a quote — see `lib/messaging/service.ts` —
+so the seed had 72 recipients claiming a reply and **zero messages from a seller
+seat**.
+
+Nothing had noticed, because the business-level median reads the timestamp and
+the timestamp was real-shaped. Board 7d reads the *message*, because a median
+needs to belong to somebody, and every seat rendered "not enough replies yet"
+underneath a business median of 32 minutes.
+
+The seed now creates the message alongside the timestamp, alternating between
+the seats so the owner is measurably slower on some accounts. That is the
+uncomfortable number the board asks for, and it is not one worth faking in only
+one direction.
+
+### A line that is arithmetically certain is not a finding
+
+"The owner is often the slowest to reply" rendered whenever the owner topped the
+list — including when they were the only measured person, where it is true by
+construction. It now needs at least two measured people, because with one the
+sentence dresses a certainty as an observation.
+
+### Postgres does not stop you joining a queue twice
+
+`@@unique([businessId, categoryId, emirate])` does not constrain the rows where
+`emirate IS NULL`, because two NULLs are distinct in a unique index. The
+national slot — the only kind the screen sells today — was therefore joinable
+twice. A partial unique index `WHERE emirate IS NULL` closes it.
+
+Prisma's generated `where` for that composite cannot express a null either, so
+`takeSlot` does find-then-create rather than upsert. A race there loses to the
+database, which is the correct place to lose it.
+
+### A schema edit that did not apply
+
+The `Subscription` columns went into the migration and not into
+`schema.prisma` — a string replacement whose anchor did not match, which
+`prisma validate` and `migrate deploy` both accept because the migration is raw
+SQL and does not consult the model. The drift surfaced as a type error on the
+first query that used `endsAt`. Worth knowing that neither of those commands
+catches this shape of mistake; only the compiler did.
+
+### A test pinned to a temporary state
+
+`dashboard.spec.ts` asserted that Analytics was named-but-not-linked, which was
+true while it was unbuilt. Step 4 built it and the test failed. That is the
+right failure — but only if it is read as one, so the test now points at Setup,
+which is still unbuilt, and additionally asserts that Analytics *is* a link.
+Both halves of the rule, rather than whichever half happens to be observable.
+
+### The component inventory is complete
+
+`HoursEditor`, `EmirateAreaPicker` and `PlanCard` bring tier 4 to fifteen, and
+the gallery says 15/15. The count still does not reconcile with
+`docs/design-system.md`, which says tier 4 is 14 and the four tiers make 64 —
+this makes 65. Criterion 12 counts to 64, so that document and handoff 3's
+README disagree and one of them is wrong.
