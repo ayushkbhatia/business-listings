@@ -269,6 +269,56 @@ export const en = {
   "display.self_reported": "Self-reported by the supplier",
   "display.material_ductile_iron": "Ductile iron",
 
+  // ── Verification. §06 is canvas-only; these rungs are inferred from the data
+  //    model and recorded in docs/inferred.md.
+  "verify.t0": "Not verified",
+  "verify.t0.checked": "Nothing on this page has been checked by us",
+  "verify.t1": "Licence on file",
+  "verify.t1.checked": "Trade licence number recorded",
+  "verify.t2": "Licence verified",
+  "verify.t2.checked": "Trade licence checked against the issuing authority",
+  "verify.t3": "Site visited",
+  "verify.t3.checked": "Premises visited by our field team",
+  "verify.t4": "Audited",
+  "verify.t4.checked": "Premises visited and trading history audited",
+  "verify.tier": "tier {tier}",
+  "verify.ladder": "Verification ladder",
+  "verify.reached": "Reached",
+  "verify.requirement.t1": "The supplier gives us a trade licence number.",
+  "verify.requirement.t2": "We check the licence against the issuing authority and confirm it is current.",
+  "verify.requirement.t3": "Our field team visits the premises and confirms the stock and the trade counter.",
+  "verify.requirement.t4": "We audit trading history and buyer outcomes alongside the site visit.",
+  "verify.expired": "Licence expired — tier held at 2 until it is renewed",
+
+  // ── Listing card ──
+  "listing.products": { one: "{count} product", other: "{count} products" },
+  "listing.reviews": { one: "{count} review", other: "{count} reviews" },
+  "listing.no_reviews": "No reviews yet",
+  "listing.branches": { one: "{count} branch", other: "{count} branches" },
+  "listing.years": "Trading since {year}",
+  "listing.unclaimed_title": "This listing has not been claimed",
+  "listing.unclaimed_body": "Everything here comes from the public trade licence record. Nothing has been verified by us, and the supplier has not confirmed any of it.",
+  "listing.claim_cta": "Claim this listing",
+  "listing.report": "Report this listing",
+  "listing.view": "View supplier",
+  "listing.similar": "Verified suppliers in the same trade",
+
+  // ── Product card ──
+  "product.enquire": "Send enquiry",
+  "product.notify": "Notify me",
+  "product.lead_time": "Lead time {days} days",
+  "product.min_order": "Min order {qty}",
+  "product.in_stock_qty": "{qty} in stock",
+  "product.no_price": "Price on enquiry",
+  "product.spec": "Specification",
+  "product.spec_filterable": "filterable",
+  "product.datasheet": "Datasheet",
+
+  // ── The enquiry engine is the next handoff ──
+  "enquiry.disabled": "Enquiries open in the next release",
+  "gallery.theme_proof": "The same badge inside all six seller themes. A storefront theme recolours the header, headings, buttons, links and form focus. It never touches a verification badge — a trust signal a seller controls is not a trust signal.",
+  "gallery.sponsored": "Sponsored",
+
   // ── Trust ──
   "verification.tier": "Verification tier {tier}",
   "verification.unverified": "Not yet verified",

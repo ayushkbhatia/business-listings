@@ -187,3 +187,54 @@ The block is byte-identical inside the layer. See docs/contrast.md.
 Measured, not estimated, and left unchanged. `docs/contrast.md` has the table,
 the reasoning and three ways out. This is the one open item that needs a design
 decision before handoff 1 puts these colours in front of buyers.
+
+---
+
+## Handoff 1, steps 1 and 2
+
+### The verification ladder — five rungs, all inferred
+§06 is canvas-only. `components/domain/verification.ts` derives the rungs from
+what the shipped documents state: the tier is 0..4 and staff-write-only, tier 3
+requires `visitedAt`, and the tier drops to 2 the day the licence expires.
+
+| tier | label | what was checked |
+|---|---|---|
+| 0 | Not verified | nothing on the page has been checked |
+| 1 | Licence on file | trade licence number recorded |
+| 2 | Licence verified | checked against the issuing authority |
+| 3 | Site visited | premises visited by the field team |
+| 4 | Audited | premises visited and trading history audited |
+
+Tier 1 versus 2 is the least certain: the data model distinguishes them only by
+implication. Tiers 3 and 4 both require a visit, and the difference drawn here
+— an audit of trading history — is an invention that needs confirming.
+
+### ResponseTime bands
+Green under 4 hours, amber under 24, red past that. The design system names the
+three colours and not the thresholds. Four hours is inside a UAE working
+morning; a day is still same-business-day.
+
+### Tier 4 imports `t()` directly
+Tiers 1 to 3 take their strings as props and stay generic. A domain component is
+domain-specific by definition, and threading twenty catalogue keys through props
+would be ceremony. Recorded because it is a deliberate line, not an oversight.
+
+### Map tiles
+`NEXT_PUBLIC_MAP_STYLE_URL`, defaulting to a keyless style so nothing waits on a
+paid account. MapCanvas nudges the provider's background and water layers toward
+`--map-base` and `--map-water` where those layers exist, and otherwise leaves the
+provider's own colours. **A style JSON that renders the five map tokens properly
+is a design deliverable**, not a config change — the tokens define a map that no
+off-the-shelf style matches.
+
+### Locked panel dim
+Raised from 40% to 70% opacity. At 40% the body copy computes to 2.07:1, which
+is unreadable — and unreadable content defeats the rule the dim exists to serve.
+The design system says "dimmed"; it also says never hide the feature.
+
+### Still unknown
+- Whether tier 4 is an audit, a re-visit cadence, or something else entirely.
+- What a sponsored ListingCard looks like beyond "always labelled".
+- Whether the map has a clustered state in the canvas; MapCanvas types the
+  cluster circle in its documented hierarchy but does not yet render one, as
+  nothing in the seed has enough co-located pins to need it.

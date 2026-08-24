@@ -13,7 +13,7 @@ pnpm report:contrast    # what axe actually finds on the rendered gallery
 
 ## What axe finds on `/dev/gallery`
 
-611 failing nodes, from thirteen colour pairings, as of the tier 3 display
+789 failing nodes, from thirteen colour pairings, as of the tier 3 display
 components. Every other axe rule passes. The pairings are the same two tokens
 on more surfaces — no component has introduced a new failing combination.
 
@@ -61,7 +61,7 @@ of sync silently, which is worse than a documented gap. So:
 
 - no token value has been altered
 - the failures are enumerated, reproducible, and counted
-- the Playwright suite pins the count at 611, so a *new* contrast failure
+- the Playwright suite pins the count at 789, so a *new* contrast failure
   introduced by a component still breaks the build
 
 ## Three ways out, for the design decision

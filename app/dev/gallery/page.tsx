@@ -2,6 +2,7 @@ import { t } from "@/lib/i18n";
 import { Actions } from "./_sections/Actions";
 import { Choice } from "./_sections/Choice";
 import { Display } from "./_sections/Display";
+import { Domain } from "./_sections/Domain";
 import { Numeric } from "./_sections/Numeric";
 import { TextEntry } from "./_sections/TextEntry";
 import { Overlays } from "./_sections/Overlays";
@@ -81,6 +82,16 @@ const TIER_3 = [
   "map-canvas",
 ] as const;
 
+const TIER_4 = [
+  "verification-badge",
+  "verification-ladder",
+  "listing-card",
+  "product-card",
+  "spec-table",
+  "completeness-meter",
+  "response-time",
+] as const;
+
 export default function Gallery() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -121,7 +132,9 @@ export default function Gallery() {
             </tr>
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono text-body-sm text-body">tier-4-domain</td>
-              <td className="px-3 py-1.5 text-right font-mono text-body-sm text-muted">0/7</td>
+              <td className="px-3 py-1.5 text-right font-mono text-body-sm text-ok-ink">
+                {TIER_4.length}/7
+              </td>
             </tr>
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono text-body-sm text-body">shells</td>
@@ -133,7 +146,7 @@ export default function Gallery() {
         </table>
 
         <nav aria-label={t("gallery.jump_to")} className="mt-4 flex flex-wrap gap-1.5">
-          {[...TIER_1, ...TIER_2, ...TIER_3].map((id) => (
+          {[...TIER_1, ...TIER_2, ...TIER_3, ...TIER_4].map((id) => (
             <a
               key={id}
               href={`#${id}`}
@@ -152,6 +165,7 @@ export default function Gallery() {
       <Upload />
       <Structure />
       <Display />
+      <Domain />
       <Overlays />
       <Shells />
       <Tokens />

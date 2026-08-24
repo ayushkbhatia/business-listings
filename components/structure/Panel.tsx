@@ -70,7 +70,13 @@ export function Panel({
         </header>
       )}
 
-      <div className={cn(padded && "p-4", locked && "pointer-events-none opacity-40")}>
+      {/*
+        Dimmed, not erased. At 40% opacity --text-body computes to 2.07:1 on a
+        card, which is unreadable — and unreadable content defeats the rule the
+        dim exists to serve: never hide the feature, because a seller cannot
+        want what they cannot see. 70% still reads as inactive and still reads.
+      */}
+      <div className={cn(padded && "p-4", locked && "pointer-events-none opacity-70")}>
         {children}
       </div>
 
