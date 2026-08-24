@@ -81,6 +81,15 @@ export const mayManageBilling = (a: Actor) => can(a, "billing.manage");
 export const assertCanManageTeam = (a: Actor) => assertCan(a, "team.manage");
 export const mayManageTeam = (a: Actor) => can(a, "team.manage");
 
+export const assertCanChangePlan = (a: Actor) => assertCan(a, "plan.change");
+export const mayChangePlan = (a: Actor) => can(a, "plan.change");
+
+export const assertCanBuyPlacement = (a: Actor) => assertCan(a, "placement.purchase");
+export const mayBuyPlacement = (a: Actor) => can(a, "placement.purchase");
+
+export const assertCanReadAnalytics = (a: Actor) => assertCan(a, "analytics.read");
+export const mayReadAnalytics = (a: Actor) => can(a, "analytics.read");
+
 // ── Buyer ───────────────────────────────────────────────────────────────────
 export const assertCanCreateEnquiry = (a: Actor) => assertCan(a, "enquiry.create");
 export const mayCreateEnquiry = (a: Actor) => can(a, "enquiry.create");

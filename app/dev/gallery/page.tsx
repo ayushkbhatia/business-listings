@@ -107,6 +107,9 @@ const TIER_4 = [
   "thread",
   "moderation-row",
   "audit-row",
+  "hours-editor",
+  "emirate-area-picker",
+  "plan-card",
 ] as const;
 
 export default function Gallery() {
