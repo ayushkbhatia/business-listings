@@ -106,7 +106,9 @@ export function MultiSelect({
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-label={label}
-        aria-invalid={invalid || undefined}
+        // Not aria-invalid: the attribute is not supported on role=button. The
+        // border carries it visually and the FieldError beside it carries it
+        // to assistive technology.
         onClick={() => setOpen((o) => !o)}
         className={cn(
           "flex w-full items-center gap-1.5 rounded-ctl border bg-card py-1 pl-3 pr-8 text-left",

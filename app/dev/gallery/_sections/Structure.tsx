@@ -14,7 +14,7 @@ import {
   type Column,
   type RowTone,
 } from "@/components/structure";
-import { Button, Checkbox, SearchField } from "@/components/primitives";
+import { Button, SearchField } from "@/components/primitives";
 import { formatAED, formatCount, formatDate, formatDuration, maskPhone, maskTRN } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { Frame, Section, Specimen, States } from "../_kit";

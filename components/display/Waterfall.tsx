@@ -23,16 +23,30 @@ export interface WaterfallProps {
   label: string;
 }
 
+interface Bar extends WaterfallStep {
+  start: number;
+  end: number;
+}
+
+/**
+ * Each floating bar starts where the last one finished. A pure function rather
+ * than a running variable in the component body — React 19 rightly objects to
+ * mutation during render, and this is the same arithmetic without it.
+ */
+function toBars(steps: readonly WaterfallStep[]): Bar[] {
+  return steps.reduce<{ bars: Bar[]; running: number }>(
+    (acc, step) => {
+      const start = step.total ? 0 : acc.running;
+      const end = step.total ? step.value : acc.running + step.value;
+      acc.bars.push({ ...step, start, end });
+      return { bars: acc.bars, running: end };
+    },
+    { bars: [], running: 0 },
+  ).bars;
+}
+
 export function Waterfall({ steps, label }: WaterfallProps) {
-  // Running total, so each floating bar starts where the last one finished.
-  let running = 0;
-  const bars = steps.map((step) => {
-    const start = step.total ? 0 : running;
-    const end = step.total ? step.value : running + step.value;
-    if (!step.total) running += step.value;
-    else running = step.value;
-    return { ...step, start, end };
-  });
+  const bars = toBars(steps);
 
   const ceiling = Math.max(...bars.map((b) => Math.max(b.start, b.end)), 1);
 

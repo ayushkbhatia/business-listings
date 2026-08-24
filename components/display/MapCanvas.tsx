@@ -55,9 +55,6 @@ export interface MapCanvasProps {
 const DEFAULT_STYLE =
   process.env.NEXT_PUBLIC_MAP_STYLE_URL ?? "https://tiles.openfreemap.org/styles/positron";
 
-/** Roughly the centre of the populated UAE, for an empty map. */
-const UAE_CENTRE = { lat: 25.05, lng: 55.3 };
-
 export function MapCanvas({
   pins,
   excluded = 0,
@@ -75,7 +72,11 @@ export function MapCanvas({
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
   const [failed, setFailed] = useState(false);
-  const [visible, setVisible] = useState(false);
+  // No IntersectionObserver (jsdom, an old browser) means mount immediately
+  // rather than never. Decided at initialisation, not from inside an effect.
+  const [visible, setVisible] = useState(
+    () => typeof IntersectionObserver === "undefined",
+  );
   const id = useId();
 
   /**
@@ -86,10 +87,6 @@ export function MapCanvas({
   useEffect(() => {
     const node = containerRef.current;
     if (!node || visible) return;
-    if (typeof IntersectionObserver === "undefined") {
-      setVisible(true);
-      return;
-    }
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) setVisible(true);

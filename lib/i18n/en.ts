@@ -267,6 +267,7 @@ export const en = {
   "display.setup_progress": "{done} of {total} done",
   "display.setup": "Setup",
   "display.self_reported": "Self-reported by the supplier",
+  "display.material_ductile_iron": "Ductile iron",
 
   // ── Trust ──
   "verification.tier": "Verification tier {tier}",

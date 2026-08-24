@@ -10,7 +10,7 @@ import {
 } from "@/components/primitives";
 import { Search } from "@/components/primitives/icons";
 import { t } from "@/lib/i18n";
-import { Frame, Section, Specimen, States } from "../_kit";
+import { Frame, Section, States } from "../_kit";
 
 export function TextEntry() {
   const [query, setQuery] = useState("gate valve DN100");

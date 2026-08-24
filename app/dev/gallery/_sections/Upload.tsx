@@ -4,7 +4,7 @@ import { useState } from "react";
 import { FileDrop, type FileDropState } from "@/components/primitives";
 import { formatBytes } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { Section, Specimen, States } from "../_kit";
+import { Section, States } from "../_kit";
 
 export function Upload() {
   const [live, setLive] = useState<FileDropState>("idle");

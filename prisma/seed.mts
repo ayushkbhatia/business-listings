@@ -371,14 +371,6 @@ async function main() {
 type Biz = { id: string; slug: string; tier: number; claim: string; categorySlug: string };
 type Db = typeof prisma;
 
-const VALVE_NAMES = [
-  "Resilient seated gate valve",
-  "Wafer butterfly valve",
-  "Ductile iron check valve",
-  "Cast iron Y-strainer",
-  "Brass ball valve",
-  "Gear operated butterfly valve",
-];
 interface ProductSeed {
   name: string;
   /// A trade sizes its goods in its own units. A cable is mm², a breaker is

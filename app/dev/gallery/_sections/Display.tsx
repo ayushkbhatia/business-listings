@@ -91,7 +91,7 @@ export function Display() {
       <Section id="tag" title="Tag" note="a Tag describes; a FilterChip filters">
         <States label="states">
           <Specimen caption="plain">
-            <Tag>Ductile iron</Tag>
+            <Tag>{t("display.material_ductile_iron")}</Tag>
           </Specimen>
           <Specimen caption="mono">
             <Tag mono>PN16</Tag>

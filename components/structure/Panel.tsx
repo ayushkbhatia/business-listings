@@ -38,12 +38,16 @@ export function Panel({
     <section
       // A <section> is only a landmark once it has a name. Without this, a
       // screen-reader user cannot jump between the panels on a settings page.
+      //
+      // No aria-disabled: it is not supported on role=region, and it would be
+      // the wrong signal anyway. A locked panel is readable on purpose — the
+      // line in the footer says what unlocks it, and the controls inside are
+      // disabled individually by whoever put them there.
       aria-labelledby={title ? titleId : undefined}
       className={cn(
         "relative overflow-hidden rounded-panel border border-line bg-card",
         locked && "select-none",
       )}
-      aria-disabled={locked ? true : undefined}
     >
       {(title || actions || eyebrow) && (
         <header

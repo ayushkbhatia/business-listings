@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import {
@@ -360,9 +360,9 @@ describe("Panel", () => {
     // The feature stays on screen — a seller cannot want what they cannot see.
     expect(screen.getByText("One slot per category.")).toBeInTheDocument();
     expect(screen.getByText("Sponsored placement is on the Pro plan.")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Sponsored placement" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    );
+    // The panel stays a named landmark and stays readable. It is not
+    // aria-disabled: that attribute is unsupported on role=region, and hiding
+    // the feature is the thing the design system forbids.
+    expect(screen.getByRole("region", { name: "Sponsored placement" })).toBeInTheDocument();
   });
 });
