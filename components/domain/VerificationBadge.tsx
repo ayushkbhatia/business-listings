@@ -68,7 +68,10 @@ export function VerificationBadge({
       <TierIcon tier={spec.tier} size={iconSize} />
       {label}
       {tierLabel && spec.tier > 0 && (
-        <span className="font-mono text-eyebrow tabular-nums opacity-80">{tierLabel}</span>
+        // No opacity. "tier 3" is content, not decoration, and 80% drops it
+        // to 3.64:1 on the ok wash. The mono face and the eyebrow size already
+        // separate it from the label beside it.
+        <span className="font-mono text-eyebrow tabular-nums">{tierLabel}</span>
       )}
     </span>
   );

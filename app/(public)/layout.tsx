@@ -1,8 +1,8 @@
-// Density is set once, here, and inherited. Components read --row-h, --gutter,
-// --section-pad and --card-pad; they never take a size prop for this. The shell
-// component from checkpoint 5 takes over this element.
+// Density is set on PublicShell, which every page in this group renders — one
+// data-density scope, not two nested. This layout exists so the route group is
+// real and so a future group-wide provider has somewhere to live.
 export default function PublicLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  return <div data-density="roomy">{children}</div>;
+  return <>{children}</>;
 }

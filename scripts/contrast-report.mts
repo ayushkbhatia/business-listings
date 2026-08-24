@@ -16,7 +16,12 @@ const url = process.env.CONTRAST_URL ?? "http://localhost:3000/dev/gallery";
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
 await page.goto(url, { waitUntil: "domcontentloaded" });
-await page.locator("#map-canvas").waitFor({ state: "attached" });
+// Not networkidle: a page carrying a live map never goes quiet. Wait for the
+// gallery's last section where it exists, and settle briefly otherwise.
+await page
+  .locator("#map-canvas")
+  .waitFor({ state: "attached", timeout: 2000 })
+  .catch(() => page.waitForTimeout(400));
 await page.addScriptTag({ content: axeSource });
 
 const grouped = await page.evaluate(async () => {

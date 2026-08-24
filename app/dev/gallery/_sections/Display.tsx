@@ -351,7 +351,7 @@ export function Display() {
               label={t("display.map_label")}
               height={320}
               excluded={2}
-              excludedLabel={(count) => t("display.map_excluded", { count })}
+              excludedLabel={t("display.map_excluded", { count: 2 })}
               emptyLabel={t("display.map_empty")}
               pins={[
                 { id: "1", lat: 25.1412, lng: 55.2311, label: "Al Marwan Trading — head office, Al Quoz Industrial 1", kind: "head_office" },
@@ -369,7 +369,7 @@ export function Display() {
               height={140}
               pins={[]}
               excluded={3}
-              excludedLabel={(count) => t("display.map_excluded", { count })}
+              excludedLabel={t("display.map_excluded", { count: 3 })}
               emptyLabel={t("display.map_empty")}
             />
           </div>

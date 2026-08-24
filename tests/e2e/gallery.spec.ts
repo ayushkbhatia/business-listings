@@ -14,7 +14,7 @@ import { expect, test } from "@playwright/test";
  * by a component still breaks the build.
  */
 
-const KNOWN_CONTRAST_NODES = 789;
+const KNOWN_CONTRAST_NODES = 776;
 
 test.describe("gallery", () => {
   test("has no axe violations outside contrast", async ({ page }) => {

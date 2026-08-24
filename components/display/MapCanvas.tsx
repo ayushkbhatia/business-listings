@@ -38,7 +38,12 @@ export interface MapCanvasProps {
   pins: readonly MapPin[];
   /** How many were held back for having no coordinates. */
   excluded?: number;
-  excludedLabel?: (count: number) => string;
+  /**
+   * Already localised and pluralised by the caller. A string, not a formatter:
+   * this is a client component, and a function prop cannot cross the boundary
+   * from a server component that renders a map.
+   */
+  excludedLabel?: string;
   selectedId?: string;
   onSelect?: (id: string) => void;
   /** Required: a map is an image and needs a name. */
@@ -177,6 +182,8 @@ export function MapCanvas({
   if (pins.length === 0) {
     return (
       <div
+        role="group"
+        aria-label={label}
         style={{ height }}
         className={cn(
           "flex w-full flex-col items-center justify-center gap-1 rounded-card border border-line",
@@ -185,7 +192,7 @@ export function MapCanvas({
       >
         <p className="text-caption text-muted">{emptyLabel}</p>
         {excluded > 0 && excludedLabel && (
-          <p className="font-mono text-eyebrow text-faint">{excludedLabel(excluded)}</p>
+          <p className="font-mono text-eyebrow text-faint">{excludedLabel}</p>
         )}
       </div>
     );
@@ -196,7 +203,10 @@ export function MapCanvas({
       <div
         ref={containerRef}
         id={id}
-        role="img"
+        // A group, not an image. role="img" on an element containing focusable
+        // pins and the provider's zoom controls is nested-interactive, and it
+        // tells a screen reader the contents are decorative when they are not.
+        role="group"
         aria-label={label}
         style={{ height }}
         className="w-full overflow-hidden rounded-card border border-line bg-map-base"
@@ -214,7 +224,7 @@ export function MapCanvas({
 
       {(excluded > 0 || failed) && (
         <figcaption className="mt-1.5 font-mono text-eyebrow text-faint">
-          {excluded > 0 && excludedLabel ? excludedLabel(excluded) : null}
+          {excluded > 0 ? excludedLabel : null}
         </figcaption>
       )}
     </figure>
