@@ -710,3 +710,49 @@ ENQ-8871 has to stay unaccepted so the compare screen has accept buttons for
 its own tests; the review flow has to start from an accepted quote. One
 enquiry cannot be both, so ENQ-8879 is accepted and unreviewed. Three browser
 tests were skipping before that, which is a test suite quietly proving nothing.
+
+## Handoff 2, step 7 — criterion 5, the measurement job
+
+### The seed was inventing the number criterion 5 forbids
+`responseTimeMedianMs` was set to `int(20, 2600) * 60_000` at business
+creation, then partly overwritten by a hand-written SQL median. So most
+suppliers displayed a fabricated reply time — which is exactly the "claimed,
+never measured" thing the criterion exists to prevent, in the version a
+reviewer looks at first. The seed now seeds a reply history and derives the
+number through the same functions the scheduled job uses, so the two cannot
+drift.
+
+### Median, not mean, and the window is ninety days
+One supplier who ignored an enquiry over Eid drags a mean into the red for a
+quarter. The median says what usually happens, which is what a buyer is
+actually asking. Ninety days is long enough to gather a sample where a supplier
+sees a handful of enquiries a month, and short enough that improving shows up
+in a quarter rather than never.
+
+### An unanswered enquiry contributes nothing, rather than counting as infinity
+"They did not answer" is a different fact from "they answered slowly", and
+folding it in would let one ignored enquiry swamp a median meant to describe
+the replies a buyer will actually get. Non-response already has its own
+number in the recipient state.
+
+### Three replies before anything is shown
+Two is a coin toss, and publishing it invites a new supplier to game it by
+answering their first enquiry in ninety seconds. `MIN_SAMPLE` is 3 and the
+unmeasured state says "not enough enquiries to measure", which is true and is
+not a penalty. One claimed, published supplier is left with no history in the
+seed so that state has a public example.
+
+### Removing a PRNG draw renames every business after it
+Deleting the invented response time shifted the deterministic sequence and
+renamed most of the seeded businesses, breaking the hardcoded slugs a dozen
+test files pin. The draw is kept and discarded, with a comment, because a
+deliberate discarded draw is a smaller lie than a fabricated reply time and
+cheaper than churning every fixture. The underlying fragility is real: the seed
+derives names from sequence position rather than from a stable per-business
+seed, and any future change in the middle of it will do this again. Worth
+fixing properly when something else touches the generator.
+
+### `pnpm measure` needs `--conditions=react-server`
+The job imports `server-only`, whose package main throws outside a React Server
+Component; its `react-server` export condition is a no-op. Scripts that touch
+server modules carry the flag rather than the fence being weakened.
