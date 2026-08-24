@@ -62,14 +62,16 @@ test.describe("home", () => {
 });
 
 test.describe("compare", () => {
-  test("is a real feature — only the enquire-all action is disabled", async ({ page }) => {
+  test("is a real feature, and the enquire-all action reaches the fan-out", async ({ page }) => {
     await page.goto(`/compare?p=${A},${B}`);
     const table = page.getByRole("table", { name: /compared side by side/ });
     await expect(table).toBeVisible();
 
-    const enquire = page.getByRole("button", { name: /Send one enquiry/ });
+    // Board 10d's "Enquire with all 4", live from handoff 2 step 3. Every
+    // compared supplier is pinned so the fan-out keeps them.
+    const enquire = page.getByRole("link", { name: /Send one enquiry/ });
     await expect(enquire).toBeVisible();
-    await expect(enquire).toBeDisabled();
+    await expect(enquire).toHaveAttribute("href", new RegExp(`/rfq/new\\?to=.*${A}`));
   });
 
   test("is real table markup, transposed", async ({ page }) => {

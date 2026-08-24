@@ -1,7 +1,7 @@
 import { cn } from "@/lib/cn";
 import { Card } from "@/components/structure";
 import { LogoTile, StatusBadge, Tag } from "@/components/display";
-import { Button } from "@/components/primitives";
+import { Button, buttonClassName } from "@/components/primitives";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { ResponseTime } from "./ResponseTime";
@@ -64,6 +64,11 @@ export interface ListingCardProps {
    * not a dead button. Defaults to starting a fresh tray with this supplier.
    */
   compareHref?: string;
+  /**
+   * Where the enquiry affordance goes. Absent leaves it disabled, which is the
+   * state handoff 1 shipped and the one the gallery still shows.
+   */
+  enquireHref?: string;
   /** Already in the tray: the control says so and removes instead. */
   inCompare?: boolean;
   compareLabel?: string;
@@ -83,6 +88,7 @@ export function ListingCard({
   selected = false,
   sponsoredLabel,
   compareHref,
+  enquireHref,
   inCompare = false,
   compareLabel,
 }: ListingCardProps) {
@@ -209,13 +215,19 @@ export function ListingCard({
           {context === "search" && !unclaimed && (
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {/*
-                Present, in its real place, styled correctly, and disabled. The
-                enquiry engine is handoff 2; a throwaway version here would be
-                rebuilt next.
+                Live from handoff 2 step 3. Without an href it stays disabled,
+                which is how the gallery still shows the state handoff 1 shipped
+                and how a surface that has nowhere to send the buyer degrades.
               */}
-              <Button size="sm" disabled title={t("enquiry.disabled")}>
-                {t("product.enquire")}
-              </Button>
+              {enquireHref ? (
+                <a href={enquireHref} className={buttonClassName({ size: "sm" })}>
+                  {t("product.enquire")}
+                </a>
+              ) : (
+                <Button size="sm" disabled title={t("enquiry.disabled")}>
+                  {t("product.enquire")}
+                </Button>
+              )}
               <a
                 href={compareHref ?? `/compare?p=${business.slug}`}
                 className={cn(

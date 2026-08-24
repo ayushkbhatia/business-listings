@@ -155,6 +155,7 @@ export async function Results({ query, basePath, category, tray = [], search = "
         <div className="mt-4">
           {total === 0 ? (
             <ZeroResult
+              rfqHref={category ? `/rfq/new?category=${category.slug}` : "/rfq/new"}
               query={query}
               basePath={basePath}
               suggestion={suggestion}

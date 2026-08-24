@@ -1,0 +1,11 @@
+-- Handoff 2, step 3. A reference a buyer can read down a phone line.
+--
+-- ENQ-8901, ENQ-8902. Postgres allocates them, so two enquiries sent in the
+-- same second cannot collide and there is no retry loop pretending to be a
+-- sequence. Starts above the seeded refs (8802, 8841, 8863) so a fresh seed and
+-- a live database never disagree about what ENQ-8863 means.
+--
+-- Idempotent: `migrate dev` reconciles schema.prisma against the database and
+-- generates a drop for anything it cannot see, and it cannot see a sequence.
+-- See docs/database.md.
+CREATE SEQUENCE IF NOT EXISTS enquiry_ref_seq AS bigint START WITH 8901 INCREMENT BY 1;

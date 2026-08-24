@@ -19,8 +19,10 @@ they 404 until their handoff.
 /b/:slug/reviews                        Reviews                               [1m]
 /b/:slug/p/:product                     Product + spec table                  [1g]
 /b/:slug (unclaimed variant)            Unclaimed listing                    [10g]
-/rfq/new                                RFQ fan-out                           [1h]
-/enquiry/:id                            Enquiry sent + tracking               [1i]
+/rfq/new                                RFQ fan-out                           [1h]  built h2s3
+/enquiry/:id                            Enquiry sent + tracking               [1i]  built h2s3
+/enquiry/:id/compare                    Compare quotes                        [1n]  built h2s3
+/enquiry/:id/accepted                   Accepted quote record                 [7c]  built h2s3
 /enquiry/:id/thread/:seller             Negotiation thread                   [10h]
 /pricing                                Plans                                 [1l]
 /guides                                 Guide index                          [10b]
@@ -32,9 +34,7 @@ they 404 until their handoff.
 /report/:subject                        Report a listing (modal route)       [10j]
 /terms · /privacy · /verification-policy · /review-policy                    [10j]
 /signin · /signup · /verify · /reset                                          [7a]  built h2s2
-/account/enquiries                      Buyer enquiry inbox                  [10e]
-/account/enquiries/:id/accepted         Accepted quote record                 [7c]
-/account/enquiries/:id/compare          Compare quotes                        [1n]
+/account/enquiries                      Buyer enquiry inbox                  [10e]  built h2s3
 /account/saved                          Saved searches & alerts              [10e]
 /account/suppliers                      Saved suppliers                       later
 /account/requirements                   Saved requirements                    later

@@ -78,6 +78,25 @@ const SIZE: Record<ButtonSize, string> = {
   xl: "h-13 px-6 text-h3",
 };
 
+/**
+ * The same clothes, for something that is not a button.
+ *
+ * An anchor that looks like a button must stay an anchor: it navigates, it
+ * opens in a new tab on a middle click, and a screen reader announces it as a
+ * link. Making Button polymorphic would let a caller put an href on something
+ * that submits a form, which is the mistake this avoids by keeping the two
+ * elements separate and sharing only the paint.
+ *
+ *   <Link href="/rfq/new" className={buttonClassName({ block: true })}>
+ */
+export function buttonClassName({
+  variant = "primary",
+  size = "md",
+  block = false,
+}: { variant?: ButtonVariant; size?: ButtonSize; block?: boolean } = {}): string {
+  return cn(BASE, VARIANT[variant], variant === "link" ? undefined : SIZE[size], block && "w-full");
+}
+
 export function Button({
   variant = "primary",
   size = "md",
@@ -98,12 +117,7 @@ export function Button({
       disabled={isDisabled}
       // Loading is a busy state, not a disabled one, for anyone listening.
       aria-busy={loading || undefined}
-      className={cn(
-        BASE,
-        VARIANT[variant],
-        variant === "link" ? undefined : SIZE[size],
-        block && "w-full",
-      )}
+      className={buttonClassName({ variant, size, block })}
       {...rest}
     >
       {loading ? <Spinner size={14} /> : leadingIcon}

@@ -91,6 +91,7 @@ const TIER_4 = [
   "completeness-meter",
   "response-time",
   "quote-line-editor",
+  "enquiry-composer",
 ] as const;
 
 export default function Gallery() {

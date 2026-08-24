@@ -45,8 +45,16 @@ export function Select({
       <select
         disabled={disabled}
         aria-invalid={invalid || undefined}
-        value={value}
-        defaultValue={defaultValue ?? (placeholder ? "" : undefined)}
+        {...(value !== undefined
+          ? { value }
+          : /*
+             * One or the other, never both. Passing `value` and `defaultValue`
+             * together makes React warn and leaves the element ambiguous — it
+             * happened on every controlled Select that also had a placeholder,
+             * which is most of them. The empty default is what makes the
+             * placeholder the initial selection on an uncontrolled one.
+             */
+            { defaultValue: defaultValue ?? (placeholder ? "" : undefined) })}
         className={cn(
           controlShell({ size, invalid, disabled: Boolean(disabled), hasTrailing: true }),
           "appearance-none",

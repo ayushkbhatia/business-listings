@@ -82,6 +82,17 @@ function seedNow(): Date {
 const days = (n: number) => new Date(NOW.getTime() + n * 86_400_000);
 const hours = (n: number) => new Date(NOW.getTime() + n * 3_600_000);
 
+/**
+ * The claim token on the seeded provisional buyer.
+ *
+ * Fixed so `/enquiry/:id?t=…` is reachable in a test without a session. In
+ * production these are `randomUUID()` and are bearer secrets; this one is good
+ * for one seeded buyer's enquiries in a database that is truncated on every
+ * run.
+ */
+const PROVISIONAL_CLAIM_TOKEN = "seed-0000-4000-8000-provisional01";
+const PROVISIONAL_ENQUIRY_ID = "seedenquiryprovisional0001";
+
 /** Deterministic v4-shaped uuids, so seeded users keep their ids between runs. */
 function uuid(n: number): string {
   const hex = n.toString(16).padStart(12, "0");
@@ -753,6 +764,88 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
    * with no match stays honestly unlinked.
    */
   await linkQuoteLinesToCatalogue(db, [first.id, second.id, recipients[2]!.id]);
+
+  /*
+   * Enquiry four: sent by a buyer with no account.
+   *
+   * The provisional identity the README asks for — "capture mobile, create a
+   * lightweight identity, let them claim it later" — with a fixed claim token
+   * so the tracking, compare and accepted pages are reachable in a test
+   * without signing anybody in. The token is a bearer secret in production and
+   * a fixture here; it is only ever good for this one buyer's enquiries.
+   */
+  const anon = await db.user.create({
+    data: {
+      id: uuid(900),
+      phone: "+971544120087",
+      fullName: "Khalid Al Nuaimi",
+      roles: [],
+      isProvisional: true,
+      claimToken: PROVISIONAL_CLAIM_TOKEN,
+    },
+  });
+
+  const e4 = await db.enquiry.create({
+    data: {
+      // A fixed id, so a browser test can reach this enquiry without an API
+      // route that exists only for tests. Every other enquiry keeps its cuid.
+      id: PROVISIONAL_ENQUIRY_ID,
+      ref: "ENQ-8871",
+      buyerId: anon.id,
+      requirement:
+        "Butterfly valves and a strainer for a pump room at a district cooling plant. Flanged PN16. Site is Mussafah, one delivery.",
+      deliverToArea: "Mussafah Industrial",
+      neededBy: days(24),
+      termsWanted: "net_30",
+      closesAt: days(5),
+      createdAt: hours(-30),
+      lines: {
+        create: [
+          { description: "Wafer butterfly valve, gear operated", qty: 12, unit: "pcs", size: "DN200", targetUnitPriceAed: "880.00", sortOrder: 0 },
+          { description: "Cast iron Y-strainer, flanged", qty: 4, unit: "pcs", size: "DN100", targetUnitPriceAed: "320.00", sortOrder: 1 },
+        ],
+      },
+    },
+  });
+
+  // Five recipients, two of whom quote. The shape the step 3 checkpoint walks.
+  const anonRecipients = claimed.filter((b) => b.categorySlug === "valves-and-fittings").slice(0, 5);
+  for (const [i, b] of anonRecipients.entries()) {
+    await db.enquiryRecipient.create({
+      data: {
+        enquiryId: e4.id,
+        businessId: b.id,
+        state: i < 2 ? "quoted" : i === 2 ? "opened" : "delivered",
+        openedAt: i < 3 ? hours(-28 + i) : null,
+        firstReplyAt: i < 2 ? hours(-26 + i) : null,
+        createdAt: hours(-30),
+      },
+    });
+  }
+
+  for (const [i, b] of anonRecipients.slice(0, 2).entries()) {
+    const mark = b.slug.replace(/[^a-z]/g, "").slice(0, 3).toUpperCase();
+    await db.quote.create({
+      data: {
+        ref: `QT-8871-${mark}R1`,
+        enquiryId: e4.id,
+        businessId: b.id,
+        revision: 1,
+        validityDays: 14,
+        status: "sent",
+        note: i === 0 ? "Both ex-stock. Delivery within 48 hours." : "Strainer to order, three weeks.",
+        sentAt: hours(-26 + i),
+        expiresAt: days(14 - i),
+        createdAt: hours(-26 + i),
+        lines: {
+          create: [
+            { description: "Wafer butterfly valve DN200, gear operated", qty: 12, unitPrice: i === 0 ? "935.00" : "902.00", leadTimeDays: i === 0 ? 2 : 21, sortOrder: 0 },
+            { description: "Cast iron Y-strainer DN100, flanged", qty: 4, unitPrice: i === 0 ? "340.00" : "358.00", leadTimeDays: i === 0 ? 2 : 21, sortOrder: 1 },
+          ],
+        },
+      },
+    });
+  }
 
   /*
    * Enquiry three: a live lead nobody has answered yet, and the subject of the
