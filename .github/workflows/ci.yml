@@ -143,8 +143,14 @@ jobs:
       # setup project provisions one against the real Supabase project. It is
       # registered only when the keys are present, so a fork without them gets
       # a smaller suite that says so rather than a failing one.
+      #
+      # `mobile` was missing here until handoff 2's acceptance pass, and four
+      # specs had been red across six merged PRs because nothing in CI ever ran
+      # them — one of them a wizard whose Continue button could not be pressed
+      # on a phone. It is the same chromium binary with a Pixel 7 descriptor,
+      # so the install step above already covers it.
       - name: Axe and the acceptance surface
-        run: pnpm test:e2e --project=chromium --project=seller
+        run: pnpm test:e2e --project=chromium --project=mobile --project=seller
 
       - uses: actions/upload-artifact@v4
         if: failure()
