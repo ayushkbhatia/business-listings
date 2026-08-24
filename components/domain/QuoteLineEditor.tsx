@@ -278,6 +278,13 @@ export function QuoteLineEditor({
             {lines.map((line) => {
               const row = rows[line.key]!;
               const manual = line.suggested === null && row.productId === null;
+              /*
+               * The flagged row is tinted, and --text-muted on --warn-surface
+               * is 4.21:1 against a 4.5 floor. --warn-ink is 4.64:1 and says
+               * the same thing better: on a warning row, the secondary text is
+               * the warning's colour.
+               */
+              const secondary = manual && row.included ? "text-warn-ink" : "text-muted";
               const flagId = `${formId}-flag-${line.key}`;
               const selected =
                 [line.suggested, ...line.alternatives].find((c) => c?.productId === row.productId) ?? null;
@@ -306,11 +313,11 @@ export function QuoteLineEditor({
                 >
                   <th scope="row" className="px-3 py-3 text-left font-normal">
                     <span className="block text-ink">{line.description}</span>
-                    <span className="mt-0.5 block font-mono text-caption text-muted">
+                    <span className={cn("mt-0.5 block font-mono text-caption", secondary)}>
                       {[line.size, line.unit].filter(Boolean).join(" · ")}
                     </span>
                     {line.targetUnitPriceAed ? (
-                      <span className="mt-1 block text-caption text-muted">
+                      <span className={cn("mt-1 block text-caption", secondary)}>
                         {labels.targetPrice(line.targetUnitPriceAed)}
                       </span>
                     ) : null}
@@ -319,7 +326,7 @@ export function QuoteLineEditor({
                         <StatusBadge tone="warn" size="sm" shape="chip">
                           {labels.manualFlag}
                         </StatusBadge>
-                        <span className="text-caption text-muted">{labels.manualHelp}</span>
+                        <span className={cn("text-caption", secondary)}>{labels.manualHelp}</span>
                       </span>
                     ) : null}
                     {!row.included ? (
@@ -363,7 +370,7 @@ export function QuoteLineEditor({
                         ) : null}
                       </>
                     ) : (
-                      <span className="text-caption text-muted">{labels.chooseProduct}</span>
+                      <span className={cn("text-caption", secondary)}>{labels.chooseProduct}</span>
                     )}
                   </td>
 

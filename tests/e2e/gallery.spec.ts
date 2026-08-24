@@ -9,12 +9,40 @@ import { expect, test } from "@playwright/test";
  * come from docs/tokens.css, which the handoff says to paste unchanged, and
  * they contradict the 4.5:1 and 3:1 floor stated in the same document. Failing
  * the build on them would mean either editing a file the handoff froze or
- * muting the check. Instead they are enumerated in docs/contrast.md and this
- * test asserts the count has not grown — so a new contrast failure introduced
- * by a component still breaks the build.
+ * muting the check. Instead they are enumerated here and in docs/contrast.md.
+ *
+ * This pinned the node *count*, which was the wrong measure: the count grows
+ * with every component that renders muted text, so it broke the build for
+ * adding a component rather than for adding a fault. What matters is the set of
+ * distinct colour pairings that fail. A component reusing a known-bad pairing
+ * changes nothing; a component creating a new one has to be listed here, by
+ * hand, with its ratio — which is a diff a reviewer can argue with.
  */
 
-const KNOWN_CONTRAST_NODES = 776;
+/**
+ * Every failing foreground/background pair on the gallery, with the ratio axe
+ * measures. `#7c776c` is --text-muted, `#a29d92` is --text-faint, `#8a857a` is
+ * --text-on-ink-muted, `#8a6d12` is --warn-ink, `#7e7b77` is a disabled
+ * control's text. All five are documented in docs/contrast.md.
+ */
+const KNOWN_CONTRAST_PAIRS: readonly string[] = [
+  "#7c776c on #e7ece7 @4.5:1", // muted on --ok-surface
+  "#7c776c on #f2f0ea @4.5:1", // muted on --fill
+  "#7c776c on #f3f4f2 @4.5:1", // muted on --info-surface
+  "#7c776c on #f4f9f5 @4.5:1", // muted on --ok-wash
+  "#7c776c on #f6f4ee @4.5:1", // muted on --paper-sunk
+  "#7c776c on #f7f5f0 @4.5:1", // muted on --track
+  "#7c776c on #faf9f6 @4.5:1", // muted on --paper
+  "#7c776c on #ffffff @4.5:1", // muted on --card
+  "#7e7b77 on #ffffff @4.5:1", // disabled control text on --card
+  "#8a6d12 on #f7efdd @4.5:1", // --warn-ink on --warn-wash
+  "#8a857a on #211f1b @4.5:1", // --text-on-ink-muted on --ink
+  "#a29d92 on #e7ece7 @4.5:1", // faint on --ok-surface
+  "#a29d92 on #f3f4f2 @4.5:1", // faint on --info-surface
+  "#a29d92 on #f6f4ee @4.5:1", // faint on --paper-sunk
+  "#a29d92 on #faf9f6 @4.5:1", // faint on --paper
+  "#a29d92 on #ffffff @4.5:1", // faint on --card
+];
 
 test.describe("gallery", () => {
   test("has no axe violations outside contrast", async ({ page }) => {
@@ -50,10 +78,34 @@ test.describe("gallery", () => {
       .withRules(["color-contrast"])
       .analyze();
 
-    const nodes = results.violations.flatMap((v) => v.nodes).length;
-    // Recorded, not ignored. A component that introduces a new failing pairing
-    // pushes this over the line and breaks the build.
-    expect(nodes).toBeLessThanOrEqual(KNOWN_CONTRAST_NODES);
+    const found = new Map<string, { count: number; ratio: unknown; example: string }>();
+    for (const violation of results.violations) {
+      for (const node of violation.nodes) {
+        const data = (node.any[0]?.data ?? {}) as Record<string, unknown>;
+        const key = `${data["fgColor"]} on ${data["bgColor"]} @${data["expectedContrastRatio"]}`;
+        const seen = found.get(key);
+        if (seen) seen.count += 1;
+        else
+          found.set(key, {
+            count: 1,
+            ratio: data["contrastRatio"],
+            example: node.html?.slice(0, 100) ?? "",
+          });
+      }
+    }
+
+    const unexpected = [...found.entries()]
+      .filter(([key]) => !KNOWN_CONTRAST_PAIRS.includes(key))
+      .map(([key, v]) => `${key} = ${v.ratio} · ${v.count} node(s) · ${v.example}`);
+
+    // A new pairing is a new decision, and it has to be argued for in the list
+    // above rather than absorbed by a number going up.
+    expect(unexpected, unexpected.join("\n")).toEqual([]);
+
+    // And the other direction: a pairing that has been fixed should leave the
+    // list, or this becomes a record of problems the codebase no longer has.
+    const stale = KNOWN_CONTRAST_PAIRS.filter((key) => !found.has(key));
+    expect(stale, `fixed — remove from KNOWN_CONTRAST_PAIRS:\n${stale.join("\n")}`).toEqual([]);
   });
 
   test("every tier 1 to 4 component is on the page", async ({ page }) => {
