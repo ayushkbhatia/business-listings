@@ -9,15 +9,33 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job that builds or runs the app needs a database. The home page and the
+# sitemap are prerendered, both read from Postgres, and the whole public
+# surface is server-rendered from seed data — a CI run without a database
+# proves nothing about any of it.
+env:
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+  DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+  NEXT_PUBLIC_SUPABASE_URL: https://irywaycgqjeeoklfmzzd.supabase.co
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
+  NEXT_PUBLIC_SITE_URL: http://localhost:3000
+
 jobs:
   verify:
     runs-on: ubuntu-latest
-    env:
-      # Build-time only. Real values live in Vercel; CI never touches the database.
-      NEXT_PUBLIC_SUPABASE_URL: https://irywaycgqjeeoklfmzzd.supabase.co
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
-      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +49,19 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # The PostgREST lockdown migration revokes from Supabase's `anon` and
+      # `authenticated` roles. They do not exist on a stock Postgres, so CI
+      # creates them rather than the migration being weakened to suit CI.
+      - name: Create the Supabase roles the lockdown migration expects
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE anon NOLOGIN;"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE authenticated NOLOGIN;"
+
+      - name: Migrate and seed
+        run: |
+          pnpm exec prisma migrate deploy
+          pnpm db:seed
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -43,6 +74,9 @@ jobs:
       - name: Schema invariants
         run: pnpm check:schema
 
+      - name: Formatter coverage
+        run: pnpm check:formatters
+
       - name: Unit tests
         run: pnpm test
 
@@ -52,11 +86,19 @@ jobs:
   acceptance:
     runs-on: ubuntu-latest
     needs: verify
-    env:
-      NEXT_PUBLIC_SUPABASE_URL: https://irywaycgqjeeoklfmzzd.supabase.co
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_placeholder
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
-      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -67,15 +109,23 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Create the Supabase roles the lockdown migration expects
+        run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE anon NOLOGIN;"
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE authenticated NOLOGIN;"
+
+      - name: Migrate and seed
+        run: |
+          pnpm exec prisma migrate deploy
+          pnpm db:seed
+
       - name: Install Playwright chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      # Acceptance criterion 8. The gallery is the surface; axe is the check.
+      # Acceptance criterion 8 of handoff 0 and criterion 10 of handoff 1. The
+      # Playwright config builds and starts the app itself.
       - name: Axe and the acceptance surface
         run: pnpm test:e2e --project=chromium
-
-      - name: Formatter coverage
-        run: pnpm check:formatters
 
       - uses: actions/upload-artifact@v4
         if: failure()
