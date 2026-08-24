@@ -1,0 +1,6 @@
+Item Name,Part No,Unit Price AED,List Price,Qty,Lead Time,Body material,Nominal diameter,K Value,Internal notes ref 4
+"Gate valve, resilient seated, flanged",GV-150-DI,1240.00,1450.00,24,7,Ductile iron,DN150,182,checked
+"Gate valve, resilient seated, flanged DN200",GV-200-DI,1980.00,2300.00,12,7,Ductile iron,DN200,310,checked
+"Butterfly valve, lugged",BV-200-CI,860.00,990.00,30,14,Cast iron,DN200,455,
+"Check valve, swing, flanged",CV-100-DI,420.00,510.00,45,3,Ductile iron,DN100,96,
+"Y-strainer, cast iron",YS-100-CI,310.00,380.00,18,5,Cast iron,DN100,64,pending

@@ -47,19 +47,19 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
       // The dashboard needs a signed-in seller; the seller projects own it.
-      testIgnore: /(dashboard|overview)[\w-]*\.spec\.ts/,
+      testIgnore: /(dashboard|overview|catalogue)[\w-]*\.spec\.ts/,
     },
     {
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testIgnore: /(dashboard|overview)[\w-]*\.spec\.ts/,
+      testIgnore: /(dashboard|overview|catalogue)[\w-]*\.spec\.ts/,
     },
     ...(canSignIn
       ? [
           { name: "setup", testMatch: /auth\.setup\.ts/ },
           {
             name: "seller",
-            testMatch: /(dashboard|overview)[\w-]*\.spec\.ts/,
+            testMatch: /(dashboard|overview|catalogue)[\w-]*\.spec\.ts/,
             testIgnore: /overview-free\.spec\.ts/,
             dependencies: ["setup"],
             use: { ...devices["Desktop Chrome"], storageState: SELLER_STATE },

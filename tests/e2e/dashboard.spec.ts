@@ -182,15 +182,31 @@ test.describe("the seller shell", () => {
   });
 
   test("every internal link in the dashboard resolves", async ({ page, request }) => {
+    test.slow();
+    /*
+     * Collected across every page first, then fetched once each.
+     *
+     * The sidebar is identical on all four, so checking per page fetched the
+     * same links four times over. That was survivable while the nav had two
+     * live entries; handoff 3 turned on the overview, the catalogue and the
+     * media library, and the redundant fetches pushed this past the test
+     * timeout on CI — where each dashboard route is `force-dynamic` and the
+     * runner has one worker. It failed as "Request context disposed", which
+     * names the symptom and not the cause.
+     */
+    const seen = new Map<string, string>();
+
     for (const path of ["/dashboard/leads", "/dashboard/quotes", "/dashboard/settings", "/dashboard/reviews"]) {
       await page.goto(path);
       const hrefs = await page.locator("a[href^='/']").evaluateAll((nodes) =>
         nodes.map((n) => (n as HTMLAnchorElement).getAttribute("href")!),
       );
-      for (const href of new Set(hrefs)) {
-        const response = await request.get(href, { maxRedirects: 0 });
-        expect([200, 307, 308], `${path} → ${href}`).toContain(response.status());
-      }
+      for (const href of hrefs) if (!seen.has(href)) seen.set(href, path);
+    }
+
+    for (const [href, foundOn] of seen) {
+      const response = await request.get(href, { maxRedirects: 0 });
+      expect([200, 307, 308], `${foundOn} → ${href}`).toContain(response.status());
     }
   });
 });

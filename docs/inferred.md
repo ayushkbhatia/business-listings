@@ -1067,3 +1067,140 @@ denominator read `/7`, a number twelve components had already passed, and is now
 15 — the newest source rather than the one that makes 64 come out right.
 Criterion 12 counts to 64, so one of the two documents is wrong and it is worth
 settling before that check is treated as meaningful.
+
+## Handoff 3, step 2 — the catalogue loop
+
+### The importer is a fence, not a validator
+
+CLAUDE.md non-negotiable 1 says `Product` has no price field. Every other path
+into that table is a typed form with no price input on it, so the rule holds by
+construction. A CSV importer is the one path wide enough to break it, because
+the seller brings their own column names — and a supplier's own export almost
+always has a price column in it, since it was written for their accounting
+system rather than for us.
+
+So `lib/import/columns.ts` refuses by name, and the refusal is checked before
+any other rule gets a chance to claim a column. "Price Description" is blocked
+rather than read as a product name.
+
+Erring wide is deliberate and the asymmetry is the argument: a false positive
+costs the seller one column they map by hand, and a false negative puts a price
+on a public product row, which is a migration to undo. Matching only the word
+"price" would catch "Unit Price AED" and wave through "Rate", "Cost", "Landed",
+"MRP", "Ex-Works" and "List" — all the same field.
+
+`assertNoPriceEscapes` runs in the service before anything is read, because the
+plan travels through a form and through a saved mapping, and both are strings a
+seller could edit. It throws rather than warns; there is no partial success
+worth having.
+
+### `stockvalue` contains `kvalue`
+
+The exception list exists because a valves directory sees "K Value", "Kv Value"
+and "Flow Rate" constantly — a Kv value is a flow coefficient, and refusing it
+would be refusing a spec. Written as substring matches on the squashed header,
+"Stock Value" was exempted: `stockvalue`.includes(`kvalue`) is true.
+
+That is the third time this repo has been bitten by substring matching on
+squashed identifiers. Handoff 2 fixed it in the quote matcher, where `as`
+matched inside `cast`. Both sides now match whole words, with the exceptions
+written as consecutive token pairs.
+
+Whole words alone were not enough for the last-resort tier either: "Internal
+notes ref 4" was read as a SKU because `ref` is genuinely a word in it. A header
+of four words carrying one incidental match is not that field, so the guess tier
+only fires on headers of two words or fewer. A wrong column mapped to SKU is
+worse than one left alone — the seller has to notice a bad guess in order to
+undo it, and has to notice nothing at all to fill in a blank.
+
+### Provenance on the row, not a timestamp
+
+Criterion 7 gives twenty-four hours to reverse an import. Counting backwards
+from `ImportRun.createdAt` would also catch anything the seller typed by hand in
+the same minute, so `Product.importRunId` names the rows a run created. The run
+is marked reverted rather than deleted: the record of what was imported and
+undone survives the undo.
+
+`ImportMapping` stores the plan **as applied**, blocked columns included. A
+mapping reused next month has to refuse the same column again without
+re-deriving why, and a mapping overridden at the last moment must not come back
+different.
+
+### The mapping a rename cannot drop
+
+Criterion 6 asks that cloning preserves the mapping to platform fields and that
+renaming keeps it. Both fall out of the storage rather than being enforced on
+top of it: `Product.specValues` is keyed by platform `SpecField` id — lib/spec.ts
+has always read it that way — and `SellerTemplate.fieldMappings` is keyed by the
+same id. The seller's label is a *value* hanging off that key, so a rename
+physically cannot drop the mapping.
+
+A clone stores an empty mapping object rather than a copy of every label. A
+clone that copies labels is a snapshot: rename a platform field later and every
+seller who cloned before the rename keeps the old wording forever, with nothing
+able to say the two are the same field. Typing the platform's own label back
+removes the override entirely, so the field starts following the platform again.
+
+The warning is a courtesy on top of a guarantee, and what it says matters more
+than that it exists. The fear when renaming is that products already filled in
+lose their values, so the sentence names how many products are affected and says
+they keep them. "Are you sure?" would answer nothing.
+
+### The same client-component mistake, twice more
+
+"Functions cannot be passed directly to Client Components" is a runtime error on
+the rendered page, not a build error, so it ships. Handoff 2 hit it three times —
+QuoteLineEditor, ResendButton, EnquiryComposer. This step hit it twice more in
+one hour, in ImportWizard and CatalogueTable, and the shape was identical every
+time: a `labels` object with members like `apply: (n) => t("...", { n })`, which
+reads as data and is a function prop.
+
+`tests/unit/client-labels.test.ts` now fails the build instead. Getting it right
+took three attempts, and the two wrong ones are worth recording:
+
+- Flagging *declarations* of function props caught nine existing files. Most were
+  legitimate: a client component taking `formatValue` from another client
+  component is fine, and several primitives do it. The rule is about the call
+  site.
+- Flagging any `=>` inside a JSX element caught six more, all false. An arrow
+  inside `.map(...)` is an argument to a call that returns an array, and the
+  array is what crosses.
+
+The discrimination falls out of bracketing. Collapse every balanced paren pair,
+innermost first: `specFields.map((f) => ({ id: f.id }))` loses `(f)` and
+`({ id: f.id })`, then loses the `( => )` they leave behind, and ends as
+`specFields.map` with no arrow in it. `labels={{ apply: (n) => t("x") }}` has no
+enclosing call, so it survives as `{ apply:  => t }` and the arrow is still
+there. Server action props are exempt by name.
+
+The test was checked against the real bug by reintroducing it, which failed, and
+then removing it again.
+
+### Storage is not a migration
+
+`storage.*` belongs to Supabase, and CI runs a plain Postgres with no storage
+schema at all. A migration creating buckets would fail every build for a feature
+CI cannot exercise anyway, so `pnpm storage:setup` creates them idempotently
+against a real project.
+
+Two buckets, and the split is the point. Photographs are on a public storefront
+and are meant to be seen; trade licences are documents a supplier handed us to
+be verified, and nothing about that implies consent to publish them. A single
+bucket with per-object rules would make the private case the exception, and the
+exception is the one that must not fail.
+
+Bytes go from the browser straight to Storage with a signed URL issued per
+object, after the server has checked the seller owns the path and has a
+photograph left on their plan. An eight-megabyte photograph posted through a
+server action is eight megabytes of base64 in a request body, twenty times over
+for a supplier uploading a gallery. There is no bucket-wide write policy to get
+wrong. `recordMedia` re-checks that the path starts with the seat's own business
+id, which is the only check that survives a bug in the signing step.
+
+### What CI cannot prove here
+
+The upload path needs a real Supabase project. The `seller` e2e project covers
+the mapper, the catalogue, the template and the editor, but the media library's
+upload is exercised only by hand — verified in the browser with a generated PNG,
+which uploaded, stored and rendered back through the public URL. The library's
+read path is covered wherever the seed has media, and the seed has none.
