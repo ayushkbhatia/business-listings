@@ -13,6 +13,12 @@ import { Check, Minus } from "./icons";
  *
  * Indeterminate is set on the DOM node, because it is a property and not an
  * attribute and React will not write it for you.
+ *
+ * The tick and the filled box are driven by `:checked` in CSS, not by the
+ * `checked` prop. Reading the prop worked for a controlled checkbox and left an
+ * uncontrolled one — `defaultChecked`, or just a user clicking it — permanently
+ * blank, because `checked` is undefined in that case and the tick was hidden
+ * behind it. Radio was already written this way; this now matches.
  */
 export interface CheckboxProps
   extends Omit<React.ComponentPropsWithoutRef<"input">, "className" | "type" | "size"> {
@@ -42,8 +48,6 @@ export function Checkbox({
     if (ref.current) ref.current.indeterminate = indeterminate;
   }, [indeterminate]);
 
-  const marked = indeterminate || checked;
-
   return (
     <div className="flex items-start gap-2">
       <span className="relative flex size-5 shrink-0 items-center justify-center">
@@ -51,7 +55,7 @@ export function Checkbox({
           ref={ref}
           id={fieldId}
           type="checkbox"
-          checked={checked}
+          {...(checked === undefined ? {} : { checked })}
           disabled={disabled}
           aria-invalid={invalid || undefined}
           className={cn(
@@ -59,11 +63,9 @@ export function Checkbox({
             "transition-colors duration-120 ease-out",
             "focus-visible:outline-none focus-visible:shadow-focus",
             "disabled:cursor-not-allowed",
-            marked
-              ? "border-moss bg-moss"
-              : invalid
-                ? "border-bad-line-strong bg-card"
-                : "border-line-strong bg-card hover:border-moss",
+            invalid ? "border-bad-line-strong bg-card" : "border-line-strong bg-card hover:border-moss",
+            // The state, from the DOM rather than from a prop.
+            "checked:border-moss checked:bg-moss indeterminate:border-moss indeterminate:bg-moss",
             disabled && "border-line bg-disabled-fill",
           )}
           {...rest}
@@ -72,7 +74,7 @@ export function Checkbox({
           className={cn(
             "pointer-events-none absolute inset-0 flex items-center justify-center",
             disabled ? "text-disabled-text" : "text-on-ink",
-            marked ? "opacity-100" : "opacity-0",
+            "opacity-0 peer-checked:opacity-100 peer-indeterminate:opacity-100",
           )}
         >
           {indeterminate ? <Minus size={12} /> : <Check size={12} />}

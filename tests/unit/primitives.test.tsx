@@ -72,6 +72,50 @@ describe("Checkbox", () => {
   });
 });
 
+describe("Checkbox", () => {
+  it("shows the tick when a user clicks an uncontrolled box", async () => {
+    // The visual state used to be read from the `checked` prop, which is
+    // undefined on an uncontrolled checkbox — so the box filled in for a
+    // controlled one and stayed permanently blank for everybody else.
+    const user = userEvent.setup();
+    render(<Checkbox name="listing" label="Listing" />);
+    const box = screen.getByRole("checkbox", { name: "Listing" });
+
+    expect(box).not.toBeChecked();
+    await user.click(box);
+    expect(box).toBeChecked();
+    // :checked drives the fill, so the DOM state is the visual state and the
+    // two cannot disagree.
+    expect(box.className).toContain("checked:bg-moss");
+  });
+
+  it("honours defaultChecked and stays uncontrolled", async () => {
+    const user = userEvent.setup();
+    render(<Checkbox name="buying" defaultChecked label="Buying" />);
+    const box = screen.getByRole("checkbox", { name: "Buying" });
+    expect(box).toBeChecked();
+    // Uncontrolled: unticking it sticks. If `checked={undefined}` were passed
+    // through, React would treat the field as controlled and snap it back.
+    await user.click(box);
+    expect(box).not.toBeChecked();
+  });
+
+  it("stays controlled when checked is given", async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<Checkbox name="c" checked={false} onChange={onChange} label="Controlled" />);
+    const box = screen.getByRole("checkbox", { name: "Controlled" });
+    await user.click(box);
+    expect(onChange).toHaveBeenCalled();
+    expect(box).not.toBeChecked();
+  });
+
+  it("sets indeterminate as a property, which React will not write", () => {
+    render(<Checkbox indeterminate label="Some" />);
+    expect((screen.getByRole("checkbox", { name: "Some" }) as HTMLInputElement).indeterminate).toBe(true);
+  });
+});
+
 describe("Toggle", () => {
   it("announces as a switch, not a checkbox", () => {
     render(<Toggle checked onChange={() => {}} label="WhatsApp updates" />);

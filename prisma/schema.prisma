@@ -28,14 +28,14 @@ datasource db {
 /// identity space. Roles live here and are copied into the JWT by an auth hook;
 /// they are never read from user_metadata, which the user can edit.
 model User {
-  id          String   @id @db.Uuid
-  phone       String?  @unique
-  email       String?  @unique
-  fullName    String?  @map("full_name")
-  roles       Role[]   @default([])
+  id         String  @id @db.Uuid
+  phone      String? @unique
+  email      String? @unique
+  fullName   String? @map("full_name")
+  roles      Role[]  @default([])
   /// Set for a seller seat. Scopes every seller capability to one business.
-  businessId  String?  @map("business_id")
-  locale      String   @default("en")
+  businessId String? @map("business_id")
+  locale     String  @default("en")
 
   /// A buyer can send an enquiry with no account at all — the board says so and
   /// it is deliberate, because requiring signup before the first enquiry is the
@@ -45,24 +45,76 @@ model User {
   claimToken    String?   @unique @map("claim_token")
   claimedAt     DateTime? @map("claimed_at")
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  /// Signup captures the intent to list, not the role. `seller_owner` is scoped
+  /// to a business and there is no business until the claim flow in handoff 3
+  /// attaches one — granting the role here would grant it over nothing.
+  wantsToList Boolean @default(false) @map("wants_to_list")
 
-  business          Business?         @relation("BusinessTeam", fields: [businessId], references: [id], onDelete: SetNull)
-  buyerCompanyId    String?           @map("buyer_company_id")
-  buyerCompany      BuyerCompany?     @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
-  enquiries         Enquiry[]
-  reviews           Review[]
-  auditEvents       AuditEvent[]
-  reportsFiled      SupplierReport[]  @relation("ReportReporter")
-  visitsMade        Business[]        @relation("BusinessVisitedBy")
-  messages          Message[]
-  contactReveals    ContactReveal[]
-  savedSearches     SavedSearch[]
-  reviewRequests    ReviewRequest[]
+  /// The "account suspended" state on board 7a.
+  ///
+  /// No reason column, deliberately. A suspension is a staff state change, so
+  /// the written reason is on its audit row — the same place a business
+  /// suspension keeps one, and the place CLAUDE.md requires. It is also not
+  /// automatically the text to show the suspended person: an investigative
+  /// reason is a note to staff, and the screen offers an appeal instead.
+  suspendedAt DateTime? @map("suspended_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  business       Business?        @relation("BusinessTeam", fields: [businessId], references: [id], onDelete: SetNull)
+  buyerCompanyId String?          @map("buyer_company_id")
+  buyerCompany   BuyerCompany?    @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
+  enquiries      Enquiry[]
+  reviews        Review[]
+  auditEvents    AuditEvent[]
+  reportsFiled   SupplierReport[] @relation("ReportReporter")
+  visitsMade     Business[]       @relation("BusinessVisitedBy")
+  messages       Message[]
+  contactReveals ContactReveal[]
+  savedSearches  SavedSearch[]
+  reviewRequests ReviewRequest[]
 
   @@index([businessId])
   @@map("user")
+}
+
+/// What was attempted. Kept separate because the thresholds differ: asking for
+/// a code is cheap to the user and costly to us, while getting one wrong is the
+/// opposite.
+enum AuthAttemptKind {
+  /// Asking for a code. Throttled for cost — a WhatsApp authentication message
+  /// to the UAE is priced per delivery, so a resend button with no cooldown is
+  /// a direct leak.
+  otp_request
+  /// Submitting a code. Throttled for security.
+  otp_verify
+  /// Asking for a password reset link.
+  reset_request
+
+  @@map("auth_attempt_kind")
+}
+
+/// One row per attempt at getting in, successful or not.
+///
+/// Supabase enforces its own rate limits and does not expose the counter, so
+/// "too many attempts" cannot be a designed state without our own record. This
+/// is also the audit trail for a locked-out user asking why.
+model AuthAttempt {
+  id String @id @default(cuid())
+
+  /// Normalised: E.164 phone, or a lowercased email. Never a user id — the
+  /// point is to throttle before we know, or care, who this is.
+  identifier String
+  kind       AuthAttemptKind
+  succeeded  Boolean         @default(false)
+  /// Best-effort, from the proxy header. Null when there is none to read.
+  ip         String?
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  @@index([identifier, kind, createdAt])
+  @@index([createdAt])
+  @@map("auth_attempt")
 }
 
 enum Role {
@@ -83,12 +135,12 @@ enum Role {
 /// team sets for itself — "orders over AED 25,000 need approval" is the buyer's
 /// own process, not a platform order entity.
 model BuyerCompany {
-  id                  String   @id @default(cuid())
-  name                String
-  trn                 String?
-  emirate             Emirate?
-  approvalThresholdAed Int?    @map("approval_threshold_aed")
-  createdAt           DateTime @default(now()) @map("created_at")
+  id                   String   @id @default(cuid())
+  name                 String
+  trn                  String?
+  emirate              Emirate?
+  approvalThresholdAed Int?     @map("approval_threshold_aed")
+  createdAt            DateTime @default(now()) @map("created_at")
 
   members   User[]
   enquiries Enquiry[]
@@ -115,15 +167,15 @@ enum Emirate {
 /// Areas and free zones are translatable records, not code strings. Arabic names
 /// live here from day one so the taxonomy is a data change, never a deploy.
 model Area {
-  id         String   @id @default(cuid())
-  emirate    Emirate
-  name       String
-  nameAr     String?  @map("name_ar")
-  slug       String   @unique
+  id          String    @id @default(cuid())
+  emirate     Emirate
+  name        String
+  nameAr      String?   @map("name_ar")
+  slug        String    @unique
   /// A free zone is a cross-cutting toggle, not a place in the area hierarchy.
-  isFreeZone Boolean  @default(false) @map("is_free_zone")
-  lat        Float?
-  lng        Float?
+  isFreeZone  Boolean   @default(false) @map("is_free_zone")
+  lat         Float?
+  lng         Float?
   /// Landing pages publish only above the board 6f thresholds. Enforced in the
   /// service layer, and unpublished automatically when supply drops below them.
   publishedAt DateTime? @map("published_at")
@@ -204,10 +256,10 @@ model SpecTemplate {
   status     TemplateStatus @default(draft)
   createdAt  DateTime       @default(now()) @map("created_at")
 
-  category        Category         @relation("TemplateCategory", fields: [categoryId], references: [id], onDelete: Restrict)
-  defaultForCategories Category[]  @relation("CategoryDefaultTemplate")
-  fields          SpecField[]
-  sellerTemplates SellerTemplate[]
+  category             Category         @relation("TemplateCategory", fields: [categoryId], references: [id], onDelete: Restrict)
+  defaultForCategories Category[]       @relation("CategoryDefaultTemplate")
+  fields               SpecField[]
+  sellerTemplates      SellerTemplate[]
 
   @@unique([categoryId, version])
   @@index([categoryId])
@@ -347,7 +399,7 @@ model Business {
   verificationTier Int       @default(0) @map("verification_tier")
   verifiedAt       DateTime? @map("verified_at")
   visitedAt        DateTime? @map("visited_at")
-  visitedByStaffId String?   @db.Uuid @map("visited_by_staff_id")
+  visitedByStaffId String?   @map("visited_by_staff_id") @db.Uuid
 
   claimStatus       ClaimStatus   @default(unclaimed) @map("claim_status")
   planId            String?       @map("plan_id")
@@ -375,28 +427,28 @@ model Business {
   reviewCount          Int       @default(0) @map("review_count")
   derivedAt            DateTime? @map("derived_at")
 
-  primaryCategory Category           @relation("BusinessPrimaryCategory", fields: [primaryCategoryId], references: [id], onDelete: Restrict)
-  categories      BusinessCategory[]
-  plan            Plan?              @relation(fields: [planId], references: [id], onDelete: SetNull)
-  visitedByStaff  User?              @relation("BusinessVisitedBy", fields: [visitedByStaffId], references: [id], onDelete: SetNull)
-  team            User[]             @relation("BusinessTeam")
-  locations       Location[]
-  products        Product[]
-  media           Media[]
-  documents       Document[]
-  sellerTemplates SellerTemplate[]
-  recipients      EnquiryRecipient[]
-  quotes          Quote[]
-  messages        Message[]
-  reviews         Review[]
-  reports         SupplierReport[]   @relation("ReportSubject")
-  subscription    Subscription?
-  invoices        Invoice[]
-  placements      PlacementSlot[]
-  contactReveals  ContactReveal[]
-  redirectsFrom   Redirect[]
+  primaryCategory        Category                @relation("BusinessPrimaryCategory", fields: [primaryCategoryId], references: [id], onDelete: Restrict)
+  categories             BusinessCategory[]
+  plan                   Plan?                   @relation(fields: [planId], references: [id], onDelete: SetNull)
+  visitedByStaff         User?                   @relation("BusinessVisitedBy", fields: [visitedByStaffId], references: [id], onDelete: SetNull)
+  team                   User[]                  @relation("BusinessTeam")
+  locations              Location[]
+  products               Product[]
+  media                  Media[]
+  documents              Document[]
+  sellerTemplates        SellerTemplate[]
+  recipients             EnquiryRecipient[]
+  quotes                 Quote[]
+  messages               Message[]
+  reviews                Review[]
+  reports                SupplierReport[]        @relation("ReportSubject")
+  subscription           Subscription?
+  invoices               Invoice[]
+  placements             PlacementSlot[]
+  contactReveals         ContactReveal[]
+  redirectsFrom          Redirect[]
   notificationPreference NotificationPreference?
-  reviewRequests  ReviewRequest[]
+  reviewRequests         ReviewRequest[]
 
   @@index([primaryCategoryId])
   @@index([claimStatus])
@@ -434,28 +486,28 @@ enum LocationType {
 }
 
 model Location {
-  id          String       @id @default(cuid())
-  businessId  String       @map("business_id")
-  type        LocationType
-  emirate     Emirate
-  areaId      String       @map("area_id")
-  addressLine String       @map("address_line")
-  lat         Float?
+  id              String       @id @default(cuid())
+  businessId      String       @map("business_id")
+  type            LocationType
+  emirate         Emirate
+  areaId          String       @map("area_id")
+  addressLine     String       @map("address_line")
+  lat             Float?
   /// Null means unpinned. Excluded from map search entirely — a location is
   /// never approximated to an area centroid, because a wrong pin is worse than
   /// no pin and the gap is surfaced to the seller instead.
-  lng         Float?
-  phone       String?
-  whatsapp    String?
+  lng             Float?
+  phone           String?
+  whatsapp        String?
   /// An unverified number is hidden from buyers.
-  phoneVerified   Boolean  @default(false) @map("phone_verified")
+  phoneVerified   Boolean      @default(false) @map("phone_verified")
   /// Per-day open/close, split shifts.
-  hours           Json     @default("{}")
+  hours           Json         @default("{}")
   /// Applied automatically on announced dates.
-  ramadanHours    Json?    @map("ramadan_hours")
-  serviceRadiusKm Int?     @map("service_radius_km")
-  published       Boolean  @default(false)
-  createdAt       DateTime @default(now()) @map("created_at")
+  ramadanHours    Json?        @map("ramadan_hours")
+  serviceRadiusKm Int?         @map("service_radius_km")
+  published       Boolean      @default(false)
+  createdAt       DateTime     @default(now()) @map("created_at")
 
   business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   area           Area            @relation(fields: [areaId], references: [id], onDelete: Restrict)
@@ -541,16 +593,16 @@ enum MediaKind {
 }
 
 model Media {
-  id         String    @id @default(cuid())
-  kind       MediaKind
+  id          String    @id @default(cuid())
+  kind        MediaKind
   /// Supabase Storage object path. The bucket is not in Prisma's schema.
-  storagePath String   @map("storage_path")
-  alt        String?
-  width      Int?
-  height     Int?
-  bytes      Int?
-  sortOrder  Int       @default(0) @map("sort_order")
-  createdAt  DateTime  @default(now()) @map("created_at")
+  storagePath String    @map("storage_path")
+  alt         String?
+  width       Int?
+  height      Int?
+  bytes       Int?
+  sortOrder   Int       @default(0) @map("sort_order")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   businessId String? @map("business_id")
   productId  String? @map("product_id")
@@ -636,30 +688,30 @@ enum QuoteStatus {
 }
 
 model Enquiry {
-  id             String        @id @default(cuid())
+  id                          String        @id @default(cuid())
   /// ENQ-8841
-  ref            String        @unique
-  buyerId        String        @db.Uuid @map("buyer_id")
-  buyerCompanyId String?       @map("buyer_company_id")
-  requirement    String
-  deliverToArea  String?       @map("deliver_to_area")
-  neededBy       DateTime?     @map("needed_by")
-  termsWanted    PaymentTerms? @map("terms_wanted")
-  closesAt       DateTime      @map("closes_at")
+  ref                         String        @unique
+  buyerId                     String        @map("buyer_id") @db.Uuid
+  buyerCompanyId              String?       @map("buyer_company_id")
+  requirement                 String
+  deliverToArea               String?       @map("deliver_to_area")
+  neededBy                    DateTime?     @map("needed_by")
+  termsWanted                 PaymentTerms? @map("terms_wanted")
+  closesAt                    DateTime      @map("closes_at")
   /// Set only on acceptance. Releases contact to exactly one business.
-  contactReleasedToBusinessId String?   @map("contact_released_to_business_id")
-  contactReleasedAt           DateTime? @map("contact_released_at")
-  createdAt      DateTime      @default(now()) @map("created_at")
+  contactReleasedToBusinessId String?       @map("contact_released_to_business_id")
+  contactReleasedAt           DateTime?     @map("contact_released_at")
+  createdAt                   DateTime      @default(now()) @map("created_at")
 
-  buyer        User               @relation(fields: [buyerId], references: [id], onDelete: Cascade)
-  buyerCompany BuyerCompany?      @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
-  lines        EnquiryLine[]
+  buyer          User               @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  buyerCompany   BuyerCompany?      @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
+  lines          EnquiryLine[]
   /// 1..8 businesses.
-  recipients   EnquiryRecipient[]
-  attachments  Document[]
-  quotes       Quote[]
-  messages     Message[]
-  review       Review?
+  recipients     EnquiryRecipient[]
+  attachments    Document[]
+  quotes         Quote[]
+  messages       Message[]
+  review         Review?
   reviewRequests ReviewRequest[]
 
   @@index([buyerId])
@@ -668,19 +720,19 @@ model Enquiry {
 }
 
 model EnquiryLine {
-  id          String  @id @default(cuid())
-  enquiryId   String  @map("enquiry_id")
-  description String
-  qty         Int
-  unit        String?
+  id                 String   @id @default(cuid())
+  enquiryId          String   @map("enquiry_id")
+  description        String
+  qty                Int
+  unit               String?
   /// What the buyer hopes to pay, per unit. Optional, private to this enquiry
   /// and its recipients, and never on a public surface. It is the buyer's own
   /// budget rather than a supplier's price for goods, which is why it sits
   /// here and not anywhere near Product.
   targetUnitPriceAed Decimal? @map("target_unit_price_aed") @db.Decimal(12, 2)
   /// Free text as the buyer wrote it, e.g. `DN100` or `4"`.
-  size        String?
-  sortOrder   Int     @default(0) @map("sort_order")
+  size               String?
+  sortOrder          Int      @default(0) @map("sort_order")
 
   enquiry Enquiry @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
 
@@ -689,18 +741,18 @@ model EnquiryLine {
 }
 
 model EnquiryRecipient {
-  enquiryId  String         @map("enquiry_id")
-  businessId String         @map("business_id")
-  state      RecipientState @default(delivered)
-  openedAt   DateTime?      @map("opened_at")
+  enquiryId    String         @map("enquiry_id")
+  businessId   String         @map("business_id")
+  state        RecipientState @default(delivered)
+  openedAt     DateTime?      @map("opened_at")
   /// Enquiry-to-first-reply is what response time is measured from. Never a
   /// seller-editable field.
-  firstReplyAt DateTime?    @map("first_reply_at")
+  firstReplyAt DateTime?      @map("first_reply_at")
   /// One follow-up nudge, ever. Board 11b: a second loses more deals than it
   /// wins, so the column is a timestamp rather than a count and the UI does
   /// not offer a second.
-  nudgedAt     DateTime?    @map("nudged_at")
-  createdAt  DateTime       @default(now()) @map("created_at")
+  nudgedAt     DateTime?      @map("nudged_at")
+  createdAt    DateTime       @default(now()) @map("created_at")
 
   enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -762,15 +814,15 @@ model QuoteLine {
 /// the body — IBAN patterns, "transfer to" — and raises a SupplierReport with
 /// kind `off_platform_payment`, which skips the moderation queue.
 model Message {
-  id              String   @id @default(cuid())
-  enquiryId       String   @map("enquiry_id")
-  businessId      String   @map("business_id")
-  senderId        String   @db.Uuid @map("sender_id")
+  id              String    @id @default(cuid())
+  enquiryId       String    @map("enquiry_id")
+  businessId      String    @map("business_id")
+  senderId        String    @map("sender_id") @db.Uuid
   body            String
   /// A revised quote appears inline in the thread.
-  quoteRevisionId String?  @map("quote_revision_id")
+  quoteRevisionId String?   @map("quote_revision_id")
   flaggedAt       DateTime? @map("flagged_at")
-  createdAt       DateTime @default(now()) @map("created_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   enquiry       Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -786,28 +838,28 @@ model Message {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Review {
-  id             String   @id @default(cuid())
-  businessId     String   @map("business_id")
-  buyerId        String   @db.Uuid @map("buyer_id")
+  id              String    @id @default(cuid())
+  businessId      String    @map("business_id")
+  buyerId         String    @map("buyer_id") @db.Uuid
   /// Gating: one review per enquiry, and the enquiry must exist.
-  enquiryId      String   @unique @map("enquiry_id")
-  overall        Int
-  quotedAccurate Int      @map("quoted_accurate")
-  onTime         Int      @map("on_time")
-  asDescribed    Int      @map("as_described")
-  responsiveness Int
-  body           String
-  showCompanyName Boolean @default(true) @map("show_company_name")
+  enquiryId       String    @unique @map("enquiry_id")
+  overall         Int
+  quotedAccurate  Int       @map("quoted_accurate")
+  onTime          Int       @map("on_time")
+  asDescribed     Int       @map("as_described")
+  responsiveness  Int
+  body            String
+  showCompanyName Boolean   @default(true) @map("show_company_name")
   /// created + 14 days.
-  editableUntil  DateTime @map("editable_until")
+  editableUntil   DateTime  @map("editable_until")
   /// One only, not editable after posting. Never seller-deletable.
-  sellerReply    String?  @map("seller_reply")
+  sellerReply     String?   @map("seller_reply")
   sellerRepliedAt DateTime? @map("seller_replied_at")
-  removedAt      DateTime? @map("removed_at")
+  removedAt       DateTime? @map("removed_at")
   /// Required when removedAt is set. Enforced by a check constraint in the
   /// migration, not only by the service layer.
-  removalReason  String?  @map("removal_reason")
-  createdAt      DateTime @default(now()) @map("created_at")
+  removalReason   String?   @map("removal_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   buyer    User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
@@ -843,7 +895,7 @@ enum ReportOutcome {
 model SupplierReport {
   id                String         @id @default(cuid())
   subjectBusinessId String         @map("subject_business_id")
-  reporterId        String?        @db.Uuid @map("reporter_id")
+  reporterId        String?        @map("reporter_id") @db.Uuid
   kind              ReportKind
   /// Which field was reported, for the three-strikes auto-flag.
   subjectField      String?        @map("subject_field")
@@ -909,16 +961,16 @@ model Plan {
 }
 
 model Subscription {
-  id         String    @id @default(cuid())
-  businessId String    @unique @map("business_id")
-  planId     String    @map("plan_id")
-  status     SubStatus @default(active)
-  startedAt  DateTime  @default(now()) @map("started_at")
-  renewsAt   DateTime  @map("renews_at")
-  cancelledAt DateTime? @map("cancelled_at")
+  id                  String    @id @default(cuid())
+  businessId          String    @unique @map("business_id")
+  planId              String    @map("plan_id")
+  status              SubStatus @default(active)
+  startedAt           DateTime  @default(now()) @map("started_at")
+  renewsAt            DateTime  @map("renews_at")
+  cancelledAt         DateTime? @map("cancelled_at")
   /// Grandfathering: entitlements captured at signup, unless a plan change
   /// explicitly sets "apply to existing".
-  entitlementSnapshot Json? @map("entitlement_snapshot")
+  entitlementSnapshot Json?     @map("entitlement_snapshot")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   plan     Plan     @relation(fields: [planId], references: [id], onDelete: Restrict)
@@ -993,18 +1045,18 @@ model InvoiceLine {
 /// Write it in the service layer. A mutation that can reach the database
 /// without an audit row is a bug, and the suite proves it cannot.
 model AuditEvent {
-  id      String   @id @default(cuid())
-  actorId String   @db.Uuid @map("actor_id")
+  id        String   @id @default(cuid())
+  actorId   String   @map("actor_id") @db.Uuid
   /// tier_change | review_removed | credit_issued | suspend | merge | boost |
   /// view_as | report_resolved | queue_decided | visit_recorded |
   /// taxonomy_changed | staff_changed
-  action  String
+  action    String
   /// Entity type and id, e.g. `Business:clx123`.
-  subject String
+  subject   String
   /// REQUIRED. Not nullable, by design, in the schema and in the service layer.
-  reason  String
-  before  Json?
-  after   Json?
+  reason    String
+  before    Json?
+  after     Json?
   createdAt DateTime @default(now()) @map("created_at")
 
   actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
@@ -1031,7 +1083,7 @@ enum RevealChannel {
 model ContactReveal {
   id         String        @id @default(cuid())
   /// Null for an anonymous buyer. Most reveals happen before signup.
-  actorId    String?       @db.Uuid @map("actor_id")
+  actorId    String?       @map("actor_id") @db.Uuid
   businessId String        @map("business_id")
   locationId String?       @map("location_id")
   channel    RevealChannel
@@ -1050,16 +1102,16 @@ model ContactReveal {
 /// the recruitment call list. Required by handoff 1 acceptance criterion 6 —
 /// added here rather than at handoff 1 so it is never a retrofit.
 model ZeroResultQuery {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   query      String
-  categoryId String?   @map("category_id")
+  categoryId String?  @map("category_id")
   emirate    Emirate?
   /// The facet values that were set, so the gap report can name which filter to
   /// suggest dropping.
-  filters    Json      @default("{}")
-  tab        String    @default("businesses")
-  actorId    String?   @db.Uuid @map("actor_id")
-  createdAt  DateTime  @default(now()) @map("created_at")
+  filters    Json     @default("{}")
+  tab        String   @default("businesses")
+  actorId    String?  @map("actor_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
 
   @@index([query])
   @@index([createdAt])
@@ -1069,7 +1121,7 @@ model ZeroResultQuery {
 /// A saved search plus its alert cadence. /account/saved.
 model SavedSearch {
   id        String   @id @default(cuid())
-  userId    String   @db.Uuid @map("user_id")
+  userId    String   @map("user_id") @db.Uuid
   name      String
   query     String
   filters   Json     @default("{}")
@@ -1085,12 +1137,12 @@ model SavedSearch {
 /// Slugs are immutable once published. A rename or a merge creates one of these
 /// automatically; deleting a page without one is blocked at the service layer.
 model Redirect {
-  id             String   @id @default(cuid())
-  fromPath       String   @unique @map("from_path")
-  toPath         String   @map("to_path")
-  statusCode     Int      @default(301) @map("status_code")
-  businessId     String?  @map("business_id")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id         String   @id @default(cuid())
+  fromPath   String   @unique @map("from_path")
+  toPath     String   @map("to_path")
+  statusCode Int      @default(301) @map("status_code")
+  businessId String?  @map("business_id")
+  createdAt  DateTime @default(now()) @map("created_at")
 
   business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
@@ -1145,17 +1197,17 @@ enum TemplateApproval {
 }
 
 model NotificationTemplate {
-  id       String              @id @default(cuid())
-  event    NotificationEvent
-  channel  NotificationChannel
-  locale   String              @default("en")
-  version  Int                 @default(1)
-  status   TemplateApproval    @default(draft)
+  id      String              @id @default(cuid())
+  event   NotificationEvent
+  channel NotificationChannel
+  locale  String              @default("en")
+  version Int                 @default(1)
+  status  TemplateApproval    @default(draft)
 
   /// Email only.
-  subject  String?
+  subject     String?
   /// Placeholders are {curly}. Never a buyer phone, email or company name.
-  body     String
+  body        String
   /// The one action. Deep link, relative.
   actionLabel String? @map("action_label")
   actionPath  String? @map("action_path")
@@ -1175,31 +1227,31 @@ model NotificationTemplate {
 
 /// A seller's routing matrix, board 7e. One row per business.
 model NotificationPreference {
-  id         String   @id @default(cuid())
-  businessId String   @unique @map("business_id")
+  id         String @id @default(cuid())
+  businessId String @unique @map("business_id")
 
   /// Event to channels, e.g. { "enquiry_received": ["whatsapp", "in_app"] }.
   /// JSON rather than a join table: the matrix is edited as a whole and read
   /// as a whole, and a row per cell would be forty rows nobody queries singly.
-  routing    Json     @default("{}")
+  routing Json @default("{}")
 
   /// Quiet hours suppress WhatsApp and SMS. In-app is never suppressed —
   /// it is not an interruption.
-  quietHoursEnabled Boolean @default(true)  @map("quiet_hours_enabled")
-  quietFromHour     Int     @default(21)    @map("quiet_from_hour")
-  quietToHour       Int     @default(7)     @map("quiet_to_hour")
-  quietOnSunday     Boolean @default(true)  @map("quiet_on_sunday")
+  quietHoursEnabled Boolean @default(true) @map("quiet_hours_enabled")
+  quietFromHour     Int     @default(21) @map("quiet_from_hour")
+  quietToHour       Int     @default(7) @map("quiet_to_hour")
+  quietOnSunday     Boolean @default(true) @map("quiet_on_sunday")
 
   /// A high-value enquiry overrides quiet hours. Null means never override.
   highValueOverrideAed Int? @default(50000) @map("high_value_override_aed")
 
   /// Where the escalation in the matrix goes after two hours unanswered.
-  escalateToUserId String?  @db.Uuid @map("escalate_to_user_id")
-  escalateAfterMinutes Int  @default(120) @map("escalate_after_minutes")
+  escalateToUserId     String? @map("escalate_to_user_id") @db.Uuid
+  escalateAfterMinutes Int     @default(120) @map("escalate_after_minutes")
 
   /// The single follow-up nudge, and how long after delivery it fires.
-  nudgeEnabled     Boolean @default(true) @map("nudge_enabled")
-  nudgeAfterHours  Int     @default(24)   @map("nudge_after_hours")
+  nudgeEnabled    Boolean @default(true) @map("nudge_enabled")
+  nudgeAfterHours Int     @default(24) @map("nudge_after_hours")
 
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -1231,15 +1283,15 @@ model NotificationDelivery {
 
   /// Who it went to. A user id, never a phone number — the number is read from
   /// the user at send time and never stored on the log.
-  recipientUserId String? @db.Uuid @map("recipient_user_id")
+  recipientUserId String? @map("recipient_user_id") @db.Uuid
   businessId      String? @map("business_id")
   enquiryId       String? @map("enquiry_id")
 
   /// Why it was skipped or deferred, for the seller's own audit of their alerts.
-  reason      String?
+  reason       String?
   scheduledFor DateTime? @map("scheduled_for")
-  sentAt      DateTime? @map("sent_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
+  sentAt       DateTime? @map("sent_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
   template NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
@@ -1258,7 +1310,7 @@ model NotificationDelivery {
 model ReviewRequest {
   id         String   @id @default(cuid())
   businessId String   @map("business_id")
-  buyerId    String   @db.Uuid @map("buyer_id")
+  buyerId    String   @map("buyer_id") @db.Uuid
   /// The accepted quote that earns the right to ask.
   enquiryId  String   @map("enquiry_id")
   sentAt     DateTime @default(now()) @map("sent_at")

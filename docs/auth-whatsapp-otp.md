@@ -85,6 +85,61 @@ add it. Returns 202 on accept — delivery is asynchronous, so a 202 is not proo
 The button component is what makes the WhatsApp one-tap copy affordance appear. Meta
 requires both components to carry the same value on an authentication template.
 
+## Built, and what it is wired to — handoff 2 step 2
+
+The flow is complete and the delivery leg is pluggable, which is what makes the
+rest of it testable while WhatsApp is blocked.
+
+```
+lib/auth/otp/sender.ts     the interface: one method, carry six digits
+lib/auth/otp/bird.ts       Bird EU1, the WhatsApp authentication template
+lib/auth/otp/console.ts    prints the code; refuses to construct in production
+lib/auth/otp/index.ts      resolveOtpSender() — Bird when configured, console
+                           in development, and a throw in production rather
+                           than a silent downgrade
+app/api/auth/send-otp      the hook: verify the signature on the raw body,
+                           check the per-number cooldown, then deliver
+lib/auth/webhook.ts        Standard Webhooks verification, constant time
+lib/auth/throttle.ts       the two policies, and why they differ
+lib/auth/flow.ts           the seven states board 7a draws
+```
+
+## What the live project actually does
+
+Checked against the project rather than the documentation, 24 Aug 2026.
+
+| | State |
+|---|---|
+| `external.phone` | **false**. Flipping it needs the Management API and a personal access token, which this environment does not have. |
+| `external.email` | true. |
+| Email OTP delivery | Works, on the **built-in SMTP: two messages an hour**. That is a development convenience, not an email service. A real SMTP provider is required before launch, and it is a separate decision from the WhatsApp one. |
+| Reserved TLDs | Rejected as undeliverable — `someone@harbour.example` comes back `email_address_invalid`. Worth knowing before writing a fixture. |
+| OTP length | The project issues **eight** digits. Board 7a says six. `OTP_LENGTH` in `lib/auth/constants.ts` is 6 and only sizes the field; the field itself accepts four to ten so a mismatch cannot lock anybody out. Set the project to 6 to make the hint true. |
+| OTP expiry | Set the project's `MAILER_OTP_EXP` / `SMS_OTP_EXP` to 600 to match the ten minutes the screen and the message quote. |
+
+## Testing the round trip without a send
+
+`POST /auth/v1/admin/generate_link` returns the OTP Supabase generated and sends
+no mail. That is the one leg blocked on outside configuration, so it is the one
+leg worth substituting — everything after it in
+`tests/integration/auth-flow.test.ts` is the production path: `verifyOtp`, the
+profile row, the roles claim, the suspension check and the throttle.
+
+It needs `SUPABASE_SECRET_KEY`, which CI does not have, so those tests skip
+there and say so. Giving CI a production service key is a decision to take
+deliberately, not one to make by writing a test that needs it.
+
+## A wrong code and an expired one are the same answer
+
+`verifyOtp` reports both as `otp_expired`, "Token has expired or is invalid",
+and it is right to: telling somebody a code expired confirms it was once valid.
+So the verify screen never claims to know which, and says "that code did not
+match" with an offer of a fresh one.
+
+`link_expired` — the state board 7a draws — is a **link** state. It comes from
+`/auth/callback`, where Supabase does report expiry explicitly in the query
+string, and it is reached by an emailed link rather than by a typed code.
+
 ## What is still missing
 
 1. **A Meta-approved authentication template.** Category must be `authentication`, with a
@@ -94,8 +149,13 @@ requires both components to carry the same value on an authentication template.
    `whatsapp_management:read` so it can be discovered from the API.
 3. **Phone provider is off** in Supabase (`phone: false`, `sms_provider: twilio`).
    Enable phone auth and register the hook URL under Authentication → Hooks.
-4. **`AUTH_HOOK_SECRET`** — generate with `openssl rand -hex 32`, paste the same value both
-   sides.
+   Needs the Management API and a personal access token.
+4. **A real SMTP provider.** The built-in one sends two messages an hour and
+   only exists for development. Until it is replaced, the email path works in
+   principle and not in volume.
+5. **`AUTH_HOOK_SECRET`** — generate with `openssl rand -hex 32`, paste the same value both
+   sides. The endpoint answers 500 without it rather than accepting unsigned
+   requests, because an unverified hook is an open OTP oracle.
 
 ## Open decision: fallback
 

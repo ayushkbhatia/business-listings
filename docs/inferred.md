@@ -426,3 +426,59 @@ The seed's historical refs use an older positional shape (`QT-8841-B2R1`) and
 are left as they are. A numeric suffix is appended if two suppliers on one
 enquiry share a mark, because `Quote.ref` is unique and a clash must not lose a
 quote.
+
+## Handoff 2, step 2 — auth
+
+### A wrong code cannot be told from an expired one
+Supabase answers both with `otp_expired`. Rather than pass its guess on as
+certainty, the verify screen says "that code did not match" and offers a fresh
+one. `link_expired` — the board 7a state — is reached only from
+`/auth/callback`, where Supabase does say so explicitly. Caught by a test that
+expected the two to differ; they do not.
+
+### Sign-in is enumeration-neutral, sign-up is not
+Asking for a code says the same thing whether or not the account exists, and the
+failed attempt is still counted so the throttle is not itself an oracle. Sign-up
+does say when an address is rejected, because an address that does not exist is
+the user's own typo and there is nothing to enumerate. Supplier numbers are
+published on their own storefronts anyway; buyer numbers are not, and this was
+the one place they could have been checked one at a time.
+
+### The intent to list is not the role
+Signup captures `wantsToList` on the profile. `seller_owner` is scoped to a
+business, and there is no business until the claim flow in handoff 3 attaches
+one, so granting the role at signup would grant it over nothing.
+
+### A provisional identity is a real Supabase user
+The alternative was a profile row with an id of our own, re-keyed on first
+sign-in — which means updating a primary key that Enquiry, Message, Review,
+ReviewRequest and SupplierReport all point at, under foreign keys that are
+`ON UPDATE NO ACTION`. Creating the lightweight identity as an unverified
+Supabase user makes the ids match from the start and removes the whole class of
+problem. `createProvisionalIdentity` is the seam step 3 calls.
+
+### A suspension has no reason column
+It lives on the audit row, where CLAUDE.md puts every staff state change and
+where a business suspension already keeps one. It is also not automatically the
+text to show the suspended person — an investigative note is for staff — so the
+screen names the date and offers an appeal instead.
+
+### Two throttles, because the risks are opposite
+Asking for a code is cheap to the user and costly to us: a WhatsApp
+authentication message to the UAE is priced per delivery, so there is a
+one-minute cooldown and five an hour. Submitting one is free to us and is the
+only thing between a six-digit number and an account: no cooldown, five wrong in
+fifteen minutes. Supabase enforces its own limits and does not expose the
+counter, so "too many attempts" could not be a designed state without our own
+record.
+
+### `Checkbox` had never worked uncontrolled
+Shipped in handoff 0. The tick and the filled box were driven by the `checked`
+prop, which is `undefined` on an uncontrolled checkbox — so a user could click
+it, the DOM would update, and nothing visible would change. Every gallery
+specimen was controlled, so nothing caught it. Now driven by `:checked` in CSS,
+which is how `Radio` was already written.
+
+### `tsconfig.target` is ES2020
+Raised in step 1 for bigint literals in the quote arithmetic. Recorded here too
+because it is a project-wide setting that arrived inside a feature commit.
