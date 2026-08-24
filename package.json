@@ -23,6 +23,7 @@
     "verify": "pnpm typecheck && pnpm lint && pnpm check:tokens && pnpm check:schema && pnpm test && pnpm test:integration && pnpm build",
     "postinstall": "prisma generate",
     "matrix": "tsx scripts/print-matrix.mts",
+    "measure": "NODE_OPTIONS=--conditions=react-server tsx scripts/measure-response-times.mts",
     "check:contrast": "tsx scripts/contrast-audit.mts",
     "report:contrast": "tsx scripts/contrast-report.mts",
     "check:formatters": "tsx scripts/check-formatter-coverage.mts",

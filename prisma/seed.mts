@@ -23,6 +23,7 @@ import {
 } from "./seed-data.mjs";
 import { DN_SYNONYMS, sizeAliases } from "../lib/trade/nominal-size.js";
 import { matchLine } from "../lib/quote/match.js";
+import { medianResponseMs, windowStart } from "../lib/metrics/response-time.js";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL! }),
@@ -341,7 +342,16 @@ async function main() {
         source: claimed ? pick(["licence_import", "self_added"]) : "licence_import",
         publishedAt: days(-int(10, 400)),
         themePreset: claimed && planId === "pro" ? pick(THEMES) : null,
-        responseTimeMedianMs: claimed ? int(20, 2600) * 60_000 : null,
+        /*
+         * `responseTimeMedianMs` used to be invented here, which criterion 5
+         * forbids — it is derived from real reply timestamps now, by the same
+         * functions the scheduled job uses. The draw it used to make stays,
+         * discarded: the PRNG is a sequence, and removing a draw renames every
+         * business generated after it, which renamed the slugs a dozen test
+         * files pin. A deliberate discarded draw is a smaller lie than a
+         * fabricated reply time, and cheaper than churning every fixture.
+         */
+        ...(claimed ? (int(20, 2600), {}) : {}),
         profileStrength: claimed ? int(38, 98) : 12,
         specCompleteness: claimed ? Number((0.4 + rnd() * 0.6).toFixed(2)) : null,
         ratingOverall: null,
@@ -404,6 +414,7 @@ async function main() {
   await seedNotificationTemplates(prisma);
   await seedProducts(prisma, businesses, catBySlug, fieldId, template.id);
   await seedEnquiries(prisma, businesses, buyer.id, buyerTwo.id, buyerCompany.id);
+  await seedReplyHistory(prisma, businesses, buyerTwo.id);
   await seedCommercials(prisma, businesses);
   await seedTrust(prisma, businesses, opsLead.id, moderator.id, buyer.id);
   await seedSignals(prisma, businesses, buyer.id, catBySlug);
@@ -1082,6 +1093,101 @@ function nominalSizeOf(specValues: unknown): string | null {
   return null;
 }
 
+/**
+ * Past enquiries, so response time has something real to measure.
+ *
+ * Every claimed business needs at least MIN_SAMPLE answered enquiries inside
+ * the ninety-day window or its median is honestly null — and a directory whose
+ * every supplier reads "not enough enquiries to measure" teaches a reviewer
+ * nothing about the state it is meant to show.
+ *
+ * Latencies are drawn per business from a fixed profile, so the bands are all
+ * represented: some suppliers answer inside the hour, some take a day, and the
+ * storefront shows green, amber and red rather than one colour.
+ */
+async function seedReplyHistory(db: Db, businesses: Biz[], buyerId: string) {
+  console.log("→ reply history");
+  const claimed = businesses.filter((b) => b.claim === "claimed");
+  if (claimed.length === 0) return;
+
+  // Minutes to first reply. Index into this by position, so the fixed PRNG
+  // gives the same supplier the same character every run.
+  const PROFILES: readonly number[][] = [
+    [18, 25, 40, 32, 22], // fast: well under two hours
+    [45, 90, 70, 110, 65], // fast to moderate
+    [150, 210, 190, 260, 175], // moderate: two to six hours
+    [400, 520, 460, 610, 480], // slow: beyond six
+    [55, 75, 240, 95, 80], // mostly fast, one bad day
+  ];
+
+  let created = 0;
+  for (const [i, business] of claimed.entries()) {
+    /*
+     * One claimed, published supplier is left with no history, so the
+     * unmeasured state has a public example. It is the state a new listing is
+     * in on its first day, and a directory where every supplier already has a
+     * number never shows a reviewer what that looks like.
+     */
+    if (i === 1) continue;
+
+    const profile = PROFILES[i % PROFILES.length]!;
+    for (const [j, minutes] of profile.entries()) {
+      // Spread across the window so all of them are inside ninety days.
+      const deliveredAt = days(-(6 + j * 11 + (i % 5)));
+      const enquiry = await db.enquiry.create({
+        data: {
+          ref: `ENQ-H${String(i).padStart(2, "0")}${j}`,
+          buyerId,
+          requirement: "Historical enquiry, kept so response time has something to measure.",
+          closesAt: new Date(deliveredAt.getTime() + 7 * 86_400_000),
+          createdAt: deliveredAt,
+          lines: { create: [{ description: "Valves, assorted", qty: 10, sortOrder: 0 }] },
+        },
+        select: { id: true },
+      });
+      await db.enquiryRecipient.create({
+        data: {
+          enquiryId: enquiry.id,
+          businessId: business.id,
+          state: "quoted",
+          createdAt: deliveredAt,
+          openedAt: new Date(deliveredAt.getTime() + minutes * 30_000),
+          firstReplyAt: new Date(deliveredAt.getTime() + minutes * 60_000),
+        },
+      });
+      created += 1;
+    }
+  }
+  console.log(`   ${created} answered enquiries across ${claimed.length} businesses`);
+}
+
+/** The job's own functions, so the seed and production cannot disagree. */
+async function deriveResponseTimes(db: Db) {
+  const since = windowStart(NOW);
+  const rows = await db.enquiryRecipient.findMany({
+    where: { createdAt: { gte: since }, business: { claimStatus: "claimed", suspendedAt: null } },
+    select: { businessId: true, createdAt: true, firstReplyAt: true },
+  });
+
+  const byBusiness = new Map<string, { deliveredAt: Date; firstReplyAt: Date | null }[]>();
+  for (const row of rows) {
+    const list = byBusiness.get(row.businessId) ?? [];
+    list.push({ deliveredAt: row.createdAt, firstReplyAt: row.firstReplyAt });
+    byBusiness.set(row.businessId, list);
+  }
+
+  let measured = 0;
+  for (const [businessId, observations] of byBusiness) {
+    const median = medianResponseMs(observations);
+    await db.business.update({
+      where: { id: businessId },
+      data: { responseTimeMedianMs: median, derivedAt: NOW },
+    });
+    if (median !== null) measured += 1;
+  }
+  console.log(`   ${measured} of ${byBusiness.size} businesses have a measurable reply time`);
+}
+
 async function seedCommercials(db: Db, businesses: Biz[]) {
   console.log("→ subscriptions, placements, invoices");
   const paying = businesses.filter((b) => b.claim === "claimed").slice(0, 12);
@@ -1365,21 +1471,14 @@ async function recomputeDerived(db: Db) {
     where r."business_id" = b."id";
   `);
 
-  await db.$executeRawUnsafe(`
-    update "business" b set
-      "response_time_median_ms" = m.median
-    from (
-      select er."business_id",
-             (percentile_cont(0.5) within group (
-               order by extract(epoch from (er."first_reply_at" - e."created_at")) * 1000
-             ))::int as median
-      from "enquiry_recipient" er
-      join "enquiry" e on e."id" = er."enquiry_id"
-      where er."first_reply_at" is not null
-      group by er."business_id"
-    ) m
-    where m."business_id" = b."id";
-  `);
+  /*
+   * Response time is derived here, by the same functions the scheduled job
+   * uses — not invented at creation and not computed by a second hand-written
+   * median that would drift from the first. Criterion 5 asks for measured,
+   * never claimed, and a seed that claims one is a seed that has already
+   * broken it.
+   */
+  await deriveResponseTimes(db);
 
   await db.$executeRawUnsafe(`
     update "business" b set
