@@ -756,3 +756,48 @@ fixing properly when something else touches the generator.
 The job imports `server-only`, whose package main throws outside a React Server
 Component; its `react-server` export condition is a no-op. Scripts that touch
 server modules carry the flag rather than the fence being weakened.
+## Handoff 2, step 7 — criterion 11, the seller screens
+
+### The gap closed by signing in, not by weakening the fence
+Four steps shipped their seller screens with no browser test, because Playwright
+builds for production and `lib/auth/dev-seller.ts` is deliberately inert there.
+The answer was never to make the development seat work in production — it was
+to sign in properly, which step 2 built. `tests/e2e/auth.setup.ts` provisions a
+seller, signs in through the real verify form, and saves the session; the
+`seller` project reuses it.
+
+The only substitution is delivery: `admin.generateLink` returns the code
+Supabase generated without sending it. Everything after — verifyOtp, the
+profile lookup, the roles claim, the redirect to /dashboard/leads — is the
+production path. If the auth flow breaks, the setup fails loudly rather than
+producing forty confusing failures.
+
+### The seller projects are not registered without a key
+Rather than registered and skipping. A suite that silently covers less than it
+claims is worse than one that is visibly smaller, and the config says so on
+stderr when it happens.
+
+### Playwright cannot import the generated Prisma client
+It transforms test files to CommonJS and the client uses `import.meta`. The
+setup talks to Postgres through `pg` instead; three statements do not need an
+ORM.
+
+### The dashboard nav was full of dead links
+Handoff 1's rule — "a `later` route is named so the nav shape is right now, and
+is not a link until its handoff lands. No dead links" — was implemented in
+AppSidebar and never applied to the dashboard config. Twelve of sixteen items
+pointed at routes that do not exist. The first browser test signed in as a
+seller found them all. Every unbuilt item is `later` now, on both the dashboard
+and the admin nav.
+
+### Which exposed a second defect
+With most items rendering as text rather than links, the sidebar's scrollable
+region had no focusable descendant — so it could not be scrolled by keyboard at
+all. It carries `tabIndex={0}` now. Axe found it the moment the nav changed,
+which is the argument for having had these tests four steps ago.
+
+### One shared Supabase user across environments
+The e2e seller is `bl.e2e.seller@gmail.com` in the real Supabase project, and
+CI and a local run share it. The setup deletes any leftover before creating
+one, so at most one accumulates — but two runs at the same moment would race.
+Worth a per-run suffix if that ever bites.
