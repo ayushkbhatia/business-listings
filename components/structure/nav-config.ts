@@ -99,8 +99,8 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
     key: "catalogue",
     labelKey: "nav.group.catalogue",
     items: [
-      { key: "products", labelKey: "nav.products", href: "/dashboard/products", capability: "product.edit" , later: true },
-      { key: "media", labelKey: "nav.media", href: "/dashboard/media", capability: "listing.edit" , later: true },
+      { key: "products", labelKey: "nav.products", href: "/dashboard/products", capability: "product.edit" },
+      { key: "media", labelKey: "nav.media", href: "/dashboard/media", capability: "listing.edit" },
     ],
   },
   {

@@ -74,6 +74,7 @@ model User {
   contactReveals ContactReveal[]
   savedSearches  SavedSearch[]
   reviewRequests ReviewRequest[]
+  importRuns     ImportRun[]
 
   @@index([businessId])
   @@map("user")
@@ -215,6 +216,7 @@ model Category {
   businesses      BusinessCategory[]
   products        Product[]
   placements      PlacementSlot[]
+  importMappings  ImportMapping[]
 
   @@index([parentId])
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
@@ -439,6 +441,8 @@ model Business {
   sellerTemplates        SellerTemplate[]
   recipients             EnquiryRecipient[]
   missedEnquiries        MissedEnquiry[]
+  importRuns             ImportRun[]
+  importMappings         ImportMapping[]
   quotes                 Quote[]
   messages               Message[]
   reviews                Review[]
@@ -559,12 +563,17 @@ model Product {
   searchText   String?       @map("search_text")
   description  String?
   status       ProductStatus @default(draft)
+  /// Which import created this row, so a run can be undone without guessing.
+  importRunId  String?       @map("import_run_id")
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
   // NO price. NO currency. NO tier pricing. Prices live on quote_line only.
+  // The CSV importer is the widest path into this table and refuses a price
+  // column outright — see lib/import/columns.ts.
 
   business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  importRun  ImportRun?  @relation(fields: [importRunId], references: [id], onDelete: SetNull)
   category   Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   media      Media[]
   documents  Document[]
@@ -578,6 +587,7 @@ model Product {
   /// substring of a machine string; a stemmer helps with neither, and 4" is
   /// not a legal tsquery. Declared here rather than only in raw SQL so
   /// `migrate diff` stops reading it as drift and generating a DROP.
+  @@index([importRunId])
   @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("product")
 }
@@ -753,6 +763,60 @@ model EnquiryLine {
 /// It is also the structural half of rule 1. There is no buyer relation here at
 /// all, so the missed-enquiry list on board 11a can show the requirement and
 /// the date and has no column to leak a name from.
+/// One CSV upload, and everything needed to undo it.
+///
+/// Criterion 7 gives a seller twenty-four hours to reverse an import. That is
+/// only possible if the rows a run created are identifiable, which is what
+/// `Product.importRunId` is for — counting backwards from a timestamp would
+/// also catch anything the seller typed by hand in the same minute.
+///
+/// `columnPlan` is the mapping as it was actually applied, not as it was
+/// offered. It is what the reversal screen shows and what "save this mapping
+/// for next month" copies from, and keeping the applied version means a
+/// mapping that was overridden at the last moment cannot come back different.
+model ImportRun {
+  id         String    @id @default(cuid())
+  businessId String    @map("business_id")
+  actorId    String    @map("actor_id") @db.Uuid
+  filename   String
+  /// Rows in the file, including ones that were skipped.
+  rowCount   Int       @map("row_count")
+  /// Products actually created.
+  createdCount Int     @map("created_count")
+  columnPlan Json      @map("column_plan")
+  /// Set when the seller reverses it. A reverted run is kept, not deleted.
+  revertedAt DateTime? @map("reverted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actor    User      @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  products Product[]
+
+  @@index([businessId, createdAt])
+  @@map("import_run")
+}
+
+/// A column mapping the seller saved to use again.
+///
+/// Suppliers re-upload the same export from the same system every month. Making
+/// them re-map thirty columns each time is how a catalogue stops being updated.
+model ImportMapping {
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  name       String
+  categoryId String?  @map("category_id")
+  columnPlan Json     @map("column_plan")
+  createdAt  DateTime @default(now()) @map("created_at")
+  usedAt     DateTime? @map("used_at")
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@unique([businessId, name])
+  @@index([businessId])
+  @@map("import_mapping")
+}
+
 model MissedEnquiry {
   enquiryId  String     @map("enquiry_id")
   businessId String     @map("business_id")
