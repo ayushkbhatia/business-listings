@@ -360,3 +360,10 @@ this does not block — but it compounds with the contrast gap on exactly the sa
 Facet rows in the filter rail were 22px tall against a stated floor of 44px on
 mobile. Fine with a mouse, bad with a thumb, and a filter rail on a phone is all
 thumb.
+
+### Raw-SQL indexes and `prisma migrate dev`
+An index created in a hand-written migration is invisible to `schema.prisma`,
+so the next `migrate dev` reads it as drift and generates a migration to drop
+it. Any future raw-SQL object needs `IF NOT EXISTS` on creation and `IF EXISTS`
+on removal, and the migration that follows it needs reading before it is
+applied. See docs/database.md.

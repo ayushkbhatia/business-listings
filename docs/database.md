@@ -61,8 +61,33 @@ enforces, so a manual SQL fix cannot quietly break them:
 - a quote line has positive quantity and non-negative price
 - an enquiry reaches at most 8 businesses (deferred constraint trigger)
 
-Plus GIN indexes on `product.search_text` and `business.display_name`, which is
-what lets a `DN100` query reach a product the seller typed as `4"`.
+## Search indexes
+
+Trigram, not full text. `20260824100000_trigram_search` puts GIN `gin_trgm_ops`
+indexes on `product.search_text`, `business.display_name` and
+`business.trade_name`, plus a plain GIN on `category.synonyms` for the exact
+array match an Arabic term needs.
+
+Full text was the first attempt and was wrong for this data: it stems and
+tokenises, while a buyer typing `DN100` or `4"` means an exact substring of a
+machine string — and `4"` is not a legal tsquery at all.
+
+**Raw-SQL indexes have to be idempotent.** `schema.prisma` cannot see an index
+declared in a hand-written migration, so the next `prisma migrate dev` treats
+it as drift and generates a migration to drop it. That happened here: a
+handwritten migration created four indexes, Prisma immediately wrote and
+applied a second migration dropping all four, and the repo kept only the
+second. The database ran without any search index until it was caught by CI
+failing to replay the history on a fresh Postgres. Every statement in the
+replacement is `IF EXISTS` / `IF NOT EXISTS`.
+
+At seed scale the planner picks a sequential scan over 97 products, which is
+correct. `set enable_seqscan = off` confirms the index is usable:
+
+```
+Bitmap Heap Scan on product
+  ->  Bitmap Index Scan on product_search_text_trgm_idx
+```
 
 ## Seed
 
