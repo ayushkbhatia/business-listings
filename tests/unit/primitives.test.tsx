@@ -9,6 +9,7 @@ import {
   IconButton,
   Radio,
   RadioGroup,
+  Select,
   SegmentedControl,
   Stepper,
   TimePair,
@@ -113,6 +114,49 @@ describe("Checkbox", () => {
   it("sets indeterminate as a property, which React will not write", () => {
     render(<Checkbox indeterminate label="Some" />);
     expect((screen.getByRole("checkbox", { name: "Some" }) as HTMLInputElement).indeterminate).toBe(true);
+  });
+});
+
+describe("Select", () => {
+  it("is controlled when given a value, even with a placeholder", () => {
+    // Passing value and defaultValue together makes React warn and leaves the
+    // element ambiguous. It used to do exactly that on every controlled select
+    // that also had a placeholder, which is most of them.
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(
+      <Select
+        aria-label="Emirate"
+        placeholder="Choose an emirate"
+        value="dubai"
+        onChange={() => {}}
+        options={[{ value: "dubai", label: "Dubai" }]}
+      />,
+    );
+    expect(screen.getByRole("combobox", { name: "Emirate" })).toHaveValue("dubai");
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("starts on the placeholder when uncontrolled", () => {
+    render(
+      <Select
+        aria-label="Emirate"
+        placeholder="Choose an emirate"
+        options={[{ value: "dubai", label: "Dubai" }]}
+      />,
+    );
+    expect(screen.getByRole("combobox", { name: "Emirate" })).toHaveValue("");
+  });
+
+  it("honours a defaultValue", () => {
+    render(
+      <Select
+        aria-label="Emirate"
+        defaultValue="dubai"
+        options={[{ value: "dubai", label: "Dubai" }, { value: "sharjah", label: "Sharjah" }]}
+      />,
+    );
+    expect(screen.getByRole("combobox", { name: "Emirate" })).toHaveValue("dubai");
   });
 });
 

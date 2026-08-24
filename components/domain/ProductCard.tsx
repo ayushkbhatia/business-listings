@@ -1,5 +1,5 @@
 import { cn } from "@/lib/cn";
-import { Button } from "@/components/primitives";
+import { Button, buttonClassName } from "@/components/primitives";
 import { Card } from "@/components/structure";
 import { ImagePlaceholder, StatusBadge, type StatusTone } from "@/components/display";
 import { formatCount } from "@/lib/format";
@@ -42,6 +42,11 @@ export interface ProductCardProps {
   /** Grid tile, or a compact row inside a catalogue list. */
   layout?: "grid" | "row";
   href?: string;
+  /**
+   * Where the enquiry affordance goes, carrying this product as a line. Absent
+   * leaves it disabled — the state handoff 1 shipped and the gallery shows.
+   */
+  enquireHref?: string;
 }
 
 const AVAILABILITY_TONE: Record<Availability, StatusTone> = {
@@ -58,7 +63,7 @@ const AVAILABILITY_KEY = {
   out_of_stock: "availability.out_of_stock",
 } as const;
 
-export function ProductCard({ product, layout = "grid", href }: ProductCardProps) {
+export function ProductCard({ product, layout = "grid", href, enquireHref }: ProductCardProps) {
   const link = href ?? `/b/${product.businessSlug}/p/${product.slug}`;
   const outOfStock = product.availability === "out_of_stock";
 
@@ -149,9 +154,23 @@ export function ProductCard({ product, layout = "grid", href }: ProductCardProps
           says so out loud rather than leaving a gap the eye reads as missing.
         */}
         <span className="text-caption text-muted">{t("product.no_price")}</span>
-        <Button size="sm" variant={outOfStock ? "secondary" : "primary"} disabled title={t("enquiry.disabled")}>
-          {outOfStock ? t("product.notify") : t("product.enquire")}
-        </Button>
+        {/*
+          Live from handoff 2 step 3. Without an href it stays disabled — the
+          gallery still shows that state, and so does any surface with nowhere
+          to send the buyer.
+        */}
+        {enquireHref ? (
+          <a
+            href={enquireHref}
+            className={buttonClassName({ size: "sm", variant: outOfStock ? "secondary" : "primary" })}
+          >
+            {outOfStock ? t("product.notify") : t("product.enquire")}
+          </a>
+        ) : (
+          <Button size="sm" variant={outOfStock ? "secondary" : "primary"} disabled title={t("enquiry.disabled")}>
+            {outOfStock ? t("product.notify") : t("product.enquire")}
+          </Button>
+        )}
       </div>
     </div>
   );

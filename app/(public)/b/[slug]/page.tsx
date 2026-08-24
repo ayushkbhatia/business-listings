@@ -10,12 +10,16 @@ import {
   getSimilarClaimedBusinesses,
   getSpecTemplate,
 } from "@/lib/db/queries";
-import { formatCount, formatDate, formatDuration, maskPhone, maskTRN } from "@/lib/format";
+import { formatCount, formatDate, formatDuration, maskTRN } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { primarySize } from "@/lib/spec";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { StorefrontHeader, storefrontCrumbs } from "./_storefront";
+import { ContactCard } from "./ContactCard";
+import { EnquireButton } from "./EnquireDrawer";
+import { EMIRATES } from "@/lib/uae";
+import { getActor } from "@/lib/auth/session";
 
 export const revalidate = 300;
 
@@ -84,6 +88,10 @@ type Business = NonNullable<Awaited<ReturnType<typeof getBusinessBySlug>>>;
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function ClaimedStorefront({ business }: { business: Business }) {
+  // Only to decide whether the composer asks for a phone number. A buyer with
+  // no account can still send one — that is the point of the provisional
+  // identity — they just have to say where the quotes should go.
+  const actor = await getActor();
   const [products, template] = await Promise.all([
     getBusinessProducts(business.id, { take: 4 }),
     getSpecTemplate(business.primaryCategoryId),
@@ -186,6 +194,7 @@ async function ClaimedStorefront({ business }: { business: Business }) {
                 <div className="mt-3 grid gap-[var(--gutter)] sm:grid-cols-2">
                   {products.map((product) => (
                     <ProductCard
+                      enquireHref={`/rfq/new?to=${business.slug}`}
                       key={product.id}
                       product={{
                         slug: product.slug,
@@ -292,29 +301,43 @@ async function ClaimedStorefront({ business }: { business: Business }) {
               )}
             </Card>
 
+            {/*
+              Masking is not a growth trick — the reveal is the event that
+              proves the platform delivered the enquiry, and it is what a
+              seller's subscription is ultimately judged on.
+            */}
             <div className="mt-3">
-              <Card>
-                <p className="text-caption text-muted">{t("storefront.phone")}</p>
-                {/*
-                  Masked until revealed, and the reveal is inert this handoff.
-                  Masking is not a growth trick — the reveal is the event that
-                  proves the platform delivered the enquiry.
-                */}
-                <p className="mt-0.5 font-mono text-body text-ink">
-                  {head?.phone ? maskPhone(head.phone) : t("table.not_provided")}
-                </p>
-                <div className="mt-2">
-                  <Button size="sm" variant="secondary" block disabled title={t("enquiry.disabled")}>
-                    {t("storefront.reveal")}
-                  </Button>
-                </div>
-                <div className="mt-2">
-                  <Button block disabled title={t("enquiry.disabled")}>
-                    {t("product.enquire")}
-                  </Button>
-                </div>
-                <p className="mt-2 text-caption text-faint">{t("enquiry.disabled")}</p>
-              </Card>
+              <ContactCard
+                businessId={business.id}
+                businessSlug={business.slug}
+                phone={head?.phone ?? null}
+                whatsapp={head?.whatsapp ?? null}
+                enquire={
+                  <EnquireButton
+                    block
+                    businessId={business.id}
+                    businessSlug={business.slug}
+                    displayName={business.displayName}
+                    categoryId={business.primaryCategoryId}
+                    emirates={EMIRATES}
+                    signedIn={Boolean(actor)}
+                    triggerLabel={t("product.enquire")}
+                    recipient={{
+                      businessId: business.id,
+                      displayName: business.displayName,
+                      areaName: head?.area?.name ?? null,
+                      verificationTier: business.verificationTier,
+                      responseLabel:
+                        business.responseTimeMedianMs === null
+                          ? t("response.unmeasured")
+                          : t("response.median", {
+                              duration: formatDuration(business.responseTimeMedianMs),
+                            }),
+                      pinned: true,
+                    }}
+                  />
+                }
+              />
             </div>
           </aside>
         </div>
@@ -430,6 +453,7 @@ async function UnclaimedStorefront({ business }: { business: Business }) {
               <div className="flex flex-col gap-2 p-3">
                 {similar.businesses.map((other) => (
                   <ListingCard
+                    enquireHref={`/rfq/new?to=${other.slug}`}
                     key={other.id}
                     context="map"
                     business={{

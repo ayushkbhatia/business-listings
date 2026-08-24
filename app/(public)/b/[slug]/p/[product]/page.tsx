@@ -1,15 +1,17 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Button } from "@/components/primitives";
 import { Breadcrumb, Card, Panel, PublicShell } from "@/components/structure";
 import { ImagePlaceholder, StatusBadge, type StatusTone } from "@/components/display";
 import { CompletenessMeter, SpecTable, VerificationBadge, tierSpec } from "@/components/domain";
 import { getProductBySlug, getSpecTemplate } from "@/lib/db/queries";
-import { formatCount, formatDate } from "@/lib/format";
+import { formatCount, formatDate, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { countFilled, toSpecRows } from "@/lib/spec";
+import { countFilled, primarySize, toSpecRows } from "@/lib/spec";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
+import { EnquireButton } from "../../EnquireDrawer";
+import { EMIRATES } from "@/lib/uae";
+import { getActor } from "@/lib/auth/session";
 
 /** Rebuilt on demand, then cached for five minutes. A catalogue is not a feed. */
 export const revalidate = 300;
@@ -69,6 +71,9 @@ export default async function ProductPage({ params }: Params) {
   const template = await getSpecTemplate(product.categoryId);
   const fields = template?.fields ?? [];
   const rows = toSpecRows(fields, product.specValues);
+  const sizeLabel = primarySize(fields, product.specValues);
+  // Only to decide whether the composer asks for a phone number.
+  const actor = await getActor();
   const filled = countFilled(fields, product.specValues);
   const spec = tierSpec(business.verificationTier);
   const outOfStock = product.availability === "out_of_stock";
@@ -227,12 +232,48 @@ export default async function ProductPage({ params }: Params) {
                 line is the answer rather than a gap the eye reads as missing.
               */}
               <p className="text-caption text-muted">{t("product.no_price")}</p>
+              {/*
+                Live from handoff 2 step 3, and it carries this product in as a
+                line — a buyer standing on a product page is not writing a
+                requirement from scratch, they are pointing at one thing.
+              */}
               <div className="mt-2">
-                <Button block disabled title={t("enquiry.disabled")}>
-                  {outOfStock ? t("product.notify") : t("product.enquire")}
-                </Button>
+                <EnquireButton
+                  block
+                  businessId={business.id}
+                  businessSlug={business.slug}
+                  displayName={business.displayName}
+                  categoryId={business.primaryCategoryId}
+                  emirates={EMIRATES}
+                  signedIn={Boolean(actor)}
+                  triggerLabel={outOfStock ? t("product.notify") : t("product.enquire")}
+                  initialRequirementSeed={product.name}
+                  initialLines={[
+                    {
+                      key: product.id,
+                      description: product.name,
+                      qty: product.minOrderQty ?? 1,
+                      unit: "pcs",
+                      size: sizeLabel ?? "",
+                      targetUnitPriceAed: "",
+                    },
+                  ]}
+                  recipient={{
+                    businessId: business.id,
+                    displayName: business.displayName,
+                    areaName: null,
+                    verificationTier: business.verificationTier,
+                    responseLabel:
+                      business.responseTimeMedianMs === null
+                        ? t("response.unmeasured")
+                        : t("response.median", {
+                            duration: formatDuration(business.responseTimeMedianMs),
+                          }),
+                    pinned: true,
+                  }}
+                />
               </div>
-              <p className="mt-2 text-caption text-faint">{t("enquiry.disabled")}</p>
+              <p className="mt-2 text-caption text-faint">{t("storefront.enquiry_note")}</p>
             </div>
           </Card>
 

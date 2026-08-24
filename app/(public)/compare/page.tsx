@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Button } from "@/components/primitives";
+import { buttonClassName } from "@/components/primitives";
 import { Close } from "@/components/primitives/icons";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { Tag } from "@/components/display";
@@ -75,12 +75,16 @@ export default async function ComparePage({ searchParams }: Props) {
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
             {/*
-              Board 10d's "Enquire with all 4". Present in its real place,
-              styled, disabled — the enquiry engine is handoff 2.
+              Board 10d's "Enquire with all 4", live from handoff 2 step 3.
+              Every compared supplier is pinned, so the fan-out keeps them and
+              tops up with whoever else can answer.
             */}
-            <Button disabled title={t("enquiry.disabled")}>
+            <a
+              href={`/rfq/new?to=${businesses.map((b) => b.slug).join(",")}`}
+              className={buttonClassName()}
+            >
               {t("compare.enquire_all", { count: businesses.length })}
-            </Button>
+            </a>
             <p className="text-caption text-muted">{t("compare.no_price")}</p>
           </div>
         </>

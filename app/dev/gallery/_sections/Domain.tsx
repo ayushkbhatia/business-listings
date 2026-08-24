@@ -2,6 +2,7 @@
 
 import {
   CompletenessMeter,
+  EnquiryComposer,
   QuoteLineEditor,
   ListingCard,
   ProductCard,
@@ -14,6 +15,7 @@ import {
   type Availability,
   type ListingCardBusiness,
   type ListingContext,
+  type EnquiryComposerLabels,
   type QuoteLineDraft,
   type QuoteLineEditorLabels,
 } from "@/components/domain";
@@ -335,6 +337,8 @@ export function Domain() {
         </States>
       </Section>
 
+      <EnquiryComposerSpecimens />
+
       <Section
         id="quote-line-editor"
         title="QuoteLineEditor"
@@ -511,3 +515,150 @@ const QUOTE_LABELS: QuoteLineEditorLabels = {
   badPriceError: (line) => t("quote.error.bad_price", { line }),
   nothingIncludedError: t("quote.error.nothing_included"),
 };
+
+/**
+ * The composer's two shapes. Both are the same form; the difference is how much
+ * of it is on screen at once.
+ */
+const ENQUIRY_LABELS: EnquiryComposerLabels = {
+  formLabel: t("rfq.sequence"),
+  steps: [t("rfq.step.need"), t("rfq.step.where"), t("rfq.step.who")],
+  // StepHeader already hands this a 1-based number.
+    stepOf: (current, total) => t("rfq.step_of", { current, total }),
+  requirement: t("rfq.requirement"),
+  requirementHint: t("rfq.requirement_hint"),
+  requirementPlaceholder: t("rfq.requirement_placeholder"),
+  lines: t("rfq.lines"),
+  linesHint: t("rfq.lines_hint"),
+  lineDescription: (n) => t("rfq.line_description_for", { number: n }),
+  lineQty: (n) => t("rfq.line_qty_for", { number: n }),
+  lineUnit: (n) => t("rfq.line_unit_for", { number: n }),
+  lineSize: (n) => t("rfq.line_size_for", { number: n }),
+  lineTarget: (n) => t("rfq.line_target_for", { number: n }),
+  lineTargetHint: t("rfq.line_target_hint"),
+  colDescription: t("rfq.line_description"),
+  colQty: t("rfq.line_qty"),
+  colUnit: t("rfq.line_unit"),
+  colSize: t("rfq.line_size"),
+  colTarget: t("rfq.line_target"),
+  addLine: t("rfq.add_line"),
+  removeLine: (n) => t("rfq.remove_line", { number: n }),
+  area: t("rfq.area"),
+  areaHint: t("rfq.area_hint"),
+  emirate: t("rfq.emirate"),
+  emirateOptions: [
+    { value: "dubai", label: "Dubai" },
+    { value: "sharjah", label: "Sharjah" },
+  ],
+  neededBy: t("rfq.needed_by"),
+  neededByHint: t("rfq.needed_by_hint"),
+  terms: t("rfq.terms"),
+  termsHint: t("rfq.terms_hint"),
+  termsOptions: [
+    { value: "", label: t("rfq.terms_any") },
+    { value: "net_30", label: t("terms.net_30") },
+  ],
+  closes: t("rfq.closes"),
+  closesHint: t("rfq.closes_hint"),
+  closesOptions: [{ value: "7", label: t("rfq.closes_days", { count: 7 }) }],
+  recipients: t("rfq.recipients"),
+  recipientsHint: t("rfq.recipients_hint"),
+  fanout: (count) => t("rfq.fanout", { count }),
+  fanoutLabel: t("rfq.fanout_label"),
+  fanoutNote: t("rfq.fanout_note"),
+  pinned: t("rfq.pinned"),
+  recipientsPreview: (count) => t("rfq.recipients_preview", { count }),
+  recipientsNone: t("rfq.recipients_none"),
+  privacy: t("rfq.privacy"),
+  contact: t("rfq.contact"),
+  contactHint: t("rfq.contact_hint"),
+  contactName: t("rfq.contact_name"),
+  contactNameHint: t("rfq.contact_name_hint"),
+  back: t("rfq.back"),
+  next: t("rfq.next"),
+  submit: t("rfq.submit"),
+  sending: t("rfq.sending"),
+  errorRequirement: t("rfq.requirement_required"),
+  errorLines: t("rfq.lines_required"),
+  errorContact: t("rfq.contact_required"),
+};
+
+const ENQUIRY_RECIPIENTS = [
+  {
+    businessId: "b1",
+    displayName: "Al Marwan Industrial Supplies LLC",
+    areaName: "Al Quoz Industrial 1",
+    verificationTier: 3,
+    responseLabel: t("response.median", { duration: formatDuration(7_200_000) }),
+    pinned: true,
+  },
+  {
+    businessId: "b2",
+    displayName: "Desert Anchor General Trading LLC",
+    areaName: "Industrial Area 4",
+    verificationTier: 2,
+    responseLabel: t("response.unmeasured"),
+  },
+];
+
+export function EnquiryComposerSpecimens() {
+  return (
+    <Section
+      id="enquiry-composer"
+      title="EnquiryComposer"
+      note="tier 4 · buyer side · one form, two shapes"
+    >
+      <States label="single seller — the composer on a storefront" stack>
+        <Frame>
+          <EnquiryComposer
+            shape="single"
+            labels={{ ...ENQUIRY_LABELS, formLabel: "Enquiry — single seller" }}
+            recipients={[ENQUIRY_RECIPIENTS[0]!]}
+          />
+        </Frame>
+      </States>
+
+      <States label="the fan-out wizard, on its first step" stack>
+        <Frame>
+          <EnquiryComposer
+            shape="wizard"
+            labels={{ ...ENQUIRY_LABELS, formLabel: "Enquiry — fan-out wizard" }}
+            recipients={ENQUIRY_RECIPIENTS}
+          />
+        </Frame>
+      </States>
+
+      <States label="lines carried in from a product tray" stack>
+        <Frame>
+          <EnquiryComposer
+            shape="single"
+            labels={{ ...ENQUIRY_LABELS, formLabel: "Enquiry — lines from a tray" }}
+            initialRequirement="Three items off your catalogue, for a plant room at Mussafah."
+            initialLines={[
+              { key: "a", description: "Resilient seated gate valve DN100", qty: 24, unit: "pcs", size: "DN100", targetUnitPriceAed: "" },
+              { key: "b", description: "Wafer butterfly valve DN200", qty: 6, unit: "pcs", size: "DN200", targetUnitPriceAed: "" },
+            ]}
+            recipients={[ENQUIRY_RECIPIENTS[0]!]}
+          />
+        </Frame>
+      </States>
+
+      <States label="sending, and a failure the server sent back" stack>
+        <Frame>
+          <EnquiryComposer
+            shape="single"
+            labels={{ ...ENQUIRY_LABELS, formLabel: "Enquiry — sending" }}
+            busy
+          />
+        </Frame>
+        <Frame>
+          <EnquiryComposer
+            shape="single"
+            labels={{ ...ENQUIRY_LABELS, formLabel: "Enquiry — refused by the server" }}
+            error={t("rfq.recipients_none")}
+          />
+        </Frame>
+      </States>
+    </Section>
+  );
+}

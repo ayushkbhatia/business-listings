@@ -94,11 +94,13 @@ test.describe("acceptance criterion 6 — zero results is a designed state", () 
     await expect(page.getByText(/Removing any single filter still returns nothing/)).toBeVisible();
   });
 
-  test("offers the RFQ path, disabled", async ({ page }) => {
+  test("offers the RFQ path, live, carrying the category", async ({ page }) => {
+    // The surface this matters on most: nobody in the directory lists it, so
+    // asking the trade is the only thing left to offer.
     await page.goto("/c/packaging-and-materials?tier=3");
-    const rfq = page.getByRole("button", { name: "Post a requirement" });
+    const rfq = page.getByRole("link", { name: "Post a requirement" });
     await expect(rfq).toBeVisible();
-    await expect(rfq).toBeDisabled();
+    await expect(rfq).toHaveAttribute("href", "/rfq/new?category=packaging-and-materials");
   });
 
   test("says the miss was recorded", async ({ page }) => {

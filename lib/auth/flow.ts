@@ -306,6 +306,12 @@ async function adoptProfile(
  * Returns the existing profile if that number is already known, provisional or
  * not. Two people cannot share a mobile, and a second enquiry from the same
  * number is the same buyer.
+ *
+ * It also recovers from the two stores having drifted apart. A Supabase auth
+ * user can outlive its profile row — a failed transaction, a half-finished
+ * cleanup — and without this, `createUser` fails on the duplicate phone and
+ * that number can never send an enquiry again. Finding the existing auth user
+ * and rebuilding the profile beside it is the repair.
  */
 export async function createProvisionalIdentity(input: {
   phone: string;
@@ -326,11 +332,22 @@ export async function createProvisionalIdentity(input: {
     phone_confirm: false,
     user_metadata: { full_name: input.fullName?.trim() ?? null, provisional: true },
   });
-  if (error || !data.user) return null;
+
+  let userId = data?.user?.id;
+
+  if (!userId) {
+    // The auth user may already exist with no profile row beside it. Adopt it
+    // rather than leave this number permanently unable to send an enquiry.
+    userId = await findAuthUserByPhone(identifier.value);
+    if (!userId) {
+      console.error("[auth] could not create a provisional identity", { cause: error?.message });
+      return null;
+    }
+  }
 
   await prisma.user.create({
     data: {
-      id: data.user.id,
+      id: userId,
       phone: identifier.value,
       fullName: input.fullName?.trim() ?? null,
       // No roles. It can own an enquiry and nothing else until it is claimed.
@@ -340,7 +357,27 @@ export async function createProvisionalIdentity(input: {
     },
   });
 
-  return { userId: data.user.id, created: true };
+  return { userId, created: true };
+}
+
+/**
+ * The Supabase auth user for a number, when one exists.
+ *
+ * The admin API has no lookup by phone, so this pages the list. It only runs on
+ * the drift path — a createUser that failed on a duplicate — so the cost lands
+ * on a case that should be rare and would otherwise be unrecoverable.
+ */
+async function findAuthUserByPhone(e164: string): Promise<string | undefined> {
+  const bare = e164.replace(/^\+/, "");
+  const admin = createAdminClient();
+  for (let page = 1; page <= 20; page += 1) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error || !data?.users?.length) return undefined;
+    const found = data.users.find((u) => u.phone === bare || u.phone === e164);
+    if (found) return found.id;
+    if (data.users.length < 200) return undefined;
+  }
+  return undefined;
 }
 
 /** Mirror roles into the JWT claim `getActor` reads. Service role only. */

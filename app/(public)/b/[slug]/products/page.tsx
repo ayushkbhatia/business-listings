@@ -1,13 +1,16 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Breadcrumb, PublicShell } from "@/components/structure";
-import { ProductCard } from "@/components/domain";
+
 import { getBusinessBySlug, getBusinessProducts, getSpecTemplate } from "@/lib/db/queries";
-import { formatCount } from "@/lib/format";
+import { formatCount, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { primarySize } from "@/lib/spec";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
+import { ProductTray } from "./ProductTray";
+import { EMIRATES } from "@/lib/uae";
+import { getActor } from "@/lib/auth/session";
 
 export const revalidate = 300;
 
@@ -37,9 +40,10 @@ export default async function CataloguePage({ params }: Params) {
   // An unclaimed listing has no catalogue, so the tab does not exist for it.
   if (!business || business.claimStatus === "unclaimed") notFound();
 
-  const [products, template] = await Promise.all([
+  const [products, template, actor] = await Promise.all([
     getBusinessProducts(business.id),
     getSpecTemplate(business.primaryCategoryId),
+    getActor(),
   ]);
   const fields = template?.fields ?? [];
 
@@ -68,24 +72,38 @@ export default async function CataloguePage({ params }: Params) {
           {products.length === 0 ? (
             <p className="mt-3 text-body-sm text-muted">{t("storefront.catalogue_empty")}</p>
           ) : (
-            <div className="mt-3 grid gap-[var(--gutter)] sm:grid-cols-2 lg:grid-cols-3">
-              {products.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  product={{
-                    slug: product.slug,
-                    businessSlug: business.slug,
-                    name: product.name,
-                    sku: product.sku,
-                    availability: product.availability,
-                    stockQty: product.stockQty,
-                    leadTimeDays: product.leadTimeDays,
-                    minOrderQty: product.minOrderQty,
-                    sizeLabel: primarySize(fields, product.specValues),
-                  }}
-                />
-              ))}
-            </div>
+            <ProductTray
+              businessId={business.id}
+              businessSlug={business.slug}
+              displayName={business.displayName}
+              categoryId={business.primaryCategoryId}
+              emirates={EMIRATES}
+              signedIn={Boolean(actor)}
+              recipient={{
+                businessId: business.id,
+                displayName: business.displayName,
+                areaName: business.locations[0]?.area?.name ?? null,
+                verificationTier: business.verificationTier,
+                responseLabel:
+                  business.responseTimeMedianMs === null
+                    ? t("response.unmeasured")
+                    : t("response.median", { duration: formatDuration(business.responseTimeMedianMs) }),
+                pinned: true,
+              }}
+              products={products.map((product) => ({
+                id: product.id,
+                slug: product.slug,
+                businessSlug: business.slug,
+                name: product.name,
+                sku: product.sku,
+                availability: product.availability,
+                stockQty: product.stockQty,
+                leadTimeDays: product.leadTimeDays,
+                minOrderQty: product.minOrderQty,
+                sizeLabel: primarySize(fields, product.specValues),
+                size: primarySize(fields, product.specValues) ?? null,
+              }))}
+            />
           )}
         </div>
       </div>

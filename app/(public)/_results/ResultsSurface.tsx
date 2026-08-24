@@ -187,6 +187,7 @@ export function ResultsList({
         <div className="grid gap-[var(--gutter)] sm:grid-cols-2 xl:grid-cols-3">
           {products.rows.map((product) => (
             <ProductCard
+              enquireHref={`/rfq/new?to=${product.business.slug}`}
               key={product.id}
               product={{
                 slug: product.slug,
@@ -226,6 +227,7 @@ export function ResultsList({
                 </div>
               )}
               <ListingCard
+                enquireHref={`/rfq/new?to=${business.slug}`}
                 context={business.claimStatus === "unclaimed" ? "unclaimed" : "search"}
                 business={{
                   slug: business.slug,

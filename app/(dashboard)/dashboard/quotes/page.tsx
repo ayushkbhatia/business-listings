@@ -17,14 +17,18 @@ import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 export const metadata = { title: "Quotes sent" };
 export const dynamic = "force-dynamic";
 
+/*
+ * Keyed to the QuoteStatus enum, all six of it. This carried `declined` and
+ * `withdrawn`, which are not states a quote has, and was missing `lost`, which
+ * is — so a lost quote rendered as "Draft".
+ */
 const STATE_TONE: Record<string, StatusTone> = {
   draft: "neutral",
   sent: "info",
   read: "info",
   accepted: "ok",
-  declined: "neutral",
+  lost: "neutral",
   expired: "warn",
-  withdrawn: "neutral",
 };
 
 const STATE_LABEL = {
@@ -32,9 +36,8 @@ const STATE_LABEL = {
   sent: "quotes.state.sent",
   read: "quotes.state.read",
   accepted: "quotes.state.accepted",
-  declined: "quotes.state.declined",
+  lost: "quotes.state.lost",
   expired: "quotes.state.expired",
-  withdrawn: "quotes.state.withdrawn",
 } as const;
 
 export default async function QuotesPage() {
@@ -132,6 +135,11 @@ function QuotesTable({ quotes }: { quotes: readonly QuoteRow[] }) {
                   <StatusBadge tone={STATE_TONE[quote.status] ?? "neutral"} size="sm" shape="chip">
                     {t(STATE_LABEL[quote.status as keyof typeof STATE_LABEL] ?? "quotes.state.draft")}
                   </StatusBadge>
+                  {quote.lostReason ? (
+                    <span className="mt-0.5 block text-caption text-muted">
+                      {t(`quotes.lost.${quote.lostReason}` as "quotes.lost.buyer_accepted_another")}
+                    </span>
+                  ) : null}
                 </td>
               </tr>
             ))}

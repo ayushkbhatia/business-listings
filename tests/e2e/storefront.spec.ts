@@ -160,11 +160,22 @@ test.describe("maps and masking", () => {
     expect(pins).toBeLessThanOrEqual(branchCount);
   });
 
-  test("phone numbers are masked and the reveal is inert", async ({ page }) => {
+  test("phone numbers are masked until the reveal is asked for", async ({ page }) => {
     await page.goto(`/b/${CLAIMED}`);
     const body = (await page.textContent("body")) ?? "";
     expect(body).toMatch(/•/);
-    await expect(page.getByRole("button", { name: "Show number" })).toBeDisabled();
+
+    /*
+     * Live from handoff 2 step 3. Masking is not a growth trick — the reveal is
+     * the event that proves the directory delivered the seller something, and
+     * it is what their subscription is ultimately judged on. So it is a real
+     * control now, and asking for it is recorded.
+     */
+    const reveal = page.getByRole("button", { name: "Show number" });
+    await expect(reveal).toBeEnabled();
+    await reveal.click();
+    await expect(reveal).toHaveCount(0);
+    expect(await page.textContent("body")).toMatch(/\+971|^0\d/m);
   });
 
   test("the TRN is masked to first three and last four", async ({ page }) => {
@@ -175,12 +186,27 @@ test.describe("maps and masking", () => {
 });
 
 test.describe("enquiry affordances", () => {
-  test("are present, styled and disabled — never hidden", async ({ page }) => {
+  /*
+   * Handoff 1 shipped these present, styled and disabled, and this test held
+   * them to it. Handoff 2 step 3 turns them on, so it now holds them to the
+   * opposite: the affordance is in the same place and it works.
+   */
+  test("are live, and open a composer rather than navigating away", async ({ page }) => {
     await page.goto(`/b/${CLAIMED}/p/resilient-seated-gate-valve-dn150-0`);
     const enquire = page.getByRole("button", { name: /Send enquiry|Notify me/ }).first();
     await expect(enquire).toBeVisible();
-    await expect(enquire).toBeDisabled();
-    await expect(enquire).toHaveAttribute("title", "Enquiries open in the next release");
+    await expect(enquire).toBeEnabled();
+
+    await enquire.click();
+    // The buyer keeps sight of the product they were looking at.
+    await expect(page.getByRole("dialog")).toBeVisible();
+    await expect(page.getByRole("dialog")).toContainText("Al Marwan");
+  });
+
+  test("carry the product in as a line, rather than an empty box", async ({ page }) => {
+    await page.goto(`/b/${CLAIMED}/p/resilient-seated-gate-valve-dn150-0`);
+    await page.getByRole("button", { name: /Send enquiry|Notify me/ }).first().click();
+    await expect(page.getByLabel("Item on line 1")).toHaveValue(/gate valve/i);
   });
 
   test("there are no dead links behind them", async ({ page }) => {

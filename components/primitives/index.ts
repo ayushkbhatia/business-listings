@@ -1,5 +1,5 @@
 // Tier 1 — the eighteen primitives. Variants are props on one component.
-export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
+export { Button, buttonClassName, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
 export { IconButton, type IconButtonProps } from "./IconButton";
 export { SplitButton, type SplitButtonItem, type SplitButtonProps } from "./SplitButton";
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from "./SegmentedControl";

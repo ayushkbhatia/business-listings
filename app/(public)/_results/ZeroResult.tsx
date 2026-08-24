@@ -1,4 +1,4 @@
-import { Button } from "@/components/primitives";
+import { buttonClassName } from "@/components/primitives";
 import { Card, Panel } from "@/components/structure";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -21,6 +21,7 @@ export function ZeroResult({
   facetLabel,
   categoryName,
   categoryHref,
+  rfqHref = "/rfq/new",
 }: {
   query: SearchQuery;
   basePath: string;
@@ -29,6 +30,8 @@ export function ZeroResult({
   facetLabel: (key: string) => string;
   categoryName?: string;
   categoryHref?: string;
+  /** Where the RFQ affordance goes, carrying the category the search was in. */
+  rfqHref?: string;
 }) {
   return (
     <div className="max-w-[var(--measure-prose)]">
@@ -69,10 +72,14 @@ export function ZeroResult({
         <Panel title={t("zero.rfq_title")}>
           <p className="text-body-sm text-body">{t("zero.rfq_body")}</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            {/* The enquiry engine is handoff 2. Present, styled, disabled. */}
-            <Button disabled title={t("enquiry.disabled")}>
+            {/*
+              Live from handoff 2 step 3, and this is the surface it matters on
+              most: nobody in the directory lists it, so asking the trade is the
+              only thing left to offer.
+            */}
+            <a href={rfqHref} className={buttonClassName()}>
               {t("zero.rfq_cta")}
-            </Button>
+            </a>
             {categoryName && categoryHref && (
               <a
                 href={categoryHref}

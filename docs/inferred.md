@@ -482,3 +482,65 @@ which is how `Radio` was already written.
 ### `tsconfig.target` is ES2020
 Raised in step 1 for bigint literals in the quote arithmetic. Recorded here too
 because it is a project-wide setting that arrived inside a feature commit.
+
+## Handoff 2, step 3 — the buyer flow
+
+### Fan-out ranking is not search ranking
+`lib/enquiry/fanout.ts` has its own weights. Search answers "who should this
+buyer look at" and is weighted for relevance and browsing; fan-out answers "who
+can actually answer this today", so coverage and stock carry most of it and the
+plan's multiplier carries almost none. A paid plan reorders two similar
+suppliers and can never promote one who cannot fill the order — there is a test
+for exactly that line.
+
+### The monthly cap is applied during matching, not at delivery
+Rule 4 says the buyer never sees a capped seller in their recipient list. So a
+capped seller is not a candidate at all, rather than a candidate who is shown
+and then skipped. It applies even to a pinned supplier: if they cannot reply,
+putting them on the enquiry costs the buyer a slot and gets them nothing.
+
+### An enquiry reference comes from a Postgres sequence
+`enquiry_ref_seq`, starting at 8901 — above the seeded refs so a fresh seed and
+a live database never disagree about what `ENQ-8863` means. A retry loop
+pretending to be a sequence was the alternative, and two enquiries sent in the
+same second would have raced.
+
+### A buyer with no account is identified by a bearer token in the URL
+The tracking page cannot be public by reference: `ENQ-8901` is four digits in a
+WhatsApp message and anybody could walk them. So the link carries the
+provisional identity's `claimToken`, which is a random UUID, only ever grants
+access to that identity's own enquiries, and stops working once the account is
+claimed. It is the magic-link trade-off, taken deliberately.
+
+### The provisional identity had a repair added
+`createProvisionalIdentity` now recovers when Supabase already holds that phone
+with no profile row beside it. Found by the browser walkthrough: an integration
+test had deleted a profile row without its auth user, and that one orphan made
+the number permanently unable to send an enquiry. In production the same drift
+could come from a failed transaction, so the recovery is not test-only.
+
+### Every enquiry affordance handoff 1 shipped disabled is now live
+The README's "depends on" says so: `/b/:slug`, the catalogue tray, the product
+page, the results rows, the comparison tray's "enquire with all", and the
+zero-result RFQ. `ListingCard` and `ProductCard` take an optional
+`enquireHref`; without one they stay disabled, which is how the gallery still
+shows the state handoff 1 shipped. Three handoff-1 tests asserted the disabled
+state and now assert the live one.
+
+### `Select` passed both `value` and `defaultValue`
+On every controlled select that also had a placeholder, which is most of them.
+React warns and the element is ambiguous. Same family as the `Checkbox` bug in
+step 2: a primitive whose state came from the wrong place.
+
+### A link that looks like a button stays a link
+`buttonClassName()` is exported from `Button` rather than making the component
+polymorphic. An anchor navigates, middle-clicks into a new tab and announces as
+a link; a polymorphic Button would let a caller put an `href` on something that
+submits a form.
+
+### `docs/routes.md` disagreed with the handoff on two paths
+It listed `/account/enquiries/:id/compare` and `/account/enquiries/:id/accepted`;
+the handoff 2 README's scope block says `/enquiry/:id/compare` and
+`/enquiry/:id/accepted`. The README won — those pages are reachable by a buyer
+with no account, and nesting them under `/account` would promise a section such
+a buyer does not have. routes.md now matches.
