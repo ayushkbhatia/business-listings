@@ -161,3 +161,29 @@ shape is right now.
 - Whether the results toolbar in PublicShell is part of the shell or a page
   concern; it is a slot either way.
 - Whether pagination is bottom-only or also top on long admin tables.
+
+---
+
+## Checkpoint 6 findings
+
+### An on-ink button treatment is unspecified
+`ghost` is a light-surface variant: `--text-body` on `--ink` measures 1.66:1.
+BuilderChrome's bar and the sidebar are ink, and the design system names no
+button variant for a dark surface — only that `--moss-on-ink` is the sole
+accent permitted there. The gallery uses `secondary` on the builder bar as a
+stopgap. Two ways to resolve it, for the canvas to decide: a `tone="on-ink"`
+prop orthogonal to the five variants, or a rule that ink surfaces only ever
+carry secondary and moss-on-ink controls.
+
+### The token block has to be inside `@layer base`
+Not a design question, but worth recording because it is invisible and it bit.
+Tailwind v4 puts utilities in a cascade layer, and unlayered CSS beats every
+layer regardless of specificity. `tokens.css` pasted at the top level meant
+`a { color: var(--moss) }` overrode `text-on-ink-muted` on every sidebar link,
+rendering base moss on ink at 2.15:1 — the one pairing §01 forbids by name.
+The block is byte-identical inside the layer. See docs/contrast.md.
+
+### Ten colour pairings do not clear the §09.2 floor
+Measured, not estimated, and left unchanged. `docs/contrast.md` has the table,
+the reasoning and three ways out. This is the one open item that needs a design
+decision before handoff 1 puts these colours in front of buyers.

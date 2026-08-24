@@ -110,7 +110,7 @@ export function Overlays() {
           }
         >
           <FilterRail
-            label={t("overlay.filters_title")}
+            label={`${t("overlay.filters_title")} — in drawer`}
             appliedCount={applied}
             appliedLabel={(count) => t("table.filters_applied", { count })}
             clearAllLabel={t("table.clear_filters")}
@@ -163,7 +163,7 @@ export function Overlays() {
         <States label="states" stack>
           <div className="w-72 rounded-card border border-line bg-card px-3">
             <FilterRail
-              label={t("overlay.filters_title")}
+              label={`${t("overlay.filters_title")} — rail`}
               appliedCount={applied}
               appliedLabel={(count) => t("table.filters_applied", { count })}
               clearAllLabel={t("table.clear_filters")}

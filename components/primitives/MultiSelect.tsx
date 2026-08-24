@@ -31,7 +31,7 @@ export interface MultiSelectProps {
   placeholder?: string;
   /** Placeholder for the filter box, shown once the list is long. */
   filterPlaceholder?: string;
-  /** `{n} selected`, already localised. */
+  /** `{n} selected`, already localised. Shown in the trigger. */
   summaryLabel?: (count: number) => string;
   /** Accessible name for a chip's remove button, already localised. */
   removeLabel?: (option: string) => string;
@@ -39,8 +39,6 @@ export interface MultiSelectProps {
   size?: ControlSize;
   invalid?: boolean;
   disabled?: boolean;
-  /** Chips collapse to a count past this many. */
-  maxChips?: number;
   filterThreshold?: number;
 }
 
@@ -57,7 +55,6 @@ export function MultiSelect({
   size = "md",
   invalid = false,
   disabled = false,
-  maxChips = 3,
   filterThreshold = 8,
 }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
@@ -99,7 +96,6 @@ export function MultiSelect({
   }
 
   const chips = options.filter((o) => selected.has(o.value));
-  const overflow = Math.max(0, chips.length - maxChips);
 
   return (
     <div ref={rootRef} className="relative w-full">
@@ -113,7 +109,7 @@ export function MultiSelect({
         aria-invalid={invalid || undefined}
         onClick={() => setOpen((o) => !o)}
         className={cn(
-          "flex w-full items-center gap-1.5 rounded-ctl border bg-card py-1 pl-2 pr-8 text-left",
+          "flex w-full items-center gap-1.5 rounded-ctl border bg-card py-1 pl-3 pr-8 text-left",
           "min-h-9",
           "transition-colors duration-120 ease-out",
           "focus-visible:outline-none focus-visible:shadow-focus",
@@ -122,40 +118,11 @@ export function MultiSelect({
           disabled && "cursor-not-allowed border-line bg-fill text-disabled-text",
         )}
       >
-        {chips.length === 0 ? (
-          <span className={disabled ? "text-disabled-text" : "text-faint"}>{placeholder}</span>
-        ) : (
-          <span className="flex flex-wrap items-center gap-1">
-            {chips.slice(0, maxChips).map((chip) => (
-              <span
-                key={chip.value}
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-chip border-[1.5px] border-moss",
-                  "bg-moss-wash px-1.5 py-0.5 text-caption text-moss-deep",
-                )}
-              >
-                {chip.label}
-                <span
-                  role="button"
-                  tabIndex={-1}
-                  aria-label={removeLabel?.(chip.label) ?? chip.label}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    if (!disabled) toggle(chip.value);
-                  }}
-                  className="cursor-pointer text-moss hover:text-moss-hover"
-                >
-                  <Close size={11} />
-                </span>
-              </span>
-            ))}
-            {overflow > 0 && (
-              <span className="font-mono text-eyebrow text-muted">
-                {summaryLabel ? summaryLabel(overflow) : `+${overflow}`}
-              </span>
-            )}
-          </span>
-        )}
+        <span className={chips.length === 0 ? (disabled ? "text-disabled-text" : "text-faint") : "text-ink"}>
+          {chips.length === 0
+            ? placeholder
+            : (summaryLabel?.(chips.length) ?? String(chips.length))}
+        </span>
         <ChevronDown
           size={14}
           className={cn(
@@ -164,6 +131,45 @@ export function MultiSelect({
           )}
         />
       </button>
+
+      {/*
+        Chips live outside the trigger, not inside it. A remove control nested
+        in the trigger is a button inside a button — axe calls it
+        nested-interactive, and a screen reader cannot reach the inner one.
+        Below the control they are still the visible answer, and each is a real
+        button in the tab order.
+      */}
+      {chips.length > 0 && (
+        <ul className="mt-1.5 flex flex-wrap gap-1">
+          {chips.map((chip) => (
+            <li key={chip.value}>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-chip border-[1.5px] border-moss",
+                  "bg-moss-wash py-0.5 pl-2 pr-1 text-caption text-moss-deep",
+                )}
+              >
+                {chip.label}
+                <button
+                  type="button"
+                  disabled={disabled}
+                  aria-label={removeLabel?.(chip.label) ?? chip.label}
+                  title={removeLabel?.(chip.label) ?? chip.label}
+                  onClick={() => toggle(chip.value)}
+                  className={cn(
+                    "flex size-4 items-center justify-center rounded-tag text-moss",
+                    "transition-colors duration-120 ease-out hover:bg-card hover:text-moss-hover",
+                    "focus-visible:outline-none focus-visible:shadow-focus",
+                    "disabled:cursor-not-allowed disabled:text-disabled-text",
+                  )}
+                >
+                  <Close size={11} />
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {open && (
         <div

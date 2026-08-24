@@ -8,6 +8,12 @@
  * staff should never be unsure which surface they are on.
  */
 export interface AdminShellProps {
+  /**
+   * The content region's element. `main` in the product; `div` when a shell
+   * is embedded inside another page, as the gallery does — a page may only
+   * have one main landmark.
+   */
+  contentAs?: "main" | "div";
   sidebar: React.ReactNode;
   header: React.ReactNode;
   children: React.ReactNode;
@@ -22,7 +28,9 @@ export function AdminShell({
   children,
   notice,
   impersonation,
+  contentAs = "main",
 }: AdminShellProps) {
+  const Content = contentAs;
   return (
     <div data-density="compact" className="flex h-dvh bg-paper">
       <div className="hidden md:block">{sidebar}</div>
@@ -31,7 +39,7 @@ export function AdminShell({
         {impersonation}
         {notice}
         {header}
-        <main className="min-h-0 flex-1 overflow-y-auto p-[var(--section-pad)]">{children}</main>
+        <Content className="min-h-0 flex-1 overflow-y-auto p-[var(--section-pad)]">{children}</Content>
       </div>
     </div>
   );

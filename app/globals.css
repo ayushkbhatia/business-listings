@@ -90,173 +90,189 @@
 }
 
 /* ==========================================================================
-   Business Listings — design tokens
-   Paste into app/globals.css. Nothing in the codebase may contain a raw hex
-   after this file exists; add a lint rule failing on /#[0-9a-f]{3,6}/ outside
-   this file. Source of truth: design system canvas §01, §09.1.
+   docs/tokens.css, pasted unchanged — inside @layer base.
+
+   The layer is the only addition, and it is load-bearing. Tailwind v4 puts its
+   utilities in a cascade layer; unlayered CSS beats every layer regardless of
+   specificity. Pasted at the top level, this file's `a { color: var(--moss) }`
+   silently overrode `text-on-ink-muted` on every link in the ink sidebar, so
+   base moss rendered on ink at 2.15:1 — the one pairing design-system §01
+   explicitly forbids. axe found 43 of them.
+
+   Nothing inside the block is edited. Custom properties resolve identically in
+   a layer; only the element rules move to where a utility can beat them, which
+   is the entire point of utilities.
    ========================================================================== */
+@layer base {
+  /* ==========================================================================
+     Business Listings — design tokens
+     Paste into app/globals.css. Nothing in the codebase may contain a raw hex
+     after this file exists; add a lint rule failing on /#[0-9a-f]{3,6}/ outside
+     this file. Source of truth: design system canvas §01, §09.1.
+     ========================================================================== */
 
-:root {
-  /* ---- Surfaces -------------------------------------------------------- */
-  --paper:        #FAF9F6;   /* page background */
-  --paper-sunk:   #F6F4EE;   /* table heads, note blocks, footers */
-  --fill:         #F2F0EA;   /* chips, disabled, tiles */
-  --card:         #FFFFFF;   /* raised surface only — never a page background */
-  --ink:          #211F1B;   /* headings, dark surfaces */
-  --ink-raised:   #26241F;   /* a card sitting on ink */
-  --ink-line:     #3A382F;   /* borders on ink surfaces */
+  :root {
+    /* ---- Surfaces -------------------------------------------------------- */
+    --paper:        #FAF9F6;   /* page background */
+    --paper-sunk:   #F6F4EE;   /* table heads, note blocks, footers */
+    --fill:         #F2F0EA;   /* chips, disabled, tiles */
+    --card:         #FFFFFF;   /* raised surface only — never a page background */
+    --ink:          #211F1B;   /* headings, dark surfaces */
+    --ink-raised:   #26241F;   /* a card sitting on ink */
+    --ink-line:     #3A382F;   /* borders on ink surfaces */
 
-  /* ---- Lines ----------------------------------------------------------- */
-  --line:         #E5E2D9;   /* default border */
-  --line-mid:     #DCD8CE;
-  --line-strong:  #CFCABD;   /* inputs, emphasis, promoted cards */
+    /* ---- Lines ----------------------------------------------------------- */
+    --line:         #E5E2D9;   /* default border */
+    --line-mid:     #DCD8CE;
+    --line-strong:  #CFCABD;   /* inputs, emphasis, promoted cards */
 
-  /* ---- Text ramp ------------------------------------------------------- */
-  --text-faint:   #A29D92;   /* labels, placeholders — 11.5px+ on paper only */
-  --text-muted:   #7C776C;   /* secondary copy */
-  --text-body:    #46433C;   /* body at small sizes */
-  --text-prose:   #33302A;   /* long-form reading */
-  --text-ink:     #211F1B;   /* headings */
-  --text-on-ink:  #FAF9F6;
-  --text-on-ink-muted: #A8A396;
-  --text-on-ink-faint: #8A857A;
+    /* ---- Text ramp ------------------------------------------------------- */
+    --text-faint:   #A29D92;   /* labels, placeholders — 11.5px+ on paper only */
+    --text-muted:   #7C776C;   /* secondary copy */
+    --text-body:    #46433C;   /* body at small sizes */
+    --text-prose:   #33302A;   /* long-form reading */
+    --text-ink:     #211F1B;   /* headings */
+    --text-on-ink:  #FAF9F6;
+    --text-on-ink-muted: #A8A396;
+    --text-on-ink-faint: #8A857A;
 
-  /* ---- Accent — action only ------------------------------------------- */
-  --moss:         #46584A;
-  --moss-hover:   #3A4A3C;
-  --moss-wash:    #E7ECE7;
-  --moss-deep:    #2F4033;   /* text on moss-wash */
-  --moss-on-ink:  #8FA892;   /* the only accent permitted on dark surfaces */
-  --moss-on-ink-hover: #A3B9A6;
-  --moss-on-ink-text:  #1A221B;
-  --moss-muted:   #C3CEC4;   /* secondary chart series */
+    /* ---- Accent — action only ------------------------------------------- */
+    --moss:         #46584A;
+    --moss-hover:   #3A4A3C;
+    --moss-wash:    #E7ECE7;
+    --moss-deep:    #2F4033;   /* text on moss-wash */
+    --moss-on-ink:  #8FA892;   /* the only accent permitted on dark surfaces */
+    --moss-on-ink-hover: #A3B9A6;
+    --moss-on-ink-text:  #1A221B;
+    --moss-muted:   #C3CEC4;   /* secondary chart series */
 
-  /* ---- Status — four tones, each with wash + surface + line ----------- */
-  --ok:           #2F7D4F;
-  --ok-ink:       #2A6B45;
-  --ok-wash:      #E6F0E8;
-  --ok-surface:   #F4F9F5;
-  --ok-line:      #CFDCD0;
+    /* ---- Status — four tones, each with wash + surface + line ----------- */
+    --ok:           #2F7D4F;
+    --ok-ink:       #2A6B45;
+    --ok-wash:      #E6F0E8;
+    --ok-surface:   #F4F9F5;
+    --ok-line:      #CFDCD0;
 
-  --warn:         #B07D1A;
-  --warn-ink:     #8A6D12;
-  --warn-wash:    #F7EFDD;
-  --warn-surface: #FDF8EE;
-  --warn-line:    #ECDFC4;
-  --warn-line-strong: #DDD0B4;
+    --warn:         #B07D1A;
+    --warn-ink:     #8A6D12;
+    --warn-wash:    #F7EFDD;
+    --warn-surface: #FDF8EE;
+    --warn-line:    #ECDFC4;
+    --warn-line-strong: #DDD0B4;
 
-  --bad:          #B0453A;
-  --bad-ink:      #8F3A31;
-  --bad-hover:    #963A31;
-  --bad-wash:     #F6E6E3;
-  --bad-surface:  #FDF6F5;
-  --bad-line:     #F0D9D4;
-  --bad-line-strong: #D9A49C;
-  --bad-disabled: #E8D5D1;
-  --bad-disabled-text: #C99E97;
+    --bad:          #B0453A;
+    --bad-ink:      #8F3A31;
+    --bad-hover:    #963A31;
+    --bad-wash:     #F6E6E3;
+    --bad-surface:  #FDF6F5;
+    --bad-line:     #F0D9D4;
+    --bad-line-strong: #D9A49C;
+    --bad-disabled: #E8D5D1;
+    --bad-disabled-text: #C99E97;
 
-  --info:         #3A5F8F;
-  --info-ink:     #2F5A86;
-  --info-wash:    #E7ECF2;
-  --info-surface: #F4F8FB;
-  --info-line:    #D4E0EA;
-  --info-line-strong: #B9CBDB;
+    --info:         #3A5F8F;
+    --info-ink:     #2F5A86;
+    --info-wash:    #E7ECF2;
+    --info-surface: #F4F8FB;
+    --info-line:    #D4E0EA;
+    --info-line-strong: #B9CBDB;
 
-  /* ---- Control states ------------------------------------------------- */
-  --disabled-fill:  #E0DDD4;
-  --disabled-text:  #A29D92;
-  --track:          #E9E6DE;   /* progress and slider tracks */
-  --track-alt:      #EFECE5;   /* skeleton secondary */
-  --placeholder-stripe-a: #EEECE5;  /* image placeholder, 135deg */
-  --placeholder-stripe-b: #F5F3EE;
-  --placeholder-empty-a:  #F0EEE8;  /* genuinely absent, dashed border */
-  --placeholder-empty-b:  #F7F5F0;
+    /* ---- Control states ------------------------------------------------- */
+    --disabled-fill:  #E0DDD4;
+    --disabled-text:  #A29D92;
+    --track:          #E9E6DE;   /* progress and slider tracks */
+    --track-alt:      #EFECE5;   /* skeleton secondary */
+    --placeholder-stripe-a: #EEECE5;  /* image placeholder, 135deg */
+    --placeholder-stripe-b: #F5F3EE;
+    --placeholder-empty-a:  #F0EEE8;  /* genuinely absent, dashed border */
+    --placeholder-empty-b:  #F7F5F0;
 
-  /* ---- Map ------------------------------------------------------------ */
-  --map-base:     #F3F4F2;
-  --map-grid:     #EEF0EF;
-  --map-road:     #E7E4DC;
-  --map-water:    #E2EAEC;
-  --map-label:    #8D9490;
+    /* ---- Map ------------------------------------------------------------ */
+    --map-base:     #F3F4F2;
+    --map-grid:     #EEF0EF;
+    --map-road:     #E7E4DC;
+    --map-water:    #E2EAEC;
+    --map-label:    #8D9490;
 
-  /* ---- Radii ---------------------------------------------------------- */
-  --r-tag:        3px;
-  --r-chip:       5px;
-  --r-ctl:        6px;    /* buttons, inputs, selects */
-  --r-card:       9px;
-  --r-card-lg:    10px;
-  --r-panel:      12px;
-  --r-pill:       999px;  /* status badges and filter chips only */
+    /* ---- Radii ---------------------------------------------------------- */
+    --r-tag:        3px;
+    --r-chip:       5px;
+    --r-ctl:        6px;    /* buttons, inputs, selects */
+    --r-card:       9px;
+    --r-card-lg:    10px;
+    --r-panel:      12px;
+    --r-pill:       999px;  /* status badges and filter chips only */
 
-  /* ---- Elevation ------------------------------------------------------ */
-  --e-flat:       none;                             /* 1px line, the default */
-  --e-raised:     0 1px 3px rgba(0,0,0,.06);        /* artboards, sticky bars */
-  --e-promoted:   0 4px 20px rgba(70,88,74,.10);    /* recommended plan, one per screen */
-  --e-overlay:    0 8px 34px rgba(0,0,0,.16);       /* modals, dropdowns, toasts */
-  --focus-ring:   0 0 0 2px var(--paper), 0 0 0 4px var(--moss);
-  --focus-ring-danger: 0 0 0 2px var(--paper), 0 0 0 4px var(--bad);
-  --focus-ring-on-ink: 0 0 0 2px var(--ink), 0 0 0 4px var(--moss-on-ink);
-  --focus-inset:  0 0 0 3px rgba(70,88,74,.12);     /* inside a focused input */
+    /* ---- Elevation ------------------------------------------------------ */
+    --e-flat:       none;                             /* 1px line, the default */
+    --e-raised:     0 1px 3px rgba(0,0,0,.06);        /* artboards, sticky bars */
+    --e-promoted:   0 4px 20px rgba(70,88,74,.10);    /* recommended plan, one per screen */
+    --e-overlay:    0 8px 34px rgba(0,0,0,.16);       /* modals, dropdowns, toasts */
+    --focus-ring:   0 0 0 2px var(--paper), 0 0 0 4px var(--moss);
+    --focus-ring-danger: 0 0 0 2px var(--paper), 0 0 0 4px var(--bad);
+    --focus-ring-on-ink: 0 0 0 2px var(--ink), 0 0 0 4px var(--moss-on-ink);
+    --focus-inset:  0 0 0 3px rgba(70,88,74,.12);     /* inside a focused input */
 
-  /* ---- Motion --------------------------------------------------------- */
-  --t-state:      120ms ease-out;
-  --t-reveal:     180ms ease-out;
-  --t-overlay:    220ms cubic-bezier(.2,.8,.2,1);
-  --t-skeleton:   1200ms ease-in-out;
+    /* ---- Motion --------------------------------------------------------- */
+    --t-state:      120ms ease-out;
+    --t-reveal:     180ms ease-out;
+    --t-overlay:    220ms cubic-bezier(.2,.8,.2,1);
+    --t-skeleton:   1200ms ease-in-out;
 
-  /* ---- Type ----------------------------------------------------------- */
-  --f-serif: 'Instrument Serif', ui-serif, Georgia, serif;
-  --f-sans:  Geist, ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --f-mono:  'JetBrains Mono', ui-monospace, monospace;
+    /* ---- Type ----------------------------------------------------------- */
+    --f-serif: 'Instrument Serif', ui-serif, Georgia, serif;
+    --f-sans:  Geist, ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --f-mono:  'JetBrains Mono', ui-monospace, monospace;
 
-  /* size / line-height / tracking */
-  --t-display:   42px; --lh-display: 1.08; --ls-display: -.020em;
-  --t-h1-serif:  30px; --lh-h1s:     1.15; --ls-h1s:     -.015em;
-  --t-h1:        23px; --lh-h1:      1.25; --ls-h1:      -.015em;
-  --t-h2:        17px; --lh-h2:      1.30; --ls-h2:      -.015em;
-  --t-h3:      14.0px; --lh-h3:      1.35;
-  --t-prose:   14.5px; --lh-prose:   1.65; --measure-prose: 640px;
-  --t-body:    13.0px; --lh-body:    1.60;
-  --t-body-sm: 12.5px; --lh-body-sm: 1.55;
-  --t-caption: 11.5px; --lh-caption: 1.50;
-  --t-eyebrow:  9.5px; --ls-eyebrow: .11em;   /* mono 500, uppercase */
-  --t-colhead:  9.5px; --ls-colhead: .09em;   /* mono 500, uppercase */
-}
+    /* size / line-height / tracking */
+    --t-display:   42px; --lh-display: 1.08; --ls-display: -.020em;
+    --t-h1-serif:  30px; --lh-h1s:     1.15; --ls-h1s:     -.015em;
+    --t-h1:        23px; --lh-h1:      1.25; --ls-h1:      -.015em;
+    --t-h2:        17px; --lh-h2:      1.30; --ls-h2:      -.015em;
+    --t-h3:      14.0px; --lh-h3:      1.35;
+    --t-prose:   14.5px; --lh-prose:   1.65; --measure-prose: 640px;
+    --t-body:    13.0px; --lh-body:    1.60;
+    --t-body-sm: 12.5px; --lh-body-sm: 1.55;
+    --t-caption: 11.5px; --lh-caption: 1.50;
+    --t-eyebrow:  9.5px; --ls-eyebrow: .11em;   /* mono 500, uppercase */
+    --t-colhead:  9.5px; --ls-colhead: .09em;   /* mono 500, uppercase */
+  }
 
-/* ---- Density: set once on the shell, inherited ------------------------ */
-[data-density="roomy"]        { --row-h: auto;  --gutter: 18px; --section-pad: 48px; --card-pad: 20px; }
-[data-density="comfortable"]  { --row-h: 46px;  --gutter: 14px; --section-pad: 24px; --card-pad: 18px; }
-[data-density="compact"]      { --row-h: 38px;  --gutter: 10px; --section-pad: 20px; --card-pad: 16px; }
+  /* ---- Density: set once on the shell, inherited ------------------------ */
+  [data-density="roomy"]        { --row-h: auto;  --gutter: 18px; --section-pad: 48px; --card-pad: 20px; }
+  [data-density="comfortable"]  { --row-h: 46px;  --gutter: 14px; --section-pad: 24px; --card-pad: 18px; }
+  [data-density="compact"]      { --row-h: 38px;  --gutter: 10px; --section-pad: 20px; --card-pad: 16px; }
 
-/* ---- Seller storefront themes ----------------------------------------
-   Applied to a storefront root as [data-theme="…"]. Recolours header,
-   headings, buttons, links and form focus ONLY. Never verification badges,
-   never status tones, never platform chrome. A custom hex is contrast-checked
-   on save (>= 4.5:1 against white) and rejected with the reason shown.
-   --------------------------------------------------------------------- */
-[data-theme="industrial"] { --brand: #2F4A5C; --brand-ink: #1F3140; --brand-wash: #EAF0F3; --brand-line: #E3EAEE; --brand-muted: #7C9AAD; --brand-text: #3F5A6B; }
-[data-theme="default"]    { --brand: #46584A; --brand-ink: #2F4033; --brand-wash: #E7ECE7; --brand-line: #DBE3DB; --brand-muted: #8FA892; --brand-text: #46433C; }
-[data-theme="trade"]      { --brand: #7A4A2F; --brand-ink: #5A3622; --brand-wash: #F2E9E2; --brand-line: #E8DBD1; --brand-muted: #B08D74; --brand-text: #5A4438; }
-[data-theme="mono"]       { --brand: #1F1F1F; --brand-ink: #141414; --brand-wash: #EEEEEC; --brand-line: #E2E2DE; --brand-muted: #8A8A85; --brand-text: #3D3D39; }
-[data-theme="clinic"]     { --brand: #3D5A3A; --brand-ink: #2A3F28; --brand-wash: #E8EFE6; --brand-line: #DCE6DA; --brand-muted: #87A283; --brand-text: #41503E; }
-[data-theme="salon"]      { --brand: #5C3B52; --brand-ink: #40283A; --brand-wash: #F1E8EE; --brand-line: #E6D9E2; --brand-muted: #A5879B; --brand-text: #4E3A48; }
+  /* ---- Seller storefront themes ----------------------------------------
+     Applied to a storefront root as [data-theme="…"]. Recolours header,
+     headings, buttons, links and form focus ONLY. Never verification badges,
+     never status tones, never platform chrome. A custom hex is contrast-checked
+     on save (>= 4.5:1 against white) and rejected with the reason shown.
+     --------------------------------------------------------------------- */
+  [data-theme="industrial"] { --brand: #2F4A5C; --brand-ink: #1F3140; --brand-wash: #EAF0F3; --brand-line: #E3EAEE; --brand-muted: #7C9AAD; --brand-text: #3F5A6B; }
+  [data-theme="default"]    { --brand: #46584A; --brand-ink: #2F4033; --brand-wash: #E7ECE7; --brand-line: #DBE3DB; --brand-muted: #8FA892; --brand-text: #46433C; }
+  [data-theme="trade"]      { --brand: #7A4A2F; --brand-ink: #5A3622; --brand-wash: #F2E9E2; --brand-line: #E8DBD1; --brand-muted: #B08D74; --brand-text: #5A4438; }
+  [data-theme="mono"]       { --brand: #1F1F1F; --brand-ink: #141414; --brand-wash: #EEEEEC; --brand-line: #E2E2DE; --brand-muted: #8A8A85; --brand-text: #3D3D39; }
+  [data-theme="clinic"]     { --brand: #3D5A3A; --brand-ink: #2A3F28; --brand-wash: #E8EFE6; --brand-line: #DCE6DA; --brand-muted: #87A283; --brand-text: #41503E; }
+  [data-theme="salon"]      { --brand: #5C3B52; --brand-ink: #40283A; --brand-wash: #F1E8EE; --brand-line: #E6D9E2; --brand-muted: #A5879B; --brand-text: #4E3A48; }
 
-/* ---- Base ------------------------------------------------------------- */
-body {
-  margin: 0;
-  background: var(--paper);
-  color: var(--text-body);
-  font-family: var(--f-sans);
-  -webkit-font-smoothing: antialiased;
-}
-a { color: var(--moss); text-decoration: none; }
-a:hover { color: var(--moss-hover); }
+  /* ---- Base ------------------------------------------------------------- */
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--text-body);
+    font-family: var(--f-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--moss); text-decoration: none; }
+  a:hover { color: var(--moss-hover); }
 
-/* Mono always uses tabular figures — columns must align. */
-.mono, [class*="mono"] { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+  /* Mono always uses tabular figures — columns must align. */
+  .mono, [class*="mono"] { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
 
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation: none !important; transition: none !important; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
 }
 
 /* ==========================================================================

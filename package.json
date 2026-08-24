@@ -21,7 +21,11 @@
     "check:schema": "./scripts/check-schema-invariants.sh",
     "verify": "pnpm typecheck && pnpm lint && pnpm check:tokens && pnpm check:schema && pnpm test && pnpm build",
     "postinstall": "prisma generate",
-    "matrix": "tsx scripts/print-matrix.mts"
+    "matrix": "tsx scripts/print-matrix.mts",
+    "check:contrast": "tsx scripts/contrast-audit.mts",
+    "report:contrast": "tsx scripts/contrast-report.mts",
+    "check:formatters": "tsx scripts/check-formatter-coverage.mts",
+    "acceptance": "./scripts/acceptance.sh"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

@@ -12,6 +12,12 @@ import { cn } from "@/lib/cn";
  * sits on the right where the eye finishes.
  */
 export interface BuilderChromeProps {
+  /**
+   * The content region's element. `main` in the product; `div` when a shell
+   * is embedded inside another page, as the gallery does — a page may only
+   * have one main landmark.
+   */
+  contentAs?: "main" | "div";
   title: string;
   /** A mono ref or breadcrumb under the title. */
   subtitle?: string;
@@ -34,7 +40,9 @@ export function BuilderChrome({
   status,
   children,
   toolbar,
+  contentAs = "main",
 }: BuilderChromeProps) {
+  const Content = contentAs;
   return (
     <div data-density="comfortable" className="flex h-dvh flex-col bg-paper">
       <header
@@ -64,7 +72,7 @@ export function BuilderChrome({
         </div>
       )}
 
-      <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+      <Content className="min-h-0 flex-1 overflow-auto">{children}</Content>
     </div>
   );
 }

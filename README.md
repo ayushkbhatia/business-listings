@@ -73,7 +73,13 @@ is not the same on every project.
 | `pnpm test:e2e` | Playwright |
 | `pnpm check:tokens` | Acceptance criteria 3 and 4 — raw hex, untranslated strings |
 | `pnpm check:schema` | Acceptance criterion 9 — no price on Product, no order table, no payout |
-| `pnpm verify` | All of the above, in order |
+| `pnpm test:e2e` | Playwright + axe on the gallery |
+| `pnpm acceptance` | The ten handoff-0 criteria, walked in order |
+| `pnpm check:contrast` | Every token pairing against the §09.2 floor |
+| `pnpm report:contrast` | What axe finds on the running gallery, grouped by colour pair |
+| `pnpm check:formatters` | Every formatter has a test |
+| `pnpm matrix` | The permission matrix, for diffing against §07 |
+| `pnpm verify` | Typecheck, lint, both greps, schema, unit tests, build |
 | `pnpm db:migrate` | `prisma migrate dev` |
 | `pnpm db:seed` | Seed UAE-shaped fixture data |
 | `pnpm db:studio` | Prisma Studio |

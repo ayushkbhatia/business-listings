@@ -375,7 +375,7 @@ export function Structure() {
       <Section id="breadcrumb" title="Breadcrumb" note="the last crumb is the page, and is not a link">
         <States label="states" stack>
           <Breadcrumb
-            label={t("gallery.breadcrumb_label")}
+            label={`${t("gallery.breadcrumb_label")} — full`}
             items={[
               { label: "Directory", href: "#" },
               { label: "Valves & fittings", href: "#" },
@@ -384,7 +384,7 @@ export function Structure() {
             ]}
           />
           <Breadcrumb
-            label={t("gallery.breadcrumb_label")}
+            label={`${t("gallery.breadcrumb_label")} — collapsed`}
             maxItems={3}
             items={[
               { label: "Directory", href: "#" },

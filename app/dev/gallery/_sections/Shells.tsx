@@ -46,7 +46,7 @@ export function Shells() {
         <States label="states" stack>
           <div className="w-full overflow-hidden rounded-card border border-line">
             <PublicNav
-              label={t("nav.label.public")}
+              label={`${t("nav.label.public")} — standalone`}
               brand="Business Listings"
               search={
                 <SearchField
@@ -82,7 +82,7 @@ export function Shells() {
           <div className="flex gap-4">
             <Viewport height={420}>
               <AppSidebar
-                label={t("nav.label.dashboard")}
+                label={`${t("nav.label.dashboard")} — seller_owner`}
                 groups={DASHBOARD_NAV}
                 activeHref="/dashboard/leads"
                 translate={(key) => t(key as never)}
@@ -94,7 +94,7 @@ export function Shells() {
             </Viewport>
             <Viewport height={420}>
               <AppSidebar
-                label={t("nav.label.dashboard")}
+                label={`${t("nav.label.dashboard")} — seller_sales`}
                 groups={DASHBOARD_NAV}
                 activeHref="/dashboard/leads"
                 translate={(key) => t(key as never)}
@@ -112,7 +112,7 @@ export function Shells() {
           <div className="flex gap-4">
             <Viewport height={520}>
               <AppSidebar
-                label={t("nav.label.admin")}
+                label={`${t("nav.label.admin")} — staff_moderator`}
                 groups={ADMIN_NAV}
                 activeHref="/admin/queue"
                 translate={(key) => t(key as never)}
@@ -131,7 +131,7 @@ export function Shells() {
             </Viewport>
             <Viewport height={520}>
               <AppSidebar
-                label={t("nav.label.admin")}
+                label={`${t("nav.label.admin")} — staff_ops_lead`}
                 groups={ADMIN_NAV}
                 activeHref="/admin/audit"
                 translate={(key) => t(key as never)}
@@ -174,7 +174,7 @@ export function Shells() {
               title="Al Marwan Trading"
               breadcrumb={
                 <Breadcrumb
-                  label={t("gallery.breadcrumb_label")}
+                  label={`${t("gallery.breadcrumb_label")} — page header`}
                   items={[
                     { label: "Businesses", href: "#" },
                     { label: "Al Marwan Trading" },
@@ -211,9 +211,10 @@ export function Shells() {
       >
         <Viewport height={420}>
           <PublicShell
+            contentAs="div"
             nav={
               <PublicNav
-                label={t("nav.label.public")}
+                label={`${t("nav.label.public")} — in shell`}
                 brand="Business Listings"
                 search={
                   <SearchField
@@ -227,7 +228,7 @@ export function Shells() {
             }
             breadcrumb={
               <Breadcrumb
-                label={t("gallery.breadcrumb_label")}
+                label={`${t("gallery.breadcrumb_label")} — public shell`}
                 items={[
                   { label: "Directory", href: "#" },
                   { label: "Valves & fittings", href: "#" },
@@ -265,9 +266,10 @@ export function Shells() {
       >
         <Viewport height={460}>
           <DashboardShell
+            contentAs="div"
             sidebar={
               <AppSidebar
-                label={t("nav.label.dashboard")}
+                label={`${t("nav.label.dashboard")} — shell`}
                 groups={DASHBOARD_NAV}
                 activeHref="/dashboard/leads"
                 translate={(key) => t(key as never)}
@@ -301,9 +303,10 @@ export function Shells() {
       >
         <Viewport height={460}>
           <AdminShell
+            contentAs="div"
             sidebar={
               <AppSidebar
-                label={t("nav.label.admin")}
+                label={`${t("nav.label.admin")} — shell`}
                 groups={ADMIN_NAV}
                 activeHref="/admin/queue"
                 translate={(key) => t(key as never)}
@@ -356,11 +359,16 @@ export function Shells() {
       >
         <Viewport height={380}>
           <BuilderChrome
+            contentAs="div"
             title="Storefront template"
             subtitle="AL-MARWAN / DRAFT"
             status={t("shell.saved", { when: "8 seconds ago" })}
             exit={
-              <Button variant="ghost" size="sm" leadingIcon={<Close size={14} />}>
+              // ghost is a light-surface variant: --text-body on --ink is
+              // 1.66:1. The design system names no on-ink button treatment, so
+              // a secondary chip is used here and the gap is recorded in
+              // docs/inferred.md.
+              <Button variant="secondary" size="sm" leadingIcon={<Close size={14} />}>
                 {t("shell.exit")}
               </Button>
             }

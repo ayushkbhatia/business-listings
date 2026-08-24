@@ -8,6 +8,12 @@ import { cn } from "@/lib/cn";
  * components inside — they read --row-h, --gutter, --section-pad from here.
  */
 export interface PublicShellProps {
+  /**
+   * The content region's element. `main` in the product; `div` when a shell
+   * is embedded inside another page, as the gallery does — a page may only
+   * have one main landmark.
+   */
+  contentAs?: "main" | "div";
   nav: React.ReactNode;
   breadcrumb?: React.ReactNode;
   /** Result count, sort control, view switcher. */
@@ -25,7 +31,9 @@ export function PublicShell({
   children,
   footer,
   bleed = false,
+  contentAs = "main",
 }: PublicShellProps) {
+  const Content = contentAs;
   return (
     <div data-density="roomy" className="flex min-h-dvh flex-col bg-paper">
       {nav}
@@ -45,9 +53,9 @@ export function PublicShell({
         </div>
       )}
 
-      <main className="flex-1">
+      <Content className="flex-1">
         {bleed ? children : <div className="mx-auto max-w-7xl px-5 py-[var(--section-pad)]">{children}</div>}
-      </main>
+      </Content>
 
       {footer && <footer className="border-t border-line bg-paper-sunk">{footer}</footer>}
     </div>

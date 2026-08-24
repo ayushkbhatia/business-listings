@@ -6,6 +6,12 @@
  * not a second copy.
  */
 export interface DashboardShellProps {
+  /**
+   * The content region's element. `main` in the product; `div` when a shell
+   * is embedded inside another page, as the gallery does — a page may only
+   * have one main landmark.
+   */
+  contentAs?: "main" | "div";
   sidebar: React.ReactNode;
   header: React.ReactNode;
   children: React.ReactNode;
@@ -13,7 +19,14 @@ export interface DashboardShellProps {
   notice?: React.ReactNode;
 }
 
-export function DashboardShell({ sidebar, header, children, notice }: DashboardShellProps) {
+export function DashboardShell({
+  sidebar,
+  header,
+  children,
+  notice,
+  contentAs = "main",
+}: DashboardShellProps) {
+  const Content = contentAs;
   return (
     <div data-density="comfortable" className="flex h-dvh bg-paper">
       <div className="hidden md:block">{sidebar}</div>
@@ -21,7 +34,7 @@ export function DashboardShell({ sidebar, header, children, notice }: DashboardS
       <div className="flex min-w-0 flex-1 flex-col">
         {notice}
         {header}
-        <main className="min-h-0 flex-1 overflow-y-auto p-[var(--section-pad)]">{children}</main>
+        <Content className="min-h-0 flex-1 overflow-y-auto p-[var(--section-pad)]">{children}</Content>
       </div>
     </div>
   );
