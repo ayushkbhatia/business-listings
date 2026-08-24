@@ -139,6 +139,7 @@ async function main() {
   await prisma.$executeRawUnsafe(`
     truncate table
       "audit_event","contact_reveal","zero_result_query","saved_search","redirect",
+      "notification_delivery","notification_template","notification_preference","review_request",
       "invoice_line","invoice","placement_slot","subscription",
       "supplier_report","review","message","quote_line","quote",
       "enquiry_recipient","enquiry_line","enquiry",
@@ -378,6 +379,8 @@ async function main() {
   }
 
   console.log(`→ ${businesses.length} businesses`);
+  await seedSellerAccounts(prisma, businesses);
+  await seedNotificationTemplates(prisma);
   await seedProducts(prisma, businesses, catBySlug, fieldId, template.id);
   await seedEnquiries(prisma, businesses, buyer.id, buyerTwo.id, buyerCompany.id);
   await seedCommercials(prisma, businesses);
@@ -1075,3 +1078,250 @@ main()
     await prisma.$disconnect();
     process.exit(1);
   });
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Seller accounts
+//
+// Handoff 2 is explicit that onboarding and the claim flow are out of scope and
+// the seller accounts should be seeded. Without them the leads inbox has nobody
+// to belong to.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function seedSellerAccounts(db: Db, businesses: Biz[]) {
+  console.log("→ seller accounts and alert preferences");
+  const claimed = businesses.filter((b) => b.claim === "claimed");
+  let seat = 100;
+
+  for (const [i, b] of claimed.entries()) {
+    const slugMark = b.slug.replace(/[^a-z]/g, "").slice(0, 12);
+
+    await db.user.create({
+      data: {
+        id: uuid(seat++),
+        phone: `+9715${(50 + (i % 9)) % 100}${String(1000000 + i * 7919).slice(0, 7)}`,
+        email: `owner@${slugMark}.example`,
+        fullName: "Owner",
+        roles: ["seller_owner"],
+        businessId: b.id,
+      },
+    });
+
+    // A sales seat on the larger accounts, so the permission matrix has
+    // something real to act on: sales can answer an enquiry and cannot touch
+    // billing or the listing.
+    if (i % 3 === 0) {
+      await db.user.create({
+        data: {
+          id: uuid(seat++),
+          phone: `+9715${(52 + (i % 7)) % 100}${String(2000000 + i * 6131).slice(0, 7)}`,
+          fullName: "Sales",
+          roles: ["seller_sales"],
+          businessId: b.id,
+        },
+      });
+    }
+
+    await db.notificationPreference.create({
+      data: {
+        businessId: b.id,
+        // Board 7e's matrix. WhatsApp carries the events that need a fast
+        // reply; email carries the ones that need a record.
+        routing: {
+          enquiry_received: ["whatsapp", "in_app"],
+          enquiry_unanswered: ["whatsapp", "in_app"],
+          enquiry_escalated: ["whatsapp", "email", "in_app"],
+          quote_accepted: ["whatsapp", "email", "in_app"],
+          quote_expiring: ["in_app"],
+          review_posted: ["email", "in_app"],
+          document_expiring: ["email", "in_app"],
+          weekly_digest: ["email"],
+        },
+        // A seller who never turns them off still gets no WhatsApp at 02:00.
+        quietHoursEnabled: true,
+        highValueOverrideAed: 50_000,
+        nudgeEnabled: true,
+        nudgeAfterHours: 24,
+      },
+    });
+  }
+  console.log(`   ${claimed.length} owners, ${Math.ceil(claimed.length / 3)} sales seats`);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notification templates
+//
+// Database records rather than code: handoff 4 gives admin an editor, and a
+// WhatsApp template cannot change version without Meta approving it first.
+//
+// Not one of these may name a buyer's phone, email or company. Rule 1 applies
+// to notifications, and this is the easiest place in the product to leak it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface TemplateSeed {
+  event: string;
+  channel: string;
+  subject?: string;
+  body: string;
+  actionLabel?: string;
+  actionPath?: string;
+  metaTemplateName?: string;
+  status?: string;
+}
+
+const TEMPLATES: TemplateSeed[] = [
+  {
+    event: "enquiry_received",
+    channel: "whatsapp",
+    // Two taps from notification to a quote in progress. That deep link is the
+    // mechanic behind the reply-speed number, so it carries the enquiry ref
+    // and lands on the composer, not on a list.
+    body: "New enquiry {ref} for {summary}. Needed by {neededBy} in {area}. {lineCount} lines. Quote before {closesAt}.",
+    actionLabel: "Open and quote",
+    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    metaTemplateName: "bl_enquiry_received_v1",
+    status: "pending_meta",
+  },
+  {
+    event: "enquiry_received",
+    channel: "in_app",
+    body: "New enquiry {ref} — {lineCount} lines for {area}, needed by {neededBy}.",
+    actionLabel: "Open and quote",
+    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    status: "live",
+  },
+  {
+    event: "enquiry_unanswered",
+    channel: "whatsapp",
+    body: "Enquiry {ref} is still unanswered after {hours} hours. It closes {closesAt}.",
+    actionLabel: "Quote now",
+    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    metaTemplateName: "bl_enquiry_unanswered_v1",
+    status: "pending_meta",
+  },
+  {
+    event: "enquiry_escalated",
+    channel: "email",
+    subject: "Enquiry {ref} has gone unanswered",
+    body: "Enquiry {ref} reached your team {hours} hours ago and has no reply. It closes {closesAt}. Median reply time is part of how suppliers rank in search.",
+    actionLabel: "Open the enquiry",
+    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    status: "live",
+  },
+  {
+    // SMS is the fallback when WhatsApp does not deliver. Deliberately terse:
+    // it is one segment, and a two-segment SMS to eight sellers a day is a
+    // cost line nobody budgeted for.
+    event: "enquiry_received",
+    channel: "sms",
+    body: "New enquiry {ref}, {lineCount} lines for {area}. Closes {closesAt}. Quote: {shortLink}",
+    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    status: "live",
+  },
+  {
+    event: "quote_accepted",
+    channel: "sms",
+    body: "Quote {quoteRef} accepted, {amount}. Contact details are on the enquiry: {shortLink}",
+    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    status: "live",
+  },
+  {
+    event: "quote_received",
+    channel: "in_app",
+    body: "{businessName} sent a quote on {ref}, revision {revision}.",
+    actionLabel: "Compare quotes",
+    actionPath: "/enquiry/{enquiryId}/compare",
+    status: "live",
+  },
+  {
+    event: "quote_revised",
+    channel: "in_app",
+    body: "{businessName} revised their quote on {ref} to revision {revision}.",
+    actionLabel: "See what changed",
+    actionPath: "/enquiry/{enquiryId}/thread/{businessSlug}",
+    status: "live",
+  },
+  {
+    event: "quote_accepted",
+    channel: "whatsapp",
+    // What happened, what it is worth, one action.
+    body: "Your quote {quoteRef} was accepted, {amount}. The buyer's contact details are now on the enquiry.",
+    actionLabel: "Open the accepted quote",
+    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    metaTemplateName: "bl_quote_accepted_v1",
+    status: "pending_meta",
+  },
+  {
+    event: "quote_accepted",
+    channel: "email",
+    subject: "Quote {quoteRef} accepted — {amount}",
+    body: "Your quote {quoteRef} for enquiry {ref} was accepted at {amount}. Contact details are on the enquiry page. Payment and delivery are between you and the buyer.",
+    actionLabel: "Open the accepted quote",
+    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    status: "live",
+  },
+  {
+    event: "quote_expiring",
+    channel: "in_app",
+    body: "Quote {quoteRef} expires {expiresAt}. Extend the validity or let it lapse.",
+    actionLabel: "Open the quote",
+    actionPath: "/dashboard/quotes",
+    status: "live",
+  },
+  {
+    event: "review_posted",
+    channel: "email",
+    subject: "A review was posted on your listing",
+    body: "A buyer left a {rating} out of 5 review after enquiry {ref}. You may reply once, and the reply cannot be edited afterwards.",
+    actionLabel: "Read and reply",
+    actionPath: "/dashboard/reviews",
+    status: "live",
+  },
+  {
+    event: "review_requested",
+    channel: "in_app",
+    body: "{businessName} asked for a review of enquiry {ref}.",
+    actionLabel: "Write a review",
+    actionPath: "/review/new?enq={enquiryId}",
+    status: "live",
+  },
+  {
+    event: "document_expiring",
+    channel: "email",
+    subject: "Your trade licence expires {expiresAt}",
+    body: "The trade licence on your listing expires {expiresAt}. Verification drops to tier 2 the day it lapses, with no grace period.",
+    actionLabel: "Upload the renewal",
+    actionPath: "/dashboard/verification",
+    status: "live",
+  },
+  {
+    event: "weekly_digest",
+    channel: "email",
+    subject: "Your week: {enquiryCount} enquiries, {quoteCount} quotes",
+    body: "{enquiryCount} enquiries reached you this week and you quoted {quoteCount}. Median reply time {medianReply}.",
+    actionLabel: "Open the dashboard",
+    actionPath: "/dashboard",
+    status: "live",
+  },
+];
+
+async function seedNotificationTemplates(db: Db) {
+  console.log("→ notification templates");
+  for (const template of TEMPLATES) {
+    await db.notificationTemplate.create({
+      data: {
+        event: template.event as never,
+        channel: template.channel as never,
+        locale: "en",
+        version: 1,
+        status: (template.status ?? "live") as never,
+        subject: template.subject ?? null,
+        body: template.body,
+        actionLabel: template.actionLabel ?? null,
+        actionPath: template.actionPath ?? null,
+        metaTemplateName: template.metaTemplateName ?? null,
+      },
+    });
+  }
+  console.log(`   ${TEMPLATES.length} templates`);
+}

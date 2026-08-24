@@ -22,6 +22,11 @@ function modelBody(name: string): string {
 }
 
 describe("no price on a public surface", () => {
+  it("the buyer's target price is on EnquiryLine, never on Product", () => {
+    expect(modelBody("EnquiryLine")).toMatch(/^\s*targetUnitPriceAed\s+Decimal\?/m);
+    expect(modelBody("Product")).not.toMatch(/target/i);
+  });
+
   it("Product has no price, currency or tier-pricing field", () => {
     const body = modelBody("Product");
     expect(body).not.toMatch(/^\s*price\s/m);
@@ -33,10 +38,16 @@ describe("no price on a public surface", () => {
   it("QuoteLine.unitPrice is the only product price in the schema", () => {
     expect(modelBody("QuoteLine")).toMatch(/^\s*unitPrice\s+Decimal/m);
 
-    // Plan and PlacementSlot carry what we charge sellers. Those are ours, not
-    // a supplier's price for goods, and they never reach a public product page.
+    // Three price fields exist and each earns it:
+    //   unitPrice           a supplier's price, private to one quote
+    //   monthlyPriceAed     what we charge a seller, ours not theirs
+    //   targetUnitPriceAed  what a buyer hopes to pay, their own budget,
+    //                       private to the enquiry and never public
+    // Nothing else may be added without the same kind of justification.
     const priceFields = [...code.matchAll(/^\s*(\w*[Pp]rice\w*)\s+\w/gm)].map((m) => m[1]);
-    expect(new Set(priceFields)).toEqual(new Set(["unitPrice", "monthlyPriceAed"]));
+    expect(new Set(priceFields)).toEqual(
+      new Set(["unitPrice", "monthlyPriceAed", "targetUnitPriceAed"]),
+    );
   });
 });
 

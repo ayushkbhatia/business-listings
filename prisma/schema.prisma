@@ -36,6 +36,15 @@ model User {
   /// Set for a seller seat. Scopes every seller capability to one business.
   businessId  String?  @map("business_id")
   locale      String   @default("en")
+
+  /// A buyer can send an enquiry with no account at all — the board says so and
+  /// it is deliberate, because requiring signup before the first enquiry is the
+  /// fastest way to kill the funnel. A provisional user has a phone number, no
+  /// Supabase auth record, and a token that lets them claim the identity later.
+  isProvisional Boolean   @default(false) @map("is_provisional")
+  claimToken    String?   @unique @map("claim_token")
+  claimedAt     DateTime? @map("claimed_at")
+
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -50,6 +59,7 @@ model User {
   messages          Message[]
   contactReveals    ContactReveal[]
   savedSearches     SavedSearch[]
+  reviewRequests    ReviewRequest[]
 
   @@index([businessId])
   @@map("user")
@@ -155,6 +165,9 @@ model Category {
   placements      PlacementSlot[]
 
   @@index([parentId])
+  /// Synonyms are matched exactly — an Arabic term either is or is not in the
+  /// list — so a plain GIN over the array is the right shape.
+  @@index([synonyms], type: Gin)
   @@map("category")
 }
 
@@ -382,12 +395,16 @@ model Business {
   placements      PlacementSlot[]
   contactReveals  ContactReveal[]
   redirectsFrom   Redirect[]
+  notificationPreference NotificationPreference?
+  reviewRequests  ReviewRequest[]
 
   @@index([primaryCategoryId])
   @@index([claimStatus])
   @@index([verificationTier])
   @@index([publishedAt])
   @@index([licenceExpiry])
+  @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([tradeName(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("business")
 }
 
@@ -504,6 +521,11 @@ model Product {
   @@index([businessId])
   @@index([categoryId])
   @@index([availability])
+  /// Trigram, not full text. A buyer types DN100 or 4" and means an exact
+  /// substring of a machine string; a stemmer helps with neither, and 4" is
+  /// not a legal tsquery. Declared here rather than only in raw SQL so
+  /// `migrate diff` stops reading it as drift and generating a DROP.
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("product")
 }
 
@@ -625,7 +647,8 @@ model Enquiry {
   termsWanted    PaymentTerms? @map("terms_wanted")
   closesAt       DateTime      @map("closes_at")
   /// Set only on acceptance. Releases contact to exactly one business.
-  contactReleasedToBusinessId String? @map("contact_released_to_business_id")
+  contactReleasedToBusinessId String?   @map("contact_released_to_business_id")
+  contactReleasedAt           DateTime? @map("contact_released_at")
   createdAt      DateTime      @default(now()) @map("created_at")
 
   buyer        User               @relation(fields: [buyerId], references: [id], onDelete: Cascade)
@@ -637,6 +660,7 @@ model Enquiry {
   quotes       Quote[]
   messages     Message[]
   review       Review?
+  reviewRequests ReviewRequest[]
 
   @@index([buyerId])
   @@index([closesAt])
@@ -649,6 +673,11 @@ model EnquiryLine {
   description String
   qty         Int
   unit        String?
+  /// What the buyer hopes to pay, per unit. Optional, private to this enquiry
+  /// and its recipients, and never on a public surface. It is the buyer's own
+  /// budget rather than a supplier's price for goods, which is why it sits
+  /// here and not anywhere near Product.
+  targetUnitPriceAed Decimal? @map("target_unit_price_aed") @db.Decimal(12, 2)
   /// Free text as the buyer wrote it, e.g. `DN100` or `4"`.
   size        String?
   sortOrder   Int     @default(0) @map("sort_order")
@@ -667,6 +696,10 @@ model EnquiryRecipient {
   /// Enquiry-to-first-reply is what response time is measured from. Never a
   /// seller-editable field.
   firstReplyAt DateTime?    @map("first_reply_at")
+  /// One follow-up nudge, ever. Board 11b: a second loses more deals than it
+  /// wins, so the column is a timestamp rather than a count and the UI does
+  /// not offer a second.
+  nudgedAt     DateTime?    @map("nudged_at")
   createdAt  DateTime       @default(now()) @map("created_at")
 
   enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
@@ -691,6 +724,9 @@ model Quote {
   sentAt       DateTime?   @map("sent_at")
   readAt       DateTime?   @map("read_at")
   acceptedAt   DateTime?   @map("accepted_at")
+  /// sentAt + validityDays, materialised so the expiry job and the buyer's
+  /// countdown read the same number.
+  expiresAt    DateTime?   @map("expires_at")
   createdAt    DateTime    @default(now()) @map("created_at")
 
   enquiry  Enquiry     @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
@@ -1059,4 +1095,179 @@ model Redirect {
   business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
   @@map("redirect")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications
+//
+// Templates are database records rather than code because handoff 4 gives
+// admin an editor for them, and because a WhatsApp template needs Meta
+// approval before a new version can send — so a version has to be a row with a
+// status, not a deploy.
+//
+// Rule 1 applies here hardest: no notification of any kind may contain a
+// buyer's contact details. A test asserts it across every template.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum NotificationEvent {
+  enquiry_received
+  enquiry_unanswered
+  enquiry_escalated
+  quote_received
+  quote_revised
+  quote_accepted
+  quote_expiring
+  review_posted
+  review_requested
+  document_expiring
+  weekly_digest
+
+  @@map("notification_event")
+}
+
+enum NotificationChannel {
+  whatsapp
+  sms
+  email
+  in_app
+
+  @@map("notification_channel")
+}
+
+enum TemplateApproval {
+  draft
+  /// WhatsApp only: submitted to Meta and waiting.
+  pending_meta
+  live
+  retired
+
+  @@map("template_approval")
+}
+
+model NotificationTemplate {
+  id       String              @id @default(cuid())
+  event    NotificationEvent
+  channel  NotificationChannel
+  locale   String              @default("en")
+  version  Int                 @default(1)
+  status   TemplateApproval    @default(draft)
+
+  /// Email only.
+  subject  String?
+  /// Placeholders are {curly}. Never a buyer phone, email or company name.
+  body     String
+  /// The one action. Deep link, relative.
+  actionLabel String? @map("action_label")
+  actionPath  String? @map("action_path")
+
+  /// WhatsApp only: the Meta-approved template name this maps to.
+  metaTemplateName String? @map("meta_template_name")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  deliveries NotificationDelivery[]
+
+  @@unique([event, channel, locale, version])
+  @@index([event, channel, status])
+  @@map("notification_template")
+}
+
+/// A seller's routing matrix, board 7e. One row per business.
+model NotificationPreference {
+  id         String   @id @default(cuid())
+  businessId String   @unique @map("business_id")
+
+  /// Event to channels, e.g. { "enquiry_received": ["whatsapp", "in_app"] }.
+  /// JSON rather than a join table: the matrix is edited as a whole and read
+  /// as a whole, and a row per cell would be forty rows nobody queries singly.
+  routing    Json     @default("{}")
+
+  /// Quiet hours suppress WhatsApp and SMS. In-app is never suppressed —
+  /// it is not an interruption.
+  quietHoursEnabled Boolean @default(true)  @map("quiet_hours_enabled")
+  quietFromHour     Int     @default(21)    @map("quiet_from_hour")
+  quietToHour       Int     @default(7)     @map("quiet_to_hour")
+  quietOnSunday     Boolean @default(true)  @map("quiet_on_sunday")
+
+  /// A high-value enquiry overrides quiet hours. Null means never override.
+  highValueOverrideAed Int? @default(50000) @map("high_value_override_aed")
+
+  /// Where the escalation in the matrix goes after two hours unanswered.
+  escalateToUserId String?  @db.Uuid @map("escalate_to_user_id")
+  escalateAfterMinutes Int  @default(120) @map("escalate_after_minutes")
+
+  /// The single follow-up nudge, and how long after delivery it fires.
+  nudgeEnabled     Boolean @default(true) @map("nudge_enabled")
+  nudgeAfterHours  Int     @default(24)   @map("nudge_after_hours")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preference")
+}
+
+enum DeliveryStatus {
+  queued
+  /// Held by quiet hours, to send when they lift.
+  deferred
+  sent
+  failed
+  /// Suppressed on purpose — duplicate, or the channel is off in the matrix.
+  skipped
+
+  @@map("delivery_status")
+}
+
+/// Every send attempt. Quiet-hours deferral, deduplication and the one-nudge
+/// rule all need to know what has already gone out.
+model NotificationDelivery {
+  id         String              @id @default(cuid())
+  templateId String?             @map("template_id")
+  event      NotificationEvent
+  channel    NotificationChannel
+  status     DeliveryStatus      @default(queued)
+
+  /// Who it went to. A user id, never a phone number — the number is read from
+  /// the user at send time and never stored on the log.
+  recipientUserId String? @db.Uuid @map("recipient_user_id")
+  businessId      String? @map("business_id")
+  enquiryId       String? @map("enquiry_id")
+
+  /// Why it was skipped or deferred, for the seller's own audit of their alerts.
+  reason      String?
+  scheduledFor DateTime? @map("scheduled_for")
+  sentAt      DateTime? @map("sent_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  template NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([event, businessId, createdAt])
+  @@index([status, scheduledFor])
+  @@map("notification_delivery")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review requests
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Seller-initiated, board 11c. One per buyer ever — the unique constraint is
+/// the rule, not a screen that remembers. No incentives: an incentivised
+/// review is removed and logged against the account.
+model ReviewRequest {
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  buyerId    String   @db.Uuid @map("buyer_id")
+  /// The accepted quote that earns the right to ask.
+  enquiryId  String   @map("enquiry_id")
+  sentAt     DateTime @default(now()) @map("sent_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  buyer    User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, buyerId])
+  @@index([businessId, sentAt])
+  @@map("review_request")
 }

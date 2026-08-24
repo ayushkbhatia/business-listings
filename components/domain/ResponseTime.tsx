@@ -27,12 +27,13 @@ export interface ResponseTimeProps {
 }
 
 /**
- * Bands, in hours. Inferred — the design system names the three colours but
- * not the thresholds. Four hours is inside a working morning in the UAE; a day
- * is still same-business-day; past that a buyer has moved on.
+ * Bands, in hours. Stated by the handoff 2 README: green under two hours,
+ * amber under six, red beyond. Handoff 1 shipped 4h/24h as an explicit
+ * inference; these are the real numbers and they are tighter, which is the
+ * right direction for a market where reply speed is the product.
  */
-const FAST_MS = 4 * 3_600_000;
-const SLOW_MS = 24 * 3_600_000;
+const FAST_MS = 2 * 3_600_000;
+const SLOW_MS = 6 * 3_600_000;
 
 export function ResponseTime({
   medianMs,
