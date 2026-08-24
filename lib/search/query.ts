@@ -1,0 +1,135 @@
+/**
+ * The search query, parsed out of the URL and back into it.
+ *
+ * Tab state lives in the URL, not in component state: two tabs over one query
+ * means a buyer can send someone the products tab of a search, and it means the
+ * back button does what they expect.
+ */
+export type SearchTab = "businesses" | "products";
+
+export interface SearchQuery {
+  q: string;
+  tab: SearchTab;
+  emirate?: string;
+  area?: string;
+  /** Minimum verification tier. Set explicitly by the buyer. */
+  tier?: number;
+  freeZone?: boolean;
+  availability?: string[];
+  /** Maximum median reply, in hours. */
+  replyWithinHours?: number;
+  /** Minimum years trading. */
+  yearsTrading?: number;
+  /** Spec facets, keyed by SpecField id. */
+  spec: Record<string, string[]>;
+  page: number;
+}
+
+const RESERVED = new Set([
+  "q", "tab", "emirate", "area", "tier", "freeZone", "availability",
+  "replyWithinHours", "yearsTrading", "page",
+]);
+
+function list(value: string | string[] | undefined): string[] {
+  if (!value) return [];
+  return (Array.isArray(value) ? value : [value]).flatMap((v) => v.split(",")).filter(Boolean);
+}
+
+function one(value: string | string[] | undefined): string | undefined {
+  const [first] = list(value);
+  return first;
+}
+
+export function parseSearchQuery(
+  params: Record<string, string | string[] | undefined>,
+): SearchQuery {
+  const tier = Number(one(params.tier));
+  const hours = Number(one(params.replyWithinHours));
+  const years = Number(one(params.yearsTrading));
+  const page = Number(one(params.page));
+
+  // Anything not reserved is a spec facet, keyed by SpecField id. The rail is
+  // generated from the template, so the query string has to be open the same
+  // way: adding a filterable field must not need a code change here either.
+  const spec: Record<string, string[]> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (RESERVED.has(key)) continue;
+    const values = list(value);
+    if (values.length > 0) spec[key] = values;
+  }
+
+  return {
+    q: (one(params.q) ?? "").trim(),
+    tab: one(params.tab) === "products" ? "products" : "businesses",
+    emirate: one(params.emirate),
+    area: one(params.area),
+    tier: Number.isFinite(tier) && tier > 0 ? Math.min(4, tier) : undefined,
+    freeZone: one(params.freeZone) === "1" || one(params.freeZone) === "true",
+    availability: list(params.availability),
+    replyWithinHours: Number.isFinite(hours) && hours > 0 ? hours : undefined,
+    yearsTrading: Number.isFinite(years) && years > 0 ? years : undefined,
+    spec,
+    page: Number.isFinite(page) && page > 1 ? page : 1,
+  };
+}
+
+/** Facets the buyer set, for the chip row and the drop-a-filter suggestion. */
+export interface AppliedFacet {
+  /** Query-string key. */
+  key: string;
+  /** Localised facet name, e.g. "Emirate". */
+  facet: string;
+  /** Localised value, e.g. "Dubai". */
+  value: string;
+}
+
+export function toSearchParams(query: SearchQuery, overrides: Partial<SearchQuery> = {}): string {
+  const merged = { ...query, ...overrides };
+  const params = new URLSearchParams();
+
+  if (merged.q) params.set("q", merged.q);
+  if (merged.tab !== "businesses") params.set("tab", merged.tab);
+  if (merged.emirate) params.set("emirate", merged.emirate);
+  if (merged.area) params.set("area", merged.area);
+  if (merged.tier) params.set("tier", String(merged.tier));
+  if (merged.freeZone) params.set("freeZone", "1");
+  if (merged.availability?.length) params.set("availability", merged.availability.join(","));
+  if (merged.replyWithinHours) params.set("replyWithinHours", String(merged.replyWithinHours));
+  if (merged.yearsTrading) params.set("yearsTrading", String(merged.yearsTrading));
+  for (const [field, values] of Object.entries(merged.spec)) {
+    if (values.length > 0) params.set(field, values.join(","));
+  }
+  if (merged.page > 1) params.set("page", String(merged.page));
+
+  return params.toString();
+}
+
+/** The same query with one facet removed. Drives "drop this filter". */
+export function withoutFacet(query: SearchQuery, key: string): SearchQuery {
+  const next: SearchQuery = { ...query, spec: { ...query.spec }, page: 1 };
+  switch (key) {
+    case "emirate": delete next.emirate; break;
+    case "area": delete next.area; break;
+    case "tier": delete next.tier; break;
+    case "freeZone": next.freeZone = false; break;
+    case "availability": next.availability = []; break;
+    case "replyWithinHours": delete next.replyWithinHours; break;
+    case "yearsTrading": delete next.yearsTrading; break;
+    default: delete next.spec[key];
+  }
+  return next;
+}
+
+/** Every facet currently applied, as query-string keys. */
+export function appliedKeys(query: SearchQuery): string[] {
+  const keys: string[] = [];
+  if (query.emirate) keys.push("emirate");
+  if (query.area) keys.push("area");
+  if (query.tier) keys.push("tier");
+  if (query.freeZone) keys.push("freeZone");
+  if (query.availability?.length) keys.push("availability");
+  if (query.replyWithinHours) keys.push("replyWithinHours");
+  if (query.yearsTrading) keys.push("yearsTrading");
+  keys.push(...Object.keys(query.spec));
+  return keys;
+}

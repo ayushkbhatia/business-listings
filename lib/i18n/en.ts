@@ -86,6 +86,8 @@ export const en = {
   "search.label": "Search suppliers and products",
   "search.placeholder": "Gate valve, DN100, Al Quoz",
   "search.clear": "Clear search",
+  "search.results_title": "Search results",
+  "search.results_for": "Results for “{query}”",
 
   // ── Upload ──
   "upload.idle": "Drop a file here, or choose one",
@@ -411,6 +413,49 @@ export const en = {
   "storefront.day.thu": "Thursday",
   "storefront.day.fri": "Friday",
   "storefront.day.sat": "Saturday",
+
+  // ── Search and results ──
+  "results.businesses_tab": "Suppliers",
+  "results.products_tab": "Products",
+  "results.count": { one: "{count} supplier", other: "{count} suppliers" },
+  "results.product_count": { one: "{count} product", other: "{count} products" },
+  "results.in_area": "{count} in {area}",
+  "results.sponsored": "Sponsored",
+  "results.sponsored_note": "A supplier pays for this slot. It never outranks a verified supplier on a filter you set.",
+  "results.filters": "Filters",
+  "results.applied": { one: "{count} filter applied", other: "{count} filters applied" },
+  "results.clear_all": "Clear all",
+  "results.remove_filter": "Remove the {facet} filter",
+  "results.facet_selected": "selected, activate to remove",
+
+  "facet.tier": "Verification",
+  "facet.tier_option": "Tier {tier} and up",
+  "facet.emirate": "Emirate",
+  "facet.availability": "Availability",
+  "facet.free_zone": "Free zone",
+  "facet.free_zone_option": "Free zone only",
+  "facet.reply": "Replies within",
+  "facet.reply_option": "{hours} hours",
+  "facet.years": "Years trading",
+  "facet.years_option": "{years} years or more",
+
+  // ── Zero results, board 10c. A designed state, not a fallback. ──
+  "zero.title": "Nothing matches all of that",
+  "zero.query_title": "No supplier matches “{query}”",
+  "zero.drop": "Drop the {facet} filter",
+  "zero.drop_yields": { one: "{count} result", other: "{count} results" },
+  "zero.nothing_helps": "Removing any single filter still returns nothing. The words themselves may be the problem — try a broader term, or the category browse.",
+  "zero.rfq_title": "Ask the whole trade instead",
+  "zero.rfq_body": "Send one requirement to up to eight suppliers and let them come to you. This is how buyers find the things nobody has listed yet.",
+  "zero.rfq_cta": "Post a requirement",
+  "zero.browse": "Browse {category}",
+  "zero.recorded": "We record searches that find nothing, and use them to decide which trades to go and recruit.",
+
+  // ── Category pages ──
+  "category.subcategories": "Browse by type",
+  "category.suppliers_in": "{category} suppliers in the UAE",
+  "category.intro_count": "{count} listed suppliers, {verified} of them verified.",
+  "seo.category_description": "{count} {category} suppliers across the UAE. Filter by verification, emirate and specification, then send one enquiry.",
 
   // ── Trust ──
   "verification.tier": "Verification tier {tier}",

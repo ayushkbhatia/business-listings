@@ -64,7 +64,12 @@ function slugify(s: string): string {
     .replace(/^-|-$/g, "");
 }
 
-/** DN to the imperial names a seller might have typed instead. */
+/**
+ * Metric and imperial are the same size to the trade and different strings to a
+ * database. A seller who types 4" and a buyer who types DN100 mean one thing,
+ * and the match surface has to carry both directions or the products tab is
+ * worth nothing.
+ */
 const DN_SYNONYMS: Record<string, string[]> = {
   DN15: ['1/2"', "1/2 inch", "half inch"],
   DN20: ['3/4"', "3/4 inch"],
@@ -82,9 +87,14 @@ const DN_SYNONYMS: Record<string, string[]> = {
   DN300: ['12"', "12 inch"],
 };
 
+/** The reverse of DN_SYNONYMS: an imperial size back to its metric name. */
+const INCH_TO_DN: Record<string, string> = Object.fromEntries(
+  Object.entries(DN_SYNONYMS).flatMap(([dn, names]) => names.map((n) => [n, dn])),
+);
+
 /**
- * The denormalised match surface. Both DN100 and 4" land here, which is what
- * lets a DN100 query find a product whose seller typed 4".
+ * The denormalised match surface. Both DN100 and 4" land here whichever way the
+ * seller typed it, which is what lets each query find the other's products.
  */
 function buildSearchText(parts: {
   name: string;
@@ -104,11 +114,21 @@ function buildSearchText(parts: {
   add(parts.categoryName);
   add(parts.size);
   for (const syn of DN_SYNONYMS[parts.size ?? ""] ?? []) add(syn);
+  const metricOfSize = INCH_TO_DN[parts.size ?? ""];
+  if (metricOfSize) {
+    add(metricOfSize);
+    for (const syn of DN_SYNONYMS[metricOfSize] ?? []) add(syn);
+  }
   for (const value of Object.values(parts.specValues)) {
     if (Array.isArray(value)) value.forEach(add);
     else add(value);
     const key = String(value);
     for (const syn of DN_SYNONYMS[key] ?? []) add(syn);
+    const metric = INCH_TO_DN[key];
+    if (metric) {
+      add(metric);
+      for (const syn of DN_SYNONYMS[metric] ?? []) add(syn);
+    }
   }
   return [...tokens].join(" ");
 }
@@ -484,6 +504,48 @@ async function seedProducts(
           searchText: buildSearchText({ name, sku, categoryName: b.categorySlug.replace(/-/g, " "), specValues, size }),
           description: `Supplied ex-stock or to order. Datasheet available on request.`,
           status: availability === "out_of_stock" ? "out_of_stock" : "live",
+        },
+      });
+      total += 1;
+    }
+
+    /*
+     * One imperial-first product per valve catalogue. A real share of UAE
+     * sellers type 4" because that is what their supplier's datasheet says, and
+     * acceptance criterion 3 is only meaningfully demonstrated against a
+     * product actually stored that way — not against a DN100 product that
+     * merely carries 4" as a synonym.
+     */
+    if (isValves) {
+      const imperialSize = pick(['2"', '4"', '6"']);
+      const specValues: Record<string, string | number | string[]> = {
+        [fieldId("nominal_diameter")]: imperialSize,
+        [fieldId("pressure_rating")]: "PN16",
+        [fieldId("body_material")]: "Cast iron",
+        [fieldId("end_connection")]: "Flanged",
+      };
+      const name = `Cast iron gate valve ${imperialSize}`;
+      const mark = b.slug.replace(/[^a-z]/g, "").slice(0, 3).toUpperCase();
+      const sku = `${mark}-9${bi}`;
+      await db.product.create({
+        data: {
+          businessId: b.id,
+          name,
+          slug: `cast-iron-gate-valve-imperial-${bi}`,
+          sku,
+          categoryId: catBySlug.get(b.categorySlug)!,
+          availability: "in_stock",
+          stockQty: int(10, 200),
+          specValues,
+          searchText: buildSearchText({
+            name,
+            sku,
+            categoryName: b.categorySlug.replace(/-/g, " "),
+            specValues,
+            size: imperialSize,
+          }),
+          description: "Imperial sizing as printed on the manufacturer datasheet.",
+          status: "live",
         },
       });
       total += 1;

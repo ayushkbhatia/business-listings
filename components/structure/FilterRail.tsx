@@ -32,9 +32,14 @@ export interface FilterRailProps {
   label: string;
   /** Total filters applied, across every section. */
   appliedCount: number;
-  appliedLabel: (count: number) => string;
+  /** Already localised and pluralised. A string, not a formatter: a server
+   * component cannot hand a function across the client boundary, and the
+   * results page that uses this is server-rendered. */
+  appliedLabel: string;
   clearAllLabel: string;
-  onClearAll: () => void;
+  /** Clear by navigation, for a server-rendered rail. */
+  clearAllHref?: string;
+  onClearAll?: () => void;
 }
 
 export function FilterRail({
@@ -43,26 +48,36 @@ export function FilterRail({
   appliedCount,
   appliedLabel,
   clearAllLabel,
+  clearAllHref,
   onClearAll,
 }: FilterRailProps) {
+  const clearClasses = cn(
+    "rounded-tag text-caption text-moss underline-offset-2",
+    "transition-colors duration-120 ease-out hover:text-moss-hover hover:underline",
+    "focus-visible:outline-none focus-visible:shadow-focus",
+  );
   return (
     <aside aria-label={label} className="w-full">
+      {/*
+        The rail's own heading. Its sections are h3, and without this they sit
+        directly under the page h1 — a skipped level, and an outline that reads
+        as ten unrelated sections rather than ten filters.
+      */}
+      <h2 className="sr-only">{label}</h2>
       {appliedCount > 0 && (
         <div className="flex items-center justify-between gap-2 border-b border-line py-2">
           <span aria-live="polite" className="font-mono text-eyebrow tabular-nums text-muted">
-            {appliedLabel(appliedCount)}
+            {appliedLabel}
           </span>
-          <button
-            type="button"
-            onClick={onClearAll}
-            className={cn(
-              "rounded-tag text-caption text-moss underline-offset-2",
-              "transition-colors duration-120 ease-out hover:text-moss-hover hover:underline",
-              "focus-visible:outline-none focus-visible:shadow-focus",
-            )}
-          >
-            {clearAllLabel}
-          </button>
+          {clearAllHref ? (
+            <a href={clearAllHref} className={clearClasses}>
+              {clearAllLabel}
+            </a>
+          ) : (
+            <button type="button" onClick={onClearAll} className={clearClasses}>
+              {clearAllLabel}
+            </button>
+          )}
         </div>
       )}
 

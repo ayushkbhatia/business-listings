@@ -238,3 +238,51 @@ The design system says "dimmed"; it also says never hide the feature.
 - Whether the map has a clustered state in the canvas; MapCanvas types the
   cluster circle in its documented hierarchy but does not yet render one, as
   nothing in the seed has enough co-located pins to need it.
+
+---
+
+## Handoff 1, step 4 — search
+
+### Ranking is in the process, not in Postgres
+The weights object is the deliverable board 12c specifies and it is exact. The
+scoring runs in Node over a bounded candidate set of 200 rows, which is correct
+at 41 listings and wrong at 41,000. Moving it to a Postgres-side score is a
+query change; `lib/search/ranking.ts` moves unchanged, which is the point of
+having it as config.
+
+### Unmeasured signals score half, not zero
+Not specified anywhere. A new supplier has no response time and no reviews, and
+scoring those as "worst possible" would bury every listing on its first day and
+freeze the top of every category. Half credit is the honest position: we do not
+know. Same for distance, which is unknown for almost every buyer because the
+site never asks where they are.
+
+### Response-time bands
+Full marks at four hours or better, zero at a week, linear between. Same
+thresholds as the ResponseTime component.
+
+### The sponsored slot
+Top of page one when the buyer has set no verification filter; natural rank
+position when they have. Either way it is labelled and there is at most one.
+The rule in the README is "never outranks a verified supplier on a filter the
+buyer explicitly set" — this reads that as the verification facet specifically,
+which is the only facet where "outranking" has a trust meaning.
+
+### Facet counts are measured with that facet cleared
+Otherwise every unpicked option reads zero, which is the most common way a
+filter rail becomes useless. Spec-facet counts are grouped in the process over
+up to 1,000 matching rows rather than in SQL, because a JSON column with a
+dynamic key does not group cleanly through the query builder.
+
+### Imperial-first products in the seed
+Added so criterion 3 has a real subject. A DN100 product that merely carries 4"
+as a synonym does not demonstrate anything; a product named and specced `4"`,
+found by a DN100 query, does. Both directions are now in the match surface.
+
+### Still unknown
+- Whether a category page should be indexable with filters applied. Currently
+  the canonical drops the query string and /search is noindex, which is the
+  conservative reading.
+- Whether the results toolbar should carry a sort control. Nothing in the
+  README mentions one, and ranking is the answer to sorting here.
+- What the sponsored slot looks like beyond "always labelled".

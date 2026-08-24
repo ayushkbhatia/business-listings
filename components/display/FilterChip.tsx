@@ -16,12 +16,30 @@ export interface FilterChipProps {
   facet?: string;
   children: React.ReactNode;
   onRemove?: () => void;
+  /**
+   * Remove by navigation instead of a handler, for a server-rendered results
+   * page. A filter rail that only works once JavaScript arrives is a filter
+   * rail that does not work on the first paint Google sees.
+   */
+  removeHref?: string;
   removeLabel?: string;
   /** No remove control — for a facet fixed by the route, like the category. */
   fixed?: boolean;
 }
 
-export function FilterChip({ facet, children, onRemove, removeLabel, fixed = false }: FilterChipProps) {
+export function FilterChip({
+  facet,
+  children,
+  onRemove,
+  removeHref,
+  removeLabel,
+  fixed = false,
+}: FilterChipProps) {
+  const removeClasses = cn(
+    "flex size-4 items-center justify-center rounded-tag text-moss",
+    "transition-colors duration-120 ease-out hover:bg-card hover:text-moss-hover",
+    "focus-visible:outline-none focus-visible:shadow-focus",
+  );
   return (
     <span
       className={cn(
@@ -32,17 +50,18 @@ export function FilterChip({ facet, children, onRemove, removeLabel, fixed = fal
     >
       {facet && <span className="text-muted">{facet}:</span>}
       {children}
-      {!fixed && onRemove && removeLabel && (
+      {!fixed && removeLabel && removeHref && (
+        <a href={removeHref} aria-label={removeLabel} title={removeLabel} className={removeClasses}>
+          <Close size={11} />
+        </a>
+      )}
+      {!fixed && removeLabel && !removeHref && onRemove && (
         <button
           type="button"
           aria-label={removeLabel}
           title={removeLabel}
           onClick={onRemove}
-          className={cn(
-            "flex size-4 items-center justify-center rounded-tag text-moss",
-            "transition-colors duration-120 ease-out hover:bg-card hover:text-moss-hover",
-            "focus-visible:outline-none focus-visible:shadow-focus",
-          )}
+          className={removeClasses}
         >
           <Close size={11} />
         </button>

@@ -112,7 +112,7 @@ export function Overlays() {
           <FilterRail
             label={`${t("overlay.filters_title")} — in drawer`}
             appliedCount={applied}
-            appliedLabel={(count) => t("table.filters_applied", { count })}
+            appliedLabel={t("table.filters_applied", { count: applied })}
             clearAllLabel={t("table.clear_filters")}
             onClearAll={() => setApplied(0)}
             sections={[
@@ -165,7 +165,7 @@ export function Overlays() {
             <FilterRail
               label={`${t("overlay.filters_title")} — rail`}
               appliedCount={applied}
-              appliedLabel={(count) => t("table.filters_applied", { count })}
+              appliedLabel={t("table.filters_applied", { count: applied })}
               clearAllLabel={t("table.clear_filters")}
               onClearAll={() => setApplied(0)}
               sections={[
