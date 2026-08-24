@@ -21,6 +21,21 @@ let admin: SupabaseClient | null = null;
 const createdEnquiryIds: string[] = [];
 const createdUserIds: string[] = [];
 
+/**
+ * Creating a lightweight identity needs the Supabase admin API, which CI has no
+ * key for. Everything else in this file needs Postgres and nothing else, so
+ * only the one test is guarded rather than the suite.
+ */
+const canCreateIdentities = Boolean(
+  process.env["SUPABASE_SECRET_KEY"] && process.env["NEXT_PUBLIC_SUPABASE_URL"],
+);
+if (!canCreateIdentities) {
+  console.warn(
+    "[enquiry-fanout] the anonymous-buyer test is skipped: it needs SUPABASE_SECRET_KEY. " +
+      "The provisional identity path is unproven in this environment.",
+  );
+}
+
 /** Digits nobody else in the seed uses, so a leak is unambiguous. */
 const BUYER_PHONE = "+971509988771";
 const BUYER_NAME = "Khalid Al Nuaimi";
@@ -99,7 +114,7 @@ describe("criterion 1 — sending an enquiry", () => {
     expect(new Set(rows.map((r) => r.state))).toEqual(new Set(["delivered"]));
   });
 
-  it("lets a buyer with no account send one, and builds them an identity", async () => {
+  it.skipIf(!canCreateIdentities)("lets a buyer with no account send one, and builds them an identity", async () => {
     // The README is explicit: requiring signup before the first enquiry is the
     // fastest way to kill the funnel.
     const result = await createEnquiry({
