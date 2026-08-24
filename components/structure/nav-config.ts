@@ -82,7 +82,7 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
     labelKey: "nav.group.overview",
     items: [
       { key: "dashboard", labelKey: "nav.dashboard", href: "/dashboard" },
-      { key: "setup", labelKey: "nav.setup", href: "/dashboard/setup" , later: true },
+      { key: "setup", labelKey: "nav.setup", href: "/dashboard/setup" },
     ],
   },
   {

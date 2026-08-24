@@ -1,5 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { DASHBOARD_NAV } from "@/components/structure/nav-config";
+import { t } from "@/lib/i18n";
 
 /**
  * Criterion 11, for the seller side:
@@ -171,25 +173,46 @@ test.describe("the seller shell", () => {
     await expect(page.getByText(/Development only/)).toHaveCount(0);
   });
 
-  test("locks what this role cannot reach rather than hiding it", async ({ page }) => {
+  test("links what is built and names what is not, whatever the config says", async ({ page }) => {
     await page.goto("/dashboard/leads");
     const nav = page.getByRole("navigation", { name: /Seller navigation/ });
     await expect(nav).toBeVisible();
-    /*
-     * A seller has to know a screen exists before they can ask for access, and
-     * an unbuilt one is named without being a link. Both are the same rule.
-     *
-     * Setup, because it is still unbuilt — it arrives with onboarding in step 5.
-     * This asserted Analytics until step 4 built it, at which point the test was
-     * asserting a deferral that no longer existed. Worth naming: a test pinned
-     * to a *temporary* state fails the moment the work it was waiting for lands,
-     * which is the right failure but only if somebody reads it as one.
-     */
-    await expect(nav.getByText("Setup")).toBeVisible();
-    await expect(nav.getByRole("link", { name: /^Setup/ })).toHaveCount(0);
 
-    // And the built ones are links, which is the other half of the same rule.
-    await expect(nav.getByRole("link", { name: /Analytics/ })).toHaveCount(1);
+    /*
+     * Derived from DASHBOARD_NAV rather than naming a route.
+     *
+     * This has now broken twice for the same reason: it named Analytics as an
+     * unbuilt example, step 4 built it; it named Setup instead, step 5 built
+     * that. Each step builds one more, so any test that hardcodes *which* route
+     * is deferred is a test with an expiry date — and the failure looks like a
+     * regression rather than like progress.
+     *
+     * Both halves of the rule, read off the config: a deferred item is named
+     * and not linked, a built one is a link. Today there are no deferred seller
+     * items left, and this asserting nothing on that side is itself the honest
+     * answer.
+     */
+    const items = DASHBOARD_NAV.flatMap((group) => group.items);
+    expect(items.length).toBeGreaterThan(5);
+
+    // Scoped to the list items. A group heading carries the same word as one of
+    // its items — "Overview" is both — and matching on text alone finds two.
+    const rows = nav.locator("li");
+
+    for (const item of items) {
+      const label = t(item.labelKey);
+      await expect(rows.getByText(label, { exact: true }).first(), label).toBeVisible();
+      /*
+       * Anchored, not exact. An item carrying a badge has the count in its
+       * accessible name — "Leads & RFQ 13" — so an exact match finds nothing
+       * on precisely the items that matter most.
+       */
+      const named = new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`);
+      await expect(
+        rows.getByRole("link", { name: named }),
+        `${label} should ${item.later ? "not " : ""}be a link`,
+      ).toHaveCount(item.later ? 0 : 1);
+    }
   });
 
   test("every internal link in the dashboard resolves", async ({ page, request }) => {

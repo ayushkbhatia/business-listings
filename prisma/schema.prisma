@@ -78,6 +78,8 @@ model User {
   changeRequests ListingChangeRequest[] @relation("ChangeRequestActor")
   changesDecided ListingChangeRequest[] @relation("ChangeRequestDecider")
   invitesSent    TeamInvite[]           @relation("InviteSender")
+  claimsMade     ClaimSubmission[]      @relation("ClaimClaimant")
+  visitsRequested SiteVisitRequest[]    @relation("VisitRequester")
 
   @@index([businessId])
   @@map("user")
@@ -455,6 +457,8 @@ model Business {
   importMappings         ImportMapping[]
   changeRequests         ListingChangeRequest[]
   teamInvites            TeamInvite[]
+  claimSubmissions       ClaimSubmission[]
+  visitRequests          SiteVisitRequest[]
   placementWaitlist      PlacementWaitlist[]
   quotes                 Quote[]
   messages               Message[]
@@ -668,6 +672,7 @@ model Document {
   business Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
   product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
   enquiry  Enquiry?  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  claims   ClaimSubmission[]
 
   @@index([businessId])
   @@index([productId])
@@ -950,6 +955,75 @@ model PlacementWaitlist {
   @@unique([businessId, categoryId, emirate])
   @@index([categoryId, emirate, createdAt])
   @@map("placement_waitlist")
+}
+
+/// Somebody saying "this listing is mine".
+///
+/// Boards 2a and 2b. Two routes, both human-checked: a trade licence upload, or
+/// a call to the number on the public licence record. The submission is taken
+/// either way — including when somebody else has already claimed the listing,
+/// because a conflicting claim is a thing staff need to see rather than a door
+/// to close in front of the second person.
+///
+/// Nothing here moves `Business.claimStatus`. Handoff 4 builds the queue that
+/// decides; handoff 3 fills it, and criterion 1 is about the seller getting all
+/// the way to a dashboard without staff involvement — not about the claim being
+/// approved without one.
+model ClaimSubmission {
+  id         String      @id @default(cuid())
+  businessId String      @map("business_id")
+  claimantId String      @map("claimant_id") @db.Uuid
+  route      ClaimRoute
+  /// The licence document, on the licence route.
+  documentId String?     @map("document_id")
+  /// The number we would call, on the phone route. Taken from the public
+  /// licence record, never typed by the claimant — that is the whole check.
+  phone      String?
+  /// True when somebody else already held it. Staff see both.
+  contested  Boolean     @default(false)
+  status     ClaimStatus @default(unclaimed)
+  decidedAt  DateTime?   @map("decided_at")
+  /// NOT NULL once decided, enforced by a check constraint in the migration.
+  decisionReason String?  @map("decision_reason")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  claimant User      @relation("ClaimClaimant", fields: [claimantId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+
+  @@index([businessId, status])
+  @@index([status, createdAt])
+  @@map("claim_submission")
+}
+
+enum ClaimRoute {
+  licence_upload
+  phone_callback
+
+  @@map("claim_route")
+}
+
+/// A seller asking for the site visit that tier 3 needs.
+///
+/// Board 8e. `Business.visitedAt` is staff-written and feeds a trust signal, so
+/// a seller's *request* cannot live on it. Separate row, and the tier still
+/// only moves when somebody has actually been.
+model SiteVisitRequest {
+  id           String    @id @default(cuid())
+  businessId   String    @map("business_id")
+  requestedById String   @map("requested_by_id") @db.Uuid
+  /// What the seller said suits them. Not a booking; we call to arrange.
+  preferredNote String?  @map("preferred_note")
+  scheduledFor DateTime? @map("scheduled_for")
+  completedAt  DateTime? @map("completed_at")
+  cancelledAt  DateTime? @map("cancelled_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  requestedBy User     @relation("VisitRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+
+  @@index([businessId, createdAt])
+  @@map("site_visit_request")
 }
 
 model MissedEnquiry {
