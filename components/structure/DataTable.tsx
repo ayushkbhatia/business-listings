@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { cn } from "@/lib/cn";
 import { Checkbox } from "@/components/primitives";
 import { ChevronDown, Dots } from "@/components/primitives/icons";
@@ -79,6 +79,42 @@ export interface DataTableProps<Row> {
   loadingRows?: number;
   /** Rendered in place of the body when there are no rows. */
   empty?: React.ReactNode;
+  /**
+   * Rendered in place of the body when the query failed.
+   *
+   * Never the same node as `empty`, and the reason is the whole point. A queue
+   * that renders a broken query as "nothing to do" tells the person whose job
+   * is clearing that queue that their job is done. It is the worst failure this
+   * component can have, and until this prop existed it was the default one.
+   */
+  error?: React.ReactNode;
+  /**
+   * Keeps the column heads visible while the body scrolls.
+   *
+   * For queues read a hundred rows at a time. Off by default: a sticky head
+   * inside a short table is a head that covers content for no reason.
+   */
+  stickyHeader?: boolean;
+  /**
+   * Bands the rows into labelled groups — the dedupe confidence bands, a queue
+   * split by age. Rows are rendered in the order given; this does not sort them,
+   * because a group that reorders the table hides which row was actually next.
+   */
+  groupBy?: (row: Row) => string;
+  /** The band heading. Gets the row count so it can say how many are in it. */
+  groupLabel?: (key: string, count: number) => React.ReactNode;
+  /**
+   * A totals row, in a real `<tfoot>`. Money screens need one and a `<tr>` at
+   * the end of `<tbody>` is a row that sorts, filters and paginates with the data.
+   */
+  footer?: React.ReactNode;
+  /**
+   * Which columns to render, by key. Omitted means all of them.
+   *
+   * Distinct from `hideBelow`, which is responsive and automatic. This is a
+   * person deciding a column is not worth the width today.
+   */
+  visibleColumns?: readonly string[];
 
   pagination?: {
     page: number;
@@ -89,6 +125,10 @@ export interface DataTableProps<Row> {
     previousLabel: string;
     nextLabel: string;
     pageLabel: (page: number) => string;
+    /** Offering a page size at all is what stops "show me everything" being a request. */
+    pageSizeOptions?: readonly number[];
+    onPageSizeChange?: (size: number) => void;
+    pageSizeLabel?: string;
   };
 }
 
@@ -135,18 +175,141 @@ export function DataTable<Row>({
   loading = false,
   loadingRows = 6,
   empty,
+  error,
+  stickyHeader = false,
+  groupBy,
+  groupLabel,
+  footer,
+  visibleColumns,
   pagination,
 }: DataTableProps<Row>) {
+  const shown = useMemo(
+    () =>
+      visibleColumns
+        ? columns.filter((c) => visibleColumns.includes(c.key))
+        : columns,
+    [columns, visibleColumns],
+  );
   const selectedSet = useMemo(() => new Set(selected), [selected]);
   const allKeys = useMemo(() => rows.map(rowKey), [rows, rowKey]);
-  const allSelected = rows.length > 0 && allKeys.every((k) => selectedSet.has(k));
+  const allSelected =
+    rows.length > 0 && allKeys.every((k) => selectedSet.has(k));
   const someSelected = !allSelected && allKeys.some((k) => selectedSet.has(k));
 
   const hasActions = Boolean(rowAction || rowMenu);
-  const columnCount = columns.length + (selectable ? 1 : 0) + (hasActions ? 1 : 0);
+  const columnCount =
+    shown.length + (selectable ? 1 : 0) + (hasActions ? 1 : 0);
+
+  /*
+   * Bands, in the order the rows arrived. Grouping does not sort: a table that
+   * reorders itself to make bands contiguous is a table that has stopped
+   * showing which row is next, and "which is next" is what a queue is for.
+   */
+  const bands = useMemo(() => {
+    if (!groupBy) return null;
+    const out: { key: string; rows: Row[] }[] = [];
+    for (const row of rows) {
+      const key = groupBy(row);
+      const last = out[out.length - 1];
+      if (last && last.key === key) last.rows.push(row);
+      else out.push({ key, rows: [row] });
+    }
+    return out;
+  }, [rows, groupBy]);
 
   const cellPad = "px-3";
+  const headSticky = stickyHeader ? "sticky top-0 z-10" : "";
   const rowHeight = { height: "var(--row-h, 46px)" };
+
+  function renderRow(row: Row) {
+    const key = rowKey(row);
+    const isSelected = selectedSet.has(key);
+    const tone: RowTone = isSelected
+      ? "selected"
+      : (rowTone?.(row) ?? "default");
+    const action = rowAction?.(row) ?? null;
+    const menu = rowMenu?.(row) ?? [];
+
+    return (
+      <tr
+        key={key}
+        style={rowHeight}
+        onClick={onRowClick ? () => onRowClick(row) : undefined}
+        className={cn(
+          "relative border-t border-line",
+          // The tone edge is a 2px bar on the leading edge, drawn
+          // with a pseudo-element so it does not add a column.
+          "before:absolute before:inset-y-0 before:start-0 before:w-0.5 before:content-['']",
+          TONE[tone],
+          TONE_EDGE[tone],
+          "transition-colors duration-120 ease-out",
+          onRowClick && "cursor-pointer",
+          tone === "default" && "hover:bg-paper-sunk",
+        )}
+      >
+        {selectable && (
+          <td
+            className={cn(cellPad, "py-1.5")}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Checkbox
+              aria-label={selectRowLabel?.(row)}
+              checked={isSelected}
+              onChange={() =>
+                onSelectedChange?.(
+                  isSelected
+                    ? selected.filter((k) => k !== key)
+                    : [...selected, key],
+                )
+              }
+            />
+          </td>
+        )}
+
+        {shown.map((column) => (
+          <td
+            key={column.key}
+            className={cn(
+              cellPad,
+              "py-1.5 text-body-sm text-body",
+              column.numeric && "text-right tabular-nums",
+              column.mono && "font-mono",
+              column.hideBelow && HIDE[column.hideBelow],
+            )}
+          >
+            {column.render(row)}
+          </td>
+        ))}
+
+        {hasActions && (
+          <td
+            className={cn(cellPad, "py-1.5 text-right")}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <span className="inline-flex items-center justify-end gap-1">
+              {action && (
+                <button
+                  type="button"
+                  onClick={action.onSelect}
+                  className={cn(
+                    "rounded-ctl border border-line bg-card px-2 py-1 text-caption text-body",
+                    "transition-colors duration-120 ease-out",
+                    "hover:border-line-strong hover:text-ink",
+                    "focus-visible:outline-none focus-visible:shadow-focus",
+                  )}
+                >
+                  {action.label}
+                </button>
+              )}
+              {menu.length > 0 && rowMenuLabel && (
+                <RowMenu label={rowMenuLabel(row)} items={menu} />
+              )}
+            </span>
+          </td>
+        )}
+      </tr>
+    );
+  }
 
   return (
     <div className="overflow-hidden rounded-b-card border border-t-0 border-line bg-card">
@@ -157,28 +320,45 @@ export function DataTable<Row>({
           <thead>
             <tr className="bg-paper-sunk">
               {selectable && (
-                <th scope="col" className={cn(cellPad, "w-10 py-2")}>
+                <th
+                  scope="col"
+                  className={cn(cellPad, "w-10 py-2 bg-paper-sunk", headSticky)}
+                >
                   <Checkbox
                     aria-label={selectAllLabel}
                     checked={allSelected}
                     indeterminate={someSelected}
-                    onChange={() => onSelectedChange?.(allSelected ? [] : allKeys)}
+                    onChange={() =>
+                      onSelectedChange?.(allSelected ? [] : allKeys)
+                    }
                   />
                 </th>
               )}
 
-              {columns.map((column) => {
+              {shown.map((column) => {
                 const active = sort?.key === column.key;
-                const direction: SortDirection = active && sort ? sort.direction : "asc";
+                const direction: SortDirection =
+                  active && sort ? sort.direction : "asc";
                 return (
                   <th
                     key={column.key}
                     scope="col"
-                    aria-sort={active ? (direction === "asc" ? "ascending" : "descending") : undefined}
+                    aria-sort={
+                      active
+                        ? direction === "asc"
+                          ? "ascending"
+                          : "descending"
+                        : undefined
+                    }
                     style={column.width ? { width: column.width } : undefined}
                     className={cn(
                       cellPad,
                       "py-2 font-mono text-colhead font-medium uppercase text-muted",
+                      // The background repeats on the cell because a sticky
+                      // <th> leaves the <tr> behind — without it the rows
+                      // scroll through the heading.
+                      "bg-paper-sunk",
+                      headSticky,
                       column.numeric && "text-right",
                       column.hideBelow && HIDE[column.hideBelow],
                     )}
@@ -186,11 +366,15 @@ export function DataTable<Row>({
                     {column.sortable && onSortChange ? (
                       <button
                         type="button"
-                        aria-label={sortLabel?.(column.header, active && direction === "asc" ? "desc" : "asc")}
+                        aria-label={sortLabel?.(
+                          column.header,
+                          active && direction === "asc" ? "desc" : "asc",
+                        )}
                         onClick={() =>
                           onSortChange({
                             key: column.key,
-                            direction: active && direction === "asc" ? "desc" : "asc",
+                            direction:
+                              active && direction === "asc" ? "desc" : "asc",
                           })
                         }
                         className={cn(
@@ -220,7 +404,10 @@ export function DataTable<Row>({
               })}
 
               {hasActions && (
-                <th scope="col" className={cn(cellPad, "w-24 py-2")}>
+                <th
+                  scope="col"
+                  className={cn(cellPad, "w-24 py-2 bg-paper-sunk", headSticky)}
+                >
                   <span className="sr-only">{actionsHeader}</span>
                 </th>
               )}
@@ -230,14 +417,31 @@ export function DataTable<Row>({
           <tbody>
             {loading &&
               Array.from({ length: loadingRows }, (_, i) => (
-                <tr key={`skeleton-${i}`} className="border-t border-line" style={rowHeight}>
+                <tr
+                  key={`skeleton-${i}`}
+                  className="border-t border-line"
+                  style={rowHeight}
+                >
                   <td colSpan={columnCount} className={cn(cellPad, "py-2")}>
                     <span className="block h-3 w-full max-w-[32rem] rounded-tag bg-track motion-safe:animate-pulse" />
                   </td>
                 </tr>
               ))}
 
-            {!loading && rows.length === 0 && (
+            {/*
+              Error before empty, and never folded into it. The two say opposite
+              things to the person reading the queue: one means there is no work,
+              the other means we cannot tell.
+            */}
+            {!loading && error && (
+              <tr>
+                <td colSpan={columnCount} className="px-3 py-10">
+                  {error}
+                </td>
+              </tr>
+            )}
+
+            {!loading && !error && rows.length === 0 && (
               <tr>
                 <td colSpan={columnCount} className="px-3 py-10">
                   {empty}
@@ -245,87 +449,44 @@ export function DataTable<Row>({
               </tr>
             )}
 
-            {!loading &&
-              rows.map((row) => {
-                const key = rowKey(row);
-                const isSelected = selectedSet.has(key);
-                const tone: RowTone = isSelected ? "selected" : (rowTone?.(row) ?? "default");
-                const action = rowAction?.(row) ?? null;
-                const menu = rowMenu?.(row) ?? [];
-
-                return (
-                  <tr
-                    key={key}
-                    style={rowHeight}
-                    onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    className={cn(
-                      "relative border-t border-line",
-                      // The tone edge is a 2px bar on the leading edge, drawn
-                      // with a pseudo-element so it does not add a column.
-                      "before:absolute before:inset-y-0 before:start-0 before:w-0.5 before:content-['']",
-                      TONE[tone],
-                      TONE_EDGE[tone],
-                      "transition-colors duration-120 ease-out",
-                      onRowClick && "cursor-pointer",
-                      tone === "default" && "hover:bg-paper-sunk",
-                    )}
-                  >
-                    {selectable && (
-                      <td className={cn(cellPad, "py-1.5")} onClick={(e) => e.stopPropagation()}>
-                        <Checkbox
-                          aria-label={selectRowLabel?.(row)}
-                          checked={isSelected}
-                          onChange={() =>
-                            onSelectedChange?.(
-                              isSelected ? selected.filter((k) => k !== key) : [...selected, key],
-                            )
-                          }
-                        />
-                      </td>
-                    )}
-
-                    {columns.map((column) => (
-                      <td
-                        key={column.key}
+            {!loading && !error && bands
+              ? bands.map((band) => (
+                  <Fragment key={band.key}>
+                    <tr className="border-t border-line">
+                      <th
+                        scope="colgroup"
+                        colSpan={columnCount}
                         className={cn(
                           cellPad,
-                          "py-1.5 text-body-sm text-body",
-                          column.numeric && "text-right tabular-nums",
-                          column.mono && "font-mono",
-                          column.hideBelow && HIDE[column.hideBelow],
+                          "bg-fill py-1.5 text-left font-mono text-colhead font-medium uppercase text-muted",
                         )}
                       >
-                        {column.render(row)}
-                      </td>
-                    ))}
+                        {groupLabel
+                          ? groupLabel(band.key, band.rows.length)
+                          : band.key}
+                      </th>
+                    </tr>
+                    {band.rows.map(renderRow)}
+                  </Fragment>
+                ))
+              : null}
 
-                    {hasActions && (
-                      <td className={cn(cellPad, "py-1.5 text-right")} onClick={(e) => e.stopPropagation()}>
-                        <span className="inline-flex items-center justify-end gap-1">
-                          {action && (
-                            <button
-                              type="button"
-                              onClick={action.onSelect}
-                              className={cn(
-                                "rounded-ctl border border-line bg-card px-2 py-1 text-caption text-body",
-                                "transition-colors duration-120 ease-out",
-                                "hover:border-line-strong hover:text-ink",
-                                "focus-visible:outline-none focus-visible:shadow-focus",
-                              )}
-                            >
-                              {action.label}
-                            </button>
-                          )}
-                          {menu.length > 0 && rowMenuLabel && (
-                            <RowMenu label={rowMenuLabel(row)} items={menu} />
-                          )}
-                        </span>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
+            {!loading && !error && !bands && rows.map(renderRow)}
           </tbody>
+
+          {/* A real <tfoot>, so a total is not a row that sorts with the data. */}
+          {footer && !loading && !error && (
+            <tfoot>
+              <tr className="border-t-2 border-line-strong bg-paper-sunk">
+                <td
+                  colSpan={columnCount}
+                  className={cn(cellPad, "py-2 text-body-sm text-ink")}
+                >
+                  {footer}
+                </td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
@@ -364,7 +525,9 @@ function RowMenu({ label, items }: { label: string; items: RowMenuItem[] }) {
       >
         {items.map((item, i) => (
           <div key={item.key}>
-            {item.destructive && i > 0 && <div className="h-px bg-line" role="none" />}
+            {item.destructive && i > 0 && (
+              <div className="h-px bg-line" role="none" />
+            )}
             <button
               type="button"
               disabled={item.disabled}
@@ -374,7 +537,9 @@ function RowMenu({ label, items }: { label: string; items: RowMenuItem[] }) {
                 "transition-colors duration-120 ease-out",
                 "focus-visible:outline-none focus-visible:bg-fill",
                 "disabled:cursor-not-allowed disabled:text-disabled-text",
-                item.destructive ? "text-bad-ink hover:bg-bad-wash" : "text-body hover:bg-fill",
+                item.destructive
+                  ? "text-bad-ink hover:bg-bad-wash"
+                  : "text-body hover:bg-fill",
               )}
             >
               {item.label}

@@ -134,66 +134,100 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
 ];
 
 /**
- * /admin — staff. Six groups, per docs/routes.md.
+ * /admin — staff. Seven groups covering every route in the docs/routes.md admin
+ * block, plus `/admin/invoices`, which the handoff-4 README names and the route
+ * table did not.
  *
- * None of it is built; the admin surface is handoff 4. Every item is `later`
- * so the shape is visible and nothing is a dead link.
+ * It carried twenty of the thirty-one and three invented badge counts —
+ * `badge: 34` on the queue, `3` on reports, `5` on dunning — which were
+ * placeholders from before there was anything to count. They are gone. A
+ * fabricated number on a queue is the same lie as a fabricated response time,
+ * and this one sits on the screen whose entire job is saying what is behind.
+ * Real counts come from `getAdminNavBadges`.
+ *
+ * Every item except the console overview is still `later`: named, not linked,
+ * so the shape is visible and nothing is a dead link. Each step of handoff 4
+ * drops `later` from the rows it builds.
  */
 export const ADMIN_NAV: readonly NavGroup[] = [
   {
     key: "overview",
     labelKey: "nav.group.overview",
     items: [
-      { key: "admin", labelKey: "nav.platform", href: "/admin" , later: true },
-      { key: "queue", labelKey: "nav.queue", href: "/admin/queue", badge: 34, capability: "queue.decide" , later: true },
-      { key: "reports", labelKey: "nav.reports", href: "/admin/reports", badge: 3, capability: "report.resolve" , later: true },
+      { key: "admin", labelKey: "nav.platform", href: "/admin" },
+      { key: "queue", labelKey: "nav.queue", href: "/admin/queue", capability: "queue.decide", later: true },
+      { key: "reports", labelKey: "nav.reports", href: "/admin/reports", capability: "report.resolve", later: true },
     ],
   },
   {
     key: "supply",
     labelKey: "nav.group.supply",
     items: [
-      { key: "businesses", labelKey: "nav.businesses", href: "/admin/businesses" , later: true },
-      { key: "ingest", labelKey: "nav.ingest", href: "/admin/ingest" , later: true },
-      { key: "visits", labelKey: "nav.visits", href: "/admin/visits", capability: "visit.record" , later: true },
-      { key: "crm", labelKey: "nav.crm", href: "/admin/crm" , later: true },
+      { key: "businesses", labelKey: "nav.businesses", href: "/admin/businesses", later: true },
+      { key: "ingest", labelKey: "nav.ingest", href: "/admin/ingest", later: true },
+      { key: "dedupe", labelKey: "nav.dedupe", href: "/admin/ingest/dedupe", capability: "business.merge", later: true },
+      { key: "visits", labelKey: "nav.visits", href: "/admin/visits", capability: "visit.record", later: true },
+      { key: "crm", labelKey: "nav.crm", href: "/admin/crm", later: true },
     ],
   },
   {
     key: "taxonomy",
     labelKey: "nav.group.taxonomy",
     items: [
-      { key: "categories", labelKey: "nav.categories", href: "/admin/categories", capability: "taxonomy.write" , later: true },
-      { key: "spec-library", labelKey: "nav.spec_library", href: "/admin/spec-library", capability: "taxonomy.write" , later: true },
-      { key: "areas", labelKey: "nav.areas", href: "/admin/areas", capability: "taxonomy.write" , later: true },
-      { key: "attributes", labelKey: "nav.attributes", href: "/admin/attributes", later: true },
+      { key: "categories", labelKey: "nav.categories", href: "/admin/categories", capability: "taxonomy.write", later: true },
+      { key: "spec-library", labelKey: "nav.spec_library", href: "/admin/spec-library", capability: "taxonomy.write", later: true },
+      { key: "areas", labelKey: "nav.areas", href: "/admin/areas", capability: "taxonomy.write", later: true },
+      { key: "attributes", labelKey: "nav.attributes", href: "/admin/attributes", capability: "taxonomy.write", later: true },
     ],
   },
   {
     key: "demand",
     labelKey: "nav.group.demand",
     items: [
-      { key: "search", labelKey: "nav.search_ranking", href: "/admin/search" , later: true },
-      { key: "content", labelKey: "nav.content", href: "/admin/content/matrix" , later: true },
+      { key: "search", labelKey: "nav.search_ranking", href: "/admin/search", capability: "search.ranking.write", later: true },
+      { key: "content", labelKey: "nav.content", href: "/admin/content/matrix", later: true },
+      {
+        key: "storefront-templates",
+        labelKey: "nav.storefront_templates",
+        href: "/admin/storefront-templates",
+        capability: "storefront.template.write",
+        later: true,
+      },
     ],
   },
   {
     key: "commercial",
     labelKey: "nav.group.commercial",
     items: [
-      { key: "subscriptions", labelKey: "nav.subscriptions", href: "/admin/subscriptions", capability: "revenue.read" , later: true },
-      { key: "revenue", labelKey: "nav.revenue", href: "/admin/revenue", capability: "revenue.read" , later: true },
-      { key: "dunning", labelKey: "nav.dunning", href: "/admin/dunning", badge: 5, capability: "revenue.read" , later: true },
+      { key: "subscriptions", labelKey: "nav.subscriptions", href: "/admin/subscriptions", capability: "revenue.read", later: true },
+      { key: "revenue", labelKey: "nav.revenue", href: "/admin/revenue", capability: "revenue.read", later: true },
+      { key: "plans", labelKey: "nav.plans", href: "/admin/plans", capability: "plan.entitlements.write", later: true },
+      { key: "invoices", labelKey: "nav.invoices", href: "/admin/invoices", capability: "subscription.credit", later: true },
+      { key: "dunning", labelKey: "nav.dunning", href: "/admin/dunning", capability: "revenue.read", later: true },
+      { key: "tax", labelKey: "nav.tax", href: "/admin/tax", capability: "revenue.read", later: true },
+    ],
+  },
+  {
+    key: "content",
+    labelKey: "nav.group.content",
+    items: [
+      { key: "notifications", labelKey: "nav.notifications", href: "/admin/notifications", capability: "taxonomy.write", later: true },
+      { key: "strings", labelKey: "nav.strings", href: "/admin/strings", capability: "taxonomy.write", later: true },
+      { key: "content-home", labelKey: "nav.content_home", href: "/admin/content/home", capability: "taxonomy.write", later: true },
+      { key: "content-redirects", labelKey: "nav.content_redirects", href: "/admin/content/redirects", capability: "taxonomy.write", later: true },
     ],
   },
   {
     key: "platform",
     labelKey: "nav.group.platform",
     items: [
-      { key: "staff", labelKey: "nav.staff", href: "/admin/staff", capability: "staff.manage" , later: true },
-      { key: "audit", labelKey: "nav.audit", href: "/admin/audit", capability: "audit.read" , later: true },
-      { key: "support", labelKey: "nav.support", href: "/admin/support", capability: "support.view_as" , later: true },
-      { key: "compliance", labelKey: "nav.compliance", href: "/admin/compliance" , later: true },
+      { key: "staff", labelKey: "nav.staff", href: "/admin/staff", capability: "staff.manage", later: true },
+      { key: "audit", labelKey: "nav.audit", href: "/admin/audit", capability: "audit.read", later: true },
+      { key: "support", labelKey: "nav.support", href: "/admin/support", capability: "support.view_as", later: true },
+      { key: "users", labelKey: "nav.users", href: "/admin/users", capability: "staff.manage", later: true },
+      { key: "compliance", labelKey: "nav.compliance", href: "/admin/compliance", capability: "staff.manage", later: true },
+      { key: "api", labelKey: "nav.api", href: "/admin/api", capability: "staff.manage", later: true },
     ],
   },
 ];
+

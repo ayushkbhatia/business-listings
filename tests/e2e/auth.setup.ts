@@ -32,20 +32,32 @@ import { Client } from "pg";
 interface Seat {
   /** A deliverable address: Supabase rejects reserved TLDs like .example. */
   email: string;
-  /** The fixture business the specs assert against. */
-  slug: string;
+  /**
+   * The fixture business the specs assert against.
+   *
+   * Absent for a staff seat, which belongs to the platform rather than to a
+   * business. That is not a special case for tests — `User.businessId` is
+   * nullable precisely because staff exist.
+   */
+  slug?: string;
   name: string;
   roles: string[];
   state: string;
+  /** Where this seat lands after verifying, per `destinationFor`. */
+  landing: string;
+  /** The h1 that proves the landing page actually rendered. */
+  heading: string;
 }
 
-const SEATS: Record<"pro" | "free", Seat> = {
+const SEATS: Record<"pro" | "free" | "opsLead" | "moderator", Seat> = {
   pro: {
     email: "bl.e2e.seller@gmail.com",
     slug: "al-marwan-industrial-supplies-llc",
     name: "E2E Seller",
     roles: ["seller_owner"],
     state: "tests/e2e/.auth/seller.json",
+    landing: "**/dashboard/leads",
+    heading: "Leads",
   },
   free: {
     // Board 11a is the whole reason this seat exists: the missed-enquiry list
@@ -55,6 +67,33 @@ const SEATS: Record<"pro" | "free", Seat> = {
     name: "E2E Free Seller",
     roles: ["seller_owner"],
     state: "tests/e2e/.auth/seller-free.json",
+    landing: "**/dashboard/leads",
+    heading: "Leads",
+  },
+  /*
+   * Two staff seats, and the second one is the point.
+   *
+   * Criterion 9 says a moderator cannot change a verification tier, issue a
+   * credit or suspend an account. The integration tests prove the services
+   * refuse them; this seat proves the console does not offer them the control
+   * in the first place. Both halves are needed and neither substitutes for the
+   * other — a hidden button is a UI opinion and a server action is a URL.
+   */
+  opsLead: {
+    email: "bl.e2e.ops@gmail.com",
+    name: "E2E Ops Lead",
+    roles: ["staff_ops_lead"],
+    state: "tests/e2e/.auth/staff-ops.json",
+    landing: "**/admin",
+    heading: "Platform overview",
+  },
+  moderator: {
+    email: "bl.e2e.moderator@gmail.com",
+    name: "E2E Moderator",
+    roles: ["staff_moderator"],
+    state: "tests/e2e/.auth/staff-moderator.json",
+    landing: "**/admin",
+    heading: "Platform overview",
   },
 };
 
@@ -79,11 +118,14 @@ async function provision(page: Page, seat: Seat) {
     }
     await db.query('DELETE FROM "user" WHERE email = $1', [seat.email]);
 
-    const business = await db.query<{ id: string }>("SELECT id FROM business WHERE slug = $1", [
-      seat.slug,
-    ]);
-    const businessId = business.rows[0]?.id;
-    if (!businessId) throw new Error(`the seed has no business ${seat.slug}`);
+    let businessId: string | null = null;
+    if (seat.slug) {
+      const business = await db.query<{ id: string }>("SELECT id FROM business WHERE slug = $1", [
+        seat.slug,
+      ]);
+      businessId = business.rows[0]?.id ?? null;
+      if (!businessId) throw new Error(`the seed has no business ${seat.slug}`);
+    }
 
     const { data: created, error } = await admin.auth.admin.createUser({
       email: seat.email,
@@ -115,10 +157,15 @@ async function provision(page: Page, seat: Seat) {
     await page.getByLabel("Verification code").fill(link.properties.email_otp);
     await page.getByRole("button", { name: "Verify", exact: true }).click();
 
-    // A seller lands on their leads. If this fails the auth flow is broken,
-    // which is worth knowing loudly rather than as forty confusing failures.
-    await page.waitForURL("**/dashboard/leads", { timeout: 30_000 });
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Leads");
+    /*
+     * A seller lands on their leads and a staff seat lands on the console. If
+     * this fails the auth flow is broken, which is worth knowing loudly rather
+     * than as forty confusing failures — and it is exactly how the missing
+     * `staff_*` branch in `destinationFor` would have surfaced: a staff sign-in
+     * that silently went to the directory home.
+     */
+    await page.waitForURL(seat.landing, { timeout: 30_000 });
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(seat.heading);
 
     await page.context().storageState({ path: seat.state });
   } finally {
@@ -132,4 +179,12 @@ setup("sign in as a seller on Pro", async ({ page }) => {
 
 setup("sign in as a seller on Free", async ({ page }) => {
   await provision(page, SEATS.free);
+});
+
+setup("sign in as an ops lead", async ({ page }) => {
+  await provision(page, SEATS.opsLead);
+});
+
+setup("sign in as a moderator", async ({ page }) => {
+  await provision(page, SEATS.moderator);
 });

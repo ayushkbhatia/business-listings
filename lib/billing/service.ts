@@ -1,6 +1,12 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { assertCanChangePlan, assertCanManageBilling } from "@/lib/auth/guards";
+import "@/lib/audit/prisma-writer";
+import {
+  assertCanChangePlan,
+  assertCanIssueSubscriptionCredit,
+  assertCanManageBilling,
+} from "@/lib/auth/guards";
+import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
 import { filsToAed, prorate, type Proration } from "./proration";
 import { paymentProvider } from "./provider";
@@ -326,4 +332,121 @@ export async function invoicesFor(actor: Actor, businessId: string) {
       lines: { select: { kind: true, description: true, qty: true, amountAed: true } },
     },
   });
+}
+
+/* ── Subscription credits — finance only, and never a refund ─────────────── */
+
+export type CreditResult =
+  | { ok: true; invoiceId: string }
+  | { ok: false; error: "not_found" | "not_positive" | "too_large"; message: string };
+
+export interface CreditInput {
+  actor: Actor;
+  businessId: string;
+  /** Whole fils. Integer arithmetic everywhere; a credit is money we did charge. */
+  fils: number;
+  /** What the credit is for, in the seller's language — it prints on the invoice. */
+  description: string;
+  /** Why we issued it, in ours. Goes on the audit row, not the invoice. */
+  reason: string;
+}
+
+/**
+ * A subscription credit.
+ *
+ * `subscription.credit` is **finance only** — §07 gives ops lead a dash on this
+ * row, which was inferred the other way for two handoffs and corrected in PR
+ * #14. The most senior role does not hold every capability, and this is the row
+ * that proves it.
+ *
+ * The vocabulary is load-bearing, not fussiness. This is a credit against
+ * money the platform charged for a subscription. It is never a refund, because
+ * a refund implies buyer funds, and CLAUDE.md's first rule is that the platform
+ * is never party to a transaction and holds nothing to give back. `InvoiceLine`
+ * has a `subscription_credit` kind and deliberately has no refund kind; the
+ * schema will not let this be written as one.
+ *
+ * A credit lands as a negative line on its own issued invoice rather than
+ * editing a past one. An invoice a seller has already downloaded is a record,
+ * and a record that changes after the fact is not one.
+ */
+export async function issueSubscriptionCredit(input: CreditInput): Promise<CreditResult> {
+  assertCanIssueSubscriptionCredit(input.actor);
+
+  if (!Number.isInteger(input.fils) || input.fils <= 0) {
+    return {
+      ok: false,
+      error: "not_positive",
+      message: "A credit is a positive amount in whole fils.",
+    };
+  }
+
+  const business = await prisma.business.findUnique({
+    where: { id: input.businessId },
+    select: {
+      id: true,
+      subscription: { select: { id: true, plan: { select: { monthlyPriceAed: true } } } },
+    },
+  });
+  if (!business) {
+    return { ok: false, error: "not_found", message: "That business is not in the directory." };
+  }
+
+  /*
+   * A ceiling of one year of the current plan. Not a policy — a typo guard.
+   * Fils are two orders of magnitude away from dirhams and the most likely
+   * mistake here is one somebody makes with the decimal point, at which point
+   * the number has already been written down as a fact.
+   */
+  const monthly = Number(business.subscription?.plan.monthlyPriceAed ?? 0);
+  const ceiling = Math.max(monthly, 1) * 12 * 100;
+  if (input.fils > ceiling) {
+    return {
+      ok: false,
+      error: "too_large",
+      message: `That is more than a year of this plan. The most a credit can be is AED ${Math.floor(ceiling / 100)}.`,
+    };
+  }
+
+  const now = new Date();
+  const reference = `CREDIT-${business.id.slice(-6)}-${now.getTime()}`;
+
+  const invoiceId = await prisma.$transaction(async (tx) =>
+    staffMutation(
+      {
+        actor: input.actor,
+        capability: "subscription.credit",
+        subject: `Business:${business.id}`,
+        reason: input.reason,
+        tx,
+      },
+      async () => {
+        const invoice = await tx.invoice.create({
+          data: {
+            ref: reference,
+            businessId: business.id,
+            status: "issued",
+            issuedAt: now,
+            lines: {
+              create: [
+                {
+                  kind: "subscription_credit",
+                  description: input.description,
+                  amountAed: `-${filsToAed(input.fils)}`,
+                },
+              ],
+            },
+          },
+          select: { id: true, ref: true },
+        });
+        return {
+          result: invoice.id,
+          before: null,
+          after: { invoiceRef: invoice.ref, fils: input.fils },
+        };
+      },
+    ),
+  );
+
+  return { ok: true, invoiceId };
 }

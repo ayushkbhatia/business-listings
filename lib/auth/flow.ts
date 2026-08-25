@@ -475,6 +475,13 @@ export function fromSupabaseError(error: {
  */
 export function destinationFor(roles: readonly Role[], next: string | null): string {
   if (next && isSafeNext(next)) return next;
+  /*
+   * Staff before seller, because somebody can hold both — a small operations
+   * team will have an ops lead who also owns a test listing — and the console
+   * is the surface they signed in for. `/admin` is board 4a, which answers
+   * "which of the six jobs is behind" and links into each of them.
+   */
+  if (roles.some((r) => r.startsWith("staff_"))) return "/admin";
   if (roles.some((r) => r.startsWith("seller_"))) return "/dashboard/leads";
   return "/";
 }
