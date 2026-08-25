@@ -1,3 +1,4 @@
+export { Alert, type AlertProps, type AlertTone } from "./Alert";
 // Tier 3 — the fifteen display components.
 export { StatusBadge, type StatusBadgeProps, type StatusTone } from "./StatusBadge";
 export { PlanBadge, type PlanBadgeProps, type PlanTier } from "./PlanBadge";

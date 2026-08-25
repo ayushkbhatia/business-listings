@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "@/components/primitives";
 import {
+  Alert,
   CategoryMark,
   FilterChip,
   FunnelBars,
@@ -373,6 +375,72 @@ export function Display() {
               emptyLabel={t("display.map_empty")}
             />
           </div>
+        </States>
+      </Section>
+
+      <Section
+        id="alert"
+        title="Alert"
+        note="65 · §05.1 · five tones, one optional action, no icon — the copy carries the tone"
+      >
+        <States label="the five tones" stack>
+          <Frame>
+            <div className="flex flex-col gap-3">
+              <Alert tone="ok" live="polite">
+                Saved and live.
+              </Alert>
+              <Alert tone="info">{t("overview.free_is_free")}</Alert>
+              <Alert
+                tone="warn"
+                action={
+                  <Button size="sm" variant="secondary">
+                    Edit your spec template
+                  </Button>
+                }
+              >
+                62 products have no filterable specs. Buyers filter on those fields, so those
+                products are listed but not found.
+              </Alert>
+              <Alert
+                tone="bad"
+                live="assertive"
+                fix="Use 24-hour times like 08:00 and 17:30."
+              >
+                &quot;8am&quot; is not a time.
+              </Alert>
+              <Alert tone="neutral">{t("billing.not_live")}</Alert>
+            </div>
+          </Frame>
+        </States>
+
+        <States label="a title, and a problem that carries its fix" stack>
+          <Frame>
+            <div className="flex flex-col gap-3">
+              <Alert
+                tone="warn"
+                title="Somebody else has claimed this listing"
+                fix="Submit below and carry on setting up. Nothing you fill in is lost if the claim takes a day to resolve."
+              >
+                We are taking your submission anyway. If a former employee or an agency claimed
+                it, this is how it gets put right — a person will look at both.
+              </Alert>
+              {/*
+                The rule the inventory states outright: a notice describing a
+                problem must also carry the action that fixes it. A bad or warn
+                Alert with neither logs an error in development.
+              */}
+              <Alert
+                tone="bad"
+                action={
+                  <Button size="sm" variant="secondary">
+                    Reload
+                  </Button>
+                }
+              >
+                That template has changed since this page opened.
+              </Alert>
+            </div>
+          </Frame>
         </States>
       </Section>
     </>

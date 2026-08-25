@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "@/components/primitives";
-import { StatusBadge } from "@/components/display";
+import { Alert, StatusBadge } from "@/components/display";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { PromoteResult } from "./actions";
@@ -45,12 +45,7 @@ export function SlotList({ slots, takeAction, leaveAction }: SlotListProps) {
   return (
     <div className="flex flex-col gap-3">
       {error && (
-        <div
-          role="alert"
-          className="rounded-ctl border border-bad-line bg-bad-surface px-3 py-2 text-body-sm text-bad-ink"
-        >
-          {error}
-        </div>
+        <Alert tone="bad" live="assertive">{error}</Alert>
       )}
       <span aria-live="polite" className="text-body-sm text-muted">
         {notice}

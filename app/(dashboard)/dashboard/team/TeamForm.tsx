@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/display";
 import { useState, useTransition } from "react";
 import { Button, Input, Radio, Select } from "@/components/primitives";
 import { Panel } from "@/components/structure";
@@ -77,12 +78,7 @@ export function TeamForm(props: TeamFormProps) {
   return (
     <div className="flex flex-col gap-5">
       {error && (
-        <div
-          role="alert"
-          className="rounded-ctl border border-bad-line bg-bad-surface px-3 py-2 text-body-sm text-bad-ink"
-        >
-          {error}
-        </div>
+        <Alert tone="bad" live="assertive">{error}</Alert>
       )}
 
       <Panel

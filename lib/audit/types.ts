@@ -18,7 +18,12 @@ export type AuditAction =
   | "queue_decided"
   | "visit_recorded"
   | "taxonomy_changed"
-  | "staff_changed";
+  | "staff_changed"
+  | "claim_resolved"
+  | "entitlements_changed"
+  | "ranking_changed"
+  | "storefront_template_changed"
+  | "cross_business_read";
 
 /**
  * Every audited capability maps to exactly one action, so a staff mutation
@@ -37,6 +42,23 @@ export const ACTION_FOR_CAPABILITY = {
   "taxonomy.write": "taxonomy_changed",
   "staff.manage": "staff_changed",
   "support.view_as": "view_as",
+
+  /*
+   * Arrived with docs/permissions.md. §07 is explicit that **every ✓ in the
+   * staff table that changes state writes an AuditEvent with a reason, and ops
+   * lead has no exemption** — so each of these needs a name of its own rather
+   * than being folded into a neighbour.
+   *
+   * `cross_business_read` is the odd one: it does not change state. It is
+   * audited because §07 calls it "the one row that matters most: support needs
+   * it, and it must be impossible to do silently", and an action name is how
+   * it becomes greppable in /admin/audit.
+   */
+  "claim.resolve": "claim_resolved",
+  "plan.entitlements.write": "entitlements_changed",
+  "search.ranking.write": "ranking_changed",
+  "storefront.template.write": "storefront_template_changed",
+  "enquiry.read_other_business": "cross_business_read",
 } as const satisfies Partial<Record<Capability, AuditAction>>;
 
 export type AuditedCapability = keyof typeof ACTION_FOR_CAPABILITY;

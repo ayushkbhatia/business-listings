@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Button, FileDrop, Input, Select } from "@/components/primitives";
-import { StatusBadge, Tag } from "@/components/display";
+import { Alert, StatusBadge, Tag } from "@/components/display";
 import { Card, Panel, StepHeader } from "@/components/structure";
 import type { ColumnPlan, ColumnSuggestion, TargetKind } from "@/lib/import/columns";
 import type { ImportPreview } from "@/lib/import/service";
@@ -154,12 +154,7 @@ export function ImportWizard({
 
       <div className="p-5">
         {error && (
-          <div
-            role="alert"
-            className="mb-4 rounded-ctl border border-bad-line bg-bad-surface px-3 py-2 text-body-sm text-bad-ink"
-          >
-            {error}
-          </div>
+          <Alert tone="bad" live="assertive">{error}</Alert>
         )}
 
         {stage === "upload" && (

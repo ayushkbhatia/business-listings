@@ -1549,3 +1549,130 @@ as one of its items — "Overview" is both — so text matching has to be scoped
 the list rows. And an item with a badge has the count in its accessible name,
 so "Leads & RFQ" is never an exact match for the link whose name is
 "Leads & RFQ 13"; the assertion anchors at the start of the label instead.
+
+## The canvas arrived — what the inferred matrix had wrong
+
+`docs/permissions.md` and `docs/component-inventory.md` are now in the repo, and
+`lib/auth/capabilities.ts` is transcribed from the first rather than inferred.
+The file that shipped before it carried a warning to diff it against §07 before
+handoff 1. That never happened, and by handoff 3 it was wrong in nine rows.
+
+They were not all wrong in the safe direction:
+
+**Over-granted** — a seat could do something the design does not allow:
+
+- `plan.change` was owner + finance; §07 gives it to the owner alone. A finance
+  seat reads what was spent and does not decide what the business buys.
+- `visit.request` was folded into `listing.edit`, handing it to a manager. It is
+  the owner's alone: somebody from this platform coming to the premises is not a
+  manager's call.
+- `review.remove` was moderator + ops lead; §07 holds it at ops lead. A
+  moderator approves and rejects submissions and resolves reports, and does not
+  remove a buyer's published words.
+- `placement.boost` was finance + ops lead on the theory that a sold slot
+  belongs to finance. Moving a listing up a results page is a ranking decision.
+- `subscription.credit` and `revenue.read` both carried ops lead as well as
+  finance.
+
+**Under-granted** — a seat could not do its job:
+
+- `team.manage` was owner-only. A manager who cannot add the person who answers
+  enquiries has to ask the owner every time.
+- Lead routing had no capability at all and rode on `team.manage`, so it was
+  withheld from the manager too. It is now `routing.manage`.
+- `analytics.read` included finance and excluded sales. §07 has it the other way
+  round: sales sees their own leads, finance does not have the row.
+- `enquiry.create` was buyer-only. §07's cross-surface table is ✓ for buyer *and*
+  seller — a supplier buying from another supplier is ordinary trade.
+
+Three of the over-grants shared one assumption: that the most senior role can do
+everything. `can.test.ts` asserted it outright — "gives ops_lead every audited
+capability" — and §07 denies it. Two rows are finance's alone, and the
+separation is the point: the role that can suspend an account and change a
+verification tier is not the role that can move money.
+
+`tests/unit/permission-matrix.test.ts` now transcribes both tables and asserts
+them row by row, thirty-seven tests. A comment asking somebody to check is not a
+check.
+
+### Three rows a role cannot answer
+
+permissions.md: *"Role is an input, never the check itself — three of the rows
+above are subject-dependent and a role-only check gets them wrong."*
+
+Each fails **open**, which is why they are in `lib/auth/subject.ts` rather than
+in the matrix:
+
+- A field verifier may set a tier **for a visit they recorded**. Role-only, that
+  is a field verifier who may set any tier on any business — the row CLAUDE.md
+  calls a non-negotiable. Missing information denies: no visit, or somebody
+  else's, is a no.
+- A sales seat scoped to a branch is limited to that branch's enquiries and
+  locations. Role-only, the scoping does nothing at all. An enquiry routed to no
+  branch stays visible — it was not routed *away* from them, and hiding it loses
+  the enquiry rather than scoping it.
+- "See another business's enquiries" is granted to two staff roles **as an
+  audit-only action**. Role-only, the grant survives and the audit row does not,
+  which is exactly the silent version §07 says must be impossible. The reason is
+  required by the *signature*: a caller with nothing to write cannot form the
+  argument.
+
+Two of these return a scope rather than a boolean — `analyticsScopeFor` and
+`auditScopeFor` — because a caller given a yes would have invented the narrowing
+itself, then invented it differently on the second screen.
+
+The bare guards for those rows were **removed** from `guards.ts`. A function
+named the obvious thing and taking only an actor is the mistake the subject
+check exists to prevent, so it is not offered, and the compiler forced every
+call site to the fuller version.
+
+### The dispatch row
+
+Board 7d carried "Dispatch orders & upload PODs" from before the e-commerce
+pivot, deleted rather than renamed because there is no order entity. The
+inferred matrix never had it, but a test now refuses any capability whose name
+or rationale mentions dispatch, fulfilment, shipment or proof of delivery —
+deleting a row is only durable if something stops it coming back under a
+friendlier name.
+
+### The count reconciles
+
+Tier 1 is 18, tier 2 is 17, tier 3 is 16 with `Alert`, tier 4 is 14. Sixty-five.
+
+The discrepancy was a category error on my side: the inventory counts
+*components*, and `ListingCard` is one component with a `context` prop while
+`Button` is one with five variants and four sizes. A file count runs higher and
+always will.
+
+`Thread` — board 11c, built in handoff 2 — has no row in the inventory at all.
+It is shown in the gallery under its own heading rather than counted, because a
+component the design system has not described is worth surfacing rather than
+folding into a tier to make a total come out right.
+
+### Alert, and the twenty-one copies it replaced
+
+Component 65, the §05.1 inline notice. The repo had grown twenty-one hand-rolled
+versions of the same four classes and a `role="alert"`, each copied from the
+last screen, so nothing governed how a validation message looked or how it
+announced itself — on one of the highest-traffic surfaces in the product.
+
+Five tones, one optional action, **no icon**: an icon on a notice is a second
+channel saying the same thing to people who can already read the sentence, and
+nothing to the ones who cannot.
+
+The inventory's one stated rule — a notice describing a problem must carry the
+action that fixes it — is enforced rather than reviewed: a `warn` or `bad` Alert
+with neither `action` nor `fix` logs an error in development. It caught two real
+ones immediately. `/dashboard/products` named a number of products missing
+filterable specs and offered nowhere to fix them; `/dashboard/verification` said
+a licence had expired and stopped there.
+
+### Eight client components very nearly became server components
+
+The codemod that added the `Alert` import put it **above** `"use client"` in
+eight files. A directive prologue only counts before the first statement, so all
+eight silently stopped being client components — and tsc, eslint and the type
+checker all stayed quiet, because nothing in the toolchain looks at line order.
+
+`tests/unit/client-labels.test.ts` now fails on any file with code above the
+directive, verified by reintroducing it.

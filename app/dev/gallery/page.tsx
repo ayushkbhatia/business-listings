@@ -65,6 +65,7 @@ const TIER_2 = [
 const SHELLS = ["shell-public", "shell-dashboard", "shell-admin", "builder-chrome"] as const;
 
 const TIER_3 = [
+  "alert",
   "status-badge",
   "plan-badge",
   "filter-chip",
@@ -83,16 +84,18 @@ const TIER_3 = [
 ] as const;
 
 /*
- * Fifteen, and the number is contested. docs/design-system.md says tier 4 is
- * 14 and that the four tiers make 64; twelve are built and handoff 3's README
- * names three more — HoursEditor, EmirateAreaPicker and PlanCard — which is
- * 15, and 65 in total. The denominator here read /7 until handoff 3 step 1,
- * which twelve components had already passed.
+ * Fourteen, verbatim from docs/component-inventory.md rows 51–64.
  *
- * Set to what the newest source says rather than to the total that makes 64
- * come out right. Handoff 3 criterion 12 counts to 64, so one of the two
- * documents is wrong and it is worth knowing which before that check is
- * treated as meaningful.
+ * The count that did not reconcile is settled: the inventory counts
+ * `ListingCard` as one component with a `context` prop and `Button` as one
+ * with five variants, so a file count runs higher than an inventory count and
+ * always will. Tier 4 is 14, tier 3 gains `Alert` as component 65, and the
+ * four tiers make 18 + 17 + 16 + 14 = 65.
+ *
+ * `Thread` is deliberately not in this list. It is a real component — board
+ * 11c, built in handoff 2 — and it has no row in the inventory at all, so
+ * counting it here would put the denominator back out by one. It is rendered
+ * below under its own heading instead: exercised, and not miscounted.
  */
 const TIER_4 = [
   "verification-badge",
@@ -104,13 +107,22 @@ const TIER_4 = [
   "response-time",
   "quote-line-editor",
   "enquiry-composer",
-  "thread",
   "moderation-row",
   "audit-row",
   "hours-editor",
   "emirate-area-picker",
   "plan-card",
 ] as const;
+
+/**
+ * Built, and not in docs/component-inventory.md.
+ *
+ * `Thread` is board 11c and shipped in handoff 2. The inventory has no row for
+ * it, so it is shown and not counted — a component the design system has not
+ * described is worth surfacing rather than quietly folding into a tier to make
+ * a total come out right.
+ */
+const UNLISTED = ["thread"] as const;
 
 export default function Gallery() {
   return (
@@ -147,13 +159,13 @@ export default function Gallery() {
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono text-body-sm text-body">tier-3-display</td>
               <td className="px-3 py-1.5 text-right font-mono text-body-sm text-ok-ink">
-                {TIER_3.length}/15
+                {TIER_3.length}/16
               </td>
             </tr>
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono text-body-sm text-body">tier-4-domain</td>
               <td className="px-3 py-1.5 text-right font-mono text-body-sm text-ok-ink">
-                {TIER_4.length}/15
+                {TIER_4.length}/14
               </td>
             </tr>
             <tr className="border-t border-line">
@@ -166,7 +178,7 @@ export default function Gallery() {
         </table>
 
         <nav aria-label={t("gallery.jump_to")} className="mt-4 flex flex-wrap gap-1.5">
-          {[...TIER_1, ...TIER_2, ...TIER_3, ...TIER_4].map((id) => (
+          {[...TIER_1, ...TIER_2, ...TIER_3, ...TIER_4, ...UNLISTED].map((id) => (
             <a
               key={id}
               href={`#${id}`}

@@ -163,6 +163,36 @@ function withoutCallArguments(expression: string): string {
   return previous;
 }
 
+describe('"use client" is the first line, or it is not a directive', () => {
+  const files = ROOTS.flatMap((root) => walk(root));
+
+  it("finds no file where something was inserted above the directive", () => {
+    /*
+     * A directive prologue only counts before the first statement. Put an
+     * import above `"use client"` and the file silently becomes a server
+     * component — no error, no warning, and the hooks inside it fail at
+     * runtime on whichever page renders first.
+     *
+     * A codemod adding an import to eight client components did exactly this,
+     * and tsc, eslint and the type checker all stayed quiet. Nothing else in
+     * the toolchain looks at line order.
+     */
+    const displaced = files.filter((file) => {
+      const lines = readFileSync(file, "utf8").split("\n");
+      const at = lines.findIndex((line) => /^\s*["']use client["'];?\s*$/.test(line));
+      return at > 0 && lines.slice(0, at).some((line) => line.trim() !== "");
+    });
+
+    expect(
+      displaced,
+      displaced.length > 0
+        ? `${displaced.join(", ")} has code above "use client", so the directive does nothing ` +
+            "and the file is a server component."
+        : "",
+    ).toEqual([]);
+  });
+});
+
 describe("server components pass no functions to client components", () => {
   const files = ROOTS.flatMap((root) => walk(root));
 
