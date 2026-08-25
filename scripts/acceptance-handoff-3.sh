@@ -46,9 +46,24 @@ vu() {
   }
 }
 
+# `-g` filters *every* project in the run, including `setup`. So a filtered
+# seller run matches none of auth.setup.ts's tests, the setup project executes
+# nothing, no fresh storage state is written, and the seller specs go out with
+# whatever session happens to be on disk. A stale one sends every route to
+# `requireSellerSeat` → `notFound()`, and the failure arrives as an axe
+# violation about a missing main landmark rather than as an expired session.
+#
+# So the sessions are minted once, unfiltered, before any filtered run.
+signin() {
+  pnpm exec playwright test --project=setup --reporter=dot >"$LOG/signin.log" 2>&1 || return 1
+  grep -qE '[0-9]+ passed' "$LOG/signin.log" || return 1
+}
+
 pwx() {
   local project="$1" filter="$2" log="$3"
-  pnpm exec playwright test --project="$project" --reporter=dot -g "$filter" >"$LOG/$log.log" 2>&1 || return 1
+  # `--no-deps`: the sessions already exist, and letting the dependency run
+  # under a grep is what made them silently not exist.
+  pnpm exec playwright test --project="$project" --no-deps --reporter=dot -g "$filter" >"$LOG/$log.log" 2>&1 || return 1
   grep -qE '[0-9]+ passed' "$LOG/$log.log" || {
     printf '   \033[31mFAIL\033[0m  the filter "%s" matched no tests\n' "$filter"
     return 1
@@ -63,6 +78,13 @@ count() { grep -oE 'Tests +[0-9]+ passed' "$LOG/$1.log" | grep -oE '[0-9]+' | he
 pcount() { grep -oE '[0-9]+ passed' "$LOG/$1.log" | head -1; }
 
 # ─────────────────────────────────────────────────────────────────────────────
+
+note "0. Two seller sessions, signed in through the real verify form"
+if signin; then
+  ok "a Pro seat and a Free seat, minted before anything filtered runs"
+else
+  bad "see $LOG/signin.log — without these every seller route 404s and the failure reads as an axe violation"
+fi
 
 note "1. A supplier finds an unclaimed record, verifies, and reaches a dashboard with no staff"
 if vi tests/integration/onboarding.test.ts "criterion 1" c1 -t "criterion 1"; then
@@ -197,7 +219,7 @@ else
   bad "$writable call sites in app/ appear to write a derived column"; fi
 
 note "12. Axe clean on the dashboard routes, build clean, and the gallery renders every component"
-if pnpm exec playwright test --project=chromium --project=seller --project=seller-free --reporter=dot -g "axe" >"$LOG/c12a.log" 2>&1; then
+if pnpm exec playwright test --project=chromium --project=seller --project=seller-free --no-deps --reporter=dot -g "axe" >"$LOG/c12a.log" 2>&1; then
   ok "$(pcount c12a) axe checks, colour-contrast excepted — see docs/contrast.md"
 else
   bad "see $LOG/c12a.log"; fi
@@ -212,11 +234,10 @@ curl -s "$B/dev/gallery" -o "$LOG/gallery.html"
 # matching, or this greps for a string the page never contains.
 # Head -4: the RSC payload embedded further down the page carries the same
 # shape again, so matching the whole document finds each tier twice.
-counts=$(sed 's/<!--[^>]*-->//g' "$LOG/gallery.html" | grep -oE '[0-9]+/(18|17|16|14)<' | tr -d '<' | head -4 | tr '\n' ' ')
-if [ "$counts" = "18/18 17/17 16/16 14/14 " ]; then
-  ok "gallery renders 18 + 17 + 16 + 14 = 65, every tier complete"
-  info "the README says 64: Alert was approved as component 65 after it was written — docs/component-inventory.md"
-  info "Thread has no row in the inventory and is shown under its own heading rather than counted"
+counts=$(sed 's/<!--[^>]*-->//g' "$LOG/gallery.html" | grep -oE '[0-9]+/(18|17|16|15)<' | tr -d '<' | head -4 | tr '\n' ' ')
+if [ "$counts" = "18/18 17/17 16/16 15/15 " ]; then
+  ok "gallery renders 18 + 17 + 16 + 15 = 66, every tier complete"
+  info "the README says 64: Alert (65) and Thread (66) were approved after it was written — docs/component-inventory.md"
 else
   bad "gallery tier counts read: $counts"; fi
 

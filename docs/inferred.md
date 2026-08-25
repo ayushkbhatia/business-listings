@@ -1719,3 +1719,49 @@ whole document finds each tier twice.
 Both are the same class of mistake as the ones the earlier walks made: a check
 that reads a rendered artefact has to be written against what is actually
 served, not against what the source looks like.
+
+## Thread is component 66
+
+Given a row in `docs/component-inventory.md`, moved out of the gallery's
+"unlisted" heading into tier 4, and the totals updated everywhere they are
+stated: tier 4 is 15, and the four tiers make 66.
+
+`UNLISTED` is kept in the gallery as an empty array rather than deleted. A
+component the design system has not described is worth surfacing, and the next
+one wants somewhere to go that is not a guess about which tier it belongs to.
+
+### The acceptance walk was running seller tests without a session
+
+Adding one row to the inventory turned criterion 10's browser half red, and the
+component count had nothing to do with it.
+
+`playwright test --project=seller -g "board 11f"` applies the grep to **every**
+project in the run, `setup` included. `auth.setup.ts`'s tests are called "sign
+in as a seller on Pro" and "on Free", so a filtered run matches neither, the
+setup project executes nothing, and no fresh storage state is written. The
+seller specs then go out with whatever session happens to be on disk.
+
+While that session is fresh it works, which is why the first two runs of the
+walk were green. Once it is stale, every seller route reaches
+`requireSellerSeat()` → `notFound()`, and the failure surfaces as **an axe
+violation about a missing main landmark** — a report about accessibility, on a
+page the test never meant to be looking at, caused by authentication.
+
+The walk now mints both sessions once, unfiltered, before anything else, and
+every filtered run passes `--no-deps`. Verified by deleting
+`tests/e2e/.auth/*.json` and running the whole walk from nothing: 29 for 29.
+
+Worth stating plainly, because it is the second time a Playwright dependency
+has behaved differently under a filter than without one: **a `-g` filter is not
+scoped to the project you named.**
+
+### And the 404 had no landmarks
+
+The symptom was misleading; the defect it named was real. Next's default 404
+has no `<main>`, so every not-found in the app failed `landmark-one-main` —
+including the one a signed-out visitor reaches by typing a dashboard URL, which
+is the most likely way anybody meets it.
+
+`app/not-found.tsx` now has a main landmark and copy naming all three reasons a
+page might not be there. The most common of them is "you are not signed in",
+which is exactly what a bare "page not found" misleads somebody about.

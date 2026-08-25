@@ -724,7 +724,7 @@ const THREAD_MESSAGES: ThreadMessageView[] = [
 
 export function ThreadSpecimens() {
   return (
-    <Section id="thread" title="Thread" note="boards 10h and 11b · one component, two sides">
+    <Section id="thread" title="Thread" note="66 · boards 10h and 11b · one component, two sides">
       <States label="a revision, with the previous total struck through" stack>
         <Frame width="34rem">
           <Thread

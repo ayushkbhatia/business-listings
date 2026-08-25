@@ -84,18 +84,17 @@ const TIER_3 = [
 ] as const;
 
 /*
- * Fourteen, verbatim from docs/component-inventory.md rows 51–64.
+ * Fifteen, verbatim from docs/component-inventory.md rows 51–64 plus 66.
  *
  * The count that did not reconcile is settled: the inventory counts
  * `ListingCard` as one component with a `context` prop and `Button` as one
  * with five variants, so a file count runs higher than an inventory count and
- * always will. Tier 4 is 14, tier 3 gains `Alert` as component 65, and the
- * four tiers make 18 + 17 + 16 + 14 = 65.
+ * always will.
  *
- * `Thread` is deliberately not in this list. It is a real component — board
- * 11c, built in handoff 2 — and it has no row in the inventory at all, so
- * counting it here would put the denominator back out by one. It is rendered
- * below under its own heading instead: exercised, and not miscounted.
+ * Two components were approved after the original list — `Alert` (65) into
+ * tier 3 and `Thread` (66) into this one — so the four tiers make
+ * 18 + 17 + 16 + 15 = 66. `Thread` was built in handoff 2 against boards 10h
+ * and 11b and rendered here uncounted until it was given a row.
  */
 const TIER_4 = [
   "verification-badge",
@@ -112,17 +111,18 @@ const TIER_4 = [
   "hours-editor",
   "emirate-area-picker",
   "plan-card",
+  "thread",
 ] as const;
 
 /**
  * Built, and not in docs/component-inventory.md.
  *
- * `Thread` is board 11c and shipped in handoff 2. The inventory has no row for
- * it, so it is shown and not counted — a component the design system has not
- * described is worth surfacing rather than quietly folding into a tier to make
- * a total come out right.
+ * Empty, and worth keeping. `Thread` sat here until it was given row 66 — a
+ * component the design system has not described is worth surfacing rather than
+ * folding into a tier to make a total come out right, and the next one wants
+ * somewhere to go that is not a guess about which tier it belongs to.
  */
-const UNLISTED = ["thread"] as const;
+const UNLISTED = [] as const;
 
 export default function Gallery() {
   return (
@@ -165,7 +165,7 @@ export default function Gallery() {
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono text-body-sm text-body">tier-4-domain</td>
               <td className="px-3 py-1.5 text-right font-mono text-body-sm text-ok-ink">
-                {TIER_4.length}/14
+                {TIER_4.length}/15
               </td>
             </tr>
             <tr className="border-t border-line">
