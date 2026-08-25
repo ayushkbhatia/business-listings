@@ -11,9 +11,9 @@ const CLAIMED = "al-marwan-industrial-supplies-llc";
 const UNCLAIMED = "al-wadi-technical-services-llc";
 
 test.describe("robots.txt", () => {
-  test("disallows the three surfaces that must not be indexed", async ({ request }) => {
+  test("disallows the four surfaces that must not be indexed", async ({ request }) => {
     const body = await (await request.get("/robots.txt")).text();
-    for (const path of ["/search", "/compare", "/dev"]) {
+    for (const path of ["/search", "/compare", "/dev", "/admin"]) {
       expect(body, path).toContain(`Disallow: ${path}`);
     }
     expect(body).toContain("Allow: /");
@@ -30,7 +30,7 @@ test.describe("sitemap.xml", () => {
   test("lists published pages and nothing else", async ({ request }) => {
     const urls = await locs(request);
     expect(urls.length).toBeGreaterThan(50);
-    for (const forbidden of ["/search", "/compare", "/dev"]) {
+    for (const forbidden of ["/search", "/compare", "/dev", "/admin"]) {
       expect(urls.filter((u) => u.includes(forbidden)), forbidden).toEqual([]);
     }
   });

@@ -182,16 +182,36 @@ describe("site visit requests", () => {
 });
 
 describe("the audit rows those decisions owe", () => {
-  it("exist for every decided change request and claim", async () => {
-    const [decidedChanges, decidedClaims, queueDecided, claimResolved] = await Promise.all([
+  it("exist for every decided change request", async () => {
+    const [decidedChanges, queueDecided] = await Promise.all([
       prisma.listingChangeRequest.count({ where: { decidedAt: { not: null } } }),
-      prisma.claimSubmission.count({ where: { decidedAt: { not: null } } }),
       prisma.auditEvent.count({ where: { action: "queue_decided" } }),
-      prisma.auditEvent.count({ where: { action: "claim_resolved" } }),
     ]);
-
     expect(queueDecided).toBeGreaterThanOrEqual(decidedChanges);
-    expect(claimResolved).toBeGreaterThanOrEqual(decidedClaims);
+  });
+
+  it("exist once per resolved conflict, not once per decided claim", async () => {
+    /*
+     * Written the other way round in step 0, and wrong once step 1 built the
+     * resolution: settling a conflict is ONE decision that decides TWO
+     * submissions, so counting audit rows against decided claims expects twice
+     * as many rows as there are decisions.
+     *
+     * One decision, one audit row, and the subject is the conflict rather than
+     * either submission — which is also what makes the row readable. "Resolved
+     * this claim" says nothing about the person on the other side of it.
+     */
+    const resolved = await prisma.claimConflict.findMany({
+      where: { resolvedAt: { not: null } },
+      select: { id: true },
+    });
+
+    for (const conflict of resolved) {
+      const rows = await prisma.auditEvent.count({
+        where: { action: "claim_resolved", subject: `ClaimConflict:${conflict.id}` },
+      });
+      expect(rows, `conflict ${conflict.id}`).toBe(1);
+    }
   });
 
   it("are written by an actor who holds the capability", async () => {

@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import type { Actor } from "@/lib/auth/roles";
+import { openConflictIfContested } from "./conflict";
 
 /**
  * Finding a listing, and saying it is yours. Boards 2a and 2b.
@@ -159,6 +160,14 @@ export async function submitClaim(
     },
     select: { id: true },
   });
+
+  /*
+   * A second undecided claim on one listing is a conflict, and board 4c needs a
+   * row to put in the queue. Opening it here rather than leaving staff to
+   * notice a pair: `contested` has been a flag since handoff 3 and flagged
+   * nothing to anybody.
+   */
+  if (contested) await openConflictIfContested(input.businessId);
 
   return { ok: true, submissionId: created.id, contested };
 }

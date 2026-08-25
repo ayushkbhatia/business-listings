@@ -1826,6 +1826,7 @@ main()
       changeRequests: await prisma.listingChangeRequest.count(),
       pendingChanges: await prisma.listingChangeRequest.count({ where: { status: "pending" } }),
       claims: await prisma.claimSubmission.count(),
+      claimConflicts: await prisma.claimConflict.count(),
       undecidedClaims: await prisma.claimSubmission.count({ where: { decidedAt: null } }),
       visitRequests: await prisma.siteVisitRequest.count(),
       auditEvents: await prisma.auditEvent.count(),
@@ -2329,22 +2330,21 @@ async function seedQueues(
 
   const approvedOwner = await ownerOf(approvedTarget.id);
 
-  await db.claimSubmission.createMany({
-    data: [
+  const claimRows = [
       {
         // Undecided sits at `unclaimed`: the submission has not moved the
         // listing yet. Nothing about the row says pending except the absence
         // of a decision, which is what the queue filters on.
         businessId: phoneClaimTarget.id,
         claimantId: claimantPhone.id,
-        route: "phone_callback",
+        route: "phone_callback" as const,
         phone: "+97143472290",
         createdAt: days(-1),
       },
       {
         businessId: licenceClaimTarget.id,
         claimantId: claimantLicence.id,
-        route: "licence_upload",
+        route: "licence_upload" as const,
         documentId: licenceDoc.id,
         createdAt: days(-3),
       },
@@ -2354,7 +2354,7 @@ async function seedQueues(
         // anyway, flagged, and staff see both sides.
         businessId: contestedTarget.id,
         claimantId: claimantContesting.id,
-        route: "licence_upload",
+        route: "licence_upload" as const,
         documentId: contestedDoc.id,
         contested: true,
         createdAt: days(-7),
@@ -2362,9 +2362,9 @@ async function seedQueues(
       {
         businessId: approvedTarget.id,
         claimantId: approvedOwner,
-        route: "phone_callback",
+        route: "phone_callback" as const,
         phone: "+97142678831",
-        status: "claimed",
+        status: "claimed" as const,
         decidedAt: days(-40),
         decisionReason:
           "Called the number on the DED record and reached the manager named on the licence. Ownership confirmed on the call.",
@@ -2373,16 +2373,73 @@ async function seedQueues(
       {
         businessId: refusedTarget.id,
         claimantId: claimantRefused.id,
-        route: "phone_callback",
+        route: "phone_callback" as const,
         phone: "+97165331074",
         contested: true,
-        status: "disputed",
+        status: "disputed" as const,
         decidedAt: days(-15),
         decisionReason:
           "Claimant could not name the licence holder and the number reached a different company. Listing stays with the existing holder; claimant told what evidence would change that.",
         createdAt: days(-18),
       },
-    ],
+  ];
+
+  // Created one at a time rather than with createMany: the conflict row below
+  // needs the contested submission's id, and createMany does not return them.
+  const claimIds: string[] = [];
+  for (const row of claimRows) {
+    const created = await db.claimSubmission.create({ data: row, select: { id: true } });
+    claimIds.push(created.id);
+  }
+  const contestedClaimId = claimIds[2]!;
+
+  // ── A conflicting claim, with both sides ──────────────────────────────────
+  // Board 4c needs a pair, not a flag. `contested` has been a boolean since
+  // handoff 3 and flagged nothing to anybody; the conflict row is what the
+  // queue actually renders.
+
+  const conflictTarget = disputed[0]!;
+  const rivalClaimant = await db.user.create({
+    data: {
+      id: uuid(914),
+      phone: "+971509912074",
+      fullName: "Yusuf Rahman",
+      roles: ["buyer"],
+    },
+  });
+  const rivalDoc = await db.document.create({
+    data: {
+      kind: "trade_licence",
+      businessId: conflictTarget.id,
+      storagePath: `documents/${conflictTarget.id}/second-licence.pdf`,
+      filename: "second-licence.pdf",
+      bytes: 401_338,
+      mimeType: "application/pdf",
+      createdAt: days(-6),
+    },
+  });
+  const rivalClaim = await db.claimSubmission.create({
+    data: {
+      businessId: conflictTarget.id,
+      claimantId: rivalClaimant.id,
+      route: "licence_upload",
+      documentId: rivalDoc.id,
+      contested: true,
+      createdAt: days(-6),
+    },
+    select: { id: true },
+  });
+
+  await db.claimConflict.create({
+    data: {
+      businessId: conflictTarget.id,
+      submissionAId: contestedClaimId,
+      submissionBId: rivalClaim.id,
+      buyersWaiting: await db.enquiryRecipient.count({
+        where: { businessId: conflictTarget.id, state: { in: ["delivered", "opened"] } },
+      }),
+      createdAt: days(-6),
+    },
   });
 
   // ── Site visit requests ───────────────────────────────────────────────────
