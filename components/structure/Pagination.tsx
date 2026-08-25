@@ -26,6 +26,17 @@ export interface PaginationProps {
   pageLabel: (page: number) => string;
   /** Hidden entirely at or below this many rows. The design system says 50. */
   threshold?: number;
+  /**
+   * Page sizes staff may choose between.
+   *
+   * Offering a size at all is what keeps "just show me everything" from being a
+   * reasonable request — a console over 41,000 listings has no honest
+   * all-rows view, and the way to say so is to name the sizes that exist.
+   */
+  pageSizeOptions?: readonly number[];
+  onPageSizeChange?: (size: number) => void;
+  /** Names the select. Required whenever options are offered. */
+  pageSizeLabel?: string;
 }
 
 function pageWindow(page: number, pages: number): (number | "gap")[] {
@@ -50,6 +61,9 @@ export function Pagination({
   nextLabel,
   pageLabel,
   threshold = 50,
+  pageSizeOptions,
+  onPageSizeChange,
+  pageSizeLabel,
 }: PaginationProps) {
   if (total <= threshold) return null;
 
@@ -70,9 +84,40 @@ export function Pagination({
       aria-label={pageLabel(page)}
       className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-3 py-2"
     >
-      <p className="font-mono text-eyebrow tabular-nums text-muted">
-        {rangeLabel(from, to, total)}
-      </p>
+      <div className="flex items-center gap-3">
+        <p className="font-mono text-eyebrow tabular-nums text-muted">
+          {rangeLabel(from, to, total)}
+        </p>
+
+        {pageSizeOptions && onPageSizeChange && pageSizeLabel && (
+          <label className="flex items-center gap-1.5">
+            <span className="sr-only">{pageSizeLabel}</span>
+            {/*
+              A native select. The design system's own note on Select applies
+              here more than anywhere: this is a control somebody uses once and
+              then forgets, and the platform one is the one their browser
+              already knows how to open.
+            */}
+            <select
+              value={pageSize}
+              onChange={(event) => onPageSizeChange(Number(event.target.value))}
+              className={cn(
+                "h-8 rounded-ctl border border-line bg-card px-2",
+                "font-mono text-eyebrow tabular-nums text-muted",
+                "transition-colors duration-120 ease-out",
+                "hover:border-line-strong hover:text-ink",
+                "focus-visible:outline-none focus-visible:shadow-focus",
+              )}
+            >
+              {pageSizeOptions.map((size) => (
+                <option key={size} value={size}>
+                  {formatCount(size)}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
 
       <div className="flex items-center gap-1">
         <button

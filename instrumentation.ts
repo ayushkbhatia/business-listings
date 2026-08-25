@@ -8,6 +8,6 @@
 export async function register() {
   if (process.env.NEXT_RUNTIME === "nodejs") {
     const { installPersistence } = await import("./lib/db/writers");
-    installPersistence();
+    await installPersistence();
   }
 }

@@ -1765,3 +1765,108 @@ is the most likely way anybody meets it.
 `app/not-found.tsx` now has a main landmark and copy naming all three reasons a
 page might not be there. The most common of them is "you are not signed in",
 which is exactly what a bare "page not found" misleads somebody about.
+
+---
+
+## Handoff 4, step 0 — the console frame
+
+### Service levels are ours, not the design system's
+
+Board 4a says queues show "age and SLA breach before volume" and names no numbers,
+so `lib/console/overview.ts` sets them: moderation 2 days, claims 3, supplier
+reports 5, site visits 14, failed payments 14.
+
+They are set against what the delay costs somebody outside the building rather
+than against how hard the work is. A contested claim is the most expensive
+because buyers are enquiring on a listing whose owner is undecided; a supplier
+report next; a taxonomy edit least. Dunning is 14 because D14 is when the plan
+drops, so the deadline is already fixed by the sequence.
+
+The numbers are stated on the screen that uses them. A queue with no published
+deadline is a queue nobody can be behind on, and "behind" is the whole question
+board 4a exists to answer.
+
+### A metric with no table returns null, not zero
+
+Licence records staged, storefront templates and the CRM call list have no table
+until steps 2, 6 and 4. Each returns `null` and renders as "not measurable yet".
+
+Zero on a queue means the work is done. On a queue that does not exist it is the
+one lie a console must never tell, and it is an easy one to tell by accident:
+`count()` over a table that is empty because nothing writes to it returns 0 quite
+happily.
+
+### The console overview links only to routes that exist
+
+Every number on 4a is meant to be a link into the queue that fixes it. Most of
+those queues are `later` in `ADMIN_NAV`, so the page reads that flag and renders
+those metrics as plain text with the same "soon" mark the sidebar uses.
+
+Nothing needs editing when a step lands — dropping `later` from a nav row turns
+its number into a link on its own. This is the rule handoff 1 arrived at after
+the seller sidebar shipped a dozen dead links, applied before the same thing
+could happen here.
+
+### Three invented badge counts, removed
+
+`ADMIN_NAV` carried `badge: 34` on the approval queue, `3` on reports and `5` on
+dunning. They were placeholders from before there was anything to count, and the
+seed's real pending count is 3.
+
+Same shape of invention as the seed's `responseTimeMedianMs` and
+`profileStrength`, both caught in earlier handoffs — and this one sat on the
+screen whose entire job is saying what is behind. Counts now come from
+`getAdminNavBadges`, and a count nobody may act on is not loaded at all: a
+moderator has no `revenue.read`, and a badge on a row they cannot open is
+telling them about somebody else's backlog.
+
+### Two audit writers existed, and load order decided which one won
+
+A real defect, found while wiring the first admin service.
+
+`lib/audit/prisma-writer.ts` honours the transaction handle `staffMutation`
+passes it and registers itself on import. `lib/db/writers.ts` held a **second**
+implementation that ignored that argument and read the transaction from an
+`AsyncLocalStorage` set by `runInAuditedTransaction` — a function nothing in the
+repo ever called. `instrumentation.ts` installed the second at process start,
+and the first module to import `prisma-writer` replaced it.
+
+So whether an audit row joined the transaction of the mutation it records —
+which is the guarantee `staffMutation`'s own doc comment makes — depended on
+module load order. `lib/db/writers.ts` is now a one-line import of the single
+implementation.
+
+### `staffMutation` refuses a subject-dependent capability without its subject check
+
+`assertCan` is a role-array membership test. For `business.verification_tier.write`
+a role test passes for **every** field verifier, including one setting a tier on
+a business they have never visited — the exact grant `docs/permissions.md` calls
+"not a general grant", and the thing CLAUDE.md's second non-negotiable exists to
+prevent.
+
+The old contract let that call compile, run, and write a tidy audit row saying it
+was fine. `staffMutation` now throws `SubjectCheckRequiredError` unless the
+caller passes `subjectChecked: true`, which it may only do after calling the
+matching assert in `lib/auth/subject.ts`. Passing the flag where it is not needed
+is also an error: a flag that can be set anywhere is a flag that means nothing.
+
+### No development staff seat
+
+`lib/auth/dev-seller.ts` exists because a seller dashboard is unusable without a
+business, and it is inert in production. There is deliberately no equivalent for
+staff. It would be a way to become an ops lead by setting an environment
+variable, and the blast radius is every audited capability in the matrix.
+
+The browser tests sign in properly instead, through the same OTP path a person
+uses — two staff seats, and the moderator one exists to prove a negative that an
+ops lead's session cannot.
+
+### The admin layout does not guard
+
+`app/(admin)/layout.tsx` returns its children and nothing else. Next runs a
+layout for every matching route, but a layout cannot stop a page's own data
+fetching from running — the two render concurrently. A guard there would look
+like protection and provide none. Every page calls `requireStaff()` itself.
+
+A missing staff role is a 404 rather than a 403, so a guessed URL does not
+confirm the URL exists.

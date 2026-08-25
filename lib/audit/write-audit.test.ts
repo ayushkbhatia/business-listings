@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
 import { AUDITED_CAPABILITIES } from "@/lib/auth/capabilities";
-import { staffMutation } from "./staff-mutation";
+import { staffMutation, SubjectCheckRequiredError } from "./staff-mutation";
 import { ACTION_FOR_CAPABILITY, type AuditRow } from "./types";
 import { AuditNotConfiguredError, setAuditWriter, writeAudit } from "./write-audit";
 
@@ -120,6 +120,52 @@ describe("writeAudit", () => {
 describe("staffMutation", () => {
   const REASON = "Licence expired, dropping the tier as policy requires.";
 
+  it("refuses a subject-dependent capability with no subject check", async () => {
+    /*
+     * The failure this prevents was silent. `assertCan` is role membership, and
+     * for this row a role test passes for every field verifier — including one
+     * tiering a business they have never visited, which is the single thing
+     * CLAUDE.md's second non-negotiable exists to stop. The old contract let
+     * that call run and write a tidy audit row saying it was fine.
+     */
+    const run = vi.fn(async () => ({ result: "ok" }));
+
+    await expect(
+      staffMutation(
+        {
+          actor: opsLead,
+          capability: "business.verification_tier.write",
+          subject: "Business:clx1",
+          reason: REASON,
+        },
+        run,
+      ),
+    ).rejects.toThrow(SubjectCheckRequiredError);
+
+    expect(run).not.toHaveBeenCalled();
+    expect(rows).toHaveLength(0);
+  });
+
+  it("refuses subjectChecked on a capability that does not take one", async () => {
+    // A flag that can be set anywhere is a flag that means nothing.
+    const run = vi.fn(async () => ({ result: "ok" }));
+
+    await expect(
+      staffMutation(
+        {
+          actor: opsLead,
+          capability: "business.suspend",
+          subject: "Business:clx1",
+          reason: REASON,
+          subjectChecked: true,
+        },
+        run,
+      ),
+    ).rejects.toThrow(/not subject-dependent/);
+
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it("runs the mutation and writes exactly one audit row", async () => {
     const run = vi.fn(async () => ({ result: "ok", before: { tier: 3 }, after: { tier: 2 } }));
 
@@ -129,6 +175,9 @@ describe("staffMutation", () => {
         capability: "business.verification_tier.write",
         subject: "Business:clx1",
         reason: REASON,
+        // Subject-dependent, so the caller has to say it ran the narrower
+        // check — see lib/verification/service.ts, which does.
+        subjectChecked: true,
       },
       run,
     );
@@ -149,6 +198,7 @@ describe("staffMutation", () => {
           capability: "business.verification_tier.write",
           subject: "Business:clx1",
           reason: REASON,
+          subjectChecked: true,
         },
         run,
       ),

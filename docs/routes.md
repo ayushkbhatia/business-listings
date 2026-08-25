@@ -83,7 +83,7 @@ they 404 until their handoff.
 ## Superadmin — /admin
 
 ```
-/admin                                  Platform overview                     [4a]
+/admin                                  Platform overview                     [4a]  built h4s0
 /admin/queue                            Approval queue                        [4b]
 /admin/queue/:id                        Review a submission                   [4c]
 /admin/ingest                           Licence importer                     [12a]
@@ -97,6 +97,7 @@ they 404 until their handoff.
 /admin/users                            Users                                later
 /admin/staff                            Staff, roles & audit                  [4i]
 /admin/subscriptions                    Subscriptions                         [4g]
+/admin/invoices                         Invoices & credits                   [12e]
 /admin/plans                            Plans & entitlements                 [12e]
 /admin/dunning                          Failed payments                      [12e]
 /admin/tax                              VAT export                           [12e]

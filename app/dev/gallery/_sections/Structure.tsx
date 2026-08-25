@@ -156,6 +156,51 @@ export function Structure() {
         <States label="row tones" stack>
           <p className="text-caption text-muted">{t("gallery.tone_note")}</p>
         </States>
+
+        {/*
+          The state this component did not have until handoff 4 step 0, and the
+          one that mattered most. A failed query used to fall through to the
+          empty state, so a broken queue told the person clearing it that there
+          was nothing to clear.
+        */}
+        <States label="failed" stack>
+          <div className="w-full">
+            <DataTable
+              caption={t("table.caption.businesses")}
+              columns={columns}
+              rows={[]}
+              rowKey={(r) => r.id}
+              error={
+                <div className="text-center">
+                  <p className="text-body-sm text-bad-ink">{t("table.error.title")}</p>
+                  <p className="mt-1 text-caption text-muted">{t("table.error.action")}</p>
+                </div>
+              }
+            />
+          </div>
+        </States>
+
+        <States label="banded, with a total" stack>
+          <div className="w-full">
+            <DataTable
+              caption={t("table.caption.businesses")}
+              columns={columns}
+              rows={ROWS}
+              rowKey={(r) => r.id}
+              stickyHeader
+              groupBy={(r) => (r.tier >= 3 ? "verified" : "unverified")}
+              groupLabel={(key, count) =>
+                key === "verified"
+                  ? t("table.band.verified", { count: formatCount(count) })
+                  : t("table.band.unverified", { count: formatCount(count) })
+              }
+              footer={t("table.total", {
+                count: formatCount(ROWS.length),
+                value: formatAED(ROWS.reduce((sum, r) => sum + r.quoted, 0)),
+              })}
+            />
+          </div>
+        </States>
       </Section>
 
       <Section

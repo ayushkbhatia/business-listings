@@ -28,6 +28,13 @@ if (!canSignIn) {
 const SELLER_STATE = "tests/e2e/.auth/seller.json";
 /** Board 11a only exists for a plan with a cap, so it needs its own session. */
 const FREE_SELLER_STATE = "tests/e2e/.auth/seller-free.json";
+/*
+ * Two staff sessions. The moderator one exists to prove a negative — criterion
+ * 9's claim that the console does not offer them the tier, credit or suspend
+ * controls — and a negative asserted from an ops lead's session proves nothing.
+ */
+const OPS_LEAD_STATE = "tests/e2e/.auth/staff-ops.json";
+const MODERATOR_STATE = "tests/e2e/.auth/staff-moderator.json";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -47,12 +54,12 @@ export default defineConfig({
       name: "chromium",
       use: { ...devices["Desktop Chrome"] },
       // The dashboard needs a signed-in seller; the seller projects own it.
-      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding)[\w-]*\.spec\.ts/,
+      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin)[\w-]*\.spec\.ts/,
     },
     {
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding)[\w-]*\.spec\.ts/,
+      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin)[\w-]*\.spec\.ts/,
     },
     ...(canSignIn
       ? [
@@ -69,6 +76,19 @@ export default defineConfig({
             testMatch: /overview-free\.spec\.ts/,
             dependencies: ["setup"],
             use: { ...devices["Desktop Chrome"], storageState: FREE_SELLER_STATE },
+          },
+          {
+            name: "staff",
+            testMatch: /admin[\w-]*\.spec\.ts/,
+            testIgnore: /admin-moderator\.spec\.ts/,
+            dependencies: ["setup"],
+            use: { ...devices["Desktop Chrome"], storageState: OPS_LEAD_STATE },
+          },
+          {
+            name: "staff-moderator",
+            testMatch: /admin-moderator\.spec\.ts/,
+            dependencies: ["setup"],
+            use: { ...devices["Desktop Chrome"], storageState: MODERATOR_STATE },
           },
         ]
       : []),
