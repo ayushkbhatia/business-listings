@@ -1437,3 +1437,115 @@ the gallery says 15/15. The count still does not reconcile with
 `docs/design-system.md`, which says tier 4 is 14 and the four tiers make 64 —
 this makes 65. Criterion 12 counts to 64, so that document and handoff 3's
 README disagree and one of them is wrong.
+
+## Handoff 3, step 5 — onboarding and setup
+
+### The listing goes live one step before the plan screen
+
+Criterion 3 is a single call in a single place: `goLive` at the end of board 2d,
+not at the end of the funnel. Everything after that point happens to a listing
+that is already on the directory, so a supplier who closes the tab at the
+pricing table is listed, findable, and receiving enquiries up to the Free cap.
+
+The plan screen then opens with the address of the live listing, because a
+pricing table shown to somebody who believes they are still blocked reads as a
+paywall however carefully it is worded. "Stay on Free" is a button rather than a
+link in small type, for the same reason.
+
+`goLive` is idempotent and also publishes the locations. A listing that is
+"live" with every branch unpublished is a listing with no address a buyer can
+see, which is not live in any sense that matters.
+
+### A claim attaches; it does not migrate
+
+Criterion 2 — "claiming preserves existing reviews and any historical
+enquiries" — reads like something that could not go wrong, right up until
+somebody implements claiming as create-then-migrate rather than attach. Then it
+goes wrong silently, and the supplier whose fourteen reviews vanished is the one
+who tells us.
+
+It holds by construction here: a claim writes one `ClaimSubmission` row and
+attaches the user to a business that already exists. Nothing that hangs off the
+business is touched, and the integration test asserts the full before/after
+shape rather than spot-checking two counts.
+
+The screen says it with a number — "14 reviews and 38 enquiries stay exactly as
+they are" — rather than a reassurance. "Your data is safe" is what a product
+says whether or not it is true.
+
+### A contested claim is taken, not refused
+
+If a former employee or an agency claimed the listing, the second person is
+often the real owner. Closing the door in front of them is the wrong side to be
+wrong on, so the submission is recorded with `contested: true` and staff see
+both. Nothing about `claimStatus` moves either way; handoff 4 decides.
+
+The seat, though, is attached immediately. Criterion 1 asks that a supplier
+reaches a dashboard without staff involvement — making them wait for a human
+before they can fill anything in would fail it, and a rejected claim is detached
+by the queue that rejects it.
+
+### The phone route calls a number the claimant cannot choose
+
+Anybody can answer their own phone. The check only means something because the
+number comes from the public licence record, so board 2b offers *that* number
+and there is no field to type one into. The e2e asserts the absence of the
+field, not just the presence of the sentence.
+
+### Setup completion is derived, never flagged
+
+Criterion 4 wants four tasks that are independent and resumable after logout.
+There is no `taskCompleted` column and there should not be: a flag can be set by
+something other than the work, goes stale when a seller deletes the photographs
+afterwards, and would give no credit to a seller who added products from the
+catalogue screen instead of from the task.
+
+`setupStateFor` counts rows. "Resumable after logout" then needs no
+implementation at all, which is the test: two reads with nothing between them
+give the same answer because nothing is held in a session.
+
+`TASK_POINTS` reads from `WEIGHTS` rather than restating the numbers. Board 8a
+publishes what each task is worth and the meter shows the result; two copies
+that drifted would be a promise the product breaks in front of the person it
+made it to. The visit is worth zero and the hub says so — it moves trust, not
+strength, and implying otherwise would be selling a number the task does not
+touch.
+
+### ON DELETE SET NULL against a CHECK that requires the column
+
+`claim_submission.document_id` was `ON DELETE SET NULL`, and the check
+constraint requires a licence claim to carry its document. Deleting the document
+therefore produced a row violating its own constraint — and the error came back
+as a confusing complaint about the claim rather than a clear one about the
+document.
+
+`ON DELETE RESTRICT` is right: a licence claim without its licence is not a
+claim, so deleting the evidence is refused while the claim is open. Worth
+remembering that a `SET NULL` foreign key and a `NOT NULL`-ish check on the same
+column are a contradiction the database will only mention at the worst moment.
+
+### The onboarding layout had no landmarks
+
+Written bare rather than through `DashboardShell` or `PublicShell`, so it
+inherited neither's `<main>`. Every step failed `landmark-one-main` and put all
+its content outside any landmark — on the first screen a supplier ever sees. The
+axe check on the new routes caught it; nothing else would have.
+
+### A test with an expiry date, twice
+
+`dashboard.spec.ts` asserted that a named-but-unlinked route was named and
+unlinked. It picked Analytics; step 4 built it. It was changed to Setup; step 5
+built that. Each step builds one more, so any test naming *which* route is
+deferred has an expiry date — and when it goes off, the failure looks like a
+regression rather than like progress.
+
+It now reads `DASHBOARD_NAV` and asserts both halves of the rule for every item:
+deferred ones named and not linked, built ones linked. There are no deferred
+seller items left, and the test asserting nothing on that side is the honest
+answer rather than a gap.
+
+Two smaller things fell out of writing it. A group heading carries the same word
+as one of its items — "Overview" is both — so text matching has to be scoped to
+the list rows. And an item with a badge has the count in its accessible name,
+so "Leads & RFQ" is never an exact match for the link whose name is
+"Leads & RFQ 13"; the assertion anchors at the start of the label instead.
