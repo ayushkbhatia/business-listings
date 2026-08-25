@@ -39,6 +39,8 @@ let sellerOwnerId: string;
 /** A business somebody has actually visited, and one nobody has. */
 let visitedBusinessId: string;
 let unvisitedBusinessId: string;
+/** A business on a paid plan, so a credit has something to be a credit against. */
+let payingBusinessId: string;
 
 beforeAll(async () => {
   const staff = await prisma.user.findMany({
@@ -68,6 +70,18 @@ beforeAll(async () => {
     select: { id: true },
   });
   unvisitedBusinessId = unvisited.id;
+
+  /*
+   * Chosen explicitly rather than taken from whichever business the visited
+   * query happened to return. CI failed here and a local run did not: a fresh
+   * database offered a business with no subscription, and the credit ceiling
+   * is computed from the plan price.
+   */
+  const paying = await prisma.business.findFirstOrThrow({
+    where: { subscription: { isNot: null }, planId: { not: "free" } },
+    select: { id: true },
+  });
+  payingBusinessId = paying.id;
 });
 
 const REASON = "Checked the trade licence against the DED register and the premises photos.";
@@ -335,7 +349,7 @@ describe("what the permitted roles can do, and what it leaves behind", () => {
   it("finance issues a credit as a negative line, never a refund", async () => {
     const result = await issueSubscriptionCredit({
       actor: actor(financeId, "staff_finance"),
-      businessId: visitedBusinessId,
+      businessId: payingBusinessId,
       fils: 34_900,
       description: "Basic plan, four days the search index was stale",
       reason: "Our index lagged for four days and their listing did not appear. Credited the days.",
@@ -356,12 +370,32 @@ describe("what the permitted roles can do, and what it leaves behind", () => {
   it("refuses a credit larger than a year of the plan", async () => {
     const result = await issueSubscriptionCredit({
       actor: actor(financeId, "staff_finance"),
-      businessId: visitedBusinessId,
+      businessId: payingBusinessId,
       fils: 99_999_999,
       description: "Typo",
       reason: "This should not be possible to write down.",
     });
     expect(result).toMatchObject({ ok: false, error: "too_large" });
+  });
+
+  it("refuses a credit against a business with no subscription", async () => {
+    const unsubscribed = await prisma.business.findFirstOrThrow({
+      where: { subscription: { is: null } },
+      select: { id: true },
+    });
+
+    const result = await issueSubscriptionCredit({
+      actor: actor(financeId, "staff_finance"),
+      businessId: unsubscribed.id,
+      fils: 10_000,
+      description: "One month",
+      reason: "There is nothing here to credit against.",
+    });
+
+    expect(result).toMatchObject({ ok: false, error: "no_subscription" });
+    // And the error names the real reason rather than a plan they do not have.
+    if (result.ok) return;
+    expect(result.message).not.toMatch(/more than a year/);
   });
 });
 

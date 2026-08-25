@@ -338,7 +338,11 @@ export async function invoicesFor(actor: Actor, businessId: string) {
 
 export type CreditResult =
   | { ok: true; invoiceId: string }
-  | { ok: false; error: "not_found" | "not_positive" | "too_large"; message: string };
+  | {
+      ok: false;
+      error: "not_found" | "not_positive" | "too_large" | "no_subscription";
+      message: string;
+    };
 
 export interface CreditInput {
   actor: Actor;
@@ -393,12 +397,30 @@ export async function issueSubscriptionCredit(input: CreditInput): Promise<Credi
   }
 
   /*
+   * No subscription, nothing to credit.
+   *
+   * This used to fall through to a ceiling computed from a monthly price of
+   * zero, which produced a AED 12 cap and refused every real credit with
+   * "that is more than a year of this plan" — an error naming a plan the
+   * business does not have. CI caught it and a local run did not, because a
+   * local database that has been seeded and mutated a dozen times happened to
+   * offer a business with a subscription to the query the test used.
+   */
+  if (!business.subscription) {
+    return {
+      ok: false,
+      error: "no_subscription",
+      message: "That business has no subscription. A credit is against something we charged.",
+    };
+  }
+
+  /*
    * A ceiling of one year of the current plan. Not a policy — a typo guard.
    * Fils are two orders of magnitude away from dirhams and the most likely
    * mistake here is one somebody makes with the decimal point, at which point
    * the number has already been written down as a fact.
    */
-  const monthly = Number(business.subscription?.plan.monthlyPriceAed ?? 0);
+  const monthly = Number(business.subscription.plan.monthlyPriceAed);
   const ceiling = Math.max(monthly, 1) * 12 * 100;
   if (input.fils > ceiling) {
     return {
