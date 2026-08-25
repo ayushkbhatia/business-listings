@@ -1,3 +1,4 @@
+import { Alert } from "@/components/display";
 import { prisma } from "@/lib/db/client";
 import { VerificationLadder } from "@/components/domain";
 import { TIERS } from "@/components/domain/verification";
@@ -56,12 +57,9 @@ export default async function VerificationPage() {
         <p className="max-w-prose text-body-sm text-muted">{t("verify_listing.intro")}</p>
 
         {licenceExpired && (
-          <p
-            role="alert"
-            className="max-w-prose rounded-ctl border border-warn-line bg-warn-surface px-3 py-2 text-body-sm text-warn-ink"
-          >
+          <Alert tone="warn" live="polite" fix={t("verify_listing.licence_expired_fix")}>
             {t("verify_listing.licence_expired", { when: formatDate(business.licenceExpiry) })}
-          </p>
+          </Alert>
         )}
 
         <Panel

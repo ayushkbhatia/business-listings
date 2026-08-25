@@ -54,6 +54,15 @@ export interface Actor {
   roles: readonly Role[];
   /** Set for a seller role. A seller capability is scoped to their own business. */
   businessId?: string;
+  /**
+   * Set where a sales seat is scoped to one branch.
+   *
+   * Board 7d shows Fatima scoped to Al Quoz: every capability she holds is
+   * further limited to that branch's enquiries and locations. Undefined means
+   * unscoped, which is what an owner, a manager and most sales seats are —
+   * scoping is opt-in, and absent it nothing narrows.
+   */
+  branchId?: string;
 }
 
 export function isStaff(actor: Actor): boolean {

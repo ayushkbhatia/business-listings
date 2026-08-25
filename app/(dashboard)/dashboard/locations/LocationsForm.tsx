@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/display";
 import { useState, useTransition } from "react";
 import { Button, Input, Select, Toggle } from "@/components/primitives";
 import { Panel } from "@/components/structure";
@@ -141,12 +142,7 @@ function BranchPanel({
           {branch && <input type="hidden" name="id" value={branch.id} />}
 
           {error && (
-            <div
-              role="alert"
-              className="rounded-ctl border border-bad-line bg-bad-surface px-3 py-2 text-body-sm text-bad-ink"
-            >
-              {error}
-            </div>
+            <Alert tone="bad" live="assertive">{error}</Alert>
           )}
 
           <label className="flex max-w-sm flex-col gap-1">

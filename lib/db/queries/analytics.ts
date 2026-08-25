@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { windowStart } from "@/lib/metrics/response-time";
+import type { AnalyticsScope } from "@/lib/auth/subject";
 
 /**
  * Board 3l — where enquiries come from.
@@ -30,12 +31,28 @@ export interface AnalyticsView {
   byCategory: Slice[];
 }
 
-export async function getAnalytics(businessId: string, now = new Date()): Promise<AnalyticsView> {
+export async function getAnalytics(
+  businessId: string,
+  now = new Date(),
+  scope?: AnalyticsScope,
+): Promise<AnalyticsView> {
   const since = windowStart(now);
+
+  /*
+   * "Own leads only" means the enquiries this person replied to, not the ones
+   * routed to them — routing changes, and a seat that answered forty enquiries
+   * last quarter should still see forty. The message sender is the record of
+   * who actually did the work, which is the same source board 7d's per-person
+   * reply times read.
+   */
+  const ownLeads =
+    scope?.kind === "own_leads"
+      ? { enquiry: { messages: { some: { businessId, senderId: scope.actorId } } } }
+      : {};
 
   const [recipients, quotes, accepted] = await Promise.all([
     prisma.enquiryRecipient.findMany({
-      where: { businessId, createdAt: { gte: since } },
+      where: { businessId, createdAt: { gte: since }, ...ownLeads },
       select: {
         enquiry: {
           select: {

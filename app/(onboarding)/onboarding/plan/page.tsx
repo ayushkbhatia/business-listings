@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Alert } from "@/components/display";
 import { prisma } from "@/lib/db/client";
 import { PlanCard } from "@/components/domain";
 import { featuresOf, priceLabelOf, summaryOf } from "@/lib/billing/plan-features";
@@ -45,9 +46,7 @@ export default async function PlanStepPage() {
 
   return (
     <OnboardingPage step="plan" title={t("plan_step.title")}>
-      <p className="max-w-prose rounded-ctl border border-ok-line bg-ok-surface px-3 py-2 text-body-sm text-ok-ink">
-        {t("plan_step.live_already", { url: `/b/${business.slug}` })}
-      </p>
+      <Alert tone="ok">{t("plan_step.live_already", { url: `/b/${business.slug}` })}</Alert>
 
       <div className="grid gap-4 lg:grid-cols-3">
         {plans.map((plan) => (

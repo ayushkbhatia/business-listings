@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/display";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/primitives";
 import { PlanCard, type PlanFeature } from "@/components/domain";
@@ -103,12 +104,7 @@ export function PlanChooser({ plans, quoteAction, confirmAction }: PlanChooserPr
   return (
     <div className="flex flex-col gap-5">
       {error && (
-        <div
-          role="alert"
-          className="rounded-ctl border border-bad-line bg-bad-surface px-3 py-2 text-body-sm text-bad-ink"
-        >
-          {error}
-        </div>
+        <Alert tone="bad" live="assertive">{error}</Alert>
       )}
 
       <div className="grid gap-4 lg:grid-cols-3">

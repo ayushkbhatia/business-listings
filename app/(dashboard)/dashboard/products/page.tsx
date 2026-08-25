@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Alert } from "@/components/display";
 import { buttonClassName } from "@/components/primitives";
 import { Card } from "@/components/structure";
 import { getCatalogue } from "@/lib/db/queries/catalogue";
@@ -69,11 +70,21 @@ export default async function CataloguePage() {
         ))}
 
         {catalogue.missingFilterableSpecs > 0 && (
-          <p className="rounded-ctl border border-warn-line bg-warn-surface px-3 py-2 text-body-sm text-warn-ink">
+          <Alert
+            tone="warn"
+            action={
+              <Link
+                href="/dashboard/templates"
+                className={buttonClassName({ variant: "secondary", size: "sm" })}
+              >
+                {t("catalogue.template_link")}
+              </Link>
+            }
+          >
             {t("catalogue.missing_specs", {
               count: formatCount(catalogue.missingFilterableSpecs),
             })}
-          </p>
+          </Alert>
         )}
 
         {catalogue.draftCount > 0 && (

@@ -14,10 +14,19 @@ import type { Actor } from "./roles";
  * mutation is allowed.
  */
 
-// ── Trust ───────────────────────────────────────────────────────────────────
-export const assertCanChangeVerificationTier = (a: Actor) =>
-  assertCan(a, "business.verification_tier.write");
-export const mayChangeVerificationTier = (a: Actor) => can(a, "business.verification_tier.write");
+/*
+ * ── Trust ───────────────────────────────────────────────────────────────────
+ *
+ * `business.verification_tier.write` has no bare guard here on purpose. A field
+ * verifier holds it only for a visit they recorded, so the role grant is not
+ * the check — see `assertCanSetVerificationTier` in lib/auth/subject.ts, which
+ * takes the visit. A guard named the obvious thing and taking only an actor is
+ * exactly the mistake that row exists to prevent, so it is not offered.
+ *
+ * The same applies to `enquiry.respond`, `quote.send`, `analytics.read` and
+ * `enquiry.read_other_business`. Every subject-dependent capability is listed
+ * in `SUBJECT_DEPENDENT`.
+ */
 
 export const assertCanSuspendBusiness = (a: Actor) => assertCan(a, "business.suspend");
 export const maySuspendBusiness = (a: Actor) => can(a, "business.suspend");
@@ -39,6 +48,31 @@ export const mayDecideQueueItem = (a: Actor) => can(a, "queue.decide");
 export const assertCanRecordVisit = (a: Actor) => assertCan(a, "visit.record");
 export const mayRecordVisit = (a: Actor) => can(a, "visit.record");
 
+export const assertCanResolveClaim = (a: Actor) => assertCan(a, "claim.resolve");
+export const mayResolveClaim = (a: Actor) => can(a, "claim.resolve");
+
+export const assertCanEditEntitlements = (a: Actor) => assertCan(a, "plan.entitlements.write");
+export const mayEditEntitlements = (a: Actor) => can(a, "plan.entitlements.write");
+
+export const assertCanEditRanking = (a: Actor) => assertCan(a, "search.ranking.write");
+export const mayEditRanking = (a: Actor) => can(a, "search.ranking.write");
+
+export const assertCanEditStorefrontTemplate = (a: Actor) =>
+  assertCan(a, "storefront.template.write");
+export const mayEditStorefrontTemplate = (a: Actor) => can(a, "storefront.template.write");
+
+export const assertCanReplyToReview = (a: Actor) => assertCan(a, "review.reply");
+export const mayReplyToReview = (a: Actor) => can(a, "review.reply");
+
+export const assertCanRequestReview = (a: Actor) => assertCan(a, "review.request");
+export const mayRequestReview = (a: Actor) => can(a, "review.request");
+
+export const assertCanRequestVisit = (a: Actor) => assertCan(a, "visit.request");
+export const mayRequestVisit = (a: Actor) => can(a, "visit.request");
+
+export const assertCanManageRouting = (a: Actor) => assertCan(a, "routing.manage");
+export const mayManageRouting = (a: Actor) => can(a, "routing.manage");
+
 // ── Commercial ──────────────────────────────────────────────────────────────
 export const assertCanIssueSubscriptionCredit = (a: Actor) => assertCan(a, "subscription.credit");
 export const mayIssueSubscriptionCredit = (a: Actor) => can(a, "subscription.credit");
@@ -56,8 +90,7 @@ export const mayEditTaxonomy = (a: Actor) => can(a, "taxonomy.write");
 export const assertCanManageStaff = (a: Actor) => assertCan(a, "staff.manage");
 export const mayManageStaff = (a: Actor) => can(a, "staff.manage");
 
-export const assertCanReadAuditLog = (a: Actor) => assertCan(a, "audit.read");
-export const mayReadAuditLog = (a: Actor) => can(a, "audit.read");
+
 
 export const assertCanViewAs = (a: Actor) => assertCan(a, "support.view_as");
 export const mayViewAs = (a: Actor) => can(a, "support.view_as");
@@ -69,11 +102,6 @@ export const mayEditListing = (a: Actor) => can(a, "listing.edit");
 export const assertCanEditProduct = (a: Actor) => assertCan(a, "product.edit");
 export const mayEditProduct = (a: Actor) => can(a, "product.edit");
 
-export const assertCanRespondToEnquiry = (a: Actor) => assertCan(a, "enquiry.respond");
-export const mayRespondToEnquiry = (a: Actor) => can(a, "enquiry.respond");
-
-export const assertCanSendQuote = (a: Actor) => assertCan(a, "quote.send");
-export const maySendQuote = (a: Actor) => can(a, "quote.send");
 
 export const assertCanManageBilling = (a: Actor) => assertCan(a, "billing.manage");
 export const mayManageBilling = (a: Actor) => can(a, "billing.manage");
@@ -87,8 +115,7 @@ export const mayChangePlan = (a: Actor) => can(a, "plan.change");
 export const assertCanBuyPlacement = (a: Actor) => assertCan(a, "placement.purchase");
 export const mayBuyPlacement = (a: Actor) => can(a, "placement.purchase");
 
-export const assertCanReadAnalytics = (a: Actor) => assertCan(a, "analytics.read");
-export const mayReadAnalytics = (a: Actor) => can(a, "analytics.read");
+
 
 // ── Buyer ───────────────────────────────────────────────────────────────────
 export const assertCanCreateEnquiry = (a: Actor) => assertCan(a, "enquiry.create");

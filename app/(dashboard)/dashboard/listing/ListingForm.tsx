@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Button, Input, Select, Textarea } from "@/components/primitives";
-import { StatusBadge } from "@/components/display";
+import { Alert, StatusBadge } from "@/components/display";
 import { Panel } from "@/components/structure";
 import { DESCRIPTION_LIMIT } from "@/lib/listing/constants";
 import { formatDateTime } from "@/lib/format";
@@ -70,12 +70,7 @@ export function ListingForm(props: ListingFormProps) {
   return (
     <div className="flex flex-col gap-5">
       {error && (
-        <div
-          role="alert"
-          className="rounded-ctl border border-bad-line bg-bad-surface px-3 py-2 text-body-sm text-bad-ink"
-        >
-          {error}
-        </div>
+        <Alert tone="bad" live="assertive">{error}</Alert>
       )}
 
       <form onSubmit={onSave}>
@@ -248,37 +243,30 @@ function ModeratedField({
           seller who does that twice has no idea which one a moderator is
           looking at. Withdraw, then ask again.
         */
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-ctl border border-warn-line bg-warn-surface px-3 py-2">
-          <div className="min-w-0">
-            <p className="text-body-sm text-warn-ink">
-              {t("listing.pending_change", { value: pending.afterValue })}
-            </p>
-            {/*
-              An absolute time, not a relative one. A request submitted a moment
-              ago renders as "now", and "Waiting for review since now" is a
-              sentence nobody would write.
-            */}
-            <p className="mt-0.5 text-caption text-muted">
-              {t("listing.pending_since", { when: formatDateTime(new Date(pending.createdAt)) })}
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={busy}
-            onClick={() => {
-              const form = new FormData();
-              form.set("id", pending.id);
-              startTransition(async () => {
-                const result = await withdrawAction(form);
-                if (result.ok) setNotice(t("listing.withdrawn"));
-                else setError(result.error);
-              });
-            }}
-          >
-            {t("listing.withdraw")}
-          </Button>
-        </div>
+        <Alert
+          tone="warn"
+          fix={t("listing.pending_since", { when: formatDateTime(new Date(pending.createdAt)) })}
+          action={
+            <Button
+              size="sm"
+              variant="secondary"
+              disabled={busy}
+              onClick={() => {
+                const form = new FormData();
+                form.set("id", pending.id);
+                startTransition(async () => {
+                  const result = await withdrawAction(form);
+                  if (result.ok) setNotice(t("listing.withdrawn"));
+                  else setError(result.error);
+                });
+              }}
+            >
+              {t("listing.withdraw")}
+            </Button>
+          }
+        >
+          {t("listing.pending_change", { value: pending.afterValue })}
+        </Alert>
       ) : (
         <div className="flex flex-wrap items-end gap-2">
           {options ? (

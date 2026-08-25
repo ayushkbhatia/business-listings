@@ -44,8 +44,16 @@ beforeAll(async () => {
   buyerId = open.buyerId;
   businessId = open.recipients[0]!.businessId;
 
-  const staff = await prisma.user.findFirst({ where: { roles: { has: "staff_moderator" } }, select: { id: true } });
-  moderator = { id: staff?.id ?? buyerId, roles: ["staff_moderator"] };
+  /*
+   * An ops lead, not a moderator.
+   *
+   * docs/permissions.md §07 holds "remove a review" one rung above the queue: a
+   * moderator approves and rejects submissions and resolves supplier reports,
+   * and does not remove a buyer's published words. This read `staff_moderator`
+   * while the matrix was inferred.
+   */
+  const staff = await prisma.user.findFirst({ where: { roles: { has: "staff_ops_lead" } }, select: { id: true } });
+  moderator = { id: staff?.id ?? buyerId, roles: ["staff_ops_lead"] };
   fieldStaff = { id: staff?.id ?? buyerId, roles: ["staff_field"] };
 });
 

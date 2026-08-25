@@ -3,20 +3,43 @@ import type { Role } from "./roles";
 /**
  * The permission matrix.
  *
- * ⚠ design-system §07 carries the authoritative matrix and lives in the canvas
- * file, which has not been supplied. Every row below is marked `stated` where a
- * shipped document says it outright, or `inferred` where it was derived from the
- * role name, the route table in docs/routes.md and the audit action list in
- * docs/data-model.md. Diff the inferred rows against §07 before handoff 1.
+ * Transcribed from `docs/permissions.md` — design-system §07 and boards 7d and
+ * 4i — which is the source of truth. Every row below is `stated`: the file that
+ * shipped before it carried an inferred matrix with a note to diff it against
+ * §07, and this is that diff, applied.
+ *
+ * Nine rows were wrong, and they were not all wrong in the safe direction:
+ *
+ *   - `plan.change` and `visit.request` had been given to seats that do not
+ *     hold them, which is a real over-grant.
+ *   - `team.manage`, `routing.manage` and `analytics.read` had been withheld
+ *     from a manager who does hold them, which is a product that does not work
+ *     for the seat it was designed around.
+ *   - `review.remove`, `placement.boost`, `subscription.credit` and
+ *     `revenue.read` all had an extra staff role attached, and the extra role
+ *     was `ops_lead` three times out of four. "The most senior role can do
+ *     everything" is a plausible assumption and this matrix does not make it.
  *
  * `audited: true` means a state change that must write an AuditEvent with a
- * written reason. The service layer enforces the pairing — see lib/audit.
+ * written reason. Per §07: **every ✓ in the staff table that changes state
+ * writes one, and ops lead has no exemption.**
+ *
+ * Three rows are subject-dependent and cannot be answered by a role alone —
+ * `can()` is deliberately not the whole check for them. See `subject.ts`, and
+ * the `subject` field below, which names what else has to be true.
  */
 export interface CapabilitySpec {
   roles: readonly Role[];
   audited: boolean;
   source: "stated" | "inferred";
   why: string;
+  /**
+   * Set where a role grant is necessary but not sufficient.
+   *
+   * The presence of this field is a promise that `can()` alone is the wrong
+   * check, and `lib/auth/subject.ts` exports the function that completes it.
+   */
+  subject?: "own_visit" | "own_branch" | "other_business";
 }
 
 const OPS_LEAD_ONLY = ["staff_ops_lead"] as const satisfies readonly Role[];
@@ -24,160 +47,218 @@ const OPS_LEAD_ONLY = ["staff_ops_lead"] as const satisfies readonly Role[];
 export const CAPABILITIES = {
   // ── Trust. The one row nothing may soften. ────────────────────────────────
   "business.verification_tier.write": {
-    roles: OPS_LEAD_ONLY,
+    roles: ["staff_ops_lead", "staff_field"],
     audited: true,
     source: "stated",
-    why: "CLAUDE.md non-negotiable 2: verification_tier is writable only by ops_lead. No API path, no self-service, no seller-editable field.",
+    why: "§07 staff table. Ops lead unconditionally; a field verifier only as the result of a visit they recorded — permissions.md: \"it is not a general grant. Enforce with a subject check, not just a role check.\" CLAUDE.md non-negotiable 2 still holds: no seller, no API path, no self-service.",
+    subject: "own_visit",
+  },
+  "visit.record": {
+    roles: ["staff_ops_lead", "staff_field"],
+    audited: true,
+    source: "stated",
+    why: "§07 staff table. Recording a visit is what later licenses the tier change above, so the same two roles hold it and the tier check reads the visit this one wrote.",
   },
   "business.suspend": {
     roles: OPS_LEAD_ONLY,
     audited: true,
-    source: "inferred",
-    why: "Listed as an audited staff action in data-model.md. Taking a paying supplier off the directory is the most severe reversible act on the platform; held at ops_lead until §07 says otherwise.",
+    source: "stated",
+    why: "§07 cross-surface and staff tables agree: superadmin only. Taking a paying supplier off the directory is the most severe reversible act on the platform.",
   },
   "business.merge": {
     roles: OPS_LEAD_ONLY,
     audited: true,
     source: "inferred",
-    why: "Audited action `merge`. /admin/ingest/dedupe. A merge rewrites slugs and creates 301s, so it is not reversible in the way a review removal is.",
+    why: "Not a row in §07. Audited action `merge`, /admin/ingest/dedupe. Held at ops lead because a merge rewrites slugs and creates 301s, so it is not reversible the way a review removal is. Still inferred — flag it if §07 gains a row.",
+  },
+  "claim.resolve": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "stated",
+    why: "§07 staff table, \"Resolve claim conflicts\". Deciding who owns a listing is the most consequential thing staff do to a business that is not suspending it, and a moderator does not hold it.",
   },
 
   // ── Moderation ────────────────────────────────────────────────────────────
   "review.remove": {
-    roles: ["staff_moderator", "staff_ops_lead"],
+    roles: OPS_LEAD_ONLY,
     audited: true,
-    source: "inferred",
-    why: "Audited action `review_removed`. The moderator role exists for exactly this queue; removalReason is already NOT NULL when removedAt is set.",
+    source: "stated",
+    why: "§07, both tables. A moderator may reject a submission and resolve a report but may not remove a review — this was inferred as moderator + ops lead and the matrix says ops lead alone. Removing a buyer's published words is held one rung higher than moderating a queue.",
   },
   "report.resolve": {
     roles: ["staff_moderator", "staff_ops_lead"],
     audited: true,
-    source: "inferred",
-    why: "SupplierReport outcomes are seller_corrected | upheld | no_action, and outcomeReason travels with them. /admin/reports.",
+    source: "stated",
+    why: "§07 staff table, \"Resolve a supplier report\". Outcomes are seller_corrected | upheld | no_action and outcomeReason travels with them.",
   },
   "queue.decide": {
     roles: ["staff_moderator", "staff_ops_lead"],
     audited: true,
-    source: "inferred",
-    why: "/admin/queue and /admin/queue/:id — approving or rejecting a submission changes what the public sees.",
+    source: "stated",
+    why: "§07 staff table, \"Approve listings & edits\" and \"Reject with reason\". This is the queue handoff 3's ListingChangeRequest fills.",
   },
-
-  // ── Field ─────────────────────────────────────────────────────────────────
-  "visit.record": {
-    roles: ["staff_field", "staff_ops_lead"],
+  "support.view_as": {
+    roles: ["staff_moderator", "staff_ops_lead"],
     audited: true,
-    source: "inferred",
-    why: "Business.visitedAt and visitedByStaffId, /admin/visits. Tier 3 additionally requires visitedAt, so a visit record feeds a trust signal and has to be attributable.",
+    source: "stated",
+    why: "§07 staff table, \"View-as a business\". Looking through a seller's eyes is a privacy event and is audited even though it changes nothing.",
+  },
+  "enquiry.read_other_business": {
+    roles: ["staff_moderator", "staff_ops_lead"],
+    audited: true,
+    source: "stated",
+    why: "§07 cross-surface, and the row permissions.md calls the one that matters most: \"support needs it, and it must be impossible to do silently.\" Audit-only for both roles that have it — the grant is not the permission, the audit row is the condition.",
+    subject: "other_business",
   },
 
   // ── Commercial ────────────────────────────────────────────────────────────
   "subscription.credit": {
-    roles: ["staff_finance", "staff_ops_lead"],
+    roles: ["staff_finance"],
     audited: true,
-    source: "inferred",
-    why: "Audited action `credit_issued`. A subscription credit moves money we did charge; it is never a refund of buyer money, which does not exist.",
+    source: "stated",
+    why: "§07 staff table: finance only, and ops lead is a dash. Was inferred as finance + ops lead. A subscription credit moves money we did charge; it is never a refund of buyer money, which does not exist.",
   },
-  "placement.boost": {
-    roles: ["staff_finance", "staff_ops_lead"],
+  "plan.entitlements.write": {
+    roles: ["staff_ops_lead", "staff_finance"],
     audited: true,
-    source: "inferred",
-    why: "Audited action `boost`. PlacementSlot is sold, so the finance role owns it. /admin/search carries ranking and boosts.",
+    source: "stated",
+    why: "§07 staff table, \"Edit plans & entitlements\". The only commercial row ops lead and finance share.",
   },
   "revenue.read": {
-    roles: ["staff_finance", "staff_ops_lead"],
+    roles: ["staff_finance"],
     audited: false,
-    source: "inferred",
-    why: "/admin/revenue, /admin/subscriptions, /admin/tax. Reading does not change state.",
+    source: "stated",
+    why: "§07 staff table, \"Export VAT / finance data\": finance only. Was inferred as finance + ops lead. Reading does not change state, so it is not audited — but it is not everybody's to read either.",
+  },
+  "placement.boost": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "stated",
+    why: "§07 staff table, \"Manual boost / demote a listing\": ops lead only. Was inferred as finance + ops lead on the theory that a sold slot belongs to finance. It does not — moving a listing up a results page is a ranking decision, and ranking sits with ops.",
+  },
+  "search.ranking.write": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "stated",
+    why: "§07 staff table, \"Adjust search ranking weights\". Changes what every buyer sees, so it is the narrowest grant in the table.",
   },
 
   // ── Platform ──────────────────────────────────────────────────────────────
   "taxonomy.write": {
     roles: OPS_LEAD_ONLY,
     audited: true,
-    source: "inferred",
-    why: "/admin/categories and /admin/spec-library. Renaming a category creates a 301 and a rename breaks cross-seller comparison, so it is not a routine edit.",
+    source: "stated",
+    why: "§07 staff table, \"Edit taxonomy & spec templates\". Renaming a category creates a 301 and breaks cross-seller comparison.",
+  },
+  "storefront.template.write": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "stated",
+    why: "§07, both tables. A storefront builder is a superadmin tool and is explicitly out of scope for sellers — handoff 3's README says so too.",
   },
   "staff.manage": {
     roles: OPS_LEAD_ONLY,
     audited: true,
     source: "inferred",
-    why: "/admin/staff — granting a role is how someone else gets these capabilities.",
+    why: "Not a row in §07. /admin/staff — granting a role is how somebody else gets these capabilities, so it is held at the top. Still inferred.",
   },
   "audit.read": {
-    roles: OPS_LEAD_ONLY,
+    roles: ["staff_ops_lead", "staff_moderator", "staff_field", "staff_finance"],
     audited: false,
-    source: "inferred",
-    why: "/admin/audit. The log is the check on staff, so the people being checked cannot all read it.",
-  },
-  "support.view_as": {
-    roles: ["staff_moderator", "staff_ops_lead"],
-    audited: true,
-    source: "inferred",
-    why: "Audited action `view_as`. Looking through a seller's eyes is a privacy event and is audited even though it changes nothing.",
+    source: "stated",
+    why: "§07 staff table: ops lead reads all of it, every other staff role reads their own actions. Was inferred as ops-lead-only, which is the wrong shape — a moderator being able to see what they themselves did is not a loosening of the check on staff, it is how somebody answers a question about their own work.",
+    subject: "other_business",
   },
 
-  // ── Seller ────────────────────────────────────────────────────────────────
+  // ── Seller (board 7d) ─────────────────────────────────────────────────────
   "listing.edit": {
     roles: ["seller_owner", "seller_manager"],
     audited: false,
-    source: "inferred",
-    why: "/dashboard/listing, locations, hours, media. Sales and finance seats do not shape the public profile.",
+    source: "stated",
+    why: "Board 7d, \"Edit listing profile, locations, hours\" and \"Upload verification documents\" and \"Pick a theme preset\" — owner and manager. Sales and finance do not shape the public profile.",
   },
   "product.edit": {
     roles: ["seller_owner", "seller_manager"],
     audited: false,
-    source: "inferred",
-    why: "/dashboard/products and the CSV import mapper.",
+    source: "stated",
+    why: "Board 7d, \"Edit products & specs\" and \"Bulk import / export catalogue\".",
   },
   "enquiry.respond": {
     roles: ["seller_owner", "seller_manager", "seller_sales"],
     audited: false,
-    source: "inferred",
-    why: "/dashboard/leads. The sales seat exists to answer enquiries, and response time is the number the seller is judged on.",
+    source: "stated",
+    why: "Board 7d, \"Reply to enquiries & send quotes\". A branch-scoped sales seat is further limited to that branch's enquiries — board 7d shows Fatima scoped to Al Quoz — which a role check alone cannot express.",
+    subject: "own_branch",
   },
   "quote.send": {
     roles: ["seller_owner", "seller_manager", "seller_sales"],
     audited: false,
-    source: "inferred",
-    why: "/dashboard/quotes. A quote carries the only prices in the system, so the seat that talks to buyers owns it.",
+    source: "stated",
+    why: "Board 7d, \"Reply to enquiries & send quotes\" and \"Send a quote revision\". Branch-scoped the same way.",
+    subject: "own_branch",
+  },
+  "review.reply": {
+    roles: ["seller_owner", "seller_manager"],
+    audited: false,
+    source: "stated",
+    why: "Board 7d, \"Reply to a review\". Not the sales seat: a reply is the business speaking on its public page, not a message to one buyer.",
+  },
+  "review.request": {
+    roles: ["seller_owner", "seller_manager", "seller_sales"],
+    audited: false,
+    source: "stated",
+    why: "Board 7d, \"Request reviews from buyers\". The sales seat has it, because the person who handled the enquiry is the person who knows it went well.",
+  },
+  "visit.request": {
+    roles: ["seller_owner"],
+    audited: false,
+    source: "stated",
+    why: "Board 7d, \"Request a site visit\": owner only. Was inferred as listing.edit, which handed it to a manager. Somebody from this platform coming to the premises is the owner's decision.",
+  },
+  "analytics.read": {
+    roles: ["seller_owner", "seller_manager", "seller_sales"],
+    audited: false,
+    source: "stated",
+    why: "Board 7d, \"See analytics\": owner and manager in full, a sales seat for their own leads only, finance not at all. Was inferred as owner + manager + finance, which is wrong at both ends.",
+    subject: "own_branch",
   },
   "billing.manage": {
     roles: ["seller_owner", "seller_finance"],
     audited: false,
-    source: "inferred",
-    why: "/dashboard/billing and plan change. The finance seat exists so the owner does not have to hold the card.",
-  },
-  "team.manage": {
-    roles: ["seller_owner"],
-    audited: false,
-    source: "inferred",
-    why: "/dashboard/team. Only the owner adds seats, because seats cost money and grant the capabilities above.",
-  },
-  "plan.change": {
-    roles: ["seller_owner", "seller_finance"],
-    audited: false,
-    source: "inferred",
-    why: "/dashboard/billing/change and /cancel. Split from billing.manage because reading an invoice and moving the business onto a different plan are different-sized acts, even where the same two seats hold both today. Criterion 9 names plan changes separately from billing for the same reason.",
+    source: "stated",
+    why: "Board 7d, \"See invoices & billing\". The finance seat exists so the owner does not have to hold the card.",
   },
   "placement.purchase": {
     roles: ["seller_owner", "seller_finance"],
     audited: false,
-    source: "inferred",
-    why: "/dashboard/promote. A sponsored slot is a purchase, so it sits with the seat that holds the card. Distinct from placement.boost, which is the staff side of the same object.",
+    source: "stated",
+    why: "Board 7d, \"Buy sponsored placement\". A purchase, so it sits with the seat that holds the card. Distinct from placement.boost, which is the staff side of the same object and is ops-lead-only.",
   },
-  "analytics.read": {
-    roles: ["seller_owner", "seller_manager", "seller_finance"],
+  "plan.change": {
+    roles: ["seller_owner"],
     audited: false,
-    source: "inferred",
-    why: "/dashboard/analytics. Not the sales seat: the per-person response stats on board 7d include the uncomfortable one, and a seat being measured is not the seat that should choose what the measurement says.",
+    source: "stated",
+    why: "Board 7d, \"Change plan or cancel\": owner only. Was inferred as owner + finance by analogy with billing.manage, and the matrix separates them — a finance seat reads the invoices and does not decide what the business buys.",
+  },
+  "team.manage": {
+    roles: ["seller_owner", "seller_manager"],
+    audited: false,
+    source: "stated",
+    why: "Board 7d, \"Invite or remove team members\": owner and manager. Was inferred as owner-only on the theory that seats cost money. A manager who cannot add the person who answers enquiries is a manager who has to ask the owner every time.",
+  },
+  "routing.manage": {
+    roles: ["seller_owner", "seller_manager"],
+    audited: false,
+    source: "stated",
+    why: "Board 7d, \"Set lead routing rules\": owner and manager. Split out of team.manage, which was owner-only and therefore withheld this from the seat that runs the day.",
   },
 
   // ── Buyer ─────────────────────────────────────────────────────────────────
   "enquiry.create": {
-    roles: ["buyer"],
+    roles: ["buyer", "seller_owner", "seller_manager", "seller_sales", "seller_finance"],
     audited: false,
     source: "stated",
-    why: "The conversion event. README: buyers find licensed suppliers and send enquiries.",
+    why: "§07 cross-surface, \"Send an enquiry / RFQ\": buyer ✓ and seller ✓. A supplier buying from another supplier is ordinary trade, and this row was inferred as buyer-only.",
   },
   "quote.accept": {
     roles: ["buyer"],
@@ -199,6 +280,14 @@ export const CAPABILITY_LIST = Object.keys(CAPABILITIES) as Capability[];
 
 /** Capabilities whose use must write an AuditEvent carrying a written reason. */
 export const AUDITED_CAPABILITIES = CAPABILITY_LIST.filter((c) => CAPABILITIES[c].audited);
+
+/**
+ * Capabilities a role grant does not finish answering.
+ *
+ * `grep` this list before adding a call site: every one of them needs the
+ * matching function from `lib/auth/subject.ts` as well as `can`.
+ */
+export const SUBJECT_DEPENDENT = CAPABILITY_LIST.filter((c) => "subject" in CAPABILITIES[c]);
 
 export function isCapability(value: string): value is Capability {
   return Object.hasOwn(CAPABILITIES, value);

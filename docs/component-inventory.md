@@ -1,0 +1,108 @@
+# Component inventory — design system §09.3
+
+The authoritative list. 64 components in four tiers. **Variants are props on one component,
+never separate components** — one `Button` with a `variant` prop, not five.
+
+The 64 count treats `ListingCard` as one component with a `context` prop (four contexts) and
+`Button` as one component with five variants. If you have built more files than 64, check
+whether you split a variant into its own component.
+
+---
+
+## Tier 1 — primitives (18) · handoff 0
+
+| # | Component | States to cover |
+|---|---|---|
+| 1 | `Button` | 5 variants (primary, secondary, quiet, danger, on-ink) × 4 sizes (46/38/32/28) × default, hover, focus, disabled, loading |
+| 2 | `IconButton` | default, hover, focus, disabled · always `aria-label` |
+| 3 | `SplitButton` | main + caret, open menu |
+| 4 | `SegmentedControl` | 2–4 items, selected, disabled item |
+| 5 | `Input` | default, filled, focus, error, success, locked, with prefix (e.g. +971) |
+| 6 | `Textarea` | default, focus, error, with character counter |
+| 7 | `Select` | default, focus, open, disabled |
+| 8 | `MultiSelect` | empty, with chips, focus, at-limit |
+| 9 | `SearchField` | placeholder, typed, with scope pill |
+| 10 | `Checkbox` | checked, unchecked, indeterminate, disabled, focus, nested (24px indent) |
+| 11 | `Radio` | selected, unselected, disabled, focus |
+| 12 | `Toggle` | on, off, on-with-consequence (warn tone), disabled |
+| 13 | `RangeSlider` | single and two-handle |
+| 14 | `Stepper` | default, at-min, at-max |
+| 15 | `TimePair` | enabled with times, disabled/closed, split shift |
+| 16 | `FileDrop` | idle, uploading with progress, done, error |
+| 17 | `Label` | default, with secondary note, required |
+| 18 | `FieldError` | single message |
+
+## Tier 2 — structure (17) · handoff 0
+
+| # | Component | Notes |
+|---|---|---|
+| 19 | `DataTable` | the one to get right — two surfaces live in it |
+| 20 | `TableToolbar` | search, filters, attention chip, sort statement |
+| 21 | `SelectionBar` | ink bar replacing the toolbar when rows are selected |
+| 22 | `Pagination` | above 50 rows; never infinite scroll on a work surface |
+| 23 | `KeyValuePanel` | two-column, alternating tint by row |
+| 24 | `Card` | flat default, raised, promoted |
+| 25 | `Panel` | 12px radius, section container |
+| 26 | `Tabs` | 1.5px ink underline, with optional count |
+| 27 | `Breadcrumb` | mono caps, last crumb ink and not a link |
+| 28 | `PublicNav` | 68px, search in the bar |
+| 29 | `AppSidebar` | 236px, one component, nav config drives seller vs admin |
+| 30 | `PageHeader` | 58px, title + badges + actions |
+| 31 | `StepHeader` | done/current/future, count not percentage |
+| 32 | `FilterRail` | generated from filterable spec fields |
+| 33 | `BuilderChrome` | ink bar, no sidebar, full-screen editing |
+| 34 | `Drawer` | right-side, overlay elevation |
+| 35 | `Modal` | 420px confirm, and larger content variant |
+
+## Tier 3 — display (15) · handoff 1
+
+| # | Component | Notes |
+|---|---|---|
+| 36 | `StatusBadge` | pill, 4 tones × wash; always carries a word |
+| 37 | `PlanBadge` | 4px square radius, mono caps — deliberately not a status pill |
+| 38 | `FilterChip` | pill (facet + count), square (applied, removable ×), dashed (mode) |
+| 39 | `Tag` | 4px radius, content label, no interaction |
+| 40 | `StatCard` | one number, one label, one comparison. Never two numbers |
+| 41 | `ProgressBar` | with optional target marker |
+| 42 | `StepProgress` | segment pills |
+| 43 | `StackedBar` | two series over time |
+| 44 | `FunnelBars` | drop-off with percentages |
+| 45 | `ShareBars` | share of total |
+| 46 | `Waterfall` | start / +new / −churn / end |
+| 47 | `ImagePlaceholder` | striped (expected), dashed (absent), solid+label (document) |
+| 48 | `LogoTile` | logo, initials fallback, overlap variant with white ring |
+| 49 | `CategoryMark` | moss tile, two-letter mono code |
+| 50 | `MapCanvas` | 4-level pin hierarchy + cluster count |
+
+## Tier 4 — domain (14)
+
+| # | Component | Lands in |
+|---|---|---|
+| 51 | `VerificationBadge` | handoff 1 |
+| 52 | `VerificationLadder` | handoff 1 (read-only), writable in 4 |
+| 53 | `ListingCard` | handoff 1 — one component, `context` prop: search row, map result, grid, unclaimed |
+| 54 | `ProductCard` | handoff 1 — availability-led, no price |
+| 55 | `SpecTable` | handoff 1 |
+| 56 | `CompletenessMeter` | handoff 1 |
+| 57 | `ResponseTime` | handoff 1 (component), handoff 2 (real data) |
+| 58 | `EnquiryComposer` | handoff 2 |
+| 59 | `QuoteLineEditor` | handoff 2 |
+| 60 | `ModerationRow` | handoff 2 (written), handoff 4 (displayed) |
+| 61 | `AuditRow` | handoff 2 (written), handoff 4 (displayed) |
+| 62 | `HoursEditor` | handoff 3 |
+| 63 | `EmirateAreaPicker` | handoff 3 |
+| 64 | `PlanCard` | handoff 3 |
+
+---
+
+## Approved addition
+
+**65 · `Alert`** — the inline notice from design-system §05.1. Five tones (ok, warn, bad,
+info, neutral), optional single action, no icon; the copy carries the tone. Approved as an
+addition to tier 3, replacing hand-rolled notice blocks. Any notice describing a problem must
+also carry the action that fixes it.
+
+## Naming
+
+PascalCase components. kebab-case CSS variables. `data-density` on the shell, never a size
+prop per component. `data-theme` on a storefront root only.

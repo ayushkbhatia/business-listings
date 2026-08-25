@@ -1,7 +1,8 @@
 import { ShareBars, StatCard } from "@/components/display";
 import { Card, Panel } from "@/components/structure";
 import { getAnalytics } from "@/lib/db/queries/analytics";
-import { assertCanReadAnalytics } from "@/lib/auth/guards";
+import { analyticsScopeFor } from "@/lib/auth/subject";
+import { notFound } from "next/navigation";
 import { formatCount, formatPercent } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
@@ -13,19 +14,30 @@ import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
  * response-time job uses. Nothing is estimated, so an empty period renders as
  * an empty state that says so rather than a flat line that looks like data.
  *
- * Not visible to the sales seat. The per-person response stats next door
- * include the uncomfortable one, and a seat being measured is not the seat that
- * should choose what the measurement says.
+ * A sales seat sees their own leads rather than the whole business — board 7d,
+ * "own leads only" — and a finance seat does not hold the row at all. The scope
+ * comes from lib/auth/subject.ts so this screen and any later one narrow the
+ * same way.
  */
 export const metadata = { title: "Analytics" };
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {
   const seat = await requireSellerSeat();
-  assertCanReadAnalytics(seat.actor);
+
+  /*
+   * A scope, not a yes or no.
+   *
+   * Board 7d gives a sales seat "own leads only" rather than the full picture,
+   * and a boolean would have made this screen invent the narrowing itself —
+   * then invent it differently on the next screen that needs it. `null` is the
+   * finance seat, which does not hold the row at all.
+   */
+  const scope = analyticsScopeFor(seat.actor);
+  if (!scope) notFound();
 
   const [analytics, badges] = await Promise.all([
-    getAnalytics(seat.businessId),
+    getAnalytics(seat.businessId, undefined, scope),
     getNavBadges(seat.businessId),
   ]);
 

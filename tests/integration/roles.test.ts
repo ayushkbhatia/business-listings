@@ -122,11 +122,16 @@ describe("criterion 9 — the seats that should be allowed still are", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("lets the finance seat quote a plan change and read invoices", async () => {
-    // The finance seat exists so the owner does not have to hold the card.
-    const result = await quotePlanChange(finance, businessId, "basic");
-    expect(result.ok).toBe(true);
+  it("lets the finance seat read invoices, and not change the plan", async () => {
+    /*
+     * The finance seat exists so the owner does not have to hold the card —
+     * and §07 stops there. "See invoices & billing" is owner and finance;
+     * "Change plan or cancel" is owner alone. This asserted finance could do
+     * both, by analogy with billing.manage, and the matrix separates them: a
+     * finance seat reads what was spent and does not decide what to buy.
+     */
     await expect(invoicesFor(finance, businessId)).resolves.toBeInstanceOf(Array);
+    await expect(quotePlanChange(finance, businessId, "basic")).rejects.toThrow(PermissionError);
   });
 
   it("lets the manager edit the listing but not the plan", async () => {

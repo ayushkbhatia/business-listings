@@ -1407,6 +1407,7 @@ export const en = {
   "verify_listing.confirm_delete": "Delete this document? This cannot be undone.",
   "verify_listing.licence_expiry": "Licence expires {when}",
   "verify_listing.licence_expired": "Your trade licence expired on {when}. Tier 3 and above need a licence that has not expired.",
+  "verify_listing.licence_expired_fix": "Upload the renewed licence below and we will check it, usually within four working hours.",
   "verify_listing.staff_only": "Your tier is set by our team after checking. Nothing on this page changes it.",
 
 
@@ -1605,6 +1606,7 @@ export const en = {
   "verify.submitted": "Submitted. We will be in touch within four working hours.",
   "verify.contested_heading": "Somebody else has claimed this listing",
   "verify.contested_body": "We are taking your submission anyway. If a former employee or an agency claimed it, this is how it gets put right — a person will look at both.",
+  "verify.contested_fix": "Submit below and carry on setting up. Nothing you fill in is lost if the claim takes a day to resolve.",
   "verify.continue": "Carry on setting up",
 
   "profile_step.title": "Your profile",
