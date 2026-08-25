@@ -1660,6 +1660,13 @@ export const en = {
   "visit.pending": "Requested {when}. We will call to arrange a time.",
   "visit.cancel": "Cancel the request",
 
+
+  // ── Not found ─────────────────────────────────────────────────────────────
+  "notfound.title": "That page is not here",
+  "notfound.body": "The address may be mistyped, the page may have moved, or you may not be signed in to the account it belongs to.",
+  "notfound.signin": "Sign in",
+  "notfound.home": "Go to the directory",
+
 } as const satisfies Catalogue;
 
 export type MessageKey = keyof typeof en;

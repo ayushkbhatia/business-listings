@@ -99,16 +99,17 @@ new-lead counts announce politely; only a failed save announces assertively.
 
 ## Component inventory
 
-Tier 1 (18), tier 2 (17), tier 3 (16), tier 4 (14) — **65 in total**. The full list, with the
+Tier 1 (18), tier 2 (17), tier 3 (16), tier 4 (15) — **66 in total**. The full list, with the
 states each component owes, is `docs/component-inventory.md` (§09.3).
 
 The count is of *components*, not of files. `ListingCard` is one component with a `context`
 prop and `Button` is one with five variants and four sizes, so a file count runs higher and
 always will — that is where to look when the two disagree.
 
-Tier 3 is 16 because component 65, `Alert`, was approved as an addition: the §05.1 inline
-notice, replacing hand-rolled notice blocks. `Thread` (board 11c, handoff 2) is built and has
-no row in the inventory; the gallery shows it under its own heading rather than counting it.
+Two components were approved after the original 64: `Alert` (65), the §05.1 inline notice that
+replaced the hand-rolled notice blocks, into tier 3; and `Thread` (66), the enquiry
+conversation from boards 10h and 11b, into tier 4. It was built in handoff 2 and left off the
+list, and the gallery carried it uncounted until it was given a row.
 
 Naming: PascalCase components, kebab-case CSS variables, variants as props on one component.
 `data-density` on the shell, not per component.

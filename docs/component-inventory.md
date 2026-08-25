@@ -74,7 +74,7 @@ whether you split a variant into its own component.
 | 49 | `CategoryMark` | moss tile, two-letter mono code |
 | 50 | `MapCanvas` | 4-level pin hierarchy + cluster count |
 
-## Tier 4 — domain (14)
+## Tier 4 — domain (15)
 
 | # | Component | Lands in |
 |---|---|---|
@@ -92,15 +92,28 @@ whether you split a variant into its own component.
 | 62 | `HoursEditor` | handoff 3 |
 | 63 | `EmirateAreaPicker` | handoff 3 |
 | 64 | `PlanCard` | handoff 3 |
+| 66 | `Thread` | handoff 2 — one component, boards 10h and 11b are two views of it |
 
 ---
 
-## Approved addition
+## Approved additions
 
 **65 · `Alert`** — the inline notice from design-system §05.1. Five tones (ok, warn, bad,
 info, neutral), optional single action, no icon; the copy carries the tone. Approved as an
 addition to tier 3, replacing hand-rolled notice blocks. Any notice describing a problem must
 also carry the action that fixes it.
+
+**66 · `Thread`** — the enquiry conversation, added to tier 4. Built in handoff 2 against
+boards 10h and 11b and left out of this list; the gallery carried it uncounted until it was
+given a row.
+
+One component, not two. The buyer's view and the seller's view are the same exchange, and the
+only differences are the chips, the off-platform warning and whose messages sit on which side.
+Two implementations would have let them drift, and a buyer and a seller reading different
+renderings of the same record is the one thing a record must never do.
+
+The quote delta — the previous price struck through beside the new one — is computed once in
+`lib/messaging/thread-view.ts` for the same reason, so both sides read the same numbers.
 
 ## Naming
 
