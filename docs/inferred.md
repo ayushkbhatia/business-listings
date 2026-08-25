@@ -1676,3 +1676,46 @@ checker all stayed quiet, because nothing in the toolchain looks at line order.
 
 `tests/unit/client-labels.test.ts` now fails on any file with code above the
 directive, verified by reintroducing it.
+
+## Handoff 3, step 6 — the acceptance pass
+
+`pnpm acceptance:3` walks the twelve criteria and prints one line each. Twenty-
+eight checks, because most criteria have halves that fail independently: a
+service-layer proof and a browser proof are different claims, and a criterion
+green on one and red on the other is worth seeing as two lines rather than one.
+
+Needs the app built and served on `:3000` with the seed loaded.
+
+### Criterion numbers collide across handoffs
+
+Handoff 2 has a `criterion 1` and so does handoff 3. Handoff 2's walk selected
+tests by title alone, which was safe while only one handoff had numbered its
+tests; with two it silently widens — `-t "criterion 1"` now matches the enquiry
+fan-out tests as well as the onboarding ones, and a criterion would report a
+pass earned partly by another handoff's work.
+
+So this walk selects by **file** first and narrows by title inside it. The two
+guards from handoff 2's pass are kept: a filter matching nothing fails rather
+than exiting zero, and the mobile project is in the run.
+
+### What criterion 12 actually counts
+
+The README says 64. `docs/component-inventory.md` says 65, because `Alert` was
+approved as component 65 after the README was written. The walk checks 65 and
+says why on the line beneath, rather than checking a number that was correct
+when it was written and is not now.
+
+The gallery reads 18/18, 17/17, 16/16, 14/14. `Thread` is built, has no row in
+the inventory, and is shown under its own heading rather than counted.
+
+### The count the walk could not read
+
+The gallery check failed on its first run, and the gallery was fine. React puts
+a comment marker between two adjacent expressions, so `{TIER_1.length}/18`
+serves as `18<!-- -->/18` and a grep for `18/18` finds nothing. The same page
+then carries the RSC flight payload, which repeats the shape, so matching the
+whole document finds each tier twice.
+
+Both are the same class of mistake as the ones the earlier walks made: a check
+that reads a rendered artefact has to be written against what is actually
+served, not against what the source looks like.
