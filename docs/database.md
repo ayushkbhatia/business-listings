@@ -96,11 +96,33 @@ produce the same rows and a screenshot diff shows real changes only.
 
 40 businesses across 6 categories and 4 emirates · 14 claimed, 24 unclaimed,
 2 disputed · verification tiers 0 through 4 all present · 55 locations of which
-9 are deliberately unpinned · 92 products across all four availability states ·
-one live spec template with three filterable fields · 3 enquiries, 4 quotes
+9 are deliberately unpinned · 101 products across all four availability states ·
+one live spec template with three filterable fields · 78 enquiries, 7 quotes
 including a revision 1 and 2 on the same enquiry and business · 2 reviews, one
-of them removed with a reason · 3 supplier reports · 5 audit events · 60 contact
-reveals · 5 zero-result queries.
+of them removed with a reason · 3 supplier reports · 60 contact reveals ·
+5 zero-result queries.
+
+The queues admin drains: 6 listing change requests, 3 of them still pending,
+covering all three moderated fields and all four statuses · 5 claim submissions,
+3 undecided, both routes, contested both decided and not · 4 site visit requests
+across asked, scheduled, completed and cancelled · 10 audit events, one for
+every decided row.
+
+`tests/integration/admin-queues.test.ts` asserts those shapes rather than the
+counts, so adding a fixture does not break it and dropping the last one of a
+kind does. The queues were empty here for three merges: handoff 3 fills them at
+runtime and nothing filled them at seed time, which is invisible until a screen
+opens on them.
+
+**Adding to the seed changes the seed.** The PRNG is a sequence, so a new
+`int()`, `pick()` or `rnd()` inserted anywhere shifts every draw after it and
+renames every business generated later — which renames slugs a dozen test files
+pin. Append at the end, and use literal data or values read back from rows
+already written. Two existing draws are deliberately made and discarded for the
+same reason; see the comments in `prisma/seed.mts`.
+
+Staff ids are deterministic (`uuid(n)`): 1–4 staff, 10–11 buyers, 900 the
+provisional buyer, 100 upward seller seats, 910 upward claimants.
 
 Every name, licence number and phone number in the seed is fictional. The shapes
 are real.

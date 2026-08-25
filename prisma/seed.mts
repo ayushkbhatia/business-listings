@@ -162,6 +162,7 @@ async function main() {
       "notification_delivery","notification_template","notification_preference","review_request",
       "invoice_line","invoice","placement_slot","subscription",
       "supplier_report","review","message","quote_line","quote",
+      "listing_change_request","claim_submission","site_visit_request","team_invite",
       "missed_enquiry","enquiry_recipient","enquiry_line","enquiry",
       "document","media","product","seller_template","location",
       "business_category","business","spec_field","spec_template",
@@ -443,6 +444,7 @@ async function main() {
   await seedCommercials(prisma, businesses);
   await seedTrust(prisma, businesses, opsLead.id, moderator.id, buyer.id);
   await seedSignals(prisma, businesses, buyer.id, catBySlug);
+  await seedQueues(prisma, businesses, catBySlug, opsLead.id, moderator.id);
   await recomputeDerived(prisma);
 }
 
@@ -1672,7 +1674,14 @@ async function seedTrust(db: Db, businesses: Biz[], opsLeadId: string, moderator
         createdAt: days(-12),
       },
       {
-        actorId: moderatorId,
+        /*
+         * Ops lead, not the moderator this used to name. §07 holds
+         * `review.remove` at ops lead alone — a moderator may reject a
+         * submission and resolve a report but may not remove a buyer's
+         * published words. The fixture predates the matrix correction and
+         * quietly showed a moderator doing something the matrix forbids.
+         */
+        actorId: opsLeadId,
         action: "review_removed",
         subject: `Business:${removalTarget.id}`,
         reason: "Review integrity: posted from an account with no enquiry history and matching text on three other listings.",
@@ -1814,6 +1823,11 @@ main()
       quoteLines: await prisma.quoteLine.count(),
       reviews: await prisma.review.count(),
       reports: await prisma.supplierReport.count(),
+      changeRequests: await prisma.listingChangeRequest.count(),
+      pendingChanges: await prisma.listingChangeRequest.count({ where: { status: "pending" } }),
+      claims: await prisma.claimSubmission.count(),
+      undecidedClaims: await prisma.claimSubmission.count({ where: { decidedAt: null } }),
+      visitRequests: await prisma.siteVisitRequest.count(),
       auditEvents: await prisma.auditEvent.count(),
       contactReveals: await prisma.contactReveal.count(),
       zeroResults: await prisma.zeroResultQuery.count(),
@@ -2073,4 +2087,420 @@ async function seedNotificationTemplates(db: Db) {
     });
   }
   console.log(`   ${TEMPLATES.length} templates`);
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The admin queues
+//
+// Three tables handoff 3 fills at runtime and the seed did not, so a fresh
+// database gave /admin/queue nothing to open on. Handoff 4 builds the screens
+// that drain them, and a queue screen with no rows cannot be judged: the empty
+// state and the populated one are different screens and both have to exist
+// before either can be reviewed.
+//
+// Every status the enums allow appears at least once, and every decided row
+// carries the audit event CLAUDE.md non-negotiable 3 requires — written by a
+// role that actually holds the capability. `queue.decide` is moderator or ops
+// lead, `claim.resolve` is ops lead alone, `visit.record` is ops lead or field
+// officer. A fixture decided by the wrong role is a row the permission matrix
+// forbids, sitting in the database as if it were normal.
+//
+// No PRNG in here. The generator is a sequence and every draw renames every
+// business after it, so this data is either literal or read back from rows
+// already written.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function seedQueues(
+  db: Db,
+  businesses: Biz[],
+  catBySlug: Map<string, string>,
+  opsLeadId: string,
+  moderatorId: string,
+) {
+  console.log("→ admin queues: listing changes, claims, visit requests");
+
+  const claimed = businesses.filter((b) => b.claim === "claimed");
+  const disputed = businesses.filter((b) => b.claim === "disputed");
+  const unclaimed = businesses.filter((b) => b.claim === "unclaimed");
+
+  // Loud rather than short. Seeding four rows where fourteen were meant is the
+  // kind of thing a queue screen hides well.
+  if (claimed.length < 14 || disputed.length < 2 || unclaimed.length < 3) {
+    throw new Error(
+      `seedQueues expects 14 claimed, 2 disputed and 3 unclaimed businesses; got ${claimed.length}, ${disputed.length} and ${unclaimed.length}.`,
+    );
+  }
+
+  const ownerOf = async (businessId: string) => {
+    const owner = await db.user.findFirstOrThrow({
+      where: { businessId, roles: { has: "seller_owner" } },
+      select: { id: true },
+    });
+    return owner.id;
+  };
+
+  const facts = async (businessId: string) =>
+    db.business.findUniqueOrThrow({
+      where: { id: businessId },
+      select: { tradeName: true, licenceNumber: true, primaryCategoryId: true },
+    });
+
+  // ── Listing change requests ───────────────────────────────────────────────
+  // All three moderated fields and all four statuses. `beforeValue` is read
+  // from the row rather than invented, the same way lib/listing/service.ts
+  // does it, so the queue shows a real diff.
+
+  const renamePending = claimed[8]!;
+  const licencePending = claimed[9]!;
+  const categoryPending = claimed[10]!;
+  const renameApproved = claimed[11]!;
+  const licenceRejected = claimed[12]!;
+  const categoryWithdrawn = claimed[13]!;
+
+  const [f8, f9, f10, f11, f12, f13] = await Promise.all([
+    facts(renamePending.id),
+    facts(licencePending.id),
+    facts(categoryPending.id),
+    facts(renameApproved.id),
+    facts(licenceRejected.id),
+    facts(categoryWithdrawn.id),
+  ]);
+
+  const [o8, o9, o10, o11, o12, o13] = await Promise.all([
+    ownerOf(renamePending.id),
+    ownerOf(licencePending.id),
+    ownerOf(categoryPending.id),
+    ownerOf(renameApproved.id),
+    ownerOf(licenceRejected.id),
+    ownerOf(categoryWithdrawn.id),
+  ]);
+
+  // Same authority, new serial. A renewal changes the number, not who issued
+  // it, and a queue that cannot see that is a queue that approves the wrong
+  // thing.
+  const renewed = (licenceNumber: string, serial: string) =>
+    licenceNumber.replace(/-\d+$/, `-${serial}`);
+
+  await db.listingChangeRequest.createMany({
+    data: [
+      {
+        businessId: renamePending.id,
+        actorId: o8,
+        field: "trade_name",
+        beforeValue: f8.tradeName,
+        afterValue: "Al Sahra Industrial Supplies LLC",
+        status: "pending",
+        createdAt: days(-2),
+      },
+      {
+        businessId: licencePending.id,
+        actorId: o9,
+        field: "licence",
+        beforeValue: f9.licenceNumber,
+        afterValue: renewed(f9.licenceNumber, "704118"),
+        status: "pending",
+        createdAt: days(-1),
+      },
+      {
+        businessId: categoryPending.id,
+        actorId: o10,
+        field: "primary_category",
+        beforeValue: f10.primaryCategoryId,
+        afterValue: catBySlug.get("hvac-and-ventilation")!,
+        status: "pending",
+        createdAt: hours(-5),
+      },
+      {
+        businessId: renameApproved.id,
+        actorId: o11,
+        field: "trade_name",
+        beforeValue: f11.tradeName,
+        afterValue: "Gulf Line Trading LLC",
+        status: "approved",
+        decisionReason:
+          "Trade name on the DED licence reads Gulf Line Trading LLC. Amendment certificate attached to the submission matches.",
+        decidedById: moderatorId,
+        decidedAt: days(-6),
+        createdAt: days(-8),
+      },
+      {
+        businessId: licenceRejected.id,
+        actorId: o12,
+        field: "licence",
+        beforeValue: f12.licenceNumber,
+        afterValue: renewed(f12.licenceNumber, "552901"),
+        status: "rejected",
+        decisionReason:
+          "The number submitted belongs to a different licence holder on the authority's register. Send the renewed licence itself and it goes through the same day.",
+        decidedById: moderatorId,
+        decidedAt: days(-4),
+        createdAt: days(-5),
+      },
+      {
+        // Withdrawn carries no reason and no decider: nobody looked at it.
+        // The check constraint enforces that, and the seed is where it gets
+        // proved against a real row rather than a unit test.
+        businessId: categoryWithdrawn.id,
+        actorId: o13,
+        field: "primary_category",
+        beforeValue: f13.primaryCategoryId,
+        afterValue: catBySlug.get("safety-and-ppe")!,
+        status: "withdrawn",
+        createdAt: days(-11),
+      },
+    ],
+  });
+
+  // ── Claim submissions ─────────────────────────────────────────────────────
+  // Both routes, and the route constraint means each has to carry its own
+  // evidence: a licence claim needs the document, a phone claim needs the
+  // number off the public licence record.
+
+  const phoneClaimTarget = unclaimed[0]!;
+  const licenceClaimTarget = unclaimed[1]!;
+  const contestedTarget = disputed[0]!;
+  const refusedTarget = disputed[1]!;
+  const approvedTarget = claimed[1]!;
+
+  /*
+   * Claimants get 910+. Staff hold 1–4, buyers 10–11, seller seats run from
+   * 100 upward as `seat++`, and the provisional buyer took 900 — which this
+   * block collided with on the first run, because `uuid(n)` is deterministic
+   * and a duplicate id is the only thing that catches it.
+   */
+  const claimantPhone = await db.user.create({
+    data: {
+      id: uuid(910),
+      phone: "+971503318842",
+      fullName: "Imran Sheikh",
+      roles: ["buyer"],
+    },
+  });
+  const claimantLicence = await db.user.create({
+    data: {
+      id: uuid(911),
+      phone: "+971557740219",
+      email: "accounts@midpointsupplies.example",
+      fullName: "Nadia Kassem",
+      roles: ["buyer"],
+    },
+  });
+  const claimantContesting = await db.user.create({
+    data: {
+      id: uuid(912),
+      phone: "+971506627035",
+      fullName: "Bilal Haque",
+      roles: ["buyer"],
+    },
+  });
+  const claimantRefused = await db.user.create({
+    data: {
+      id: uuid(913),
+      phone: "+971524409183",
+      fullName: "Sanjay Menon",
+      roles: ["buyer"],
+    },
+  });
+
+  const licenceDoc = await db.document.create({
+    data: {
+      kind: "trade_licence",
+      businessId: licenceClaimTarget.id,
+      storagePath: `documents/${licenceClaimTarget.id}/trade-licence-2026.pdf`,
+      filename: "trade-licence-2026.pdf",
+      bytes: 412_774,
+      mimeType: "application/pdf",
+      createdAt: days(-3),
+    },
+  });
+
+  const contestedDoc = await db.document.create({
+    data: {
+      kind: "trade_licence",
+      businessId: contestedTarget.id,
+      storagePath: `documents/${contestedTarget.id}/licence-scan.pdf`,
+      filename: "licence-scan.pdf",
+      bytes: 388_102,
+      mimeType: "application/pdf",
+      createdAt: days(-7),
+    },
+  });
+
+  const approvedOwner = await ownerOf(approvedTarget.id);
+
+  await db.claimSubmission.createMany({
+    data: [
+      {
+        // Undecided sits at `unclaimed`: the submission has not moved the
+        // listing yet. Nothing about the row says pending except the absence
+        // of a decision, which is what the queue filters on.
+        businessId: phoneClaimTarget.id,
+        claimantId: claimantPhone.id,
+        route: "phone_callback",
+        phone: "+97143472290",
+        createdAt: days(-1),
+      },
+      {
+        businessId: licenceClaimTarget.id,
+        claimantId: claimantLicence.id,
+        route: "licence_upload",
+        documentId: licenceDoc.id,
+        createdAt: days(-3),
+      },
+      {
+        // The state handoff 3 takes and handoff 4 resolves: somebody already
+        // holds this listing and a second person says it is theirs. Taken
+        // anyway, flagged, and staff see both sides.
+        businessId: contestedTarget.id,
+        claimantId: claimantContesting.id,
+        route: "licence_upload",
+        documentId: contestedDoc.id,
+        contested: true,
+        createdAt: days(-7),
+      },
+      {
+        businessId: approvedTarget.id,
+        claimantId: approvedOwner,
+        route: "phone_callback",
+        phone: "+97142678831",
+        status: "claimed",
+        decidedAt: days(-40),
+        decisionReason:
+          "Called the number on the DED record and reached the manager named on the licence. Ownership confirmed on the call.",
+        createdAt: days(-42),
+      },
+      {
+        businessId: refusedTarget.id,
+        claimantId: claimantRefused.id,
+        route: "phone_callback",
+        phone: "+97165331074",
+        contested: true,
+        status: "disputed",
+        decidedAt: days(-15),
+        decisionReason:
+          "Claimant could not name the licence holder and the number reached a different company. Listing stays with the existing holder; claimant told what evidence would change that.",
+        createdAt: days(-18),
+      },
+    ],
+  });
+
+  // ── Site visit requests ───────────────────────────────────────────────────
+  // Board 8e task 4. The seller asks; the tier only moves once somebody has
+  // actually been, which is why the request and `Business.visitedAt` are
+  // different columns.
+
+  const visitAsked = claimed[2]!;
+  const visitScheduled = claimed[4]!;
+  const visitDone = claimed[5]!;
+  const visitCancelled = claimed[7]!;
+
+  const [v2, v4, v5, v7] = await Promise.all([
+    ownerOf(visitAsked.id),
+    ownerOf(visitScheduled.id),
+    ownerOf(visitDone.id),
+    ownerOf(visitCancelled.id),
+  ]);
+
+  await db.siteVisitRequest.createMany({
+    data: [
+      {
+        businessId: visitAsked.id,
+        requestedById: v2,
+        preferredNote: "Any morning except Friday. Warehouse is open from 08:00.",
+        createdAt: days(-2),
+      },
+      {
+        businessId: visitScheduled.id,
+        requestedById: v4,
+        preferredNote: "Ramadan hours this month, so before 14:00 if possible.",
+        scheduledFor: days(6),
+        createdAt: days(-9),
+      },
+      {
+        businessId: visitDone.id,
+        requestedById: v5,
+        preferredNote: "Trade counter and the yard behind it.",
+        scheduledFor: days(-21),
+        completedAt: days(-21),
+        createdAt: days(-30),
+      },
+      {
+        businessId: visitCancelled.id,
+        requestedById: v7,
+        preferredNote: "Second week of the month.",
+        scheduledFor: days(-12),
+        cancelledAt: days(-13),
+        createdAt: days(-25),
+      },
+    ],
+  });
+
+  // ── The audit rows those decisions owe ────────────────────────────────────
+  // Non-negotiable 3. Each action is written by a role that holds the
+  // capability: queue.decide is moderator or ops lead, claim.resolve is ops
+  // lead alone, visit.record is ops lead or field officer.
+
+  await db.auditEvent.createMany({
+    data: [
+      {
+        actorId: moderatorId,
+        action: "queue_decided",
+        subject: `ListingChangeRequest:${renameApproved.id}`,
+        reason:
+          "Trade name on the DED licence reads Gulf Line Trading LLC. Amendment certificate attached to the submission matches.",
+        before: { tradeName: f11.tradeName },
+        after: { tradeName: "Gulf Line Trading LLC" },
+        createdAt: days(-6),
+      },
+      {
+        actorId: moderatorId,
+        action: "queue_decided",
+        subject: `ListingChangeRequest:${licenceRejected.id}`,
+        reason:
+          "The number submitted belongs to a different licence holder on the authority's register. Rejected with the evidence that would change it.",
+        before: { licenceNumber: f12.licenceNumber },
+        after: { licenceNumber: f12.licenceNumber },
+        createdAt: days(-4),
+      },
+      {
+        actorId: opsLeadId,
+        action: "claim_resolved",
+        subject: `Business:${approvedTarget.id}`,
+        reason:
+          "Called the number on the DED record and reached the manager named on the licence. Ownership confirmed on the call.",
+        before: { claimStatus: "unclaimed" },
+        after: { claimStatus: "claimed" },
+        createdAt: days(-40),
+      },
+      {
+        actorId: opsLeadId,
+        action: "claim_resolved",
+        subject: `Business:${refusedTarget.id}`,
+        reason:
+          "Claimant could not name the licence holder and the number reached a different company. Listing stays with the existing holder.",
+        before: { claimStatus: "disputed" },
+        after: { claimStatus: "disputed" },
+        createdAt: days(-15),
+      },
+      {
+        // The field officer's own row. lib/auth/subject.ts reads exactly this
+        // to decide whether they may then move the tier — a verifier can set a
+        // tier only for a visit they recorded, so a visit with no recorder is
+        // a tier nobody can move.
+        actorId: uuid(3),
+        action: "visit_recorded",
+        subject: `Business:${visitDone.id}`,
+        reason:
+          "Attended the trade counter and the yard. Stock on the shelves matches the catalogue; counter staff present and selling.",
+        after: { completedAt: days(-21).toISOString() },
+        createdAt: days(-21),
+      },
+    ],
+  });
+
+  await db.business.update({
+    where: { id: visitDone.id },
+    data: { visitedAt: days(-21), visitedByStaffId: uuid(3) },
+  });
 }
