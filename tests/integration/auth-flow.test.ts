@@ -30,7 +30,21 @@ if (!live) {
 }
 
 /** A gmail address: Supabase rejects reserved TLDs like .example as undeliverable. */
-const EMAIL = "bl.integration.buyer@gmail.com";
+/**
+ * One address per run, not one per suite.
+ *
+ * This test talks to the real Supabase project, and that project is shared:
+ * CI and a laptop use the same one, while their Postgres databases are
+ * separate. With a fixed address, `removeExisting` in one run deletes the auth
+ * user the other has just created — which is exactly what happened when a CI
+ * run at 17:21 overlapped a local `pnpm verify`, and produced a profile row
+ * that was there a moment ago and gone by the update.
+ *
+ * Gmail's `+tag` addressing makes each run its own address, and Supabase treats
+ * them as distinct users. `removeExisting` then only ever clears its own.
+ */
+const RUN = `${process.pid.toString(36)}${Date.now().toString(36).slice(-5)}`;
+const EMAIL = `bl.integration.buyer+${RUN}@gmail.com`;
 
 let admin: SupabaseClient;
 const createdUserIds: string[] = [];
