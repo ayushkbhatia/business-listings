@@ -30,7 +30,6 @@ const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 let opsLeadId: string;
 let moderatorId: string;
 let sectorA: string;
-let sectorB: string;
 const madeTemplates: string[] = [];
 const madeCategories: string[] = [];
 
@@ -52,10 +51,9 @@ beforeAll(async () => {
     where: { parentId: null, slug: { not: { startsWith: "sf-test-" } } },
     orderBy: { sortOrder: "asc" },
     select: { id: true },
-    take: 2,
+    take: 1,
   });
   sectorA = sectors[0]!.id;
-  sectorB = sectors[1]!.id;
 });
 
 afterAll(async () => {

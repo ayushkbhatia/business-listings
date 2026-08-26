@@ -45,3 +45,4 @@ export {
 } from "./EmirateAreaPicker";
 
 export { PlanCard, type PlanCardProps, type PlanFeature } from "./PlanCard";
+export { ReviewCard, type ReviewCardProps } from "./ReviewCard";

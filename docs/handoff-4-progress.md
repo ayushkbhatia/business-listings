@@ -23,28 +23,42 @@ sprint without asking, through to the end of the handoff.
 | [#23](https://github.com/ayushkbhatia/business-listings/pull/23) | Step 3 — boards 4h/4i/12h, the visit report the tier check was waiting for | `991fcf9` |
 | [#24](https://github.com/ayushkbhatia/business-listings/pull/24) | Step 4 — boards 4f/12d/12f, view-as and a call list with no insert path | merged |
 | [#25](https://github.com/ayushkbhatia/business-listings/pull/25) | Step 5 — boards 4g/12e, the MRR ledger, dunning, grandfathering that grandfathers | `531046d` |
-| [#26](https://github.com/ayushkbhatia/business-listings/pull/26) | Step 6a — the storefront template model, and a sector column the database keeps | open |
+| [#26](https://github.com/ayushkbhatia/business-listings/pull/26) | Step 6a — the storefront template model, and a sector column the database keeps | `386856c` |
+| [#27](https://github.com/ayushkbhatia/business-listings/pull/27) | Step 6b — fourteen sections that render, and the page that proves it | open |
 
 ## Next
 
-**Step 6b — the builder shell, section library and specimens page** (`5a`, `5c`, `5g`, `5h`).
+**Step 6c — the builder shell** (`5a`), plus themes (`5b`) and the page editor (`5d`).
 
-The model landed in 6a and nothing renders from it yet, which is stated rather than implied.
-6b builds `/admin/storefront-templates`, the three-pane builder on `BuilderChrome`, the
-section library, and `/admin/storefront-templates/specimens` — the acceptance surface for the
-whole step, the way `/dev/gallery` is for components.
+Three panes on `BuilderChrome`: section list left, live canvas centre, settings right. The
+canvas renders the template against a real seller's data at 50% — the renderers landed in 6b,
+so this is composition rather than new drawing. Publish is a two-step: a diff of what changed,
+then a confirm naming the store count. `publishTemplate` and `restoreVersion` already exist and
+already carry the count; 6c is the screen in front of them.
 
-Then, in order:
+**Checkpoint: change one template and see the store count before and after the save.**
 
-- **6c** — themes `5b` and the page editor `5d`.
-- **6d** — domain verification `5e`, behind a `CertificateIssuer` port with a fake, because
-  step 4 of that flow is a Vercel platform operation and there is no token. See §0.7.
-- **6e** — the public storefront rewrite. Roadmap §0.6: the four `/b/[slug]` routes are
-  hardcoded JSX with no section registry, so criterion 2 is proved against `resolveSections()`
-  and not against a route until this lands. It is its own step with its own checkpoint rather
-  than the last item of a long one.
+Then:
+
+- **6d** — domain verification `5e`, behind a `CertificateIssuer` port with a fake. §0.7.
+- **6e** — the public storefront rewrite. The four `/b/[slug]` routes still render hardcoded
+  JSX; `renderSection` and `resolveSections` exist and no route calls them. Criterion 2 is
+  proved against the service and the resolver, not against a page, until this lands.
 
 Then steps 7–8: content ops `[6f]` `[12g]`, and the acceptance pass.
+
+## What step 6b found
+
+- **`/b/[slug]/reviews` rendered a review as inline JSX.** The storefront Reviews section
+  needed the same markup and the choice was copy or extract. `ReviewCard` is component 67, used
+  in both, for the reason the inventory's own `Thread` note gives.
+- **The fourteen sections are not in the component inventory, deliberately.** Their catalogue
+  is `lib/storefront/section-types.ts`, which carries columns an inventory has no room for —
+  data source, seller-fillable fields, singleton. `tests/unit/section-registry.test.ts` asserts
+  the catalogue and the renderers are the same set, so one list stays safe.
+- **My own copy tripped my own test.** The certifications note says a trade licence is never
+  shown there, and the assertion that no specimen mentions a trade licence caught it. The
+  assertion was scoped to document titles; the note stayed.
 
 ## What step 6a found
 

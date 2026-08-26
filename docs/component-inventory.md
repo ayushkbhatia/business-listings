@@ -93,6 +93,7 @@ whether you split a variant into its own component.
 | 63 | `EmirateAreaPicker` | handoff 3 |
 | 64 | `PlanCard` | handoff 3 |
 | 66 | `Thread` | handoff 2 — one component, boards 10h and 11b are two views of it |
+| 67 | `ReviewCard` | handoff 4 — one review, on the reviews page and in the storefront section |
 
 ---
 
@@ -114,6 +115,21 @@ renderings of the same record is the one thing a record must never do.
 
 The quote delta — the previous price struck through beside the new one — is computed once in
 `lib/messaging/thread-view.ts` for the same reason, so both sides read the same numbers.
+
+**67 · `ReviewCard`** — extracted, not added. `/b/[slug]/reviews` rendered a review as inline
+JSX, and the storefront Reviews section needed the same markup. Copying it would have been two
+renderings of one record, which is the failure the `Thread` note above describes.
+
+It takes resolved strings rather than a Prisma row, because the reviews page and the section
+reach the data by different queries and a component typed to one breaks when the other changes.
+
+**The fourteen storefront sections are not in this list, deliberately.** Their catalogue is
+`lib/storefront/section-types.ts`, which declares each type's data source, its seller-fillable
+fields and whether it is a singleton — things a component inventory has no column for. Two
+lists of fourteen things is one list too many, and the `Thread` note above is what happens when
+a component lives in one list and not the other. `tests/unit/section-registry.test.ts` asserts
+the catalogue and the renderers are the same set, and
+`/admin/storefront-templates/specimens` is their gallery.
 
 ## Naming
 
