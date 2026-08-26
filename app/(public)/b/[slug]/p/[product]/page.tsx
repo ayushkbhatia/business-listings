@@ -251,6 +251,7 @@ export default async function ProductPage({ params }: Params) {
                   initialLines={[
                     {
                       key: product.id,
+                      productId: product.id,
                       description: product.name,
                       qty: product.minOrderQty ?? 1,
                       unit: "pcs",

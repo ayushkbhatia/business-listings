@@ -19,7 +19,7 @@ import type { RecipientPreview } from "@/components/domain";
 
 export interface SendEnquiryInput {
   requirement: string;
-  lines: { description: string; qty: number; unit: string | null; size: string | null; targetUnitPriceAed: string | null }[];
+  lines: { description: string; qty: number; unit: string | null; size: string | null; targetUnitPriceAed: string | null; productId: string | null }[];
   categoryId: string;
   emirate: string | null;
   deliverToArea: string | null;

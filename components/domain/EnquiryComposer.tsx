@@ -29,6 +29,15 @@ import { cn } from "@/lib/cn";
 
 export interface EnquiryLineDraft {
   key: string;
+  /**
+   * The product this line came from, where it came from one.
+   *
+   * The tray already had it — it was the React key — and threw it away on the
+   * way to the server, so `EnquiryLine` recorded a description and no id. That
+   * is why "auto-pick most-enquired" on the featured-products section had
+   * nothing to rank on and could not be backfilled.
+   */
+  productId?: string | null;
   description: string;
   qty: number;
   unit: string;
@@ -49,7 +58,7 @@ export interface RecipientPreview {
 
 export interface EnquiryComposerValue {
   requirement: string;
-  lines: { description: string; qty: number; unit: string | null; size: string | null; targetUnitPriceAed: string | null }[];
+  lines: { description: string; qty: number; unit: string | null; size: string | null; targetUnitPriceAed: string | null; productId: string | null }[];
   emirate: string | null;
   deliverToArea: string | null;
   neededBy: string | null;
@@ -235,6 +244,7 @@ export function EnquiryComposer({
         unit: l.unit.trim() || null,
         size: l.size.trim() || null,
         targetUnitPriceAed: l.targetUnitPriceAed.trim() || null,
+        productId: l.productId ?? null,
       })),
       emirate: emirate || null,
       deliverToArea: area.trim() || null,

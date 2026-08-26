@@ -1738,7 +1738,7 @@ export const en = {
   "verify_listing.current": "You are at tier {tier}",
   "verify_listing.reached": "Reached",
   "verify_listing.documents": "Documents",
-  "verify_listing.documents_hint": "Only our team sees these. They are never on your public listing and never linked from it.",
+  "verify_listing.documents_hint": "Your trade licence and VAT certificate are only ever seen by our team. They are never on your public listing and never linked from it. Certificates, catalogues and datasheets can be shown on your storefront if you choose.",
   "verify_listing.upload": "Upload a document",
   "verify_listing.upload_hint": "PDF, JPEG or PNG, up to 16 MB.",
   "verify_listing.kind": "What this is",

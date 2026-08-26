@@ -97,6 +97,8 @@ export async function findFanoutCandidates(
 export interface EnquiryLineInput {
   description: string;
   qty: number;
+  /** The product the buyer was looking at, where they were looking at one. */
+  productId?: string | null;
   unit?: string | null;
   size?: string | null;
   /** The buyer's own budget per unit. Never a supplier price. */
@@ -215,6 +217,7 @@ export async function createEnquiry(
           create: input.lines.map((line, i) => ({
             description: line.description.trim(),
             qty: line.qty,
+            productId: line.productId ?? null,
             unit: line.unit ?? null,
             size: line.size ?? null,
             targetUnitPriceAed: line.targetUnitPriceAed ?? null,

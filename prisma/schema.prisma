@@ -93,6 +93,7 @@ model User {
   proposalsDecided  SpecFieldProposal[] @relation("ProposalDecidedBy")
 
   @@index([businessId])
+  templateVersions TemplateVersion[]
   @@map("user")
 }
 
@@ -241,6 +242,7 @@ model Category {
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
   /// list — so a plain GIN over the array is the right shape.
   @@index([synonyms], type: Gin)
+  sectorTemplates StorefrontTemplate[] @relation("SectorTemplates")
   @@map("category")
 }
 
@@ -434,6 +436,18 @@ model Business {
   claimStatus       ClaimStatus   @default(unclaimed) @map("claim_status")
   planId            String?       @map("plan_id")
   primaryCategoryId String        @map("primary_category_id")
+  /// The top-level ancestor of `primaryCategoryId`, denormalised.
+  ///
+  /// A storefront template belongs to a sector and the store count is the
+  /// number every builder screen shows before a save, so it has to be one
+  /// indexed column rather than a recursive walk per render.
+  ///
+  /// `BusinessCategory` rows are deliberately ignored: a third of businesses
+  /// carry a second one, and a listing that belonged to two sectors would
+  /// belong to two templates. Kept in step with `primaryCategoryId` by
+  /// `lib/taxonomy/sector.ts`, and an integration test walks every row to check
+  /// the two still agree.
+  sectorId          String?       @map("sector_id")
   source            ListingSource @default(licence_import)
   /// Which licence import created this listing, where one did.
   ///
@@ -523,12 +537,15 @@ model Business {
   reviewRequests         ReviewRequest[]
 
   @@index([primaryCategoryId])
+  @@index([sectorId])
   @@index([claimStatus])
   @@index([verificationTier])
   @@index([publishedAt])
   @@index([licenceExpiry])
   @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([tradeName(ops: raw("gin_trgm_ops"))], type: Gin)
+  storefrontContent StorefrontContent[]
+  teamMembers       TeamMember[]
   @@map("business")
 }
 
@@ -589,6 +606,7 @@ model Location {
   @@index([businessId])
   @@index([areaId])
   @@index([emirate])
+  teamMembers TeamMember[]
   @@map("location")
 }
 
@@ -648,6 +666,8 @@ model Product {
   quoteLines QuoteLine[]
 
   @@unique([businessId, slug])
+  enquiryLines EnquiryLine[]
+
   @@index([businessId])
   @@index([categoryId])
   @@index([availability])
@@ -695,6 +715,7 @@ model Media {
 
   @@index([businessId])
   @@index([productId])
+  teamMembers TeamMember[]
   @@map("media")
 }
 
@@ -805,6 +826,15 @@ model Enquiry {
 model EnquiryLine {
   id                 String   @id @default(cuid())
   enquiryId          String   @map("enquiry_id")
+  /// What the buyer was looking at when they asked, where they were looking at
+  /// anything. Nullable because most enquiries start from a search rather than
+  /// a product, and because every row written before this column existed has
+  /// no answer — the RFQ tray had the id and put it in the description.
+  ///
+  /// Added now, while the table is small, so "auto-pick most-enquired" on the
+  /// featured-products section has something to rank on later. Until there are
+  /// enough rows, that section is manual-pick and says so.
+  productId          String?  @map("product_id")
   description        String
   qty                Int
   unit               String?
@@ -817,9 +847,13 @@ model EnquiryLine {
   size               String?
   sortOrder          Int      @default(0) @map("sort_order")
 
-  enquiry Enquiry @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  enquiry Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  /// `SetNull`, not `Cascade`. A seller deleting a product must not delete the
+  /// buyer's enquiry line — what they asked for still happened.
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([enquiryId])
+  @@index([productId])
   @@map("enquiry_line")
 }
 
@@ -2031,6 +2065,226 @@ model Redirect {
   business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
   @@map("redirect")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Storefront templates
+//
+// Sellers do not build storefronts. We build templates per sector; sellers fill
+// the fields we opened. Ordering, adding, removing and composing sections is a
+// staff action, which makes every template edit a fan-out: changing the
+// Industrial template changes every live storefront in that sector.
+//
+// Three shapes carry that:
+//
+//   1. One live template per sector, enforced by a partial unique index. The
+//      store count is only well defined if a listing has one template.
+//   2. `TemplateSection.id` is stable across versions. `StorefrontContent` is
+//      keyed to it, so a version restore that replaced section rows would
+//      silently destroy seller content across every store on the template.
+//      Restore upserts by id; it never clones.
+//   3. Singletons are a column and an index, not a service remembering.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// `TemplateStatus` is shared with `SpecTemplate` above. Draft, live and retired
+// mean the same three things here, and a second enum with the same members
+// would be a migration's worth of ceremony for no guarantee.
+
+enum TemplateDensity {
+  compact
+  comfortable
+  roomy
+
+  @@map("template_density")
+}
+
+enum TypePairing {
+  editorial
+  clean
+  technical
+
+  @@map("type_pairing")
+}
+
+model StorefrontTemplate {
+  id       String         @id @default(cuid())
+  /// A top-level category. Not any category: a sector is the unit a seller
+  /// recognises as their trade, and a template per subcategory would be a
+  /// hundred templates nobody maintains.
+  sectorId String         @map("sector_id")
+  name     String
+  status   TemplateStatus @default(draft)
+  /// Bumped on publish. The history lives in `TemplateVersion`.
+  version  Int            @default(1)
+
+  // ── Theme, board 5b ──
+  /// Which of the six presets sellers in this sector may pick.
+  offeredThemes  String[]        @default([]) @map("offered_themes")
+  defaultTheme   String          @default("default") @map("default_theme")
+  /// A hex outside the six. Contrast-checked on save, refused below 4.5:1.
+  allowCustomHex Boolean         @default(false) @map("allow_custom_hex")
+  typePairing    TypePairing     @default(clean) @map("type_pairing")
+  cornerRadius   Int             @default(6) @map("corner_radius")
+  density        TemplateDensity @default(comfortable)
+  darkHeader     Boolean         @default(false) @map("dark_header")
+  /// Pro entitlement. Whether a seller on this template may take our badge off.
+  badgeRemovable Boolean         @default(false) @map("badge_removable")
+
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  sector   Category          @relation("SectorTemplates", fields: [sectorId], references: [id], onDelete: Restrict)
+  sections TemplateSection[]
+  pages    TemplatePage[]
+  versions TemplateVersion[]
+
+  @@index([sectorId, status])
+  @@map("storefront_template")
+}
+
+model TemplateSection {
+  id         String @id @default(cuid())
+  templateId String @map("template_id")
+  /// A `SectionType` key from `lib/storefront/section-types.ts`. Not an enum:
+  /// adding a type is a code change and the catalogue is the source of truth,
+  /// so a migration per section type would be ceremony with no guarantee.
+  type       String
+
+  sortOrder Int     @default(0) @map("sort_order")
+  enabled   Boolean @default(true)
+  /// Cannot be moved, disabled or removed. Only the header. Denormalised from
+  /// the catalogue so the check constraint below can see it.
+  fixed     Boolean @default(false)
+  /// Denormalised for the partial unique index. Criterion 7.
+  singleton Boolean @default(false)
+
+  /// Which of the type's declared fields this template lets a seller fill.
+  /// Always a subset of `sellerFieldKeys(type)`, checked at write time.
+  sellerEditableFields String[] @default([]) @map("seller_editable_fields")
+  showOnMobile         Boolean  @default(true) @map("show_on_mobile")
+  /// Staff settings for this instance — hero layout, background source. Shaped
+  /// by the type, validated in the service.
+  settings             Json     @default("{}")
+
+  template StorefrontTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  content  StorefrontContent[]
+
+  @@index([templateId, sortOrder])
+  @@map("template_section")
+}
+
+/// What one seller filled into one section.
+///
+/// The fifth object, which the specification does not name and cannot work
+/// without: ten of the fourteen types have a "Seller fills" column and there
+/// was nowhere to put what a specific seller filled in.
+///
+/// Keyed to `TemplateSection.id`, which survives a version restore. Keyed to a
+/// row that a restore replaced, a template rollback would wipe seller content
+/// across every store in the sector — silently, and with no way back.
+model StorefrontContent {
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  sectionId  String   @map("section_id")
+  /// Only keys in the section's `sellerEditableFields`, only field types the
+  /// section type declares. Validated on write; a blob nobody checks is a blob
+  /// that eventually renders somebody's price.
+  values     Json     @default("{}")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  section  TemplateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, sectionId])
+  @@index([sectionId])
+  @@map("storefront_content")
+}
+
+model TemplatePage {
+  id         String @id @default(cuid())
+  templateId String @map("template_id")
+  slug       String
+  title      String
+
+  metaDescription String?        @map("meta_description")
+  /// Heading, text, image+text, numbers row, timeline, gallery, certifications,
+  /// call to action. A smaller vocabulary than sections, because a page is
+  /// prose and a storefront home is data.
+  blocks          Json           @default("[]")
+  showInNav       Boolean        @default(true) @map("show_in_nav")
+  allowIndexing   Boolean        @default(true) @map("allow_indexing")
+  status          TemplateStatus @default(draft)
+  publishedAt     DateTime?      @map("published_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
+
+  template StorefrontTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, slug])
+  @@map("template_page")
+}
+
+/// A published version, kept whole.
+///
+/// Criterion 12: publish is reversible from version history. The snapshot is
+/// the section list and the theme settings as they were, and a restore writes
+/// them back by section id rather than recreating rows — see
+/// `StorefrontContent` for why that distinction is the whole ballgame.
+model TemplateVersion {
+  id         String @id @default(cuid())
+  templateId String @map("template_id")
+  version    Int
+  /// The sections and settings as published. Read by the restore path and by
+  /// the diff the publish confirmation shows.
+  snapshot   Json
+
+  /// How many live storefronts this publish changed. On the row because the
+  /// number is the decision — "this affects 1,842 stores" is what somebody
+  /// confirmed, and a history that lost it cannot say what was agreed.
+  storeCount  Int      @map("store_count")
+  publishedBy String   @map("published_by") @db.Uuid
+  /// Never null. Same rule as `AuditEvent`, for the same reason.
+  reason      String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  template StorefrontTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  author   User               @relation(fields: [publishedBy], references: [id], onDelete: Restrict)
+
+  @@unique([templateId, version])
+  @@map("template_version")
+}
+
+/// A named person on a storefront, with the consent to be there.
+///
+/// The "Meet the team" section asks for names, roles and numbers on a public
+/// page. `User.phone` is a sign-in credential and is never this. A row here is
+/// a deliberate act with a timestamp on it, in the same handoff that builds the
+/// PDPL erasure path — and the number defaults to the branch line rather than
+/// anybody's mobile.
+model TeamMember {
+  id         String  @id @default(cuid())
+  businessId String  @map("business_id")
+  name       String
+  role       String
+  /// The branch line unless somebody chose otherwise. Never `User.phone`.
+  phone      String?
+  locationId String? @map("location_id")
+  mediaId    String? @map("media_id")
+  sortOrder  Int     @default(0) @map("sort_order")
+
+  /// When this person agreed to appear. NOT NULL: there is no row without
+  /// consent, so there is no state in which one is published without it.
+  consentGivenAt DateTime @map("consent_given_at")
+  /// Who recorded it, so an erasure request has somebody to ask.
+  consentBy      String   @map("consent_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  media    Media?    @relation(fields: [mediaId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, sortOrder])
+  @@map("team_member")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

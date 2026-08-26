@@ -198,11 +198,20 @@ async function main() {
 
   console.log("→ categories");
   const catBySlug = new Map<string, string>();
+  /**
+   * Slug to top-level ancestor id.
+   *
+   * `Business.sectorId` is denormalised and every writer of `primaryCategoryId`
+   * writes it too. The seed is one of those writers, and a seed that skipped it
+   * would leave the whole directory outside every storefront template.
+   */
+  const sectorBySlug = new Map<string, string>();
   for (const [i, c] of CATEGORIES.entries()) {
     const row = await prisma.category.create({
       data: { ...c, synonyms: [...c.synonyms], sortOrder: i, publishThreshold: 60, verifiedShareMin: 0.3 },
     });
     catBySlug.set(c.slug, row.id);
+    sectorBySlug.set(c.slug, row.id);
   }
   for (const [i, s] of SUBCATEGORIES.entries()) {
     const row = await prisma.category.create({
@@ -217,6 +226,7 @@ async function main() {
       },
     });
     catBySlug.set(s.slug, row.id);
+    sectorBySlug.set(s.slug, sectorBySlug.get(s.parent)!);
   }
 
   console.log("→ spec template");
@@ -456,6 +466,7 @@ async function main() {
   await seedTrust(prisma, businesses, opsLead.id, moderator.id, buyer.id);
   await seedSignals(prisma, businesses, buyer.id, catBySlug);
   await seedQueues(prisma, businesses, catBySlug, opsLead.id, moderator.id);
+  await seedStorefrontTemplates(prisma, sectorBySlug, opsLead.id);
   await recomputeDerived(prisma);
 }
 
@@ -1562,6 +1573,113 @@ async function deriveResponseTimes(db: Db) {
     if (median !== null) measured += 1;
   }
   console.log(`   ${measured} of ${byBusiness.size} businesses have a measurable reply time`);
+}
+
+/**
+ * Two sector templates, and they are deliberately different.
+ *
+ * Criterion 2 — *"reordering, enabling or disabling a section changes every live
+ * storefront on that template and nothing else"* — is only assertable with two,
+ * so valves and pipes get different section lists. One template and the test
+ * proves nothing: everything is on the same template, so everything changes.
+ *
+ * Both are `live`, which the partial unique index allows exactly once per
+ * sector. Every other sector has no template, which is the honest starting
+ * state — a directory where four trades out of six are still on the default
+ * storefront is what this actually looks like before staff get to it.
+ */
+async function seedStorefrontTemplates(
+  db: Db,
+  sectorBySlug: Map<string, string>,
+  opsLeadId: string,
+) {
+  console.log("→ storefront templates");
+  const { sectionType } = await import("../lib/storefront/section-types.js");
+
+  const plans = [
+    {
+      sector: "valves-and-fittings",
+      name: "Industrial",
+      theme: "industrial",
+      offered: ["industrial", "mono", "default"],
+      // The full set: a trade where the catalogue is the sell.
+      types: [
+        "header", "hero", "trust_strip", "featured_products", "catalogue_grid",
+        "spec_comparison", "certifications", "branches", "reviews", "enquiry_form",
+      ],
+    },
+    {
+      sector: "pipes-and-tubing",
+      name: "Stockist",
+      theme: "trade",
+      offered: ["trade", "mono"],
+      // Shorter, and no spec comparison. Pipe is sold on stock and lead time.
+      types: ["header", "hero", "trust_strip", "catalogue_grid", "branches", "enquiry_form"],
+    },
+  ];
+
+  for (const plan of plans) {
+    const sectorId = sectorBySlug.get(plan.sector);
+    if (!sectorId) continue;
+
+    const template = await db.storefrontTemplate.create({
+      data: {
+        sectorId,
+        name: plan.name,
+        status: "live",
+        version: 1,
+        publishedAt: days(-int(5, 40)),
+        defaultTheme: plan.theme,
+        offeredThemes: plan.offered,
+        density: plan.sector === "pipes-and-tubing" ? "compact" : "comfortable",
+        sections: {
+          create: plan.types.map((type, index) => {
+            const definition = sectionType(type)!;
+            return {
+              type,
+              sortOrder: index,
+              fixed: definition.fixed,
+              singleton: definition.singleton,
+              sellerEditableFields: definition.sellerFields.map((field) => field.key),
+            };
+          }),
+        },
+      },
+      select: {
+        id: true,
+        version: true,
+        sections: {
+          select: {
+            id: true, type: true, sortOrder: true, enabled: true, fixed: true,
+            singleton: true, sellerEditableFields: true, showOnMobile: true, settings: true,
+          },
+          orderBy: { sortOrder: "asc" },
+        },
+      },
+    });
+
+    const storeCount = await db.business.count({
+      where: { sectorId, publishedAt: { not: null }, mergedIntoId: null, suspendedAt: null },
+    });
+
+    /*
+     * The published version, with the store count on it. The count is the
+     * decision — somebody confirmed "this affects N stores" — and a history
+     * that lost the number cannot say what was agreed.
+     */
+    await db.templateVersion.create({
+      data: {
+        templateId: template.id,
+        version: template.version,
+        storeCount,
+        publishedBy: opsLeadId,
+        reason: `First publish of the ${plan.name} template for ${plan.sector.replace(/-/g, " ")}.`,
+        snapshot: { name: plan.name, sections: template.sections } as object,
+      },
+    });
+
+    console.log(`   ${plan.name}: ${template.sections.length} sections, ${storeCount} stores`);
+  }
 }
 
 async function seedCommercials(db: Db, businesses: Biz[]) {

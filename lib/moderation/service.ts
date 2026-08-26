@@ -241,7 +241,8 @@ export async function approveChange(input: DecideInput): Promise<DecisionResult>
                 ...(nextSlug && nextSlug !== request.business.slug ? { slug: nextSlug } : {}),
               }
             : field === "primary_category"
-              ? { primaryCategoryId: request.afterValue }
+              ? // `sector_id` follows, by trigger. See the migration.
+                { primaryCategoryId: request.afterValue }
               : { licenceNumber: request.afterValue };
 
         const after = await tx.business.update({

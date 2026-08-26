@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import {
   affectedByNewField,
@@ -49,6 +49,34 @@ beforeAll(async () => {
 let seq = 0;
 
 /**
+ * Everything the fixtures made, so it can be taken away again.
+ *
+ * This suite used to leave a top-level category behind on every run. A
+ * top-level category is a **sector** — the unit the storefront template model
+ * is organised around and the denominator of the store count every builder
+ * screen shows before a save — so a suite that leaks one per run makes any
+ * assertion about sectors flaky, in the same way the leaked listings made the
+ * dedupe scan miss its own pair.
+ */
+const made: { categories: string[]; businesses: string[] } = { categories: [], businesses: [] };
+
+afterAll(async () => {
+  // Order matters. A category with a business or a product on it will not
+  // delete — `onDelete: Restrict` on both, deliberately.
+  await prisma.business.deleteMany({ where: { id: { in: made.businesses } } });
+  await prisma.product.deleteMany({ where: { categoryId: { in: made.categories } } });
+  await prisma.category.updateMany({
+    where: { id: { in: made.categories } },
+    data: { defaultTemplateId: null },
+  });
+  await prisma.specTemplate.deleteMany({ where: { categoryId: { in: made.categories } } });
+  await prisma.category.deleteMany({ where: { id: { in: made.categories } } });
+  // By slug too, so a crashed run does not leave a sector behind for the next.
+  await prisma.category.deleteMany({ where: { slug: { startsWith: "test-trade-" } } });
+  await prisma.$disconnect();
+});
+
+/**
  * A category of its own, with a live template and a catalogue.
  *
  * Built per test rather than shared. `publishVersionWithField` retires the
@@ -95,6 +123,8 @@ async function freshTemplate(options: { complete: number; incomplete: number }) 
     data: { defaultTemplateId: template.id },
   });
 
+  made.categories.push(template.categoryId);
+
   const boreId = template.fields.find((f) => f.key === "bore")!.id;
 
   /*
@@ -122,6 +152,7 @@ async function freshTemplate(options: { complete: number; incomplete: number }) 
     },
     select: { id: true },
   });
+  made.businesses.push(business.id);
 
   for (let i = 0; i < options.complete + options.incomplete; i += 1) {
     await prisma.product.create({

@@ -22,24 +22,38 @@ sprint without asking, through to the end of the handoff.
 | [#22](https://github.com/ayushkbhatia/business-listings/pull/22) | Step 2b — board 12b, dedupe and the reversible merge, the 301 resolver | `e864692` |
 | [#23](https://github.com/ayushkbhatia/business-listings/pull/23) | Step 3 — boards 4h/4i/12h, the visit report the tier check was waiting for | `991fcf9` |
 | [#24](https://github.com/ayushkbhatia/business-listings/pull/24) | Step 4 — boards 4f/12d/12f, view-as and a call list with no insert path | merged |
-| [#25](https://github.com/ayushkbhatia/business-listings/pull/25) | Step 5 — boards 4g/12e, the MRR ledger, dunning, grandfathering that grandfathers | open |
+| [#25](https://github.com/ayushkbhatia/business-listings/pull/25) | Step 5 — boards 4g/12e, the MRR ledger, dunning, grandfathering that grandfathers | `531046d` |
+| [#26](https://github.com/ayushkbhatia/business-listings/pull/26) | Step 6a — the storefront template model, and a sector column the database keeps | open |
 
 ## Next
 
-**Step 6 — the storefront template builder `[5a]`–`[5e]` `[5g]` `[5h]`.**
+**Step 6b — the builder shell, section library and specimens page** (`5a`, `5c`, `5g`, `5h`).
 
-Build in the spec's own priority order: the section library and builder shell (`5a`, `5c`),
-domain verification (`5e`), then the specimens page (`5g`/`5h`). Theme editor ships as the six
-fixed presets first. The embed does not ship here at all — roadmap §0.5.
+The model landed in 6a and nothing renders from it yet, which is stated rather than implied.
+6b builds `/admin/storefront-templates`, the three-pane builder on `BuilderChrome`, the
+section library, and `/admin/storefront-templates/specimens` — the acceptance surface for the
+whole step, the way `/dev/gallery` is for components.
 
-The organising fact is that a template edit is a fan-out: changing one template changes every
-live storefront in that sector, so every screen shows the blast radius before the save and
-publish is two steps. `/admin/storefront-templates/specimens` is the acceptance surface for
-the whole step.
+Then, in order:
 
-**Checkpoint: change one template and see the store count before and after the save.**
+- **6c** — themes `5b` and the page editor `5d`.
+- **6d** — domain verification `5e`, behind a `CertificateIssuer` port with a fake, because
+  step 4 of that flow is a Vercel platform operation and there is no token. See §0.7.
+- **6e** — the public storefront rewrite. Roadmap §0.6: the four `/b/[slug]` routes are
+  hardcoded JSX with no section registry, so criterion 2 is proved against `resolveSections()`
+  and not against a route until this lands. It is its own step with its own checkpoint rather
+  than the last item of a long one.
 
 Then steps 7–8: content ops `[6f]` `[12g]`, and the acceptance pass.
+
+## What step 6a found
+
+- **`spec-library.test.ts` had no cleanup of any kind** — no `afterAll`, no deletes — and
+  created a top-level category per run. A top-level category is a *sector*, the unit the whole
+  template model is organised around, so the suite was leaking a fresh empty sector every run.
+  Same class of leak as the one that made the dedupe scan miss its own pair.
+- **`findCandidates` was not the only silent cap.** Fixed in step 5; noted here because the
+  dedupe tests now pass an explicit limit and the default remains 500.
 
 ## What step 5 found in `main`
 

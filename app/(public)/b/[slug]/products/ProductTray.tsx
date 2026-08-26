@@ -100,6 +100,7 @@ export function ProductTray({
         signedIn={signedIn}
         initialLines={chosen.map((p) => ({
           key: p.id,
+          productId: p.id,
           description: p.name,
           qty: p.minOrderQty ?? 1,
           unit: "pcs",
