@@ -97,14 +97,14 @@ they 404 until their handoff.
 /admin/businesses                       Businesses & health                   [4f]
 /admin/crm                              Recruitment & accounts               [12d]
 /admin/users                            Users                                later
-/admin/staff                            Staff, roles & audit                  [4i]
+/admin/staff                            Staff, roles & audit                  [4i]  built h4s3
 /admin/subscriptions                    Subscriptions                         [4g]
 /admin/invoices                         Invoices & credits                   [12e]
 /admin/plans                            Plans & entitlements                 [12e]
 /admin/dunning                          Failed payments                      [12e]
 /admin/tax                              VAT export                           [12e]
 /admin/revenue                          Revenue                               [4g]
-/admin/reports                          Supplier reports & flags              [4h]
+/admin/reports                          Supplier reports & flags              [4h]  built h4s3
 /admin/support                          Support desk & view-as               [12f]
 /admin/notifications                    Notification templates              [12g]
 /admin/strings                          Localisation                         [12g]
@@ -112,11 +112,11 @@ they 404 until their handoff.
 /admin/content/home                     Homepage curation                    [12g]
 /admin/content/redirects                Redirects                            [12g]
 /admin/storefront-templates/*           Storefront builder            [5a–5e, 5g, 5h]
-/admin/visits                           Field visit scheduling               [12h]
+/admin/visits                           Field visit scheduling               [12h]  built h4s3
 /admin/areas                            Emirates, areas, free zones          [12h]
 /admin/api                              API keys & webhooks                  [12h]
 /admin/compliance                       PDPL data requests                   [12h]
-/admin/audit                            Audit log                             [4i]
+/admin/audit                            Audit log                             [4i]  built h4s3
 ```
 
 ## Development surfaces

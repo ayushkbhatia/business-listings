@@ -68,3 +68,23 @@ test.describe("what a moderator is not offered", () => {
     await expect(page.getByRole("button", { name: /suspend/i })).toHaveCount(0);
   });
 });
+
+test.describe("the audit log a moderator sees", () => {
+  test("is their own actions, and says so", async ({ page }) => {
+    /*
+     * §07: ops lead reads the whole log, everybody else reads their own. The
+     * narrowing has existed in `auditScopeFor` since handoff 3 and was called
+     * from nowhere until step 3 — so it narrowed nothing.
+     */
+    await page.goto("/admin/audit");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Audit log");
+    await expect(page.getByText(/You see your own actions/)).toBeVisible();
+    await expect(page.getByText(/every actor/)).toHaveCount(0);
+  });
+
+  test("cannot reach the visits queue", async ({ page }) => {
+    // visit.record is ops lead or field verifier.
+    const response = await page.goto("/admin/visits");
+    expect(response?.status()).toBe(404);
+  });
+});

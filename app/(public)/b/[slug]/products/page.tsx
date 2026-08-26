@@ -39,7 +39,22 @@ export default async function CataloguePage({ params }: Params) {
   const { slug } = await params;
   const business = await getBusinessBySlug(slug);
   // An unclaimed listing has no catalogue, so the tab does not exist for it.
-  if (!business || business.claimStatus === "unclaimed") notFound();
+  if (!business) {
+    /*
+     * Before the 404, the two ways a listing legitimately moves: a rename wrote
+     * a redirect, or a merge absorbed it. Both wrote rows nothing read until
+     * handoff 4 step 2.
+     */
+    await redirectIfMoved(`/b/${slug}`);
+    notFound();
+  }
+
+  const movedTo = await absorbedInto(slug);
+  if (movedTo) permanentRedirect(`/b/${movedTo}`);
+
+  // An unclaimed listing has no subpages. It is a licence record, not a
+  // storefront, and there is nothing here for it to show.
+  if (business.claimStatus === "unclaimed") notFound();
 
   const [products, template, actor] = await Promise.all([
     getBusinessProducts(business.id),

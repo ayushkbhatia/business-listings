@@ -49,8 +49,8 @@ test.describe("board 4a — the console overview", () => {
     await expect(sidebar.getByRole("link", { name: "Taxonomy" })).toBeVisible();
     // Not yet. Named, not linked — the rule handoff 1 arrived at after the
     // seller sidebar shipped a dozen dead links.
-    await expect(sidebar.getByRole("link", { name: "Field visits" })).toHaveCount(0);
-    await expect(sidebar.getByText("Field visits")).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Recruitment" })).toHaveCount(0);
+    await expect(sidebar.getByText("Recruitment")).toBeVisible();
   });
 
   test("every admin link on the page resolves", async ({ page }) => {
@@ -155,7 +155,15 @@ test.describe("boards 4b, 4d and 4e", () => {
   });
 
   test("all three are axe clean at compact density", async ({ page }) => {
-    for (const path of ["/admin/queue", "/admin/categories", "/admin/spec-library", "/admin/ingest"]) {
+    for (const path of [
+      "/admin/queue",
+      "/admin/categories",
+      "/admin/spec-library",
+      "/admin/ingest",
+      "/admin/reports",
+      "/admin/audit",
+      "/admin/visits",
+    ]) {
       await page.goto(path);
       const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
       expect(results.violations, path).toEqual([]);
@@ -218,5 +226,33 @@ test.describe("board 12b — dedupe", () => {
     await page.goto("/admin/ingest/dedupe");
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
+  });
+});
+
+test.describe("boards 4h, 4i and 12h — trust", () => {
+  test("the report queue offers three outcomes and never a fourth", async ({ page }) => {
+    await page.goto("/admin/reports");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Supplier reports");
+    await expect(page.getByText(/Outcomes are corrected, upheld or no action/)).toBeVisible();
+    // The word this product does not use, anywhere a report can reach.
+    await expect(page.getByRole("main")).not.toContainText(/refund/i);
+  });
+
+  test("off-platform payment reports are outside the queue", async ({ page }) => {
+    await page.goto("/admin/reports");
+    await expect(page.getByText("Off-platform payment, outside the queue")).toBeVisible();
+  });
+
+  test("an ops lead sees the whole audit log", async ({ page }) => {
+    await page.goto("/admin/audit");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Audit log");
+    // The scope is in the page header's meta, not in the table.
+    await expect(page.getByText(/entries, every actor/)).toBeVisible();
+  });
+
+  test("the visits queue says a visit does not set a tier", async ({ page }) => {
+    await page.goto("/admin/visits");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Field visits");
+    await expect(page.getByText(/Recording a visit does not set a tier/)).toBeVisible();
   });
 });
