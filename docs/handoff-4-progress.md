@@ -26,21 +26,32 @@ sprint without asking, through to the end of the handoff.
 | [#26](https://github.com/ayushkbhatia/business-listings/pull/26) | Step 6a — the storefront template model, and a sector column the database keeps | `386856c` |
 | [#27](https://github.com/ayushkbhatia/business-listings/pull/27) | Step 6b — fourteen sections that render, and the page that proves it | `ffdbffb` |
 | [#28](https://github.com/ayushkbhatia/business-listings/pull/28) | Step 6c — the builder, and a publish that says what it is about to do | `4eabc20` |
-| [#29](https://github.com/ayushkbhatia/business-listings/pull/29) | Step 6e — the storefront renders from its template | open |
+| [#29](https://github.com/ayushkbhatia/business-listings/pull/29) | Step 6e — the storefront renders from its template | `0539933` |
+| [#30](https://github.com/ayushkbhatia/business-listings/pull/30) | Step 6d(i) — themes, and the floor a seller's own colour has to clear | open |
 
 ## Next
 
-**Step 6d — themes `5b`, the page editor `5d`, and domain verification `5e`.**
+**Step 6d(ii) — the page editor `5d` and domain verification `5e`.**
 
-The theme settings are already columns on `StorefrontTemplate`, the diff already reports
-changes to them in words, and the loader already prefers the template's theme over the
-seller's. What is missing is the form, and the per-template offered set that decides which
-presets a seller may pick at all.
-
-`5e` goes behind a `CertificateIssuer` port with a fake — step 4 of that flow is a Vercel
-platform operation and there is no token; §0.7.
+`5e` goes behind a `CertificateIssuer` port with a fake, in the shape of
+`lib/billing/provider.ts`: step 4 of that flow is a Vercel platform operation and there is no
+token, so the five DNS states are provable and the certificate half is honestly marked as not
+yet live. §0.7.
 
 Then steps 7–8: content ops `[6f]` `[12g]`, and the acceptance pass.
+
+## What step 6d(i) found
+
+- **The contrast maths lived only in `scripts/contrast-audit.mts`.** Fine while contrast was
+  only audited; criterion 5 makes it a rule the product enforces, and two implementations of
+  WCAG relative luminance eventually disagree — the audit saying one thing and the form
+  another about the same hex. It is `lib/theme/contrast.ts` now, and the script imports it.
+- **The brand floor is measured against `--paper`, not white.** The criterion says "against
+  white"; the page background is `#FAF9F6`, so paper is stricter and is the surface the colour
+  is actually painted on. A test pins the constant to the token.
+- **Both raw-hex checks — the shell script and the eslint rule — flagged the new files.**
+  Rather than weaken either, three sites carry a written exemption: the arithmetic constant,
+  its test, and a placeholder that has to look like a hex to show what is being asked for.
 
 ## What step 6e found
 

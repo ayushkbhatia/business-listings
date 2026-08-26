@@ -1,3 +1,4 @@
+import { contrastRatio as ratio } from "../lib/theme/contrast.js";
 /**
  * Measures every foreground/background pairing the design system actually uses
  * against the §09.2 floor: body text 4.5:1, large text and UI borders 3:1.
@@ -6,26 +7,21 @@
  */
 import { readFileSync } from "node:fs";
 
+/*
+ * The maths is `lib/theme/contrast.ts`, not a copy.
+ *
+ * It lived here alone while contrast was only ever audited. Criterion 5 made it
+ * a rule the product enforces on a seller's own brand colour, and two
+ * implementations of WCAG relative luminance is two implementations that
+ * eventually disagree — with the audit saying one thing and the form saying
+ * another about the same hex.
+ */
 const css = readFileSync("docs/tokens.css", "utf8");
 
 function token(name: string): string {
   const m = new RegExp(`--${name}:\\s*(#[0-9A-Fa-f]{6})`).exec(css);
   if (!m) throw new Error(`No token --${name} in docs/tokens.css`);
   return m[1]!;
-}
-
-function luminance(hex: string): number {
-  const n = parseInt(hex.slice(1), 16);
-  const channels = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
-    const c = v / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  });
-  return 0.2126 * channels[0]! + 0.7152 * channels[1]! + 0.0722 * channels[2]!;
-}
-
-function ratio(a: string, b: string): number {
-  const [x, y] = [luminance(a), luminance(b)].sort((p, q) => q - p);
-  return (x! + 0.05) / (y! + 0.05);
 }
 
 interface Pair {

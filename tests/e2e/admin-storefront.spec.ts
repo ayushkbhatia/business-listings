@@ -250,6 +250,71 @@ test.describe("board 5a — the builder, and step 6's checkpoint", () => {
   });
 });
 
+test.describe("board 5b — themes, and criterion 5", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/admin/storefront-templates");
+    await page.getByRole("link", { name: "Industrial" }).click();
+    await page.waitForURL(/\/admin\/storefront-templates\/[a-z0-9]+$/);
+    await page.getByRole("link", { name: "Theme", exact: true }).click();
+    await page.waitForURL(/\/theme$/);
+  });
+
+  test("names the store count the change would reach", async ({ page }) => {
+    const header = page.getByRole("banner").or(page.locator("header")).first();
+    await expect(header).toContainText(/Applies to \d+ storefronts/);
+  });
+
+  test("offers the six presets and no others", async ({ page }) => {
+    const offered = page.getByRole("heading", { name: "Themes sellers may pick" });
+    await expect(offered).toBeVisible();
+    for (const name of ["Moss", "Steel blue", "Clay", "Ink", "Sage", "Plum"]) {
+      await expect(page.getByRole("checkbox", { name })).toBeVisible();
+    }
+  });
+
+  test("rejects a brand hex below the floor, and says the number", async ({ page }) => {
+    /*
+     * Criterion 5. The reason is the point: "too light" is not something a
+     * seller can act on, and "3.1 against the page background, and it needs
+     * 4.5" is.
+     */
+    await page.getByRole("checkbox", { name: /own brand colour/ }).check();
+
+    const field = page.getByLabel("Try a colour");
+    await field.fill("#FFD400");
+    await expect(page.getByText(/against the page background, and it needs 4.5:1/)).toBeVisible();
+    await expect(page.getByText(/^\d+(\.\d+)?:1 against/)).toBeVisible();
+
+    // And one that clears it says so.
+    await field.fill("#46584A");
+    await expect(page.getByText(/That clears the floor/)).toBeVisible();
+  });
+
+  test("says what a hex is when it is not one", async ({ page }) => {
+    await page.getByRole("checkbox", { name: /own brand colour/ }).check();
+    await page.getByLabel("Try a colour").fill("#c00");
+    await expect(page.getByText("Six digits after a hash. The field shows the shape.")).toBeVisible();
+  });
+
+  test("will not save without a reason", async ({ page }) => {
+    const save = page.getByRole("button", { name: /^Save for \d+ storefronts$/ });
+    await expect(save).toBeDisabled();
+    await page.getByLabel("Why").fill("Steel blue suits this trade better than moss.");
+    await expect(save).toBeEnabled();
+  });
+
+  test("never offers the verification badge as something a seller can remove", async ({ page }) => {
+    // The removable one is the attribution line. The verification badge is not
+    // a seller's to remove, and the copy has to be unambiguous about which.
+    await expect(page.getByText(/Never the verification badge/)).toBeVisible();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
 test.describe("the storefront builder is staff-only", () => {
   test("a moderator cannot reach it", async ({ browser }) => {
     // §07: a storefront builder is a superadmin tool and is explicitly out of

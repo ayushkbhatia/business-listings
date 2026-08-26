@@ -140,6 +140,12 @@ export default async function BuilderPage({ params }: Params) {
           </span>
           <Link
             className={buttonClassName({ variant: "ghost", size: "sm" })}
+            href={`/admin/storefront-templates/${template.id}/theme`}
+          >
+            {t("theme.title")}
+          </Link>
+          <Link
+            className={buttonClassName({ variant: "ghost", size: "sm" })}
             href="/admin/storefront-templates/specimens"
           >
             {t("admin.templates.specimens")}

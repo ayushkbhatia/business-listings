@@ -4,6 +4,7 @@ import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
 import { BUILDABLE_SECTION_TYPES, sectionType } from "./section-types";
+import { checkBrandHex, isThemePreset, type HexRefusal as BaseHexRefusal, type ThemePreset } from "@/lib/theme/contrast";
 import {
   applyOrder,
   canAddSection,
@@ -27,11 +28,23 @@ import {
  * capability since handoff 3 with nothing behind it.
  */
 
+type HexRefusal = BaseHexRefusal | "not_allowed";
+
 export type TemplateResult<T = unknown> =
   | ({ ok: true; storeCount: number } & T)
-  | { ok: false; error: SectionRefusal | "not_found" | "not_a_sector" | "sector_taken"; message: string };
+  | { ok: false; error: Refusal; message: string };
 
-const REFUSAL_MESSAGE: Record<SectionRefusal | "not_found" | "not_a_sector" | "sector_taken", string> = {
+/** Every way this service says no, and the sentence it says it with. */
+type Refusal =
+  | SectionRefusal
+  | "not_found"
+  | "not_a_sector"
+  | "sector_taken"
+  | "no_theme_offered"
+  | "default_not_offered"
+  | "radius_out_of_range";
+
+const REFUSAL_MESSAGE: Record<Refusal, string> = {
   unknown_type: "That section type is not one we have built.",
   coming_soon: "Services and packages needs the services model, which is not built yet.",
   singleton_exists: "This template already has one of those, and it is a section that can only appear once.",
@@ -40,9 +53,12 @@ const REFUSAL_MESSAGE: Record<SectionRefusal | "not_found" | "not_a_sector" | "s
   not_found: "That template is not here.",
   not_a_sector: "A template belongs to a top-level trade, not a subcategory.",
   sector_taken: "That trade already has a live template. Retire it first, or edit the one that is live.",
+  no_theme_offered: "Offer at least one theme. A seller with none to pick from gets the default and no choice.",
+  default_not_offered: "The default has to be one of the themes on offer, or a seller opens the picker and cannot find the one they are on.",
+  radius_out_of_range: "Corner radius is a whole number of pixels from 0 to 24.",
 };
 
-function refuse<T>(error: keyof typeof REFUSAL_MESSAGE): TemplateResult<T> {
+function refuse<T>(error: Refusal): TemplateResult<T> {
   return { ok: false, error, message: REFUSAL_MESSAGE[error] };
 }
 
@@ -569,6 +585,140 @@ export async function restoreVersion(input: RestoreInput): Promise<TemplateResul
   );
 
   return { ok: true, storeCount: count };
+}
+
+export interface ThemeInput {
+  actor: Actor;
+  templateId: string;
+  offeredThemes: string[];
+  defaultTheme: string;
+  allowCustomHex: boolean;
+  typePairing: "editorial" | "clean" | "technical";
+  density: "compact" | "comfortable" | "roomy";
+  cornerRadius: number;
+  darkHeader: boolean;
+  badgeRemovable: boolean;
+  reason: string;
+}
+
+/**
+ * Board 5b — the theme settings for one template.
+ *
+ * Two refusals worth naming. A theme nobody wrote tokens for cannot be offered,
+ * because `[data-theme="neon"]` matches nothing and the storefront would render
+ * with the default palette while the builder said otherwise. And the default
+ * has to be one of the offered set, or a seller opens the picker to find the
+ * theme they are already on is not in it.
+ *
+ * The badge-removable flag is a Pro entitlement and is set here rather than on
+ * the plan: which sectors may take our badge off is a storefront decision, and
+ * `Plan.customDomain` is the shape it follows.
+ */
+export async function setTemplateTheme(
+  input: ThemeInput,
+): Promise<TemplateResult<Record<never, never>>> {
+  const template = await prisma.storefrontTemplate.findUnique({
+    where: { id: input.templateId },
+    select: {
+      id: true, sectorId: true, offeredThemes: true, defaultTheme: true,
+      allowCustomHex: true, typePairing: true, density: true, cornerRadius: true,
+      darkHeader: true, badgeRemovable: true,
+    },
+  });
+  if (!template) return refuse("not_found");
+
+  const offered = [...new Set(input.offeredThemes)].filter(isThemePreset);
+  if (offered.length === 0) return refuse("no_theme_offered");
+  if (!offered.includes(input.defaultTheme as ThemePreset)) return refuse("default_not_offered");
+  if (!Number.isInteger(input.cornerRadius) || input.cornerRadius < 0 || input.cornerRadius > 24) {
+    return refuse("radius_out_of_range");
+  }
+
+  const count = await storeCount(template.sectorId);
+
+  await prisma.$transaction(async (tx) =>
+    staffMutation(
+      {
+        actor: input.actor,
+        capability: "storefront.template.write",
+        subject: `StorefrontTemplate:${template.id}`,
+        reason: input.reason,
+        tx,
+      },
+      async () => {
+        await tx.storefrontTemplate.update({
+          where: { id: template.id },
+          data: {
+            offeredThemes: offered,
+            defaultTheme: input.defaultTheme,
+            allowCustomHex: input.allowCustomHex,
+            typePairing: input.typePairing,
+            density: input.density,
+            cornerRadius: input.cornerRadius,
+            darkHeader: input.darkHeader,
+            badgeRemovable: input.badgeRemovable,
+          },
+        });
+        return {
+          result: null,
+          before: {
+            offeredThemes: template.offeredThemes,
+            defaultTheme: template.defaultTheme,
+            density: template.density,
+          },
+          after: {
+            offeredThemes: offered,
+            defaultTheme: input.defaultTheme,
+            density: input.density,
+            storeCount: count,
+          },
+        };
+      },
+    ),
+  );
+
+  return { ok: true, storeCount: count };
+}
+
+/**
+ * A seller's own brand colour, checked before it is stored.
+ *
+ * Criterion 5. The refusal carries the number, because a refusal with no number
+ * is one somebody argues with — and because the seller can act on "3.1 against
+ * the page background" in a way they cannot act on "too light".
+ */
+export async function setBrandHex(
+  actor: Actor,
+  businessId: string,
+  hex: string,
+): Promise<{ ok: true; ratio: number } | { ok: false; error: HexRefusal; ratio: number }> {
+  const check = checkBrandHex(hex);
+  if (!check.ok) return { ok: false, error: check.reason!, ratio: check.ratio };
+
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { sectorId: true },
+  });
+  if (!business) return { ok: false, error: "not_a_hex", ratio: 0 };
+
+  const template = business.sectorId
+    ? await prisma.storefrontTemplate.findFirst({
+        where: { sectorId: business.sectorId, status: "live" },
+        select: { allowCustomHex: true },
+      })
+    : null;
+
+  // A template that does not offer custom colours is not overridden by a
+  // seller who found the field. Refused as though the hex were wrong, because
+  // from the seller's side it is: it is not a colour they may use.
+  if (!template?.allowCustomHex) return { ok: false, error: "not_allowed", ratio: check.ratio };
+
+  void actor;
+  await prisma.business.update({
+    where: { id: businessId },
+    data: { themePreset: hex },
+  });
+  return { ok: true, ratio: check.ratio };
 }
 
 /** The library screen's catalogue, with what is in use in this template. */
