@@ -111,7 +111,12 @@ they 404 until their handoff.
 /admin/content/matrix                   SEO page matrix                       [6f]
 /admin/content/home                     Homepage curation                    [12g]
 /admin/content/redirects                Redirects                            [12g]
-/admin/storefront-templates/*           Storefront builder            [5a–5e, 5g, 5h]
+/admin/storefront-templates             Templates & section library      [5c]  built h4s6
+/admin/storefront-templates/specimens   Section specimens           [5g, 5h]  built h4s6
+/admin/storefront-templates/:id         Builder shell                    [5a]
+/admin/storefront-templates/:id/theme   Theme presets                    [5b]
+/admin/storefront-templates/:id/pages   Page template editor             [5d]
+/admin/domains                          Custom domain verification       [5e]
 /admin/visits                           Field visit scheduling               [12h]  built h4s3
 /admin/areas                            Emirates, areas, free zones          [12h]
 /admin/api                              API keys & webhooks                  [12h]

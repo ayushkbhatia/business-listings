@@ -212,7 +212,6 @@ export const ADMIN_NAV: readonly NavGroup[] = [
         labelKey: "nav.storefront_templates",
         href: "/admin/storefront-templates",
         capability: "storefront.template.write",
-        later: true,
       },
     ],
   },

@@ -3,6 +3,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
 import { Breadcrumb, Card, PublicShell } from "@/components/structure";
 import { ProgressBar } from "@/components/display";
+import { ReviewCard } from "@/components/domain";
 import { getBusinessBySlug, getBusinessReviews, getReviewSummary } from "@/lib/db/queries";
 import { formatDate, formatDecimal } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -117,31 +118,19 @@ export default async function ReviewsPage({ params }: Params) {
 
             <div className="flex min-w-0 flex-col gap-3">
               {reviews.map((review) => (
-                <Card key={review.id} as="article">
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-body-sm text-ink">
-                      {review.showCompanyName
-                        ? (review.buyer.buyerCompany?.name ?? review.buyer.fullName ?? "")
-                        : t("storefront.review_anonymous")}
-                    </p>
-                    <span className="font-mono text-eyebrow tabular-nums text-muted">
-                      {formatDecimal(review.overall)} · {formatDate(review.createdAt)}
-                    </span>
-                  </div>
-
-                  <p className="mt-2 max-w-[var(--measure-prose)] text-prose text-prose">
-                    {review.body}
-                  </p>
-
-                  {review.sellerReply && (
-                    <div className="mt-3 rounded-chip border-s-2 border-brand bg-paper-sunk p-3">
-                      <p className="font-mono text-eyebrow uppercase text-faint">
-                        {t("storefront.seller_reply")}
-                      </p>
-                      <p className="mt-1 text-body-sm text-body">{review.sellerReply}</p>
-                    </div>
-                  )}
-                </Card>
+                <ReviewCard
+                  key={review.id}
+                  author={
+                    review.showCompanyName
+                      ? (review.buyer.buyerCompany?.name ?? review.buyer.fullName ?? "")
+                      : t("storefront.review_anonymous")
+                  }
+                  rating={formatDecimal(review.overall)}
+                  date={formatDate(review.createdAt)}
+                  body={review.body}
+                  sellerReply={review.sellerReply}
+                  replyLabel={t("storefront.seller_reply")}
+                />
               ))}
             </div>
           </div>
