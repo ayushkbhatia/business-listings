@@ -158,6 +158,157 @@ describe("the sector denormalisation", () => {
   });
 });
 
+describe("criterion 2 — at the storefront, not just at the service", () => {
+  /*
+   * The half that was missing until the rewrite.
+   *
+   * `resolveSections` and the fourteen renderers existed and no public route
+   * called them, so "reordering a section changes every live storefront on that
+   * template" was a statement about a function nothing invoked. These assert it
+   * against what a storefront actually resolves to, for two sectors.
+   */
+  it("resolves a listing's sections from its sector's live template", async () => {
+    const { storefrontPlan } = await import("@/lib/storefront/loader");
+
+    const industrial = await prisma.storefrontTemplate.findFirstOrThrow({
+      where: { name: "Industrial", status: "live" },
+      select: { sectorId: true, sections: { select: { type: true }, orderBy: { sortOrder: "asc" } } },
+    });
+    const listing = await prisma.business.findFirstOrThrow({
+      where: { sectorId: industrial.sectorId, publishedAt: { not: null }, suspendedAt: null },
+      select: { id: true, slug: true, sectorId: true, themePreset: true },
+    });
+
+    const plan = await storefrontPlan(listing);
+    expect(plan.templateId).not.toBeNull();
+    expect(plan.sections.map((section) => section.type)).toEqual(
+      industrial.sections.map((section) => section.type),
+    );
+  }, 60_000);
+
+  it("changes every storefront in the sector and none outside it", async () => {
+    const { storefrontPlan } = await import("@/lib/storefront/loader");
+
+    const industrial = await prisma.storefrontTemplate.findFirstOrThrow({
+      where: { name: "Industrial", status: "live" },
+      select: { id: true, sectorId: true },
+    });
+    const stockist = await prisma.storefrontTemplate.findFirstOrThrow({
+      where: { name: "Stockist", status: "live" },
+      select: { id: true, sectorId: true },
+    });
+
+    const inSector = await prisma.business.findMany({
+      where: { sectorId: industrial.sectorId, publishedAt: { not: null }, suspendedAt: null },
+      select: { id: true, slug: true, sectorId: true, themePreset: true },
+      take: 3,
+    });
+    const outside = await prisma.business.findFirstOrThrow({
+      where: { sectorId: stockist.sectorId, publishedAt: { not: null }, suspendedAt: null },
+      select: { id: true, slug: true, sectorId: true, themePreset: true },
+    });
+
+    expect(inSector.length).toBeGreaterThan(1);
+
+    const before = await Promise.all(inSector.map((listing) => storefrontPlan(listing)));
+    const outsideBefore = await storefrontPlan(outside);
+
+    const reviews = await prisma.templateSection.findFirstOrThrow({
+      where: { templateId: industrial.id, type: "reviews" },
+      select: { id: true },
+    });
+    await setSectionEnabled({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      templateId: industrial.id,
+      sectionId: reviews.id,
+      enabled: false,
+      reason: "Turning reviews off across this trade while we re-cut the card.",
+    });
+
+    try {
+      const after = await Promise.all(inSector.map((listing) => storefrontPlan(listing)));
+
+      // Every storefront in the sector lost it.
+      for (const [index, plan] of after.entries()) {
+        expect(plan.sections.some((section) => section.type === "reviews")).toBe(false);
+        expect(before[index]!.sections.some((section) => section.type === "reviews")).toBe(true);
+      }
+
+      // And the other sector is untouched — the half that passes by accident.
+      const outsideAfter = await storefrontPlan(outside);
+      expect(outsideAfter.sections.map((section) => section.type)).toEqual(
+        outsideBefore.sections.map((section) => section.type),
+      );
+    } finally {
+      await setSectionEnabled({
+        actor: actor(opsLeadId, "staff_ops_lead"),
+        templateId: industrial.id,
+        sectionId: reviews.id,
+        enabled: true,
+        reason: "Putting reviews back after the re-cut.",
+      });
+    }
+  }, 120_000);
+
+  it("falls back to a default set where a trade has no template", async () => {
+    /*
+     * Four sectors out of six have none. A directory where two thirds of
+     * storefronts rendered nothing would be a worse outcome than one where they
+     * render a sensible default, and the default opens no seller fields —
+     * there is no staff decision behind it to open them.
+     */
+    const { storefrontPlan } = await import("@/lib/storefront/loader");
+
+    const templated = await prisma.storefrontTemplate.findMany({
+      where: { status: "live" },
+      select: { sectorId: true },
+    });
+    const listing = await prisma.business.findFirst({
+      where: {
+        publishedAt: { not: null },
+        suspendedAt: null,
+        sectorId: { notIn: templated.map((template) => template.sectorId) },
+      },
+      select: { id: true, slug: true, sectorId: true, themePreset: true },
+    });
+    if (!listing) return;
+
+    const plan = await storefrontPlan(listing);
+    expect(plan.templateId).toBeNull();
+    expect(plan.sections.length).toBeGreaterThan(0);
+    expect(plan.sections[0]!.type).toBe("header");
+    expect(plan.sections.every((section) => section.sellerEditableFields.length === 0)).toBe(true);
+  }, 60_000);
+
+  it("never puts a trade licence in a storefront's documents", async () => {
+    /*
+     * The fence is in the loader's query, so a licence never leaves the
+     * database. Asserted against every published listing that has documents
+     * rather than against one.
+     */
+    const { storefrontPlan } = await import("@/lib/storefront/loader");
+
+    const withDocuments = await prisma.business.findMany({
+      where: {
+        publishedAt: { not: null },
+        suspendedAt: null,
+        documents: { some: {} },
+      },
+      select: { id: true, slug: true, sectorId: true, themePreset: true },
+      take: 5,
+    });
+
+    for (const listing of withDocuments) {
+      const plan = await storefrontPlan(listing);
+      for (const document of plan.data.documents) {
+        expect(["certificate", "catalogue", "datasheet"]).toContain(document.kind);
+        // A route, never a storage path.
+        expect(document.href).toMatch(/^\/b\/[^/]+\/d\//);
+      }
+    }
+  }, 120_000);
+});
+
 describe("criterion 2 — a template edit reaches its own sector and no other", () => {
   it("changes one sector's sections and leaves the other's alone", async () => {
     const seeded = await templateLibrary();

@@ -27,7 +27,7 @@ export function Downloads({ data, content }: SectionProps) {
         {documents.map((document) => (
           <li key={document.id}>
             <a
-              href={document.url ?? "#"}
+              href={document.href}
               className="flex items-baseline justify-between gap-3 rounded-card border border-line bg-card px-4 py-3 text-body-sm text-ink hover:border-brand focus-visible:outline-none focus-visible:shadow-focus"
             >
               <span className="min-w-0">{document.title}</span>

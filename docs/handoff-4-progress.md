@@ -25,23 +25,36 @@ sprint without asking, through to the end of the handoff.
 | [#25](https://github.com/ayushkbhatia/business-listings/pull/25) | Step 5 — boards 4g/12e, the MRR ledger, dunning, grandfathering that grandfathers | `531046d` |
 | [#26](https://github.com/ayushkbhatia/business-listings/pull/26) | Step 6a — the storefront template model, and a sector column the database keeps | `386856c` |
 | [#27](https://github.com/ayushkbhatia/business-listings/pull/27) | Step 6b — fourteen sections that render, and the page that proves it | `ffdbffb` |
-| [#28](https://github.com/ayushkbhatia/business-listings/pull/28) | Step 6c — the builder, and a publish that says what it is about to do | open |
+| [#28](https://github.com/ayushkbhatia/business-listings/pull/28) | Step 6c — the builder, and a publish that says what it is about to do | `4eabc20` |
+| [#29](https://github.com/ayushkbhatia/business-listings/pull/29) | Step 6e — the storefront renders from its template | open |
 
 ## Next
 
 **Step 6d — themes `5b`, the page editor `5d`, and domain verification `5e`.**
 
-The theme settings are already columns on `StorefrontTemplate` and the diff already reports
-changes to them in words — what is missing is the form. `5e` goes behind a `CertificateIssuer`
-port with a fake, because step 4 of that flow is a Vercel platform operation and there is no
-token; §0.7.
+The theme settings are already columns on `StorefrontTemplate`, the diff already reports
+changes to them in words, and the loader already prefers the template's theme over the
+seller's. What is missing is the form, and the per-template offered set that decides which
+presets a seller may pick at all.
 
-**6e — the public storefront rewrite.** The four `/b/[slug]` routes still render hardcoded
-JSX. `renderSection`, `resolveSections` and the whole section registry exist and no public
-route calls them. Criterion 2 is proved against the service, the resolver and the builder, not
-against a storefront, until this lands.
+`5e` goes behind a `CertificateIssuer` port with a fake — step 4 of that flow is a Vercel
+platform operation and there is no token; §0.7.
 
 Then steps 7–8: content ops `[6f]` `[12g]`, and the acceptance pass.
+
+## What step 6e found
+
+- **`Document` has no title and no validity dates.** `filename`, `kind` and `mimeType` are the
+  whole of it. The board's Certifications card draws an expiry beside each one; that needs
+  columns nobody has argued for, so the card shows what exists. Carried forward.
+- **The document bucket is private, and storefront pages are cached for five minutes.** A
+  signed URL baked into a cached page outlives its own expiry. Documents link to
+  `/b/:slug/d/:id`, which signs at request time and 404s for a licence, a mismatched business
+  or an unpublished one.
+- **A pure template rewrite would have dropped the licence panel, the masked TRN, the contact
+  card and the verification ladder.** None of the fourteen section types covers them. They are
+  chrome now, outside the template, and the argument is non-negotiable 2: a trust signal that a
+  template can reorder or switch off is not one that renders identically on every storefront.
 
 ## What step 6c found
 

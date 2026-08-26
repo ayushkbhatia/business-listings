@@ -94,9 +94,11 @@ export const SPECIMEN_DATA: SectionData = {
   reviewSummary: { count: 1, average: 4 },
 
   documents: [
-    { id: "d1", title: "ISO 9001:2015", kind: "certificate", url: "#", issuedOn: day(-400), expiresOn: day(300) },
-    { id: "d2", title: "Valve range catalogue 2026", kind: "catalogue", url: "#", issuedOn: day(-90), expiresOn: null },
-    { id: "d3", title: "DN100 gate valve datasheet", kind: "datasheet", url: "#", issuedOn: null, expiresOn: null },
+    // Filenames, because that is all `Document` holds. No title column and no
+    // validity dates — the specimen must not show what the data cannot.
+    { id: "d1", title: "iso-9001-2015.pdf", kind: "certificate", href: "#" },
+    { id: "d2", title: "valve-range-catalogue-2026.pdf", kind: "catalogue", href: "#" },
+    { id: "d3", title: "dn100-gate-valve-datasheet.pdf", kind: "datasheet", href: "#" },
   ],
 
   brands: [
