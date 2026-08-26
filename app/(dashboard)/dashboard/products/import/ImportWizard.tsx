@@ -178,6 +178,15 @@ export function ImportWizard({
               {preview.raggedRows.length > 0 ? ` ${t("import.ragged", { count: formatCount(preview.raggedRows.length) })}` : ""}
             </p>
 
+            {preview.truncated > 0 && (
+              <Alert
+                tone="warn"
+                fix={t("import.truncated_fix")}
+              >
+                {t("import.truncated", { count: formatCount(preview.truncated) })}
+              </Alert>
+            )}
+
             {blocked.length > 0 && (
               <Panel title={t("import.blocked_heading")} eyebrow={t("import.blocked_badge")}>
                 <p className="max-w-prose text-body-sm text-ink">
