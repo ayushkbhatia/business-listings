@@ -378,7 +378,18 @@ async function main() {
          * subsequent PRNG value and rename half the seed.
          */
         ...(claimed ? (int(38, 98), {}) : {}),
-        specCompleteness: claimed ? Number((0.4 + rnd() * 0.6).toFixed(2)) : null,
+        /*
+         * Not set here. Derived in recomputeDerived by the same pure function
+         * the hourly job calls — see lib/metrics/spec-completeness.ts. This was
+         * `0.4 + rnd() * 0.6` until handoff 4 step 1, the third instance of the
+         * invention criterion 5 forbids, and the worst of the three: it is not
+         * only shown to a seller, `lib/search/ranking.ts` weights it at 12, so
+         * search results were ordered partly by a random number.
+         *
+         * The draw is kept and discarded, as the other two are: removing it
+         * shifts every subsequent PRNG value and renames half the seed.
+         */
+        ...(claimed ? (Number((0.4 + rnd() * 0.6).toFixed(2)), {}) : {}),
         ratingOverall: null,
         reviewCount: 0,
         derivedAt: NOW,
@@ -530,11 +541,35 @@ async function seedProducts(
       // Valve spec values key off the same size, so the spec table and the name
       // never disagree.
       const dn = size;
+      /*
+       * Every third product is missing its body material — a required,
+       * filterable field.
+       *
+       * Not decoration. `specCompleteness` is measured now rather than invented,
+       * and a seed where every product is complete gives a flat 1.00 to all
+       * sixteen sellers: a ranking signal that ranks nothing, and no products
+       * for board 4e's "this version makes N products incomplete" to count.
+       * A real catalogue is patchy — somebody bulk-imported it and never went
+       * back — and that is the shape worth seeding.
+       *
+       * Chosen by index rather than by a draw. The PRNG is a sequence and an
+       * inserted `rnd()` renames every business generated after it.
+       */
+      const missingMaterial = p % 3 === 0;
+      /*
+       * Both drawn, in the order they were drawn before, and the material used
+       * only when it is kept. Putting the `pick()` inside the conditional would
+       * skip a draw for a third of the products; hoisting it above the pressure
+       * rating would swap the two values. The PRNG is a sequence and its order
+       * is as load-bearing as its length.
+       */
+      const pressureRating = pick(["PN16", "PN16", "PN25", "Class 150"]);
+      const bodyMaterial = pick(["Ductile iron", "Cast iron", "Stainless steel 316", "Brass"]);
       const specValues: Record<string, string | number | string[]> = isValves
         ? {
             [fieldId("nominal_diameter")]: dn,
-            [fieldId("pressure_rating")]: pick(["PN16", "PN16", "PN25", "Class 150"]),
-            [fieldId("body_material")]: pick(["Ductile iron", "Cast iron", "Stainless steel 316", "Brass"]),
+            [fieldId("pressure_rating")]: pressureRating,
+            ...(missingMaterial ? {} : { [fieldId("body_material")]: bodyMaterial }),
             [fieldId("end_connection")]: pick(["Flanged", "Wafer", "Threaded"]),
             [fieldId("operation")]: pick(["Handwheel", "Lever", "Gear operated"]),
             [fieldId("certification")]: pickN(["WRAS", "FM approved", "UL listed", "EN 1074", "ISO 9001"], int(1, 3)),
@@ -1404,6 +1439,7 @@ async function seedAtMonthlyCap(db: Db, businesses: Biz[], buyerId: string) {
  */
 async function deriveProfileStrength(db: Db) {
   const { profileStrength } = await import("../lib/metrics/profile-strength.js");
+  const { specCompleteness } = await import("../lib/metrics/spec-completeness.js");
 
   const businesses = await db.business.findMany({
     select: {
@@ -1418,13 +1454,39 @@ async function deriveProfileStrength(db: Db) {
     },
   });
 
-  const [products, media] = await Promise.all([
-    db.product.findMany({ select: { businessId: true, specValues: true } }),
+  const [products, media, fields] = await Promise.all([
+    db.product.findMany({
+      select: {
+        businessId: true,
+        specValues: true,
+        category: { select: { defaultTemplateId: true } },
+      },
+    }),
     db.media.findMany({
       where: { reviewId: null },
       select: { kind: true, businessId: true, product: { select: { businessId: true } } },
     }),
+    db.specField.findMany({
+      select: { id: true, templateId: true, key: true, required: true, isFilterable: true, requiredFrom: true },
+    }),
   ]);
+
+  const rulesByTemplate = new Map<string, { id: string; key: string; required: boolean; isFilterable: boolean; requiredFrom: Date | null }[]>();
+  for (const f of fields) {
+    const list = rulesByTemplate.get(f.templateId) ?? [];
+    list.push({ id: f.id, key: f.key, required: f.required, isFilterable: f.isFilterable, requiredFrom: f.requiredFrom });
+    rulesByTemplate.set(f.templateId, list);
+  }
+
+  const specsByBusiness = new Map<string, { templateId: string | null; values: Record<string, unknown> | null }[]>();
+  for (const p of products) {
+    const list = specsByBusiness.get(p.businessId) ?? [];
+    list.push({
+      templateId: p.category?.defaultTemplateId ?? null,
+      values: p.specValues as Record<string, unknown> | null,
+    });
+    specsByBusiness.set(p.businessId, list);
+  }
 
   const photos = new Map<string, number>();
   const logos = new Set<string>();
@@ -1462,7 +1524,16 @@ async function deriveProfileStrength(db: Db) {
       photos: photos.get(b.id) ?? 0,
       teamSeats: b._count.team,
     });
-    await db.business.update({ where: { id: b.id }, data: { profileStrength: score } });
+    const completeness = specCompleteness(
+      specsByBusiness.get(b.id) ?? [],
+      rulesByTemplate,
+      NOW,
+    );
+
+    await db.business.update({
+      where: { id: b.id },
+      data: { profileStrength: score, specCompleteness: completeness },
+    });
   }
 }
 

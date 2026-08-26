@@ -153,6 +153,40 @@ function propsOf(element: string): { name: string; expression: string }[] {
  * survives as `{ apply:  => t }` and the arrow is still there. That object is a
  * function prop however it is spelled, which is exactly what shipped five times.
  */
+/**
+ * Follow a bare identifier to the `const` that declares it, in the same file.
+ *
+ * `columns={columns}` looks like data at the call site and the arrows are in
+ * the declaration ten lines up. That is how this shipped a sixth and seventh
+ * time in handoff 4 — two admin tables whose `Column.render` is a function,
+ * passed as one identifier — and it is why checking only the inline expression
+ * was never enough.
+ *
+ * Balanced-bracket scanning again, and one hop only: an identifier assigned
+ * from another identifier is not the shape that goes wrong.
+ */
+function declarationOf(source: string, identifier: string): string | null {
+  if (!/^[A-Za-z_$][\w$]*$/.test(identifier.trim())) return null;
+
+  const declaration = new RegExp(
+    `\\bconst\\s+${identifier.trim()}\\b[^=]*=\\s*`,
+    "g",
+  );
+  const match = declaration.exec(source);
+  if (!match) return null;
+
+  let i = match.index + match[0].length;
+  let depth = 0;
+  const start = i;
+  for (; i < source.length; i += 1) {
+    const char = source[i]!;
+    if ("([{".includes(char)) depth += 1;
+    else if (")]}".includes(char)) depth -= 1;
+    else if (char === ";" && depth === 0) break;
+  }
+  return source.slice(start, i);
+}
+
 function withoutCallArguments(expression: string): string {
   let previous = expression;
   for (let pass = 0; pass < 20; pass += 1) {
@@ -215,8 +249,16 @@ describe("server components pass no functions to client components", () => {
           for (const prop of propsOf(element)) {
             // A server action is the one function that legitimately crosses.
             if (/[Aa]ction/.test(prop.name)) continue;
+
             if (withoutCallArguments(prop.expression).includes("=>")) {
               offenders.push(`${prop.name} on <${name}>`);
+              continue;
+            }
+
+            // A bare identifier hides its arrows in its declaration.
+            const declared = declarationOf(source, prop.expression);
+            if (declared && withoutCallArguments(declared).includes("=>")) {
+              offenders.push(`${prop.name} on <${name}> (declared above)`);
             }
           }
         }

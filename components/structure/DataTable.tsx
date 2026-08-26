@@ -320,7 +320,25 @@ export function DataTable<Row>({
 
   return (
     <div className="overflow-hidden rounded-b-card border border-t-0 border-line bg-card">
-      <div className="overflow-x-auto">
+      {/*
+        Focusable, so the scroll works without a mouse.
+        
+        A horizontally scrolling container that cannot be reached by keyboard is
+        unusable for anybody not using one — axe's
+        `scrollable-region-focusable`, which fired on the first admin table wide
+        enough to actually overflow.
+        
+        `tabIndex` alone, deliberately. The first fix added `role="region"` with
+        the caption as its label, which is what the rule's documentation
+        suggests — and a labelled region is a **landmark**, so the gallery
+        immediately had several sharing one name and the landmark test failed.
+        The table's own `<caption>` is what names this content; the container
+        only needs to be reachable.
+      */}
+      <div
+        tabIndex={0}
+        className="overflow-x-auto focus-visible:shadow-focus focus-visible:outline-none"
+      >
         <table className="w-full border-collapse text-left">
           <caption className="sr-only">{caption}</caption>
 

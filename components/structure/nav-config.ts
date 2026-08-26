@@ -155,7 +155,7 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     labelKey: "nav.group.overview",
     items: [
       { key: "admin", labelKey: "nav.platform", href: "/admin" },
-      { key: "queue", labelKey: "nav.queue", href: "/admin/queue", capability: "queue.decide", later: true },
+      { key: "queue", labelKey: "nav.queue", href: "/admin/queue", capability: "queue.decide" },
       { key: "reports", labelKey: "nav.reports", href: "/admin/reports", capability: "report.resolve", later: true },
     ],
   },
@@ -174,8 +174,8 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     key: "taxonomy",
     labelKey: "nav.group.taxonomy",
     items: [
-      { key: "categories", labelKey: "nav.categories", href: "/admin/categories", capability: "taxonomy.write", later: true },
-      { key: "spec-library", labelKey: "nav.spec_library", href: "/admin/spec-library", capability: "taxonomy.write", later: true },
+      { key: "categories", labelKey: "nav.categories", href: "/admin/categories", capability: "taxonomy.write" },
+      { key: "spec-library", labelKey: "nav.spec_library", href: "/admin/spec-library", capability: "taxonomy.write" },
       { key: "areas", labelKey: "nav.areas", href: "/admin/areas", capability: "taxonomy.write", later: true },
       { key: "attributes", labelKey: "nav.attributes", href: "/admin/attributes", capability: "taxonomy.write", later: true },
     ],
