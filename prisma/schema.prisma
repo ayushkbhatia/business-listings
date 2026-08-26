@@ -546,6 +546,7 @@ model Business {
   @@index([tradeName(ops: raw("gin_trgm_ops"))], type: Gin)
   storefrontContent StorefrontContent[]
   teamMembers       TeamMember[]
+  customDomain      CustomDomain?
   @@map("business")
 }
 
@@ -2285,6 +2286,53 @@ model TeamMember {
 
   @@index([businessId, sortOrder])
   @@map("team_member")
+}
+
+enum DomainStatus {
+  pending
+  partial
+  verified
+  failed
+  revoked
+
+  @@map("domain_status")
+}
+
+/// A seller's own web address, and how far along it is.
+///
+/// Two addresses, both live: the platform URL keeps its ranking and the custom
+/// domain is the one on the business card. Neither replaces the other, which is
+/// also why a revoked domain costs the seller nothing — `/b/:slug` was serving
+/// all along.
+///
+/// One per business. A seller with two web addresses pointing at one storefront
+/// is two sets of canonical tags and a ranking problem we would have made.
+model CustomDomain {
+  id         String       @id @default(cuid())
+  businessId String       @unique @map("business_id")
+  hostname   String       @unique
+  /// Goes in the TXT record. Random, and never reused across hostnames.
+  token      String
+  status     DomainStatus @default(pending)
+
+  /// Per record, independently. Partial propagation is the normal case and
+  /// must not read as failure — criterion 8.
+  cnameState String   @default("waiting") @map("cname_state")
+  txtState   String   @default("waiting") @map("txt_state")
+
+  addedAt       DateTime  @default(now()) @map("added_at")
+  lastCheckedAt DateTime? @map("last_checked_at")
+  verifiedAt    DateTime? @map("verified_at")
+  /// Set only where a real provider issued one. Null while the issuer is the
+  /// console fake, which is what stops a screen claiming TLS it has not got.
+  certificateRef String?  @map("certificate_ref")
+  /// Which of the named causes, where it failed. Never a resolver error string.
+  failureCause   String?  @map("failure_cause")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([status, lastCheckedAt])
+  @@map("custom_domain")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

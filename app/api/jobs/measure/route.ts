@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { measureResponseTimes } from "@/lib/metrics/job";
 import { measureProfileStrength } from "@/lib/metrics/strength-job";
+import { pollDomains } from "@/lib/domains/service";
 
 /**
  * The scheduled measurement run.
@@ -34,8 +35,23 @@ export async function GET(request: NextRequest) {
    */
   const responseTimes = await measureResponseTimes();
   const profileStrength = await measureProfileStrength();
-  console.info("[jobs] measured", { responseTimes, profileStrength });
-  return NextResponse.json({ responseTimes, profileStrength });
+
+  /*
+   * The domain poller rides along.
+   *
+   * Board 5e asks for a check every sixty seconds and this job runs on a longer
+   * cadence, which is a real gap — a seller watching the screen sees `Waiting`
+   * for longer than the board describes. It is here rather than nowhere, and
+   * the honest fix is its own schedule once there is a certificate provider to
+   * make verification mean something.
+   *
+   * It also writes no `Business` row, so unlike the two above it can run beside
+   * them without racing for `derivedAt`.
+   */
+  const domains = await pollDomains();
+
+  console.info("[jobs] measured", { responseTimes, profileStrength, domains });
+  return NextResponse.json({ responseTimes, profileStrength, domains });
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
