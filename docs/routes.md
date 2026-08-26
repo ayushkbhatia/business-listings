@@ -86,6 +86,7 @@ they 404 until their handoff.
 /admin                                  Platform overview                     [4a]  built h4s0
 /admin/queue                            Approval queue                        [4b]
 /admin/queue/:id                        Review a submission                   [4c]
+/admin/queue/conflict/:id               Resolve a conflicting claim           [4c]
 /admin/ingest                           Licence importer                     [12a]
 /admin/ingest/dedupe                    Dedupe & merge                       [12b]
 /admin/search                           Ranking, boosts, routing             [12c]

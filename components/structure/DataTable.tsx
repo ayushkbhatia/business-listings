@@ -147,6 +147,9 @@ const TONE_EDGE: Record<RowTone, string> = {
   blocked: "before:bg-bad",
 };
 
+/** The 2px meaning bar, drawn on the first cell of a row. */
+const EDGE = "before:absolute before:inset-y-0 before:start-0 before:w-0.5 before:content-['']";
+
 const HIDE: Record<NonNullable<Column<unknown>["hideBelow"]>, string> = {
   sm: "hidden sm:table-cell",
   md: "hidden md:table-cell",
@@ -236,12 +239,8 @@ export function DataTable<Row>({
         style={rowHeight}
         onClick={onRowClick ? () => onRowClick(row) : undefined}
         className={cn(
-          "relative border-t border-line",
-          // The tone edge is a 2px bar on the leading edge, drawn
-          // with a pseudo-element so it does not add a column.
-          "before:absolute before:inset-y-0 before:start-0 before:w-0.5 before:content-['']",
+          "border-t border-line",
           TONE[tone],
-          TONE_EDGE[tone],
           "transition-colors duration-120 ease-out",
           onRowClick && "cursor-pointer",
           tone === "default" && "hover:bg-paper-sunk",
@@ -266,12 +265,20 @@ export function DataTable<Row>({
           </td>
         )}
 
-        {shown.map((column) => (
+        {shown.map((column, index) => (
           <td
             key={column.key}
             className={cn(
               cellPad,
               "py-1.5 text-body-sm text-body",
+              // The tone edge rides the first cell, never the row. A
+              // pseudo-element on a <tr> is wrapped in an anonymous table-cell
+              // by the CSS table fixup rules, which added a seventh column to
+              // every six-column table in the product — the body sat one column
+              // right of its own headers from handoff 0 until handoff 4 step 1.
+              // Absolute positioning does not prevent the wrapping; only not
+              // generating the box on the row does.
+              index === 0 && !selectable && cn("relative", EDGE, TONE_EDGE[tone]),
               column.numeric && "text-right tabular-nums",
               column.mono && "font-mono",
               column.hideBelow && HIDE[column.hideBelow],

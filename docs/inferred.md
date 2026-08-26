@@ -1870,3 +1870,95 @@ like protection and provide none. Every page calls `requireStaff()` itself.
 
 A missing staff role is a 404 rather than a 403, so a guessed URL does not
 confirm the URL exists.
+
+---
+
+## Handoff 4, step 1 — the queue
+
+### One conflict row, not two flags
+
+Handoff 3 set `ClaimSubmission.contested` when a second person claimed a listing
+somebody already held. It is a write-once derived boolean that links nothing, so
+noticing that two submissions were a *pair* was left to whoever read the queue
+carefully.
+
+`ClaimConflict` is the pair, opened by `submitClaim` the moment a second
+undecided claim lands. A partial unique index allows one open conflict per
+business, which is what stops two staff settling the same dispute in opposite
+directions.
+
+### The four outcomes needed their own enum
+
+`ClaimStatus` is `unclaimed | claimed | disputed` and describes the *listing*. It
+cannot describe what staff decided, and two of board 4c's four outcomes create or
+restructure businesses — so `ClaimConflict` records the resolution and what it
+produced. Without that, the audit row says "claim_resolved" and nothing about
+which way, which is unreadable a year later.
+
+`buyersWaiting` is stored rather than recomputed. It is board 4c's argument for
+deciding today, and it is only true at the moment somebody looked.
+
+### One decision, one audit row
+
+Settling a conflict decides two submissions. It is still one decision, so it
+writes one `claim_resolved` row whose subject is the conflict rather than either
+submission.
+
+The step-0 test asserted an audit row per decided claim, which was right when a
+claim could only be decided on its own and wrong the moment the resolution
+existed. Corrected to the real invariant: one row per resolved conflict.
+
+### Service levels, and why an age is never negative
+
+The queue bands by service level rather than sorting by it — late rows first,
+each band in age order. Sorting purely by age buries a five-day-old claim under
+a three-day-old edit that is not late at all.
+
+`ageInDays` clamps at zero. The seed anchors its clock to the start of the Dubai
+day, so a row it stamps "five hours ago" can sit slightly ahead of a reader whose
+clock is real, and `-1d waiting` makes the whole column look broken.
+
+### Approving applies the change, and writes the 301
+
+A queue row is a request, not a record of something that already happened. An
+approval that sets `status = approved` and stops leaves a seller reading that
+their new trade name was approved on a listing that still shows the old one —
+and that failure looks exactly like success from the console.
+
+A trade-name change moves the slug, and `docs/routes.md` says slugs are immutable
+once published and a rename creates a 301 automatically. The redirect is written
+in the same transaction rather than left to whoever remembers.
+
+Two refusals worth having: a rename onto an address another listing holds, and a
+**stale** request whose before-value no longer matches the listing. The second
+prevents an approval overwriting a change nobody reviewed.
+
+### The spec grace period is a date, not a flag
+
+Criterion 4 needs a new required field not to invalidate the products already
+filed against a template. So `required` stops being a boolean at a point in time:
+`SpecField.requiredFrom` is the date it starts applying, null meaning "from the
+beginning". Read together — required now if `required` and (`requiredFrom` is
+null or past).
+
+`SpecTemplate` already carries `version` and `status` with a unique
+`(categoryId, version)`, so a new version is a new row. The roadmap proposed a
+separate `SpecTemplateVersion`; the existing shape is better and is what step 1
+uses.
+
+### A `::before` on a `<tr>` added a column to every table in the product
+
+The row tone edge was a pseudo-element on the `<tr>`. The CSS table fixup rules
+wrap a non-cell child of a table-row in an **anonymous table-cell**, and
+`position: absolute` does not prevent the box being generated — so every
+six-column `DataTable` was laid out as seven, with the body sitting one column
+right of its own headers.
+
+It shipped in handoff 0 and was found in handoff 4 step 1, by which point every
+table in the seller dashboard and the console had it. Nobody caught it by eye:
+the column heads are small mono uppercase and the misalignment reads as loose
+placement rather than a broken table. Measuring is the only way to see it, so
+`tests/e2e/gallery.spec.ts` now measures — the test was confirmed to fail against
+the old markup before the fix landed.
+
+The edge now rides the row's first cell.

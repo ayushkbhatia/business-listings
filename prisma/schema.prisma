@@ -80,6 +80,8 @@ model User {
   invitesSent    TeamInvite[]           @relation("InviteSender")
   claimsMade     ClaimSubmission[]      @relation("ClaimClaimant")
   visitsRequested SiteVisitRequest[]    @relation("VisitRequester")
+  conflictsResolved ClaimConflict[]     @relation("ConflictResolvedBy")
+  proposalsDecided  SpecFieldProposal[] @relation("ProposalDecidedBy")
 
   @@index([businessId])
   @@map("user")
@@ -223,6 +225,7 @@ model Category {
   placements      PlacementSlot[]
   importMappings  ImportMapping[]
   placementWaitlist PlacementWaitlist[]
+  fieldProposals  SpecFieldProposal[]
 
   @@index([parentId])
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
@@ -284,12 +287,21 @@ model SpecField {
   unit         String?
   options      String[]  @default([])
   required     Boolean   @default(false)
+  /// When `required` starts biting, for a field added to a live template.
+  ///
+  /// Criterion 4: publishing a version with a new required field must not
+  /// invalidate the products already filed against it. Null means required from
+  /// the beginning, which is the common case; a date means everything before it
+  /// is incomplete-but-valid until then. Read the two together — a field is
+  /// required now if `required` and (`requiredFrom` is null or in the past).
+  requiredFrom DateTime? @map("required_from")
   /// Drives the site-wide filter rail. Changing this changes the rail with no
   /// code change — see handoff 1 acceptance criterion 4.
   isFilterable Boolean   @default(false) @map("is_filterable")
   sortOrder    Int       @default(0) @map("sort_order")
 
-  template SpecTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  template  SpecTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  proposals SpecFieldProposal[]
 
   @@unique([templateId, key])
   @@index([templateId, isFilterable])
@@ -459,6 +471,8 @@ model Business {
   teamInvites            TeamInvite[]
   claimSubmissions       ClaimSubmission[]
   visitRequests          SiteVisitRequest[]
+  claimConflicts         ClaimConflict[]         @relation("ConflictBusiness")
+  producedByConflicts    ClaimConflict[]         @relation("ConflictProduced")
   placementWaitlist      PlacementWaitlist[]
   quotes                 Quote[]
   messages               Message[]
@@ -533,6 +547,7 @@ model Location {
 
   business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   area           Area            @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  producedByConflicts ClaimConflict[] @relation("ConflictProducedLocation")
   contactReveals ContactReveal[]
 
   @@index([businessId])
@@ -990,6 +1005,8 @@ model ClaimSubmission {
   business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   claimant User      @relation("ClaimClaimant", fields: [claimantId], references: [id], onDelete: Cascade)
   document Document? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  conflictsAsA ClaimConflict[] @relation("ConflictA")
+  conflictsAsB ClaimConflict[] @relation("ConflictB")
 
   @@index([businessId, status])
   @@index([status, createdAt])
@@ -1001,6 +1018,91 @@ enum ClaimRoute {
   phone_callback
 
   @@map("claim_route")
+}
+
+/// The four ways board 4c lets staff settle two licences on one premises.
+///
+/// `ClaimStatus` describes the listing and cannot describe the decision. Two of
+/// these four create or restructure businesses, so the resolution has to name
+/// what it produced or the audit row is unreadable a year later.
+enum ClaimResolution {
+  award_to_a
+  award_to_b
+  split_into_two
+  merge_as_branches
+
+  @@map("claim_resolution")
+}
+
+/// Two claims on one listing, and what staff did about it.
+///
+/// Opened by the claim service the moment a second undecided claim arrives on a
+/// business, so the queue has a row rather than staff having to notice a pair.
+model ClaimConflict {
+  id            String           @id @default(cuid())
+  businessId    String           @map("business_id")
+  submissionAId String           @map("submission_a_id")
+  submissionBId String           @map("submission_b_id")
+  resolution    ClaimResolution?
+  resolvedById  String?          @map("resolved_by_id") @db.Uuid
+  resolvedAt    DateTime?        @map("resolved_at")
+  /// NOT NULL once resolved, paired by a CHECK in the migration.
+  reason        String?
+  /// The second listing a split created, or null for the two award outcomes.
+  producedBusinessId String?     @map("produced_business_id")
+  /// The branch a merge folded the loser into.
+  producedLocationId String?     @map("produced_location_id")
+  /// Buyers waiting on this listing when it was resolved — board 4c's argument
+  /// for why the delay costs something. Recorded because it is only true at
+  /// the moment somebody looked.
+  buyersWaiting Int              @default(0) @map("buyers_waiting")
+  createdAt     DateTime         @default(now()) @map("created_at")
+
+  business         Business        @relation("ConflictBusiness", fields: [businessId], references: [id], onDelete: Cascade)
+  submissionA      ClaimSubmission @relation("ConflictA", fields: [submissionAId], references: [id], onDelete: Restrict)
+  submissionB      ClaimSubmission @relation("ConflictB", fields: [submissionBId], references: [id], onDelete: Restrict)
+  resolvedBy       User?           @relation("ConflictResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  producedBusiness Business?       @relation("ConflictProduced", fields: [producedBusinessId], references: [id], onDelete: SetNull)
+  producedLocation Location?       @relation("ConflictProducedLocation", fields: [producedLocationId], references: [id], onDelete: SetNull)
+
+  @@map("claim_conflict")
+}
+
+enum ProposalState {
+  proposed
+  promoted
+  declined
+
+  @@map("proposal_state")
+}
+
+/// A field enough sellers invented that it should be in the shared template.
+///
+/// `SellerTemplate.fieldMappings` is an opaque Json blob, so "appears often
+/// enough" was not a countable thing. One row per (category, normalised key)
+/// with a business count makes it one — and that promotion path is what stops
+/// 40,000 businesses inventing 40,000 attribute names.
+model SpecFieldProposal {
+  id              String        @id @default(cuid())
+  categoryId      String        @map("category_id")
+  /// Lowercased and punctuation-stripped, so "Wall Thk." and "wall thk" are one
+  /// proposal. The label a seller actually typed is kept beside it.
+  key             String
+  sampleLabel     String        @map("sample_label")
+  businessCount   Int           @default(0) @map("business_count")
+  state           ProposalState @default(proposed)
+  promotedFieldId String?       @map("promoted_field_id")
+  decidedById     String?       @map("decided_by_id") @db.Uuid
+  decidedAt       DateTime?     @map("decided_at")
+  reason          String?
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  category      Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  promotedField SpecField? @relation(fields: [promotedFieldId], references: [id], onDelete: SetNull)
+  decidedBy     User?      @relation("ProposalDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@unique([categoryId, key])
+  @@map("spec_field_proposal")
 }
 
 /// A seller asking for the site visit that tier 3 needs.

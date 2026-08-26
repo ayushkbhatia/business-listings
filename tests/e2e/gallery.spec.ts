@@ -266,3 +266,47 @@ test.describe("verification is platform-owned", () => {
     await expect(cards.getByText(/AED/)).toHaveCount(0);
   });
 });
+
+test.describe("DataTable column alignment", () => {
+  /*
+   * A regression test for a bug that shipped in handoff 0 and was found in
+   * handoff 4 step 1, by which point every table in the product had it.
+   *
+   * The row tone edge was a `::before` on the `<tr>`. The CSS table fixup rules
+   * wrap a non-cell child of a table-row in an **anonymous table-cell**, and
+   * absolute positioning does not prevent the box being generated — so every
+   * six-column table quietly became seven columns, with the body sitting one
+   * column to the right of its own headers.
+   *
+   * Nobody caught it by eye because the column heads are small mono uppercase
+   * and the misalignment reads as loose placement rather than a broken table.
+   * Measuring is the only way to see it, so this measures.
+   */
+  test("every table body lines up with its own headers", async ({ page }) => {
+    await page.goto("/dev/gallery");
+    await page.locator("table").first().waitFor();
+
+    const mismatches = await page.evaluate(() => {
+      const out: { caption: string; head: number[]; cells: number[] }[] = [];
+      for (const table of document.querySelectorAll("table")) {
+        const x = (el: Element) => Math.round(el.getBoundingClientRect().x);
+        const head = [...table.querySelectorAll("thead th")].map(x);
+        const row = [...table.querySelectorAll("tbody tr")].find(
+          (tr) => tr.children.length === head.length,
+        );
+        if (!row || head.length === 0) continue;
+        const cells = [...row.children].map(x);
+        if (JSON.stringify(head) !== JSON.stringify(cells)) {
+          out.push({
+            caption: table.querySelector("caption")?.textContent?.trim() ?? "(no caption)",
+            head,
+            cells,
+          });
+        }
+      }
+      return out;
+    });
+
+    expect(mismatches).toEqual([]);
+  });
+});
