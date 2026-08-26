@@ -24,28 +24,41 @@ sprint without asking, through to the end of the handoff.
 | [#24](https://github.com/ayushkbhatia/business-listings/pull/24) | Step 4 — boards 4f/12d/12f, view-as and a call list with no insert path | merged |
 | [#25](https://github.com/ayushkbhatia/business-listings/pull/25) | Step 5 — boards 4g/12e, the MRR ledger, dunning, grandfathering that grandfathers | `531046d` |
 | [#26](https://github.com/ayushkbhatia/business-listings/pull/26) | Step 6a — the storefront template model, and a sector column the database keeps | `386856c` |
-| [#27](https://github.com/ayushkbhatia/business-listings/pull/27) | Step 6b — fourteen sections that render, and the page that proves it | open |
+| [#27](https://github.com/ayushkbhatia/business-listings/pull/27) | Step 6b — fourteen sections that render, and the page that proves it | `ffdbffb` |
+| [#28](https://github.com/ayushkbhatia/business-listings/pull/28) | Step 6c — the builder, and a publish that says what it is about to do | open |
 
 ## Next
 
-**Step 6c — the builder shell** (`5a`), plus themes (`5b`) and the page editor (`5d`).
+**Step 6d — themes `5b`, the page editor `5d`, and domain verification `5e`.**
 
-Three panes on `BuilderChrome`: section list left, live canvas centre, settings right. The
-canvas renders the template against a real seller's data at 50% — the renderers landed in 6b,
-so this is composition rather than new drawing. Publish is a two-step: a diff of what changed,
-then a confirm naming the store count. `publishTemplate` and `restoreVersion` already exist and
-already carry the count; 6c is the screen in front of them.
+The theme settings are already columns on `StorefrontTemplate` and the diff already reports
+changes to them in words — what is missing is the form. `5e` goes behind a `CertificateIssuer`
+port with a fake, because step 4 of that flow is a Vercel platform operation and there is no
+token; §0.7.
 
-**Checkpoint: change one template and see the store count before and after the save.**
-
-Then:
-
-- **6d** — domain verification `5e`, behind a `CertificateIssuer` port with a fake. §0.7.
-- **6e** — the public storefront rewrite. The four `/b/[slug]` routes still render hardcoded
-  JSX; `renderSection` and `resolveSections` exist and no route calls them. Criterion 2 is
-  proved against the service and the resolver, not against a page, until this lands.
+**6e — the public storefront rewrite.** The four `/b/[slug]` routes still render hardcoded
+JSX. `renderSection`, `resolveSections` and the whole section registry exist and no public
+route calls them. Criterion 2 is proved against the service, the resolver and the builder, not
+against a storefront, until this lands.
 
 Then steps 7–8: content ops `[6f]` `[12g]`, and the acceptance pass.
+
+## What step 6c found
+
+- **A staff e2e test that performs an audited mutation broke seat provisioning.**
+  `audit_event.actor_id` is `Restrict` — correctly — so once the ops lead owned audit rows,
+  `auth.setup.ts` could no longer delete and recreate that user, and every later run failed in
+  setup rather than anywhere informative. Provisioning now reuses an existing seat, which is
+  also closer to what a seat is.
+- **One reason field for edits and publish was wrong.** The edit consumed it and the publish
+  button sat there dead with nothing saying why. Publishing is its own decision with its own
+  version row, so it has its own field.
+- **`BuilderChrome` left its bar outside every landmark.** A `header` that is not a direct
+  child of `body` carries no role. It became a `banner` when it owns the page — and the first
+  attempt moved the toolbar onto the ink surface, which put an unselected tab at 3.69:1 and was
+  caught by the gallery's contrast set within one run.
+- **A controlled checkbox driven by a server action shows the old value until the round-trip
+  lands.** The builder keeps an optimistic map, cleared when the server refuses.
 
 ## What step 6b found
 

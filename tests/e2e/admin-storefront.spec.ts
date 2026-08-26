@@ -142,6 +142,114 @@ test.describe("criterion 10 — the specimens page", () => {
   });
 });
 
+test.describe("board 5a — the builder, and step 6's checkpoint", () => {
+  /**
+   * The checkpoint: *change one template and see the store count before and
+   * after the save.* Criterion 1 in one walk — a template edit shows the
+   * affected store count before saving, and publishing requires a confirm
+   * naming that count.
+   */
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/admin/storefront-templates");
+    await page.getByRole("link", { name: "Industrial" }).click();
+    await page.waitForURL(/\/admin\/storefront-templates\/[a-z0-9]+$/);
+  });
+
+  test("names the store count in the bar before anything is touched", async ({ page }) => {
+    await expect(page.getByText(/APPLIES TO \d+ STORES/)).toBeVisible();
+  });
+
+  test("holds the header fixed and offers no way to turn it off", async ({ page }) => {
+    // Criterion 6, from the screen. The database refuses it too.
+    const header = page
+      .getByRole("complementary", { name: "Sections" })
+      .getByRole("listitem")
+      .filter({ hasText: "Header & contact bar" })
+      .first();
+    await expect(header).toContainText("FIXED");
+    await expect(header.getByRole("checkbox")).toBeDisabled();
+  });
+
+  test("will not let anything be changed without a reason", async ({ page }) => {
+    /*
+     * The reason is not a field somebody fills in at the end. Every mutation
+     * writes an audit row and `assertReason` refuses a blank, so the controls
+     * are dead until there is something to write.
+     */
+    const hero = page
+      .getByRole("complementary", { name: "Sections" })
+      .getByRole("listitem")
+      .filter({ hasText: "Hero banner" })
+      .first();
+    await expect(hero.getByRole("checkbox")).toBeDisabled();
+
+    await page.getByLabel("Why", { exact: true }).fill("Turning reviews off while we re-cut the card.");
+    await expect(hero.getByRole("checkbox")).toBeEnabled();
+  });
+
+  test("does not offer a second hero", async ({ page }) => {
+    // Criterion 7. A button that always fails is a button nobody should see.
+    const add = page.getByRole("list", { name: "Add a section" });
+    await expect(add.getByRole("button", { name: "Hero banner", exact: true })).toHaveCount(0);
+    await expect(add.getByRole("button", { name: "Offer banner", exact: true })).toBeVisible();
+  });
+
+  test("lists what changed in words, and publishing confirms with the count", async ({ page }) => {
+    /*
+     * Flips whatever the section currently is rather than assuming it is on.
+     *
+     * An earlier version of this test unchecked Reviews, published, and put it
+     * back at the end — which left the seeded template half-changed whenever it
+     * failed part-way, and then the next run's first assertion was against a
+     * state it did not expect. A walk that reads before it writes does not care
+     * how it found things.
+     */
+    const reviews = page
+      .getByRole("complementary", { name: "Sections" })
+      .getByRole("listitem")
+      .filter({ hasText: "Reviews" })
+      .first();
+    const box = reviews.getByRole("checkbox");
+
+    await page.getByLabel("Why", { exact: true }).fill("Flipping the reviews section while we re-cut the card.");
+    const wasOn = await box.isChecked();
+    await box.setChecked(!wasOn);
+
+    // Step one: the diff, in sentences. Scoped to the settings pane by its
+    // landmark name, which is why the two asides are labelled.
+    const settings = page.getByRole("complementary", { name: "Settings" });
+    await expect(settings).toContainText(wasOn ? "turned off" : "turned on");
+
+    // Step two: the confirm, which names the count.
+    await page.getByRole("button", { name: "Review and publish" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toContainText(/Publish to \d+ storefronts/);
+    if (wasOn) await expect(dialog).toContainText(/take something away/);
+
+    // Publish is its own decision and carries its own reason. The edit's
+    // reason was consumed by the edit.
+    await expect(dialog.getByRole("button", { name: /^Publish to \d+ storefronts$/ })).toBeDisabled();
+    await dialog.getByLabel("Why publish").fill("Publishing the re-cut card for this trade.");
+    await dialog.getByRole("button", { name: /^Publish to \d+ storefronts$/ }).click();
+    await expect(page.getByText(/storefronts now render version/)).toBeVisible();
+
+    // And back, so the template is as it was found.
+    await page.getByLabel("Why", { exact: true }).fill("Putting the reviews section back after the re-cut.");
+    await box.setChecked(wasOn);
+    await expect(page.getByText("Saved. Not published yet.")).toBeVisible();
+    await page.getByRole("button", { name: "Review and publish" }).click();
+    const second = page.getByRole("dialog");
+    await second.getByLabel("Why publish").fill("Publishing the section back where it was.");
+    await second.getByRole("button", { name: /^Publish to \d+ storefronts$/ }).click();
+    await expect(page.getByText(/storefronts now render version/)).toBeVisible();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
 test.describe("the storefront builder is staff-only", () => {
   test("a moderator cannot reach it", async ({ browser }) => {
     // §07: a storefront builder is a superadmin tool and is explicitly out of

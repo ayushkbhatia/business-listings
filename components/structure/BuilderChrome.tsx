@@ -45,32 +45,59 @@ export function BuilderChrome({
   const Content = contentAs;
   return (
     <div data-density="comfortable" className="flex h-dvh flex-col bg-paper">
+      {/*
+        A banner when this is the whole page, and nothing when it is embedded.
+        A `header` that is not a direct child of `body` carries no role, which
+        left the bar's contents outside every landmark — axe's `region` rule,
+        and a real navigation problem for anybody moving by landmark. The
+        gallery embeds this inside a page that already has a banner, so the role
+        is conditional rather than always on: two banners is its own violation.
+      */}
       <header
-        className={cn(
-          "flex shrink-0 items-center gap-3 border-b border-ink-line bg-ink px-4 text-on-ink",
-        )}
-        style={{ height: "58px" }}
+        {...(contentAs === "main" ? { role: "banner" as const } : {})}
+        className="flex shrink-0 flex-col border-b border-ink-line bg-ink text-on-ink"
       >
-        <div className="shrink-0">{exit}</div>
+        <div
+          className={cn("flex shrink-0 items-center gap-3 px-4")}
+          style={{ height: "58px" }}
+        >
+          <div className="shrink-0">{exit}</div>
 
-        <div className="min-w-0 flex-1 text-center">
-          <p className="truncate text-body-sm text-on-ink">{title}</p>
-          {subtitle && (
-            <p className="truncate font-mono text-eyebrow text-on-ink-faint">{subtitle}</p>
-          )}
+          <div className="min-w-0 flex-1 text-center">
+            <p className="truncate text-body-sm text-on-ink">{title}</p>
+            {subtitle && (
+              <p className="truncate font-mono text-eyebrow text-on-ink-faint">
+                {subtitle}
+              </p>
+            )}
+          </div>
+
+          <div className="flex shrink-0 items-center gap-3">
+            {status && (
+              <span className="font-mono text-eyebrow text-on-ink-faint">
+                {status}
+              </span>
+            )}
+            {commit}
+          </div>
         </div>
 
-        <div className="flex shrink-0 items-center gap-3">
-          {status && <span className="font-mono text-eyebrow text-on-ink-faint">{status}</span>}
-          {commit}
-        </div>
+        {/*
+          Inside the banner, not beside it. A second strip of chrome outside
+          every landmark is the same problem the bar had.
+        */}
+        {toolbar && (
+          /*
+           * Inside the banner so its contents are in a landmark, and on its own
+           * surface so it looks the way it did — the first version inherited
+           * the bar's ink and put an unselected tab at 3.69:1, which the
+           * gallery's contrast set caught immediately.
+           */
+          <div className="flex shrink-0 items-center gap-2 border-t border-line bg-card px-4 py-2 text-ink">
+            {toolbar}
+          </div>
+        )}
       </header>
-
-      {toolbar && (
-        <div className="flex shrink-0 items-center gap-2 border-b border-line bg-card px-4 py-2">
-          {toolbar}
-        </div>
-      )}
 
       <Content className="min-h-0 flex-1 overflow-auto">{children}</Content>
     </div>
