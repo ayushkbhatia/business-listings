@@ -8,6 +8,7 @@ import {
   restoreVersion,
   setSectionEnabled,
   setSellerEditableFields,
+  setTemplateTheme,
   storeCount,
   templateLibrary,
   templateWithSections,
@@ -687,6 +688,122 @@ describe("the product id the RFQ tray used to throw away", () => {
       WHERE rc.constraint_name = 'enquiry_line_product_id_fkey'`;
     expect(constraint[0]!.delete_rule).toBe("SET NULL");
   });
+});
+
+describe("board 5b — theme settings, and criterion 5", () => {
+  it("refuses a template that offers no theme at all", async () => {
+    const { templateId } = await draft("Theme None");
+    const result = await setTemplateTheme({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      templateId,
+      offeredThemes: [],
+      defaultTheme: "default",
+      allowCustomHex: false,
+      typePairing: "clean",
+      density: "comfortable",
+      cornerRadius: 6,
+      darkHeader: false,
+      badgeRemovable: false,
+      reason: "Trying to offer nothing.",
+    });
+    expect(result).toMatchObject({ ok: false, error: "no_theme_offered" });
+  }, 60_000);
+
+  it("refuses a default that is not on offer", async () => {
+    // A seller opens the picker to find the theme they are on is not in it.
+    const { templateId } = await draft("Theme Mismatch");
+    const result = await setTemplateTheme({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      templateId,
+      offeredThemes: ["industrial"],
+      defaultTheme: "salon",
+      allowCustomHex: false,
+      typePairing: "clean",
+      density: "comfortable",
+      cornerRadius: 6,
+      darkHeader: false,
+      badgeRemovable: false,
+      reason: "Default outside the offered set.",
+    });
+    expect(result).toMatchObject({ ok: false, error: "default_not_offered" });
+  }, 60_000);
+
+  it("drops a theme nobody wrote tokens for rather than storing it", async () => {
+    /*
+     * `[data-theme="neon"]` matches nothing, so the storefront would render the
+     * default palette while the builder said otherwise.
+     */
+    const { templateId } = await draft("Theme Invented");
+    const result = await setTemplateTheme({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      templateId,
+      offeredThemes: ["industrial", "neon"],
+      defaultTheme: "industrial",
+      allowCustomHex: false,
+      typePairing: "technical",
+      density: "compact",
+      cornerRadius: 2,
+      darkHeader: true,
+      badgeRemovable: false,
+      reason: "Offering industrial for this trade, compact and dark-headed.",
+    });
+    expect(result.ok).toBe(true);
+
+    const saved = await prisma.storefrontTemplate.findUniqueOrThrow({
+      where: { id: templateId },
+      select: { offeredThemes: true, density: true, darkHeader: true },
+    });
+    expect(saved.offeredThemes).toEqual(["industrial"]);
+    expect(saved.density).toBe("compact");
+    expect(saved.darkHeader).toBe(true);
+  }, 60_000);
+
+  it("puts the theme change on the audit row with the store count", async () => {
+    const { templateId, sectorId } = await draft("Theme Audit");
+    const expected = await storeCount(sectorId);
+
+    await setTemplateTheme({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      templateId,
+      offeredThemes: ["trade", "mono"],
+      defaultTheme: "trade",
+      allowCustomHex: true,
+      typePairing: "editorial",
+      density: "roomy",
+      cornerRadius: 10,
+      darkHeader: false,
+      badgeRemovable: true,
+      reason: "Clay suits this trade better than moss, and Pro may drop our badge.",
+    });
+
+    const row = await prisma.auditEvent.findFirstOrThrow({
+      where: { subject: `StorefrontTemplate:${templateId}` },
+      orderBy: { createdAt: "desc" },
+      select: { after: true },
+    });
+    const after = row.after as { storeCount: number; defaultTheme: string };
+    expect(after.storeCount).toBe(expected);
+    expect(after.defaultTheme).toBe("trade");
+  }, 60_000);
+
+  it("refuses a moderator", async () => {
+    const { templateId } = await draft("Theme Moderator");
+    await expect(
+      setTemplateTheme({
+        actor: actor(moderatorId, "staff_moderator"),
+        templateId,
+        offeredThemes: ["mono"],
+        defaultTheme: "mono",
+        allowCustomHex: false,
+        typePairing: "clean",
+        density: "comfortable",
+        cornerRadius: 6,
+        darkHeader: false,
+        badgeRemovable: false,
+        reason: "Not my row.",
+      }),
+    ).rejects.toBeInstanceOf(PermissionError);
+  }, 60_000);
 });
 
 describe("a template belongs to a trade, not a subcategory", () => {
