@@ -2281,3 +2281,70 @@ Step 2b wired `/b/[slug]`. The three subroutes guard with
 404ing a renamed or merged listing. They now redirect first and refuse an
 unclaimed listing second — which is also clearer: an unclaimed listing has no
 subpages because it is a licence record rather than a storefront.
+
+---
+
+## Handoff 4, step 4 — accounts, the call list, view-as
+
+### Read-only is the permission matrix, not a hidden button
+
+A view-as session does **not** swap the actor for the seller. The actor stays the
+staff member — their id, their roles, their audit trail — and only the *business*
+changes.
+
+That is the whole enforcement. Every seller mutation guards on a seller
+capability (`listing.edit` is owner and manager, `team.manage` is owner,
+`billing.manage` is owner and finance) and a staff actor holds none of them, so
+the refusal happens at the same `assertCan` that refuses a sales seat, in the
+service layer, on every path — including one somebody adds later without reading
+the comment.
+
+Four integration tests call the seller's own mutation *services* with the staff
+actor a session carries, and assert each refuses. A test that checked the
+buttons were hidden would prove nothing: a hidden button is a UI opinion and a
+server action is a URL.
+
+### Thirty minutes is a column, and expiry is applied on read
+
+A session that ends when the tab closes is not capped, and a cap the browser is
+merely told about is one somebody keeps open all afternoon. `expiresAt` is
+checked every time `currentSession` is asked, rather than by a sweep — a cap
+that depends on a job having run is a cap with a gap in it.
+
+One live session per staff member, by partial unique index. Two at once means a
+support call where nobody can say whose account is on screen.
+
+### The call list is a query, and that is criterion 7
+
+*"Nobody types a prospect list by hand."* The way to make that true rather than
+intended is to give it nowhere to type: there is no `CallTask` model, no insert
+path and no "add" control. `lib/crm/call-list.ts` derives prospects from
+`MissedEnquiry`, `ZeroResultQuery` and the unclaimed-with-demand case — all
+three written by handoff 1 and 2 code and read by nothing until now — and the
+only writer it exports is `logCall`, which records what happened *after* a call.
+
+One signal per prospect, the strongest, because a call opens with one number and
+a list offering three reasons for the same person is a list somebody reads
+instead of dialling. Ordered by the size of the missed demand rather than by
+account value: a Free seller who lost eleven enquiries is a better call than a
+Pro seller who lost one, and sorting by what we would earn is how a CRM stops
+being about the customer.
+
+Anybody called in the last seven days drops off. A list that offers the same
+person every morning gets somebody rung twice, and the second call is worse than
+no call.
+
+### A call is not a staff mutation
+
+`logCall` is not audited. Nothing about the listing, the plan or the tier
+changes, and putting "rang somebody" in the same log as "decided who owns a
+listing" makes that log harder to read. `CallOutcome` is its own record and is
+visible on the account.
+
+### Account health invents nothing
+
+Every column on board 4f is measured: response time from enquiry-to-first-reply
+timestamps, profile strength and spec completeness from pure functions the
+hourly job calls. All three were fabricated in the seed at some point in this
+project's life and all three were caught. A dash means not enough to say, which
+is not the same as zero.

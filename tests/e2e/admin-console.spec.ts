@@ -49,8 +49,8 @@ test.describe("board 4a — the console overview", () => {
     await expect(sidebar.getByRole("link", { name: "Taxonomy" })).toBeVisible();
     // Not yet. Named, not linked — the rule handoff 1 arrived at after the
     // seller sidebar shipped a dozen dead links.
-    await expect(sidebar.getByRole("link", { name: "Recruitment" })).toHaveCount(0);
-    await expect(sidebar.getByText("Recruitment")).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Ranking & boosts" })).toHaveCount(0);
+    await expect(sidebar.getByText("Ranking & boosts")).toBeVisible();
   });
 
   test("every admin link on the page resolves", async ({ page }) => {
@@ -163,6 +163,9 @@ test.describe("boards 4b, 4d and 4e", () => {
       "/admin/reports",
       "/admin/audit",
       "/admin/visits",
+      "/admin/businesses",
+      "/admin/crm",
+      "/admin/support",
     ]) {
       await page.goto(path);
       const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
@@ -254,5 +257,42 @@ test.describe("boards 4h, 4i and 12h — trust", () => {
     await page.goto("/admin/visits");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Field visits");
     await expect(page.getByText(/Recording a visit does not set a tier/)).toBeVisible();
+  });
+});
+
+test.describe("boards 4f, 12d and 12f — accounts", () => {
+  test("account health shows measured figures, with a dash where there is not enough", async ({
+    page,
+  }) => {
+    await page.goto("/admin/businesses");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Businesses");
+    for (const head of ["Plan", "Tier", "Median reply", "State"]) {
+      await expect(page.getByRole("columnheader", { name: head })).toBeVisible();
+    }
+  });
+
+  test("the call list says nobody types it", async ({ page }) => {
+    await page.goto("/admin/crm");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Recruitment");
+    await expect(page.getByText(/Nobody types this list/)).toBeVisible();
+    // No way to add somebody. That absence is criterion 7.
+    await expect(page.getByRole("button", { name: /add/i })).toHaveCount(0);
+  });
+
+  test("the support desk asks for a ticket first", async ({ page }) => {
+    await page.goto("/admin/support");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Support desk");
+    await expect(page.getByLabel(/Ticket/)).toBeVisible();
+    await expect(page.getByText(/without a reason is a privacy event/)).toBeVisible();
+    // Read-only is not a hidden button, and the screen says where the fence is.
+    await expect(page.getByText(/enforced where the seller's own mutations are/)).toBeVisible();
+  });
+
+  test("all three are axe clean", async ({ page }) => {
+    for (const path of ["/admin/businesses", "/admin/crm", "/admin/support"]) {
+      await page.goto(path);
+      const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+      expect(results.violations, path).toEqual([]);
+    }
   });
 });

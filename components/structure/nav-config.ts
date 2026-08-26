@@ -163,11 +163,11 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     key: "supply",
     labelKey: "nav.group.supply",
     items: [
-      { key: "businesses", labelKey: "nav.businesses", href: "/admin/businesses", later: true },
+      { key: "businesses", labelKey: "nav.businesses", href: "/admin/businesses" },
       { key: "ingest", labelKey: "nav.ingest", href: "/admin/ingest", capability: "queue.decide" },
       { key: "dedupe", labelKey: "nav.dedupe", href: "/admin/ingest/dedupe", capability: "business.merge" },
       { key: "visits", labelKey: "nav.visits", href: "/admin/visits", capability: "visit.record" },
-      { key: "crm", labelKey: "nav.crm", href: "/admin/crm", later: true },
+      { key: "crm", labelKey: "nav.crm", href: "/admin/crm" },
     ],
   },
   {
@@ -223,7 +223,7 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     items: [
       { key: "staff", labelKey: "nav.staff", href: "/admin/staff", capability: "staff.manage", later: true },
       { key: "audit", labelKey: "nav.audit", href: "/admin/audit", capability: "audit.read" },
-      { key: "support", labelKey: "nav.support", href: "/admin/support", capability: "support.view_as", later: true },
+      { key: "support", labelKey: "nav.support", href: "/admin/support", capability: "support.view_as" },
       { key: "users", labelKey: "nav.users", href: "/admin/users", capability: "staff.manage", later: true },
       { key: "compliance", labelKey: "nav.compliance", href: "/admin/compliance", capability: "staff.manage", later: true },
       { key: "api", labelKey: "nav.api", href: "/admin/api", capability: "staff.manage", later: true },

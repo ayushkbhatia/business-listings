@@ -87,6 +87,8 @@ model User {
   pdplSubjectOf     PdplRequest[]       @relation("PdplSubject")
   pdplClosed        PdplRequest[]       @relation("PdplClosedBy")
   apiKeys           ApiKey[]            @relation("ApiKeyCreator")
+  viewAsSessions    ViewAsSession[]     @relation("ViewAsStaff")
+  callsMade         CallOutcome[]       @relation("CallStaff")
   candidatesDismissed MergeCandidate[]  @relation("CandidateDismissedBy")
   proposalsDecided  SpecFieldProposal[] @relation("ProposalDecidedBy")
 
@@ -502,6 +504,8 @@ model Business {
   mergesAbsorbed         BusinessMerge[]         @relation("MergeAbsorb")
   stagedListings         StagedListing[]
   visitReports           SiteVisitReport[]
+  viewAsSessions         ViewAsSession[]
+  callOutcomes           CallOutcome[]
   claimConflicts         ClaimConflict[]         @relation("ConflictBusiness")
   producedByConflicts    ClaimConflict[]         @relation("ConflictProduced")
   placementWaitlist      PlacementWaitlist[]
@@ -1390,6 +1394,62 @@ model ApiKey {
 
   @@unique([secretHash])
   @@map("api_key")
+}
+
+/// A staff member looking through a seller's eyes.
+///
+/// Criterion 8: read-only, expires at 30 minutes, writes an audit row naming
+/// the ticket. A row rather than a cookie claim, because the cap has to be a
+/// fact the server checks rather than a number the browser was told.
+model ViewAsSession {
+  id         String    @id @default(cuid())
+  staffId    String    @map("staff_id") @db.Uuid
+  businessId String    @map("business_id")
+  /// NOT NULL. Looking through a seller's eyes without a reason is the thing
+  /// §07 calls a privacy event, and "which ticket" is the reason.
+  ticketRef  String    @map("ticket_ref")
+  startedAt  DateTime  @default(now()) @map("started_at")
+  expiresAt  DateTime  @map("expires_at")
+  endedAt    DateTime? @map("ended_at")
+
+  staff    User     @relation("ViewAsStaff", fields: [staffId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("view_as_session")
+}
+
+enum CallOutcomeKind {
+  reached
+  no_answer
+  wrong_number
+  not_interested
+  call_back
+  converted
+
+  @@map("call_outcome_kind")
+}
+
+/// What happened on a call.
+///
+/// The call *list* is deliberately not a table — board 12d says it builds itself
+/// from demand signals, and "no manual entry" is a property you get by having
+/// nowhere to type. Only the outcome is written down.
+model CallOutcome {
+  id         String          @id @default(cuid())
+  businessId String          @map("business_id")
+  staffId    String          @map("staff_id") @db.Uuid
+  kind       CallOutcomeKind
+  /// Which signal put them on the list, so the argument that worked can be told
+  /// from the one that did not.
+  signal     String
+  note       String?
+  callBackAt DateTime?       @map("call_back_at")
+  createdAt  DateTime        @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  staff    User     @relation("CallStaff", fields: [staffId], references: [id], onDelete: Restrict)
+
+  @@map("call_outcome")
 }
 
 model SpecFieldProposal {

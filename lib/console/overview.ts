@@ -87,6 +87,8 @@ function cutoff(now: Date, days: number): Date {
 }
 
 export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
+  const { callList } = await import("@/lib/crm/call-list");
+
   const [
     queuePending,
     queueLate,
@@ -177,6 +179,8 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
     }),
   ]);
 
+  const callListSize = (await callList(500, now)).length;
+
   const metric = (
     key: string,
     labelKey: string,
@@ -228,7 +232,9 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
       labelKey: "console.job.accounts",
       metrics: [
         metric("free_accounts", "console.metric.free_accounts", "businesses", "/admin/businesses", freeAtCap),
-        metric("call_list", "console.metric.call_list", "crm", "/admin/crm", null),
+        // Real now: step 4 built the query. The list is derived from signals
+        // rather than typed, so this counts what those signals produced.
+        metric("call_list", "console.metric.call_list", "crm", "/admin/crm", callListSize),
       ],
     },
     {

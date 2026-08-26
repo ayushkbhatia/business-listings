@@ -5,7 +5,8 @@ import { DASHBOARD_NAV } from "@/components/structure/nav-config";
 import { prisma } from "@/lib/db/client";
 import { actorFromDevSeller, devSellerRequest } from "@/lib/auth/dev-seller";
 import { getActor } from "@/lib/auth/session";
-import type { Actor } from "@/lib/auth/roles";
+import { currentSession, minutesLeft } from "@/lib/support/view-as";
+import { isStaff, type Actor } from "@/lib/auth/roles";
 import { t } from "@/lib/i18n";
 
 /**
@@ -20,6 +21,19 @@ export interface SellerSeat {
   businessName: string;
   /** True while the seat came from DEV_SELLER_SLUG rather than a session. */
   isDevSeat: boolean;
+  /**
+   * Set while a staff member is viewing this account through board 12f.
+   *
+   * The actor is still **them** — their id, their roles, their audit trail —
+   * and only the business changes. That is what makes the session read-only
+   * without a second mechanism: every seller mutation guards on a seller
+   * capability, and a staff actor holds none of them, so the refusal happens at
+   * the same `assertCan` that refuses a sales seat.
+   *
+   * The banner is what this field is for. Hiding buttons is fine and is not the
+   * fence.
+   */
+  viewingAs?: { sessionId: string; ticketRef: string; expiresAt: Date };
 }
 
 /**
@@ -30,6 +44,28 @@ export interface SellerSeat {
  */
 export async function getSellerSeat(): Promise<SellerSeat | null> {
   const actor = await getActor();
+
+  /*
+   * A staff member looking through a seller's eyes. Checked before the seller
+   * path, because a staff actor has no `businessId` of their own and would
+   * otherwise fall through to the development seat.
+   */
+  if (actor && isStaff(actor)) {
+    const session = await currentSession(actor.id);
+    if (!session) return null;
+    return {
+      actor,
+      businessId: session.businessId,
+      businessName: session.business.displayName,
+      isDevSeat: false,
+      viewingAs: {
+        sessionId: session.id,
+        ticketRef: session.ticketRef,
+        expiresAt: session.expiresAt,
+      },
+    };
+  }
+
   if (actor?.businessId) {
     const business = await prisma.business.findUnique({
       where: { id: actor.businessId },
@@ -132,7 +168,21 @@ export function SellerPage({
         />
       }
       notice={
-        seat.isDevSeat ? (
+        seat.viewingAs ? (
+          /*
+           * Loud, and on every screen. Somebody looking at an account that is
+           * not theirs should never be able to forget it — and the countdown is
+           * there because the cap is real: the session ends at thirty minutes
+           * whether or not this tab is still open.
+           */
+          <p className="border-b border-warn-line bg-warn-surface px-[var(--section-pad)] py-2 text-caption text-warn-ink">
+            {t("dashboard.viewing_as", {
+              business: seat.businessName,
+              ticket: seat.viewingAs.ticketRef,
+              minutes: String(minutesLeft(seat.viewingAs.expiresAt)),
+            })}
+          </p>
+        ) : seat.isDevSeat ? (
           <p className="border-b border-warn-line bg-warn-surface px-[var(--section-pad)] py-2 text-caption text-warn-ink">
             {t("dev.acting_as", { business: seat.businessName })}
           </p>
