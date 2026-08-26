@@ -122,16 +122,6 @@ async function provision(page: Page, seat: Seat) {
   await db.connect();
 
   try {
-    // Start clean. A leftover from an interrupted run would collide on the
-    // unique email and leave the profile row pointing at a dead auth user.
-    const { data: existing } = await admin.auth.admin.listUsers({ perPage: 200 });
-    for (const user of existing?.users ?? []) {
-      if (user.email !== seat.email) continue;
-      await db.query('DELETE FROM "user" WHERE id = $1', [user.id]);
-      await admin.auth.admin.deleteUser(user.id).catch(() => undefined);
-    }
-    await db.query('DELETE FROM "user" WHERE email = $1', [seat.email]);
-
     let businessId: string | null = null;
     if (seat.slug) {
       const business = await db.query<{ id: string }>("SELECT id FROM business WHERE slug = $1", [
@@ -141,22 +131,66 @@ async function provision(page: Page, seat: Seat) {
       if (!businessId) throw new Error(`the seed has no business ${seat.slug}`);
     }
 
-    const { data: created, error } = await admin.auth.admin.createUser({
-      email: seat.email,
-      email_confirm: false,
-    });
-    if (error || !created.user) throw error ?? new Error(`could not create ${seat.email}`);
-
     /*
-     * The profile row shares the auth user's id, which is what `adoptProfile`
-     * expects — see lib/auth/flow.ts. A seller seat is a User with a
-     * businessId; this is a real one, not a special case for tests.
+     * Reuse the seat if it is already there, rather than deleting and
+     * recreating it.
+     *
+     * This used to start clean every run. That worked until a staff e2e test
+     * performed an audited mutation: `audit_event.actor_id` is `Restrict`, so
+     * the ops lead's profile row could no longer be deleted, and every
+     * subsequent run failed in setup rather than anywhere informative.
+     *
+     * Restrict is right — an audit log that can lose its actor is not an audit
+     * log — so the provisioning is what changes. Reusing is also closer to what
+     * a real seat is: a person whose account persists between sessions.
      */
-    await db.query(
-      `INSERT INTO "user" (id, email, full_name, roles, business_id, updated_at)
-       VALUES ($1, $2, $3, $4::"role"[], $5, now())`,
-      [created.user.id, seat.email, seat.name, seat.roles, businessId],
-    );
+    const { data: existing } = await admin.auth.admin.listUsers({ perPage: 200 });
+    const found = (existing?.users ?? []).find((user) => user.email === seat.email);
+
+    let userId: string;
+    if (found) {
+      userId = found.id;
+      const profile = await db.query('SELECT id FROM "user" WHERE id = $1', [userId]);
+      if (profile.rowCount === 0) {
+        // The auth user outlived its profile row — an interrupted run. Take the
+        // email back from any orphan first, then re-create the profile.
+        await db.query('DELETE FROM "user" WHERE email = $1 AND id <> $2', [seat.email, userId]);
+        await db.query(
+          `INSERT INTO "user" (id, email, full_name, roles, business_id, updated_at)
+           VALUES ($1, $2, $3, $4::"role"[], $5, now())`,
+          [userId, seat.email, seat.name, seat.roles, businessId],
+        );
+      } else {
+        // Roles and business may have moved since the row was written.
+        await db.query(
+          `UPDATE "user" SET full_name = $2, roles = $3::"role"[], business_id = $4, updated_at = now()
+           WHERE id = $1`,
+          [userId, seat.name, seat.roles, businessId],
+        );
+      }
+    } else {
+      // A profile row with this email but no auth user is a dead row from an
+      // interrupted run, and it holds the unique email.
+      await db.query('DELETE FROM "user" WHERE email = $1', [seat.email]);
+
+      const { data: created, error } = await admin.auth.admin.createUser({
+        email: seat.email,
+        email_confirm: false,
+      });
+      if (error || !created.user) throw error ?? new Error(`could not create ${seat.email}`);
+      userId = created.user.id;
+
+      /*
+       * The profile row shares the auth user's id, which is what `adoptProfile`
+       * expects — see lib/auth/flow.ts. A seller seat is a User with a
+       * businessId; this is a real one, not a special case for tests.
+       */
+      await db.query(
+        `INSERT INTO "user" (id, email, full_name, roles, business_id, updated_at)
+         VALUES ($1, $2, $3, $4::"role"[], $5, now())`,
+        [userId, seat.email, seat.name, seat.roles, businessId],
+      );
+    }
 
     const { data: link, error: linkError } = await admin.auth.admin.generateLink({
       type: "magiclink",

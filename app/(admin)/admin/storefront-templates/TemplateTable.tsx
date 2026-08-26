@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { StatusBadge } from "@/components/display";
 import { DataTable, type Column } from "@/components/structure";
 import { t } from "@/lib/i18n";
@@ -31,7 +32,18 @@ const TONE: Record<string, "ok" | "warn" | "neutral"> = {
 export function TemplateTable({ rows }: { rows: readonly TemplateRowView[] }) {
   const columns: Column<TemplateRowView>[] = [
     { key: "sector", header: t("admin.templates.col.sector"), render: (row) => row.sectorName },
-    { key: "name", header: t("admin.templates.col.name"), render: (row) => row.name },
+    {
+      key: "name",
+      header: t("admin.templates.col.name"),
+      render: (row) => (
+        <Link
+          href={`/admin/storefront-templates/${row.id}`}
+          className="rounded-tag text-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+        >
+          {row.name}
+        </Link>
+      ),
+    },
     {
       key: "status",
       header: t("admin.templates.col.status"),
