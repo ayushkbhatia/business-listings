@@ -20,30 +20,34 @@ sprint without asking, through to the end of the handoff.
 | [#20](https://github.com/ayushkbhatia/business-listings/pull/20) | Step 1b — boards 4d/4e, `specCompleteness` measured, versioning corrected | `1a2262e` |
 | [#21](https://github.com/ayushkbhatia/business-listings/pull/21) | Step 2a — board 12a, the licence importer, the silent CSV truncation | `c84209f` |
 | [#22](https://github.com/ayushkbhatia/business-listings/pull/22) | Step 2b — board 12b, dedupe and the reversible merge, the 301 resolver | `e864692` |
-| [#23](https://github.com/ayushkbhatia/business-listings/pull/23) | Step 3 — boards 4h/4i/12h, the visit report the tier check was waiting for | open |
+| [#23](https://github.com/ayushkbhatia/business-listings/pull/23) | Step 3 — boards 4h/4i/12h, the visit report the tier check was waiting for | `991fcf9` |
+| [#24](https://github.com/ayushkbhatia/business-listings/pull/24) | Step 4 — boards 4f/12d/12f, view-as and a call list with no insert path | open |
 
 ## Next
 
-**Step 4 — accounts and CRM `[4f]` `[12d]` `[12f]`.**
+**Step 5 — commercials `[4g]` `[12e]`.**
 
-- `[4f]` account health.
-- `[12d]` the self-building call list. `ZeroResultQuery` and `MissedEnquiry` have been written
-  by handoff 1 and 2 code and read by nothing — the call list is a query over data that
-  already exists, not a table to fill.
-- `[12f]` support desk and view-as. Read-only must be enforced where the seller's own
-  mutations are, not by hiding buttons: a hidden button is a UI opinion and a server action is
-  a URL. Needs a `ViewAsSession` row so the 30-minute cap is data rather than a cookie claim.
+- `[4g]` revenue and MRR movement. The decomposition is unspecified — new / expansion /
+  contraction / churn is the usual four and `Waterfall` exists — so it is a stated assumption.
+- `[12e]` entitlements as data with grandfathering, dunning D0/D3/D7/D14, VAT export,
+  invoices and credits.
+- **Grandfathering does not work.** `Subscription.entitlementSnapshot` exists, its doc comment
+  promises it, all three writers store `{ planId, capturedAt }` with no cap values, and
+  nothing reads it. "Apply to existing" has nothing to switch off until this is fixed.
+- Criterion 10 is the negative one: dunning must never delete a listing or remove a badge.
+  `StatCard` hardcodes `font-serif` in both branches and admin is no-serif, so it takes a prop.
 
-Then steps 5–8 per the roadmap: commercials, the storefront builder, content ops, the
-acceptance pass.
+Then steps 6–8 per the roadmap: the storefront builder, content ops, the acceptance pass.
 
-## Carried out of step 3
+## Carried forward
 
-- **PDPL requests and API keys have tables and no screens.** `PdplRequest` and `ApiKey` are in
-  the migration with their constraints; `/admin/compliance` and `/admin/api` are still `later`.
-  Both are small and neither is blocking.
-- **Staff role management** (`/admin/staff`) is not built. `staff.manage` exists as a
-  capability with no service behind it.
+- **PDPL requests and API keys have tables and no screens.** `/admin/compliance` and
+  `/admin/api` are still `later`. Small, and neither is blocking.
+- **Staff role management** (`/admin/staff`) is not built. `staff.manage` is a capability with
+  no service behind it.
+- **The dedupe candidate list has no scheduled rescan.** It runs on demand from the screen.
+- **Merged listings are filtered out of `/b/[slug]` and the call list**, and not yet out of
+  search, category pages or the sitemap.
 
 ## Carried forward
 

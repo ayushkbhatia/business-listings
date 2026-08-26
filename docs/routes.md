@@ -94,8 +94,8 @@ they 404 until their handoff.
 /admin/categories                       Taxonomy                              [4d]
 /admin/spec-library                     Spec templates                        [4e]
 /admin/attributes                       Attribute dictionary                  later
-/admin/businesses                       Businesses & health                   [4f]
-/admin/crm                              Recruitment & accounts               [12d]
+/admin/businesses                       Businesses & health                   [4f]  built h4s4
+/admin/crm                              Recruitment & accounts               [12d]  built h4s4
 /admin/users                            Users                                later
 /admin/staff                            Staff, roles & audit                  [4i]  built h4s3
 /admin/subscriptions                    Subscriptions                         [4g]
@@ -105,7 +105,7 @@ they 404 until their handoff.
 /admin/tax                              VAT export                           [12e]
 /admin/revenue                          Revenue                               [4g]
 /admin/reports                          Supplier reports & flags              [4h]  built h4s3
-/admin/support                          Support desk & view-as               [12f]
+/admin/support                          Support desk & view-as               [12f]  built h4s4
 /admin/notifications                    Notification templates              [12g]
 /admin/strings                          Localisation                         [12g]
 /admin/content/matrix                   SEO page matrix                       [6f]
