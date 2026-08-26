@@ -49,8 +49,8 @@ test.describe("board 4a — the console overview", () => {
     await expect(sidebar.getByRole("link", { name: "Taxonomy" })).toBeVisible();
     // Not yet. Named, not linked — the rule handoff 1 arrived at after the
     // seller sidebar shipped a dozen dead links.
-    await expect(sidebar.getByRole("link", { name: "Licence importer" })).toHaveCount(0);
-    await expect(sidebar.getByText("Licence importer")).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Dedupe & merge" })).toHaveCount(0);
+    await expect(sidebar.getByText("Dedupe & merge")).toBeVisible();
   });
 
   test("every admin link on the page resolves", async ({ page }) => {
@@ -73,11 +73,15 @@ test.describe("board 4a — the console overview", () => {
   });
 
   test("says 'not measurable yet' where the table does not exist, never zero", async ({ page }) => {
-    // Licence records staged, storefront templates and the call list all have
-    // no table until later steps. Zero would mean the work is done.
-    const row = page.getByRole("listitem").filter({ hasText: "Licence records staged" });
+    // Storefront templates and the call list have no table until later steps.
+    // Zero would mean the work is done. Licence records became measurable in
+    // step 2 and are no longer in this list.
+    // Scoped to main: the sidebar also names the storefront-templates route.
+    const row = page
+      .getByRole("main")
+      .getByRole("listitem")
+      .filter({ hasText: "Storefront templates" });
     await expect(row).toContainText("Not measurable yet");
-    await expect(row).not.toContainText("0");
   });
 
   test("carries no fabricated badge counts in the sidebar", async ({ page }) => {
@@ -151,7 +155,7 @@ test.describe("boards 4b, 4d and 4e", () => {
   });
 
   test("all three are axe clean at compact density", async ({ page }) => {
-    for (const path of ["/admin/queue", "/admin/categories", "/admin/spec-library"]) {
+    for (const path of ["/admin/queue", "/admin/categories", "/admin/spec-library", "/admin/ingest"]) {
       await page.goto(path);
       const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
       expect(results.violations, path).toEqual([]);
@@ -171,5 +175,29 @@ test.describe("what taxonomy.write gates", () => {
       expect(response?.status(), path).toBe(404);
     }
     await context.close();
+  });
+});
+
+test.describe("board 12a — the licence importer", () => {
+  test("opens on the runs, and says nothing publishes itself", async ({ page }) => {
+    await page.goto("/admin/ingest");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Licence importer");
+    await expect(
+      page.getByText(/Listings are created only when somebody approves the run/),
+    ).toBeVisible();
+  });
+
+  test("shows a run table with real column heads", async ({ page }) => {
+    /*
+     * Not an empty-state assertion. The integration suite stages runs into the
+     * same database, so whether this list is empty depends on what ran before —
+     * and a test whose subject depends on the order of other files is a test
+     * that fails for reasons unrelated to what it is checking. The empty state
+     * is covered where it is stable, in the gallery.
+     */
+    await page.goto("/admin/ingest");
+    for (const head of ["Source", "Rows", "Staged", "Rejected", "Status"]) {
+      await expect(page.getByRole("columnheader", { name: head })).toBeVisible();
+    }
   });
 });

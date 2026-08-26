@@ -2049,3 +2049,91 @@ landmark test caught it. `tabIndex` alone is what the rule needs; the table's
 seeded seller — and `enquiry-fanout.test.ts` counts products. The suite failed a
 different file, on a fresh database only, off by exactly the number of fixtures
 built before it. Fixtures now create their own unpublished business.
+
+---
+
+## Handoff 4, step 2a — the licence importer
+
+### `ImportRun` was a name collision, not a foundation
+
+Handoff 3's `ImportRun` is the seller CSV *product* importer: `businessId` is
+NOT NULL behind a cascading FK, its only child is `Product`, and its revert path
+reads business + created_at. A licence run has no owning business and produces
+listings. Reusing it would have meant making `business_id` nullable and breaking
+the seller's 24-hour revert, so step 2 has `LicenceImportRun` of its own.
+
+### A licence record cannot be staged into `Business`
+
+`slug` is unique and NOT NULL, `primary_category_id` is NOT NULL behind a
+RESTRICT FK, and the licence columns are NOT NULL. A record whose category could
+not be inferred has nowhere legal to sit there — which is the whole reason
+`StagedListing` exists rather than an unpublished business.
+
+Two CHECK constraints carry criterion 1 at the level a second code path cannot
+skip: a rejected row must carry a ground, and only a `published` row may carry a
+`business_id`. Nothing publishes itself, in the schema.
+
+### The classifier queues rather than rejects
+
+A record we cannot categorise costs somebody an afternoon. A record we wrongly
+reject is a supplier who is not in the directory and will never know why. So
+"activity out of scope" fires only on activities that are positively something
+else — restaurant, salon, legal consultancy — and never on one we simply do not
+recognise. **"General Trading" is not out of scope**: it is the single most
+common licence in the market, and rejecting it would empty the directory of
+exactly the suppliers it is for.
+
+The grounds are checked in the order somebody reading a rejection would want: no
+readable name first, because it cannot be argued about; then the expiry, which
+is a fact; then scope, which is a judgement.
+
+A licence that expired *recently* is kept. A late renewal is ordinary here and
+the verification ladder already drops the tier for it; the floor is 24 months.
+
+### Day-first dates, because every authority here writes day-first
+
+`03/08/2027` read as American is five months out — enough to push a live licence
+over the 24-month floor and reject a real supplier. The parser assumes day-first
+and returns null rather than guessing at anything it does not recognise.
+
+### `Business.import_run_id` is gone
+
+A bare TEXT column from the init migration with no foreign key, no relation, no
+index and no reader or writer anywhere. It predated `ImportRun`, which points at
+products, and read as import provenance while being nothing.
+`licence_import_run_id` replaces it with the meaning the old name claimed, and
+the old column is dropped rather than left beside it — two columns whose names
+both promise provenance is how the next person picks the wrong one.
+
+### `parseCsv` was silently truncating at 5,000 rows
+
+`records.slice(1, MAX_ROWS + 1)`, with no error and no warning. A seller
+uploading six thousand products got five thousand and no indication which
+thousand were missing — the worst way for an importer to fail, because it looks
+exactly like success.
+
+The cap is now a parameter with the seller's 5,000 as the default, `ParsedCsv`
+reports `truncated`, and the seller's import wizard shows it. The licence
+importer passes 50,000: a catalogue is bounded by what one supplier stocks, an
+authority export by how many companies an emirate has licensed.
+
+### Staging is not audited; approving is
+
+Staging changes nothing a buyer or a seller can see. Writing an audit row for it
+would put "somebody uploaded a file" in the same log as "somebody decided who
+owns a listing", which makes the log harder to read rather than more complete.
+
+Approving is the audited event, and it runs with a 120-second transaction
+timeout: 8,000 rows is a long transaction, and the 5-second default is sized for
+a request rather than for an import somebody kicked off and walked away from.
+`createMany` is chunked at 500 for the same reason — 8,000 rows in one statement
+exceeds what Postgres will bind, and finding that out at 8,000 rather than at 40
+is why criterion 1 names a real number.
+
+### A listing an import creates has had nothing checked
+
+Unpublished, tier 0, unclaimed, `source: licence_import`. It has a licence
+number and an address and that is all; the claim funnel is what turns it into a
+supplier. An authority code we do not have in the `Authority` enum blocks the
+row from becoming a listing and leaves it staged, which is the honest place for
+it — a new free zone opening must not stop an import.

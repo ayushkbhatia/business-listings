@@ -99,6 +99,7 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
     zeroResults,
     freeAtCap,
     unclaimedListings,
+    stagedRecords,
     reportsOpen,
     reportsLate,
     reportsOldest,
@@ -137,6 +138,12 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
 
     prisma.business.count({ where: { planId: "free", claimStatus: "claimed" } }),
     prisma.business.count({ where: { claimStatus: "unclaimed" } }),
+
+    // Staged and waiting for somebody to approve the run. Real now: step 2
+    // built the table that board 4a used to say was not measurable yet.
+    prisma.stagedListing.count({
+      where: { disposition: { in: ["ready", "needs_category"] }, run: { status: "staged" } },
+    }),
 
     prisma.supplierReport.count({ where: { outcome: null } }),
     prisma.supplierReport.count({
@@ -196,9 +203,7 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
       metrics: [
         metric("queue", "console.metric.queue", "queue", "/admin/queue", queuePending, queueLate, queueOldest?.createdAt ?? null),
         metric("claims", "console.metric.claims", "queue", "/admin/queue", claimsOpen, claimsLate, claimsOldest?.createdAt ?? null),
-        // Null until step 2 builds the licence-import run. Not zero: nothing
-        // has been staged because there is nowhere to stage it.
-        metric("staged", "console.metric.staged", "ingest", "/admin/ingest", null),
+        metric("staged", "console.metric.staged", "ingest", "/admin/ingest", stagedRecords),
         metric("unclaimed", "console.metric.unclaimed", "crm", "/admin/crm", unclaimedListings),
       ],
     },

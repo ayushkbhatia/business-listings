@@ -31,6 +31,15 @@ export interface ImportPreview {
   suggestions: ColumnSuggestion[];
   rowCount: number;
   raggedRows: number[];
+  /**
+   * Rows past the 5,000 ceiling that were not read.
+   *
+   * Surfaced because it used to be a silent slice: a seller uploading six
+   * thousand products got five thousand and no indication which thousand were
+   * missing. An importer that quietly drops data looks exactly like one that
+   * worked.
+   */
+  truncated: number;
   /** First few rows, for showing the seller what they are about to import. */
   sample: string[][];
 }
@@ -50,6 +59,7 @@ export function previewImport(text: string, specFields: readonly SpecFieldOption
     ),
     rowCount: parsed.rows.length,
     raggedRows: parsed.raggedRows,
+    truncated: parsed.truncated,
     sample: parsed.rows.slice(0, 5),
   };
 }

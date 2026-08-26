@@ -81,6 +81,7 @@ model User {
   claimsMade     ClaimSubmission[]      @relation("ClaimClaimant")
   visitsRequested SiteVisitRequest[]    @relation("VisitRequester")
   conflictsResolved ClaimConflict[]     @relation("ConflictResolvedBy")
+  licenceImports    LicenceImportRun[]  @relation("IngestActor")
   proposalsDecided  SpecFieldProposal[] @relation("ProposalDecidedBy")
 
   @@index([businessId])
@@ -226,6 +227,7 @@ model Category {
   importMappings  ImportMapping[]
   placementWaitlist PlacementWaitlist[]
   fieldProposals  SpecFieldProposal[]
+  stagedListings  StagedListing[]
 
   @@index([parentId])
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
@@ -425,7 +427,13 @@ model Business {
   planId            String?       @map("plan_id")
   primaryCategoryId String        @map("primary_category_id")
   source            ListingSource @default(licence_import)
-  importRunId       String?       @map("import_run_id")
+  /// Which licence import created this listing, where one did.
+  ///
+  /// Replaces a bare `import_run_id` TEXT column that existed from the init
+  /// migration with no foreign key, no relation, no index and no reader — it
+  /// predated `ImportRun`, which points at products, and read as provenance
+  /// while being nothing.
+  licenceImportRunId String?      @map("licence_import_run_id")
   suspendedAt       DateTime?     @map("suspended_at")
   publishedAt       DateTime?     @map("published_at")
   createdAt         DateTime      @default(now()) @map("created_at")
@@ -471,6 +479,8 @@ model Business {
   teamInvites            TeamInvite[]
   claimSubmissions       ClaimSubmission[]
   visitRequests          SiteVisitRequest[]
+  licenceImportRun       LicenceImportRun?       @relation(fields: [licenceImportRunId], references: [id], onDelete: SetNull)
+  stagedListings         StagedListing[]
   claimConflicts         ClaimConflict[]         @relation("ConflictBusiness")
   producedByConflicts    ClaimConflict[]         @relation("ConflictProduced")
   placementWaitlist      PlacementWaitlist[]
@@ -1082,6 +1092,101 @@ enum ProposalState {
 /// enough" was not a countable thing. One row per (category, normalised key)
 /// with a business count makes it one — and that promotion path is what stops
 /// 40,000 businesses inventing 40,000 attribute names.
+/// A licence-authority export, staged.
+///
+/// Nothing here publishes itself. A run parses, categorises what it can, queues
+/// what it cannot and rejects the rest by countable reason — and then a person
+/// approves it. Criterion 1 is that sequence, in that order.
+model LicenceImportRun {
+  id                String          @id @default(cuid())
+  actorId           String          @map("actor_id") @db.Uuid
+  /// Which authority's export. Free text: a new authority is a Tuesday.
+  source            String
+  filename          String
+  status            IngestRunStatus @default(parsing)
+  rowCount          Int             @default(0) @map("row_count")
+  stagedCount       Int             @default(0) @map("staged_count")
+  categorisedCount  Int             @default(0) @map("categorised_count")
+  queuedCount       Int             @default(0) @map("queued_count")
+  rejectedCount     Int             @default(0) @map("rejected_count")
+  /// NOT NULL once decided, paired by a CHECK in the migration.
+  decisionReason    String?         @map("decision_reason")
+  decidedAt         DateTime?       @map("decided_at")
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  actor      User            @relation("IngestActor", fields: [actorId], references: [id], onDelete: Restrict)
+  rows       StagedListing[]
+  businesses Business[]
+
+  @@map("licence_import_run")
+}
+
+enum IngestRunStatus {
+  parsing
+  staged
+  approved
+  discarded
+
+  @@map("ingest_run_status")
+}
+
+enum StagedDisposition {
+  ready
+  needs_category
+  rejected
+  published
+
+  @@map("staged_disposition")
+}
+
+/// The four grounds the README fixes. An enum rather than a string because they
+/// are counted, and the counts are the screen.
+enum RejectionGround {
+  licence_expired_24_months
+  no_readable_trade_name
+  activity_out_of_scope
+  address_outside_uae
+
+  @@map("rejection_ground")
+}
+
+/// One row of a licence export, before it is a listing.
+///
+/// It cannot be staged into `Business`: slug is unique and NOT NULL,
+/// `primaryCategoryId` is NOT NULL behind a RESTRICT FK, and the licence
+/// columns are NOT NULL. A record whose category could not be inferred has
+/// nowhere legal to sit there, which is the whole reason this table exists.
+model StagedListing {
+  id               String            @id @default(cuid())
+  runId            String            @map("run_id")
+  rowNumber        Int               @map("row_number")
+  /// As it arrived, before we decided anything. Kept so a rejection can be
+  /// argued with.
+  raw              Json
+  tradeName        String?           @map("trade_name")
+  licenceNumber    String?           @map("licence_number")
+  licenceAuthority String?           @map("licence_authority")
+  licenceExpiry    DateTime?         @map("licence_expiry")
+  emirate          String?
+  areaName         String?           @map("area_name")
+  activity         String?
+  phone            String?
+  /// Nullable, unlike on `Business`. That is the point of staging.
+  categoryId       String?           @map("category_id")
+  disposition      StagedDisposition @default(needs_category)
+  rejectionGround  RejectionGround?  @map("rejection_ground")
+  /// Set only when the run is approved and this row becomes a listing.
+  businessId       String?           @map("business_id")
+  createdAt        DateTime          @default(now()) @map("created_at")
+
+  run      LicenceImportRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  category Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  business Business?        @relation(fields: [businessId], references: [id], onDelete: SetNull)
+
+  @@unique([runId, rowNumber])
+  @@map("staged_listing")
+}
+
 model SpecFieldProposal {
   id              String        @id @default(cuid())
   categoryId      String        @map("category_id")

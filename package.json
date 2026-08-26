@@ -32,7 +32,8 @@
     "acceptance:2": "./scripts/acceptance-handoff-2.sh",
     "lighthouse": "./scripts/lighthouse.sh",
     "storage:setup": "NODE_OPTIONS=--conditions=react-server tsx scripts/ensure-buckets.mts",
-    "acceptance:3": "./scripts/acceptance-handoff-3.sh"
+    "acceptance:3": "./scripts/acceptance-handoff-3.sh",
+    "fixture:licences": "tsx scripts/make-licence-fixture.mts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

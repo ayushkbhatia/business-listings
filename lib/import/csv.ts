@@ -17,6 +17,15 @@ export interface ParsedCsv {
   rows: string[][];
   /** Rows whose column count did not match the header, and were adjusted. */
   raggedRows: number[];
+  /**
+   * Rows past the ceiling that were not returned.
+   *
+   * Reported rather than swallowed. This used to be a silent `slice`: a seller
+   * uploading six thousand products got five thousand and no indication which
+   * thousand were missing, which is the worst way for an importer to fail
+   * because it looks exactly like success.
+   */
+  truncated: number;
 }
 
 const BOM = "﻿";
@@ -115,6 +124,14 @@ function toRecords(text: string): string[] {
   return records.filter((r) => r.trim() !== "");
 }
 
+/**
+ * The default ceiling, and it is the seller's.
+ *
+ * A catalogue is bounded by what one supplier stocks; a licence-authority
+ * export is bounded by how many companies an emirate has licensed. Handoff 4's
+ * importer passes its own, which is why this is a default rather than a
+ * constant.
+ */
 export const MAX_ROWS = 5_000;
 
 export class CsvError extends Error {
@@ -124,7 +141,7 @@ export class CsvError extends Error {
   }
 }
 
-export function parseCsv(text: string): ParsedCsv {
+export function parseCsv(text: string, maxRows: number = MAX_ROWS): ParsedCsv {
   const clean = text.startsWith(BOM) ? text.slice(BOM.length) : text;
   const records = toRecords(clean);
 
@@ -145,7 +162,10 @@ export function parseCsv(text: string): ParsedCsv {
   const raggedRows: number[] = [];
   const rows: string[][] = [];
 
-  for (const record of records.slice(1, MAX_ROWS + 1)) {
+  const body = records.slice(1);
+  const truncated = Math.max(0, body.length - maxRows);
+
+  for (const record of body.slice(0, maxRows)) {
     const cells = splitLine(record, delimiter);
     if (cells.length !== headers.length) {
       raggedRows.push(rows.length + 2); // 1-based, and the header is row 1.
@@ -157,7 +177,7 @@ export function parseCsv(text: string): ParsedCsv {
     rows.push(cells);
   }
 
-  return { headers, rows, raggedRows };
+  return { headers, rows, raggedRows, truncated };
 }
 
 /** Every value in one column, for guessing what the column is. */
