@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Card } from "@/components/structure";
 import { ADMIN_NAV } from "@/components/structure/nav-config";
 import { requireStaff } from "@/lib/auth/staff";
-import { consoleOverview, SLA_DAYS, type ConsoleMetric } from "@/lib/console/overview";
+import { consoleOverview, SLA_DAYS, visibleTo, type ConsoleMetric } from "@/lib/console/overview";
 import { formatCount } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
@@ -101,7 +101,14 @@ function Metric({ metric }: { metric: ConsoleMetric }) {
 
 export default async function AdminOverviewPage() {
   const seat = await requireStaff();
-  const [jobs, badges] = await Promise.all([consoleOverview(), getAdminNavBadges(seat)]);
+  const [all, badges] = await Promise.all([consoleOverview(), getAdminNavBadges(seat)]);
+  /*
+   * Filtered to what this seat may open. §07 puts `revenue.read` with finance
+   * and gives ops lead a dash, so the past-due count linked an ops lead
+   * straight into a 404 until the overview started reading the same capability
+   * the sidebar does.
+   */
+  const jobs = visibleTo(all, seat.actor);
 
   /*
    * The headline counts queues only. "94 waiting" that includes 24 unclaimed
@@ -134,11 +141,20 @@ export default async function AdminOverviewPage() {
         {jobs.map((job) => (
           <Card key={job.key}>
             <h2 className="text-body-sm font-medium text-ink">{t(job.labelKey as never)}</h2>
-            <ul className="mt-2">
-              {job.metrics.map((metric) => (
-                <Metric key={metric.key} metric={metric} />
-              ))}
-            </ul>
+            {job.metrics.length === 0 ? (
+              /*
+                The panel stays. The six jobs are what the platform has to do,
+                not what this reader has to do, and dropping one would tell an
+                ops lead the money looks after itself.
+              */
+              <p className="mt-2 text-caption text-muted">{t("admin.overview.not_yours")}</p>
+            ) : (
+              <ul className="mt-2">
+                {job.metrics.map((metric) => (
+                  <Metric key={metric.key} metric={metric} />
+                ))}
+              </ul>
+            )}
           </Card>
         ))}
       </div>

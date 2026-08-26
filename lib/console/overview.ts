@@ -1,6 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 
+// Re-exported so callers keep one import. The function itself lives outside
+// this module because it is pure and `server-only` is not testable in jsdom.
+export { visibleTo } from "./visibility";
+
 /**
  * Board 4a — the console in one screen.
  *
@@ -74,6 +78,7 @@ export interface ConsoleJob {
   labelKey: string;
   metrics: ConsoleMetric[];
 }
+
 
 const DAY_MS = 86_400_000;
 

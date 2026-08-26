@@ -98,12 +98,12 @@ they 404 until their handoff.
 /admin/crm                              Recruitment & accounts               [12d]  built h4s4
 /admin/users                            Users                                later
 /admin/staff                            Staff, roles & audit                  [4i]  built h4s3
-/admin/subscriptions                    Subscriptions                         [4g]
-/admin/invoices                         Invoices & credits                   [12e]
-/admin/plans                            Plans & entitlements                 [12e]
-/admin/dunning                          Failed payments                      [12e]
-/admin/tax                              VAT export                           [12e]
-/admin/revenue                          Revenue                               [4g]
+/admin/subscriptions                    Subscriptions                         [4g]  built h4s5
+/admin/invoices                         Invoices & credits                   [12e]  built h4s5
+/admin/plans                            Plans & entitlements                 [12e]  built h4s5
+/admin/dunning                          Failed payments                      [12e]  built h4s5
+/admin/tax                              VAT export                           [12e]  built h4s5
+/admin/revenue                          Revenue                               [4g]  built h4s5
 /admin/reports                          Supplier reports & flags              [4h]  built h4s3
 /admin/support                          Support desk & view-as               [12f]  built h4s4
 /admin/notifications                    Notification templates              [12g]

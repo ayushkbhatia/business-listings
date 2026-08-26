@@ -83,7 +83,23 @@ async function listingsFor(where: object): Promise<Listing[]> {
  * unique index says so, and a dedupe list that keeps offering back a pair
  * somebody rejected is a list people stop reading.
  */
-export async function findCandidates(limit = 500): Promise<number> {
+export interface RescanResult {
+  /** New candidate rows written. Pairs already on the list are not re-added. */
+  created: number;
+  /** Pairs above `unlikely` the scan actually found. */
+  considered: number;
+  /**
+   * Pairs the cap dropped, unwritten.
+   *
+   * Reported rather than swallowed. A scan that silently stops at five hundred
+   * tells whoever is clearing the list that they have seen everything, which is
+   * the same failure `parseCsv` had at five thousand rows and the same one a
+   * broken query rendering as "nothing to do" has. The screen says the number.
+   */
+  dropped: number;
+}
+
+export async function findCandidates(limit = 500): Promise<RescanResult> {
   const listings = await listingsFor({});
 
   const byBlock = new Map<string, Listing[]>();
@@ -140,32 +156,50 @@ export async function findCandidates(limit = 500): Promise<number> {
 
   found.sort((x, y) => y.score - x.score);
 
-  let created = 0;
-  for (const candidate of found.slice(0, limit)) {
-    const existing = await prisma.mergeCandidate.findFirst({
-      where: {
-        OR: [
-          { keepId: candidate.keepId, absorbId: candidate.absorbId },
-          { keepId: candidate.absorbId, absorbId: candidate.keepId },
-        ],
-      },
-      select: { id: true },
-    });
-    if (existing) continue;
+  /*
+   * Two queries, not two per pair.
+   *
+   * This used to run a `findFirst` and a `create` for every candidate, which is
+   * a thousand round-trips on a directory with a thousand duplicates and the
+   * reason a scan took half a minute against a few thousand listings. The
+   * blocking above exists precisely so this stays cheap at 41,000; doing it and
+   * then spending the saving on round-trips was the wrong half of the fix.
+   */
+  const wanted = found.slice(0, limit);
+  const existing = await prisma.mergeCandidate.findMany({
+    select: { keepId: true, absorbId: true },
+  });
+  const seenPairs = new Set(
+    existing.map(({ keepId, absorbId }) =>
+      keepId < absorbId ? `${keepId}|${absorbId}` : `${absorbId}|${keepId}`,
+    ),
+  );
 
-    await prisma.mergeCandidate.create({
-      data: {
+  const fresh = wanted.filter((candidate) => {
+    const key =
+      candidate.keepId < candidate.absorbId
+        ? `${candidate.keepId}|${candidate.absorbId}`
+        : `${candidate.absorbId}|${candidate.keepId}`;
+    if (seenPairs.has(key)) return false;
+    seenPairs.add(key);
+    return true;
+  });
+
+  if (fresh.length > 0) {
+    await prisma.mergeCandidate.createMany({
+      data: fresh.map((candidate) => ({
         keepId: candidate.keepId,
         absorbId: candidate.absorbId,
         score: candidate.score,
         band: candidate.band as "certain" | "probable",
         signals: candidate.signals as object,
-      },
+      })),
     });
-    created += 1;
   }
 
-  return created;
+  const created = fresh.length;
+
+  return { created, considered: found.length, dropped: Math.max(0, found.length - limit) };
 }
 
 export async function openCandidates(band?: "certain" | "probable", limit = 100) {

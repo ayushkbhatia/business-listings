@@ -1566,20 +1566,53 @@ async function deriveResponseTimes(db: Db) {
 
 async function seedCommercials(db: Db, businesses: Biz[]) {
   console.log("→ subscriptions, placements, invoices");
+  const { snapshotOf } = await import("../lib/plan/entitlements.js");
   const paying = businesses.filter((b) => b.claim === "claimed").slice(0, 12);
+  const planRows = new Map((await db.plan.findMany()).map((p) => [p.id, p]));
+
+  /** Signup dates, so the MRR ledger can be backfilled with the real ones. */
+  const started = new Map<string, { planId: string; at: Date; fils: number }>();
 
   for (const [i, b] of paying.entries()) {
     const planId = i < 3 ? "pro" : i < 8 ? "basic" : "free";
     if (planId === "free") continue;
+    const plan = planRows.get(planId)!;
+    const startedAt = days(-int(60, 700));
+    started.set(b.id, {
+      planId,
+      at: startedAt,
+      fils: Math.round(Number(plan.monthlyPriceAed) * 100),
+    });
 
     await db.subscription.create({
       data: {
         businessId: b.id,
         planId,
         status: i === 7 ? "past_due" : "active",
-        startedAt: days(-int(60, 700)),
+        startedAt,
         renewsAt: days(int(2, 30)),
-        entitlementSnapshot: { planId, capturedAt: NOW.toISOString() },
+        /*
+         * A real snapshot, with the caps in it. This used to be
+         * `{ planId, capturedAt }` — no numbers — which meant every seeded
+         * subscription looked grandfathered and was not.
+         */
+        entitlementSnapshot: snapshotOf(
+          {
+            id: plan.id,
+            name: plan.name,
+            monthlyPriceAed: Number(plan.monthlyPriceAed),
+            enquiriesPerMonth: plan.enquiriesPerMonth,
+            productLimit: plan.productLimit,
+            locationLimit: plan.locationLimit,
+            photoLimit: plan.photoLimit,
+            teamSeats: plan.teamSeats,
+            rankingMultiplier: Number(plan.rankingMultiplier),
+            customDomain: plan.customDomain,
+            siteVisitIncluded: plan.siteVisitIncluded,
+            sortOrder: plan.sortOrder,
+          },
+          NOW,
+        ) as unknown as object,
       },
     });
 
@@ -1635,6 +1668,116 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
       },
     },
   });
+
+  await seedMrrLedger(db, started);
+}
+
+/**
+ * Backfill the MRR ledger.
+ *
+ * Board 4g's waterfall is a `GROUP BY` over `MrrMovement`, and opening MRR is
+ * the running sum of everything before the window. Without a row per existing
+ * subscription the opening balance is zero and the first month on the screen
+ * shows the entire business arriving at once — which is exactly the kind of
+ * number that gets screenshotted and then explained for a week.
+ *
+ * The invariant the ledger has to hold is that its total equals the live
+ * subscription table. `reconcile()` checks it and the revenue screen shows the
+ * answer, so a seed that got this wrong would be visible rather than silent.
+ */
+async function seedMrrLedger(db: Db, started: Map<string, { planId: string; at: Date; fils: number }>) {
+  console.log("→ MRR movement ledger");
+
+  let churned = 0;
+  let expanded = 0;
+
+  for (const [businessId, signup] of started) {
+    await db.mrrMovement.create({
+      data: {
+        businessId,
+        kind: "new_business",
+        fromPlanId: null,
+        toPlanId: signup.planId,
+        deltaFils: signup.fils,
+        mrrAfterFils: signup.fils,
+        occurredAt: signup.at,
+        note: "Signed up",
+      },
+    });
+  }
+
+  /*
+   * Two accounts that are not in the live table at all: sellers who paid and
+   * left. Every real directory has them and a waterfall with an empty churn
+   * column looks like a bug. They are separate businesses rather than edits to
+   * the paying ones, because the ledger has to reconcile against the live
+   * subscription table and a churn on an account that still pays would not.
+   */
+  const gone = await db.business.findMany({
+    where: { planId: "free", claimStatus: "claimed", subscription: null },
+    select: { id: true },
+    take: 2,
+  });
+
+  for (const [index, business] of gone.entries()) {
+    const startedAt = days(-int(400, 600));
+    const leftAt = days(-int(20, 120));
+    const fils = index === 0 ? 34_900 : 89_900;
+
+    await db.mrrMovement.create({
+      data: {
+        businessId: business.id,
+        kind: "new_business",
+        toPlanId: index === 0 ? "basic" : "pro",
+        deltaFils: fils,
+        mrrAfterFils: fils,
+        occurredAt: startedAt,
+        note: "Signed up",
+      },
+    });
+    await db.mrrMovement.create({
+      data: {
+        businessId: business.id,
+        kind: "churn",
+        fromPlanId: index === 0 ? "basic" : "pro",
+        toPlanId: "free",
+        deltaFils: -fils,
+        mrrAfterFils: 0,
+        occurredAt: leftAt,
+        note: index === 0 ? "Cancellation reached its end date" : "Dunning drop after 14 days past due",
+      },
+    });
+    churned += 1;
+  }
+
+  /*
+   * One expansion and one contraction, on accounts that are on the plan the
+   * ledger ends at. Basic to Pro means the signup row has to say Basic, so the
+   * two rows sum to what the account pays now — the seed writes the pair
+   * rather than patching the signup, for the same reason the live code does.
+   */
+  const movers = [...started.entries()].filter(([, s]) => s.planId === "pro").slice(0, 1);
+  for (const [businessId, signup] of movers) {
+    await db.mrrMovement.updateMany({
+      where: { businessId, kind: "new_business" },
+      data: { toPlanId: "basic", deltaFils: 34_900, mrrAfterFils: 34_900 },
+    });
+    await db.mrrMovement.create({
+      data: {
+        businessId,
+        kind: "expansion",
+        fromPlanId: "basic",
+        toPlanId: "pro",
+        deltaFils: signup.fils - 34_900,
+        mrrAfterFils: signup.fils,
+        occurredAt: days(-int(10, 50)),
+        note: "Plan change to Pro",
+      },
+    });
+    expanded += 1;
+  }
+
+  console.log(`   ${started.size} signups, ${expanded} expansion, ${churned} churned`);
 }
 
 async function seedTrust(db: Db, businesses: Biz[], opsLeadId: string, moderatorId: string, buyerId: string) {

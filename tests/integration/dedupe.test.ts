@@ -448,7 +448,13 @@ describe("the candidate list", () => {
       data: { licenceNumber: shared },
     });
 
-    await findCandidates();
+    /*
+     * An explicit limit, because the default is five hundred and this suite
+     * leaves a directory with thousands of high-scoring pairs in it — the
+     * licence importer's own tests import the same file more than once. This
+     * test is about banding, not about the cap; the cap has its own test below.
+     */
+    await findCandidates(50_000);
 
     const candidate = await prisma.mergeCandidate.findFirst({
       where: {
@@ -466,6 +472,28 @@ describe("the candidate list", () => {
     expect(JSON.stringify(candidate!.signals)).toContain("licence_number");
   }, 60_000);
 
+  it("says how many pairs the cap dropped rather than swallowing them", async () => {
+    /*
+     * The same failure `parseCsv` had at five thousand rows: a scan that stops
+     * at a cap and reports only what it wrote tells whoever is clearing the
+     * list that they have seen everything. With the cap at one, everything but
+     * the top pair is dropped and the count has to say so.
+     */
+    const first = await listingWithHistory("Capped One");
+    const second = await listingWithHistory("Capped Two");
+    const third = await listingWithHistory("Capped Three");
+    const stamp = `${Date.now()}`;
+    await prisma.business.updateMany({
+      where: { id: { in: [first.id, second.id, third.id] } },
+      data: { licenceNumber: `DED-${stamp.slice(-6)}` },
+    });
+
+    const scan = await findCandidates(1);
+    expect(scan.considered).toBeGreaterThan(1);
+    expect(scan.dropped).toBe(scan.considered - 1);
+    expect(scan.created).toBeLessThanOrEqual(1);
+  }, 60_000);
+
   it("does not re-propose a pair somebody dismissed", async () => {
     const stamp = `${Date.now()}`;
     const first = await listingWithHistory("Dismiss One");
@@ -475,7 +503,7 @@ describe("the candidate list", () => {
       data: { licenceNumber: `DED-${stamp.slice(-6)}` },
     });
 
-    await findCandidates();
+    await findCandidates(50_000);
     const candidate = await prisma.mergeCandidate.findFirstOrThrow({
       where: {
         OR: [
@@ -492,7 +520,7 @@ describe("the candidate list", () => {
       reason: "Two brothers, two companies, one family name. Not a duplicate.",
     });
 
-    await findCandidates();
+    await findCandidates(50_000);
     const count = await prisma.mergeCandidate.count({
       where: {
         OR: [

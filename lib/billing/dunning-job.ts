@@ -1,0 +1,196 @@
+import "server-only";
+import { prisma } from "@/lib/db/client";
+import { paymentProvider } from "./provider";
+import { nextAction, SCHEDULE, type DunningStage } from "./dunning";
+import { aedToFils, recordMovement } from "./mrr";
+
+/**
+ * The dunning runner.
+ *
+ * Reads the pure sequence in `dunning.ts` and applies it. Idempotent: a run is
+ * a function of the stage and the days past due, so running it twice in an hour
+ * does the same nothing the second time.
+ *
+ * **The only account change it ever makes is a plan drop.** No listing is
+ * deleted or unpublished, no badge is removed, no tier moves, and no product or
+ * review is touched. That is criterion 10's negative, and it is true here
+ * because the switch below has one branch that writes to `Business` and that
+ * branch writes `planId`.
+ *
+ * Not audited. Dunning is the platform following its own published sequence
+ * rather than a staff decision, and there is no actor to attribute it to —
+ * `AuditEvent.actorId` is NOT NULL for exactly the reason that a log of
+ * decisions should only contain decisions. The `PaymentAttempt` rows and the
+ * stage column are the record.
+ */
+
+export interface DunningResult {
+  considered: number;
+  retried: number;
+  notified: number;
+  dropped: number;
+  ranAt: Date;
+}
+
+export async function runDunning(now: Date = new Date()): Promise<DunningResult> {
+  const overdue = await prisma.subscription.findMany({
+    where: {
+      OR: [{ status: "past_due" }, { dunningStage: { not: "none" } }],
+      NOT: { dunningStage: "dropped" },
+    },
+    select: {
+      id: true,
+      businessId: true,
+      planId: true,
+      dunningStage: true,
+      pastDueSince: true,
+      plan: { select: { monthlyPriceAed: true } },
+    },
+  });
+
+  let retried = 0;
+  let notified = 0;
+  let dropped = 0;
+
+  for (const subscription of overdue) {
+    /*
+     * A subscription marked past due by something that did not record when
+     * starts from now. Held in memory rather than written back on its own,
+     * because every branch below that does anything persists it, and the only
+     * branch that does not — `wait` — is unreachable from a null date: the
+     * date is `now`, so day zero is due and the retry fires on this same pass.
+     */
+    const pastDueSince = subscription.pastDueSince ?? now;
+    // Whole fils, as everywhere else in billing. Never a float.
+    const monthlyFils = aedToFils(Number(subscription.plan.monthlyPriceAed));
+
+    const action = nextAction(subscription.dunningStage as DunningStage, pastDueSince, now);
+    if (action.kind === "wait") continue;
+
+    if (action.kind === "retry_silently") {
+      const provider = paymentProvider();
+
+      /*
+       * A provider that cannot take money cannot report that it took money.
+       *
+       * `consoleProvider` returns `ok: true` for every charge, which is right
+       * for a screen that wants to show the shape of a receipt and catastrophic
+       * here: it would mark every past-due subscription active again, silently,
+       * without a card being touched, and the sequence would never reach the
+       * seller at all. So with no gateway the retry is skipped — the stage
+       * advances, the notifications go out, the plan drops on schedule, and the
+       * absence of a `PaymentAttempt` row is the honest record that nothing was
+       * charged.
+       *
+       * Nothing to charge is the same case. A free subscription should never be
+       * past due, but if one is, there is no card to retry and a zero-fils
+       * attempt row would fail `payment_attempt_amount_is_positive` anyway.
+       */
+      if (!provider.live || monthlyFils <= 0) {
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: { dunningStage: "retry", pastDueSince, dunningAdvancedAt: now },
+        });
+        retried += 1;
+        continue;
+      }
+
+      const charge = await provider.charge({
+        businessId: subscription.businessId,
+        fils: monthlyFils,
+        description: "Subscription retry",
+        reference: `DUNNING-${subscription.id}-${pastDueSince.getTime()}`,
+      });
+
+      await prisma.paymentAttempt.create({
+        data: {
+          subscriptionId: subscription.id,
+          amountFils: monthlyFils,
+          succeeded: charge.ok,
+          providerMessage: charge.ok ? null : (charge.error ?? null),
+          attemptedAt: now,
+        },
+      });
+
+      if (charge.ok) {
+        // Paid. Out of dunning entirely, and the columns move together or the
+        // check constraint refuses the row.
+        await prisma.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            status: "active",
+            dunningStage: "none",
+            pastDueSince: null,
+            dunningAdvancedAt: now,
+          },
+        });
+        continue;
+      }
+
+      await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { dunningStage: "retry", pastDueSince, dunningAdvancedAt: now },
+      });
+      retried += 1;
+      continue;
+    }
+
+    if (action.kind === "send") {
+      /*
+       * The notification itself goes through `lib/notify`, which is a port with
+       * a console sender until a real one exists. Advancing the stage is what
+       * matters here: a stage that moves only when a message actually sent
+       * would stall the whole sequence behind an unconfigured provider.
+       */
+      await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: { dunningStage: action.stage, pastDueSince, dunningAdvancedAt: now },
+      });
+      notified += 1;
+      continue;
+    }
+
+    if (action.kind === "drop_to_free") {
+      await prisma.$transaction(async (tx) => {
+        await tx.subscription.update({
+          where: { id: subscription.id },
+          data: {
+            planId: "free",
+            status: "active",
+            dunningStage: "dropped",
+            pastDueSince,
+            dunningAdvancedAt: now,
+          },
+        });
+
+        /*
+         * The one write to `Business`, and it is one column.
+         *
+         * Not `publishedAt`, not `verificationTier`, not `verifiedAt`. The
+         * listing stays live, the products stay visible, the reviews stay, and
+         * the badge stays — it records what we checked, and a card expiring
+         * does not unverify a trade licence.
+         */
+        await tx.business.update({
+          where: { id: subscription.businessId },
+          data: { planId: "free" },
+        });
+
+        // Churn, in the ledger board 4g reads. Same transaction, so a waterfall
+        // can never be missing a drop that happened.
+        await recordMovement(tx, {
+          businessId: subscription.businessId,
+          fromPlanId: subscription.planId,
+          toPlanId: "free",
+          beforeFils: monthlyFils,
+          afterFils: 0,
+          occurredAt: now,
+          note: `Dunning drop after ${SCHEDULE.final} days past due`,
+        });
+      });
+      dropped += 1;
+    }
+  }
+
+  return { considered: overdue.length, retried, notified, dropped, ranAt: now };
+}

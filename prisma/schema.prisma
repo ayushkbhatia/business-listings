@@ -515,6 +515,7 @@ model Business {
   reports                SupplierReport[]        @relation("ReportSubject")
   subscription           Subscription?
   invoices               Invoice[]
+  mrrMovements           MrrMovement[]
   placements             PlacementSlot[]
   contactReveals         ContactReveal[]
   redirectsFrom          Redirect[]
@@ -1699,6 +1700,40 @@ model SupplierReport {
 // Commercials — subscription and sponsored placement only
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// D0 silent retry, D3 email, D7 WhatsApp, D14 final notice then Free.
+///
+/// `dropped` is a plan change and nothing else: criterion 10 says dunning never
+/// deletes a listing or removes a badge, and a stage that meant "gone" would be
+/// the easiest way for that to stop being true.
+enum DunningStage {
+  none
+  retry
+  emailed
+  messaged
+  final
+  dropped
+
+  @@map("dunning_stage")
+}
+
+/// One attempt to take the money.
+///
+/// Kept because "the card failed four times" and "the card failed once and we
+/// never tried again" are different conversations to have with a seller.
+model PaymentAttempt {
+  id              String   @id @default(cuid())
+  subscriptionId  String   @map("subscription_id")
+  amountFils      Int      @map("amount_fils")
+  succeeded       Boolean
+  /// What the provider said. The seller-facing message is ours, not theirs.
+  providerMessage String?  @map("provider_message")
+  attemptedAt     DateTime @default(now()) @map("attempted_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@map("payment_attempt")
+}
+
 enum SubStatus {
   trialing
   active
@@ -1761,12 +1796,71 @@ model Subscription {
   /// Grandfathering: entitlements captured at signup, unless a plan change
   /// explicitly sets "apply to existing".
   entitlementSnapshot Json?     @map("entitlement_snapshot")
+  /// Where this subscription is in the D0/D3/D7/D14 sequence.
+  dunningStage        DunningStage @default(none) @map("dunning_stage")
+  /// When the payment first failed. Every step is measured from here rather
+  /// than from the previous one, so a missed run does not push the sequence
+  /// back and leave somebody in dunning for a month.
+  pastDueSince        DateTime? @map("past_due_since")
+  dunningAdvancedAt   DateTime? @map("dunning_advanced_at")
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  plan     Plan     @relation(fields: [planId], references: [id], onDelete: Restrict)
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  plan     Plan             @relation(fields: [planId], references: [id], onDelete: Restrict)
+  attempts PaymentAttempt[]
 
   @@index([status, renewsAt])
   @@map("subscription")
+}
+
+/// How a subscription's monthly value moved, and why.
+///
+/// Board 4g wants new / expansion / contraction / churn, and there is no way to
+/// derive that from the subscription table: it holds the plan an account is on
+/// now, not the one it left. Deriving a waterfall from current state is exactly
+/// the kind of fabricated metric this codebase keeps finding and deleting, so
+/// movement is an event, written by the four places that can change what an
+/// account pays — a plan change, a cancellation taking effect, the dunning drop,
+/// and a signup.
+///
+/// MRR at any date is the sum of `deltaFils` up to it, and that sum must equal
+/// the live subscription table. A test asserts the two agree.
+model MrrMovement {
+  id             String          @id @default(cuid())
+  businessId     String          @map("business_id")
+  kind           MrrMovementKind
+  fromPlanId     String?         @map("from_plan_id")
+  toPlanId       String?         @map("to_plan_id")
+  /// Signed monthly change, in fils. Negative for contraction and churn.
+  deltaFils      Int             @map("delta_fils")
+  /// What this account pays a month after the movement. Redundant with the
+  /// running sum, and kept because reconciling a ledger against itself is the
+  /// only way to find the row that is wrong.
+  mrrAfterFils   Int             @map("mrr_after_fils")
+  occurredAt     DateTime        @map("occurred_at")
+  /// What caused it, in words. "Dunning drop after 14 days", "Cancelled at
+  /// period end". Not a reason field in the audit sense — nobody decided this.
+  note           String?
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([occurredAt])
+  @@index([businessId, occurredAt])
+  @@map("mrr_movement")
+}
+
+enum MrrMovementKind {
+  /// First money from an account that has never paid.
+  new_business
+  /// Paying more than last month, same account.
+  expansion
+  /// Paying less, but still paying.
+  contraction
+  /// Was paying, now pays nothing.
+  churn
+  /// Was paying, stopped, and came back.
+  reactivation
+
+  @@map("mrr_movement_kind")
 }
 
 model PlacementSlot {

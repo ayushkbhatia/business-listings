@@ -32,6 +32,85 @@ export interface PlanCaps {
   sortOrder: number;
 }
 
+/**
+ * The caps a subscription was signed up on.
+ *
+ * `Subscription.entitlementSnapshot` has existed since handoff 3 with a doc
+ * comment promising grandfathering, and all three writers stored
+ * `{ planId, capturedAt }` — no cap values at all, and `planId` already on the
+ * same row. Nothing read it. So "grandfathered" was written down as a fact and
+ * was not one: changing a `Plan` row moved every account on it immediately.
+ *
+ * A snapshot now carries the numbers. `effectiveCaps` prefers it, so a seller
+ * keeps what they signed up for until somebody explicitly applies a change to
+ * existing accounts.
+ */
+export interface EntitlementSnapshot {
+  planId: string;
+  capturedAt: string;
+  enquiriesPerMonth: number | null;
+  productLimit: number | null;
+  locationLimit: number | null;
+  photoLimit: number | null;
+  teamSeats: number;
+  customDomain: boolean;
+  siteVisitIncluded: boolean;
+}
+
+/** Everything a snapshot needs to freeze, taken from the live plan. */
+export function snapshotOf(plan: PlanCaps, capturedAt: Date): EntitlementSnapshot {
+  return {
+    planId: plan.id,
+    capturedAt: capturedAt.toISOString(),
+    enquiriesPerMonth: plan.enquiriesPerMonth,
+    productLimit: plan.productLimit,
+    locationLimit: plan.locationLimit,
+    photoLimit: plan.photoLimit,
+    teamSeats: plan.teamSeats,
+    customDomain: plan.customDomain,
+    siteVisitIncluded: plan.siteVisitIncluded,
+  };
+}
+
+/** A snapshot, if the stored value is one. Anything older reads as absent. */
+export function readSnapshot(value: unknown): EntitlementSnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<EntitlementSnapshot>;
+  /*
+   * The old shape — `{ planId, capturedAt }` and nothing else — is not a
+   * snapshot and must not be treated as one. Reading it as if it froze caps
+   * would silently give every existing subscription `undefined` for every cap,
+   * which `capFor` would then read as unlimited.
+   */
+  if (typeof candidate.planId !== "string") return null;
+  if (typeof candidate.teamSeats !== "number") return null;
+  return candidate as EntitlementSnapshot;
+}
+
+/**
+ * What this subscription is actually entitled to.
+ *
+ * The snapshot wins where there is one, so an account keeps the caps it signed
+ * up on. The live plan supplies the name, the price and the ranking multiplier
+ * either way: those are facts about the plan today, not about what somebody
+ * bought, and a grandfathered seller is still on "Pro" at Pro's price.
+ */
+export function effectiveCaps(plan: PlanCaps, snapshot: unknown): PlanCaps {
+  const frozen = readSnapshot(snapshot);
+  if (!frozen || frozen.planId !== plan.id) return plan;
+
+  return {
+    ...plan,
+    enquiriesPerMonth: frozen.enquiriesPerMonth,
+    productLimit: frozen.productLimit,
+    locationLimit: frozen.locationLimit,
+    photoLimit: frozen.photoLimit,
+    teamSeats: frozen.teamSeats,
+    customDomain: frozen.customDomain,
+    siteVisitIncluded: frozen.siteVisitIncluded,
+  };
+}
+
 /** The capped resources. Named because a screen asks about one of them by name. */
 export const METERED = ["enquiries", "products", "locations", "photos", "seats"] as const;
 export type Metered = (typeof METERED)[number];

@@ -88,3 +88,25 @@ test.describe("the audit log a moderator sees", () => {
     expect(response?.status()).toBe(404);
   });
 });
+
+test.describe("the commercial screens a moderator cannot reach", () => {
+  /*
+   * §07 gives `revenue.read` to finance and ops lead. A moderator's job is the
+   * queue and the reports; what the platform earns is not their row, and a 404
+   * rather than a 403 is the console's rule — a 403 confirms the screen exists
+   * to somebody who should not know it does.
+   */
+  for (const path of ["/admin/revenue", "/admin/dunning", "/admin/tax", "/admin/subscriptions"]) {
+    test(`cannot reach ${path}`, async ({ page }) => {
+      const response = await page.goto(path);
+      expect(response?.status()).toBe(404);
+    });
+  }
+
+  test("is not offered them in the sidebar either", async ({ page }) => {
+    await page.goto("/admin");
+    const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
+    await expect(sidebar.getByRole("link", { name: "Revenue" })).toHaveCount(0);
+    await expect(sidebar.getByRole("link", { name: "Failed payments" })).toHaveCount(0);
+  });
+});
