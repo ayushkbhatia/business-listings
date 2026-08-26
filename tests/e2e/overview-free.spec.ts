@@ -18,6 +18,13 @@ test.describe("board 11a — the Free overview", () => {
 
   test("still opens on what needs a reply", async ({ page }) => {
     // Free is a product, not a nag screen. The upgrade argument comes second.
+    /*
+     * Two assertions, not one. `.first()` is the claim — a panel inserted above
+     * the reply queue should fail this — but on its own it reports "the page
+     * did not render" and "the queue is not first" identically, which cost a
+     * confusing twenty minutes on a red main once.
+     */
+    await expect(page.getByRole("region", { name: "Needs a reply" })).toBeVisible();
     await expect(page.getByRole("region").first()).toContainText("Needs a reply");
   });
 

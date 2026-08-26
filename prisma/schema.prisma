@@ -219,6 +219,16 @@ model Category {
   showOnHome         Boolean  @default(false) @map("show_on_home")
   acceptsRfq         Boolean  @default(true) @map("accepts_rfq")
   requiresExtraCheck Boolean  @default(false) @map("requires_extra_check")
+  /// The landing page's own copy.
+  ///
+  /// Board 6f: a category page with a heading and a grid of results is a page
+  /// search engines have nothing to rank. This is the paragraph that gives it
+  /// something, and `lib/content/matrix.ts` counts its words against the same
+  /// 250 the template pages answer to.
+  ///
+  /// Nullable, and most are null. That is the point of the matrix: it shows
+  /// which pages have nothing to say yet.
+  intro              String?
   /// Listings needed before landing pages publish.
   publishThreshold   Int      @default(60) @map("publish_threshold")
   verifiedShareMin   Float    @default(0.30) @map("verified_share_min")

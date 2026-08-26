@@ -29,18 +29,40 @@ sprint without asking, through to the end of the handoff.
 | [#29](https://github.com/ayushkbhatia/business-listings/pull/29) | Step 6e — the storefront renders from its template | `0539933` |
 | [#30](https://github.com/ayushkbhatia/business-listings/pull/30) | Step 6d(i) — themes, and the floor a seller's own colour has to clear | `258e779` |
 | [#31](https://github.com/ayushkbhatia/business-listings/pull/31) | Step 6d(ii) — domain verification, and a certificate that says it is not issued | `dfe5c34` |
-| [#32](https://github.com/ayushkbhatia/business-listings/pull/32) | Step 6d(iii) — pages on every storefront, and a slug that stops moving | open |
+| [#32](https://github.com/ayushkbhatia/business-listings/pull/32) | Step 6d(iii) — pages on every storefront, and a slug that stops moving | `31997a3` |
+| [#33](https://github.com/ayushkbhatia/business-listings/pull/33) | Step 7a — the page matrix, and a gate that stopped passing vacuously | open |
 
 ## Next
 
-**Step 7 — content ops `[6f]` `[12g]`.** The SEO page matrix, notification templates,
-localisation and homepage curation. Small and self-contained.
+**Step 7b — notification templates and localisation `[12g]`**, plus redirects and homepage
+curation.
 
-**Step 8 — the acceptance pass**, and `scripts/acceptance-handoff-4.sh` beside the three that
-already exist.
+`NotificationTemplate` is already read by `lib/notify/events.ts` and `service.ts`, so that
+editor changes what actually sends — the good case. `Redirect` is read by
+`lib/listing/redirect.ts` and by the template-page route.
 
-Board 5 is complete: `5a` builder, `5b` themes, `5c` section library, `5d` pages, `5e`
-domains, `5g`/`5h` specimens. The embed is cut to handoff 5 — §0.5.
+**Localisation is the honest one.** The catalogue is `lib/i18n/en.ts`, a compile-time file
+`t()` is type-checked against. A live editor would need a runtime override table read by `t()`,
+which is an architecture change nobody has asked for, and CLAUDE.md says Arabic is "a later
+translation project, not a rebuild". Plan: a read-only browser with coverage stats, and say
+plainly that editing belongs to that project rather than shipping a form that cannot write.
+
+**Step 8 — the acceptance pass**, and `scripts/acceptance-handoff-4.sh`.
+
+## What step 7a found
+
+- **`tests/integration/domains.test.ts` broke `account.spec.ts` at a distance.** I shipped it
+  in #31. It borrowed the first claimed business with a seller owner — the e2e Pro seat — and
+  deleted its subscription without restoring it, so the cancel page had nothing to describe.
+  It builds its own listing now. Third time this session that a fixture reaching into shared
+  data has broken somebody else's test.
+- **`categoryHealth` took `introWords` as a parameter defaulting to `MAX_SAFE_INTEGER`.** The
+  third publish gate passed vacuously on every page since handoff 0, because there was nowhere
+  for a category's copy to live. `Category.intro` is that place.
+- **The `.first()` region assertions were right and unclear.** "The reply queue is the first
+  panel" is the claim and `.first()` expresses it — but it reported "the page did not render"
+  and "the queue is not first" identically, which cost twenty confusing minutes on a red main.
+  Both now assert the named panel exists *and* that it is first.
 
 ## What step 6d(iii) found
 

@@ -94,6 +94,18 @@ export default async function CategoryPage({ params, searchParams }: Props) {
             </div>
           </div>
         )}
+        {category.intro && (
+          /*
+             Board 6f. A category page with a heading and a grid of results is a
+             page search engines have nothing to rank and a buyer has no reason
+             to trust. This is written by staff on the page matrix, where its
+             word count is measured against the same floor that decides whether
+             the page publishes at all.
+          */
+          <p className="mt-4 max-w-[var(--measure-prose)] text-prose text-prose">
+            {category.intro}
+          </p>
+        )}
       </header>
 
       <div className="mt-5">

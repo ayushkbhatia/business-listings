@@ -109,7 +109,7 @@ they 404 until their handoff.
 /admin/support                          Support desk & view-as               [12f]  built h4s4
 /admin/notifications                    Notification templates              [12g]
 /admin/strings                          Localisation                         [12g]
-/admin/content/matrix                   SEO page matrix                       [6f]
+/admin/content/matrix                   SEO page matrix                       [6f]  built h4s7
 /admin/content/home                     Homepage curation                    [12g]
 /admin/content/redirects                Redirects                            [12g]
 /admin/storefront-templates             Templates & section library      [5c]  built h4s6
