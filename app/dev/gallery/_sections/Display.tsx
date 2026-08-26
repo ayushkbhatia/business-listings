@@ -203,7 +203,7 @@ export function Display() {
         </States>
       </Section>
 
-      <Section id="stat-card" title="StatCard" note="the number gets the serif face — the one big number §01 allows">
+      <Section id="stat-card" title="StatCard" note="the number gets the serif face — the one big number §01 allows, except in the console">
         <States label="states" stack>
           <div className="grid w-full gap-3 sm:grid-cols-3">
             <StatCard
@@ -226,6 +226,19 @@ export function Display() {
           </div>
           <div className="w-64">
             <StatCard hero label="suppliers" value={formatCount(41_204)} caption="listed" />
+          </div>
+          {/*
+            The console face. The handoff-4 README says no serif anywhere in
+            admin, and the alternative to a prop was a second stat component
+            saying the same thing differently.
+          */}
+          <div className="w-64">
+            <StatCard
+              face="sans"
+              label="monthly recurring"
+              value={formatAED(409_300 / 100)}
+              caption="ACTIVE AND PAST DUE"
+            />
           </div>
         </States>
       </Section>

@@ -24,8 +24,17 @@ export interface StatCardProps {
     /** Up is not always good. A rise in response time is bad. */
     sentiment?: "good" | "bad" | "neutral";
   };
-  /** Serif and display size. Off for a dense admin row of eight. */
+  /** Display size. Off for a dense admin row of eight. */
   hero?: boolean;
+  /**
+   * The face the number is set in.
+   *
+   * Serif everywhere the design draws it, and the one exception is the admin
+   * console: the handoff-4 README says no serif anywhere in it, and a second
+   * stat component to say the same thing differently is a component the
+   * inventory does not have room for.
+   */
+  face?: "serif" | "sans";
   /** A footnote the number needs to be honest, e.g. self-reported. */
   note?: string;
 }
@@ -38,7 +47,15 @@ const SENTIMENT = {
 
 const ARROW = { up: "↑", down: "↓", flat: "→" } as const;
 
-export function StatCard({ label, value, caption, delta, hero = false, note }: StatCardProps) {
+export function StatCard({
+  label,
+  value,
+  caption,
+  delta,
+  hero = false,
+  face = "serif",
+  note,
+}: StatCardProps) {
   return (
     <div className="rounded-card border border-line bg-card p-4">
       <p className="font-mono text-eyebrow uppercase text-muted">{label}</p>
@@ -46,7 +63,8 @@ export function StatCard({ label, value, caption, delta, hero = false, note }: S
       <p
         className={cn(
           "mt-1 text-ink tabular-nums",
-          hero ? "font-serif text-display" : "font-serif text-h1-serif",
+          face === "serif" ? "font-serif" : "font-sans",
+          hero ? "text-display" : face === "serif" ? "text-h1-serif" : "text-h1",
         )}
       >
         {value}

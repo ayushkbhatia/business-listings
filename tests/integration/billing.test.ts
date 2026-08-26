@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
+import { Prisma } from "@/lib/db/generated/client";
 import {
   applyEndedCancellations,
   cancelSubscription,
@@ -27,6 +28,16 @@ let businessId: string;
 let actor: Actor;
 let originalPlanId: string | null;
 let originalTier: number;
+/**
+ * The subscription row as it was found, so `afterAll` can put it back.
+ *
+ * This file changes plans and cancels them, and it used to restore only
+ * `Business.planId` — leaving the subscription on whatever the last test set.
+ * That drift was invisible until the MRR ledger started reconciling against the
+ * subscription table, at which point `tests/integration/revenue.test.ts` failed
+ * on state this file left behind rather than on anything it does itself.
+ */
+let originalSubscription: Awaited<ReturnType<typeof prisma.subscription.findUnique>> = null;
 
 beforeAll(async () => {
   const business = await prisma.business.findUniqueOrThrow({
@@ -41,20 +52,74 @@ beforeAll(async () => {
   businessId = business.id;
   originalPlanId = business.planId;
   originalTier = business.verificationTier;
+  originalSubscription = await prisma.subscription.findUnique({ where: { businessId } });
   const owner = business.team[0]!;
   actor = { id: owner.id, roles: owner.roles, businessId };
 });
 
+/**
+ * Put the account back the way it was found.
+ *
+ * It used not to be: only `Business.planId` and the tier were restored, leaving
+ * the subscription on whatever the last test set and, once the MRR ledger
+ * existed, a revenue movement describing a change that had been undone. Nothing
+ * noticed until `revenue.test.ts` began reconciling the ledger against the
+ * subscription table, and then only when the runner happened to order the two
+ * files the other way round.
+ */
+async function restore() {
+  await prisma.invoice.deleteMany({ where: { businessId, ref: { startsWith: "PLAN-" } } });
+  // Every plan change here wrote a revenue movement, describing a change that
+  // is about to be undone. They go with it.
+  await prisma.mrrMovement.deleteMany({ where: { businessId } });
+  await prisma.business.update({
+    where: { id: businessId },
+    data: { planId: originalPlanId, verificationTier: originalTier },
+  });
+  if (originalSubscription) {
+    /*
+     * Column by column, and `id` is not one of them: the row is keyed on
+     * `businessId`, which is already known, and a re-created subscription takes
+     * a new cuid that nothing references.
+     *
+     * Prisma's null for a nullable Json column is `DbNull`, not `null` — the
+     * two are different values in Postgres and the client makes you say which.
+     */
+    const columns = {
+      planId: originalSubscription.planId,
+      status: originalSubscription.status,
+      startedAt: originalSubscription.startedAt,
+      renewsAt: originalSubscription.renewsAt,
+      cancelledAt: originalSubscription.cancelledAt,
+      endsAt: originalSubscription.endsAt,
+      providerRef: originalSubscription.providerRef,
+      dunningStage: originalSubscription.dunningStage,
+      pastDueSince: originalSubscription.pastDueSince,
+      dunningAdvancedAt: originalSubscription.dunningAdvancedAt,
+      entitlementSnapshot: originalSubscription.entitlementSnapshot ?? Prisma.DbNull,
+    };
+    await prisma.subscription.upsert({
+      where: { businessId },
+      create: { businessId, ...columns },
+      update: columns,
+    });
+  } else {
+    await prisma.subscription.deleteMany({ where: { businessId } });
+  }
+}
+
+/*
+ * Invoices only, between tests. The subscription is deliberately left where the
+ * last test put it: this file's tests chain — the one that checks a proration
+ * credit needs the plan the previous one bought — and resetting between them
+ * would be testing a different sequence than the one criterion 10 describes.
+ */
 afterEach(async () => {
   await prisma.invoice.deleteMany({ where: { businessId, ref: { startsWith: "PLAN-" } } });
 });
 
 afterAll(async () => {
-  await prisma.invoice.deleteMany({ where: { businessId, ref: { startsWith: "PLAN-" } } });
-  await prisma.business.update({
-    where: { id: businessId },
-    data: { planId: originalPlanId, verificationTier: originalTier },
-  });
+  await restore();
   await prisma.$disconnect();
 });
 

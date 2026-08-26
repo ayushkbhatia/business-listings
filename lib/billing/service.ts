@@ -9,7 +9,9 @@ import {
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
 import { filsToAed, prorate, type Proration } from "./proration";
+import { snapshotOf } from "@/lib/plan/entitlements";
 import { paymentProvider } from "./provider";
+import { aedToFils, recordMovement } from "./mrr";
 
 /**
  * Plan changes, cancellation and invoices.
@@ -144,10 +146,39 @@ export async function changePlan(
     }
   }
 
+  /*
+   * The full plan row, for the snapshot. The quote's `toPlan` is trimmed to
+   * what board 11f shows — a name and a price — and a snapshot needs the caps.
+   */
+  const toPlanRow = await prisma.plan.findUniqueOrThrow({
+    where: { id: toPlanId },
+    select: PLAN_SELECT,
+  });
+  const frozen = snapshotOf(
+    { ...toPlanRow, monthlyPriceAed: Number(toPlanRow.monthlyPriceAed), rankingMultiplier: Number(toPlanRow.rankingMultiplier) },
+    now,
+  ) as unknown as object;
+
   const invoiceId = await prisma.$transaction(async (tx) => {
     const renewsAt = quote.proration.renewsAt;
 
     await tx.business.update({ where: { id: businessId }, data: { planId: toPlanId } });
+
+    /*
+     * The revenue ledger, written where the change happens. Board 4g's
+     * waterfall is a `GROUP BY` over these rows — the subscription table cannot
+     * answer "what did this account pay last month", because the moment it is
+     * updated the old plan is gone.
+     */
+    await recordMovement(tx, {
+      businessId,
+      fromPlanId: quote.fromPlan.id,
+      toPlanId,
+      beforeFils: aedToFils(quote.fromPlan.monthlyPriceAed),
+      afterFils: aedToFils(quote.toPlan.monthlyPriceAed),
+      occurredAt: now,
+      note: `Plan change to ${quote.toPlan.name}`,
+    });
 
     await tx.subscription.upsert({
       where: { businessId },
@@ -158,7 +189,7 @@ export async function changePlan(
         renewsAt,
         // A snapshot of what was bought, so a later plan edit cannot rewrite
         // what this seller is entitled to for the period they paid for.
-        entitlementSnapshot: { planId: toPlanId, capturedAt: now.toISOString() },
+        entitlementSnapshot: frozen,
       },
       update: {
         planId: toPlanId,
@@ -167,7 +198,7 @@ export async function changePlan(
         // constraint refuses the row.
         cancelledAt: null,
         endsAt: null,
-        entitlementSnapshot: { planId: toPlanId, capturedAt: now.toISOString() },
+        entitlementSnapshot: frozen,
       },
     });
 
@@ -282,7 +313,11 @@ export async function cancelSubscription(
 export async function applyEndedCancellations(now = new Date()) {
   const due = await prisma.subscription.findMany({
     where: { cancelledAt: { not: null }, endsAt: { lte: now }, status: { not: "cancelled" } },
-    select: { businessId: true },
+    select: {
+      businessId: true,
+      planId: true,
+      plan: { select: { monthlyPriceAed: true } },
+    },
   });
 
   for (const subscription of due) {
@@ -290,6 +325,22 @@ export async function applyEndedCancellations(now = new Date()) {
       await tx.subscription.update({
         where: { businessId: subscription.businessId },
         data: { status: "cancelled", planId: "free" },
+      });
+
+      /*
+       * Churn, dated the day the money stops rather than the day the seller
+       * said so. A cancellation announced in January for a period ending in
+       * March is a March event — booking it in January would show a month of
+       * churn that had not happened yet.
+       */
+      await recordMovement(tx, {
+        businessId: subscription.businessId,
+        fromPlanId: subscription.planId,
+        toPlanId: "free",
+        beforeFils: aedToFils(Number(subscription.plan.monthlyPriceAed)),
+        afterFils: 0,
+        occurredAt: now,
+        note: "Cancellation reached its end date",
       });
       await tx.business.update({
         where: { id: subscription.businessId },

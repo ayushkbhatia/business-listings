@@ -35,6 +35,7 @@ const FREE_SELLER_STATE = "tests/e2e/.auth/seller-free.json";
  */
 const OPS_LEAD_STATE = "tests/e2e/.auth/staff-ops.json";
 const MODERATOR_STATE = "tests/e2e/.auth/staff-moderator.json";
+const FINANCE_STATE = "tests/e2e/.auth/staff-finance.json";
 
 export default defineConfig({
   testDir: "./tests/e2e",
@@ -80,7 +81,7 @@ export default defineConfig({
           {
             name: "staff",
             testMatch: /admin[\w-]*\.spec\.ts/,
-            testIgnore: /admin-moderator\.spec\.ts/,
+            testIgnore: /admin-(moderator|commercials)\.spec\.ts/,
             dependencies: ["setup"],
             use: { ...devices["Desktop Chrome"], storageState: OPS_LEAD_STATE },
           },
@@ -89,6 +90,17 @@ export default defineConfig({
             testMatch: /admin-moderator\.spec\.ts/,
             dependencies: ["setup"],
             use: { ...devices["Desktop Chrome"], storageState: MODERATOR_STATE },
+          },
+          /*
+           * §07 puts `revenue.read` with finance and gives ops lead a dash, so
+           * the commercial screens are unreachable from the ops-lead seat by
+           * design. They get their own project rather than a relaxed capability.
+           */
+          {
+            name: "staff-finance",
+            testMatch: /admin-commercials\.spec\.ts/,
+            dependencies: ["setup"],
+            use: { ...devices["Desktop Chrome"], storageState: FINANCE_STATE },
           },
         ]
       : []),

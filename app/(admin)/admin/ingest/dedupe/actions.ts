@@ -23,9 +23,18 @@ function refused(error: unknown): ActionResult {
 export async function rescan(): Promise<ActionResult> {
   const seat = await requireStaff();
   try {
-    const created = await findCandidates();
+    const scan = await findCandidates();
     revalidatePath("/admin/ingest/dedupe");
-    return { ok: true, message: t("admin.dedupe.rescan_done", { count: formatCount(created) }) };
+    return {
+      ok: true,
+      message:
+        scan.dropped === 0
+          ? t("admin.dedupe.rescan_done", { count: formatCount(scan.created) })
+          : t("admin.dedupe.rescan_capped", {
+              count: formatCount(scan.created),
+              dropped: formatCount(scan.dropped),
+            }),
+    };
   } catch (error) {
     return refused(error);
   } finally {

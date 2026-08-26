@@ -149,6 +149,27 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
  * so the shape is visible and nothing is a dead link. Each step of handoff 4
  * drops `later` from the rows it builds.
  */
+/**
+ * The capability that gates one nav key, or undefined where nothing does.
+ *
+ * Declared once, in the nav, and read by anything else that shows a number
+ * pointing at a screen. The console overview links every count to the queue
+ * that fixes it, and a link an ops lead follows into a 404 is what happens when
+ * the two lists are maintained separately — which they were, until the revenue
+ * screens made `/admin/dunning` real and finance-only.
+ */
+export function capabilityForNavKey(
+  key: string,
+  groups: readonly NavGroup[] = ADMIN_NAV,
+): Capability | undefined {
+  for (const group of groups) {
+    for (const item of group.items) {
+      if (item.key === key) return item.capability;
+    }
+  }
+  return undefined;
+}
+
 export const ADMIN_NAV: readonly NavGroup[] = [
   {
     key: "overview",
@@ -199,12 +220,12 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     key: "commercial",
     labelKey: "nav.group.commercial",
     items: [
-      { key: "subscriptions", labelKey: "nav.subscriptions", href: "/admin/subscriptions", capability: "revenue.read", later: true },
-      { key: "revenue", labelKey: "nav.revenue", href: "/admin/revenue", capability: "revenue.read", later: true },
-      { key: "plans", labelKey: "nav.plans", href: "/admin/plans", capability: "plan.entitlements.write", later: true },
-      { key: "invoices", labelKey: "nav.invoices", href: "/admin/invoices", capability: "subscription.credit", later: true },
-      { key: "dunning", labelKey: "nav.dunning", href: "/admin/dunning", capability: "revenue.read", later: true },
-      { key: "tax", labelKey: "nav.tax", href: "/admin/tax", capability: "revenue.read", later: true },
+      { key: "subscriptions", labelKey: "nav.subscriptions", href: "/admin/subscriptions", capability: "revenue.read" },
+      { key: "revenue", labelKey: "nav.revenue", href: "/admin/revenue", capability: "revenue.read" },
+      { key: "plans", labelKey: "nav.plans", href: "/admin/plans", capability: "plan.entitlements.write" },
+      { key: "invoices", labelKey: "nav.invoices", href: "/admin/invoices", capability: "subscription.credit" },
+      { key: "dunning", labelKey: "nav.dunning", href: "/admin/dunning", capability: "revenue.read" },
+      { key: "tax", labelKey: "nav.tax", href: "/admin/tax", capability: "revenue.read" },
     ],
   },
   {

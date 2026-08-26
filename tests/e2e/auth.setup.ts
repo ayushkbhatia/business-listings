@@ -49,7 +49,7 @@ interface Seat {
   heading: string;
 }
 
-const SEATS: Record<"pro" | "free" | "opsLead" | "moderator", Seat> = {
+const SEATS: Record<"pro" | "free" | "opsLead" | "moderator" | "finance", Seat> = {
   pro: {
     email: "bl.e2e.seller@gmail.com",
     slug: "al-marwan-industrial-supplies-llc",
@@ -92,6 +92,20 @@ const SEATS: Record<"pro" | "free" | "opsLead" | "moderator", Seat> = {
     name: "E2E Moderator",
     roles: ["staff_moderator"],
     state: "tests/e2e/.auth/staff-moderator.json",
+    landing: "**/admin",
+    heading: "Platform overview",
+  },
+  /*
+   * The third staff seat, and it exists because §07 puts `revenue.read` with
+   * finance and gives ops lead a dash. An ops lead cannot open the revenue,
+   * dunning or VAT screens at all — which is the rule, not a gap — so the
+   * commercial screens need a seat that can.
+   */
+  finance: {
+    email: "bl.e2e.finance@gmail.com",
+    name: "E2E Finance",
+    roles: ["staff_finance"],
+    state: "tests/e2e/.auth/staff-finance.json",
     landing: "**/admin",
     heading: "Platform overview",
   },
@@ -187,4 +201,8 @@ setup("sign in as an ops lead", async ({ page }) => {
 
 setup("sign in as a moderator", async ({ page }) => {
   await provision(page, SEATS.moderator);
+});
+
+setup("sign in as finance", async ({ page }) => {
+  await provision(page, SEATS.finance);
 });

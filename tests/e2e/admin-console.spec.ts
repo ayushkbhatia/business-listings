@@ -41,6 +41,21 @@ test.describe("board 4a — the console overview", () => {
     await expect(page.getByText(/Service level, in days/)).toBeVisible();
   });
 
+  test("does not offer an ops lead a number they cannot open", async ({ page }) => {
+    /*
+     * §07 puts `revenue.read` and `subscription.credit` with finance. The
+     * "Take the money" panel used to show a past-due count linking straight
+     * into a 404 for this seat — the two lists, nav capabilities and overview
+     * metrics, were maintained separately until the overview started reading
+     * the nav's.
+     */
+    const money = page
+      .getByRole("heading", { level: 2, name: "Take the money" })
+      .locator("xpath=..");
+    await expect(money.getByText(/Somebody else's row/)).toBeVisible();
+    await expect(money.getByRole("link")).toHaveCount(0);
+  });
+
   test("links a built screen and names an unbuilt one", async ({ page }) => {
     const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
     // Built in steps 0 and 1.

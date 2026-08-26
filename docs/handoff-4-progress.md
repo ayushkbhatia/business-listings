@@ -21,23 +21,43 @@ sprint without asking, through to the end of the handoff.
 | [#21](https://github.com/ayushkbhatia/business-listings/pull/21) | Step 2a — board 12a, the licence importer, the silent CSV truncation | `c84209f` |
 | [#22](https://github.com/ayushkbhatia/business-listings/pull/22) | Step 2b — board 12b, dedupe and the reversible merge, the 301 resolver | `e864692` |
 | [#23](https://github.com/ayushkbhatia/business-listings/pull/23) | Step 3 — boards 4h/4i/12h, the visit report the tier check was waiting for | `991fcf9` |
-| [#24](https://github.com/ayushkbhatia/business-listings/pull/24) | Step 4 — boards 4f/12d/12f, view-as and a call list with no insert path | open |
+| [#24](https://github.com/ayushkbhatia/business-listings/pull/24) | Step 4 — boards 4f/12d/12f, view-as and a call list with no insert path | merged |
+| [#25](https://github.com/ayushkbhatia/business-listings/pull/25) | Step 5 — boards 4g/12e, the MRR ledger, dunning, grandfathering that grandfathers | open |
 
 ## Next
 
-**Step 5 — commercials `[4g]` `[12e]`.**
+**Step 6 — the storefront template builder `[5a]`–`[5e]` `[5g]` `[5h]`.**
 
-- `[4g]` revenue and MRR movement. The decomposition is unspecified — new / expansion /
-  contraction / churn is the usual four and `Waterfall` exists — so it is a stated assumption.
-- `[12e]` entitlements as data with grandfathering, dunning D0/D3/D7/D14, VAT export,
-  invoices and credits.
-- **Grandfathering does not work.** `Subscription.entitlementSnapshot` exists, its doc comment
-  promises it, all three writers store `{ planId, capturedAt }` with no cap values, and
-  nothing reads it. "Apply to existing" has nothing to switch off until this is fixed.
-- Criterion 10 is the negative one: dunning must never delete a listing or remove a badge.
-  `StatCard` hardcodes `font-serif` in both branches and admin is no-serif, so it takes a prop.
+Build in the spec's own priority order: the section library and builder shell (`5a`, `5c`),
+domain verification (`5e`), then the specimens page (`5g`/`5h`). Theme editor ships as the six
+fixed presets first. The embed does not ship here at all — roadmap §0.5.
 
-Then steps 6–8 per the roadmap: the storefront builder, content ops, the acceptance pass.
+The organising fact is that a template edit is a fan-out: changing one template changes every
+live storefront in that sector, so every screen shows the blast radius before the save and
+publish is two steps. `/admin/storefront-templates/specimens` is the acceptance surface for
+the whole step.
+
+**Checkpoint: change one template and see the store count before and after the save.**
+
+Then steps 7–8: content ops `[6f]` `[12g]`, and the acceptance pass.
+
+## What step 5 found in `main`
+
+Four of these were live defects, not gaps in the new work.
+
+- **`consoleProvider.charge` returns `ok: true` for every charge.** Dunning would have read
+  that as payment received and marked every past-due subscription active again — no card
+  touched, no seller told, the sequence never starting. `runDunning` now asks
+  `provider.live` first and records no `PaymentAttempt` when there is no gateway.
+- **`billing.test.ts` restored `Business.planId` and not the subscription**, leaving the row
+  on whatever the last test set. Invisible until the MRR ledger began reconciling.
+- **The console overview linked an ops lead into a 404.** §07 puts `revenue.read` with
+  finance; the sidebar knew and the overview did not. `visibleTo` now reads the same
+  capability the nav declares, and the panel stays with a line rather than vanishing.
+- **`findCandidates` ran two database round-trips per candidate pair.** Half a minute against
+  a few thousand listings, and the blocking above it exists precisely to avoid that. Two
+  queries now. It also silently dropped everything past 500; `RescanResult.dropped` says how
+  many and the screen reads it.
 
 ## Carried forward
 
