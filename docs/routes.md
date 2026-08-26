@@ -91,7 +91,7 @@ they 404 until their handoff.
 /admin/ingest                           Licence importer                     [12a]  built h4s2
 /admin/ingest/:id                       One import run                       [12a]  built h4s2
 /admin/ingest/dedupe                    Dedupe & merge                       [12b]  built h4s2
-/admin/search                           Ranking, boosts, routing             [12c]
+/admin/search                           Ranking, boosts, routing             [12c]  built h4s8
 /admin/categories                       Taxonomy                              [4d]
 /admin/spec-library                     Spec templates                        [4e]
 /admin/attributes                       Attribute dictionary                  later

@@ -206,7 +206,7 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     key: "demand",
     labelKey: "nav.group.demand",
     items: [
-      { key: "search", labelKey: "nav.search_ranking", href: "/admin/search", capability: "search.ranking.write", later: true },
+      { key: "search", labelKey: "nav.search_ranking", href: "/admin/search", capability: "search.ranking.write" },
       { key: "content", labelKey: "nav.content", href: "/admin/content/matrix", capability: "taxonomy.write" },
       {
         key: "storefront-templates",

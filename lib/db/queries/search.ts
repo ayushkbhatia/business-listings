@@ -1,8 +1,8 @@
 import "server-only";
 import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
+import { liveBoosts, liveWeights } from "@/lib/search/settings";
 import {
-  DEFAULT_WEIGHTS,
   placeSponsored,
   rank,
   type RankingWeights,
@@ -110,9 +110,29 @@ function relevanceOf(name: string, q: string): number {
 
 export async function searchBusinesses(
   query: SearchQuery,
-  options: { categoryIds?: string[]; weights?: RankingWeights; sponsoredId?: string | null } = {},
+  options: {
+    categoryIds?: string[];
+    /** Omit to read the live ones. The default is only a fallback. */
+    weights?: RankingWeights;
+    sponsoredId?: string | null;
+    /** Live boost points by business id. Omit to read them. */
+    boosts?: Map<string, number>;
+  } = {},
 ) {
-  const { categoryIds, weights = DEFAULT_WEIGHTS, sponsoredId = null } = options;
+  const { categoryIds, sponsoredId = null } = options;
+  /*
+   * The stored weights, not the constant.
+   *
+   * `DEFAULT_WEIGHTS` was the whole configuration until board 12c: this
+   * function has always taken a `weights` option and no caller ever passed one,
+   * so criterion 5's "weights reorder live results" reordered nothing. Read
+   * here rather than at every call site, because a caller that forgot would
+   * silently get the old ranking.
+   */
+  const [weights, boosts] = await Promise.all([
+    options.weights ? Promise.resolve(options.weights) : liveWeights(),
+    options.boosts ? Promise.resolve(options.boosts) : liveBoosts(),
+  ]);
   const where = businessWhere(query, categoryIds);
 
   const [candidates, total] = await Promise.all([
@@ -136,6 +156,9 @@ export async function searchBusinesses(
       specCompleteness: business.specCompleteness,
       distanceKm: null,
       planMultiplier: business.plan?.rankingMultiplier ?? 1,
+      // Ops moving a listing for a reason of ours, with an expiry on it. Never
+      // labelled sponsored: nobody paid for this one.
+      boostPoints: boosts.get(business.id) ?? 0,
     }),
     weights,
   );
@@ -224,7 +247,8 @@ export async function searchProducts(
   query: SearchQuery,
   options: { categoryIds?: string[]; weights?: RankingWeights } = {},
 ) {
-  const { categoryIds, weights = DEFAULT_WEIGHTS } = options;
+  const { categoryIds } = options;
+  const weights = options.weights ?? (await liveWeights());
   const where = productWhere(query, categoryIds);
 
   const [candidates, total] = await Promise.all([
