@@ -196,6 +196,57 @@ async function main() {
     areaByslug.set(a.slug, row.id);
   }
 
+  /**
+   * Landing-page copy for the first two trades.
+   *
+   * Written to clear the 250-word floor the matrix measures against, and
+   * written as a buyer's guide rather than as filler: the floor is a floor, not
+   * a target, and a paragraph repeating the category name eight times clears it
+   * and helps nobody.
+   */
+  const CATEGORY_INTROS: Record<string, string> = {
+    "valves-and-fittings":
+      "Valves and fittings are bought on specification rather than on brand, and the " +
+      "specification is usually set by a consultant before a contractor ever asks for a " +
+      "price. What a buyer needs from a supplier in this trade is stock, paperwork and a " +
+      "straight answer about lead time. Stock, because a valve missing from a riser holds up " +
+      "a floor. Paperwork, because a consultant will reject a submittal without the mill " +
+      "certificate or the test certificate that the specification calls for. And a straight " +
+      "answer about lead time, because an indent item quoted as though it were on the shelf " +
+      "is a delay nobody has planned for.\n\n" +
+      "Most suppliers in the UAE hold gate, globe, ball, butterfly and check valves in the " +
+      "common sizes and pressure classes, and go to indent for the larger bores, the exotic " +
+      "materials and anything actuated. Ask which of those applies before you compare prices: " +
+      "a quote for stock and a quote for a twelve-week indent are not the same quote, and the " +
+      "cheaper one is often the second. Ask what the pressure class is against the " +
+      "specification rather than against the last job. Ask whether the body material matches " +
+      "the medium, because a brass body in a chilled-water line is a warranty claim waiting " +
+      "to happen.\n\n" +
+      "Suppliers on this page are listed with what we have checked about them: the trade " +
+      "licence, and for some, a visit to the address on it. Verification says nothing about " +
+      "the quality of the goods, and it is not meant to. It says the business exists, at the " +
+      "address it claims, under the licence it gave us. Everything else — price, terms, " +
+      "delivery — is between you and them, and always was.",
+    "pipes-and-tubing":
+      "Pipe is bought by schedule, material and coating, and the three together decide almost " +
+      "everything about the price. A buyer comparing quotes in this trade is usually " +
+      "comparing quotes for different things without realising it: galvanised against black, " +
+      "seamless against welded, one schedule against the next one up. Ask for the standard " +
+      "the pipe is made to before you ask what it costs, because a quote that does not name " +
+      "one is a quote for whatever the supplier has in the yard.\n\n" +
+      "Lead time in this trade is about the yard rather than the factory. Common sizes in GI " +
+      "and black are held in Dubai and Sharjah and go out the same day; large diameters, " +
+      "heavy wall and lined pipe come on indent, and the honest suppliers say so at the " +
+      "quotation stage rather than at the delivery date. Cutting, threading and grooving are " +
+      "usually available at the yard, and it is worth asking, because a contractor who cuts " +
+      "on site pays for the offcuts twice.\n\n" +
+      "Delivery matters more here than in most trades. Six-metre lengths need a vehicle that " +
+      "can carry them and a site that can receive them, and a supplier who has done the " +
+      "route before will ask about access before they quote. Suppliers on this page are " +
+      "listed with what we have checked: the trade licence, and for some, a visit to the " +
+      "address on it. What you agree on price and terms is between the two of you.",
+  };
+
   console.log("→ categories");
   const catBySlug = new Map<string, string>();
   /**
@@ -208,7 +259,20 @@ async function main() {
   const sectorBySlug = new Map<string, string>();
   for (const [i, c] of CATEGORIES.entries()) {
     const row = await prisma.category.create({
-      data: { ...c, synonyms: [...c.synonyms], sortOrder: i, publishThreshold: 60, verifiedShareMin: 0.3 },
+      /*
+       * Two categories get their landing-page copy and four do not.
+       *
+       * Board 6f's screen exists to show which pages have nothing to say, so a
+       * seed where every page is written teaches nobody what the matrix is for.
+       */
+      data: {
+        ...c,
+        synonyms: [...c.synonyms],
+        sortOrder: i,
+        publishThreshold: 60,
+        verifiedShareMin: 0.3,
+        ...(i < 2 ? { intro: CATEGORY_INTROS[c.slug] ?? null } : {}),
+      },
     });
     catBySlug.set(c.slug, row.id);
     sectorBySlug.set(c.slug, row.id);

@@ -1,7 +1,14 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { addDomain, domainFor, pollDomains, removeDomain, businessForHostname, DOMAIN_TARGET } from "@/lib/domains/service";
-import { consoleIssuer, setCertificateIssuer, setDnsResolver, type CertificateIssuer, type DnsResolver } from "@/lib/domains/ports";
+import {
+  consoleIssuer,
+  nodeResolver,
+  setCertificateIssuer,
+  setDnsResolver,
+  type CertificateIssuer,
+  type DnsResolver,
+} from "@/lib/domains/ports";
 import { VERIFY_PREFIX } from "@/lib/domains/state";
 import type { Actor } from "@/lib/auth/roles";
 
@@ -21,7 +28,6 @@ import type { Actor } from "@/lib/auth/roles";
 
 let businessId: string;
 let actor: Actor;
-let originalPlanId: string | null;
 
 /** DNS as this test says it is. */
 const zone = new Map<string, { cname?: string; txt?: string[] }>();
@@ -38,22 +44,48 @@ const fakeResolver: DnsResolver = {
 };
 
 beforeAll(async () => {
-  const business = await prisma.business.findFirstOrThrow({
-    where: { claimStatus: "claimed", team: { some: { roles: { has: "seller_owner" } } } },
-    select: {
-      id: true,
-      planId: true,
-      team: { where: { roles: { has: "seller_owner" } }, select: { id: true, roles: true }, take: 1 },
+  /*
+   * Its own listing, not a borrowed one.
+   *
+   * The first version took the first claimed business with a seller owner —
+   * which is the e2e Pro seat — set it to Pro and deleted its subscription to
+   * force a clean entitlement read. It never put the subscription back, so
+   * `account.spec.ts` found a cancel page with nothing to cancel. A fixture
+   * that reaches into shared data is a fixture that breaks somebody else's
+   * test at a distance, and this suite has now learned that three times.
+   */
+  const stamp = `${Date.now()}`;
+  const categoryId = (
+    await prisma.category.findFirstOrThrow({ where: { parentId: null }, select: { id: true } })
+  ).id;
+
+  const business = await prisma.business.create({
+    data: {
+      tradeName: `Domain Fixture ${stamp}`,
+      displayName: `Domain Fixture ${stamp}`,
+      slug: `domain-fixture-${stamp}`,
+      licenceNumber: `DED-DM-${stamp.slice(-6)}`,
+      licenceAuthority: "DED",
+      licenceExpiry: new Date(Date.now() + 300 * 86_400_000),
+      primaryCategoryId: categoryId,
+      claimStatus: "claimed",
+      planId: "pro",
+      publishedAt: new Date(),
     },
+    select: { id: true },
   });
   businessId = business.id;
-  originalPlanId = business.planId;
-  const owner = business.team[0]!;
-  actor = { id: owner.id, roles: owner.roles, businessId };
 
-  // Custom domains are a Pro entitlement, and the snapshot is what is read.
-  await prisma.business.update({ where: { id: businessId }, data: { planId: "pro" } });
-  await prisma.subscription.deleteMany({ where: { businessId } });
+  const owner = await prisma.user.create({
+    data: {
+      id: crypto.randomUUID(),
+      fullName: "Domain Fixture Owner",
+      roles: ["seller_owner"],
+      businessId,
+    },
+    select: { id: true, roles: true },
+  });
+  actor = { id: owner.id, roles: owner.roles, businessId };
 
   setDnsResolver(fakeResolver);
 });
@@ -65,7 +97,11 @@ afterEach(async () => {
 });
 
 afterAll(async () => {
-  await prisma.business.update({ where: { id: businessId }, data: { planId: originalPlanId } });
+  setDnsResolver(nodeResolver);
+  // Takes its own listing away, and the owner with it.
+  await prisma.business.deleteMany({ where: { id: businessId } });
+  await prisma.business.deleteMany({ where: { slug: { startsWith: "domain-fixture-" } } });
+  await prisma.user.deleteMany({ where: { fullName: "Domain Fixture Owner" } });
   await prisma.$disconnect();
 });
 

@@ -16,8 +16,14 @@ test.describe("board 3a — the Pro overview", () => {
   test("opens on what needs a reply, not on a chart", async ({ page }) => {
     // The organising claim of the board. An SME owner opens this product to
     // answer someone, so the reply queue is the first panel on the page.
-    const panels = page.getByRole("region");
-    await expect(panels.first()).toContainText("Needs a reply");
+    /*
+     * Two assertions, not one. `.first()` is the claim — a panel inserted above
+     * the reply queue should fail this — but on its own it reports "the page
+     * did not render" and "the queue is not first" identically, which cost a
+     * confusing twenty minutes on a red main once.
+     */
+    await expect(page.getByRole("region", { name: "Needs a reply" })).toBeVisible();
+    await expect(page.getByRole("region").first()).toContainText("Needs a reply");
     await expect(page.getByRole("link", { name: "Open the leads inbox" })).toBeVisible();
   });
 

@@ -84,6 +84,12 @@ export default async function SubcategoryPage({ params, searchParams }: Props) {
         <h1 className="font-serif text-h1-serif text-ink">
           {t("category.suppliers_in", { category: category.name })}
         </h1>
+        {/* Board 6f, same as the parent. Written on the page matrix. */}
+        {category.intro && (
+          <p className="mt-4 max-w-[var(--measure-prose)] text-prose text-prose">
+            {category.intro}
+          </p>
+        )}
       </header>
 
       <div className="mt-5">

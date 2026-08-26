@@ -37,6 +37,8 @@ export interface CategoryHealth {
   synonyms: string[];
   publishThreshold: number;
   verifiedShareMin: number;
+  /// Words in the landing page's own copy. Nought where there is none.
+  introWords: number;
   /** Published listings whose primary category is this one. */
   listings: number;
   /** How many of those are tier 1 or better. */
@@ -53,7 +55,15 @@ export interface CategoryHealth {
  * satisfied would be a lie — instead the screen says the word count is not
  * measurable yet, the same way board 4a does for a table that does not exist.
  */
-export async function categoryHealth(introWords = Number.MAX_SAFE_INTEGER): Promise<CategoryHealth[]> {
+/**
+ * Every category, with whether its landing page clears its own floor.
+ *
+ * `introWords` used to be a parameter defaulting to `MAX_SAFE_INTEGER`, which
+ * made the third gate pass vacuously — there was nowhere for a category's copy
+ * to live, so there was nothing to count. `Category.intro` is that place now
+ * and the count comes from the row rather than from the caller.
+ */
+export async function categoryHealth(): Promise<CategoryHealth[]> {
   const [categories, counts, verifiedCounts] = await Promise.all([
     prisma.category.findMany({
       orderBy: [{ parentId: { sort: "asc", nulls: "first" } }, { sortOrder: "asc" }],
@@ -66,6 +76,7 @@ export async function categoryHealth(introWords = Number.MAX_SAFE_INTEGER): Prom
         synonyms: true,
         publishThreshold: true,
         verifiedShareMin: true,
+        intro: true,
       },
     }),
     prisma.business.groupBy({
@@ -90,10 +101,12 @@ export async function categoryHealth(introWords = Number.MAX_SAFE_INTEGER): Prom
   return categories.map((category) => {
     const total = listings.get(category.id) ?? 0;
     const verifiedTotal = verified.get(category.id) ?? 0;
+    const introWords = countWords(category.intro);
     return {
       ...category,
       listings: total,
       verified: verifiedTotal,
+      introWords,
       decision: evaluatePublish(
         { listings: total, verified: verifiedTotal, introWords },
         thresholdsFor(category),
@@ -131,6 +144,14 @@ export interface EditCategoryInput {
   synonyms?: string[];
   publishThreshold?: number;
   verifiedShareMin?: number;
+  /**
+   * The landing page's own copy — board 6f.
+   *
+   * Here rather than on a screen of its own, because it goes through the same
+   * audited path as the thresholds it is measured against. A paragraph that
+   * decides whether a page publishes is a change worth a written reason.
+   */
+  intro?: string | null;
   reason: string;
 }
 
@@ -225,6 +246,9 @@ export async function editCategory(input: EditCategoryInput): Promise<TaxonomyRe
             ...(input.verifiedShareMin !== undefined
               ? { verifiedShareMin: input.verifiedShareMin }
               : {}),
+            // An empty box means no copy, not the string "". A category with
+            // an empty intro and one with none are the same page.
+            ...(input.intro !== undefined ? { intro: input.intro?.trim() || null } : {}),
           },
           select: {
             name: true,
