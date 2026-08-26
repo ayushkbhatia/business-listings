@@ -156,7 +156,7 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     items: [
       { key: "admin", labelKey: "nav.platform", href: "/admin" },
       { key: "queue", labelKey: "nav.queue", href: "/admin/queue", capability: "queue.decide" },
-      { key: "reports", labelKey: "nav.reports", href: "/admin/reports", capability: "report.resolve", later: true },
+      { key: "reports", labelKey: "nav.reports", href: "/admin/reports", capability: "report.resolve" },
     ],
   },
   {
@@ -166,7 +166,7 @@ export const ADMIN_NAV: readonly NavGroup[] = [
       { key: "businesses", labelKey: "nav.businesses", href: "/admin/businesses", later: true },
       { key: "ingest", labelKey: "nav.ingest", href: "/admin/ingest", capability: "queue.decide" },
       { key: "dedupe", labelKey: "nav.dedupe", href: "/admin/ingest/dedupe", capability: "business.merge" },
-      { key: "visits", labelKey: "nav.visits", href: "/admin/visits", capability: "visit.record", later: true },
+      { key: "visits", labelKey: "nav.visits", href: "/admin/visits", capability: "visit.record" },
       { key: "crm", labelKey: "nav.crm", href: "/admin/crm", later: true },
     ],
   },
@@ -222,7 +222,7 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     labelKey: "nav.group.platform",
     items: [
       { key: "staff", labelKey: "nav.staff", href: "/admin/staff", capability: "staff.manage", later: true },
-      { key: "audit", labelKey: "nav.audit", href: "/admin/audit", capability: "audit.read", later: true },
+      { key: "audit", labelKey: "nav.audit", href: "/admin/audit", capability: "audit.read" },
       { key: "support", labelKey: "nav.support", href: "/admin/support", capability: "support.view_as", later: true },
       { key: "users", labelKey: "nav.users", href: "/admin/users", capability: "staff.manage", later: true },
       { key: "compliance", labelKey: "nav.compliance", href: "/admin/compliance", capability: "staff.manage", later: true },

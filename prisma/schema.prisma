@@ -83,6 +83,10 @@ model User {
   conflictsResolved ClaimConflict[]     @relation("ConflictResolvedBy")
   licenceImports    LicenceImportRun[]  @relation("IngestActor")
   merges            BusinessMerge[]     @relation("MergeActor")
+  visitReports      SiteVisitReport[]   @relation("VisitReporter")
+  pdplSubjectOf     PdplRequest[]       @relation("PdplSubject")
+  pdplClosed        PdplRequest[]       @relation("PdplClosedBy")
+  apiKeys           ApiKey[]            @relation("ApiKeyCreator")
   candidatesDismissed MergeCandidate[]  @relation("CandidateDismissedBy")
   proposalsDecided  SpecFieldProposal[] @relation("ProposalDecidedBy")
 
@@ -497,6 +501,7 @@ model Business {
   mergesKept             BusinessMerge[]         @relation("MergeKeep")
   mergesAbsorbed         BusinessMerge[]         @relation("MergeAbsorb")
   stagedListings         StagedListing[]
+  visitReports           SiteVisitReport[]
   claimConflicts         ClaimConflict[]         @relation("ConflictBusiness")
   producedByConflicts    ClaimConflict[]         @relation("ConflictProduced")
   placementWaitlist      PlacementWaitlist[]
@@ -680,6 +685,8 @@ model Media {
   business Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
   product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
   review   Review?   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  visitPhotos SiteVisitPhoto[]
 
   @@index([businessId])
   @@index([productId])
@@ -1266,6 +1273,125 @@ model BusinessMerge {
   @@map("business_merge")
 }
 
+/// What a field officer found, and the photographs that prove they were there.
+///
+/// `SiteVisitRequest` is the seller asking. This is the evidence, and it is what
+/// licenses a tier: `lib/auth/subject.ts` lets a field verifier set a tier only
+/// for a visit they recorded, and `Business.visitedByStaffId` was written by the
+/// seed and by nothing else until this table existed.
+model SiteVisitReport {
+  id             String   @id @default(cuid())
+  requestId      String?  @map("request_id")
+  businessId     String   @map("business_id")
+  staffId        String   @map("staff_id") @db.Uuid
+  visitedAt      DateTime @map("visited_at")
+  /// The three checks board 12h names. Each is a fact somebody stood in front of.
+  premisesFound  Boolean  @map("premises_found")
+  signageMatches Boolean  @map("signage_matches")
+  stockPresent   Boolean  @map("stock_present")
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  request  SiteVisitRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+  business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  staff    User              @relation("VisitReporter", fields: [staffId], references: [id], onDelete: Restrict)
+  photos   SiteVisitPhoto[]
+
+  @@map("site_visit_report")
+}
+
+/// A geotagged photograph from a visit.
+///
+/// Rows rather than two columns: two is a floor, not a shape — a warehouse with
+/// three entrances gets three — and each photograph carries its own
+/// coordinates. Those are NOT NULL and bounded to the UAE by a CHECK: a
+/// photograph without them is a photograph of somewhere, and the point is that
+/// it is a photograph of *there*.
+model SiteVisitPhoto {
+  id       String   @id @default(cuid())
+  reportId String   @map("report_id")
+  mediaId  String   @map("media_id")
+  lat      Float
+  lng      Float
+  takenAt  DateTime @map("taken_at")
+
+  report SiteVisitReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  media  Media           @relation(fields: [mediaId], references: [id], onDelete: Restrict)
+
+  @@map("site_visit_photo")
+}
+
+enum PdplKind {
+  access
+  erasure
+  correction
+
+  @@map("pdpl_kind")
+}
+
+enum PdplState {
+  received
+  in_progress
+  fulfilled
+  refused
+
+  @@map("pdpl_state")
+}
+
+/// A person asking what we hold about them, or asking us to delete it.
+///
+/// The due date is the law's rather than ours, and it is stored rather than
+/// computed so changing the window cannot silently reopen closed requests.
+model PdplRequest {
+  id            String    @id @default(cuid())
+  kind          PdplKind
+  state         PdplState @default(received)
+  /// Where we can identify them. A request can arrive by email from somebody
+  /// whose account we cannot find, and refusing to record it because the FK
+  /// will not resolve is how a legal deadline gets missed.
+  subjectUserId String?   @map("subject_user_id") @db.Uuid
+  subjectEmail  String?   @map("subject_email")
+  subjectPhone  String?   @map("subject_phone")
+  detail        String
+  dueAt         DateTime  @map("due_at")
+  closedAt      DateTime? @map("closed_at")
+  closedById    String?   @map("closed_by_id") @db.Uuid
+  /// NOT NULL once closed. A refusal in particular has to say why.
+  outcomeReason String?   @map("outcome_reason")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  subjectUser User? @relation("PdplSubject", fields: [subjectUserId], references: [id], onDelete: SetNull)
+  closedBy    User? @relation("PdplClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+
+  @@map("pdpl_request")
+}
+
+/// The only way anything outside this codebase reads our data.
+///
+/// The secret is never stored — a hash is, and the plaintext is shown once at
+/// issue and never again. A key we can read is a key that leaks with a database
+/// dump, and "we can resend it" is the reason every key ends up in an email.
+model ApiKey {
+  id           String    @id @default(cuid())
+  name         String
+  /// The first characters, so two keys can be told apart on screen.
+  prefix       String
+  secretHash   String    @map("secret_hash")
+  /// An empty list is a key that can do nothing, which is the safer default.
+  scopes       String[]  @default([])
+  createdById  String    @map("created_by_id") @db.Uuid
+  lastUsedAt   DateTime? @map("last_used_at")
+  expiresAt    DateTime? @map("expires_at")
+  revokedAt    DateTime? @map("revoked_at")
+  revokeReason String?   @map("revoke_reason")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  createdBy User @relation("ApiKeyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([secretHash])
+  @@map("api_key")
+}
+
 model SpecFieldProposal {
   id              String        @id @default(cuid())
   categoryId      String        @map("category_id")
@@ -1305,8 +1431,9 @@ model SiteVisitRequest {
   cancelledAt  DateTime? @map("cancelled_at")
   createdAt    DateTime  @default(now()) @map("created_at")
 
-  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  requestedBy User     @relation("VisitRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  requestedBy User             @relation("VisitRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  reports     SiteVisitReport[]
 
   @@index([businessId, createdAt])
   @@map("site_visit_request")

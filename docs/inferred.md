@@ -2207,3 +2207,77 @@ licence digits, the first identifying name token and the phone makes it the
 handful of pairs that share something. A dismissed pair is never re-proposed —
 a list that keeps offering back what somebody rejected is a list people stop
 reading.
+
+---
+
+## Handoff 4, step 3 — trust
+
+### The tier check was reading a column nothing wrote
+
+`lib/auth/subject.ts` has let a field verifier set a tier **only for a visit they
+recorded** since handoff 3, and `Business.visitedByStaffId` was written by the
+seed and by nothing else. The subject check was correct and guarding a column no
+code path filled in — so in production every field verifier would have been
+denied every tier, and the rule would have looked like it worked.
+
+`recordVisit` is the only writer, and it writes both columns. There is no form
+field for either.
+
+### Recording a visit does not set a tier
+
+Two decisions, two capabilities. Collapsing them would mean a field verifier who
+visits a business has thereby tiered it, and `visit.record` is held by ops lead
+and field while `business.verification_tier.write` is held by ops lead and — for
+their own visit only — field. The overlap is deliberate and the separation is
+what makes the subject check mean anything.
+
+### Two geotagged photographs, bounded to the UAE
+
+Tier 3 says somebody from this platform stood in the building. A visit report
+with no coordinates is a form somebody could fill in from a desk, so the
+coordinates are NOT NULL and checked against the UAE bounding box in the
+database — a photograph from somewhere else is not evidence about this business.
+
+Two is a floor rather than a shape: a warehouse with three entrances gets three,
+which is why the photographs are rows rather than columns.
+
+### `MediaKind` has no "photo"
+
+`gallery` is what the enum already calls an image of the premises. Worth writing
+down because the obvious name is the wrong one.
+
+### Off-platform payment reports skip the queue
+
+The README says so and the reason is that they are not a judgement call. The
+platform detected the message; what a person decides is about the **account**,
+not about the message. They are shown separately, below the conduct queue,
+rather than mixed in with wrong-phone-number reports.
+
+`lib/messaging/service.ts` has been writing them with `reporterId: null` since
+handoff 2 — the fourth queue in this project filled by code and read by nobody.
+A report nobody filed is marked as one on screen: a moderator reading it should
+know that nobody is waiting for a reply.
+
+### The audit log's narrowing narrowed nothing
+
+§07 gives ops lead the whole log and every other staff role **their own
+actions**. `auditScopeFor` has implemented that since handoff 3 step 4 and was
+called from nowhere. Step 3 calls it, and the screen tells a moderator they are
+seeing their own rows rather than leaving them to infer it from a short list — a
+scope somebody cannot see is a scope they will assume is a bug.
+
+### A console column is not a trust signal
+
+The visits queue shows `tier 2` in mono rather than borrowing
+`VerificationBadge`. The badge is required to carry what was checked and when,
+and that obligation is the whole point of it — it is owed to a buyer reading a
+storefront. Using it to render a number in an internal table would weaken it
+everywhere it means something.
+
+### The redirect resolver had to reach the subroutes too
+
+Step 2b wired `/b/[slug]`. The three subroutes guard with
+`if (!business || claimStatus === "unclaimed")`, a different shape, so they kept
+404ing a renamed or merged listing. They now redirect first and refuse an
+unclaimed listing second — which is also clearer: an unclaimed listing has no
+subpages because it is a licence record rather than a storefront.

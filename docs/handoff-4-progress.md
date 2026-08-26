@@ -19,23 +19,31 @@ sprint without asking, through to the end of the handoff.
 | [#19](https://github.com/ayushkbhatia/business-listings/pull/19) | Step 1a — boards 4b/4c, the four-way claim resolution, the DataTable column bug | `1208f52` |
 | [#20](https://github.com/ayushkbhatia/business-listings/pull/20) | Step 1b — boards 4d/4e, `specCompleteness` measured, versioning corrected | `1a2262e` |
 | [#21](https://github.com/ayushkbhatia/business-listings/pull/21) | Step 2a — board 12a, the licence importer, the silent CSV truncation | `c84209f` |
-| [#22](https://github.com/ayushkbhatia/business-listings/pull/22) | Step 2b — board 12b, dedupe and the reversible merge, the 301 resolver | open |
+| [#22](https://github.com/ayushkbhatia/business-listings/pull/22) | Step 2b — board 12b, dedupe and the reversible merge, the 301 resolver | `e864692` |
+| [#23](https://github.com/ayushkbhatia/business-listings/pull/23) | Step 3 — boards 4h/4i/12h, the visit report the tier check was waiting for | open |
 
 ## Next
 
-**Step 3 — trust `[4h]` `[4i]` `[12h]`.**
+**Step 4 — accounts and CRM `[4f]` `[12d]` `[12f]`.**
 
-- `[4h]` supplier reports. Already being filled automatically by
-  `lib/messaging/service.ts` when off-platform payment steering is detected — a producer with
-  no drain, exactly like the three queues handoff 3 left.
-- `[4i]` staff, roles and the audit log, including the "own actions only" narrowing that is
-  implemented at `lib/auth/subject.ts:196` and called from nowhere.
-- `[12h]` field visits with the two-photo report, PDPL requests, API keys, staff security.
-- Checkpoint: prove a moderator cannot change a verification tier. Already true and tested
-  since step 0; the checkpoint is showing it on a screen.
+- `[4f]` account health.
+- `[12d]` the self-building call list. `ZeroResultQuery` and `MissedEnquiry` have been written
+  by handoff 1 and 2 code and read by nothing — the call list is a query over data that
+  already exists, not a table to fill.
+- `[12f]` support desk and view-as. Read-only must be enforced where the seller's own
+  mutations are, not by hiding buttons: a hidden button is a UI opinion and a server action is
+  a URL. Needs a `ViewAsSession` row so the 30-minute cap is data rather than a cookie claim.
 
-Then steps 4–8 per the roadmap: accounts and CRM, commercials, the storefront builder,
-content ops, the acceptance pass.
+Then steps 5–8 per the roadmap: commercials, the storefront builder, content ops, the
+acceptance pass.
+
+## Carried out of step 3
+
+- **PDPL requests and API keys have tables and no screens.** `PdplRequest` and `ApiKey` are in
+  the migration with their constraints; `/admin/compliance` and `/admin/api` are still `later`.
+  Both are small and neither is blocking.
+- **Staff role management** (`/admin/staff`) is not built. `staff.manage` exists as a
+  capability with no service behind it.
 
 ## Carried forward
 
