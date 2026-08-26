@@ -59,14 +59,20 @@ beforeAll(async () => {
   });
   sellerOwnerId = owner.id;
 
+  /*
+   * `mergedIntoId: null` on every pick below. A merged listing keeps its row so
+   * its reviews survive and the merge stays reversible — it is not a listing
+   * anybody should be suspending or tiering, and the dedupe suite leaves some
+   * behind in a database this suite does not reset.
+   */
   const visited = await prisma.business.findFirstOrThrow({
-    where: { visitedAt: { not: null }, visitedByStaffId: { not: null }, suspendedAt: null },
+    where: { visitedAt: { not: null }, visitedByStaffId: { not: null }, suspendedAt: null, mergedIntoId: null },
     select: { id: true },
   });
   visitedBusinessId = visited.id;
 
   const unvisited = await prisma.business.findFirstOrThrow({
-    where: { visitedAt: null, suspendedAt: null },
+    where: { visitedAt: null, suspendedAt: null, mergedIntoId: null },
     select: { id: true },
   });
   unvisitedBusinessId = unvisited.id;
@@ -269,7 +275,7 @@ describe("the harness refuses the shapes that would fail open", () => {
 describe("what the permitted roles can do, and what it leaves behind", () => {
   it("ops lead suspends and lifts, and each carries its own reason", async () => {
     const target = await prisma.business.findFirstOrThrow({
-      where: { suspendedAt: null, id: { not: visitedBusinessId } },
+      where: { suspendedAt: null, mergedIntoId: null, id: { not: visitedBusinessId } },
       select: { id: true },
     });
 
@@ -317,7 +323,7 @@ describe("what the permitted roles can do, and what it leaves behind", () => {
 
   it("a suspension keeps the badge, the catalogue and the reviews", async () => {
     const target = await prisma.business.findFirstOrThrow({
-      where: { suspendedAt: null, verificationTier: { gt: 0 } },
+      where: { suspendedAt: null, verificationTier: { gt: 0 }, mergedIntoId: null },
       select: { id: true, verificationTier: true },
     });
     const before = {

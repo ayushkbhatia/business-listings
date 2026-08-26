@@ -165,7 +165,7 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     items: [
       { key: "businesses", labelKey: "nav.businesses", href: "/admin/businesses", later: true },
       { key: "ingest", labelKey: "nav.ingest", href: "/admin/ingest", capability: "queue.decide" },
-      { key: "dedupe", labelKey: "nav.dedupe", href: "/admin/ingest/dedupe", capability: "business.merge", later: true },
+      { key: "dedupe", labelKey: "nav.dedupe", href: "/admin/ingest/dedupe", capability: "business.merge" },
       { key: "visits", labelKey: "nav.visits", href: "/admin/visits", capability: "visit.record", later: true },
       { key: "crm", labelKey: "nav.crm", href: "/admin/crm", later: true },
     ],

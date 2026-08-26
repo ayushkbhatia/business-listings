@@ -17,32 +17,35 @@ sprint without asking, through to the end of the handoff.
 |---|---|---|
 | [#18](https://github.com/ayushkbhatia/business-listings/pull/18) | Step 0 — `requireStaff`, the admin shell, board 4a, criterion 9 written first, six DataTable capabilities | `e5aff31` |
 | [#19](https://github.com/ayushkbhatia/business-listings/pull/19) | Step 1a — boards 4b/4c, the four-way claim resolution, the DataTable column bug | `1208f52` |
-| [#20](https://github.com/ayushkbhatia/business-listings/pull/20) | Step 1b — boards 4d/4e, `specCompleteness` measured, versioning corrected | open |
+| [#20](https://github.com/ayushkbhatia/business-listings/pull/20) | Step 1b — boards 4d/4e, `specCompleteness` measured, versioning corrected | `1a2262e` |
+| [#21](https://github.com/ayushkbhatia/business-listings/pull/21) | Step 2a — board 12a, the licence importer, the silent CSV truncation | `c84209f` |
+| [#22](https://github.com/ayushkbhatia/business-listings/pull/22) | Step 2b — board 12b, dedupe and the reversible merge, the 301 resolver | open |
 
 ## Next
 
-**Step 2 — ingestion `[12a]` `[12b]`.**
+**Step 3 — trust `[4h]` `[4i]` `[12h]`.**
 
-- `[12a]` the licence-record importer. Stage, categorise, queue what it cannot, reject by
-  countable reason. Nothing publishes. Needs `LicenceImportRun` and `StagedListing` —
-  `ImportRun` is handoff 3's seller CSV product importer and is a name collision, not a
-  foundation.
-- `[12b]` dedupe with confidence bands. Above 90% bulk-merge, 60–90% needs a decision, below
-  60% is not a match. Every merge reversible for 30 days with a stored manifest, an audit row
-  and a 301 — plus a resolver that actually serves the redirect, which does not exist.
-- Criterion 1 wants 8,000 records. Building `scripts/make-licence-fixture.mts` over the area,
-  category and authority tables already in `prisma/seed-data.mts`, per the agreed §0.2.
+- `[4h]` supplier reports. Already being filled automatically by
+  `lib/messaging/service.ts` when off-platform payment steering is detected — a producer with
+  no drain, exactly like the three queues handoff 3 left.
+- `[4i]` staff, roles and the audit log, including the "own actions only" narrowing that is
+  implemented at `lib/auth/subject.ts:196` and called from nowhere.
+- `[12h]` field visits with the two-photo report, PDPL requests, API keys, staff security.
+- Checkpoint: prove a moderator cannot change a verification tier. Already true and tested
+  since step 0; the checkpoint is showing it on a screen.
 
-Then steps 3–8 per the roadmap: trust, accounts and CRM, commercials, the storefront builder,
+Then steps 4–8 per the roadmap: accounts and CRM, commercials, the storefront builder,
 content ops, the acceptance pass.
 
-## Carried into step 2
+## Carried forward
 
 - **The taxonomy and spec-library screens are read-only.** `editCategory` and
-  `publishVersionWithField` are built, tested and unwired to a form. Shipping a table that
-  tells the truth was worth more than a form changing numbers nobody had looked at.
-- **`Business.importRunId`** is still a bare TEXT column with no FK, no relation and no
-  reader. Step 2 either gives it one or removes it.
+  `publishVersionWithField` are built, tested and unwired to a form.
+- **The dedupe candidate list has no scheduled rescan.** `findCandidates` runs on demand from
+  the screen. It belongs on the hourly job beside the metrics, in a later step.
+- **A merged listing is excluded from the public surface by `mergedIntoId`**, and the four
+  `/b/[slug]` routes now redirect. Other surfaces that list businesses — search, category
+  pages, the sitemap — do not yet filter merged listings out.
 
 ---
 

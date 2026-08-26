@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
+import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
 import { Button } from "@/components/primitives";
 import { Breadcrumb, Card, KeyValuePanel, Panel, PublicShell } from "@/components/structure";
 import { Tag } from "@/components/display";
@@ -72,7 +73,18 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 export default async function StorefrontPage({ params }: Params) {
   const { slug } = await params;
   const business = await getBusinessBySlug(slug);
-  if (!business) notFound();
+  if (!business) {
+    /*
+     * Before the 404, the two ways a listing legitimately moves: a rename wrote
+     * a redirect, or a merge absorbed it. Both have been writing rows nothing
+     * read since handoff 0.
+     */
+    await redirectIfMoved(`/b/${slug}`);
+    notFound();
+  }
+
+  const movedTo = await absorbedInto(slug);
+  if (movedTo) permanentRedirect(`/b/${movedTo}`);
 
   return business.claimStatus === "unclaimed" ? (
     <UnclaimedStorefront business={business} />
