@@ -6,6 +6,7 @@ import { route, type RoutingPreference } from "./routing";
 import { render } from "./render";
 import { resolveNotificationSenders } from "./senders";
 import { absoluteUrl } from "@/lib/site";
+import { withParams } from "./params";
 
 /**
  * The events, wired to the things that cause them.
@@ -80,7 +81,7 @@ export async function onEnquiryDelivered(input: {
         recipientUserId: owner.id,
         enquiryId: enquiry.id,
         ...(input.valueAed === undefined ? {} : { valueAed: input.valueAed }),
-        params: {
+        params: withParams("enquiry_received", {
           ref: enquiry.ref,
           summary: firstClause(enquiry.requirement),
           neededBy: enquiry.neededBy ? formatDate(enquiry.neededBy) : "no date given",
@@ -89,7 +90,7 @@ export async function onEnquiryDelivered(input: {
           lineCount: enquiry._count.lines,
           enquiryId: enquiry.id,
           shortLink: absoluteUrl(`/dashboard/leads/${enquiry.id}/thread`),
-        },
+        }),
       });
     }
   });
@@ -103,11 +104,25 @@ export async function onQuoteAccepted(input: {
   totalAed: string;
 }): Promise<void> {
   await safely("quote_accepted", async () => {
-    const owner = await prisma.user.findFirst({
-      where: { businessId: input.businessId, roles: { has: "seller_owner" } },
-      select: { id: true },
-    });
-    if (!owner) return;
+    const [owner, enquiry] = await Promise.all([
+      prisma.user.findFirst({
+        where: { businessId: input.businessId, roles: { has: "seller_owner" } },
+        select: { id: true },
+      }),
+      /*
+       * The enquiry ref, which the email template asks for and this did not
+       * supply. It read "your quote {quoteRef} for enquiry {ref}" and would
+       * have thrown `MissingParamError` rather than sending — caught by the
+       * placeholder check in `lib/notify/params.ts`, which is what that check
+       * is for. A seller thinks in enquiry refs, so the copy is right and the
+       * emitter was wrong.
+       */
+      prisma.enquiry.findUnique({
+        where: { id: input.enquiryId },
+        select: { ref: true },
+      }),
+    ]);
+    if (!owner || !enquiry) return;
 
     await notify({
       event: "quote_accepted",
@@ -115,12 +130,13 @@ export async function onQuoteAccepted(input: {
       recipientUserId: owner.id,
       enquiryId: input.enquiryId,
       valueAed: Number(input.totalAed),
-      params: {
+      params: withParams("quote_accepted", {
+        ref: enquiry.ref,
         quoteRef: input.quoteRef,
         amount: formatAED(input.totalAed),
         enquiryId: input.enquiryId,
         shortLink: absoluteUrl(`/dashboard/leads/${input.enquiryId}/thread`),
-      },
+      }),
     });
   });
 }
@@ -159,14 +175,17 @@ export async function onQuoteSent(input: {
       });
       if (!template) continue;
 
-      const rendered = render(template, {
-        ref: enquiry.ref,
-        businessName: business.displayName,
-        businessSlug: business.slug,
-        revision: input.revision,
-        enquiryId: enquiry.id,
-        shortLink: absoluteUrl(`/enquiry/${enquiry.id}/compare`),
-      });
+      const rendered = render(
+        template,
+        withParams(event, {
+          ref: enquiry.ref,
+          businessName: business.displayName,
+          businessSlug: business.slug,
+          revision: input.revision,
+          enquiryId: enquiry.id,
+          shortLink: absoluteUrl(`/enquiry/${enquiry.id}/compare`),
+        }),
+      );
 
       const status =
         decision.action !== "send"

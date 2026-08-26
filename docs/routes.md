@@ -107,7 +107,7 @@ they 404 until their handoff.
 /admin/revenue                          Revenue                               [4g]  built h4s5
 /admin/reports                          Supplier reports & flags              [4h]  built h4s3
 /admin/support                          Support desk & view-as               [12f]  built h4s4
-/admin/notifications                    Notification templates              [12g]
+/admin/notifications                    Notification templates              [12g]  built h4s7
 /admin/strings                          Localisation                         [12g]
 /admin/content/matrix                   SEO page matrix                       [6f]  built h4s7
 /admin/content/home                     Homepage curation                    [12g]

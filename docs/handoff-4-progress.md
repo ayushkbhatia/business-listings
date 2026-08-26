@@ -30,24 +30,34 @@ sprint without asking, through to the end of the handoff.
 | [#30](https://github.com/ayushkbhatia/business-listings/pull/30) | Step 6d(i) — themes, and the floor a seller's own colour has to clear | `258e779` |
 | [#31](https://github.com/ayushkbhatia/business-listings/pull/31) | Step 6d(ii) — domain verification, and a certificate that says it is not issued | `dfe5c34` |
 | [#32](https://github.com/ayushkbhatia/business-listings/pull/32) | Step 6d(iii) — pages on every storefront, and a slug that stops moving | `31997a3` |
-| [#33](https://github.com/ayushkbhatia/business-listings/pull/33) | Step 7a — the page matrix, and a gate that stopped passing vacuously | open |
+| [#33](https://github.com/ayushkbhatia/business-listings/pull/33) | Step 7a — the page matrix, and a gate that stopped passing vacuously | `0ec3502` |
+| [#34](https://github.com/ayushkbhatia/business-listings/pull/34) | Step 7b — notification templates, and an email that would have thrown | open |
 
 ## Next
 
-**Step 7b — notification templates and localisation `[12g]`**, plus redirects and homepage
-curation.
+**Step 7c — localisation, redirects and homepage curation `[12g]`.**
 
-`NotificationTemplate` is already read by `lib/notify/events.ts` and `service.ts`, so that
-editor changes what actually sends — the good case. `Redirect` is read by
-`lib/listing/redirect.ts` and by the template-page route.
+Localisation is a read-only browser. The catalogue is `lib/i18n/en.ts`, a compile-time file
+`t()` is type-checked against; a live editor needs a runtime override table read by `t()`, which
+is an architecture change nobody has asked for, and CLAUDE.md says Arabic is "a later
+translation project, not a rebuild". 2,266 strings, one locale.
 
-**Localisation is the honest one.** The catalogue is `lib/i18n/en.ts`, a compile-time file
-`t()` is type-checked against. A live editor would need a runtime override table read by `t()`,
-which is an architecture change nobody has asked for, and CLAUDE.md says Arabic is "a later
-translation project, not a rebuild". Plan: a read-only browser with coverage stats, and say
-plainly that editing belongs to that project rather than shipping a form that cannot write.
+Redirects manage `Redirect`, which `lib/listing/redirect.ts` and the template-page route both
+read. Homepage curation is over `Category.showOnHome`.
 
 **Step 8 — the acceptance pass**, and `scripts/acceptance-handoff-4.sh`.
+
+## What step 7b found
+
+- **The seeded `quote_accepted` email would have thrown rather than sent.** It read "your quote
+  {quoteRef} for enquiry {ref}" and `onQuoteAccepted` supplied no `ref` — a `MissingParamError`
+  at send time, which is a seller not being told their quote was accepted. The copy was right
+  and the emitter was wrong; it fetches the enquiry ref now.
+- **Four of eleven notification events are emitted.** The other seven are declared, seeded with
+  templates, and sent by nothing. The screen says which is which.
+- **My own e2e test was not re-runnable, twice over.** It assumed the seeded template was live,
+  then left a draft behind that broke its own next run; and it clicked through a revalidation
+  before the new row existed, so it failed on a fresh database and passed on a dirty one.
 
 ## What step 7a found
 

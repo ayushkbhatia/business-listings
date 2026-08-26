@@ -1,0 +1,96 @@
+import { describe, expect, it } from "vitest";
+import {
+  EVENT_PARAMS,
+  isEmitted,
+  paramsFor,
+  placeholdersIn,
+  unknownPlaceholders,
+} from "./params";
+
+/**
+ * The authoring-time half of a send-time rule.
+ *
+ * `render()` refuses a placeholder with no value — "a notification with a hole
+ * in it is worse than one that did not send" — and until this existed, the only
+ * way to discover a template referenced something its event does not supply was
+ * for a seller not to get told something.
+ */
+
+describe("finding placeholders", () => {
+  it("reads them out of every part a template has", () => {
+    expect(placeholdersIn("Hello {name}", "Re: {ref}", "Open {shortLink}")).toEqual([
+      "name",
+      "ref",
+      "shortLink",
+    ]);
+  });
+
+  it("counts a repeated one once", () => {
+    expect(placeholdersIn("{ref} and {ref} again")).toEqual(["ref"]);
+  });
+
+  it("ignores braces that are not placeholders", () => {
+    expect(placeholdersIn("Costs {} or {not-a-name} or { spaced }")).toEqual([]);
+  });
+
+  it("takes null and undefined parts, because subject is optional", () => {
+    expect(placeholdersIn("{ref}", null, undefined)).toEqual(["ref"]);
+  });
+});
+
+describe("what an event supplies", () => {
+  it("names the params the enquiry event actually passes", () => {
+    expect(paramsFor("enquiry_received")).toContain("summary");
+    expect(paramsFor("enquiry_received")).toContain("closesAt");
+  });
+
+  it("knows which events nothing emits yet", () => {
+    /*
+     * Four of eleven are emitted. The rest are declared in the enum, seeded
+     * with templates, and sent by nothing — which is not a bug, but staff
+     * should know before spending an afternoon on the copy.
+     */
+    const emitted = (Object.keys(EVENT_PARAMS) as (keyof typeof EVENT_PARAMS)[]).filter(isEmitted);
+    expect([...emitted].sort()).toEqual([
+      "enquiry_received",
+      "quote_accepted",
+      "quote_received",
+      "quote_revised",
+    ]);
+  });
+
+  it("covers every event in the enum, so none is missing a row", () => {
+    // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
+    // this fails loudly if somebody widens the enum and the type is loosened.
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(11);
+  });
+});
+
+describe("catching the hole before it sends", () => {
+  it("names a placeholder the event does not supply", () => {
+    expect(unknownPlaceholders("quote_accepted", "Your quote {quoteRef} for {summary}")).toEqual([
+      "summary",
+    ]);
+  });
+
+  it("passes a template that only uses what it is given", () => {
+    expect(
+      unknownPlaceholders(
+        "enquiry_received",
+        "New enquiry {ref} — {summary}",
+        "Closes {closesAt}",
+        "Open it {shortLink}",
+      ),
+    ).toEqual([]);
+  });
+
+  it("treats every placeholder as unknown on an event nothing emits", () => {
+    // Nothing supplies params, so nothing can be substituted. A template here
+    // would fail at send time on its first placeholder.
+    expect(unknownPlaceholders("weekly_digest", "Your week: {count} enquiries")).toEqual(["count"]);
+  });
+
+  it("passes a template with no placeholders at all", () => {
+    expect(unknownPlaceholders("weekly_digest", "Your weekly digest is ready.")).toEqual([]);
+  });
+});
