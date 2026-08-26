@@ -72,6 +72,7 @@ they 404 until their handoff.
 /dashboard/reviews                      Reviews                              [11c]  built h2s6
 /dashboard/analytics                    Analytics                             [3l]
 /dashboard/billing                      Subscription & invoices               [3m]
+/dashboard/domain                       Your own web address                  [5e]  built h4s6
 /dashboard/billing/change               Plan change                          [11f]
 /dashboard/billing/cancel               Cancel                               [11f]
 /dashboard/invoice/:id                  Tax invoice                          [11f]

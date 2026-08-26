@@ -27,18 +27,27 @@ sprint without asking, through to the end of the handoff.
 | [#27](https://github.com/ayushkbhatia/business-listings/pull/27) | Step 6b — fourteen sections that render, and the page that proves it | `ffdbffb` |
 | [#28](https://github.com/ayushkbhatia/business-listings/pull/28) | Step 6c — the builder, and a publish that says what it is about to do | `4eabc20` |
 | [#29](https://github.com/ayushkbhatia/business-listings/pull/29) | Step 6e — the storefront renders from its template | `0539933` |
-| [#30](https://github.com/ayushkbhatia/business-listings/pull/30) | Step 6d(i) — themes, and the floor a seller's own colour has to clear | open |
+| [#30](https://github.com/ayushkbhatia/business-listings/pull/30) | Step 6d(i) — themes, and the floor a seller's own colour has to clear | `258e779` |
+| [#31](https://github.com/ayushkbhatia/business-listings/pull/31) | Step 6d(ii) — domain verification, and a certificate that says it is not issued | open |
 
 ## Next
 
-**Step 6d(ii) — the page editor `5d` and domain verification `5e`.**
-
-`5e` goes behind a `CertificateIssuer` port with a fake, in the shape of
-`lib/billing/provider.ts`: step 4 of that flow is a Vercel platform operation and there is no
-token, so the five DNS states are provable and the certificate half is honestly marked as not
-yet live. §0.7.
+**Step 6d(iii) — the page template editor `5d`**, the last piece of board 5. Small: a block
+palette, a page at 660px, SEO fields, and the content check panel. Criterion 9 — slugs
+immutable once published, renaming produces a 301 — is the load-bearing part, and `Redirect`
+already exists to carry it.
 
 Then steps 7–8: content ops `[6f]` `[12g]`, and the acceptance pass.
+
+## What step 6d(ii) found
+
+- **`checkHostname` refused our own apex with the wrong message.** `businesslistings.me` is
+  both ours and an apex, and the apex check fired first — a seller told it was an apex would
+  go and try `shop.businesslistings.me`. The more specific refusal wins now.
+- **The poller runs on the measure job's cadence, not the board's sixty seconds.** Said out
+  loud in the route rather than left to be noticed: a seller watching the screen sees
+  `Waiting` for longer than board 5e describes. Its own schedule is the honest fix, and it is
+  worth doing when there is a certificate provider to make verification mean something.
 
 ## What step 6d(i) found
 
