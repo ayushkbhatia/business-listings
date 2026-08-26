@@ -108,10 +108,10 @@ they 404 until their handoff.
 /admin/reports                          Supplier reports & flags              [4h]  built h4s3
 /admin/support                          Support desk & view-as               [12f]  built h4s4
 /admin/notifications                    Notification templates              [12g]  built h4s7
-/admin/strings                          Localisation                         [12g]
+/admin/strings                          Localisation                         [12g]  built h4s7
 /admin/content/matrix                   SEO page matrix                       [6f]  built h4s7
-/admin/content/home                     Homepage curation                    [12g]
-/admin/content/redirects                Redirects                            [12g]
+/admin/content/home                     Homepage curation                    [12g]  built h4s7
+/admin/content/redirects                Redirects                            [12g]  built h4s7
 /admin/storefront-templates             Templates & section library      [5c]  built h4s6
 /admin/storefront-templates/specimens   Section specimens           [5g, 5h]  built h4s6
 /admin/storefront-templates/:id         Builder shell                    [5a]  built h4s6

@@ -142,6 +142,93 @@ test.describe("board 12g — notification templates", () => {
   });
 });
 
+test.describe("board 12g — localisation is a report, not an editor", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/admin/strings");
+  });
+
+  test("says what it is, and why, before somebody looks for a save button", async ({ page }) => {
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Localisation");
+    await expect(page.getByText("This is a report, not an editor.")).toBeVisible();
+    await expect(page.getByText(/a missing string a build failure/)).toBeVisible();
+  });
+
+  test("says adding Arabic is a data change rather than a rebuild", async ({ page }) => {
+    await expect(page.getByText(/a second file beside this one/)).toBeVisible();
+  });
+
+  test("counts the catalogue and breaks it down by section", async ({ page }) => {
+    const header = page.getByRole("banner").or(page.locator("header")).first();
+    await expect(header).toContainText(/[\d,]+ strings/);
+    await expect(page.getByRole("table", { name: "By section" })).toBeVisible();
+  });
+
+  test("searches by key and by phrase", async ({ page }) => {
+    const search = page.getByRole("searchbox", { name: "Search the catalogue" });
+    await search.fill("storefront.");
+    const table = page.getByRole("table", { name: "Every string in the catalogue" });
+    await expect(table.getByText("storefront.overview", { exact: true })).toBeVisible();
+
+    await search.fill("zzzznothingmatchesthis");
+    await expect(page.getByText("Nothing matches that.")).toBeVisible();
+  });
+
+  test("has no control that writes a string", async ({ page }) => {
+    // The absence is the design. A save button here would be a promise the
+    // architecture does not keep.
+    const buttons = await page.getByRole("button").allInnerTexts();
+    for (const label of buttons) {
+      expect(label, label).not.toMatch(/save|publish|edit/i);
+    }
+  });
+
+  test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+test.describe("board 12g — redirects and the home page", () => {
+  test("refuses a redirect that would chain, and says where to point it", async ({ page }) => {
+    await page.goto("/admin/content/redirects");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Redirects");
+    await expect(page.getByText(/One hop, never two/)).toBeVisible();
+  });
+
+  test("will not add a redirect without a reason", async ({ page }) => {
+    await page.goto("/admin/content/redirects");
+    await page.getByLabel("From").fill("/old-address");
+    await page.getByLabel("To").fill("/new-address");
+    await expect(page.getByRole("button", { name: "Add it" })).toBeDisabled();
+    await page.getByLabel("Why").fill("The old address was printed on a van.");
+    await expect(page.getByRole("button", { name: "Add it" })).toBeEnabled();
+  });
+
+  test("cannot feature a trade whose own page does not publish", async ({ page }) => {
+    /*
+     * The home page is the most-linked page on the site. A link from it to a
+     * thin page is the worst one to have — the page matrix doing a second job.
+     */
+    await page.goto("/admin/content/home");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Home page");
+    await expect(page.getByText(/most-linked page on the site/)).toBeVisible();
+
+    const table = page.getByRole("table", { name: /Which trades/ });
+    const thin = table.getByRole("row").filter({ hasText: "Does not publish" }).first();
+    if ((await thin.count()) > 0) {
+      await expect(thin.getByRole("checkbox")).toBeDisabled();
+    }
+  });
+
+  test("both are axe clean", async ({ page }) => {
+    for (const path of ["/admin/content/redirects", "/admin/content/home"]) {
+      await page.goto(path);
+      const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+      expect(results.violations, path).toEqual([]);
+    }
+  });
+});
+
 test.describe("the copy reaches the public page", () => {
   test("a written category shows its intro, an unwritten one shows none", async ({ browser }) => {
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });

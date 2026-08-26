@@ -31,21 +31,32 @@ sprint without asking, through to the end of the handoff.
 | [#31](https://github.com/ayushkbhatia/business-listings/pull/31) | Step 6d(ii) — domain verification, and a certificate that says it is not issued | `dfe5c34` |
 | [#32](https://github.com/ayushkbhatia/business-listings/pull/32) | Step 6d(iii) — pages on every storefront, and a slug that stops moving | `31997a3` |
 | [#33](https://github.com/ayushkbhatia/business-listings/pull/33) | Step 7a — the page matrix, and a gate that stopped passing vacuously | `0ec3502` |
-| [#34](https://github.com/ayushkbhatia/business-listings/pull/34) | Step 7b — notification templates, and an email that would have thrown | open |
+| [#34](https://github.com/ayushkbhatia/business-listings/pull/34) | Step 7 — notification templates, localisation, redirects, homepage curation | open |
 
 ## Next
 
-**Step 7c — localisation, redirects and homepage curation `[12g]`.**
+**Step 8 — the acceptance pass.** Walk handoff 4's twelve criteria the way
+`scripts/acceptance-handoff-3.sh` walks its own, and write
+`scripts/acceptance-handoff-4.sh` beside the three that exist.
 
-Localisation is a read-only browser. The catalogue is `lib/i18n/en.ts`, a compile-time file
-`t()` is type-checked against; a live editor needs a runtime override table read by `t()`, which
-is an architecture change nobody has asked for, and CLAUDE.md says Arabic is "a later
-translation project, not a rebuild". 2,266 strings, one locale.
+Step 7 is complete: `[6f]` the page matrix, `[12g]` notification templates, localisation,
+redirects and homepage curation.
 
-Redirects manage `Redirect`, which `lib/listing/redirect.ts` and the template-page route both
-read. Homepage curation is over `Category.showOnHome`.
+## What step 7c found
 
-**Step 8 — the acceptance pass**, and `scripts/acceptance-handoff-4.sh`.
+- **`auth-flow.test.ts` was not safe to run twice at once.** It used a fixed address against
+  the shared hosted Supabase project — CI and a laptop use the same one while their databases
+  are separate — so `removeExisting` in one run deleted the auth user the other had just
+  created. A CI run at 17:21 overlapping a local `pnpm verify` is what surfaced it. Each run
+  now gets its own `+tag` address.
+- **My own content-ops test took a trade off the home page for good.** It toggled `showOnHome`
+  off and back on, but the way back in goes through the publishable gate, and the trade it
+  picked was not publishable — so the restore failed silently and `home-compare.spec.ts` broke
+  two suites later. It picks a publishable trade now, and asserts the restore rather than
+  assuming it.
+- **The e2e seats share addresses on that same Supabase project.** Since provisioning reuses
+  rather than deletes, the destructive collision is gone; the residual risk is two concurrent
+  runs racing on OTP generation, which is a flake rather than data loss. Left as is.
 
 ## What step 7b found
 
