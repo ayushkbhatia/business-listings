@@ -1962,3 +1962,90 @@ placement rather than a broken table. Measuring is the only way to see it, so
 the old markup before the fix landed.
 
 The edge now rides the row's first cell.
+
+---
+
+## Handoff 4, step 1b — taxonomy and the spec library
+
+### `specCompleteness` was random, and it was a ranking input
+
+The third instance of the same invention — `responseTimeMedianMs` in handoff 2,
+`profileStrength` in handoff 3 — and the worst of the three. The other two were
+shown to a seller; this one is also **weighted**: `lib/search/ranking.ts` gives it
+12 points, so search results were ordered partly by `0.4 + rnd() * 0.6`.
+
+Measured now by `lib/metrics/spec-completeness.ts`, computed by the same hourly
+job that writes profile strength, and derived by the seed through the same pure
+function so the two cannot disagree.
+
+**A product's specs are keyed by `SpecField.id`, not by `key`.** Every writer in
+the product does that — `lib/import/service.ts`, the product editor — because an
+id survives a rename. The first version of the completeness module read by key,
+found nothing, and would have scored every product incomplete.
+
+`null` where a business has no products, never zero: zero means they filled
+nothing in, and the ranking treats an unmeasured signal as half rather than as a
+failure.
+
+### The seeded catalogue is deliberately patchy
+
+Every third product is missing its body material, a required filterable field.
+A seed where every product is complete gives a flat 1.00 to all sixteen sellers
+— a ranking signal that ranks nothing, and no products for board 4e's affected
+count to count. Chosen by index rather than by a draw, because the PRNG is a
+sequence; the `pick()` still runs and its result is discarded when the field is
+dropped, so neither the length nor the order of the sequence moves.
+
+### A spec version is a bump, not a clone
+
+The obvious implementation copies the live template's fields onto a new row and
+retires the old one. It is wrong here and an integration test caught it: cloning
+gives the carried-forward fields new ids, and `specValues` is keyed by id — so
+every catalogue in the category would read as empty the moment somebody
+published a version.
+
+Publishing adds the field to the template that already exists and bumps
+`version`. No id moves, `SellerTemplate.platformTemplateId` stays valid, and
+`Category.defaultTemplateId` never has to be repointed. What changed lives in
+the audit row's before and after, which is where changes live.
+
+The roadmap's proposed `SpecTemplateVersion` model was never needed.
+
+### The publish floor is per category, and nothing had ever read it
+
+`Category.publishThreshold` (60) and `verifiedShareMin` (0.30) have existed since
+handoff 0. `evaluatePublish` is correct and unit-tested and was wired only to
+`app/sitemap.ts` with the hardcoded defaults. Board 4d reads the columns.
+
+Intro words are passed as satisfied and the screen says so. The copy belongs to
+the landing page, which handoff 5 owns; counting it here would fail every
+category on a threshold this screen cannot see, and silently dropping a third of
+the rule is worse than naming the gap.
+
+### A `Column.render` is a function, and a bare identifier hides it
+
+The sixth and seventh occurrence of "Functions cannot be passed directly to
+Client Components", both in this step. `tests/unit/client-labels.test.ts` has
+guarded the inline shape since handoff 3 and missed these, because the call site
+read `columns={columns}` and the arrows were in the declaration ten lines up.
+
+The guard now follows a bare identifier to its `const` in the same file. Proved
+against a decoy before the fix was kept.
+
+### A scrollable table needs a tabindex, and must not become a landmark
+
+`scrollable-region-focusable` fired on the first admin table wide enough to
+overflow: a horizontally scrolling container that cannot be reached by keyboard
+is unusable without a mouse.
+
+The rule's own documentation suggests `role="region"` with a label. That makes it
+a **landmark**, and the gallery immediately had several sharing one name — the
+landmark test caught it. `tabIndex` alone is what the rule needs; the table's
+`<caption>` is what names the content.
+
+### A fixture that borrows shared data breaks somebody else's test
+
+`spec-library.test.ts` attached its products to `findFirstOrThrow()` — a real
+seeded seller — and `enquiry-fanout.test.ts` counts products. The suite failed a
+different file, on a fresh database only, off by exactly the number of fixtures
+built before it. Fixtures now create their own unpublished business.

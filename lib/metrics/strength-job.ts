@@ -1,6 +1,11 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { profileStrength, type ProfileFacts } from "./profile-strength";
+import {
+  specCompleteness,
+  type ProductSpecs,
+  type SpecFieldRule,
+} from "./spec-completeness";
 
 /**
  * The profile-strength measurement job.
@@ -18,6 +23,8 @@ import { profileStrength, type ProfileFacts } from "./profile-strength";
 export interface StrengthResult {
   businessesConsidered: number;
   updated: number;
+  /** Businesses whose `specCompleteness` moved. */
+  specUpdated: number;
   ranAt: Date;
 }
 
@@ -36,6 +43,7 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
       teamSize: true,
       languages: true,
       profileStrength: true,
+      specCompleteness: true,
       categories: { select: { categoryId: true } },
       locations: { select: { hours: true } },
       _count: { select: { team: true, products: true } },
@@ -44,13 +52,63 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
 
   // Two whole-table reads rather than two queries per business. At 41,000
   // listings this is the difference between a job and an outage.
-  const [productRows, mediaRows] = await Promise.all([
-    prisma.product.findMany({ select: { businessId: true, specValues: true } }),
+  const [productRows, mediaRows, fieldRows] = await Promise.all([
+    prisma.product.findMany({
+      select: {
+        businessId: true,
+        specValues: true,
+        category: { select: { defaultTemplateId: true } },
+      },
+    }),
     prisma.media.findMany({
       where: { reviewId: null },
       select: { kind: true, businessId: true, product: { select: { businessId: true } } },
     }),
+    /*
+     * The rules every template imposes, read once. `requiredFrom` is what makes
+     * a grace period real: a field added to a live template with a deadline in
+     * the future does not count against products filed before it.
+     */
+    prisma.specField.findMany({
+      select: {
+        id: true,
+        templateId: true,
+        key: true,
+        required: true,
+        isFilterable: true,
+        requiredFrom: true,
+      },
+    }),
   ]);
+
+  const rulesByTemplate = new Map<string, SpecFieldRule[]>();
+  for (const field of fieldRows) {
+    const list = rulesByTemplate.get(field.templateId) ?? [];
+    list.push({
+      id: field.id,
+      key: field.key,
+      required: field.required,
+      isFilterable: field.isFilterable,
+      requiredFrom: field.requiredFrom,
+    });
+    rulesByTemplate.set(field.templateId, list);
+  }
+
+  /*
+   * Products per business, carrying the template their category points at.
+   * `specCompleteness` was `0.4 + rnd() * 0.6` in the seed until now, and
+   * `lib/search/ranking.ts` weights it at 12 — so search order has been partly
+   * random since handoff 0. This is the column, measured.
+   */
+  const specsByBusiness = new Map<string, ProductSpecs[]>();
+  for (const row of productRows) {
+    const list = specsByBusiness.get(row.businessId) ?? [];
+    list.push({
+      templateId: row.category?.defaultTemplateId ?? null,
+      values: row.specValues as Record<string, unknown> | null,
+    });
+    specsByBusiness.set(row.businessId, list);
+  }
 
   // Photos per business, counting the ones hanging off products as well.
   const photoCounts = new Map<string, number>();
@@ -75,6 +133,7 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
   }
 
   let updated = 0;
+  let specUpdated = 0;
   for (const business of businesses) {
     const facts: ProfileFacts = {
       hasDescription: (business.description ?? "").trim().length > 0,
@@ -93,16 +152,30 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
     };
 
     const score = profileStrength(facts);
-    if (score === business.profileStrength) continue;
+    const completeness = specCompleteness(
+      specsByBusiness.get(business.id) ?? [],
+      rulesByTemplate,
+      now,
+    );
+
+    const strengthMoved = score !== business.profileStrength;
+    const completenessMoved =
+      completeness === null
+        ? business.specCompleteness !== null
+        : business.specCompleteness === null ||
+          Math.abs(Number(business.specCompleteness) - completeness) > 0.001;
+
+    if (!strengthMoved && !completenessMoved) continue;
 
     await prisma.business.update({
       where: { id: business.id },
-      data: { profileStrength: score, derivedAt: now },
+      data: { profileStrength: score, specCompleteness: completeness, derivedAt: now },
     });
-    updated += 1;
+    if (strengthMoved) updated += 1;
+    if (completenessMoved) specUpdated += 1;
   }
 
-  return { businessesConsidered: businesses.length, updated, ranAt: now };
+  return { businessesConsidered: businesses.length, updated, specUpdated, ranAt: now };
 }
 
 /** `hours` is Json and defaults to `{}`, so presence is not the same as filled in. */

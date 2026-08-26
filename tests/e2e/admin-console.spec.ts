@@ -41,22 +41,34 @@ test.describe("board 4a — the console overview", () => {
     await expect(page.getByText(/Service level, in days/)).toBeVisible();
   });
 
-  test("links a number into the queue that fixes it once that queue exists", async ({ page }) => {
-    // /admin is built, so its own nav row is not `later` and the sidebar links
-    // it. Every other row is named and not linked.
+  test("links a built screen and names an unbuilt one", async ({ page }) => {
     const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
+    // Built in steps 0 and 1.
     await expect(sidebar.getByRole("link", { name: "Platform overview" })).toBeVisible();
-    await expect(sidebar.getByRole("link", { name: "Approval queue" })).toHaveCount(0);
-    await expect(sidebar.getByText("Approval queue")).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Approval queue" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Taxonomy" })).toBeVisible();
+    // Not yet. Named, not linked — the rule handoff 1 arrived at after the
+    // seller sidebar shipped a dozen dead links.
+    await expect(sidebar.getByRole("link", { name: "Licence importer" })).toHaveCount(0);
+    await expect(sidebar.getByText("Licence importer")).toBeVisible();
   });
 
-  test("marks an unbuilt screen rather than linking to a 404", async ({ page }) => {
+  test("every admin link on the page resolves", async ({ page }) => {
+    /*
+     * Board 4a's numbers link into the queue that fixes them, and only once
+     * that queue exists. A link here that 404s is the failure this test is for.
+     */
     const links = await page.getByRole("main").getByRole("link").all();
+    const hrefs = new Set<string>();
     for (const link of links) {
       const href = await link.getAttribute("href");
-      if (!href?.startsWith("/admin")) continue;
-      // The only admin link this page may carry today is its own.
-      expect(href).toBe("/admin");
+      if (href?.startsWith("/admin")) hrefs.add(href);
+    }
+    expect(hrefs.size).toBeGreaterThan(0);
+
+    for (const href of hrefs) {
+      const response = await page.request.get(href);
+      expect(response.status(), href).toBe(200);
     }
   });
 
@@ -101,6 +113,63 @@ test.describe("the console is staff-only", () => {
     const page = await context.newPage();
     const response = await page.goto("/admin");
     expect(response?.status()).toBe(404);
+    await context.close();
+  });
+});
+
+test.describe("boards 4b, 4d and 4e", () => {
+  test("the queue bands late rows above the rest", async ({ page }) => {
+    await page.goto("/admin/queue");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Approval queue");
+
+    // Age before volume. The band headings are the ordering.
+    const bands = await page.getByRole("columnheader").allTextContents();
+    expect(bands.join(" ")).toMatch(/service level/i);
+  });
+
+  test("the taxonomy says which half of the floor a category failed", async ({ page }) => {
+    await page.goto("/admin/categories");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Taxonomy");
+
+    // The seed has 40 businesses against a floor of 60, so something is held.
+    await expect(page.getByText("Held back").first()).toBeVisible();
+    // And it says what is missing rather than only that something is.
+    await expect(page.getByText(/of 60/).first()).toBeVisible();
+  });
+
+  test("the taxonomy does not claim to measure intro words", async ({ page }) => {
+    // The copy belongs to the landing page, which is handoff 5. Counting it
+    // here would fail every category on a threshold this screen cannot see.
+    await page.goto("/admin/categories");
+    await expect(page.getByText(/Intro word count is not measurable here/)).toBeVisible();
+  });
+
+  test("the spec library shows the version and who has cloned it", async ({ page }) => {
+    await page.goto("/admin/spec-library");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Spec templates");
+    await expect(page.getByRole("cell", { name: /^v\d+$/ }).first()).toBeVisible();
+  });
+
+  test("all three are axe clean at compact density", async ({ page }) => {
+    for (const path of ["/admin/queue", "/admin/categories", "/admin/spec-library"]) {
+      await page.goto(path);
+      const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+      expect(results.violations, path).toEqual([]);
+    }
+  });
+});
+
+test.describe("what taxonomy.write gates", () => {
+  test("a moderator cannot reach the taxonomy or the spec library", async ({ browser }) => {
+    // §07 gives "edit taxonomy & spec templates" to ops lead alone.
+    const context = await browser.newContext({
+      storageState: "tests/e2e/.auth/staff-moderator.json",
+    });
+    const page = await context.newPage();
+    for (const path of ["/admin/categories", "/admin/spec-library"]) {
+      const response = await page.goto(path);
+      expect(response?.status(), path).toBe(404);
+    }
     await context.close();
   });
 });
