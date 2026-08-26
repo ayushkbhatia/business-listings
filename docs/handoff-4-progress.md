@@ -32,20 +32,27 @@ sprint without asking, through to the end of the handoff.
 | [#32](https://github.com/ayushkbhatia/business-listings/pull/32) | Step 6d(iii) — pages on every storefront, and a slug that stops moving | `31997a3` |
 | [#33](https://github.com/ayushkbhatia/business-listings/pull/33) | Step 7a — the page matrix, and a gate that stopped passing vacuously | `0ec3502` |
 | [#34](https://github.com/ayushkbhatia/business-listings/pull/34) | Step 7 — notification templates, localisation, redirects, homepage curation | `989193f` |
-| [#35](https://github.com/ayushkbhatia/business-listings/pull/35) | Board 12c — the ranking somebody can change, and boosts that expire | open |
+| [#35](https://github.com/ayushkbhatia/business-listings/pull/35) | Board 12c — the ranking somebody can change, and boosts that expire | `4cad043` |
+| [#36](https://github.com/ayushkbhatia/business-listings/pull/36) | Step 8 — the acceptance walk, and the check criterion 11 was missing | open |
 
 ## Next
 
-**Step 8 — the acceptance pass**, and `scripts/acceptance-handoff-4.sh` beside the three that
-exist. Two things it needs that do not exist yet:
+**Handoff 4 is complete.** `./scripts/acceptance-handoff-4.sh` walks all twenty-four criteria
+— handoff 4's twelve and the storefront spec's twelve — and reports 35 checks passing.
 
-- **Criterion 11's static check.** Nothing structurally stops a future admin service calling
-  `prisma.business.update` directly — no test, no lint rule. A static check over `app/(admin)`
-  and the admin services is what makes "every mutation writes an audit row" true rather than
-  aspirational. Roadmap §5 says so and it is cheap.
-- **Criterion 12's reading**, per §0.3: axe clean means clean outside the documented token
-  pairings, which are still pinned awaiting a canvas decision. Stated in the walk rather than
-  implied by a passing line.
+Carried into handoff 5, and stated rather than buried:
+
+- **The embed** (`5e`), cut in §0.5. It needs the `ApiKey` model, an origin allowlist and a
+  frame policy, and `data-theme="inherit"` would let host CSS recolour verification badges.
+- **`/admin/areas`, `/admin/attributes`, `/admin/staff`, `/admin/users`, `/admin/compliance`
+  and `/admin/api`** are named in the sidebar and unbuilt. PDPL requests and API keys have
+  tables and no screens.
+- **Seven of eleven notification events** are declared, seeded with templates, and emitted by
+  nothing.
+- **Certificate issuance** is a fake reporting that it issued nothing, until there is a Vercel
+  token and `stores.businesslistings.me` exists.
+- **The contrast decision**, pinned since handoff 1. Criterion 12 reads as "clean outside the
+  documented token pairings" until it is settled.
 
 ## What the acceptance pass already found, before it was written
 
