@@ -49,8 +49,8 @@ test.describe("board 4a — the console overview", () => {
     await expect(sidebar.getByRole("link", { name: "Taxonomy" })).toBeVisible();
     // Not yet. Named, not linked — the rule handoff 1 arrived at after the
     // seller sidebar shipped a dozen dead links.
-    await expect(sidebar.getByRole("link", { name: "Dedupe & merge" })).toHaveCount(0);
-    await expect(sidebar.getByText("Dedupe & merge")).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Field visits" })).toHaveCount(0);
+    await expect(sidebar.getByText("Field visits")).toBeVisible();
   });
 
   test("every admin link on the page resolves", async ({ page }) => {
@@ -199,5 +199,24 @@ test.describe("board 12a — the licence importer", () => {
     for (const head of ["Source", "Rows", "Staged", "Rejected", "Status"]) {
       await expect(page.getByRole("columnheader", { name: head })).toBeVisible();
     }
+  });
+});
+
+test.describe("board 12b — dedupe", () => {
+  test("bands the pairs and says why each one matched", async ({ page }) => {
+    await page.goto("/admin/ingest/dedupe");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Dedupe & merge");
+    await expect(
+      page.getByText(/A merge moves everything the absorbed listing has/),
+    ).toBeVisible();
+    for (const head of ["The pair", "Why", "Match"]) {
+      await expect(page.getByRole("columnheader", { name: head })).toBeVisible();
+    }
+  });
+
+  test("is axe clean", async ({ page }) => {
+    await page.goto("/admin/ingest/dedupe");
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
   });
 });

@@ -82,6 +82,8 @@ model User {
   visitsRequested SiteVisitRequest[]    @relation("VisitRequester")
   conflictsResolved ClaimConflict[]     @relation("ConflictResolvedBy")
   licenceImports    LicenceImportRun[]  @relation("IngestActor")
+  merges            BusinessMerge[]     @relation("MergeActor")
+  candidatesDismissed MergeCandidate[]  @relation("CandidateDismissedBy")
   proposalsDecided  SpecFieldProposal[] @relation("ProposalDecidedBy")
 
   @@index([businessId])
@@ -435,6 +437,14 @@ model Business {
   /// while being nothing.
   licenceImportRunId String?      @map("licence_import_run_id")
   suspendedAt       DateTime?     @map("suspended_at")
+  /// The listing that absorbed this one, where one did.
+  ///
+  /// A merge never deletes. Everything hangs off `business_id` and cascades, so
+  /// deleting the absorbed listing destroys the reviews that were the reason to
+  /// merge — and criterion 2 wants thirty days of reversibility. The row stays,
+  /// keeps its slug, and points here.
+  mergedIntoId      String?       @map("merged_into_id")
+  mergedAt          DateTime?     @map("merged_at")
   publishedAt       DateTime?     @map("published_at")
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt @map("updated_at")
@@ -480,6 +490,12 @@ model Business {
   claimSubmissions       ClaimSubmission[]
   visitRequests          SiteVisitRequest[]
   licenceImportRun       LicenceImportRun?       @relation(fields: [licenceImportRunId], references: [id], onDelete: SetNull)
+  mergedInto             Business?               @relation("BusinessMergedInto", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  absorbed               Business[]              @relation("BusinessMergedInto")
+  mergeCandidatesKeep    MergeCandidate[]        @relation("CandidateKeep")
+  mergeCandidatesAbsorb  MergeCandidate[]        @relation("CandidateAbsorb")
+  mergesKept             BusinessMerge[]         @relation("MergeKeep")
+  mergesAbsorbed         BusinessMerge[]         @relation("MergeAbsorb")
   stagedListings         StagedListing[]
   claimConflicts         ClaimConflict[]         @relation("ConflictBusiness")
   producedByConflicts    ClaimConflict[]         @relation("ConflictProduced")
@@ -1185,6 +1201,69 @@ model StagedListing {
 
   @@unique([runId, rowNumber])
   @@map("staged_listing")
+}
+
+enum MergeBand {
+  /// Above 90%. Bulk-merging these is safe.
+  certain
+  /// 60 to 90%. A person decides — merging two genuinely separate companies
+  /// destroys reviews, and this is the band where that happens.
+  probable
+  /// Below 60%. Not a match.
+  unlikely
+
+  @@map("merge_band")
+}
+
+/// Two listings that might be one company.
+model MergeCandidate {
+  id            String    @id @default(cuid())
+  keepId        String    @map("keep_id")
+  absorbId      String    @map("absorb_id")
+  /// 0..1. Computed, never typed.
+  score         Float
+  band          MergeBand
+  /// Which signals agreed, so the number can be argued with.
+  signals       Json
+  dismissedAt   DateTime? @map("dismissed_at")
+  dismissedById String?   @map("dismissed_by_id") @db.Uuid
+  dismissReason String?   @map("dismiss_reason")
+  mergeId       String?   @map("merge_id")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  keep        Business       @relation("CandidateKeep", fields: [keepId], references: [id], onDelete: Cascade)
+  absorb      Business       @relation("CandidateAbsorb", fields: [absorbId], references: [id], onDelete: Cascade)
+  dismissedBy User?          @relation("CandidateDismissedBy", fields: [dismissedById], references: [id], onDelete: SetNull)
+  merge       BusinessMerge? @relation(fields: [mergeId], references: [id], onDelete: SetNull)
+
+  @@map("merge_candidate")
+}
+
+/// One merge, and everything it moved.
+///
+/// The manifest is the point. Reversal replays it rather than recomputing —
+/// by the time somebody unmerges, the surviving listing has rows of its own and
+/// "everything belonging to the winner" is no longer the same set it was.
+model BusinessMerge {
+  id              String    @id @default(cuid())
+  keepId          String    @map("keep_id")
+  absorbId        String    @map("absorb_id")
+  actorId         String    @map("actor_id") @db.Uuid
+  reason          String
+  manifest        Json
+  /// The address the absorbed listing had, so a reversal can put it back.
+  absorbedSlug    String    @map("absorbed_slug")
+  reversibleUntil DateTime  @map("reversible_until")
+  reversedAt      DateTime? @map("reversed_at")
+  reverseReason   String?   @map("reverse_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  keep       Business         @relation("MergeKeep", fields: [keepId], references: [id], onDelete: Restrict)
+  absorb     Business         @relation("MergeAbsorb", fields: [absorbId], references: [id], onDelete: Restrict)
+  actor      User             @relation("MergeActor", fields: [actorId], references: [id], onDelete: Restrict)
+  candidates MergeCandidate[]
+
+  @@map("business_merge")
 }
 
 model SpecFieldProposal {

@@ -2137,3 +2137,73 @@ number and an address and that is all; the claim funnel is what turns it into a
 supplier. An authority code we do not have in the `Authority` enum blocks the
 row from becoming a listing and leaves it staged, which is the honest place for
 it — a new free zone opening must not stop an import.
+
+---
+
+## Handoff 4, step 2b — dedupe and merge
+
+### Scoring is a rule, not a weighting
+
+The safety property is one sentence: **no pair reaches the certain band without
+a licence number agreeing.**
+
+A first version weighted all five signals and summed them. It could not express
+both "same licence, nothing else" and "same name at one address" as `probable`
+without pushing one of them somewhere wrong — and the shape it got wrong was the
+dangerous one, because a linear sum lets enough weak signals add up to a bulk
+merge. Two tenants of one industrial unit share the landlord's switchboard, the
+street address and the area, and are different companies.
+
+So a licence match starts at the certain floor and the name lifts it; everything
+else is capped just below. The **signals** are the output as much as the score:
+in the 60–90% band a person needs to see that two listings share a phone number
+and nothing else, and a single number reduces that to a feeling.
+
+### A UAE phone is not its last nine digits
+
+`+971 4 347 2290` and `04 347 2290` are one number written two ways. Comparing
+the last nine gets it wrong — the international form drops the trunk zero the
+local form keeps, so the two differ at the front and match on nothing. Strip the
+country code, then the trunk zero.
+
+### A merge never deletes, and the manifest is why
+
+Reviews, enquiries, quotes, products, locations, media and team seats all hang
+off `business_id` and cascade. Deleting the absorbed listing destroys the reviews
+that were the reason to merge, and thirty days of reversibility would be
+reversibility of nothing.
+
+The absorbed listing keeps its row, its id and its slug, gains a `mergedIntoId`,
+and its children move across. **What moved is written down**, and reversal
+replays that list rather than recomputing it — by the time somebody unmerges,
+the surviving listing has rows of its own, and "everything belonging to the
+winner" is no longer the set that arrived. A test adds a product after the merge
+and asserts it stays put through the reversal.
+
+`EnquiryRecipient` has a composite key, so a move can collide where the survivor
+already received the same enquiry. Those stay where they are: one row per
+(enquiry, business) is the point of the key, and a buyer who reached both
+listings reached one company twice.
+
+### The 301s were inert
+
+`Redirect` has existed since handoff 0 and **nothing ever read it**. Every row a
+rename or a merge wrote was dead, and a buyer following a bookmarked address
+after either got a 404 — including every rename approved by the queue built in
+step 1a.
+
+`lib/listing/redirect.ts` resolves them, called where the 404 would otherwise be
+thrown so it costs one query only on the path that was already failing. It also
+follows `mergedIntoId`: a merged listing keeps its row so its reviews survive,
+and it should not render as itself.
+
+Reversing a merge takes the redirect down. A 301 to a listing that is live again
+sends buyers to the wrong company.
+
+### Candidates are blocked, not compared pairwise
+
+At 41,000 listings a pairwise pass is 840 million comparisons. Blocking on
+licence digits, the first identifying name token and the phone makes it the
+handful of pairs that share something. A dismissed pair is never re-proposed —
+a list that keeps offering back what somebody rejected is a list people stop
+reading.

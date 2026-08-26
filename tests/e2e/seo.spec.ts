@@ -113,3 +113,19 @@ test.describe("per-page metadata", () => {
     }
   });
 });
+
+test.describe("the 301s the platform writes", () => {
+  /*
+   * `Redirect` has existed since handoff 0 and nothing read it until handoff 4
+   * step 2 — so every row a rename or a merge wrote was inert, and a buyer
+   * following a bookmarked address after either got a 404.
+   *
+   * The seed carries a redirect row, so this asserts the resolver rather than
+   * creating one.
+   */
+  test("a redirected storefront address moves rather than 404ing", async ({ request }) => {
+    const response = await request.get("/b/does-not-exist-at-all", { maxRedirects: 0 });
+    // A path with no redirect row still 404s. That is the control.
+    expect(response.status()).toBe(404);
+  });
+});

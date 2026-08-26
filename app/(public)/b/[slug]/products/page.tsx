@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
+import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 
 import { getBusinessBySlug, getBusinessProducts, getSpecTemplate } from "@/lib/db/queries";
