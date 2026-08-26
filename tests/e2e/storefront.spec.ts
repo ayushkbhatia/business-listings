@@ -53,6 +53,28 @@ test.describe("one route, two compositions", () => {
     await expect(page.getByText("Trade licence", { exact: true })).toBeVisible();
   });
 
+  test("serves the template's pages, and links them in the storefront nav", async ({ page }) => {
+    /*
+     * Board 5d, from the buyer's side. A page is authored once for the trade
+     * and appears on every storefront in it — the route that makes the editor
+     * worth having.
+     */
+    await page.goto(`/b/${CLAIMED}`);
+    const about = page.getByRole("link", { name: "About us" });
+    await expect(about).toBeVisible();
+
+    await about.click();
+    // An h2: the storefront header owns the h1, and it is the business name.
+    await expect(page.getByRole("heading", { level: 2, name: "About us" })).toBeVisible();
+    await expect(page.getByText(/Counter sales and site delivery/)).toBeVisible();
+  });
+
+  test("a page carries no price, like every other public surface", async ({ page }) => {
+    await page.goto(`/b/${CLAIMED}/about`);
+    const body = await page.locator("article").innerText();
+    expect(body).not.toMatch(/AED\s*[\d,]/);
+  });
+
   test("an unclaimed business renders the 10g composition from the same route", async ({ page }) => {
     await page.goto(`/b/${UNCLAIMED}`);
     await expect(page.getByText("This listing has not been claimed")).toBeVisible();

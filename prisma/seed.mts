@@ -1678,7 +1678,78 @@ async function seedStorefrontTemplates(
       },
     });
 
-    console.log(`   ${plan.name}: ${template.sections.length} sections, ${storeCount} stores`);
+    /*
+     * One page per template, so the public route has something real to render
+     * and the content check has something to score. Written to pass three of
+     * its four checks and fail the image one — a specimen where everything
+     * passes teaches nobody what the panel is for.
+     */
+    const trade = plan.sector.replace(/-/g, " ");
+    await db.templatePage.create({
+      data: {
+        templateId: template.id,
+        slug: "about",
+        title: "About us",
+        metaDescription: `Stockist and supplier of ${trade} for contractors across Dubai and Sharjah.`,
+        status: "live",
+        publishedAt: days(-int(2, 20)),
+        blocks: [
+          { id: "h1", kind: "heading", values: { text: "Counter sales and site delivery" } },
+          {
+            id: "t1",
+            kind: "text",
+            values: {
+              body:
+                `We have supplied ${trade} to contractors across Dubai, Sharjah and the Northern ` +
+                "Emirates since the trade licence in the footer was first issued. Counter sales " +
+                "run from the warehouse six days a week, and scheduled site delivery covers Al " +
+                "Quoz, Ras Al Khor, Jebel Ali and the Sharjah industrial areas. Most orders " +
+                "placed before midday go out the same afternoon. Where an item is not on the " +
+                "shelf we say so and quote a lead time rather than quoting a date we cannot " +
+                "hold — the counter staff would rather lose the order than lose the contractor. " +
+                "Quotes hold for the period stated on them. Nothing on this page is a price: " +
+                "prices come back on a quote against the sizes and quantities you send, because " +
+                "what a contractor pays depends on the quantity, the specification and the " +
+                "delivery, and a number on a web page is none of those. Our team speak English, " +
+                "Arabic, Hindi and Malayalam, which is what the counter actually needs.\n\n" +
+                "Everything we stock is bought from the manufacturer or their appointed agent " +
+                "in the Emirates, and the paperwork comes with it: mill certificates where the " +
+                "specification calls for them, test certificates on request, and the " +
+                "manufacturer datasheet for anything a consultant has to approve before it goes " +
+                "in the ground. If a consultant rejects a submittal we will find the equivalent " +
+                "that passes rather than argue about the one that did not. Accounts are opened " +
+                "against a trade licence and a signed order, and payment terms are agreed " +
+                "between us and you directly, as they always have been in this trade. We are " +
+                "not a marketplace and nothing passes through anybody else on the way. The " +
+                "counter opens early because contractors start early, and somebody answers the " +
+                "phone during working hours rather than a menu. If you send a schedule we will " +
+                "price it line by line and tell you which lines are on the shelf today.",
+            },
+          },
+          {
+            id: "n1",
+            kind: "numbers",
+            values: {
+              items: [
+                { label: "Trading since", value: "2009" },
+                { label: "Branches", value: "2" },
+                { label: "Same-day delivery", value: "Before midday" },
+              ],
+            },
+          },
+          {
+            id: "c1",
+            kind: "cta",
+            values: {
+              text: "Send the sizes and quantities and we will quote from stock.",
+              label: "See the catalogue",
+            },
+          },
+        ] as object[],
+      },
+    });
+
+    console.log(`   ${plan.name}: ${template.sections.length} sections, ${storeCount} stores, 1 page`);
   }
 }
 

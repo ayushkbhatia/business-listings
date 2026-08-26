@@ -24,4 +24,5 @@ export { OfferBanner } from "./OfferBanner";
 export { SpecComparison } from "./SpecComparison";
 export { Downloads } from "./Downloads";
 export { Services } from "./Services";
+export { PageBlocks, type PageBlocksProps } from "./PageBlocks";
 export { SECTION_RENDERERS, renderSection } from "./registry";

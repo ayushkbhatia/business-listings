@@ -28,16 +28,31 @@ sprint without asking, through to the end of the handoff.
 | [#28](https://github.com/ayushkbhatia/business-listings/pull/28) | Step 6c — the builder, and a publish that says what it is about to do | `4eabc20` |
 | [#29](https://github.com/ayushkbhatia/business-listings/pull/29) | Step 6e — the storefront renders from its template | `0539933` |
 | [#30](https://github.com/ayushkbhatia/business-listings/pull/30) | Step 6d(i) — themes, and the floor a seller's own colour has to clear | `258e779` |
-| [#31](https://github.com/ayushkbhatia/business-listings/pull/31) | Step 6d(ii) — domain verification, and a certificate that says it is not issued | open |
+| [#31](https://github.com/ayushkbhatia/business-listings/pull/31) | Step 6d(ii) — domain verification, and a certificate that says it is not issued | `dfe5c34` |
+| [#32](https://github.com/ayushkbhatia/business-listings/pull/32) | Step 6d(iii) — pages on every storefront, and a slug that stops moving | open |
 
 ## Next
 
-**Step 6d(iii) — the page template editor `5d`**, the last piece of board 5. Small: a block
-palette, a page at 660px, SEO fields, and the content check panel. Criterion 9 — slugs
-immutable once published, renaming produces a 301 — is the load-bearing part, and `Redirect`
-already exists to carry it.
+**Step 7 — content ops `[6f]` `[12g]`.** The SEO page matrix, notification templates,
+localisation and homepage curation. Small and self-contained.
 
-Then steps 7–8: content ops `[6f]` `[12g]`, and the acceptance pass.
+**Step 8 — the acceptance pass**, and `scripts/acceptance-handoff-4.sh` beside the three that
+already exist.
+
+Board 5 is complete: `5a` builder, `5b` themes, `5c` section library, `5d` pages, `5e`
+domains, `5g`/`5h` specimens. The embed is cut to handoff 5 — §0.5.
+
+## What step 6d(iii) found
+
+- **The page route put a second `h1` on the storefront.** `StorefrontHeader` already carries
+  one and it is the business name. Two is two answers to "what is this page about", and every
+  other sub-page already used `h2`.
+- **The seeded About page scored 2 of 4, not the 3 its own comment claimed.** 191 words against
+  a 250 bar. The copy was extended rather than the comment corrected — a seed page that fails
+  the bar it ships with is a poor demonstration of the bar.
+- **`Panel` puts its title in a header div**, so `getByRole("heading").locator("..")` selects
+  the header rather than the body. Third time; the fix each time is to give the thing an
+  accessible name and address it by that.
 
 ## What step 6d(ii) found
 

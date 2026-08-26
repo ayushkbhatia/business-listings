@@ -12,6 +12,7 @@ import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
 import { ProductTray } from "./ProductTray";
 import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
+import { navPages } from "@/lib/storefront/pages";
 
 export const revalidate = 300;
 
@@ -63,6 +64,11 @@ export default async function CataloguePage({ params }: Params) {
   ]);
   const fields = template?.fields ?? [];
 
+  // Template pages marked for the nav. Empty where the trade has no template.
+
+  const pages = business.sectorId ? await navPages(business.sectorId) : [];
+
+
   return (
     <PublicShell
       nav={<DirectoryNav />}
@@ -75,7 +81,7 @@ export default async function CataloguePage({ params }: Params) {
       footer={<DirectoryFooter />}
     >
       <div data-theme={business.themePreset ?? "default"}>
-        <StorefrontHeader business={business} active="products" />
+        <StorefrontHeader business={business} active="products" pages={pages} />
 
         <div className="mt-5">
           {/* h1 is the business name in the header; the grid needs its own h2

@@ -6,6 +6,7 @@ import { MapCanvas, StatusBadge } from "@/components/display";
 import { getBusinessBySlug } from "@/lib/db/queries";
 import { formatShifts, maskPhone } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { navPages } from "@/lib/storefront/pages";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
 
@@ -77,6 +78,11 @@ export default async function BranchesPage({ params }: Params) {
   const pinned = business.locations.filter((l) => l.lat != null && l.lng != null);
   const excluded = business.locations.length - pinned.length;
 
+  // Template pages marked for the nav. Empty where the trade has no template.
+
+  const pages = business.sectorId ? await navPages(business.sectorId) : [];
+
+
   return (
     <PublicShell
       nav={<DirectoryNav />}
@@ -89,7 +95,7 @@ export default async function BranchesPage({ params }: Params) {
       footer={<DirectoryFooter />}
     >
       <div data-theme={business.themePreset ?? "default"}>
-        <StorefrontHeader business={business} active="branches" />
+        <StorefrontHeader business={business} active="branches" pages={pages} />
 
         <div className="mt-5 grid gap-[var(--gutter)] lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-3">
