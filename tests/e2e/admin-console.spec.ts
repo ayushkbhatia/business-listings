@@ -62,10 +62,16 @@ test.describe("board 4a — the console overview", () => {
     await expect(sidebar.getByRole("link", { name: "Platform overview" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Approval queue" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Taxonomy" })).toBeVisible();
-    // Not yet. Named, not linked — the rule handoff 1 arrived at after the
-    // seller sidebar shipped a dozen dead links.
-    await expect(sidebar.getByRole("link", { name: "Ranking & boosts" })).toHaveCount(0);
-    await expect(sidebar.getByText("Ranking & boosts")).toBeVisible();
+    /*
+     * Not yet. Named, not linked — the rule handoff 1 arrived at after the
+     * seller sidebar shipped a dozen dead links.
+     *
+     * This used to point at "Ranking & boosts", which board 12c built. The
+     * example has to be something still unbuilt or the assertion stops meaning
+     * anything, and `/admin/areas` is the one nobody has scheduled.
+     */
+    await expect(sidebar.getByRole("link", { name: "Emirates & areas" })).toHaveCount(0);
+    await expect(sidebar.getByText("Emirates & areas")).toBeVisible();
   });
 
   test("every admin link on the page resolves", async ({ page }) => {

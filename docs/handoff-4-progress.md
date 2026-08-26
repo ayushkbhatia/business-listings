@@ -31,16 +31,41 @@ sprint without asking, through to the end of the handoff.
 | [#31](https://github.com/ayushkbhatia/business-listings/pull/31) | Step 6d(ii) — domain verification, and a certificate that says it is not issued | `dfe5c34` |
 | [#32](https://github.com/ayushkbhatia/business-listings/pull/32) | Step 6d(iii) — pages on every storefront, and a slug that stops moving | `31997a3` |
 | [#33](https://github.com/ayushkbhatia/business-listings/pull/33) | Step 7a — the page matrix, and a gate that stopped passing vacuously | `0ec3502` |
-| [#34](https://github.com/ayushkbhatia/business-listings/pull/34) | Step 7 — notification templates, localisation, redirects, homepage curation | open |
+| [#34](https://github.com/ayushkbhatia/business-listings/pull/34) | Step 7 — notification templates, localisation, redirects, homepage curation | `989193f` |
+| [#35](https://github.com/ayushkbhatia/business-listings/pull/35) | Board 12c — the ranking somebody can change, and boosts that expire | open |
 
 ## Next
 
-**Step 8 — the acceptance pass.** Walk handoff 4's twelve criteria the way
-`scripts/acceptance-handoff-3.sh` walks its own, and write
-`scripts/acceptance-handoff-4.sh` beside the three that exist.
+**Step 8 — the acceptance pass**, and `scripts/acceptance-handoff-4.sh` beside the three that
+exist. Two things it needs that do not exist yet:
 
-Step 7 is complete: `[6f]` the page matrix, `[12g]` notification templates, localisation,
-redirects and homepage curation.
+- **Criterion 11's static check.** Nothing structurally stops a future admin service calling
+  `prisma.business.update` directly — no test, no lint rule. A static check over `app/(admin)`
+  and the admin services is what makes "every mutation writes an audit row" true rather than
+  aspirational. Roadmap §5 says so and it is cheap.
+- **Criterion 12's reading**, per §0.3: axe clean means clean outside the documented token
+  pairings, which are still pinned awaiting a canvas decision. Stated in the walk rather than
+  implied by a passing line.
+
+## What the acceptance pass already found, before it was written
+
+**Board `12c` was never scheduled.** It appears nowhere in the roadmap's step list, and
+criterion 5 — "weights reorder live results; a boost needs reason and expiry" — had no step
+that built it. The criteria table maps it to step 5, whose scope line is `[4g] [12e]`,
+commercials. Built now, as #35.
+
+## What board 12c found
+
+- **The weights were a constant nobody could change.** `searchBusinesses` has taken a
+  `weights` option since handoff 1 and no caller ever passed one, so `DEFAULT_WEIGHTS` was the
+  entire configuration. `ranking.ts` even said the handoff-4 editor would have "one thing to
+  write to" — that thing did not exist.
+- **A client component importing a `server-only` module passes typecheck and lint.** Only the
+  build catches it. `RankingEditor` pulled `WEIGHT_KEYS` from `settings.ts` and dragged Prisma
+  and `pg` toward the browser bundle; the pure constants live in `ranking.ts` now.
+- **`admin-console.spec.ts` asserted "Ranking & boosts" was named but not linked.** True while
+  it was unbuilt. The example had to move to something still unscheduled, or the assertion
+  stops meaning anything.
 
 ## What step 7c found
 

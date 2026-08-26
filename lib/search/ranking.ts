@@ -19,6 +19,30 @@ export interface RankingWeights {
   planTier: number;
 }
 
+/**
+ * The weight names, in the order the editor shows them.
+ *
+ * Here rather than in `settings.ts` because a client component needs them and
+ * that module is `server-only` — importing it from the editor pulled Prisma and
+ * `pg` into the browser bundle, which typecheck and lint both allowed and the
+ * build caught.
+ */
+export const WEIGHT_KEYS = [
+  "relevance",
+  "verificationTier",
+  "responseTime",
+  "specCompleteness",
+  "distance",
+  "planTier",
+] as const;
+
+/** Above this the results stop being useful and buyers notice inside a week. */
+export const PLAN_TIER_CEILING = 10;
+/** A boost bigger than this replaces the ranking rather than nudging it. */
+export const MAX_BOOST_POINTS = 25;
+/** A boost cannot outlive the quarter somebody is thinking about. */
+export const MAX_BOOST_DAYS = 90;
+
 export const DEFAULT_WEIGHTS: RankingWeights = {
   relevance: 34,
   verificationTier: 22,
@@ -42,6 +66,15 @@ export interface RankSignals {
   distanceKm: number | null;
   /** From Plan.rankingMultiplier — 1.0 free, 1.15 basic, 1.35 pro. */
   planMultiplier: number;
+  /**
+   * Points from a live `ListingBoost`, added on top rather than weighted.
+   *
+   * A boost is a nudge with a reason and an expiry, not a seventh signal — it
+   * has no natural 0..1 shape and it is not a property of the listing. Added
+   * after the weighted sum so its size is legible: five points is five points,
+   * whatever the weights happen to be this week.
+   */
+  boostPoints?: number;
 }
 
 const HOUR = 3_600_000;
@@ -88,7 +121,8 @@ export function scoreRow(signals: RankSignals, weights: RankingWeights = DEFAULT
     [weights.distance, scoreDistance(signals.distanceKm)],
     [weights.planTier, scorePlan(signals.planMultiplier)],
   ];
-  return parts.reduce((total, [weight, score]) => total + weight * score, 0);
+  const weighted = parts.reduce((total, [weight, score]) => total + weight * score, 0);
+  return weighted + (signals.boostPoints ?? 0);
 }
 
 export function rank<T>(

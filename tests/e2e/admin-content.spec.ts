@@ -229,6 +229,53 @@ test.describe("board 12g — redirects and the home page", () => {
   });
 });
 
+test.describe("board 12c — ranking and boosts", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/admin/search");
+  });
+
+  test("shows the six weights that decide the order", async ({ page }) => {
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Ranking & boosts");
+    for (const name of [
+      "Text match",
+      "Verification tier",
+      "Reply speed",
+      "Spec completeness",
+      "Distance",
+      "Plan",
+    ]) {
+      await expect(page.getByLabel(name, { exact: true })).toBeVisible();
+    }
+  });
+
+  test("says why the plan weight has a ceiling", async ({ page }) => {
+    /*
+     * The one weight money buys is the one with a cap in the database. A
+     * directory that sells its way to the top is one nobody comes back to.
+     */
+    await expect(page.getByText(/results start reading as bought/).first()).toBeVisible();
+  });
+
+  test("will not save a ranking change without a reason", async ({ page }) => {
+    await expect(page.getByRole("button", { name: "Save the weights" })).toBeDisabled();
+    await page.getByLabel("Why").fill("Leaning harder on verification while the directory is young.");
+    await expect(page.getByRole("button", { name: "Save the weights" })).toBeEnabled();
+  });
+
+  test("says a boost is not a sponsored slot", async ({ page }) => {
+    await expect(page.getByText(/never labelled sponsored/)).toBeVisible();
+  });
+
+  test("keeps expired boosts on the list, and says why", async ({ page }) => {
+    await expect(page.getByText(/record of why the results looked the way they did/)).toBeVisible();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
 test.describe("the copy reaches the public page", () => {
   test("a written category shows its intro, an unwritten one shows none", async ({ browser }) => {
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });

@@ -94,6 +94,7 @@ model User {
 
   @@index([businessId])
   templateVersions TemplateVersion[]
+  boostsCreated    ListingBoost[]
   @@map("user")
 }
 
@@ -557,6 +558,7 @@ model Business {
   storefrontContent StorefrontContent[]
   teamMembers       TeamMember[]
   customDomain      CustomDomain?
+  boosts            ListingBoost[]
   @@map("business")
 }
 
@@ -1906,6 +1908,62 @@ enum MrrMovementKind {
   reactivation
 
   @@map("mrr_movement_kind")
+}
+
+/// The ranking weights, as one row.
+///
+/// Board 12c. `lib/search/ranking.ts` has carried `DEFAULT_WEIGHTS` since
+/// handoff 1 with a comment saying the admin editor in handoff 4 would have
+/// "one thing to write to" — this is that thing. `searchBusinesses` has always
+/// taken a `weights` option and no caller ever passed one, so the constant was
+/// the whole configuration.
+///
+/// A single row, keyed by a constant. Not a settings table with a JSON blob:
+/// six named columns are six things a migration can change and a reviewer can
+/// read in a diff.
+model RankingWeights {
+  id                String   @id @default("current")
+  relevance         Int
+  verificationTier  Int      @map("verification_tier")
+  responseTime      Int      @map("response_time")
+  specCompleteness  Int      @map("spec_completeness")
+  distance          Int
+  /// Deliberately the smallest. A directory that sells its way to the top is a
+  /// directory nobody comes back to.
+  planTier          Int      @map("plan_tier")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("ranking_weights")
+}
+
+/// A manual nudge up the results, with an expiry and a reason.
+///
+/// Criterion 5: *"a boost needs reason and expiry."* Both are NOT NULL, so a
+/// boost that outlives the reason for it cannot exist — which is the failure
+/// mode a manual override has: somebody helps a supplier out for a fortnight in
+/// 2026 and the results are still bent in 2029.
+///
+/// Not a `PlacementSlot`. That is a sold, labelled, one-per-page slot. This is
+/// ops moving a listing for a reason of ours, and it is never labelled as
+/// sponsored because nobody paid for it.
+model ListingBoost {
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  /// Added to the computed score. Bounded in the service, because a boost that
+  /// can outrank everything is a boost that replaces the ranking.
+  points     Int
+  /// Never null. The whole point.
+  reason     String
+  expiresAt  DateTime @map("expires_at")
+  createdById String  @map("created_by_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdBy User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([businessId, expiresAt])
+  @@index([expiresAt])
+  @@map("listing_boost")
 }
 
 model PlacementSlot {
