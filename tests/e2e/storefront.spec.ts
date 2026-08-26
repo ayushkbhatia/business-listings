@@ -28,6 +28,31 @@ test.describe("one route, two compositions", () => {
     await expect(page.getByText("has not been claimed")).toHaveCount(0);
   });
 
+  test("renders its sections from its sector's template, with the licence panel outside it", async ({
+    page,
+  }) => {
+    /*
+     * The visible half of criterion 2. These sections come from
+     * `StorefrontTemplate`, resolved per sector, rather than from a fixed
+     * sequence of JSX in the route.
+     *
+     * The licence panel and the verification ladder are asserted in the same
+     * test on purpose: they are chrome, not sections, because non-negotiable 2
+     * says trust signals render identically on every storefront — so a template
+     * must not be able to reorder them or switch them off. A test that only
+     * checked the sections would not notice a rewrite quietly dropping them.
+     */
+    await page.goto(`/b/${CLAIMED}`);
+
+    // From the template.
+    await expect(page.getByRole("heading", { name: "Catalogue", exact: true })).toBeVisible();
+
+    // Chrome, whatever the template says.
+    await expect(page.getByRole("heading", { name: "Verification ladder" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "At a glance" })).toBeVisible();
+    await expect(page.getByText("Trade licence", { exact: true })).toBeVisible();
+  });
+
   test("an unclaimed business renders the 10g composition from the same route", async ({ page }) => {
     await page.goto(`/b/${UNCLAIMED}`);
     await expect(page.getByText("This listing has not been claimed")).toBeVisible();

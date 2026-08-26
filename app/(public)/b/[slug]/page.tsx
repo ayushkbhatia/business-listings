@@ -4,19 +4,15 @@ import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
 import { Button } from "@/components/primitives";
 import { Breadcrumb, Card, KeyValuePanel, Panel, PublicShell } from "@/components/structure";
 import { Tag } from "@/components/display";
-import { ListingCard, ProductCard, VerificationLadder, tierSpec } from "@/components/domain";
-import {
-  getBusinessBySlug,
-  getBusinessProducts,
-  getSimilarClaimedBusinesses,
-  getSpecTemplate,
-} from "@/lib/db/queries";
-import { formatCount, formatDate, formatDuration, maskTRN } from "@/lib/format";
+import { ListingCard, VerificationLadder, tierSpec } from "@/components/domain";
+import { getBusinessBySlug, getSimilarClaimedBusinesses } from "@/lib/db/queries";
+import { formatDate, formatDuration, maskTRN } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { primarySize } from "@/lib/spec";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { StorefrontHeader, storefrontCrumbs } from "./_storefront";
+import { renderSection } from "@/components/storefront";
+import { storefrontPlan } from "@/lib/storefront/loader";
 import { ContactCard } from "./ContactCard";
 import { EnquireButton } from "./EnquireDrawer";
 import { EMIRATES } from "@/lib/uae";
@@ -104,11 +100,17 @@ async function ClaimedStorefront({ business }: { business: Business }) {
   // no account can still send one — that is the point of the provisional
   // identity — they just have to say where the quotes should go.
   const actor = await getActor();
-  const [products, template] = await Promise.all([
-    getBusinessProducts(business.id, { take: 4 }),
-    getSpecTemplate(business.primaryCategoryId),
-  ]);
-  const fields = template?.fields ?? [];
+  const plan = await storefrontPlan({
+    id: business.id,
+    slug: business.slug,
+    sectorId: business.sectorId,
+    themePreset: business.themePreset,
+  });
+  /*
+   * Still needed here for the structured data, which describes the business
+   * rather than the page. Schema.org wants a postal address whether or not a
+   * template happens to enable the branches section.
+   */
   const head = business.locations[0];
   const crumbs = storefrontCrumbs(business);
 
@@ -167,66 +169,67 @@ async function ClaimedStorefront({ business }: { business: Business }) {
       />
 
       {/*
+        Rendered from the sector's storefront template, not from this file.
+        Until now these sections were a fixed sequence of JSX here, which made
+        criterion 2 — "reordering, enabling or disabling a section changes every
+        live storefront on that template and nothing else" — a statement about a
+        function no route called.
+
         The seller theme scopes here and nowhere above it. It recolours the
         heading, links and buttons inside; the verification badge is drawn from
         the status palette and is unaffected by design.
       */}
-      <div data-theme={business.themePreset ?? "default"}>
+      <div data-theme={plan.theme}>
         <StorefrontHeader business={business} active="overview" />
 
         <div className="mt-6 grid gap-[var(--gutter)] lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="min-w-0">
-            {business.description && (
-              <section>
-                <h2 className="text-h2 text-brand-ink">{t("storefront.about")}</h2>
-                <p className="mt-2 max-w-[var(--measure-prose)] text-prose text-prose">
-                  {business.description}
-                </p>
-              </section>
-            )}
-
-            <section className="mt-6">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h2 className="text-h2 text-brand-ink">{t("storefront.catalogue")}</h2>
-                {business._count.products > products.length && (
-                  <a
-                    href={`/b/${business.slug}/products`}
-                    className="rounded-tag text-caption text-brand underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-                  >
-                    {t("storefront.view_all_products", {
-                      count: formatCount(business._count.products),
-                    })}
-                  </a>
-                )}
-              </div>
-
-              {products.length === 0 ? (
-                <p className="mt-2 text-body-sm text-muted">{t("storefront.catalogue_empty")}</p>
-              ) : (
-                <div className="mt-3 grid gap-[var(--gutter)] sm:grid-cols-2">
-                  {products.map((product) => (
-                    <ProductCard
-                      enquireHref={`/rfq/new?to=${business.slug}`}
-                      key={product.id}
-                      product={{
-                        slug: product.slug,
-                        businessSlug: business.slug,
-                        name: product.name,
-                        sku: product.sku,
-                        availability: product.availability,
-                        stockQty: product.stockQty,
-                        leadTimeDays: product.leadTimeDays,
-                        minOrderQty: product.minOrderQty,
-                        sizeLabel: primarySize(fields, product.specValues),
-                      }}
-                    />
-                  ))}
+          <div className="flex min-w-0 flex-col gap-8">
+            {plan.sections
+              /*
+                The header section is chrome and `StorefrontHeader` already drew
+                it. Rendering both would put the trade name on the page twice.
+              */
+              .filter((section) => section.type !== "header")
+              .map((section) => (
+                <div key={section.id}>
+                  {renderSection({
+                    section,
+                    data: plan.data,
+                    content: plan.content[section.id] ?? {},
+                    enquireHref: `/rfq/new?to=${business.slug}`,
+                  })}
                 </div>
-              )}
-            </section>
+              ))}
+          </div>
 
-            <section className="mt-6">
-              <h2 className="text-h2 text-brand-ink">{t("verify.ladder")}</h2>
+          {/*
+            The aside is chrome, not a section, and that is not a shortcut.
+
+            It carries the licence number, the authority, the masked TRN and the
+            verification ladder — platform-owned facts. Non-negotiable 2 says
+            trust signals render identically on every storefront, which is an
+            argument that a template must not be able to reorder them, restyle
+            them or switch them off. A sector whose template dropped the licence
+            panel would be a sector where we quietly stopped showing what we
+            checked.
+
+            The contact card sits here for the same reason: the reveal is the
+            event that proves the platform delivered the enquiry, and it is not
+            a seller's to compose away.
+          */}
+
+          <aside className="min-w-0">
+            {/*
+              The ladder, moved out of the main column and into chrome.
+
+              It was a section of hardcoded JSX beside the catalogue. It is the
+              clearest statement the platform makes about what it checked and
+              what it has not, and it renders identically on every storefront
+              for the same reason the badge does — so it is not a section a
+              template may reorder or switch off.
+            */}
+            <Card>
+              <h2 className="text-h3 text-brand-ink">{t("verify.ladder")}</h2>
               <div className="mt-2">
                 <VerificationLadder
                   label={t("verify.ladder")}
@@ -249,12 +252,11 @@ async function ClaimedStorefront({ business }: { business: Business }) {
                   }))}
                 />
               </div>
-            </section>
-          </div>
+            </Card>
 
-          <aside className="min-w-0">
-            <Card>
-              <h2 className="text-h3 text-brand-ink">{t("storefront.at_a_glance")}</h2>
+            <div className="mt-3">
+              <Card>
+                <h2 className="text-h3 text-brand-ink">{t("storefront.at_a_glance")}</h2>
               <div className="mt-2">
                 <KeyValuePanel
                   columns={1}
@@ -311,7 +313,8 @@ async function ClaimedStorefront({ business }: { business: Business }) {
                   </div>
                 </div>
               )}
-            </Card>
+              </Card>
+            </div>
 
             {/*
               Masking is not a growth trick — the reveal is the event that

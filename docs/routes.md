@@ -114,6 +114,7 @@ they 404 until their handoff.
 /admin/storefront-templates             Templates & section library      [5c]  built h4s6
 /admin/storefront-templates/specimens   Section specimens           [5g, 5h]  built h4s6
 /admin/storefront-templates/:id         Builder shell                    [5a]  built h4s6
+/b/:slug/d/:document                    Signed link to a published doc   [5c]  built h4s6
 /admin/storefront-templates/:id/theme   Theme presets                    [5b]
 /admin/storefront-templates/:id/pages   Page template editor             [5d]
 /admin/domains                          Custom domain verification       [5e]

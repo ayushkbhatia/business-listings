@@ -1,5 +1,4 @@
 import { Tag } from "@/components/display";
-import { formatDate } from "@/lib/format";
 import { isPublishableDocumentKind } from "@/lib/storefront/section-types";
 import { picks, type SectionProps } from "@/lib/storefront/render-data";
 import { t } from "@/lib/i18n";
@@ -37,11 +36,12 @@ export function Certifications({ data, content }: SectionProps) {
             <p className="text-body-sm text-ink">{document.title}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Tag>{t(`document.kind.${document.kind}` as never)}</Tag>
-              {document.expiresOn && (
-                <span className="font-mono text-eyebrow text-muted">
-                  {t("section.certifications.expires", { date: formatDate(document.expiresOn) })}
-                </span>
-              )}
+              <a
+                href={document.href}
+                className="rounded-tag font-mono text-eyebrow uppercase text-brand underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+              >
+                {t("section.certifications.open")}
+              </a>
             </div>
           </li>
         ))}

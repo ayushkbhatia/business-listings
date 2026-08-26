@@ -64,12 +64,26 @@ export interface StorefrontReview {
 
 export interface StorefrontDocument {
   id: string;
+  /**
+   * The filename. `Document` has no title column and no validity dates —
+   * `filename`, `kind` and `mimeType` are the whole of what a seller gives us
+   * about a file.
+   *
+   * The board's Certifications card draws an expiry beside each one. That needs
+   * columns nobody has argued for yet, so the card shows what exists rather
+   * than a date the data cannot supply.
+   */
   title: string;
   /** Always one of `PUBLISHABLE_DOCUMENT_KINDS`. The loader fences it. */
   kind: string;
-  url: string | null;
-  issuedOn: Date | null;
-  expiresOn: Date | null;
+  /**
+   * Where to go to read it — a route, never the storage path.
+   *
+   * The bucket is private and stays private. The route mints a signed link at
+   * request time, which is the only way a link can appear on a page that is
+   * cached for five minutes without the link outliving its expiry.
+   */
+  href: string;
 }
 
 export interface StorefrontBrand {
