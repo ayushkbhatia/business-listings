@@ -146,6 +146,12 @@ export default async function BuilderPage({ params }: Params) {
           </Link>
           <Link
             className={buttonClassName({ variant: "ghost", size: "sm" })}
+            href={`/admin/storefront-templates/${template.id}/pages`}
+          >
+            {t("pages.title")}
+          </Link>
+          <Link
+            className={buttonClassName({ variant: "ghost", size: "sm" })}
             href="/admin/storefront-templates/specimens"
           >
             {t("admin.templates.specimens")}

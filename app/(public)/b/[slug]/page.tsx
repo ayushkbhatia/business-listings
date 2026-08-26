@@ -17,6 +17,7 @@ import { ContactCard } from "./ContactCard";
 import { EnquireButton } from "./EnquireDrawer";
 import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
+import { navPages } from "@/lib/storefront/pages";
 
 export const revalidate = 300;
 
@@ -114,6 +115,11 @@ async function ClaimedStorefront({ business }: { business: Business }) {
   const head = business.locations[0];
   const crumbs = storefrontCrumbs(business);
 
+  // Template pages marked for the nav. Empty where the trade has no template.
+
+  const pages = business.sectorId ? await navPages(business.sectorId) : [];
+
+
   return (
     <PublicShell
       nav={<DirectoryNav />}
@@ -180,7 +186,7 @@ async function ClaimedStorefront({ business }: { business: Business }) {
         the status palette and is unaffected by design.
       */}
       <div data-theme={plan.theme}>
-        <StorefrontHeader business={business} active="overview" />
+        <StorefrontHeader business={business} active="overview" pages={pages} />
 
         <div className="mt-6 grid gap-[var(--gutter)] lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="flex min-w-0 flex-col gap-8">

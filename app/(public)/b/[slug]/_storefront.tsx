@@ -15,9 +15,19 @@ import type { PublicBusiness } from "@/lib/db/queries";
 export function StorefrontHeader({
   business,
   active,
+  pages = [],
 }: {
   business: PublicBusiness;
-  active: "overview" | "products" | "branches" | "reviews";
+  /** A page slug where a template page is the active tab. */
+  active: string;
+  /**
+   * Template pages marked for the nav, from `navPages`.
+   *
+   * Passed in rather than loaded here: this renders on five routes and a query
+   * inside it would be five queries nobody asked for. The routes that have the
+   * sector already loaded pass them; the ones that do not, do not.
+   */
+  pages?: readonly { slug: string; title: string }[];
 }) {
   const spec = tierSpec(business.verificationTier);
   const badgeDate =
@@ -107,6 +117,15 @@ export function StorefrontHeader({
               href: `/b/${business.slug}/reviews`,
               badge: business._count.reviews,
             },
+            /*
+             * Template pages last, after the four the storefront always has.
+             * A staff-authored About should not push the catalogue along.
+             */
+            ...pages.map((page) => ({
+              key: page.slug,
+              label: page.title,
+              href: `/b/${business.slug}/${page.slug}`,
+            })),
           ]}
         />
       </div>

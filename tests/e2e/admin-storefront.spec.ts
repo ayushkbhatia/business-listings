@@ -315,6 +315,59 @@ test.describe("board 5b — themes, and criterion 5", () => {
   });
 });
 
+test.describe("board 5d — page templates, and criterion 9", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/admin/storefront-templates");
+    await page.getByRole("link", { name: "Industrial" }).click();
+    await page.waitForURL(/\/admin\/storefront-templates\/[a-z0-9]+$/);
+    await page.getByRole("link", { name: "Pages", exact: true }).click();
+    await page.waitForURL(/\/pages$/);
+  });
+
+  test("shows the seeded page and how many storefronts it is on", async ({ page }) => {
+    const header = page.getByRole("banner").or(page.locator("header")).first();
+    await expect(header).toContainText(/pages, on \d+ storefronts/);
+    await expect(page.getByRole("button", { name: /About us/ })).toBeVisible();
+  });
+
+  test("fixes the address of a live page, and says why", async ({ page }) => {
+    // Criterion 9. A disabled field with no explanation is a field somebody
+    // files a bug about.
+    // Scoped to the settings pane: "Address" is also the label on the
+    // new-page form, which is not disabled and should not be.
+    // Exact, because "Change the address" also contains "Address".
+    const settings = page.getByRole("complementary", { name: "Settings" });
+    await expect(settings.getByLabel("Address", { exact: true })).toBeDisabled();
+    await expect(settings.getByText(/its address is fixed/).first()).toBeVisible();
+  });
+
+  test("scores the content check and says what is missing", async ({ page }) => {
+    /*
+     * The seeded page passes three of four and fails the image one on purpose:
+     * a specimen where everything passes teaches nobody what the panel is for.
+     */
+    const check = page.getByRole("list", { name: "Content check" });
+    await expect(check).toContainText("no image");
+    await expect(check).toContainText(/\d+ words/);
+    await expect(page.getByText("3 of 4")).toBeVisible();
+  });
+
+  test("says the check is advisory rather than blocking", async ({ page }) => {
+    await expect(page.getByText(/it is all of them/)).toBeVisible();
+  });
+
+  test("counts the meta description against the 160 search engines show", async ({ page }) => {
+    const meta = page.getByLabel("Meta description");
+    await expect(meta).toBeVisible();
+    await expect(page.getByText(/of 160/)).toBeVisible();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
 test.describe("the storefront builder is staff-only", () => {
   test("a moderator cannot reach it", async ({ browser }) => {
     // §07: a storefront builder is a superadmin tool and is explicitly out of

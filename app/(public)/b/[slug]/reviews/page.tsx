@@ -7,6 +7,7 @@ import { ReviewCard } from "@/components/domain";
 import { getBusinessBySlug, getBusinessReviews, getReviewSummary } from "@/lib/db/queries";
 import { formatDate, formatDecimal } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { navPages } from "@/lib/storefront/pages";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
 
@@ -59,6 +60,11 @@ export default async function ReviewsPage({ params }: Params) {
     getReviewSummary(business.id),
   ]);
 
+  // Template pages marked for the nav. Empty where the trade has no template.
+
+  const pages = business.sectorId ? await navPages(business.sectorId) : [];
+
+
   return (
     <PublicShell
       nav={<DirectoryNav />}
@@ -71,7 +77,7 @@ export default async function ReviewsPage({ params }: Params) {
       footer={<DirectoryFooter />}
     >
       <div data-theme={business.themePreset ?? "default"}>
-        <StorefrontHeader business={business} active="reviews" />
+        <StorefrontHeader business={business} active="reviews" pages={pages} />
 
         {/*
           An empty review list is a first-run empty state, not a failure. It
