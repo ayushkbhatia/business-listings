@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { measureResponseTimes } from "@/lib/metrics/job";
 import { measureProfileStrength } from "@/lib/metrics/strength-job";
 import { pollDomains } from "@/lib/domains/service";
+import { sweepAreaPages } from "@/lib/seo/area";
 
 /**
  * The scheduled measurement run.
@@ -50,8 +51,19 @@ export async function GET(request: NextRequest) {
    */
   const domains = await pollDomains();
 
-  console.info("[jobs] measured", { responseTimes, profileStrength, domains });
-  return NextResponse.json({ responseTimes, profileStrength, domains });
+  /*
+   * Board 6a, criterion 1's second half. Rides along for the same reason the
+   * domain poller does: it touches no `Business` row, so it cannot race the two
+   * above for `derivedAt`.
+   *
+   * Bookkeeping rather than enforcement — `areaPageState.live` already refuses
+   * to serve a page whose supply has dropped, and the sitemap re-checks. This
+   * is what makes the stored column agree with what is being served.
+   */
+  const areaPages = await sweepAreaPages();
+
+  console.info("[jobs] measured", { responseTimes, profileStrength, domains, areaPages });
+  return NextResponse.json({ responseTimes, profileStrength, domains, areaPages });
 }
 
 function constantTimeEqual(a: string, b: string): boolean {

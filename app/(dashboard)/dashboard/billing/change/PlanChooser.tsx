@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Alert } from "@/components/display";
 import { useState, useTransition } from "react";
 import { Button } from "@/components/primitives";
@@ -91,12 +92,12 @@ export function PlanChooser({ plans, quoteAction, confirmAction }: PlanChooserPr
   if (done) {
     return (
       <Panel title={done}>
-        <a
+        <Link
           href="/dashboard/billing"
           className="text-body-sm text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
         >
           {t("change.back")}
-        </a>
+        </Link>
       </Panel>
     );
   }

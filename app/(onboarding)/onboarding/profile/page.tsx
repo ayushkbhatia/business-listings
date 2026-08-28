@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/db/client";
 import { CompletenessMeter } from "@/components/domain";
@@ -81,12 +82,12 @@ export default async function ProfileStepPage() {
       />
 
       <div className="flex justify-end border-t border-line pt-4">
-        <a
+        <Link
           href="/onboarding/locations"
           className="inline-flex items-center rounded-ctl border border-moss bg-moss px-3.5 py-1.5 text-body-sm font-medium text-on-ink hover:bg-moss-hover focus-visible:shadow-focus focus-visible:outline-none"
         >
           {t("onboarding.next")}
-        </a>
+        </Link>
       </div>
     </OnboardingPage>
   );
