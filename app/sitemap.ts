@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db/client";
-import { isPublishable } from "@/lib/publish-threshold";
 import { absoluteUrl } from "@/lib/site";
+import { categoryIndex } from "@/lib/seo/taxonomy";
 
 /**
  * Published pages only.
@@ -31,14 +31,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       where: { status: { not: "draft" }, business: PUBLIC_BUSINESS },
       select: { slug: true, updatedAt: true, business: { select: { slug: true } } },
     }),
-    prisma.category.findMany({
-      select: {
-        slug: true,
-        parentId: true,
-        parent: { select: { slug: true } },
-        _count: { select: { primaryFor: { where: PUBLIC_BUSINESS } } },
-      },
-    }),
+    /*
+       The taxonomy, gated exactly as board 6f gates it.
+
+       This used to be a local count with `introWords: 250` hardcoded and a
+       comment saying intro copy was a handoff 5 field. It is not — handoff 4
+       added `Category.intro` and the page matrix has been counting its words
+       since — so the third gate was passing vacuously here while the admin
+       screen applied it. Criterion 12 asks these two to agree exactly, and one
+       shared function is the only way they can.
+    */
+    categoryIndex(),
     /*
        Guides — boards 10b and 6d.
 
@@ -52,18 +55,6 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       select: { slug: true, updatedAt: true },
     }),
   ]);
-
-  // One query for the verified share per category, rather than one per row.
-  const verifiedByCategory = await prisma.business.groupBy({
-    by: ["primaryCategoryId"],
-    where: { ...PUBLIC_BUSINESS, verificationTier: { gte: 2 } },
-    _count: { _all: true },
-  });
-  const verifiedCounts = new Map(
-    verifiedByCategory.map((row) => [row.primaryCategoryId, row._count._all]),
-  );
-  const categoryIds = await prisma.category.findMany({ select: { id: true, slug: true } });
-  const idBySlug = new Map(categoryIds.map((c) => [c.slug, c.id]));
 
   const entries: MetadataRoute.Sitemap = [
     { url: absoluteUrl("/"), changeFrequency: "daily", priority: 1 },
@@ -84,26 +75,30 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
   }
 
-  for (const category of categories) {
-    if (category.parentId) {
-      const listings = category._count.primaryFor;
-      const verified = verifiedCounts.get(idBySlug.get(category.slug) ?? "") ?? 0;
-      // Intro copy is a handoff 5 field; until it exists the word count cannot
-      // gate a page that is otherwise healthy, so only the supply floors apply.
-      if (!isPublishable({ listings, verified, introWords: 250 })) continue;
-      entries.push({
-        url: absoluteUrl(`/c/${category.parent?.slug}/${category.slug}`),
-        changeFrequency: "daily",
-        priority: 0.6,
-      });
-      continue;
-    }
+  // The category index itself. Core navigation, linked from every page.
+  entries.push({ url: absoluteUrl("/categories"), changeFrequency: "weekly", priority: 0.7 });
 
+  for (const sector of categories) {
+    /*
+       Board 6f scopes the thresholds to "area landing pages and subcategory
+       pages". A top-level trade is core navigation that the home page links to
+       directly, and holding it out of the sitemap while linking to it from the
+       front page would be the worst of both.
+    */
     entries.push({
-      url: absoluteUrl(`/c/${category.slug}`),
+      url: absoluteUrl(`/c/${sector.slug}`),
       changeFrequency: "daily",
       priority: 0.8,
     });
+
+    for (const trade of sector.children) {
+      if (!trade.publishable) continue;
+      entries.push({
+        url: absoluteUrl(`/c/${sector.slug}/${trade.slug}`),
+        changeFrequency: "daily",
+        priority: 0.6,
+      });
+    }
   }
 
   for (const business of businesses) {

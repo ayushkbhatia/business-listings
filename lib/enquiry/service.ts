@@ -34,6 +34,21 @@ const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } } as con
  * supplier. Suspended and unpublished are excluded everywhere, as they are on
  * every public read.
  */
+/**
+ * A category and everything filed under it.
+ *
+ * The same rule `categoryIdsFor` applies on the search side, done here as a
+ * query because the RFQ composer hands over an id and not a loaded row. Two
+ * levels is what the taxonomy uses, so one hop is the whole tree.
+ */
+export async function descendantsOf(categoryId: string): Promise<string[]> {
+  const children = await prisma.category.findMany({
+    where: { parentId: categoryId },
+    select: { id: true },
+  });
+  return [categoryId, ...children.map((child) => child.id)];
+}
+
 export async function findFanoutCandidates(
   request: FanoutRequest & { excludeBusinessIds?: readonly string[] },
   now: Date = new Date(),
@@ -48,8 +63,8 @@ export async function findFanoutCandidates(
         ? { id: { notIn: [...request.excludeBusinessIds] } }
         : {}),
       OR: [
-        { primaryCategoryId: request.categoryId },
-        { categories: { some: { categoryId: request.categoryId } } },
+        { primaryCategoryId: { in: [...request.categoryIds] } },
+        { categories: { some: { categoryId: { in: [...request.categoryIds] } } } },
       ],
     },
     select: {
@@ -187,6 +202,7 @@ export async function createEnquiry(
 
   const request: FanoutRequest = {
     categoryId: input.categoryId,
+    categoryIds: await descendantsOf(input.categoryId),
     emirate: input.emirate ?? null,
     lineCount: input.lines.length,
     want: input.fanoutTo,

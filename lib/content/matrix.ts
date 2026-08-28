@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { countWords, evaluatePublish } from "@/lib/publish-threshold";
 import { thresholdsFor } from "@/lib/taxonomy/service";
+import { VERIFIED_TIER } from "@/lib/verification";
 
 /**
  * Board 6f — the SEO page matrix.
@@ -67,7 +68,7 @@ export async function pageMatrix(): Promise<Matrix> {
         publishedAt: { not: null },
         suspendedAt: null,
         mergedIntoId: null,
-        verificationTier: { gte: 1 },
+        verificationTier: { gte: VERIFIED_TIER },
       },
       _count: true,
     }),

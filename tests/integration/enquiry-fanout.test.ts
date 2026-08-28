@@ -1,9 +1,9 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { acceptQuote, createEnquiry, findFanoutCandidates } from "@/lib/enquiry/service";
+import { acceptQuote, createEnquiry, findFanoutCandidates, descendantsOf } from "@/lib/enquiry/service";
 import { getLeadDetail, getLeadsForBusiness } from "@/lib/db/queries/seller";
-import { monthStart } from "@/lib/enquiry/fanout";
+import { monthStart, scoreCandidate } from "@/lib/enquiry/fanout";
 
 /**
  * The handoff 2 step 3 checkpoint, end to end:
@@ -175,6 +175,7 @@ describe("criterion 6 — a capped seller is not offered", () => {
   it("excludes a free-plan seller who has had their three this month", async () => {
     const candidates = await findFanoutCandidates({
       categoryId,
+      categoryIds: await descendantsOf(categoryId),
       emirate: "dubai",
       lineCount: 2,
       want: 8,
@@ -205,7 +206,13 @@ describe("criterion 6 — a capped seller is not offered", () => {
     }
     expect(filler.length).toBeGreaterThan(0);
 
-    const after = await findFanoutCandidates({ categoryId, emirate: "dubai", lineCount: 2, want: 8 });
+    const after = await findFanoutCandidates({
+      categoryId,
+      categoryIds: await descendantsOf(categoryId),
+      emirate: "dubai",
+      lineCount: 2,
+      want: 8,
+    });
     const stillOffered = after.find((c) => c.businessId === free!.businessId);
     expect(stillOffered?.enquiriesThisMonth).toBeGreaterThanOrEqual(free!.enquiriesPerMonth!);
 
@@ -404,3 +411,78 @@ async function counts() {
     ]);
   return { invoice, invoiceLine, quote, quoteLine, enquiry, enquiryRecipient, message, review, subscription };
 }
+
+describe("a sector's RFQ reaches the suppliers filed under its subcategories", () => {
+  /*
+     Found in handoff 5 step 2, and live in `main` until then.
+
+     `findFanoutCandidates` matched `primaryCategoryId` against the requested
+     id exactly, while search has covered a category and its children since
+     handoff 1 through `categoryIdsFor`. Nothing showed it because the seed
+     filed all 40 businesses against the six sectors and none against the four
+     subcategories — so the set the fan-out was missing was empty.
+
+     A buyer asking "Valves & fittings" for a chilled water riser plainly means
+     the gate-valve suppliers as well. Missing them is their requirement not
+     reaching a supplier who sells exactly the thing.
+  */
+  it("offers a supplier whose primary category is a child of the one asked for", async () => {
+    const children = await prisma.category.findMany({
+      where: { parentId: categoryId },
+      select: { id: true },
+    });
+    expect(children.length, "the seed has no subcategories to test with").toBeGreaterThan(0);
+
+    const childIds = children.map((child) => child.id);
+    const filedUnderChild = await prisma.business.findMany({
+      where: {
+        primaryCategoryId: { in: childIds },
+        claimStatus: "claimed",
+        publishedAt: { not: null },
+        suspendedAt: null,
+      },
+      select: { id: true },
+    });
+    expect(
+      filedUnderChild.length,
+      "no claimed listing is filed under a subcategory, so this proves nothing",
+    ).toBeGreaterThan(0);
+
+    const candidates = await findFanoutCandidates({
+      categoryId,
+      categoryIds: await descendantsOf(categoryId),
+      emirate: "dubai",
+      lineCount: 2,
+      want: 8,
+    });
+
+    const offered = new Set(candidates.map((candidate) => candidate.businessId));
+    expect(filedUnderChild.some((business) => offered.has(business.id))).toBe(true);
+  }, 60_000);
+
+  it("scores an exact match above a subcategory of it", async () => {
+    const candidates = await findFanoutCandidates({
+      categoryId,
+      categoryIds: await descendantsOf(categoryId),
+      emirate: "dubai",
+      lineCount: 2,
+      want: 8,
+    });
+    const exact = candidates.find((c) => c.primaryCategoryId === categoryId);
+    const child = candidates.find((c) => c.primaryCategoryId !== categoryId);
+    if (!exact || !child) return;
+
+    const request = {
+      categoryId,
+      categoryIds: await descendantsOf(categoryId),
+      emirate: "dubai",
+      lineCount: 2,
+      want: 8,
+    };
+    // Same candidate twice, differing only in where it is filed, so the
+    // comparison is of the category term and nothing else.
+    const asExact = scoreCandidate({ ...exact, primaryCategoryId: categoryId }, request);
+    const asChild = scoreCandidate({ ...exact, primaryCategoryId: child.primaryCategoryId }, request);
+    expect(asExact).toBeGreaterThan(asChild);
+  }, 60_000);
+});

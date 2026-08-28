@@ -2662,6 +2662,42 @@ export const en = {
   "section.singleton": "once per template",
   "section.repeatable": "can repeat",
 
+  // ── Landing-page FAQ, criterion 3 ─────────────────────────────────────────
+  //
+  // Every answer is assembled from platform counts in `lib/seo/faq.ts`, and one
+  // whose number is missing is not asked. Say the number; never spin.
+  "faq.title": "Questions buyers ask",
+  "faq.how_many.q": "How many {subject} suppliers are listed?",
+  "faq.how_many.a": "{listings} on Business Listings, {verified} of them with a trade licence we have checked against the issuing authority.",
+  "faq.where.q": "Where are {subject} suppliers based?",
+  "faq.where.item": "{emirate} ({count})",
+  "faq.where.a": "Across {list}.",
+  "faq.where.a_more": "Across {list}, and {rest} other emirates.",
+  "faq.reply.q": "How quickly do {subject} suppliers reply?",
+  "faq.reply.a": "The median first reply is {median}, measured across the {measurable} listings with enough enquiry history to measure. It is computed from real enquiries and their replies — no supplier can edit it.",
+  "faq.availability.q": "Is {subject} held in stock or made to order?",
+  "faq.availability.a": "Of {products} listed products, {stocked} are in stock and {madeToOrder} are made to order. The rest are indent orders or currently out of stock.",
+  "faq.price.q": "Why are there no prices?",
+  "faq.price.a": "Prices are between you and the supplier. Send an enquiry and they quote you directly — we never see the number, never take a cut and never hold your money.",
+
+  // ── Category index, board 6c ──────────────────────────────────────────────
+  "categories.title": "Every trade",
+  "categories.lede": "{categories} trades across {listings} licensed UAE businesses, {verified} of them verified by us.",
+  "categories.subcategories": { one: "{count} subcategory", other: "{count} subcategories" },
+  "categories.listings": { one: "{count} supplier", other: "{count} suppliers" },
+  "categories.empty": "No trades yet.",
+  "categories.thin": "Not enough listed yet",
+  "categories.thin_hint": "This page is not in the sitemap and search engines are asked not to index it, because a page with a heading and four results has nothing for anybody to rank or trust. It stays reachable, and it publishes when the trade fills up.",
+
+  // ── Subcategory landing, board 10a ────────────────────────────────────────
+  "landing.emirates_title": "By emirate",
+  "landing.emirates_hint": "A supplier with premises in two emirates is counted in both.",
+  "landing.specs_title": "Filter by specification",
+  "landing.specs_hint": "From the specification template for this trade. Adding a field adds a chip.",
+  "landing.related_title": "Other trades in {parent}",
+  "landing.verified_share": "{verified} of {listings} verified",
+  "landing.no_facts": "Nothing is listed here yet, so there is nothing to summarise.",
+
   // ── Guides, boards 10b and 6d ─────────────────────────────────────────────
   //
   // The public half. Read by strangers deciding whether to trust us, so §08

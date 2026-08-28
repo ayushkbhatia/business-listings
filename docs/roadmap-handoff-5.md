@@ -144,6 +144,51 @@ one has already cleared the word floor.
 
 ---
 
+## 5a. Step 2 — the category index and the subcategory SEO layer
+
+**Checkpoint: add a subcategory in the database and show the page appearing.**
+
+- `/categories` — board 6c. Every sector, its subcategories, live counts.
+- `lib/seo/facts.ts` — the numbers a landing page is built from. Area pages in step 3 call
+  the same function with an `areaId`.
+- `lib/seo/faq.ts` — criterion 3's FAQ, assembled from those numbers. Brought forward from
+  step 3 because the README asks the subcategory template for "the same FAQ pattern", and
+  building it twice was the alternative.
+- `lib/seo/taxonomy.ts` — the three gates, computed once, read by the index, by the
+  subcategory route's `robots`, and by `app/sitemap.ts`.
+- Emirate breakdown, spec chips, FAQ and sibling cross-links on `/c/:category/:sub`, plus
+  `noindex` while a page is below the floors.
+
+### Four defects this step found in `main`
+
+- **The page matrix and the taxonomy screen counted verified from tier 1.** Every public
+  surface counts tier 2 — "trade licence checked against the issuing authority" — so a
+  category could read "publishes" on board 6f and still be held out of the sitemap by the
+  same gate computed with the stricter number. That is criterion 12's failure mode exactly.
+  One `VERIFIED_TIER` now, in `lib/verification.ts`.
+- **`app/sitemap.ts` hardcoded `introWords: 250`**, with a comment saying intro copy was a
+  handoff 5 field. Handoff 4 added `Category.intro` and the matrix has counted its words
+  since, so the copy gate passed vacuously in the sitemap while the admin screen applied it.
+  Both now call `categoryIndex()`.
+- **The RFQ fan-out matched `primaryCategoryId` exactly.** Search has covered a category and
+  its children since handoff 1; the fan-out did not, so an enquiry sent to a sector reached
+  none of the suppliers filed under its subcategories. Invisible until the seed had any.
+- **A subcategory could not see its trade's specification template — in four places.**
+  `getSpecFacets` rendered no filter chips and an empty rail; `getSpecTemplate` left the
+  public spec table blank; `getSpecFieldOptions` gave the CSV mapper nothing to map onto; and
+  `/dashboard/templates` told the seller there was no template. Templates belong to the trade
+  and not to the niche, so all four now fall back to the parent. Filing a supplier under a
+  subcategory was silently emptying their whole catalogue of specifications.
+
+### One seed change
+
+`prisma/seed-subcategories.mts` files a share of each sector's listings under one of its
+children. Every one of the four seeded subcategories had zero listings, so board 10a rendered
+blank on all of them and nothing about the step was demonstrable. Deterministic and
+PRNG-free — the seed's random draw is a sequence and adding one renames every business after
+it, which has cost fixtures before.
+
+
 ## 6. Blocked on the user
 
 Carried from handoff 4, unchanged. None stops a step; each narrows one.

@@ -1,13 +1,31 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Breadcrumb, PublicShell } from "@/components/structure";
-import { countResults, getCategoryBySlug } from "@/lib/db/queries";
+import { countResults, getCategoryBySlug, getSpecFacets } from "@/lib/db/queries";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { parseSearchQuery } from "@/lib/search/query";
+import { landingFacts } from "@/lib/seo/facts";
+import { faqJsonLd, landingFaq } from "@/lib/seo/faq";
+import { isCategoryPublishable } from "@/lib/seo/taxonomy";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { Results } from "@/app/(public)/_results/Results";
+import { EmirateBreakdown, Faq, RelatedTrades, SpecChips } from "@/app/(public)/_landing/Blocks";
+
+/**
+ * Board 10a — the subcategory landing page.
+ *
+ * 418 of these, so it has to scale further than any other template: everything
+ * on it beyond the intro paragraph is derived, and adding a subcategory adds a
+ * page with no code change anywhere. That is criterion 2, and this route is
+ * where it is provable.
+ *
+ * The parts the SEO layer adds over the handoff-1 page: suppliers grouped by
+ * emirate, filter chips from the trade's own specification template, an FAQ
+ * whose answers are assembled from platform counts, and — the important
+ * negative — `noindex` when the page does not clear the board 6f floors.
+ */
 
 export const revalidate = 300;
 
@@ -17,17 +35,32 @@ interface Props {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { sub } = await params;
+  const { category: parentSlug, sub } = await params;
   const category = await getCategoryBySlug(sub);
   if (!category) return {};
-  const count = await countResults(parseSearchQuery({}), [category.id]);
+
+  const [count, publishable] = await Promise.all([
+    countResults(parseSearchQuery({}), [category.id]),
+    isCategoryPublishable(category.id),
+  ]);
+
   return {
     title: t("category.suppliers_in", { category: category.name }),
     description: t("seo.category_description", {
       count: formatCount(count),
       category: category.name.toLowerCase(),
     }),
-    alternates: { canonical: `/c/${(await params).category}/${sub}` },
+    alternates: { canonical: `/c/${parentSlug}/${sub}` },
+    /*
+       A thin page is not a 404. Somebody following a link to it should see the
+       suppliers there are — there simply are not enough of them for this to be
+       a page worth putting in front of a stranger who searched. `follow` stays
+       on, because the listings it links to are each worth indexing.
+
+       `app/sitemap.ts` leaves the same page out, computed by the same function,
+       which is what criterion 12 asks for.
+    */
+    ...(publishable ? {} : { robots: { index: false, follow: true } }),
   };
 }
 
@@ -55,6 +88,34 @@ export default async function SubcategoryPage({ params, searchParams }: Props) {
       v === undefined ? [] : [[k, Array.isArray(v) ? v.join(",") : v] as [string, string]],
     ),
   ).toString();
+
+  const basePath = `/c/${parent.slug}/${category.slug}`;
+
+  /*
+     The unfiltered facts, deliberately.
+
+     The block below the results describes the trade, not the current filter —
+     a buyer who has narrowed to DN100 still wants to know how many suppliers
+     the trade has and where they are. `Results` above it answers the filter.
+  */
+  const [facts, specGroups, siblingCounts] = await Promise.all([
+    landingFacts({ categoryIds: [category.id] }),
+    // Its own products, its parent's template. A subcategory rarely carries a
+    // template of its own and the fields are the trade's, not the niche's.
+    getSpecFacets([category.id], parseSearchQuery({}), [category.id, parent.id]),
+    Promise.all(
+      parent.children
+        .filter((child) => child.id !== category.id)
+        .map(async (child) => ({
+          slug: child.slug,
+          name: child.name,
+          listings: await countResults(parseSearchQuery({}), [child.id]),
+        })),
+    ),
+  ]);
+
+  const faq = landingFaq({ subject: category.name }, facts);
+
   const crumbs = [
     { label: t("chrome.directory"), href: "/" },
     { label: parent.name, href: `/c/${parent.slug}` },
@@ -79,11 +140,22 @@ export default async function SubcategoryPage({ params, searchParams }: Props) {
           })),
         }}
       />
+      {/* Only the questions the page actually renders, so the markup and the
+          page never disagree — which is the one thing Google penalises here. */}
+      {faq.length > 0 && <JsonLd data={faqJsonLd(faq)} />}
 
       <header className="border-b border-line pb-4">
         <h1 className="font-serif text-h1-serif text-ink">
           {t("category.suppliers_in", { category: category.name })}
         </h1>
+        {facts.listings > 0 && (
+          <p className="mt-2 font-mono text-eyebrow uppercase text-faint">
+            {t("landing.verified_share", {
+              verified: formatCount(facts.verified),
+              listings: formatCount(facts.listings),
+            })}
+          </p>
+        )}
         {/* Board 6f, same as the parent. Written on the page matrix. */}
         {category.intro && (
           <p className="mt-4 max-w-[var(--measure-prose)] text-prose text-prose">
@@ -95,12 +167,30 @@ export default async function SubcategoryPage({ params, searchParams }: Props) {
       <div className="mt-5">
         <Results
           query={query}
-          basePath={`/c/${parent.slug}/${category.slug}`}
+          basePath={basePath}
           tray={tray}
           search={search}
-          category={{ id: category.id, slug: category.slug, name: category.name, ids: [category.id] }}
+          category={{
+            id: category.id,
+            slug: category.slug,
+            name: category.name,
+            ids: [category.id],
+            templateIds: [category.id, parent.id],
+          }}
         />
       </div>
+
+      <EmirateBreakdown rows={facts.emirates} basePath={basePath} />
+      <SpecChips
+        groups={specGroups.map((group) => ({
+          key: group.key,
+          label: group.label,
+          options: group.options,
+        }))}
+        basePath={basePath}
+      />
+      <Faq items={faq} />
+      <RelatedTrades parentName={parent.name} parentSlug={parent.slug} trades={siblingCounts} />
     </PublicShell>
   );
 }

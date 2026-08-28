@@ -9,6 +9,7 @@ import {
   type PublishDecision,
   type PublishThresholds,
 } from "@/lib/publish-threshold";
+import { VERIFIED_TIER } from "@/lib/verification";
 
 /**
  * Board 4d — the taxonomy, and the thresholds that gate landing pages.
@@ -89,7 +90,7 @@ export async function categoryHealth(): Promise<CategoryHealth[]> {
       where: {
         publishedAt: { not: null },
         suspendedAt: null,
-        verificationTier: { gte: 1 },
+        verificationTier: { gte: VERIFIED_TIER },
       },
       _count: true,
     }),

@@ -9,7 +9,7 @@ they 404 until their handoff.
 ```
 /                                       Directory home                        [1a]
 /c/:category                            Category browse + filters             [1b]
-/c/:category/:sub                       Subcategory                          [10a]
+/c/:category/:sub                       Subcategory                          [10a]  SEO'd h5s2
 /search?q&emirate&verified&tab          Results, businesses tab               [1c]
 /search?tab=products                    Results, products tab                [10c]
 /compare?p=…                            Comparison tray                      [10d]
@@ -28,7 +28,7 @@ they 404 until their handoff.
 /guides                                 Guide index                          [10b]  built h5s1
 /guides/:slug                           Guide article                         [6d]  built h5s1
 /best/:slug                             Curated list                          [6b]
-/categories                             Category index                        [6c]
+/categories                             Category index                        [6c]  built h5s2
 /:emirate/:area/:category               Area landing page                     [6a]
 /lp/:campaign                           Campaign landing                     [10i]
 /report/:subject                        Report a listing (modal route)       [10j]
