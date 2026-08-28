@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getActor } from "@/lib/auth/session";
-import { createEnquiry, findFanoutCandidates } from "@/lib/enquiry/service";
+import { createEnquiry, findFanoutCandidates, descendantsOf } from "@/lib/enquiry/service";
 import { selectRecipients } from "@/lib/enquiry/fanout";
 import { prisma } from "@/lib/db/client";
 import { formatDuration } from "@/lib/format";
@@ -88,6 +88,9 @@ export async function previewRecipients(input: {
 }): Promise<RecipientPreview[]> {
   const request = {
     categoryId: input.categoryId,
+    // The preview has to widen the same way the send does, or the composer
+    // shows five suppliers and the enquiry reaches a different five.
+    categoryIds: await descendantsOf(input.categoryId),
     emirate: input.emirate,
     lineCount: Math.max(1, input.lineCount),
     want: input.fanoutTo,

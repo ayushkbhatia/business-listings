@@ -32,6 +32,7 @@ function candidate(over: Partial<FanoutCandidate> & { businessId: string }): Fan
 
 const REQUEST: FanoutRequest = {
   categoryId: CATEGORY,
+  categoryIds: [CATEGORY],
   emirate: "dubai",
   lineCount: 3,
   want: DEFAULT_FANOUT,

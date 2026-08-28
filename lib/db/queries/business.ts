@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { VERIFIED_TIER } from "@/lib/verification";
 
 /**
  * Server-side reads for the public directory.
@@ -89,10 +90,29 @@ export type PublicProductDetail = NonNullable<Awaited<ReturnType<typeof getProdu
  *
  * Drives both the spec table and the filter rail. A field marked `isFilterable`
  * appears in the rail with no code change, which is handoff 1 criterion 4.
+ *
+ * Falls back to the parent's template, because templates belong to the trade
+ * and not to the niche: the seeded one is on "Valves & fittings" and there is
+ * none on "Gate valves". Without this, filing a supplier under a subcategory
+ * silently took the spec fields away from their whole catalogue — the editor
+ * offered none, the spec table rendered none, and nothing said why.
  */
 export async function getSpecTemplate(categoryId: string) {
-  return prisma.specTemplate.findFirst({
+  const own = await prisma.specTemplate.findFirst({
     where: { categoryId, status: "live" },
+    orderBy: { version: "desc" },
+    include: { fields: { orderBy: { sortOrder: "asc" } } },
+  });
+  if (own) return own;
+
+  const category = await prisma.category.findUnique({
+    where: { id: categoryId },
+    select: { parentId: true },
+  });
+  if (!category?.parentId) return null;
+
+  return prisma.specTemplate.findFirst({
+    where: { categoryId: category.parentId, status: "live" },
     orderBy: { version: "desc" },
     include: { fields: { orderBy: { sortOrder: "asc" } } },
   });
@@ -186,7 +206,7 @@ export async function getSimilarClaimedBusinesses(
   const nearby = await prisma.business.findMany({
     where: {
       ...base,
-      verificationTier: { gte: 2 },
+      verificationTier: { gte: VERIFIED_TIER },
       locations: { some: { emirate: emirate as never, published: true } },
     },
     include: SIMILAR_INCLUDE,

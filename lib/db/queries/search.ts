@@ -8,6 +8,7 @@ import {
   type RankingWeights,
 } from "@/lib/search/ranking";
 import { appliedKeys, withoutFacet, type SearchQuery } from "@/lib/search/query";
+import { VERIFIED_TIER } from "@/lib/verification";
 
 /**
  * The search. Two tabs over one query, both server-side.
@@ -439,9 +440,19 @@ export async function getFixedFacets(
 export async function getSpecFacets(
   categoryIds: string[],
   query: SearchQuery,
+  /**
+   * Where to look for the template, when that is wider than what is counted.
+   *
+   * A subcategory usually has no template of its own — the seeded one is on
+   * "Valves & fittings", not on "Gate valves" — so a subcategory page asked for
+   * its own id, found nothing, and rendered no filter chips and an empty rail.
+   * It passes its parent here and its own id above: inherit the template,
+   * count only your own products.
+   */
+  templateCategoryIds: string[] = categoryIds,
 ): Promise<FacetGroup[]> {
   const template = await prisma.specTemplate.findFirst({
-    where: { categoryId: { in: categoryIds }, status: "live" },
+    where: { categoryId: { in: templateCategoryIds }, status: "live" },
     orderBy: { version: "desc" },
     include: { fields: { where: { isFilterable: true }, orderBy: { sortOrder: "asc" } } },
   });
@@ -617,7 +628,7 @@ export async function getHomeCategories() {
 export async function getDirectoryStats() {
   const [listings, verified, categories, areas, products] = await Promise.all([
     prisma.business.count({ where: PUBLIC_BUSINESS }),
-    prisma.business.count({ where: { ...PUBLIC_BUSINESS, verificationTier: { gte: 2 } } }),
+    prisma.business.count({ where: { ...PUBLIC_BUSINESS, verificationTier: { gte: VERIFIED_TIER } } }),
     prisma.category.count({ where: { parentId: null } }),
     prisma.area.count(),
     prisma.product.count({ where: { status: { not: "draft" }, business: PUBLIC_BUSINESS } }),
@@ -634,7 +645,7 @@ export async function getDirectoryStats() {
  */
 export async function getFeaturedBusinesses(take = 6) {
   return prisma.business.findMany({
-    where: { ...PUBLIC_BUSINESS, claimStatus: "claimed", verificationTier: { gte: 2 } },
+    where: { ...PUBLIC_BUSINESS, claimStatus: "claimed", verificationTier: { gte: VERIFIED_TIER } },
     include: {
       primaryCategory: true,
       locations: { where: { published: true }, include: { area: true }, take: 1 },
