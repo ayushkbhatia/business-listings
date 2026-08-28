@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Button, Input } from "@/components/primitives";
@@ -80,12 +81,12 @@ export function ClaimSearch({ searchAction }: ClaimSearchProps) {
         <div className="rounded-card border border-line bg-paper-sunk p-4">
           <p className="text-body-sm text-ink">{t("claim.no_results", { query: searched })}</p>
           <p className="mt-1 max-w-prose text-caption text-muted">{t("claim.no_results_body")}</p>
-          <a
+          <Link
             href="/onboarding/profile?new=1"
             className="mt-3 inline-block text-body-sm text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
           >
             {t("claim.add_new")}
-          </a>
+          </Link>
         </div>
       )}
 

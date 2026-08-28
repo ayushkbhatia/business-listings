@@ -200,6 +200,7 @@ model Area {
   publishedAt DateTime? @map("published_at")
 
   locations Location[]
+  pages     AreaPage[]
 
   @@index([emirate])
   @@map("area")
@@ -249,6 +250,7 @@ model Category {
   fieldProposals    SpecFieldProposal[]
   stagedListings    StagedListing[]
   guideCtas         Guide[]              @relation("GuideCtaCategory")
+  areaPages         AreaPage[]
   sectorTemplates   StorefrontTemplate[] @relation("SectorTemplates")
 
   @@index([parentId])
@@ -2134,6 +2136,52 @@ model Redirect {
   business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
   @@map("redirect")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Area landing pages — board 6a
+//
+// 84 category×emirate combinations plus area-level depth, and the workhorse of
+// the whole acquisition engine.
+//
+// Keyed on the pair, not on the area. `Area.publishedAt` decides whether the
+// area is worth a page at all; this decides whether HVAC in Al Quoz is, which
+// is a different question with a different answer for every trade in it.
+// Criterion 1 is stated per page, and one timestamp per area cannot express it.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One trade in one area. The only authored thing on it is `intro`.
+model AreaPage {
+  id         String @id @default(cuid())
+  areaId     String @map("area_id")
+  categoryId String @map("category_id")
+
+  /// The paragraph a person writes, and the only one. Everything else on the
+  /// page is derived, which is criterion 2: a new emirate or subcategory needs
+  /// no code change, only supply and a paragraph.
+  ///
+  /// Counted against the same 250 as every other landing page, by the same
+  /// function.
+  intro String?
+
+  /// Staff intent, not the live state.
+  ///
+  /// The page is live only if this is set *and* the board 6f floors currently
+  /// hold. Criterion 1's second half — "auto-unpublishes when supply drops" —
+  /// is read that way rather than trusted to a job having run, and
+  /// `sweepAreaPages` clears the column afterwards so the drop is visible on
+  /// the matrix and in the audit log rather than only in a render.
+  publishedAt DateTime? @map("published_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  area     Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([areaId, categoryId])
+  @@index([publishedAt])
+  @@map("area_page")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

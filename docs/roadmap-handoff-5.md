@@ -189,6 +189,57 @@ PRNG-free — the seed's random draw is a sequence and adding one renames every 
 it, which has cost fixtures before.
 
 
+## 5b. Step 3 — area landing pages
+
+**Checkpoint: a page blocked by the threshold, and the same page publishing once seed data
+crosses it.** Both are in the seed: HVAC in Al Quoz Industrial 1 at 62 listings and 38%
+verified, and Safety & PPE in Ras Al Khor Industrial 2 at 9. Both carry an intro over the
+word floor, so the only thing separating them is supply.
+
+- `AreaPage`, keyed `(areaId, categoryId)` as §1.1 said it would have to be.
+- `/:emirate/:area/:category` — intro, suppliers, subcategory chips, a map, the emirate
+  breakdown, the FAQ from step 2, and cross-links both ways.
+- `lib/seo/area.ts` — the publish gate, the sweep, and `livePages` for the sitemap.
+- Board 6a's rows on the board 6f matrix, with publish and unpublish.
+
+### How criterion 1's second half is actually enforced
+
+`AreaPage.publishedAt` is staff **intent**. Whether a page is live is intent AND the floors
+holding *right now*, computed at read time. A stored flag alone would leave a thin page live
+and indexable in the window between supply dropping and a job running — and the whole reason
+board 6f exists is that a thin page in the index costs standing across the domain rather than
+only its own. The route, the sitemap and the matrix all read the computed value, so they
+cannot disagree; the sweep then clears the column so `publishedAt` stops lying to staff.
+
+The sweep is **not audited**, following `runDunning`: it is the platform applying its own
+published rule, there is no actor to attribute it to, and `AuditEvent.actorId` is NOT NULL
+precisely so the log contains decisions. It rides on `/api/jobs/measure` beside the domain
+poller, for the same reason — it writes no `Business` row, so it cannot race for `derivedAt`.
+
+### Found on the way
+
+- **`listing.unclaimed_body` said "Nothing has been verified by us"** on every unclaimed
+  listing. Verification is platform-owned and does not need a claim, so an unclaimed listing
+  can and does carry a verified licence — the badge and the notice contradicted each other on
+  the same card. The notice now says what is actually true: nobody at the business has
+  confirmed the details, and the badge says what we checked.
+- **Six `<a>` elements pointing at internal pages.** Adding a three-segment dynamic route at
+  the root made the lint rule resolve paths it had not before, and five pre-existing
+  violations surfaced with it. All six are `<Link>` now.
+- **`.claude/launch.json` had one dev configuration and I overwrote it** reaching for a
+  production server. Both are in it now.
+
+### Still to settle — and this one needs you
+
+The README illustrates the FAQ with "across quotes on this platform, AMCs in Al Quoz run
+AED 6,000–22,000". That is seller pricing, and `QuoteLine` is private to one buyer and one
+seller by non-negotiable 1. An interquartile range over enough distinct sellers is not a price
+on a public surface and is the thing no competitor can copy — but "enough" is a judgement with
+a privacy consequence, and publishing it is your call rather than mine. **Not built.** The
+area FAQ ships with the same non-price facts step 2 established. Say the word and it is a
+small addition with a stated floor.
+
+
 ## 6. Blocked on the user
 
 Carried from handoff 4, unchanged. None stops a step; each narrows one.

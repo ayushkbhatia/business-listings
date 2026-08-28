@@ -107,12 +107,12 @@ export function GuideBody({ blocks, cta }: GuideBodyProps) {
                   <Link href={ctaHref} className={buttonClassName({ size: "sm" })}>
                     {blockLine(block, "label") || ctaLabel}
                   </Link>
-                  <a
+                  <Link
                     href="/rfq/new"
                     className="rounded-tag text-body-sm text-brand underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
                   >
                     {t("guides.cta_rfq")}
-                  </a>
+                  </Link>
                 </div>
               </aside>
             );

@@ -171,3 +171,28 @@ export function ParentLink({ name, slug }: { name: string; slug: string }) {
     </Link>
   );
 }
+
+/**
+ * An authored intro, as the paragraphs it was written in.
+ *
+ * The floor is 250 words and the seeded ones run to 350. One `<p>` of that is
+ * a wall nobody reads, which defeats the point of insisting a human wrote it.
+ * Split on blank lines, and collapse the wrapping inside each paragraph so the
+ * source can be written at a sane width.
+ */
+export function Prose({ text }: { text: string }) {
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+
+  return (
+    <div className="mt-4 flex max-w-[var(--measure-prose)] flex-col gap-3">
+      {paragraphs.map((paragraph, i) => (
+        <p key={i} className="text-prose text-prose">
+          {paragraph}
+        </p>
+      ))}
+    </div>
+  );
+}

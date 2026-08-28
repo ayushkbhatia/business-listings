@@ -122,3 +122,91 @@ export async function pageMatrix(): Promise<Matrix> {
     copyOnly: rows.filter((row) => row.failing.length === 1 && row.failing[0] === "copy").length,
   };
 }
+
+/**
+ * Board 6a's rows, for the same screen — and for criterion 12.
+ *
+ *   "Sitemap contains only published pages, and page count matches the admin
+ *    matrix [6f] exactly."
+ *
+ * Area pages are the largest population in the sitemap, so a matrix that
+ * covered only categories could not answer that at all. These rows come from
+ * `areaPageState`, which is the same function the route and the sitemap read —
+ * one computation, three surfaces, no way for them to disagree.
+ *
+ * Only pairs that have a row are listed. Every area × every trade is a few
+ * thousand combinations, almost all of them empty, and a screen that listed
+ * them would bury the dozen somebody can act on.
+ */
+export interface AreaMatrixRow {
+  areaId: string;
+  categoryId: string;
+  path: string;
+  areaName: string;
+  categoryName: string;
+  listings: number;
+  verified: number;
+  introWords: number;
+  /** The paragraph itself, so the editor opens with what is there. */
+  intro: string | null;
+  /** Staff have published it. Not the same as live. */
+  published: boolean;
+  /** Published and the floors currently hold. */
+  live: boolean;
+  failing: string[];
+}
+
+export interface AreaMatrix {
+  rows: AreaMatrixRow[];
+  live: number;
+  /** Rows a person could fix this afternoon by writing a paragraph. */
+  copyOnly: number;
+}
+
+export async function areaMatrix(): Promise<AreaMatrix> {
+  const { areaPageState } = await import("@/lib/seo/area");
+
+  const pages = await prisma.areaPage.findMany({
+    orderBy: [{ area: { name: "asc" } }, { category: { name: "asc" } }],
+    select: {
+      areaId: true,
+      categoryId: true,
+      area: { select: { slug: true, name: true, emirate: true } },
+      category: { select: { slug: true, name: true } },
+    },
+  });
+
+  const rows: AreaMatrixRow[] = [];
+  for (const page of pages) {
+    const state = await areaPageState(page.areaId, page.categoryId);
+    if (!state) continue;
+
+    // Same order as the category rows: copy first, because it is the only one
+    // of the three that is a decision rather than a wait.
+    const failing: string[] = [];
+    if (state.failing.some((f) => f.reason === "intro_words")) failing.push("copy");
+    if (state.failing.some((f) => f.reason === "listings")) failing.push("listings");
+    if (state.failing.some((f) => f.reason === "verified_share")) failing.push("verified");
+
+    rows.push({
+      areaId: page.areaId,
+      categoryId: page.categoryId,
+      path: `/${page.area.emirate}/${page.area.slug}/${page.category.slug}`,
+      areaName: page.area.name,
+      categoryName: page.category.name,
+      listings: state.listings,
+      verified: state.verified,
+      introWords: state.introWords,
+      intro: state.intro,
+      published: state.publishedAt !== null,
+      live: state.live,
+      failing,
+    });
+  }
+
+  return {
+    rows,
+    live: rows.filter((row) => row.live).length,
+    copyOnly: rows.filter((row) => row.failing.length === 1 && row.failing[0] === "copy").length,
+  };
+}

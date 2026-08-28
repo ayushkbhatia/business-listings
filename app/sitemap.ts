@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db/client";
 import { absoluteUrl } from "@/lib/site";
+import { livePages } from "@/lib/seo/area";
 import { categoryIndex } from "@/lib/seo/taxonomy";
 
 /**
@@ -22,7 +23,7 @@ export const revalidate = 3600;
 const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } } as const;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [businesses, products, categories, guides] = await Promise.all([
+  const [businesses, products, categories, areaPages, guides] = await Promise.all([
     prisma.business.findMany({
       where: PUBLIC_BUSINESS,
       select: { slug: true, updatedAt: true, claimStatus: true },
@@ -42,6 +43,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
        shared function is the only way they can.
     */
     categoryIndex(),
+    /*
+       Board 6a. Live means staff intent *and* the floors holding right now —
+       `livePages` re-checks rather than trusting `publishedAt`, so a page whose
+       supply dropped this morning is out of the sitemap on the next build
+       without waiting for the sweep. Criterion 1's second half.
+    */
+    livePages(),
     /*
        Guides — boards 10b and 6d.
 
@@ -72,6 +80,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       lastModified: guide.updatedAt,
       changeFrequency: "monthly",
       priority: 0.6,
+    });
+  }
+
+  for (const page of areaPages) {
+    entries.push({
+      url: absoluteUrl(`/${page.emirate}/${page.areaSlug}/${page.categorySlug}`),
+      lastModified: page.updatedAt,
+      changeFrequency: "daily",
+      // The workhorse. These are the pages the whole acquisition engine is for.
+      priority: 0.9,
     });
   }
 

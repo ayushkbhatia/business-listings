@@ -651,7 +651,7 @@ export const en = {
   "listing.branches": { one: "{count} branch", other: "{count} branches" },
   "listing.years": "Trading since {year}",
   "listing.unclaimed_title": "This listing has not been claimed",
-  "listing.unclaimed_body": "Everything here comes from the public trade licence record. Nothing has been verified by us, and the supplier has not confirmed any of it.",
+  "listing.unclaimed_body": "Everything here comes from the public trade licence record. Nobody at the business has claimed this listing, so none of it has been confirmed by them. Any badge on it says what we checked ourselves, and when.",
   "listing.claim_cta": "Claim this listing",
   "listing.report": "Report this listing",
   "listing.view": "View supplier",
@@ -2329,6 +2329,7 @@ export const en = {
   "matrix.empty": "No categories. The taxonomy is seeded, so something is wrong if this is empty.",
   "matrix.note": "Three gates decide whether a landing page publishes: enough listings, enough of them verified, and 250 words of its own. The first two arrive on their own schedule. The third is the one somebody can fix this afternoon, which is why it sorts first.",
   "matrix.copy_only": "{count} pages would publish today if somebody wrote a paragraph.",
+  "matrix.blocked_by": "Held by: {gates}.",
 
   // ── Template pages, board 5d ──────────────────────────────────────────────
   "pages.title": "Pages",
@@ -2697,6 +2698,33 @@ export const en = {
   "landing.related_title": "Other trades in {parent}",
   "landing.verified_share": "{verified} of {listings} verified",
   "landing.no_facts": "Nothing is listed here yet, so there is nothing to summarise.",
+
+  // ── Area landing pages, board 6a ──────────────────────────────────────────
+  "area.title": "{category} suppliers in {area}",
+  "area.meta_description": "{listings} {category} suppliers with premises in {area}, {verified} with a trade licence we have checked. Send one enquiry to up to eight of them.",
+  "area.in_emirate": "{area}, {emirate}",
+  "area.held_back": "Not enough listed here yet",
+  "area.held_back_body": "This page is not in the sitemap and search engines are asked not to index it. {reason} It publishes when the area fills up — and the suppliers below are real either way.",
+  "area.map_title": "Where they are",
+  "area.map_excluded": { one: "{count} supplier has no map pin yet", other: "{count} suppliers have no map pin yet" },
+  "area.same_trade_title": "{category} elsewhere",
+  "area.other_trades_title": "Other trades in {area}",
+  "area.link": "{name} ({count})",
+  "area.subcategories": "Within {category}",
+  "area.empty": "Nothing is listed in this trade in {area} yet.",
+  "area.empty_body": "The directory covers the whole of the UAE, and the trade page will have suppliers on it.",
+  "area.browse_trade": "Browse {category}",
+
+  // ── Area pages on the admin matrix, board 6f ──────────────────────────────
+  "matrix.area_tab": "Area pages",
+  "matrix.area_caption": "Every trade in every area, and whether it publishes",
+  "matrix.col.area": "Area",
+  "matrix.col.live": "Live",
+  "matrix.live_yes": "Live",
+  "matrix.live_held": "Held",
+  "matrix.area_published": "Published. It is live and in the sitemap on the next build.",
+  "matrix.area_unpublished": "Unpublished. It stops being served as an indexable page immediately.",
+  "matrix.area_note": "An area page publishes above {listings} listings and {share}% verified, with {words} words of intro. A page that drops below the floor stops being served immediately and is unpublished by the next sweep, with the numbers in the audit log.",
 
   // ── Guides, boards 10b and 6d ─────────────────────────────────────────────
   //

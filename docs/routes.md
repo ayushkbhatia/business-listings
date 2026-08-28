@@ -29,7 +29,7 @@ they 404 until their handoff.
 /guides/:slug                           Guide article                         [6d]  built h5s1
 /best/:slug                             Curated list                          [6b]
 /categories                             Category index                        [6c]  built h5s2
-/:emirate/:area/:category               Area landing page                     [6a]
+/:emirate/:area/:category               Area landing page                     [6a]  built h5s3
 /lp/:campaign                           Campaign landing                     [10i]
 /report/:subject                        Report a listing (modal route)       [10j]
 /terms · /privacy · /verification-policy · /review-policy                    [10j]

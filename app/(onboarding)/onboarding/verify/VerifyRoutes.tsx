@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Alert } from "@/components/display";
 import { useState, useTransition } from "react";
 import { Button, FileDrop, Radio } from "@/components/primitives";
@@ -114,12 +115,12 @@ export function VerifyRoutes(props: VerifyRoutesProps) {
       <div className="flex flex-col gap-3">
         <p className="text-body-sm text-ink">{t("verify.submitted")}</p>
         <div>
-          <a
+          <Link
             href="/onboarding/profile"
             className="inline-flex items-center rounded-ctl border border-moss bg-moss px-3.5 py-1.5 text-body-sm font-medium text-on-ink hover:bg-moss-hover focus-visible:shadow-focus focus-visible:outline-none"
           >
             {t("verify.continue")}
-          </a>
+          </Link>
         </div>
       </div>
     );

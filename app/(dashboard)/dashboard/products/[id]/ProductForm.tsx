@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Button, Input, Select, Textarea } from "@/components/primitives";
 import { Alert, Tag } from "@/components/display";
@@ -167,12 +168,12 @@ export function ProductForm(props: ProductFormProps) {
         title={t("product.specs")}
         description={t("product.specs_hint")}
         actions={
-          <a
+          <Link
             href="/dashboard/templates"
             className="rounded-tag text-caption text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
           >
             {t("product.template_link")}
-          </a>
+          </Link>
         }
         footer={
           filterable.length > 0 ? (
