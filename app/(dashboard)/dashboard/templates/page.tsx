@@ -4,6 +4,7 @@ import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 import { saveTemplate, setUpTemplate } from "../products/actions";
 import { TemplateForm, type TemplateFieldRow } from "./TemplateForm";
+import { resolveDefaultTemplateId } from "@/lib/db/queries/catalogue";
 
 /**
  * Board 3h — the seller's clone of the category spec template.
@@ -22,16 +23,14 @@ export default async function TemplatePage() {
   const [business, badges] = await Promise.all([
     prisma.business.findUniqueOrThrow({
       where: { id: seat.businessId },
-      select: {
-        primaryCategory: {
-          select: { id: true, name: true, defaultTemplate: { select: { id: true } } },
-        },
-      },
+      select: { primaryCategory: { select: { id: true, name: true } } },
     }),
     getNavBadges(seat.businessId),
   ]);
 
-  const platformTemplateId = business.primaryCategory.defaultTemplate?.id;
+  // Their own category's template, or their trade's. A supplier filed under
+  // "Gate valves" still answers to the valve template.
+  const platformTemplateId = await resolveDefaultTemplateId(business.primaryCategory.id);
 
   const page = (children: React.ReactNode) => (
     <SellerPage

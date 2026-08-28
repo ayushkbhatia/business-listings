@@ -48,6 +48,20 @@ export interface FanoutCandidate {
 export interface FanoutRequest {
   /** The subcategory the buyer chose, or the category if they did not. */
   categoryId: string;
+  /**
+   * That category and everything under it.
+   *
+   * A buyer who picks "Valves & fittings" means the gate-valve suppliers too —
+   * `categoryIdsFor` has made search work that way since handoff 1, and the
+   * fan-out did not: it matched `categoryId` exactly, so an RFQ to a sector
+   * reached none of the suppliers filed under its children. Nothing showed it
+   * until the seed had listings under a subcategory to miss.
+   *
+   * Downward only, deliberately. A buyer who picks "Gate valves" has been
+   * specific, and widening that to every generalist valve seller is a different
+   * decision from the one they made.
+   */
+  categoryIds: readonly string[];
   /** Where it is going. Same-emirate suppliers deliver sooner. */
   emirate: string | null;
   /** How many lines the enquiry has, for scoring coverage. */
@@ -94,11 +108,20 @@ export function scoreCandidate(candidate: FanoutCandidate, request: FanoutReques
   const coverage = Math.min(1, candidate.matchedLineCount / lines);
   const stock = Math.min(1, candidate.inStockLineCount / lines);
 
-  const category = candidate.categoryIds.includes(request.categoryId)
-    ? candidate.primaryCategoryId === request.categoryId
+  /*
+     Exactly what was asked for scores highest; a subcategory of it is close
+     behind, because that seller sells precisely this and nothing broader; a
+     seller merely listed under it as a secondary trade is behind both.
+  */
+  const requested = new Set(request.categoryIds);
+  const category =
+    candidate.primaryCategoryId === request.categoryId
       ? 1
-      : 0.7
-    : 0;
+      : requested.has(candidate.primaryCategoryId)
+        ? 0.85
+        : candidate.categoryIds.some((id) => requested.has(id))
+          ? 0.7
+          : 0;
 
   // Same emirate is a real delivery difference in the UAE, not a nicety.
   const locality = request.emirate === null ? 0.5 : candidate.emirate === request.emirate ? 1 : 0.35;

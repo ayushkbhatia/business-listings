@@ -25,6 +25,7 @@ import { DN_SYNONYMS, sizeAliases } from "../lib/trade/nominal-size.js";
 import { matchLine } from "../lib/quote/match.js";
 import { medianResponseMs, windowStart } from "../lib/metrics/response-time.js";
 import { seedGuides } from "./seed-guides.mjs";
+import { seedSubcategories } from "./seed-subcategories.mjs";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL! }),
@@ -533,6 +534,8 @@ async function main() {
   await seedQueues(prisma, businesses, catBySlug, opsLead.id, moderator.id);
   await seedStorefrontTemplates(prisma, sectorBySlug, opsLead.id);
   await seedGuides(prisma);
+  console.log("→ subcategories");
+  await seedSubcategories(prisma);
   await recomputeDerived(prisma);
 }
 

@@ -104,21 +104,34 @@ export async function getCatalogue(businessId: string): Promise<CatalogueView> {
 }
 
 /** The platform template for a category, as the import mapper needs it. */
-export async function getSpecFieldOptions(categoryId: string): Promise<SpecFieldOption[]> {
+/**
+ * A category's default template, or its parent's.
+ *
+ * Templates belong to the trade, not to the niche: the seeded one is on
+ * "Valves & fittings" and there is none on "Gate valves". Filing a supplier
+ * under a subcategory used to take the spec fields away from their whole
+ * catalogue — the CSV mapper offered none to map onto, the template screen said
+ * there was no template, and nothing said why. Two levels is the whole
+ * taxonomy, so one hop up is the whole search.
+ */
+export async function resolveDefaultTemplateId(categoryId: string): Promise<string | null> {
   const category = await prisma.category.findUnique({
     where: { id: categoryId },
-    select: {
-      defaultTemplate: {
-        select: {
-          fields: {
-            orderBy: { sortOrder: "asc" },
-            select: { id: true, key: true, label: true, isFilterable: true },
-          },
-        },
-      },
-    },
+    select: { defaultTemplateId: true, parent: { select: { defaultTemplateId: true } } },
   });
-  return category?.defaultTemplate?.fields ?? [];
+  return category?.defaultTemplateId ?? category?.parent?.defaultTemplateId ?? null;
+}
+
+export async function getSpecFieldOptions(categoryId: string): Promise<SpecFieldOption[]> {
+  const templateId = await resolveDefaultTemplateId(categoryId);
+  if (!templateId) return [];
+
+  const fields = await prisma.specField.findMany({
+    where: { templateId },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, key: true, label: true, isFilterable: true },
+  });
+  return fields;
 }
 
 /** One product, for the editor. Null when it belongs to someone else. */

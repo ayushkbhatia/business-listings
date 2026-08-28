@@ -35,6 +35,4 @@ export function tierSpec(tier: number): TierSpec {
   return TIERS[Math.min(4, Math.max(0, Math.trunc(tier)))]!;
 }
 
-export function isVerified(tier: number): boolean {
-  return tier >= 2;
-}
+export { isVerified, VERIFIED_TIER } from "@/lib/verification";

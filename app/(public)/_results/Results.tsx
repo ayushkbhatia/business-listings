@@ -29,7 +29,20 @@ export interface ResultsProps {
   query: SearchQuery;
   basePath: string;
   /** Fixed by the route on a category page; absent on /search. */
-  category?: { id: string; slug: string; name: string; ids: string[] };
+  category?: {
+    id: string;
+    slug: string;
+    name: string;
+    ids: string[];
+    /**
+     * Where to find the spec template, when that is wider than `ids`.
+     *
+     * A subcategory rarely has one of its own, so its rail was empty: the
+     * fields belong to the trade, and the niche inherits them. Counting stays
+     * on `ids`, so the numbers on each chip are the subcategory's own.
+     */
+    templateIds?: string[];
+  };
   /** The comparison tray, carried in the URL so adding is a navigation. */
   tray?: string[];
   /** The raw query string, so tray links can preserve every other facet. */
@@ -77,7 +90,9 @@ export async function Results({ query, basePath, category, tray = [], search = "
       years: t("facet.years"),
       yearsOption: (years) => t("facet.years_option", { years }),
     }),
-    categoryIds ? getSpecFacets(categoryIds, query) : Promise.resolve([] as FacetGroup[]),
+    categoryIds
+      ? getSpecFacets(categoryIds, query, category?.templateIds ?? categoryIds)
+      : Promise.resolve([] as FacetGroup[]),
   ]);
 
   // Spec facets first: on a category page they are the reason a buyer came, and
