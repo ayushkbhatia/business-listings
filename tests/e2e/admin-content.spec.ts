@@ -293,3 +293,92 @@ test.describe("the copy reaches the public page", () => {
     await context.close();
   });
 });
+
+test.describe("boards 10b and 6d — guides", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/admin/content/guides");
+  });
+
+  test("lists the seeded guide with its word count against the floor", async ({ page }) => {
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Guides");
+
+    const table = page.getByRole("table", { name: /Every guide/ });
+    await expect(table).toBeVisible();
+    await expect(table.getByText("/guides/what-supplier-verification-actually-proves")).toBeVisible();
+    // The number, not a tick — how much writing is left is the actionable part.
+    await expect(table.getByText(/\d+ of 250 words/).first()).toBeVisible();
+  });
+
+  test("refuses to publish a draft under the floor, and names the number", async ({ page }) => {
+    await page.getByRole("link", { name: "New guide" }).click();
+    await expect(page).toHaveURL(/\/admin\/content\/guides\/new$/);
+
+    await page.getByRole("textbox", { name: "Title" }).fill("A draft that is too thin");
+    /*
+       A fresh address every run. A fixture that reuses one blocks the next run
+       on `slug_taken` if a previous run died before its cleanup — which is
+       exactly how this test failed the first time it was written.
+    */
+    const address = `e2e-draft-too-thin-${Date.now().toString(36)}`;
+    await page.getByRole("textbox", { name: "Address" }).fill(address);
+    await page
+      .getByRole("textbox", { name: "Summary" })
+      .fill("A summary long enough to clear the length check on the field.");
+    await page.getByRole("button", { name: "Add · Paragraph" }).click();
+    await page.getByRole("textbox", { name: "Paragraph" }).last().fill("Four words in total.");
+    await page.getByRole("textbox", { name: "Reason" }).fill("End-to-end check of the floor.");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+
+    await expect(page.getByText("Saved.")).toBeVisible();
+    // Saving a new guide moves the address onto its own id without navigating,
+    // so the confirmation survives and a reload lands on the guide.
+    await expect(page).toHaveURL(/\/admin\/content\/guides\/(?!new$)[a-z0-9]+$/);
+
+    // Below the floor the button is disabled, and the count beside it says by
+    // how much rather than making somebody guess.
+    await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
+    await expect(page.getByText(/more to publish/)).toBeVisible();
+
+    // Clean up: it is a draft, so it deletes — and deleting returns to the
+    // list, because the editor has nothing left to edit.
+    await page.getByRole("textbox", { name: "Reason" }).fill("Removing the end-to-end fixture.");
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/content\/guides$/);
+    await expect(page.getByRole("table", { name: /Every guide/ }).getByText(address)).toHaveCount(0);
+  });
+
+  test("shows the refusal when an address is already taken", async ({ page }) => {
+    /*
+       A refusal nobody can see is a form that silently does nothing. This one
+       fires against the seeded guide's address, so it needs no fixture of its
+       own and leaves nothing behind.
+    */
+    await page.getByRole("link", { name: "New guide" }).click();
+
+    await page.getByRole("textbox", { name: "Title" }).fill("A clashing address");
+    await page
+      .getByRole("textbox", { name: "Address" })
+      .fill("what-supplier-verification-actually-proves");
+    await page
+      .getByRole("textbox", { name: "Summary" })
+      .fill("A summary long enough to clear the length check on the field.");
+    await page.getByRole("textbox", { name: "Reason" }).fill("Checking the clash message.");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+
+    await expect(page.getByText("Another guide already has that address.")).toBeVisible();
+    // Nothing was created, so the address bar has not moved off /new.
+    await expect(page).toHaveURL(/\/admin\/content\/guides\/new$/);
+  });
+
+  test("fixes the address of a published guide", async ({ page }) => {
+    await page.getByRole("link", { name: /What supplier verification/ }).click();
+    // Published, so the address field is not editable — the service refuses the
+    // change too, and this is so nobody types into a field that will be refused.
+    await expect(page.getByRole("textbox", { name: "Address" })).toBeDisabled();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});

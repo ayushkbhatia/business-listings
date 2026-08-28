@@ -59,8 +59,10 @@ test.describe("home", () => {
     // `hidden lg:flex` list, so below 1024 they are not shown at all — which is
     // the design, not a regression. Asserting visibility on both projects made
     // this test fail on mobile for doing exactly what it should.
+    // "Guides" left this list in handoff 5 step 1 — it is a built route now,
+    // and the assertion below is that a `later` one is never a link.
     const footer = ["Terms", "Privacy"];
-    const nav = ["Pricing", "Guides"];
+    const nav = ["Pricing"];
     const width = page.viewportSize()?.width ?? 0;
     const shown = width >= 1024 ? [...footer, ...nav] : footer;
 

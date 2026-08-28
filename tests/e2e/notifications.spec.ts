@@ -29,7 +29,15 @@ test.describe("board 7f — the template specimens", () => {
     // and so does whoever is chasing the approval.
     await page.goto("/dev/notifications");
     await expect(page.getByText("pending_meta").first()).toBeVisible();
-    await expect(page.getByText(/bl_enquiry_received_v1/)).toBeVisible();
+    /*
+       `.first()`, because the specimen page renders every version and a
+       template name is shared by all of them. `admin-content.spec.ts` writes a
+       new draft version of this exact pair on every run — legitimately, there
+       is no delete path for a version and there should not be — so the second
+       local run of the suite hit a strict-mode violation here and the first
+       did not. Found while building the guides screens.
+    */
+    await expect(page.getByText(/bl_enquiry_received_v1/).first()).toBeVisible();
   });
 
   test("every template renders — none has a hole or a leak", async ({ page }) => {

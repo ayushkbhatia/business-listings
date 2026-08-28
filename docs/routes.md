@@ -25,8 +25,8 @@ they 404 until their handoff.
 /enquiry/:id/accepted                   Accepted quote record                 [7c]  built h2s3
 /enquiry/:id/thread/:seller             Negotiation thread                   [10h]  built h2s4
 /pricing                                Plans                                 [1l]
-/guides                                 Guide index                          [10b]
-/guides/:slug                           Guide article                         [6d]
+/guides                                 Guide index                          [10b]  built h5s1
+/guides/:slug                           Guide article                         [6d]  built h5s1
 /best/:slug                             Curated list                          [6b]
 /categories                             Category index                        [6c]
 /:emirate/:area/:category               Area landing page                     [6a]
@@ -110,6 +110,8 @@ they 404 until their handoff.
 /admin/notifications                    Notification templates              [12g]  built h4s7
 /admin/strings                          Localisation                         [12g]  built h4s7
 /admin/content/matrix                   SEO page matrix                       [6f]  built h4s7
+/admin/content/guides                   Guides                          [10b, 6d]  built h5s1
+/admin/content/guides/:id               One guide, or new               [10b, 6d]  built h5s1
 /admin/content/home                     Homepage curation                    [12g]  built h4s7
 /admin/content/redirects                Redirects                            [12g]  built h4s7
 /admin/storefront-templates             Templates & section library      [5c]  built h4s6
