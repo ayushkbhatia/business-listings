@@ -62,39 +62,39 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  business       Business?        @relation("BusinessTeam", fields: [businessId], references: [id], onDelete: SetNull)
-  buyerCompanyId String?          @map("buyer_company_id")
-  buyerCompany   BuyerCompany?    @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
-  enquiries      Enquiry[]
-  reviews        Review[]
-  auditEvents    AuditEvent[]
-  reportsFiled   SupplierReport[] @relation("ReportReporter")
-  visitsMade     Business[]       @relation("BusinessVisitedBy")
-  messages       Message[]
-  contactReveals ContactReveal[]
-  savedSearches  SavedSearch[]
-  reviewRequests ReviewRequest[]
-  importRuns     ImportRun[]
-  changeRequests ListingChangeRequest[] @relation("ChangeRequestActor")
-  changesDecided ListingChangeRequest[] @relation("ChangeRequestDecider")
-  invitesSent    TeamInvite[]           @relation("InviteSender")
-  claimsMade     ClaimSubmission[]      @relation("ClaimClaimant")
-  visitsRequested SiteVisitRequest[]    @relation("VisitRequester")
-  conflictsResolved ClaimConflict[]     @relation("ConflictResolvedBy")
-  licenceImports    LicenceImportRun[]  @relation("IngestActor")
-  merges            BusinessMerge[]     @relation("MergeActor")
-  visitReports      SiteVisitReport[]   @relation("VisitReporter")
-  pdplSubjectOf     PdplRequest[]       @relation("PdplSubject")
-  pdplClosed        PdplRequest[]       @relation("PdplClosedBy")
-  apiKeys           ApiKey[]            @relation("ApiKeyCreator")
-  viewAsSessions    ViewAsSession[]     @relation("ViewAsStaff")
-  callsMade         CallOutcome[]       @relation("CallStaff")
-  candidatesDismissed MergeCandidate[]  @relation("CandidateDismissedBy")
-  proposalsDecided  SpecFieldProposal[] @relation("ProposalDecidedBy")
+  business            Business?              @relation("BusinessTeam", fields: [businessId], references: [id], onDelete: SetNull)
+  buyerCompanyId      String?                @map("buyer_company_id")
+  buyerCompany        BuyerCompany?          @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
+  enquiries           Enquiry[]
+  reviews             Review[]
+  auditEvents         AuditEvent[]
+  reportsFiled        SupplierReport[]       @relation("ReportReporter")
+  visitsMade          Business[]             @relation("BusinessVisitedBy")
+  messages            Message[]
+  contactReveals      ContactReveal[]
+  savedSearches       SavedSearch[]
+  reviewRequests      ReviewRequest[]
+  importRuns          ImportRun[]
+  changeRequests      ListingChangeRequest[] @relation("ChangeRequestActor")
+  changesDecided      ListingChangeRequest[] @relation("ChangeRequestDecider")
+  invitesSent         TeamInvite[]           @relation("InviteSender")
+  claimsMade          ClaimSubmission[]      @relation("ClaimClaimant")
+  visitsRequested     SiteVisitRequest[]     @relation("VisitRequester")
+  conflictsResolved   ClaimConflict[]        @relation("ConflictResolvedBy")
+  licenceImports      LicenceImportRun[]     @relation("IngestActor")
+  merges              BusinessMerge[]        @relation("MergeActor")
+  visitReports        SiteVisitReport[]      @relation("VisitReporter")
+  pdplSubjectOf       PdplRequest[]          @relation("PdplSubject")
+  pdplClosed          PdplRequest[]          @relation("PdplClosedBy")
+  apiKeys             ApiKey[]               @relation("ApiKeyCreator")
+  viewAsSessions      ViewAsSession[]        @relation("ViewAsStaff")
+  callsMade           CallOutcome[]          @relation("CallStaff")
+  candidatesDismissed MergeCandidate[]       @relation("CandidateDismissedBy")
+  proposalsDecided    SpecFieldProposal[]    @relation("ProposalDecidedBy")
+  templateVersions    TemplateVersion[]
+  boostsCreated       ListingBoost[]
 
   @@index([businessId])
-  templateVersions TemplateVersion[]
-  boostsCreated    ListingBoost[]
   @@map("user")
 }
 
@@ -236,24 +236,25 @@ model Category {
   sortOrder          Int      @default(0) @map("sort_order")
   createdAt          DateTime @default(now()) @map("created_at")
 
-  parent          Category?          @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children        Category[]         @relation("CategoryTree")
-  defaultTemplate SpecTemplate?      @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
-  templates       SpecTemplate[]     @relation("TemplateCategory")
-  primaryFor      Business[]         @relation("BusinessPrimaryCategory")
-  businesses      BusinessCategory[]
-  products        Product[]
-  placements      PlacementSlot[]
-  importMappings  ImportMapping[]
+  parent            Category?            @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children          Category[]           @relation("CategoryTree")
+  defaultTemplate   SpecTemplate?        @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
+  templates         SpecTemplate[]       @relation("TemplateCategory")
+  primaryFor        Business[]           @relation("BusinessPrimaryCategory")
+  businesses        BusinessCategory[]
+  products          Product[]
+  placements        PlacementSlot[]
+  importMappings    ImportMapping[]
   placementWaitlist PlacementWaitlist[]
-  fieldProposals  SpecFieldProposal[]
-  stagedListings  StagedListing[]
+  fieldProposals    SpecFieldProposal[]
+  stagedListings    StagedListing[]
+  guideCtas         Guide[]              @relation("GuideCtaCategory")
+  sectorTemplates   StorefrontTemplate[] @relation("SectorTemplates")
 
   @@index([parentId])
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
   /// list — so a plain GIN over the array is the right shape.
   @@index([synonyms], type: Gin)
-  sectorTemplates StorefrontTemplate[] @relation("SectorTemplates")
   @@map("category")
 }
 
@@ -444,9 +445,9 @@ model Business {
   visitedAt        DateTime? @map("visited_at")
   visitedByStaffId String?   @map("visited_by_staff_id") @db.Uuid
 
-  claimStatus       ClaimStatus   @default(unclaimed) @map("claim_status")
-  planId            String?       @map("plan_id")
-  primaryCategoryId String        @map("primary_category_id")
+  claimStatus        ClaimStatus   @default(unclaimed) @map("claim_status")
+  planId             String?       @map("plan_id")
+  primaryCategoryId  String        @map("primary_category_id")
   /// The top-level ancestor of `primaryCategoryId`, denormalised.
   ///
   /// A storefront template belongs to a sector and the store count is the
@@ -458,27 +459,27 @@ model Business {
   /// belong to two templates. Kept in step with `primaryCategoryId` by
   /// `lib/taxonomy/sector.ts`, and an integration test walks every row to check
   /// the two still agree.
-  sectorId          String?       @map("sector_id")
-  source            ListingSource @default(licence_import)
+  sectorId           String?       @map("sector_id")
+  source             ListingSource @default(licence_import)
   /// Which licence import created this listing, where one did.
   ///
   /// Replaces a bare `import_run_id` TEXT column that existed from the init
   /// migration with no foreign key, no relation, no index and no reader — it
   /// predated `ImportRun`, which points at products, and read as provenance
   /// while being nothing.
-  licenceImportRunId String?      @map("licence_import_run_id")
-  suspendedAt       DateTime?     @map("suspended_at")
+  licenceImportRunId String?       @map("licence_import_run_id")
+  suspendedAt        DateTime?     @map("suspended_at")
   /// The listing that absorbed this one, where one did.
   ///
   /// A merge never deletes. Everything hangs off `business_id` and cascades, so
   /// deleting the absorbed listing destroys the reviews that were the reason to
   /// merge — and criterion 2 wants thirty days of reversibility. The row stays,
   /// keeps its slug, and points here.
-  mergedIntoId      String?       @map("merged_into_id")
-  mergedAt          DateTime?     @map("merged_at")
-  publishedAt       DateTime?     @map("published_at")
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
+  mergedIntoId       String?       @map("merged_into_id")
+  mergedAt           DateTime?     @map("merged_at")
+  publishedAt        DateTime?     @map("published_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
 
   /// Storefront theme preset, or a validated custom hex. Recolours the header,
   /// headings, buttons, links and form focus only. Never a verification badge,
@@ -546,6 +547,10 @@ model Business {
   redirectsFrom          Redirect[]
   notificationPreference NotificationPreference?
   reviewRequests         ReviewRequest[]
+  storefrontContent      StorefrontContent[]
+  teamMembers            TeamMember[]
+  customDomain           CustomDomain?
+  boosts                 ListingBoost[]
 
   @@index([primaryCategoryId])
   @@index([sectorId])
@@ -555,10 +560,6 @@ model Business {
   @@index([licenceExpiry])
   @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([tradeName(ops: raw("gin_trgm_ops"))], type: Gin)
-  storefrontContent StorefrontContent[]
-  teamMembers       TeamMember[]
-  customDomain      CustomDomain?
-  boosts            ListingBoost[]
   @@map("business")
 }
 
@@ -611,15 +612,15 @@ model Location {
   published       Boolean      @default(false)
   createdAt       DateTime     @default(now()) @map("created_at")
 
-  business       Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  area           Area            @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  business            Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  area                Area            @relation(fields: [areaId], references: [id], onDelete: Restrict)
   producedByConflicts ClaimConflict[] @relation("ConflictProducedLocation")
-  contactReveals ContactReveal[]
+  contactReveals      ContactReveal[]
+  teamMembers         TeamMember[]
 
   @@index([businessId])
   @@index([areaId])
   @@index([emirate])
-  teamMembers TeamMember[]
   @@map("location")
 }
 
@@ -671,16 +672,15 @@ model Product {
   // The CSV importer is the widest path into this table and refuses a price
   // column outright — see lib/import/columns.ts.
 
-  business   Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  importRun  ImportRun?  @relation(fields: [importRunId], references: [id], onDelete: SetNull)
-  category   Category    @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  media      Media[]
-  documents  Document[]
-  quoteLines QuoteLine[]
-
-  @@unique([businessId, slug])
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  importRun    ImportRun?    @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+  category     Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  media        Media[]
+  documents    Document[]
+  quoteLines   QuoteLine[]
   enquiryLines EnquiryLine[]
 
+  @@unique([businessId, slug])
   @@index([businessId])
   @@index([categoryId])
   @@index([availability])
@@ -725,10 +725,10 @@ model Media {
   review   Review?   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
 
   visitPhotos SiteVisitPhoto[]
+  teamMembers TeamMember[]
 
   @@index([businessId])
   @@index([productId])
-  teamMembers TeamMember[]
   @@map("media")
 }
 
@@ -756,9 +756,9 @@ model Document {
   productId  String? @map("product_id")
   enquiryId  String? @map("enquiry_id")
 
-  business Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  enquiry  Enquiry?  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  business Business?         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product  Product?          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  enquiry  Enquiry?          @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   claims   ClaimSubmission[]
 
   @@index([businessId])
@@ -893,18 +893,18 @@ model EnquiryLine {
 /// for next month" copies from, and keeping the applied version means a
 /// mapping that was overridden at the last moment cannot come back different.
 model ImportRun {
-  id         String    @id @default(cuid())
-  businessId String    @map("business_id")
-  actorId    String    @map("actor_id") @db.Uuid
-  filename   String
+  id           String    @id @default(cuid())
+  businessId   String    @map("business_id")
+  actorId      String    @map("actor_id") @db.Uuid
+  filename     String
   /// Rows in the file, including ones that were skipped.
-  rowCount   Int       @map("row_count")
+  rowCount     Int       @map("row_count")
   /// Products actually created.
-  createdCount Int     @map("created_count")
-  columnPlan Json      @map("column_plan")
+  createdCount Int       @map("created_count")
+  columnPlan   Json      @map("column_plan")
   /// Set when the seller reverses it. A reverted run is kept, not deleted.
-  revertedAt DateTime? @map("reverted_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
+  revertedAt   DateTime? @map("reverted_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
   business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
   actor    User      @relation(fields: [actorId], references: [id], onDelete: Restrict)
@@ -919,12 +919,12 @@ model ImportRun {
 /// Suppliers re-upload the same export from the same system every month. Making
 /// them re-map thirty columns each time is how a catalogue stops being updated.
 model ImportMapping {
-  id         String   @id @default(cuid())
-  businessId String   @map("business_id")
+  id         String    @id @default(cuid())
+  businessId String    @map("business_id")
   name       String
-  categoryId String?  @map("category_id")
-  columnPlan Json     @map("column_plan")
-  createdAt  DateTime @default(now()) @map("created_at")
+  categoryId String?   @map("category_id")
+  columnPlan Json      @map("column_plan")
+  createdAt  DateTime  @default(now()) @map("created_at")
   usedAt     DateTime? @map("used_at")
 
   business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -951,20 +951,20 @@ model ImportMapping {
 /// Handoff 4 builds the screens that drain this. Handoff 3 fills it correctly,
 /// which is the half that has to be right first.
 model ListingChangeRequest {
-  id         String              @id @default(cuid())
-  businessId String              @map("business_id")
-  actorId    String              @map("actor_id") @db.Uuid
-  field      ModeratedField
+  id             String              @id @default(cuid())
+  businessId     String              @map("business_id")
+  actorId        String              @map("actor_id") @db.Uuid
+  field          ModeratedField
   /// What it says now. Kept so the queue can show the change, not just the ask.
-  beforeValue String?            @map("before_value")
-  afterValue  String             @map("after_value")
-  status     ChangeRequestStatus @default(pending)
+  beforeValue    String?             @map("before_value")
+  afterValue     String              @map("after_value")
+  status         ChangeRequestStatus @default(pending)
   /// Written by staff on approve or reject. NOT NULL is enforced by a check
   /// constraint on the decided rows — see the migration.
-  decisionReason String?          @map("decision_reason")
-  decidedById    String?          @map("decided_by_id") @db.Uuid
-  decidedAt      DateTime?        @map("decided_at")
-  createdAt      DateTime         @default(now()) @map("created_at")
+  decisionReason String?             @map("decision_reason")
+  decidedById    String?             @map("decided_by_id") @db.Uuid
+  decidedAt      DateTime?           @map("decided_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
 
   business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   actor     User     @relation("ChangeRequestActor", fields: [actorId], references: [id], onDelete: Restrict)
@@ -1016,16 +1016,16 @@ enum LeadRouting {
 /// the roles it will grant, so accepting cannot quietly grant more than was
 /// offered.
 model TeamInvite {
-  id         String     @id @default(cuid())
-  businessId String     @map("business_id")
-  email      String
-  roles      Role[]     @default([])
+  id          String    @id @default(cuid())
+  businessId  String    @map("business_id")
+  email       String
+  roles       Role[]    @default([])
   invitedById String    @map("invited_by_id") @db.Uuid
-  token      String     @unique
-  expiresAt  DateTime   @map("expires_at")
-  acceptedAt DateTime?  @map("accepted_at")
-  revokedAt  DateTime?  @map("revoked_at")
-  createdAt  DateTime   @default(now()) @map("created_at")
+  token       String    @unique
+  expiresAt   DateTime  @map("expires_at")
+  acceptedAt  DateTime? @map("accepted_at")
+  revokedAt   DateTime? @map("revoked_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
   business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   invitedBy User     @relation("InviteSender", fields: [invitedById], references: [id], onDelete: Restrict)
@@ -1042,11 +1042,11 @@ model TeamInvite {
 /// deepest pockets at the top of every category, which is the thing this
 /// directory exists not to be. So a queue, in the order people joined it.
 model PlacementWaitlist {
-  id         String   @id @default(cuid())
-  businessId String   @map("business_id")
-  categoryId String   @map("category_id")
+  id         String    @id @default(cuid())
+  businessId String    @map("business_id")
+  categoryId String    @map("category_id")
   emirate    Emirate?
-  createdAt  DateTime @default(now()) @map("created_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
   notifiedAt DateTime? @map("notified_at")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -1070,26 +1070,26 @@ model PlacementWaitlist {
 /// the way to a dashboard without staff involvement — not about the claim being
 /// approved without one.
 model ClaimSubmission {
-  id         String      @id @default(cuid())
-  businessId String      @map("business_id")
-  claimantId String      @map("claimant_id") @db.Uuid
-  route      ClaimRoute
+  id             String      @id @default(cuid())
+  businessId     String      @map("business_id")
+  claimantId     String      @map("claimant_id") @db.Uuid
+  route          ClaimRoute
   /// The licence document, on the licence route.
-  documentId String?     @map("document_id")
+  documentId     String?     @map("document_id")
   /// The number we would call, on the phone route. Taken from the public
   /// licence record, never typed by the claimant — that is the whole check.
-  phone      String?
+  phone          String?
   /// True when somebody else already held it. Staff see both.
-  contested  Boolean     @default(false)
-  status     ClaimStatus @default(unclaimed)
-  decidedAt  DateTime?   @map("decided_at")
+  contested      Boolean     @default(false)
+  status         ClaimStatus @default(unclaimed)
+  decidedAt      DateTime?   @map("decided_at")
   /// NOT NULL once decided, enforced by a check constraint in the migration.
-  decisionReason String?  @map("decision_reason")
-  createdAt  DateTime    @default(now()) @map("created_at")
+  decisionReason String?     @map("decision_reason")
+  createdAt      DateTime    @default(now()) @map("created_at")
 
-  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  claimant User      @relation("ClaimClaimant", fields: [claimantId], references: [id], onDelete: Cascade)
-  document Document? @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  claimant     User            @relation("ClaimClaimant", fields: [claimantId], references: [id], onDelete: Cascade)
+  document     Document?       @relation(fields: [documentId], references: [id], onDelete: Restrict)
   conflictsAsA ClaimConflict[] @relation("ConflictA")
   conflictsAsB ClaimConflict[] @relation("ConflictB")
 
@@ -1124,24 +1124,24 @@ enum ClaimResolution {
 /// Opened by the claim service the moment a second undecided claim arrives on a
 /// business, so the queue has a row rather than staff having to notice a pair.
 model ClaimConflict {
-  id            String           @id @default(cuid())
-  businessId    String           @map("business_id")
-  submissionAId String           @map("submission_a_id")
-  submissionBId String           @map("submission_b_id")
-  resolution    ClaimResolution?
-  resolvedById  String?          @map("resolved_by_id") @db.Uuid
-  resolvedAt    DateTime?        @map("resolved_at")
+  id                 String           @id @default(cuid())
+  businessId         String           @map("business_id")
+  submissionAId      String           @map("submission_a_id")
+  submissionBId      String           @map("submission_b_id")
+  resolution         ClaimResolution?
+  resolvedById       String?          @map("resolved_by_id") @db.Uuid
+  resolvedAt         DateTime?        @map("resolved_at")
   /// NOT NULL once resolved, paired by a CHECK in the migration.
-  reason        String?
+  reason             String?
   /// The second listing a split created, or null for the two award outcomes.
-  producedBusinessId String?     @map("produced_business_id")
+  producedBusinessId String?          @map("produced_business_id")
   /// The branch a merge folded the loser into.
-  producedLocationId String?     @map("produced_location_id")
+  producedLocationId String?          @map("produced_location_id")
   /// Buyers waiting on this listing when it was resolved — board 4c's argument
   /// for why the delay costs something. Recorded because it is only true at
   /// the moment somebody looked.
-  buyersWaiting Int              @default(0) @map("buyers_waiting")
-  createdAt     DateTime         @default(now()) @map("created_at")
+  buyersWaiting      Int              @default(0) @map("buyers_waiting")
+  createdAt          DateTime         @default(now()) @map("created_at")
 
   business         Business        @relation("ConflictBusiness", fields: [businessId], references: [id], onDelete: Cascade)
   submissionA      ClaimSubmission @relation("ConflictA", fields: [submissionAId], references: [id], onDelete: Restrict)
@@ -1173,21 +1173,21 @@ enum ProposalState {
 /// what it cannot and rejects the rest by countable reason — and then a person
 /// approves it. Criterion 1 is that sequence, in that order.
 model LicenceImportRun {
-  id                String          @id @default(cuid())
-  actorId           String          @map("actor_id") @db.Uuid
+  id               String          @id @default(cuid())
+  actorId          String          @map("actor_id") @db.Uuid
   /// Which authority's export. Free text: a new authority is a Tuesday.
-  source            String
-  filename          String
-  status            IngestRunStatus @default(parsing)
-  rowCount          Int             @default(0) @map("row_count")
-  stagedCount       Int             @default(0) @map("staged_count")
-  categorisedCount  Int             @default(0) @map("categorised_count")
-  queuedCount       Int             @default(0) @map("queued_count")
-  rejectedCount     Int             @default(0) @map("rejected_count")
+  source           String
+  filename         String
+  status           IngestRunStatus @default(parsing)
+  rowCount         Int             @default(0) @map("row_count")
+  stagedCount      Int             @default(0) @map("staged_count")
+  categorisedCount Int             @default(0) @map("categorised_count")
+  queuedCount      Int             @default(0) @map("queued_count")
+  rejectedCount    Int             @default(0) @map("rejected_count")
   /// NOT NULL once decided, paired by a CHECK in the migration.
-  decisionReason    String?         @map("decision_reason")
-  decidedAt         DateTime?       @map("decided_at")
-  createdAt         DateTime        @default(now()) @map("created_at")
+  decisionReason   String?         @map("decision_reason")
+  decidedAt        DateTime?       @map("decided_at")
+  createdAt        DateTime        @default(now()) @map("created_at")
 
   actor      User            @relation("IngestActor", fields: [actorId], references: [id], onDelete: Restrict)
   rows       StagedListing[]
@@ -1529,18 +1529,18 @@ model SpecFieldProposal {
 /// a seller's *request* cannot live on it. Separate row, and the tier still
 /// only moves when somebody has actually been.
 model SiteVisitRequest {
-  id           String    @id @default(cuid())
-  businessId   String    @map("business_id")
-  requestedById String   @map("requested_by_id") @db.Uuid
+  id            String    @id @default(cuid())
+  businessId    String    @map("business_id")
+  requestedById String    @map("requested_by_id") @db.Uuid
   /// What the seller said suits them. Not a booking; we call to arrange.
-  preferredNote String?  @map("preferred_note")
-  scheduledFor DateTime? @map("scheduled_for")
-  completedAt  DateTime? @map("completed_at")
-  cancelledAt  DateTime? @map("cancelled_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
+  preferredNote String?   @map("preferred_note")
+  scheduledFor  DateTime? @map("scheduled_for")
+  completedAt   DateTime? @map("completed_at")
+  cancelledAt   DateTime? @map("cancelled_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
 
   business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  requestedBy User             @relation("VisitRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  requestedBy User              @relation("VisitRequester", fields: [requestedById], references: [id], onDelete: Restrict)
   reports     SiteVisitReport[]
 
   @@index([businessId, createdAt])
@@ -1825,31 +1825,31 @@ model Plan {
 }
 
 model Subscription {
-  id                  String    @id @default(cuid())
-  businessId          String    @unique @map("business_id")
-  planId              String    @map("plan_id")
-  status              SubStatus @default(active)
-  startedAt           DateTime  @default(now()) @map("started_at")
-  renewsAt            DateTime  @map("renews_at")
-  cancelledAt         DateTime? @map("cancelled_at")
+  id                  String       @id @default(cuid())
+  businessId          String       @unique @map("business_id")
+  planId              String       @map("plan_id")
+  status              SubStatus    @default(active)
+  startedAt           DateTime     @default(now()) @map("started_at")
+  renewsAt            DateTime     @map("renews_at")
+  cancelledAt         DateTime?    @map("cancelled_at")
   /// When the cancellation takes effect. Criterion 10: a cancel drops to Free
   /// at period end, never immediately, so the seller keeps what they paid for.
   /// Paired with cancelledAt by a check constraint — a cancellation that does
   /// not say when it ends is one nothing can act on.
-  endsAt              DateTime? @map("ends_at")
+  endsAt              DateTime?    @map("ends_at")
   /// Whatever a payment provider calls this subscription. Null while billing
   /// runs through the console provider — see lib/billing/provider.ts.
-  providerRef         String?   @map("provider_ref")
+  providerRef         String?      @map("provider_ref")
   /// Grandfathering: entitlements captured at signup, unless a plan change
   /// explicitly sets "apply to existing".
-  entitlementSnapshot Json?     @map("entitlement_snapshot")
+  entitlementSnapshot Json?        @map("entitlement_snapshot")
   /// Where this subscription is in the D0/D3/D7/D14 sequence.
   dunningStage        DunningStage @default(none) @map("dunning_stage")
   /// When the payment first failed. Every step is measured from here rather
   /// than from the previous one, so a missed run does not push the sequence
   /// back and leave somebody in dunning for a month.
-  pastDueSince        DateTime? @map("past_due_since")
-  dunningAdvancedAt   DateTime? @map("dunning_advanced_at")
+  pastDueSince        DateTime?    @map("past_due_since")
+  dunningAdvancedAt   DateTime?    @map("dunning_advanced_at")
 
   business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   plan     Plan             @relation(fields: [planId], references: [id], onDelete: Restrict)
@@ -1872,21 +1872,21 @@ model Subscription {
 /// MRR at any date is the sum of `deltaFils` up to it, and that sum must equal
 /// the live subscription table. A test asserts the two agree.
 model MrrMovement {
-  id             String          @id @default(cuid())
-  businessId     String          @map("business_id")
-  kind           MrrMovementKind
-  fromPlanId     String?         @map("from_plan_id")
-  toPlanId       String?         @map("to_plan_id")
+  id           String          @id @default(cuid())
+  businessId   String          @map("business_id")
+  kind         MrrMovementKind
+  fromPlanId   String?         @map("from_plan_id")
+  toPlanId     String?         @map("to_plan_id")
   /// Signed monthly change, in fils. Negative for contraction and churn.
-  deltaFils      Int             @map("delta_fils")
+  deltaFils    Int             @map("delta_fils")
   /// What this account pays a month after the movement. Redundant with the
   /// running sum, and kept because reconciling a ledger against itself is the
   /// only way to find the row that is wrong.
-  mrrAfterFils   Int             @map("mrr_after_fils")
-  occurredAt     DateTime        @map("occurred_at")
+  mrrAfterFils Int             @map("mrr_after_fils")
+  occurredAt   DateTime        @map("occurred_at")
   /// What caused it, in words. "Dunning drop after 14 days", "Cancelled at
   /// period end". Not a reason field in the audit sense — nobody decided this.
-  note           String?
+  note         String?
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
@@ -1922,16 +1922,16 @@ enum MrrMovementKind {
 /// six named columns are six things a migration can change and a reviewer can
 /// read in a diff.
 model RankingWeights {
-  id                String   @id @default("current")
-  relevance         Int
-  verificationTier  Int      @map("verification_tier")
-  responseTime      Int      @map("response_time")
-  specCompleteness  Int      @map("spec_completeness")
-  distance          Int
+  id               String   @id @default("current")
+  relevance        Int
+  verificationTier Int      @map("verification_tier")
+  responseTime     Int      @map("response_time")
+  specCompleteness Int      @map("spec_completeness")
+  distance         Int
   /// Deliberately the smallest. A directory that sells its way to the top is a
   /// directory nobody comes back to.
-  planTier          Int      @map("plan_tier")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  planTier         Int      @map("plan_tier")
+  updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("ranking_weights")
 }
@@ -1947,16 +1947,16 @@ model RankingWeights {
 /// ops moving a listing for a reason of ours, and it is never labelled as
 /// sponsored because nobody paid for it.
 model ListingBoost {
-  id         String   @id @default(cuid())
-  businessId String   @map("business_id")
+  id          String   @id @default(cuid())
+  businessId  String   @map("business_id")
   /// Added to the computed score. Bounded in the service, because a boost that
   /// can outrank everything is a boost that replaces the ranking.
-  points     Int
+  points      Int
   /// Never null. The whole point.
-  reason     String
-  expiresAt  DateTime @map("expires_at")
-  createdById String  @map("created_by_id") @db.Uuid
-  createdAt  DateTime @default(now()) @map("created_at")
+  reason      String
+  expiresAt   DateTime @map("expires_at")
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
 
   business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   createdBy User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
@@ -2134,6 +2134,58 @@ model Redirect {
   business Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
   @@map("redirect")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Guides — boards 10b and 6d
+//
+// Twenty-two articles on verification, quoting, payment terms and getting a
+// supplier to turn up. They are the only content in handoff 5 that works before
+// supply density exists, and they earn the links the 84 area pages need to rank
+// at all.
+//
+// Not governed by the board 6f matrix. That gate counts listings and verified
+// share, and a guide about payment terms has neither. What a guide answers to
+// is the word floor — the same 250 in `lib/publish-threshold.ts`, read from
+// there rather than restated, so there is one number in the codebase.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// An editorial article on the directory. Staff-authored, published from
+/// `/admin/content/guides`, and never generated.
+model Guide {
+  id      String @id @default(cuid())
+  /// Frozen once published. The rule `Redirect` states, enforced in
+  /// `lib/guides/service.ts`: a published URL that moves without a 301 spends
+  /// standing the article was written to earn.
+  slug    String @unique
+  title   String
+  /// The card on the index and the meta description. One sentence.
+  summary String
+
+  /// Heading, paragraph, bullets, numbered steps, callout, directory call to
+  /// action. A guide's own vocabulary, not the storefront page one: that has a
+  /// block reading a seller's documents and a call to action wired to a
+  /// seller's catalogue, and it is edited per template by staff.
+  body Json @default("[]")
+
+  /// A string, not a relation. A byline is a name until somebody asks for
+  /// author pages, and a `User` relation would imply the author has a seat.
+  byline String?
+
+  /// Where the article sends the reader. Every guide ends in the directory —
+  /// that is what they are for. Null means the index; a slug means that trade.
+  ctaCategoryId String? @map("cta_category_id")
+
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  ctaCategory Category? @relation("GuideCtaCategory", fields: [ctaCategoryId], references: [id], onDelete: SetNull)
+
+  /// The index reads published guides newest first, and the sitemap will read
+  /// the same set.
+  @@index([publishedAt])
+  @@map("guide")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2385,17 +2437,17 @@ model CustomDomain {
 
   /// Per record, independently. Partial propagation is the normal case and
   /// must not read as failure — criterion 8.
-  cnameState String   @default("waiting") @map("cname_state")
-  txtState   String   @default("waiting") @map("txt_state")
+  cnameState String @default("waiting") @map("cname_state")
+  txtState   String @default("waiting") @map("txt_state")
 
-  addedAt       DateTime  @default(now()) @map("added_at")
-  lastCheckedAt DateTime? @map("last_checked_at")
-  verifiedAt    DateTime? @map("verified_at")
+  addedAt        DateTime  @default(now()) @map("added_at")
+  lastCheckedAt  DateTime? @map("last_checked_at")
+  verifiedAt     DateTime? @map("verified_at")
   /// Set only where a real provider issued one. Null while the issuer is the
   /// console fake, which is what stops a screen claiming TLS it has not got.
-  certificateRef String?  @map("certificate_ref")
+  certificateRef String?   @map("certificate_ref")
   /// Which of the named causes, where it failed. Never a resolver error string.
-  failureCause   String?  @map("failure_cause")
+  failureCause   String?   @map("failure_cause")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 

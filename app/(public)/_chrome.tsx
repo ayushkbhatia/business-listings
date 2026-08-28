@@ -29,7 +29,7 @@ export function DirectoryNav() {
         // handoff that builds them. docs/routes.md marks these later; a dead
         // link is worse than an honest greyed one.
         { key: "categories", label: t("chrome.categories"), href: "/categories", later: true },
-        { key: "guides", label: t("chrome.guides"), href: "/guides", later: true },
+        { key: "guides", label: t("chrome.guides"), href: "/guides" },
         { key: "pricing", label: t("chrome.pricing"), href: "/pricing", later: true },
       ]}
       actions={

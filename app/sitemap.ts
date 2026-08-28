@@ -22,7 +22,7 @@ export const revalidate = 3600;
 const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } } as const;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [businesses, products, categories] = await Promise.all([
+  const [businesses, products, categories, guides] = await Promise.all([
     prisma.business.findMany({
       where: PUBLIC_BUSINESS,
       select: { slug: true, updatedAt: true, claimStatus: true },
@@ -38,6 +38,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         parent: { select: { slug: true } },
         _count: { select: { primaryFor: { where: PUBLIC_BUSINESS } } },
       },
+    }),
+    /*
+       Guides — boards 10b and 6d.
+
+       Published only, and no supply gate: the board 6f floors count listings
+       and verified share, and a guide about payment terms has neither. What a
+       guide answers to is the word floor, and `publishGuide` is the only path
+       that sets `publishedAt` — so a row with one has already cleared it.
+    */
+    prisma.guide.findMany({
+      where: { publishedAt: { not: null } },
+      select: { slug: true, updatedAt: true },
     }),
   ]);
 
@@ -56,6 +68,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [
     { url: absoluteUrl("/"), changeFrequency: "daily", priority: 1 },
   ];
+
+  if (guides.length > 0) {
+    entries.push({ url: absoluteUrl("/guides"), changeFrequency: "weekly", priority: 0.6 });
+  }
+  for (const guide of guides) {
+    entries.push({
+      url: absoluteUrl(`/guides/${guide.slug}`),
+      // `updatedAt`, not `publishedAt`. lastmod is a claim about when the
+      // content changed, and a crawler that finds it moved with nothing to show
+      // for it discounts the next one.
+      lastModified: guide.updatedAt,
+      changeFrequency: "monthly",
+      priority: 0.6,
+    });
+  }
 
   for (const category of categories) {
     if (category.parentId) {
