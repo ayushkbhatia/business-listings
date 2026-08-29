@@ -2792,6 +2792,33 @@ export const en = {
   "attribution.empty": "No enquiry carries a source yet.",
   "attribution.note": "A source is recorded when a buyer arrives on a tagged link and kept for {days} days, so an enquiry sent a fortnight after the click is still attributed to it. First touch wins: a buyer won by a campaign who returns through a search is still the campaign's. Nothing here identifies a person — it is the three UTM values their own inbound link declared, and nothing else.",
 
+  // ── Zero-result alerts, criterion 8 ───────────────────────────────────────
+  //
+  // The end of the flywheel. The gap is already recorded and already feeds the
+  // recruitment call list; this is what turns it back into an enquiry.
+  "alert.title": "Tell me when somebody lists it",
+  "alert.body": "We record every search that finds nothing and use it to go and recruit the supplier who stocks it. Leave a number and we will tell you once — when a match is listed, not before.",
+  "alert.watching": "Watching for",
+  "alert.contact": "Mobile number",
+  "alert.contact_hint": "One message, once, when something matches. Nothing else, ever.",
+  "alert.name": "Your name",
+  "alert.submit": "Tell me when it is listed",
+  "alert.set": "Set. We will message you once, when a match is listed.",
+  "alert.already": "You already have an alert for that search.",
+
+  // ── Renaming and removing a trade, criterion 7 ────────────────────────────
+  "taxonomy.rename_title": "Move a trade's address",
+  "taxonomy.rename_body": "Renaming a trade moves its page, every subcategory page under it — the address carries the parent's slug — and every area page for it. Each one gets a 301 in the same transaction, so a link printed last year still lands.",
+  "taxonomy.pick": "Trade",
+  "taxonomy.new_slug": "New address",
+  "taxonomy.new_slug_hint": "Lowercase letters, digits and hyphens.",
+  "taxonomy.affected": { one: "{count} address moves", other: "{count} addresses move" },
+  "taxonomy.rename": "Rename and write the redirects",
+  "taxonomy.renamed": "Renamed. {count} redirects written.",
+  "taxonomy.remove": "Remove the trade",
+  "taxonomy.removed": "Removed, and its address redirects.",
+  "taxonomy.remove_hint": "Only where nothing is left pointing at it — no subcategories, no listings, no published area page. Its address redirects to the parent.",
+
   // ── Guides, boards 10b and 6d ─────────────────────────────────────────────
   //
   // The public half. Read by strangers deciding whether to trust us, so §08

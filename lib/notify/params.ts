@@ -44,6 +44,20 @@ export const EVENT_PARAMS = {
   review_posted: [],
   review_requested: [],
   document_expiring: [],
+  /*
+     Declared, and deliberately empty — so `isEmitted` reports false and the
+     notifications screen shows it as "nothing sends this yet", which is the
+     affordance handoff 4 built for exactly this state.
+
+     `sweepAlerts` matches and records; it does not send. `notify` is
+     seller-shaped — it reads `NotificationPreference` and quiet hours keyed by
+     business — and routing a buyer's alert through the matched supplier's
+     preferences would let that seller's quiet hours silence a message to
+     somebody else's customer. Buyer-side notification preferences do not exist,
+     and inventing them inside this step would be a second pipeline rather than
+     a wire.
+  */
+  product_alert_matched: [],
   weekly_digest: [],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 

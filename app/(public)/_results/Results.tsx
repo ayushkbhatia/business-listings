@@ -14,6 +14,8 @@ import {
 } from "@/lib/db/queries";
 import { appliedKeys, toSearchParams, type SearchQuery } from "@/lib/search/query";
 import { FacetLinks } from "./FacetLinks";
+import { AlertForm } from "./AlertForm";
+import { setAlert } from "./alert-actions";
 import { ZeroResult } from "./ZeroResult";
 import { AppliedChips, CompareTray, ResultsList, ResultsTabs } from "./ResultsSurface";
 
@@ -181,6 +183,22 @@ export async function Results({ query, basePath, category, tray = [], search = "
               }}
               categoryName={category?.name}
               categoryHref={category ? `/c/${category.slug}` : undefined}
+              alert={
+                /*
+                   Criterion 8. Only where there are words to watch for — an
+                   alert on an empty query would fire on the next product
+                   anybody lists, which is the false positive that loses the
+                   buyer on the one message they get.
+                */
+                query.q.trim().length > 0 ? (
+                  <AlertForm
+                    query={query.q}
+                    {...(category ? { categoryId: category.id } : {})}
+                    {...(query.emirate ? { emirate: query.emirate } : {})}
+                    create={setAlert}
+                  />
+                ) : null
+              }
             />
           ) : (
             <ResultsList

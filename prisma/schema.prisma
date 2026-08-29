@@ -73,6 +73,7 @@ model User {
   messages            Message[]
   contactReveals      ContactReveal[]
   savedSearches       SavedSearch[]
+  productAlerts       ProductAlert[]
   reviewRequests      ReviewRequest[]
   importRuns          ImportRun[]
   changeRequests      ListingChangeRequest[] @relation("ChangeRequestActor")
@@ -253,6 +254,7 @@ model Category {
   guideCtas         Guide[]              @relation("GuideCtaCategory")
   areaPages         AreaPage[]
   campaignCtas      Campaign[]           @relation("CampaignCtaCategory")
+  productAlerts     ProductAlert[]
   curatedLists      CuratedList[]
   sectorTemplates   StorefrontTemplate[] @relation("SectorTemplates")
 
@@ -677,13 +679,14 @@ model Product {
   // The CSV importer is the widest path into this table and refuses a price
   // column outright — see lib/import/columns.ts.
 
-  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  importRun    ImportRun?    @relation(fields: [importRunId], references: [id], onDelete: SetNull)
-  category     Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  business     Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  importRun    ImportRun?     @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+  category     Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   media        Media[]
   documents    Document[]
   quoteLines   QuoteLine[]
   enquiryLines EnquiryLine[]
+  alerts       ProductAlert[]
 
   @@unique([businessId, slug])
   @@index([businessId])
@@ -2250,6 +2253,48 @@ model CuratedList {
   @@map("curated_list")
 }
 
+/// Criterion 8 — the zero-result alert, and the end of the flywheel.
+///
+/// A buyer searches for a stainless DN100 UL/FM valve, finds nobody, and asks
+/// to be told when one is listed. The CRM works the same gap from the other
+/// end — `ZeroResultQuery` feeds the recruitment call list — so the supplier
+/// who eventually lists it is often one we went and found. The alert is what
+/// turns that back into an enquiry rather than a statistic.
+///
+/// Separate from `SavedSearch`, which needs an account and has a cadence. Most
+/// people who hit a zero-result page have neither: this takes a provisional
+/// identity, the same one the RFQ flow creates, and fires exactly once.
+model ProductAlert {
+  id String @id @default(cuid())
+
+  /// The words they typed. Matched against `Product.searchText`.
+  query      String
+  categoryId String?  @map("category_id")
+  emirate    Emirate?
+
+  /// Who to tell. Provisional is normal here rather than exceptional.
+  userId String @map("user_id") @db.Uuid
+
+  /// The query that spawned it, so the gap report can show which searches
+  /// somebody cared enough about to wait for.
+  zeroResultQueryId String? @map("zero_result_query_id")
+
+  /// Fires once. A second notification for the same alert would be a
+  /// subscription nobody asked for.
+  notifiedAt       DateTime? @map("notified_at")
+  matchedProductId String?   @map("matched_product_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  matched  Product?  @relation(fields: [matchedProductId], references: [id], onDelete: SetNull)
+
+  /// The sweep reads the open ones. Partial in spirit; most rows end up closed.
+  @@index([notifiedAt])
+  @@map("product_alert")
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Campaign landings — board 10i
 //
@@ -2669,6 +2714,8 @@ enum NotificationEvent {
   review_posted
   review_requested
   document_expiring
+  /// Criterion 8. A buyer whose search found nothing, told when it would not.
+  product_alert_matched
   weekly_digest
 
   @@map("notification_event")

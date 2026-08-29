@@ -46,7 +46,7 @@ describe("what an event supplies", () => {
 
   it("knows which events nothing emits yet", () => {
     /*
-     * Four of eleven are emitted. The rest are declared in the enum, seeded
+     * Four of twelve are emitted. The rest are declared in the enum, seeded
      * with templates, and sent by nothing — which is not a bug, but staff
      * should know before spending an afternoon on the copy.
      */
@@ -62,7 +62,19 @@ describe("what an event supplies", () => {
   it("covers every event in the enum, so none is missing a row", () => {
     // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
     // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(11);
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(12);
+  });
+
+  it("does not claim to emit the alert it only records", () => {
+    /*
+       Handoff 5 step 6 added `product_alert_matched` and this test caught it
+       claiming to be emitted, because declaring params is what `isEmitted`
+       reads. `sweepAlerts` matches and records; it does not send. `notify` is
+       seller-shaped and there are no buyer-side preferences yet, so the honest
+       state is "declared, nothing sends it" — which the notifications screen
+       already has a word for.
+    */
+    expect(isEmitted("product_alert_matched")).toBe(false);
   });
 });
 

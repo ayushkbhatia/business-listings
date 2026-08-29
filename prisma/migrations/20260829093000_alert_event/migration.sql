@@ -1,0 +1,11 @@
+-- Handoff 5, step 6. The notification criterion 8's sweep sends.
+--
+-- Its own migration rather than part of `20260829090000_product_alert`, because
+-- Postgres will not let a new enum value be added and used inside the same
+-- transaction — and Prisma runs one migration as one transaction.
+--
+-- `lib/notify/params.ts` binds a template's placeholders to the event at
+-- compile time, which is what caught a seeded `quote_accepted` template asking
+-- for a value nothing supplied in handoff 4. An event with no enum value cannot
+-- be bound at all.
+ALTER TYPE "notification_event" ADD VALUE IF NOT EXISTS 'product_alert_matched' BEFORE 'weekly_digest';

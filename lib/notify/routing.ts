@@ -30,6 +30,8 @@ export type NotificationEvent =
   | "review_posted"
   | "review_requested"
   | "document_expiring"
+  /// Criterion 8. A buyer whose search found nothing, told when it would not.
+  | "product_alert_matched"
   | "weekly_digest";
 
 /** The channels quiet hours actually silence. */

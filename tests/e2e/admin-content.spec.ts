@@ -382,3 +382,45 @@ test.describe("boards 10b and 6d — guides", () => {
     expect(results.violations).toEqual([]);
   });
 });
+
+test.describe("criterion 7 — renaming a trade on the taxonomy screen", () => {
+  test("says how many addresses a rename would move before anybody commits", async ({ page }) => {
+    /*
+       One rename of a sector moves its own page, every subcategory under it —
+       the address carries the parent's slug — and every area page for it.
+       Somebody about to move forty addresses should know before, not after.
+    */
+    await page.goto("/admin/categories");
+    await expect(page.getByRole("heading", { name: "Move a trade's address" })).toBeVisible();
+
+    await page.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
+    await page.getByLabel("New address", { exact: true }).fill("hvac-and-cooling");
+
+    await expect(page.getByText(/\d+ addresses? move/)).toBeVisible();
+  });
+
+  test("will not rename or remove without a reason", async ({ page }) => {
+    await page.goto("/admin/categories");
+    await page.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
+    await page.getByLabel("New address", { exact: true }).fill("hvac-and-cooling");
+
+    await expect(page.getByRole("button", { name: "Rename and write the redirects" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Remove the trade" })).toBeDisabled();
+  });
+
+  test("refuses to remove a trade something depends on, and says what", async ({ page }) => {
+    /*
+       Children first, because listings cannot be judged until the subcategories
+       are gone — and the count decides the verb, which is why the message is
+       built rather than templated.
+    */
+    await page.goto("/admin/categories");
+    await page.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
+    await page.getByRole("textbox", { name: "Reason" }).fill("Checking what the refusal says.");
+    await page.getByRole("button", { name: "Remove the trade" }).click();
+
+    await expect(
+      page.getByText(/(subcategory sits|subcategories sit|listing is|listings are) .*under it/),
+    ).toBeVisible();
+  });
+});

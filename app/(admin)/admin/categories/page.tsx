@@ -6,6 +6,8 @@ import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { CategoryTable } from "./CategoryTable";
+import { previewRename, remove, rename } from "./actions";
+import { RenamePanel, type TradeOption } from "./RenamePanel";
 
 /**
  * Board 4d — the taxonomy, and the floor under every landing page.
@@ -19,9 +21,9 @@ import { CategoryTable } from "./CategoryTable";
  * directory from a doorway-page farm: a hundred thin "Valves in Umm Al Quwain"
  * pages teach a search engine that the site is mostly filler.
  *
- * Read-only for now. The edit form is a second PR; `editCategory` is built and
- * tested behind it, and shipping a table that tells the truth is worth more
- * than shipping a form that changes numbers nobody has looked at yet.
+ * The table is read-only; `editCategory` is still built and unwired behind it.
+ * What handoff 5 added is the panel below it, because criterion 7 asks a rename
+ * to produce a working 301 and a rename with no caller produces nothing at all.
  */
 
 export const dynamic = "force-dynamic";
@@ -44,6 +46,11 @@ export default async function TaxonomyPage() {
   const blocked = rows.filter((row) => !row.decision.publishable).length;
 
 
+  const trades: TradeOption[] = rows.map((row) => ({
+    id: row.id,
+    label: row.parentId ? `— ${row.name}` : row.name,
+  }));
+
   return (
     <AdminPage
       seat={seat}
@@ -61,6 +68,15 @@ export default async function TaxonomyPage() {
       }
     >
       <CategoryTable rows={rows} />
+
+      <div className="mt-[var(--gutter)]">
+        <RenamePanel
+          trades={trades}
+          rename={rename}
+          remove={remove}
+          preview={previewRename}
+        />
+      </div>
 
       <div className="mt-[var(--gutter)] flex flex-col gap-1">
         <p className="max-w-prose text-caption text-muted">{t("admin.taxonomy.note")}</p>

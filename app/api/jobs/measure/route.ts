@@ -4,6 +4,7 @@ import { measureResponseTimes } from "@/lib/metrics/job";
 import { measureProfileStrength } from "@/lib/metrics/strength-job";
 import { pollDomains } from "@/lib/domains/service";
 import { sweepAreaPages } from "@/lib/seo/area";
+import { sweepAlerts } from "@/lib/alerts/service";
 
 /**
  * The scheduled measurement run.
@@ -62,8 +63,18 @@ export async function GET(request: NextRequest) {
    */
   const areaPages = await sweepAreaPages();
 
-  console.info("[jobs] measured", { responseTimes, profileStrength, domains, areaPages });
-  return NextResponse.json({ responseTimes, profileStrength, domains, areaPages });
+  /*
+   * Criterion 8, and the end of the flywheel.
+   *
+   * Here rather than on product creation: a seller importing four hundred rows
+   * would otherwise fire four hundred matches inside one request, and each
+   * buyer would get whichever product happened to be first rather than the one
+   * that matched best.
+   */
+  const alerts = await sweepAlerts();
+
+  console.info("[jobs] measured", { responseTimes, profileStrength, domains, areaPages, alerts });
+  return NextResponse.json({ responseTimes, profileStrength, domains, areaPages, alerts });
 }
 
 function constantTimeEqual(a: string, b: string): boolean {
