@@ -252,6 +252,7 @@ model Category {
   stagedListings    StagedListing[]
   guideCtas         Guide[]              @relation("GuideCtaCategory")
   areaPages         AreaPage[]
+  campaignCtas      Campaign[]           @relation("CampaignCtaCategory")
   curatedLists      CuratedList[]
   sectorTemplates   StorefrontTemplate[] @relation("SectorTemplates")
 
@@ -823,6 +824,19 @@ model Enquiry {
   contactReleasedAt           DateTime?     @map("contact_released_at")
   createdAt                   DateTime      @default(now()) @map("created_at")
 
+  /// Criterion 9. Where this enquiry came from, if the buyer arrived through a
+  /// campaign or a tagged link.
+  ///
+  /// Three columns rather than a blob, because the console groups by them and
+  /// a JSON key is not an index. `utm_content` and `utm_term` are deliberately
+  /// not stored: nothing reports on them, and an attribution column nobody
+  /// reads is personal data kept for no reason.
+  utmSource   String? @map("utm_source")
+  utmMedium   String? @map("utm_medium")
+  utmCampaign String? @map("utm_campaign")
+  /// The campaign landing page they arrived on, where it was one of ours.
+  campaignId  String? @map("campaign_id")
+
   buyer          User               @relation(fields: [buyerId], references: [id], onDelete: Cascade)
   buyerCompany   BuyerCompany?      @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
   lines          EnquiryLine[]
@@ -834,9 +848,13 @@ model Enquiry {
   messages       Message[]
   review         Review?
   reviewRequests ReviewRequest[]
+  campaign       Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
 
   @@index([buyerId])
   @@index([closesAt])
+  /// The console groups by campaign and by source. Both are reads over the
+  /// whole table with a date range, which is exactly what this is for.
+  @@index([utmCampaign, createdAt])
   @@map("enquiry")
 }
 
@@ -2230,6 +2248,83 @@ model CuratedList {
 
   @@index([publishedAt])
   @@map("curated_list")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Campaign landings — board 10i
+//
+// A page with no site nav beyond the wordmark, one escape link, and always the
+// directory offered as an alternative: a page that traps the visitor converts
+// worse and ranks worse.
+//
+// Criterion 9 is the interesting half — "campaign pages preserve UTM through to
+// the enquiry and attribute it in admin". A visitor arriving on one of these
+// may click through the directory for ten minutes before sending anything, so
+// the attribution cannot ride in the query string. It is set as a first-party
+// cookie here and read at `createEnquiry`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One campaign landing page. Content, so it lives here and not in a commit.
+model Campaign {
+  id         String  @id @default(cuid())
+  slug       String  @unique
+  /// The one big line. Not the `<title>`, which is `metaTitle`.
+  headline   String
+  /// Two or three sentences under it.
+  standfirst String?
+  /// The body, in the same paragraph-per-blank-line shape a landing intro uses.
+  body       String?
+
+  metaTitle       String? @map("meta_title")
+  metaDescription String? @map("meta_description")
+
+  /// Where the one call to action goes. Null sends them to search.
+  ctaCategoryId String? @map("cta_category_id")
+
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  ctaCategory Category? @relation("CampaignCtaCategory", fields: [ctaCategoryId], references: [id], onDelete: SetNull)
+  enquiries   Enquiry[]
+
+  @@index([publishedAt])
+  @@map("campaign")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Legal pages — board 10j
+//
+// Four of them, one template. Content again: a change to the review policy
+// should cost a revalidation and not a deploy, and the person who writes it is
+// not the person who can push.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum LegalPageKind {
+  terms
+  privacy
+  verification_policy
+  review_policy
+
+  @@map("legal_page_kind")
+}
+
+/// One of the four. Versioned by `effectiveFrom`, because a policy that changed
+/// silently is a policy nobody can rely on.
+model LegalPage {
+  id   String        @id @default(cuid())
+  kind LegalPageKind @unique
+
+  title String
+  body  String
+
+  /// When this wording took effect. Shown on the page — a policy with no date
+  /// is a policy that has always said whatever it says now.
+  effectiveFrom DateTime @map("effective_from")
+
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("legal_page")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

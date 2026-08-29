@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { getActor } from "@/lib/auth/session";
+import { readAttribution } from "@/lib/campaign/cookie";
 import { createEnquiry, findFanoutCandidates, descendantsOf } from "@/lib/enquiry/service";
 import { selectRecipients } from "@/lib/enquiry/fanout";
 import { prisma } from "@/lib/db/client";
@@ -39,6 +40,9 @@ export async function sendEnquiry(input: SendEnquiryInput): Promise<SendEnquiryR
 
   const result = await createEnquiry({
     buyerId: actor?.id ?? null,
+    // Criterion 9. Read here rather than in the service, because only a request
+    // has a cookie jar and the service is called from tests without one.
+    attribution: await readAttribution(),
     phone: input.contactPhone,
     fullName: input.contactName,
     requirement: input.requirement,

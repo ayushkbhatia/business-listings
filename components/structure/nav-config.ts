@@ -235,6 +235,7 @@ export const ADMIN_NAV: readonly NavGroup[] = [
       { key: "notifications", labelKey: "nav.notifications", href: "/admin/notifications", capability: "taxonomy.write" },
       { key: "strings", labelKey: "nav.strings", href: "/admin/strings", capability: "taxonomy.write" },
       { key: "content-guides", labelKey: "nav.content_guides", href: "/admin/content/guides", capability: "taxonomy.write" },
+      { key: "content-attribution", labelKey: "nav.content_attribution", href: "/admin/content/attribution", capability: "taxonomy.write" },
       { key: "content-home", labelKey: "nav.content_home", href: "/admin/content/home", capability: "taxonomy.write" },
       { key: "content-redirects", labelKey: "nav.content_redirects", href: "/admin/content/redirects", capability: "taxonomy.write" },
     ],

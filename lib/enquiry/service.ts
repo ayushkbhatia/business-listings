@@ -4,6 +4,7 @@ import { createProvisionalIdentity } from "@/lib/auth/flow";
 import { normaliseIdentifier } from "@/lib/auth/identity";
 import { onEnquiryDelivered, onQuoteAccepted } from "@/lib/notify/events";
 import { quoteTotalAed } from "@/lib/quote/money";
+import type { Attribution } from "@/lib/campaign/attribution";
 import {
   MAX_RECIPIENTS,
   monthStart,
@@ -142,6 +143,13 @@ export interface CreateEnquiryInput {
   pinnedBusinessIds?: readonly string[];
   /** 1..8. "also send to N similar suppliers". */
   fanoutTo: number;
+  /**
+   * Where the buyer came from, if anywhere. Criterion 9.
+   *
+   * Passed in rather than read here: this service is called from tests and
+   * from a server action, and only one of those has a cookie jar.
+   */
+  attribution?: Attribution | null;
 }
 
 export type CreateEnquiryResult =
@@ -213,6 +221,23 @@ export async function createEnquiry(
   const { recipients, skipped } = selectRecipients(candidates, request);
   if (recipients.length === 0) return { ok: false, error: "no_recipients" };
 
+  /*
+     Resolve the landing slug the proxy stored into a campaign row.
+
+     The proxy runs before any database client exists, so it stores the slug; a
+     slug that no longer matches a campaign resolves to null rather than failing
+     the enquiry, which is the right way round — losing attribution is a
+     reporting gap, losing the enquiry is a lost customer.
+  */
+  const campaignId = input.attribution?.campaignSlug
+    ? ((
+        await prisma.campaign.findUnique({
+          where: { slug: input.attribution.campaignSlug },
+          select: { id: true },
+        })
+      )?.id ?? null)
+    : null;
+
   const ref = await nextEnquiryRef();
   // Never zero. An enquiry that closes the instant it is sent is one nobody
   // can answer, and a form can post anything.
@@ -229,6 +254,17 @@ export async function createEnquiry(
         neededBy: input.neededBy ?? null,
         termsWanted: (input.termsWanted as never) ?? null,
         closesAt,
+        /*
+           Criterion 9. Whatever the buyer arrived tagged with, carried here by
+           the cookie `lib/campaign/cookie.ts` set when they entered.
+
+           On the row rather than in a side table because an enquiry has exactly
+           one origin, and the console groups by it.
+        */
+        utmSource: input.attribution?.utmSource ?? null,
+        utmMedium: input.attribution?.utmMedium ?? null,
+        utmCampaign: input.attribution?.utmCampaign ?? null,
+        campaignId,
         lines: {
           create: input.lines.map((line, i) => ({
             description: line.description.trim(),

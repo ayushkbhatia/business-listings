@@ -292,6 +292,60 @@ enquiry a real `firstReplyAt` and lets the median fall out.
   began reporting a supplier as "Audited" that the seed made tier 2. It restores now.
 
 
+## 5d. Step 5 — campaign and legal pages
+
+**Criterion 9**: *"campaign pages preserve UTM through to the enquiry and attribute it in
+admin."* The hard word is "through to".
+
+### Where attribution is captured, and why it moved twice
+
+A buyer who lands on a campaign may read two guides, browse a trade and send an enquiry twenty
+minutes later — by which time the query string is long gone. Threading it through every link
+would be fragile, and would also put campaign tags in every URL anybody shares, which is
+somebody else's attribution.
+
+So it is a first-party cookie. Written first on the campaign page, which does not work: a page
+component cannot modify cookies in the App Router, and Next says so per request rather than at
+build time — the build was clean and every campaign page 500ed on the first e2e run.
+
+It is written in `proxy.ts` now, which is better than the original plan rather than a
+consolation. A tagged link points at a guide as often as at `/lp/...`, and the proxy catches
+all of them.
+
+The cookie holds three UTM values and the campaign **slug** — not its id, because the proxy
+runs before any database client exists. `createEnquiry` resolves the slug, and one that no
+longer matches resolves to null rather than failing the enquiry: losing attribution is a
+reporting gap, losing the enquiry is a lost customer.
+
+### Decisions worth reversing cheaply if wrong
+
+- **First touch wins.** A buyer won by a campaign who returns through an organic search is
+  still the campaign's. Last touch would credit the search engine for demand somebody else
+  created. Stated in a test rather than implied.
+- **Thirty days.** A marketing convention, not a discovered number, in one constant.
+- **`utm_content` and `utm_term` are dropped on the way in.** Nothing reports on them, and an
+  attribution column nobody reads is personal data kept for no reason.
+- **Untagged is a row in the report, not an omission.** A report showing only attributed
+  enquiries makes every campaign look like the whole of demand.
+- **The report is counts and dates, never a buyer.** The privacy policy this step also ships
+  says we do not build profiles; a marketing screen listing the people who asked for a quote
+  would be one.
+
+### Found on the way
+
+- **A second dynamic segment at the root of the app collides with the area route.** The four
+  policies were one `[policy]` segment; `[policy]` and `[emirate]` cannot coexist, and Next
+  raises it per request rather than at build time. They are four small files sharing one
+  renderer now, which is what `docs/routes.md` describes anyway.
+- **A second seller had drifted onto the monthly cap.** `seedAtMonthlyCap` puts exactly one
+  free seller on the line, because handoff 2 criterion 6 needs a seller who is offered
+  nothing. Step 2's subcategory re-filing changed which listings sit in the valve pool, one of
+  them was incidentally at 3 of 3, and the handoff-2 checkpoint — "send to 5 sellers" —
+  started finding four. The test had not changed and neither had the code it tests.
+  `onlyOneSellerAtCap` runs last in the seed and takes the surplus rows off anybody who is not
+  the designated one.
+
+
 ## 6. Blocked on the user
 
 Carried from handoff 4, unchanged. None stops a step; each narrows one.
