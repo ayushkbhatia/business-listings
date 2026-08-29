@@ -219,6 +219,7 @@ export const en = {
   "nav.notifications": "Notification templates",
   "nav.strings": "Localisation",
   "nav.content_guides": "Guides",
+  "nav.content_attribution": "Attribution",
   "nav.content_home": "Homepage curation",
   "nav.content_redirects": "Redirects",
   "nav.api": "API keys & webhooks",
@@ -2751,6 +2752,45 @@ export const en = {
   "best.empty_body": "That is the list working rather than failing. The directory has suppliers in this trade — they are on the trade page, with what we have checked shown on each.",
   "best.browse": "Browse {category}",
   "best.updated": "Checked when this page was built, {date}",
+
+  // ── Campaign landings, board 10i ──────────────────────────────────────────
+  //
+  // No site nav beyond the wordmark and one escape link — but the directory is
+  // always offered. A page that traps the visitor converts worse and ranks
+  // worse, and we would rather lose the click than earn it that way.
+  "campaign.escape": "Business Listings",
+  "campaign.escape_label": "Go to the directory",
+  "campaign.cta_category": "Find {category} suppliers",
+  "campaign.cta_search": "Search the directory",
+  "campaign.cta_rfq": "Describe what you need instead",
+  "campaign.alternative": "Not what you came for? {listings} licensed UAE businesses are in the directory, and the search is free and needs no account.",
+  "campaign.trust": "{listings} listed businesses · {verified} with a trade licence we have checked · no price until a supplier quotes you directly",
+
+  // ── Legal pages, board 10j ────────────────────────────────────────────────
+  "legal.effective": "In effect since {date}",
+  "legal.updated": "Last changed {date}",
+  "legal.kind.terms": "Terms of use",
+  "legal.kind.privacy": "Privacy",
+  "legal.kind.verification_policy": "Verification policy",
+  "legal.kind.review_policy": "Review policy",
+  "legal.others": "The other policies",
+  "legal.missing": "This policy has not been written yet.",
+  "legal.missing_body": "That is a gap rather than a position. Nothing here is being withheld — ask us and we will answer while it is written.",
+
+  // ── Campaign attribution in the console, criterion 9 ──────────────────────
+  "attribution.title": "Where enquiries come from",
+  "attribution.eyebrow": "Demand",
+  "attribution.meta": "{attributed} of {total} enquiries carry a source",
+  "attribution.caption": "Enquiries by campaign and source, newest first",
+  "attribution.col.campaign": "Campaign",
+  "attribution.col.source": "Source",
+  "attribution.col.medium": "Medium",
+  "attribution.col.enquiries": "Enquiries",
+  "attribution.col.first": "First",
+  "attribution.col.last": "Last",
+  "attribution.direct": "Direct or untagged",
+  "attribution.empty": "No enquiry carries a source yet.",
+  "attribution.note": "A source is recorded when a buyer arrives on a tagged link and kept for {days} days, so an enquiry sent a fortnight after the click is still attributed to it. First touch wins: a buyer won by a campaign who returns through a search is still the campaign's. Nothing here identifies a person — it is the three UTM values their own inbound link declared, and nothing else.",
 
   // ── Guides, boards 10b and 6d ─────────────────────────────────────────────
   //

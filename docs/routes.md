@@ -30,9 +30,9 @@ they 404 until their handoff.
 /best/:slug                             Curated list                          [6b]  built h5s4
 /categories                             Category index                        [6c]  built h5s2
 /:emirate/:area/:category               Area landing page                     [6a]  built h5s3
-/lp/:campaign                           Campaign landing                     [10i]
+/lp/:campaign                           Campaign landing                     [10i]  built h5s5
 /report/:subject                        Report a listing (modal route)       [10j]
-/terms · /privacy · /verification-policy · /review-policy                    [10j]
+/terms · /privacy · /verification-policy · /review-policy                    [10j]  built h5s5
 /signin · /signup · /verify · /reset                                          [7a]  built h2s2
 /account/enquiries                      Buyer enquiry inbox                  [10e]  built h2s3
 /account/saved                          Saved searches & alerts              [10e]
@@ -112,6 +112,7 @@ they 404 until their handoff.
 /admin/content/matrix                   SEO page matrix                       [6f]  built h4s7
 /admin/content/guides                   Guides                          [10b, 6d]  built h5s1
 /admin/content/guides/:id               One guide, or new               [10b, 6d]  built h5s1
+/admin/content/attribution              Enquiry attribution                  [10i]  built h5s5
 /admin/content/home                     Homepage curation                    [12g]  built h4s7
 /admin/content/redirects                Redirects                            [12g]  built h4s7
 /admin/storefront-templates             Templates & section library      [5c]  built h4s6

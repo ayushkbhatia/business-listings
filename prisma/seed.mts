@@ -24,10 +24,12 @@ import {
 import { DN_SYNONYMS, sizeAliases } from "../lib/trade/nominal-size.js";
 import { matchLine } from "../lib/quote/match.js";
 import { medianResponseMs, windowStart } from "../lib/metrics/response-time.js";
+import { monthStart } from "../lib/enquiry/fanout.js";
 import { seedGuides } from "./seed-guides.mjs";
 import { seedSubcategories } from "./seed-subcategories.mjs";
 import { seedAreaPages } from "./seed-area-pages.mjs";
 import { seedCurated } from "./seed-curated.mjs";
+import { seedCampaignLegal } from "./seed-campaign-legal.mjs";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL! }),
@@ -162,7 +164,7 @@ async function main() {
   // Order matters only where a FK is Restrict rather than Cascade.
   await prisma.$executeRawUnsafe(`
     truncate table
-      "audit_event","contact_reveal","zero_result_query","saved_search","redirect","guide","area_page","curated_list",
+      "audit_event","contact_reveal","zero_result_query","saved_search","redirect","guide","area_page","curated_list","campaign","legal_page",
       "notification_delivery","notification_template","notification_preference","review_request",
       "invoice_line","invoice","placement_slot","subscription",
       "supplier_report","review","message","quote_line","quote",
@@ -542,6 +544,10 @@ async function main() {
   await seedAreaPages(prisma);
   console.log("→ curated lists");
   await seedCurated(prisma, NOW);
+  console.log("→ campaign and legal");
+  await seedCampaignLegal(prisma);
+  // Last, because everything above it can create a recipient row.
+  await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
 }
 
@@ -1369,6 +1375,61 @@ const FREE_AT_CAP_SLUG = "al-manara-equipment-trading-llc";
  * Dated inside the current month on purpose: the panel resets on the 1st, so a
  * fixture pinned to a fixed day would empty itself as the month turned.
  */
+/**
+ * Exactly one free seller at their monthly cap, and it is the one we chose.
+ *
+ * `seedAtMonthlyCap` exists to put `FREE_AT_CAP_SLUG` on the line, because
+ * handoff 2 criterion 6 needs a seller who is offered nothing. A *second*
+ * seller arriving at the cap by accident is not a second fixture — it is a
+ * quieter version of the first, and it silently shrinks every fan-out pool that
+ * seller sits in.
+ *
+ * That happened when handoff 5 re-filed listings under subcategories: the valve
+ * pool picked up a different mix, one of them was incidentally at 3 of 3, and
+ * the handoff-2 checkpoint — "send to 5 sellers" — started finding four. The
+ * test had not changed and neither had the code it tests.
+ *
+ * So: anybody else who has drifted onto the line loses their oldest recipient
+ * rows until they are one under it. Deterministic, and it takes away only the
+ * surplus.
+ */
+async function onlyOneSellerAtCap(db: Db) {
+  const since = monthStart(NOW);
+  const sellers = await db.business.findMany({
+    where: { claimStatus: "claimed", plan: { enquiriesPerMonth: { not: null } } },
+    orderBy: { slug: "asc" },
+    select: {
+      id: true,
+      slug: true,
+      plan: { select: { enquiriesPerMonth: true } },
+      recipients: {
+        where: { createdAt: { gte: since } },
+        orderBy: { createdAt: "asc" },
+        // Composite key: there is no `id` on this row.
+        select: { enquiryId: true, businessId: true },
+      },
+    },
+  });
+
+  let freed = 0;
+  for (const seller of sellers) {
+    const cap = seller.plan?.enquiriesPerMonth;
+    if (cap === null || cap === undefined) continue;
+    if (seller.slug === FREE_AT_CAP_SLUG) continue;
+    if (seller.recipients.length < cap) continue;
+
+    const surplus = seller.recipients.slice(0, seller.recipients.length - (cap - 1));
+    await db.enquiryRecipient.deleteMany({
+      where: { businessId: seller.id, enquiryId: { in: surplus.map((r) => r.enquiryId) } },
+    });
+    freed += surplus.length;
+  }
+
+  console.log(
+    `   ${sellers.length} capped-plan sellers checked, ${freed} recipient rows removed so only ${FREE_AT_CAP_SLUG} is at cap`,
+  );
+}
+
 async function seedAtMonthlyCap(db: Db, businesses: Biz[], buyerId: string) {
   console.log("→ a free seller at their monthly cap");
   const business = businesses.find((b) => b.slug === FREE_AT_CAP_SLUG);
@@ -2313,6 +2374,7 @@ main()
       guides: await prisma.guide.count(),
       areaPages: await prisma.areaPage.count(),
       curatedLists: await prisma.curatedList.count(),
+      legalPages: await prisma.legalPage.count(),
     };
     console.log("\nseeded:");
     for (const [k, v] of Object.entries(counts)) console.log(`  ${String(v).padStart(4)}  ${k}`);
