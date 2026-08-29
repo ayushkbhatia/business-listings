@@ -439,6 +439,64 @@ canonicalises to the unfiltered trade page.
   than saying nothing, and still a failure.
 
 
+## 5f. Step 7 — the acceptance walk
+
+`pnpm acceptance:5` walks the twelve criteria one at a time. **25 checks pass, 2 are partial,
+0 fail.** `pnpm lighthouse:5` measures criterion 10's numbers.
+
+The two partials are reported as partials on purpose. A walk that reported twelve passes when
+ten are true would be the least useful document in the repository.
+
+### Criterion 8 — the match is built, the send is not
+
+Everything up to the notification is proven end to end: an alert is set from a zero-result
+page by somebody with no account, it matches only on every meaningful word, only on products
+listed after it was set, and it fires exactly once.
+
+`notify()` is seller-shaped — preferences and quiet hours keyed by business — and routing a
+buyer's alert through the matched supplier's preferences would let that seller's quiet hours
+silence a message to somebody else's customer. Buyer-side notification preferences do not
+exist. `product_alert_matched` is declared with no params so `isEmitted()` is false and the
+notifications screen shows "nothing sends this yet", and a test pins that.
+
+### Criterion 11 — axe clean outside the documented token pairings
+
+The handoff 1-to-4 convention, stated rather than implied. Lighthouse scores accessibility 96
+on all three required routes and docks exactly two audits, both in `docs/contrast.md`:
+
+- **`color-contrast`** — the pairings that document enumerates.
+- **`font-size`** — `--t-eyebrow` is 9.5px and `--t-caption` 11.5px against Lighthouse's 12px
+  floor. The same document's "Type size" section lists three options and recommends raising
+  both by half a point.
+
+Both are one decision, pinned since handoff 1, and the user's.
+
+### Criterion 10, measured
+
+Against a production build on 2026-08-29:
+
+| route | SEO | a11y | perf | LCP | CLS | TBT |
+|---|---|---|---|---|---|---|
+| area page | 100 | 96 | 96 | 2.7s | 0.046 | 10ms |
+| subcategory | 66 | 96 | 97 | 2.6s | 0.048 | 10ms |
+| guide | 100 | 96 | 99 | 2.0s | 0.001 | 0ms |
+
+**The subcategory 66 is the floor working, not the page failing.** `is-crawlable` fails because
+no seeded subcategory clears 60 listings, so the page is correctly `noindex` — and Lighthouse
+marks any page it cannot index down whatever else is right about it. Every other SEO audit on
+that page passes. The criterion is met on the template; it cannot be met on a published
+instance until a subcategory has real supply, which is a recruitment problem rather than a
+code one.
+
+### What the walk found
+
+- **A `-t` filter that matched nothing.** `dedupe.test.ts` names its redirect tests "the 301",
+  not "redirect". The helper the earlier walks built caught it — a filter matching nothing
+  makes vitest exit zero, and the walk would otherwise have reported a pass on nothing.
+- **Backticks inside a `node -e` string in bash are command substitution.** The Lighthouse
+  script tried to run `is-crawlable` as a program.
+
+
 ## 6. Blocked on the user
 
 Carried from handoff 4, unchanged. None stops a step; each narrows one.
