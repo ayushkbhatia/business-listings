@@ -201,6 +201,7 @@ model Area {
 
   locations Location[]
   pages     AreaPage[]
+  lists     CuratedList[]
 
   @@index([emirate])
   @@map("area")
@@ -251,6 +252,7 @@ model Category {
   stagedListings    StagedListing[]
   guideCtas         Guide[]              @relation("GuideCtaCategory")
   areaPages         AreaPage[]
+  curatedLists      CuratedList[]
   sectorTemplates   StorefrontTemplate[] @relation("SectorTemplates")
 
   @@index([parentId])
@@ -2182,6 +2184,52 @@ model AreaPage {
   @@unique([areaId, categoryId])
   @@index([publishedAt])
   @@map("area_page")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Curated lists — board 6b
+//
+// Every other "best of" list in this market is sold. Stating the rules is the
+// only thing that makes ours worth reading, and it is why sellers chase
+// verification instead of chasing us.
+//
+// So the rules are **code, not columns**. A list picks what it is about — a
+// trade, and optionally an area — and its editorial framing. It cannot pick its
+// bar, because a bar somebody can lower is a bar somebody can be sold. There is
+// no placement field on this model for the same reason: criterion 4 says
+// placement cannot be bought, and the cheapest way to guarantee that is to have
+// nowhere to put it.
+//
+// Membership is not stored either. It is computed from the rules on every read,
+// so a supplier whose reply time slips leaves the list without anybody running
+// anything — the same discipline `AreaPage` uses for the publishing floors.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// An editorial list. What it is about and how it is framed; never who is on it.
+model CuratedList {
+  id    String @id @default(cuid())
+  slug  String @unique
+  title String
+
+  /// The editorial framing — why this list exists and who it is for. Held to
+  /// the same word floor as every other landing page.
+  intro String?
+
+  /// What the list is about. Required: a list of "the best suppliers" with no
+  /// trade is a list of everybody.
+  categoryId String  @map("category_id")
+  /// Optionally narrowed to one area.
+  areaId     String? @map("area_id")
+
+  publishedAt DateTime? @map("published_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  area     Area?    @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  @@index([publishedAt])
+  @@map("curated_list")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

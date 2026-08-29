@@ -2726,6 +2726,32 @@ export const en = {
   "matrix.area_unpublished": "Unpublished. It stops being served as an indexable page immediately.",
   "matrix.area_note": "An area page publishes above {listings} listings and {share}% verified, with {words} words of intro. A page that drops below the floor stops being served immediately and is unpublished by the next sweep, with the numbers in the audit log.",
 
+  // ── Curated lists, board 6b ───────────────────────────────────────────────
+  //
+  // The criteria are published on the page because every other "best of" list
+  // in this market is sold and does not say so. Stating them is the product.
+  "best.criteria_title": "How this list is made",
+  "best.criteria_lede": "Every supplier below meets all three requirements. We check them on every page load, so a supplier who stops meeting one leaves the list without anybody deciding.",
+  "best.criterion.verified": "Trade licence checked against the issuing authority",
+  "best.criterion.reply": "Median first reply under {hours} hours, measured from real enquiries",
+  "best.criterion.reviews": "At least {count} reviews, each from a buyer who sent an enquiry through us",
+  "best.criterion.visit": "Premises visited by our field team",
+  "best.criterion.placement": "Paid placement",
+  "best.kind.required": "Required",
+  "best.kind.weighted": "Ranks higher",
+  "best.kind.never": "Never a factor",
+  "best.considered": "{considered} suppliers in this trade were checked against these rules. {members} met all three.",
+  "best.no_purchase": "No supplier can pay to appear here, to move up, or to keep somebody else off. There is no field in the system for it — the order below is computed from the site visit, the verification tier, the measured reply time and the number of reviews, and from nothing else.",
+  "best.rank": "{position}",
+  "best.reply": "Replies in {duration}",
+  "best.reviews": { one: "{count} review", other: "{count} reviews" },
+  "best.rating": "{rating} out of 5",
+  "best.visited": "Visited",
+  "best.empty": "Nobody meets all three rules in this trade yet.",
+  "best.empty_body": "That is the list working rather than failing. The directory has suppliers in this trade — they are on the trade page, with what we have checked shown on each.",
+  "best.browse": "Browse {category}",
+  "best.updated": "Checked when this page was built, {date}",
+
   // ── Guides, boards 10b and 6d ─────────────────────────────────────────────
   //
   // The public half. Read by strangers deciding whether to trust us, so §08

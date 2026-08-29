@@ -240,6 +240,58 @@ area FAQ ships with the same non-price facts step 2 established. Say the word an
 small addition with a stated floor.
 
 
+## 5c. Step 4 — curated lists
+
+**Criterion 4**, which is the only one that asks for a test by name: *"A curated list displays
+its selection criteria and cannot include a business that fails them; placement cannot be
+bought into one — asserted by a test."*
+
+### The rules are code, not columns
+
+`CuratedList` carries what a list is about — a trade, optionally an area — and its editorial
+framing. It does not carry its bar, and it does not carry its membership.
+
+That is the whole design. A bar somebody can lower is a bar somebody can be sold, and every
+other "best of" list in this market is sold. So `CRITERIA` and the three thresholds live in
+`lib/seo/curated.ts`, the page renders them from the same constant the service applies, and
+there is no per-list override to negotiate over.
+
+Three consequences, each with a test:
+
+1. **Membership is computed on every read.** A supplier whose median reply slips past four
+   hours leaves the list with nothing run and nobody told. Removing one review drops a
+   supplier on the next request.
+2. **Nothing a seller buys is in the comparator.** Not `planId`, not `rankingMultiplier`, not
+   `PlacementSlot`. Deliberately not `lib/search/ranking.ts` either — that one weighs plan
+   tier, correctly, on a results page and never here.
+3. **The table has no column that could hold a bought position.** A test reads
+   `information_schema` and fails if `curated_list` ever gains `featured`, `rank`,
+   `sponsored`, `position`, `placement` or `boost`. Somebody adding one has to argue for it in
+   a review rather than in a migration.
+
+### The fixture that carries the point
+
+`al-hvac-005` is on the Pro plan, has been visited by the field team, has a verified licence
+and fifteen reviews — everything the product sells. Its median reply is seven hours, measured
+from enquiry timestamps, with no seller-writable field. It is not on the list, and the e2e
+asserts its absence by name.
+
+The reply times in the seed are **derived, not written**. Setting `responseTimeMedianMs`
+directly would be the claim non-negotiable 6 forbids — and `deriveResponseTimes` runs after
+the seed and would overwrite it anyway, which is the mechanism working. The fixture gives each
+enquiry a real `firstReplyAt` and lets the median fall out.
+
+### Found on the way
+
+- **The breadcrumb is an ordered list and so was the members list**, both unnamed. A screen
+  reader user got two anonymous lists on one page. The members list is named now.
+- **`staff-refusals.test.ts` raised a verification tier to 4 and never put it back.** Its own
+  comment says the database is not reset, which was harmless while the listing it borrowed
+  with an unordered `findFirstOrThrow` was one nobody asserted on. Step 4 seeded visited
+  listings whose slugs sort early, the query started picking one of those, and a curated list
+  began reporting a supplier as "Audited" that the seed made tier 2. It restores now.
+
+
 ## 6. Blocked on the user
 
 Carried from handoff 4, unchanged. None stops a step; each narrows one.

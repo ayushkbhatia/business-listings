@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db/client";
 import { absoluteUrl } from "@/lib/site";
 import { livePages } from "@/lib/seo/area";
+import { liveLists } from "@/lib/seo/curated";
 import { categoryIndex } from "@/lib/seo/taxonomy";
 
 /**
@@ -23,7 +24,7 @@ export const revalidate = 3600;
 const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } } as const;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [businesses, products, categories, areaPages, guides] = await Promise.all([
+  const [businesses, products, categories, areaPages, lists, guides] = await Promise.all([
     prisma.business.findMany({
       where: PUBLIC_BUSINESS,
       select: { slug: true, updatedAt: true, claimStatus: true },
@@ -50,6 +51,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
        without waiting for the sweep. Criterion 1's second half.
     */
     livePages(),
+    /*
+       Board 6b. A list with nobody on it is not in here — `liveLists` drops
+       those. A "best of" page showing none is thin whatever the reason, and it
+       is the rules working rather than failing, which is not a distinction a
+       crawler makes.
+    */
+    liveLists(),
     /*
        Guides — boards 10b and 6d.
 
@@ -90,6 +98,15 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       changeFrequency: "daily",
       // The workhorse. These are the pages the whole acquisition engine is for.
       priority: 0.9,
+    });
+  }
+
+  for (const list of lists) {
+    entries.push({
+      url: absoluteUrl(`/best/${list.slug}`),
+      lastModified: list.updatedAt,
+      changeFrequency: "weekly",
+      priority: 0.7,
     });
   }
 

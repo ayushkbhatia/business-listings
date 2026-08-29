@@ -27,7 +27,7 @@ they 404 until their handoff.
 /pricing                                Plans                                 [1l]
 /guides                                 Guide index                          [10b]  built h5s1
 /guides/:slug                           Guide article                         [6d]  built h5s1
-/best/:slug                             Curated list                          [6b]
+/best/:slug                             Curated list                          [6b]  built h5s4
 /categories                             Category index                        [6c]  built h5s2
 /:emirate/:area/:category               Area landing page                     [6a]  built h5s3
 /lp/:campaign                           Campaign landing                     [10i]

@@ -27,6 +27,7 @@ import { medianResponseMs, windowStart } from "../lib/metrics/response-time.js";
 import { seedGuides } from "./seed-guides.mjs";
 import { seedSubcategories } from "./seed-subcategories.mjs";
 import { seedAreaPages } from "./seed-area-pages.mjs";
+import { seedCurated } from "./seed-curated.mjs";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL! }),
@@ -161,7 +162,7 @@ async function main() {
   // Order matters only where a FK is Restrict rather than Cascade.
   await prisma.$executeRawUnsafe(`
     truncate table
-      "audit_event","contact_reveal","zero_result_query","saved_search","redirect","guide","area_page",
+      "audit_event","contact_reveal","zero_result_query","saved_search","redirect","guide","area_page","curated_list",
       "notification_delivery","notification_template","notification_preference","review_request",
       "invoice_line","invoice","placement_slot","subscription",
       "supplier_report","review","message","quote_line","quote",
@@ -539,6 +540,8 @@ async function main() {
   await seedSubcategories(prisma);
   console.log("→ area landing pages");
   await seedAreaPages(prisma);
+  console.log("→ curated lists");
+  await seedCurated(prisma, NOW);
   await recomputeDerived(prisma);
 }
 
@@ -2309,6 +2312,7 @@ main()
       zeroResults: await prisma.zeroResultQuery.count(),
       guides: await prisma.guide.count(),
       areaPages: await prisma.areaPage.count(),
+      curatedLists: await prisma.curatedList.count(),
     };
     console.log("\nseeded:");
     for (const [k, v] of Object.entries(counts)) console.log(`  ${String(v).padStart(4)}  ${k}`);

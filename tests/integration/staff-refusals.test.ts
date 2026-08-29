@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { setVerificationTier } from "@/lib/verification/service";
 import { suspendBusiness, liftSuspension } from "@/lib/business/service";
@@ -39,6 +39,16 @@ let sellerOwnerId: string;
 /** A business somebody has actually visited, and one nobody has. */
 let visitedBusinessId: string;
 let unvisitedBusinessId: string;
+/**
+ * What the borrowed listing's tier was before this file raised it.
+ *
+ * It used to be left at 4. That is fine right up until the listing it borrows
+ * is one another test asserts on — which happened the moment handoff 5 seeded
+ * visited listings, because `findFirstOrThrow` has no ordering and the new ones
+ * sort early. Own your fixtures and put them back.
+ */
+let originalTier: number;
+let originalVerifiedAt: Date | null;
 /** A business on a paid plan, so a credit has something to be a credit against. */
 let payingBusinessId: string;
 
@@ -67,14 +77,17 @@ beforeAll(async () => {
    */
   const visited = await prisma.business.findFirstOrThrow({
     where: { visitedAt: { not: null }, visitedByStaffId: { not: null }, suspendedAt: null, mergedIntoId: null },
-    select: { id: true },
+    select: { id: true, verificationTier: true, verifiedAt: true },
   });
   visitedBusinessId = visited.id;
+  originalTier = visited.verificationTier;
+  originalVerifiedAt = visited.verifiedAt;
 
   const unvisited = await prisma.business.findFirstOrThrow({
     where: { visitedAt: null, suspendedAt: null, mergedIntoId: null },
     select: { id: true },
   });
+
   unvisitedBusinessId = unvisited.id;
 
   /*
@@ -88,6 +101,23 @@ beforeAll(async () => {
     select: { id: true },
   });
   payingBusinessId = paying.id;
+});
+
+afterAll(async () => {
+  /*
+     Put the borrowed listing back.
+
+     This file raises a tier to 4 and used to leave it there — its own comment
+     above says the database is not reset. That was harmless while the listing
+     it borrowed was one nobody asserted on. Handoff 5 seeded visited listings
+     whose slugs sort early, `findFirstOrThrow` has no ordering, and a curated
+     list started reporting a supplier as "Audited" that the seed made tier 2.
+  */
+  await prisma.business.update({
+    where: { id: visitedBusinessId },
+    data: { verificationTier: originalTier, verifiedAt: originalVerifiedAt },
+  });
+  await prisma.$disconnect();
 });
 
 const REASON = "Checked the trade licence against the DED register and the premises photos.";
