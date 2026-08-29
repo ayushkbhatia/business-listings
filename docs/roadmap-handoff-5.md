@@ -346,6 +346,99 @@ reporting gap, losing the enquiry is a lost customer.
   the designated one.
 
 
+## 5e. Step 6 — the technical layer
+
+Criteria 5, 6, 7, 8 and 12. Four of them were partly standing already; the two that were not
+are where the work went.
+
+### What was already true
+
+- **Criterion 5** landed in handoff 1. `Product` JSON-LD carries `offers.availability` and no
+  price key at all — not an empty `PriceSpecification`, which would tell a crawler we have a
+  price and are hiding it. Now asserted rather than assumed: the test serialises the block and
+  fails on the substring.
+- **Criterion 7's merge half** landed in handoff 4. `lib/dedupe/service.ts` writes the 301 and
+  takes it away again on an unmerge.
+- **`/search` and `/compare`** have been `noindex` since handoff 1.
+
+### Criterion 7 — the rename that did not exist
+
+`TaxonomyResult` has declared `slug_taken` and `would_orphan` since handoff 4 and nothing has
+ever returned either. There was no rename path and no delete path at all.
+
+The part that is easy to get wrong is how many addresses one rename moves. `/c/:category/:sub`
+carries the **parent's** slug, so renaming a sector moves its own page, every subcategory page
+under it, and every area page for it — one rename, dozens of 301s, in one transaction. A
+rename that succeeded with half its redirects written would be worse than one that failed,
+because the failure is visible and the half is not.
+
+Renaming twice repoints the first redirect rather than stacking on it: a chain is two hops for
+a visitor and a discount for a crawler, and a test walks every row to prove none of them lands
+on an address that redirects again.
+
+`deleteCategory` refuses while children, listings or published area pages depend on it, and
+writes the redirect **before** the delete inside the transaction — so there is no instant where
+the page is gone and the address answers nothing.
+
+Both are wired to `/admin/categories`, with the count of addresses a rename would move shown
+before the button. A service with no caller is the pattern this handoff has found five times;
+shipping a sixth would have been indefensible.
+
+### Criterion 8 — the end of the flywheel
+
+`ZeroResultQuery` has recorded gaps since handoff 1 and fed the CRM call list since handoff 4.
+`ProductAlert` is what turns one back into an enquiry.
+
+- **Provisional identity, not a signup.** The entire population reaching a zero-result page is
+  people whose search failed; asking them to create an account first loses almost all of them.
+  Same path the RFQ flow uses.
+- **It matches conservatively.** Every meaningful word must appear in the product's search
+  text, and the category and emirate filters still apply. A buyer told about a plastic elbow
+  because it matched "100" will not open the next one — and there is exactly one next one.
+- **Short tokens survive when they carry meaning.** "UL", "FM", "PN16" are two or four
+  characters and more specific than anything else in the sentence; "in" and "of" are not. The
+  rule is capitals or a digit, not length alone.
+- **Only products listed after the alert.** The point is that something changed. A product
+  that was already there is one the search should have found.
+- **It fires once**, and a check constraint refuses the half-written state.
+- **On the job, not on product creation.** A seller importing four hundred rows would
+  otherwise fire four hundred matches inside one request.
+
+**And the half that is not built, stated plainly.** `sweepAlerts` matches and records; it does
+not send. `notify` is seller-shaped — it reads `NotificationPreference` and quiet hours keyed
+by *business* — and routing a buyer's alert through the matched supplier's preferences would
+let that seller's quiet hours silence a message to somebody else's customer. Buyer-side
+notification preferences do not exist, and inventing them here would be a second pipeline
+rather than a wire.
+
+So `product_alert_matched` is in the enum with **no params declared**, which makes `isEmitted`
+report false and the notifications screen show it as "nothing sends this yet" — the affordance
+handoff 4 built for precisely this. A test asserts it, so the day somebody wires the send they
+have to change the assertion and think about it. Criterion 8's *match* is proven end to end;
+its *delivery* is a named gap and belongs on the buyer-notifications work that does not exist
+yet.
+
+### Criterion 6 — canonicals
+
+`/c/hvac-and-ventilation?area=al-quoz-industrial-1` and the Al Quoz area page answer the same
+query for the same buyer, and the second has the intro, the map, the FAQ and 250 words a person
+wrote. Left alone they split the signal and the thinner one sometimes wins.
+
+A filter naming one area canonicalises to that area's page — **but only where it is live**. A
+canonical aimed at a page carrying `noindex` tells a crawler to prefer something we have asked
+it to ignore, which is worse than pointing at the filtered view. Anything else filtered
+canonicalises to the unfiltered trade page.
+
+### Found on the way
+
+- **`ZeroResult` took an `alert` prop that was never destructured**, so it silently resolved to
+  the DOM global and typechecked as a function. The only sign was a React child that was never
+  a node.
+- **"1 subcategories sit under it."** A refusal with a count in it has to pluralise, and §08 is
+  explicit that an error says what is wrong — saying it ungrammatically is a smaller failure
+  than saying nothing, and still a failure.
+
+
 ## 6. Blocked on the user
 
 Carried from handoff 4, unchanged. None stops a step; each narrows one.

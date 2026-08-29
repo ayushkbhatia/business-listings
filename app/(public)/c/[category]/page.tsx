@@ -5,6 +5,7 @@ import { Tag } from "@/components/display";
 import { categoryIdsFor, countResults, getCategoryBySlug } from "@/lib/db/queries";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { canonicalFor } from "@/lib/seo/canonical";
 import { parseSearchQuery } from "@/lib/search/query";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
@@ -17,7 +18,7 @@ interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { category: slug } = await params;
   const category = await getCategoryBySlug(slug);
   if (!category) return {};
@@ -31,7 +32,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       count: formatCount(count),
       category: category.name.toLowerCase(),
     }),
-    alternates: { canonical: `/c/${slug}` },
+    /*
+       Criterion 6. A filtered view canonicalises to the area page where one is
+       live, and to this page otherwise — `/c/x?emirate=dubai` and the Al Quoz
+       page answer the same query, and left alone they split the signal.
+    */
+    alternates: {
+      canonical: await canonicalFor({
+        basePath: `/c/${slug}`,
+        categoryId: category.id,
+        searchParams: await searchParams,
+      }),
+    },
   };
 }
 

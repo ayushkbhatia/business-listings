@@ -22,6 +22,10 @@ export function ZeroResult({
   categoryName,
   categoryHref,
   rfqHref = "/rfq/new",
+  // Named `alert` and not destructured, this silently resolved to the DOM
+  // global and typechecked as a function. Worth the note: the only sign was a
+  // React child that was never a node.
+  alert,
 }: {
   query: SearchQuery;
   basePath: string;
@@ -32,6 +36,14 @@ export function ZeroResult({
   categoryHref?: string;
   /** Where the RFQ affordance goes, carrying the category the search was in. */
   rfqHref?: string;
+  /**
+   * Criterion 8's alert form, or nothing when there is no query to watch for.
+   *
+   * Passed in rather than rendered here: this is a server component and the
+   * form is a client one with a server action, and the composition belongs to
+   * whoever knows the category.
+   */
+  alert?: React.ReactNode;
 }) {
   return (
     <div className="max-w-[var(--measure-prose)]">
@@ -93,6 +105,7 @@ export function ZeroResult({
       </div>
 
       <p className="mt-4 text-caption text-muted">{t("zero.recorded")}</p>
+      {alert}
     </div>
   );
 }

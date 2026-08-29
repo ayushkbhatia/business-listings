@@ -4,6 +4,7 @@ import { Breadcrumb, PublicShell } from "@/components/structure";
 import { countResults, getCategoryBySlug, getSpecFacets } from "@/lib/db/queries";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { canonicalFor } from "@/lib/seo/canonical";
 import { parseSearchQuery } from "@/lib/search/query";
 import { landingFacts } from "@/lib/seo/facts";
 import { faqJsonLd, landingFaq } from "@/lib/seo/faq";
@@ -34,7 +35,7 @@ interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { category: parentSlug, sub } = await params;
   const category = await getCategoryBySlug(sub);
   if (!category) return {};
@@ -50,7 +51,18 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       count: formatCount(count),
       category: category.name.toLowerCase(),
     }),
-    alternates: { canonical: `/c/${parentSlug}/${sub}` },
+    /*
+       Criterion 6. A filtered view canonicalises to the area page where one is
+       live, and to this page otherwise — `/c/x?emirate=dubai` and the Al Quoz
+       page answer the same query, and left alone they split the signal.
+    */
+    alternates: {
+      canonical: await canonicalFor({
+        basePath: `/c/${parentSlug}/${sub}`,
+        categoryId: category.id,
+        searchParams: await searchParams,
+      }),
+    },
     /*
        A thin page is not a 404. Somebody following a link to it should see the
        suppliers there are — there simply are not enough of them for this to be
