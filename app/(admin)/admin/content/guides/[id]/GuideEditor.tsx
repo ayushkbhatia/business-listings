@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/display";
 import { Button, IconButton, Input, Label, Select, Textarea } from "@/components/primitives";
@@ -42,6 +42,12 @@ export interface GuideEditorProps {
   remove: (formData: FormData) => Promise<ActionResult>;
 }
 
+/**
+ * Where a first save leaves its confirmation for the remount that follows it.
+ * See `send` below for why the remount is unavoidable.
+ */
+const HANDOFF = "guide-editor:saved";
+
 let counter = 0;
 function nextId() {
   counter += 1;
@@ -75,6 +81,26 @@ export function GuideEditor(props: GuideEditorProps) {
   const [blocks, setBlocks] = useState<GuideBlock[]>(props.blocks);
   const [reason, setReason] = useState("");
   const [result, setResult] = useState<ActionResult | null>(null);
+
+  /*
+     Pick up a confirmation left behind by the save that moved us here.
+
+     Read once and cleared, so a later reload of the same guide does not
+     announce a save that happened some time ago. Per-tab and never read by the
+     server, which is right for a line of text somebody has not finished
+     reading yet.
+  */
+  useEffect(() => {
+    try {
+      const held = window.sessionStorage.getItem(HANDOFF);
+      if (!held) return;
+      window.sessionStorage.removeItem(HANDOFF);
+      setResult({ ok: true, message: held });
+    } catch {
+      // Private mode, or storage turned off. The save still happened; the only
+      // thing lost is the line saying so.
+    }
+  }, []);
   /*
      A plain flag, not `useTransition`.
 
@@ -145,9 +171,29 @@ export function GuideEditor(props: GuideEditorProps) {
         setReason("");
         if (!id && outcome.id) {
           setId(outcome.id);
-          // `history.replaceState`, not `router.replace`: the address should be
-          // the guide's own so a reload lands on it, and a Next navigation here
-          // would throw the confirmation away with the remount.
+          /*
+             The address should be the guide's own so a reload lands on it.
+
+             This was a bare `replaceState` in the belief that it avoided a
+             navigation and so kept the confirmation. It does not: changing
+             `[id]` from `new` to a real id changes the dynamic segment, Next
+             re-resolves the route, and the editor remounts with `result` gone —
+             the save worked and said nothing at all. The shallow case Next
+             actually supports is a search-param change on the same segment,
+             which this is not.
+
+             The confirmation is handed across the remount in session storage
+             rather than in the address. Putting it in the query raced the
+             navigation: the effect that tidied the parameter away sometimes ran
+             before the router had finished committing, and the router then put
+             it back — green alone and red under load, which is the worst of
+             both.
+          */
+          try {
+            window.sessionStorage.setItem(HANDOFF, outcome.message);
+          } catch {
+            // Nothing to do. Losing the line is better than losing the save.
+          }
           window.history.replaceState(null, "", `/admin/content/guides/${outcome.id}`);
         }
         settle?.(outcome);

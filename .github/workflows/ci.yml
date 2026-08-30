@@ -149,8 +149,18 @@ jobs:
       # them — one of them a wizard whose Continue button could not be pressed
       # on a phone. It is the same chromium binary with a Pixel 7 descriptor,
       # so the install step above already covers it.
+      #
+      # The three `staff` projects were missing here for the same reason and
+      # cost the same thing. 142 tests never ran in CI, so the least-exercised
+      # surface was also the one holding eight audited services that no screen
+      # ever called and one screen whose capability gate was dead code. The
+      # projects existed the whole time; this line did not name them.
       - name: Axe and the acceptance surface
-        run: pnpm test:e2e --project=chromium --project=mobile --project=seller --project=seller-free
+        run: >-
+          pnpm test:e2e
+          --project=chromium --project=mobile
+          --project=seller --project=seller-free
+          --project=staff --project=staff-moderator --project=staff-finance
 
       - uses: actions/upload-artifact@v4
         if: failure()
