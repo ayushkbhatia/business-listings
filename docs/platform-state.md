@@ -3,6 +3,13 @@
 **Codebase audit · 30 August 2026 · `main` @ `8fc0ab9`**
 PRs #37–#44 merged · every claim verified against the tree · database queried live
 
+> **Status, same day.** Everything below was then acted on in PR #45. Eight of the
+> ten findings are fixed, one was **wrong** and is corrected in place (finding 7),
+> and one is deferred with a reason (finding 3, partially). Each finding carries
+> its outcome. The parts that cannot be fixed from inside the repo — Supabase
+> project settings, a Meta template approval, an SMTP provider, a key rotation —
+> are listed under *Still yours* at the end.
+
 Six design handoffs are shipped. Ninety-eight routes render and ninety-five of ninety-seven server actions are wired to a screen. The platform is not blocked on screens — it is blocked on four things underneath them, and one of those breaks a non-negotiable.
 
 ---
@@ -15,8 +22,10 @@ Six design handoffs are shipped. Ninety-eight routes render and ninety-five of n
 | Server actions wired to a UI | **95 / 97** |
 | Businesses seeded | **431** |
 | Published | **198** |
-| Orphaned staff mutations | **8** |
-| People who can sign in | **0** |
+| Orphaned staff mutations | ~~8~~ → **2**, both deferred with reasons |
+| People who can sign in | ~~0~~ → **anyone with `pnpm dev:seat`** |
+| Scheduled jobs | ~~1 of 5~~ → **5 of 5** |
+| Playwright projects in CI | ~~4 of 8~~ → **7 of 8** |
 
 ### The verdict
 
@@ -105,6 +114,8 @@ Ranked by what it costs you.
 
 ### 1. An audited mutation escapes the audit fence — BLOCKER
 
+**Fixed.** `dismissCandidate` goes through `staffMutation` under `business.merge`. Three integration tests pin the audit row, a blank reason, and a moderator. It also closed a hole nobody had recorded: the path had **no capability check at all**, so any staff seat could post to the server action even though the screen 404s for them.
+
 `dismissCandidate` updates `mergeCandidate` with a bare `prisma.mergeCandidate.update`. No `staffMutation`, no `assertCan`, no audit row, no reason. Every other staff write goes through the fence; this one does not.
 
 This is your non-negotiable #3, and it is the kind of thing that is cheap now and a migration later. Dismissing a merge candidate is a judgement call about two real companies — it is exactly the decision you would want a written reason for when a supplier disputes it.
@@ -113,6 +124,8 @@ This is your non-negotiable #3, and it is the kind of thing that is cheap now an
 
 ### 2. Nobody can sign in — BLOCKER
 
+**Partly fixed — the rest is not in the repo.** The stack was never the problem; it is complete and it works. Three real bugs are fixed: sign-in *failed open* (it discarded the Supabase error and said "code sent" even when the phone provider was off, so people waited for a code that was never generated), signing up as a seeded seat returned a **500** on a P2002, and a session whose claim write failed stayed roleless forever. `pnpm dev:seat <kind>` now provisions a seat and prints a working code — walked end to end in a browser to `/admin`. Enabling `external.phone`, the auth hook, the Meta template and real SMTP still need the Supabase dashboard.
+
 Staff seats are Prisma rows with no corresponding Supabase auth user, and supplier sign-in is phone OTP with no SMS provider configured, so it fails closed. Both surfaces are reachable today only through test fixtures.
 
 This is why the panels have never been exercised by a person. It is also why the eight orphaned mutations went unnoticed — there was no way to click the buttons.
@@ -120,6 +133,8 @@ This is why the panels have never been exercised by a person. It is also why the
 > `app/(auth)/*` · `app/api/auth/send-otp` · `lib/auth/capabilities.ts`
 
 ### 3. Eight staff mutations are defined and never called — BLOCKER
+
+**Five of eight fixed. Three deferred, and one was misclassified.** Wired: `setVerificationTier`, `suspendBusiness`, `liftSuspension`, `unmergeBusinesses` (which needed a new `recentMerges` reader — nothing listed reversible merges), `issueSubscriptionCredit`, `stageRun`. Deferred with reasons under *Still yours*: `recordVisit` needs a geotagged photo upload path that does not exist admin-side, and `removeReview` has no host screen — **no admin screen lists reviews at all**, and `SupplierReport` has no `reviewId` to join on. `editReview` was on this list wrongly: it takes a `buyerId`, asserts no capability and writes no audit row. It is a *buyer* action with a 14-day window, and putting it behind a staff screen would let staff rewrite a buyer's published words untracked.
 
 Each is a complete, audited, capability-checked function with tests — and zero references outside its own file and its test. Verified against a control (`publishGuide`, which shows real call sites) to rule out a grep artefact.
 
@@ -131,6 +146,8 @@ Read that list as a product statement: **you cannot verify a supplier, remove a 
 
 ### 4. Four of five background jobs are never scheduled — HIGH
 
+**Fixed.** Two new routes grouped by cadence — `/api/jobs/sweep` hourly and `/api/jobs/daily` — plus the `CRON_SECRET` guard extracted to `lib/jobs/authorize.ts` so there is one copy, and the first tests `app/api/jobs/` has ever had. One caveat kept visible rather than papered over: `flushDeferred` moves a delivery from `deferred` to `queued`, and **nothing reads `queued`**. Scheduling it is necessary and not sufficient.
+
 `vercel.json` has exactly one cron: `/api/jobs/measure`, hourly. `runDunning`, `applyEndedCancellations`, `flushDeferred` and `pruneAttempts` have no schedule and no API route to reach them.
 
 Consequence in order of pain: subscriptions that should lapse stay active, dunning never starts, deferred notifications never send, and `auth_attempt` grows without bound (922 rows already).
@@ -138,6 +155,8 @@ Consequence in order of pain: subscriptions that should lapse stay active, dunni
 > `vercel.json` · `app/api/jobs/`
 
 ### 5. CI runs half the Playwright suite — HIGH
+
+**Fixed.** All three staff projects run in CI. The suite is green — 145 tests — which took fixing one genuinely red test: saving a new guide worked and said nothing, because moving the address from `new` onto the guide's id changes a dynamic segment, so Next re-resolves the route and remounts the editor.
 
 Eight projects are configured; CI runs four — `chromium`, `mobile`, `seller`, `seller-free`. The three staff projects (`staff`, `staff-moderator`, `staff-finance`) and `setup` never run.
 
@@ -147,27 +166,59 @@ The staff panel is both the least-exercised surface and the one with the most or
 
 ### 6. A pinned supplier can be dropped from their own enquiry — HIGH
 
+**Fixed**, and in `findFanoutCandidates` rather than at the seven `?to=` call sites, so the comparison tray's four-suppliers-from-four-trades case is covered too. Two adjacent ways the same supplier could vanish went with it: `take: 60` had no `orderBy`, and the page's pinned lookup did not match the fan-out's `claimStatus` filter.
+
 `/rfq/new?to=some-supplier` with no `?category=` falls back to the first `showOnHome` category by sort order. `selectRecipients` then only *sorts* by pinned — it operates on candidates already filtered by that category, so it cannot add a supplier who is not in the set.
 
 A buyer clicking "Request a quote" on a storefront outside that first category gets an enquiry that does not include the supplier they clicked. The code comment claims pinned suppliers are always included; that is true only within the category.
 
 > `app/(public)/rfq/new/page.tsx:38` · `lib/enquiry/fanout.ts`
 
-### 7. The seed does not reset 28 of 73 tables — MEDIUM
+### 7. The seed does not reset 28 of 73 tables — ~~MEDIUM~~ **WRONG**
 
-`pnpm db:seed` creates 111 businesses. The database holds **431**, of which 198 are published — so two-thirds of what you would see today is accumulated debris, not fixtures. `staged_listing` holds 8,600 rows and grows by 8,000 on every licence-ingest test run; `merge_candidate` holds 416.
+**This finding was wrong, and it is left here rather than deleted because it is
+the most instructive mistake in the audit.**
 
-This makes every manual test unreliable, because you cannot tell a seeded record from a leftover. Fix the truncate list before you trust anything you click.
+The claim was that `pnpm db:seed` leaves 28 of 73 tables untouched, and that
+`staged_listing` (8,600 rows) and `merge_candidate` (416) hold debris after a
+reseed. It was derived by reading the truncate list and diffing it against the
+schema's models — which is exactly the kind of reasoning that looks rigorous and
+is not.
 
-> `prisma/seed.ts`
+`truncate … cascade` also empties every table holding a foreign key to a named
+one, transitively, whatever the `ON DELETE` action says. Measured after a clean
+reseed:
+
+| | audit claimed | actually |
+|---|---|---|
+| `staged_listing` | 8,600 | **0** |
+| `merge_candidate` | 416 | **0** |
+| businesses | 431 | **111**, exactly what the seed writes |
+
+Twenty-six of the twenty-eight are already cleared. The 431 businesses were real
+but were stale debris from runs where nobody reseeded — not something the seed
+misses.
+
+**One table genuinely survived**: `auth_attempt`, which has no relations at all,
+so nothing reaches it. It is named in the list now. `ranking_weights` also
+survives and deliberately stays out — its singleton row comes from a migration
+and never from the seed, so truncating it would leave `liveWeights()` returning
+null for good.
+
+The real fix for production, where no seed ever runs, is scheduling
+`pruneAttempts` — finding 4.
 
 ### 8. The nav search does nothing on 27 of 28 pages — MEDIUM
+
+**Fixed.** A real GET form, unnamed so axe does not see two identically-named landmarks on the home page.
 
 The header `SearchField` has no `name` and sits in no form. The only working search is the one on the home page. Every buyer who lands on a category or storefront page and types into the header gets nothing.
 
 > `app/(public)/_chrome.tsx:19`
 
 ### 9. The legal pages are unreachable — MEDIUM
+
+**Fixed.** All four linked, with a test that clicks each one through to its page — the existing test fetched the paths directly and would have passed however unreachable they were.
 
 Privacy, terms, review policy and verification policy all render correctly and are linked from nothing. There is no footer. A test asserts the current nav shape, so it stays green while the pages stay orphaned.
 
@@ -177,35 +228,71 @@ For a platform taking subscriptions in the UAE, unreachable terms is a commercia
 
 ### 10. Two dead exports in the media actions — LOW
 
+**Fixed.** Both removed.
+
 `deleteMediaForm` and `mediaUrl` are exported and referenced nowhere. The second matters slightly more than it looks: if nothing calls `mediaUrl`, confirm that uploaded images actually render with a signed URL rather than a broken one.
 
 > `app/(dashboard)/dashboard/media/actions.ts:173,178`
 
 ---
 
-## The path to a supplier you can charge
+## Still yours
 
-Sequenced because each one makes the next testable. Step 1 first — until people can sign in, nothing below can be verified by a human.
+Everything else in this document was done in PR #45. These are the parts that
+could not be, and why.
 
-**1. Make sign-in work** — *~1 day, unblocks every manual test below*
-Create Supabase auth users for the staff seats and bind them to the Prisma rows. Configure an SMS provider for supplier OTP, or add a dev bypass gated on `NODE_ENV` so the flow is walkable now. Rotate the `service_role` key while you are in there — it was pasted into a chat and is still live.
+### Outside the repo — needs the Supabase dashboard
 
-**2. Fix the audit fence breach** — *~half a day, closes non-negotiable #3*
-Route `dismissCandidate` through `staffMutation` with a required reason and an `assertCan` check. Then add a test that fails if any `lib/**` function writes to an audited table outside the fence — the rule should be enforced, not remembered.
+The auth stack works; the project it talks to is not configured for phone.
 
-**3. Turn on the rest of CI** — *~1 line, then a day fixing what it surfaces*
-Add `--project=staff --project=staff-moderator --project=staff-finance` to `ci.yml:153`. Expect red. The red is the point — it is the staff surface reporting its true state for the first time.
+- Enable `external.phone`. Until then the phone leg is dead — and now says so,
+  instead of sending people to wait for a code that was never generated.
+- Register `/api/auth/send-otp` under **Authentication → Hooks** with the same
+  `AUTH_HOOK_SECRET` that is already in `.env.local`.
+- Set the project OTP length to **6** and the expiry to **600s**, to match
+  `OTP_LENGTH` and `OTP_EXPIRY_MINUTES`. The verify screen says "6 digits" and
+  the project currently issues 8.
+- Get the Meta authentication template approved, and replace the built-in SMTP,
+  which sends two messages an hour.
+- **Rotate the `service_role` key.** It was pasted into a chat and is still
+  live. This one is not optional.
 
-**4. Give the eight orphaned mutations a button** — *~2 days*
-Verification tier, review removal and edit, suspension, subscription credit, visit completion, unmerge, ingest run. Each needs a server action and a form on the screen that already lists the records. The hard part — the audited, capability-checked service — is done. This is what makes you an operator rather than a directory.
+Until those land, `pnpm dev:seat <kind>` is how anybody signs in.
 
-**5. Schedule the four jobs** — *~half a day*
-An API route each under `app/api/jobs/`, guarded by `CRON_SECRET` exactly as `measure` is, then four entries in `vercel.json`. Stagger the schedules so they do not collide with the hourly measure run.
+### Two mutations still without a screen
 
-**6. Fix the seed, then the three buyer papercuts** — *~1 day*
-Add the 28 missing tables to the truncate list so a reseed gives you a known database. Then: give the nav search a form and a `name`, add a footer linking the four legal pages, and carry the pinned supplier's category into `/rfq/new`. Do the seed first, or you cannot verify the other three.
+Both were deferred on purpose rather than half-built.
 
----
+- **`recordVisit`** needs a visit report: a date, three booleans, and at least
+  two geotagged photographs, each with a `mediaId`, coordinates and a timestamp.
+  The coordinates are re-checked against a UAE bounding box by a database CHECK
+  constraint, so this is a real form, not a row strip — and there is **no
+  admin-side media upload path** today; the only `FileDrop` wiring is
+  seller-side. It also blocks something visible: `setVerificationTier`'s subject
+  check reads `Business.visitedByStaffId`, which only `recordVisit` writes, so
+  until it exists a field verifier sees no tier control anywhere and only an ops
+  lead can set one.
+- **`removeReview`** has nowhere to live. **No admin screen lists reviews at
+  all**, and `SupplierReport` has a `review_integrity` kind but no `reviewId` to
+  join on — only free text. So this is a choice between a migration that adds
+  the column and a new `/admin/reviews` screen over `Review` directly. Worth
+  knowing: `components/domain/ModerationRow.tsx` was built for exactly this and
+  has only ever rendered in `/dev/gallery`. Also note `review.remove` is **ops
+  lead only** — a moderator may resolve a supplier report and may not remove the
+  review it is about.
+
+### One gap a cron does not close
+
+`flushDeferred` is scheduled now, and it moves a delivery from `deferred` to
+`queued`. **Nothing in the codebase reads `queued`.** There is no carrier
+hand-off, so a released notification still reaches nobody. The route says so in
+its own docblock rather than letting the cron entry imply otherwise.
+
+### Vercel's cron allowance
+
+Three entries now (`measure`, `sweep`, `daily`). Hobby caps at two and allows
+daily granularity only. If the project is on Hobby, fold `sweep` into `measure`
+and lose the independent failure isolation.
 
 ## How to test what you have
 
@@ -231,12 +318,15 @@ The path that works today, and the one that has to keep working. Do it in one si
 
 **Expect to see:** no price anywhere on a public surface, and an enquiry action where a price would sit. If you ever see a number outside a quote line, that is a non-negotiable breaking.
 
-### Confirm the two bugs
+### Confirm the two bugs are gone
 
-Both are two-minute checks, and both are worth seeing yourself before deciding how to prioritise them.
+Both were two-minute checks and both are now the other way round.
 
-- `/rfq/new?to=al-areen-industrial-supplies-llc` — no `?category=`. Check whether Al Areen is actually among the recipients.
-- `/c/pipes-and-tubing` — type into the *header* search and press Enter. Nothing happens.
+- `/rfq/new?to=al-areen-industrial-supplies-llc` — no `?category=`. Al Areen is
+  among the recipients, and the eyebrow names *their* trade rather than the first
+  category on the home page.
+- `/c/pipes-and-tubing` — type into the *header* search and press Enter. It goes
+  to `/search`.
 
 ### Check the SEO layer as a crawler sees it
 
@@ -251,9 +341,10 @@ Handoff 5's whole argument is that these hold without a human in the loop.
 
 **The one to actually check:** view source on the product page and search for "price". Zero hits is the pass. An empty `priceSpecification` would be a worse claim than silence.
 
-### Run the suites the way CI does not
+### Run the suites
 
-CI only runs four of eight Playwright projects. Run the staff ones locally before you touch the admin panel — they have never been green in CI, so treat their current state as unknown rather than passing.
+CI runs seven of eight projects now (`setup` is pulled in as a dependency rather
+than named). The staff trio is the part that never ran.
 
 ```bash
 lsof -ti:3000 | xargs kill -9
@@ -265,7 +356,9 @@ pnpm verify && pnpm test:e2e --project=staff --project=staff-moderator --project
 
 Kill the stale dev server first — Playwright reuses port 3000 and will silently test an old build.
 
-**Expect failures.** That is the first honest signal you will have had from the staff surface. Fix them before step 4 of the path above, not after.
+**Expect them to pass** — 145 of 145. The audit predicted red here and was
+wrong: the staff surface had exactly one genuinely failing test, not a broken
+panel. That prediction is in the Corrections below.
 
 ---
 
@@ -278,6 +371,20 @@ The parallel audit flagged 98 things as missing or stubbed. Verification killed 
 - **"`/admin/strings` is a read-only stub."** Read-only, but by design — the locale catalogue is a source file and this is a viewer.
 - **"Pinned suppliers are dropped only at the monthly cap."** That is what the code comment says and it is incomplete. Pinning only reorders within the category's candidate set, so a wrong-category fallback drops the supplier before the cap is ever consulted.
 
+And three the audit itself got wrong, found only by acting on it:
+
+- **"The seed leaves 28 tables holding debris."** Wrong — see finding 7. Derived
+  by reading a truncate list instead of querying the database.
+- **"Turn on the staff CI projects. Expect red."** Wrong. 141 of 142 passed on
+  the first run. The surface was under-tested, not broken, and the difference
+  matters: the recommendation was "budget a day for what it surfaces" when the
+  honest answer was "one test, half an hour".
+- **"`editReview` is an orphaned staff mutation."** Misclassified. It takes a
+  `buyerId`, asserts no capability and writes no audit row — a buyer action with
+  a 14-day window. Wiring it into a staff screen would have let staff rewrite a
+  buyer's published words with no audit trail, which is the opposite of the
+  non-negotiable it appeared to serve.
+
 ---
 
-*Audit performed against `main` at `8fc0ab9` on 30 August 2026. Route counts from the filesystem; record counts queried live against the Supabase instance; every finding above re-verified by hand after the parallel pass, with a control case used to rule out grep artefacts.*
+*Audit performed against `main` at `8fc0ab9` on 30 August 2026, and acted on the same day in PR #45. Route counts from the filesystem; record counts queried live against the Supabase instance; every finding above re-verified by hand after the parallel pass, with a control case used to rule out grep artefacts.*

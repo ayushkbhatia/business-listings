@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
 import { assertCanEditListing } from "@/lib/auth/guards";
 import { allowance, type PlanCaps } from "@/lib/plan/entitlements";
-import { checkImage, MEDIA_BUCKET, mediaPath, publicUrl, removeObject, signUpload } from "@/lib/storage";
+import { checkImage, MEDIA_BUCKET, mediaPath, removeObject, signUpload } from "@/lib/storage";
 import { t } from "@/lib/i18n";
 import { getSellerSeat } from "../_shell";
 
@@ -170,11 +170,3 @@ export async function deleteMedia(formData: FormData): Promise<MediaResult> {
   return { ok: true };
 }
 
-export async function deleteMediaForm(formData: FormData): Promise<void> {
-  await deleteMedia(formData);
-}
-
-/** The public URL for one stored object. */
-export async function mediaUrl(path: string): Promise<string> {
-  return publicUrl(MEDIA_BUCKET, path);
-}
