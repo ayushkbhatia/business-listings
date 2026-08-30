@@ -44,10 +44,37 @@ describe("what the matrix counts", () => {
      * More listings and more verifications arrive on their own schedule. A
      * paragraph does not, which is why a page failing all three should lead
      * with the one that is a decision.
+     *
+     * Asserted as "copy leads wherever copy fails" rather than the older "any
+     * page failing more than one gate leads with copy". The two read alike and
+     * are not the same claim: `matrix.ts` pushes copy first unconditionally, so
+     * the old form could only ever fire when copy *passed* — which made it an
+     * assertion that no category fails both `listings` and `verified` while
+     * having its paragraph written. That is a fact about seed data, not about
+     * the sort, and this suite runs against a database twenty-six earlier test
+     * files have already written to. It went red in CI on a category sitting at
+     * two listings, where a handful of unverified rows from anywhere in the
+     * suite drops the verified share under thirty per cent.
+     *
+     * The property the comment above describes is the one now being tested.
      */
     const matrix = await pageMatrix();
+
+    // TEMPORARY diagnostic — remove once CI has printed it once. Attributing a
+    // red run to a specific earlier test file needs the counts as CI sees them,
+    // and this suite's database is not reproducible from a laptop.
     for (const row of matrix.rows) {
-      if (row.failing.length > 1) expect(row.failing[0], row.path).toBe("copy");
+      if (row.failing.length > 0) {
+        console.log(
+          `[matrix] ${row.path} listings=${row.listings} verified=${row.verified} ` +
+            `share=${row.verifiedShare.toFixed(2)} words=${row.introWords} ` +
+            `failing=[${row.failing.join(",")}]`,
+        );
+      }
+    }
+
+    for (const row of matrix.rows) {
+      if (row.failing.includes("copy")) expect(row.failing[0], row.path).toBe("copy");
     }
   }, 60_000);
 
