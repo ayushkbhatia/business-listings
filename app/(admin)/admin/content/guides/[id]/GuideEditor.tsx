@@ -95,6 +95,14 @@ export function GuideEditor(props: GuideEditorProps) {
       const held = window.sessionStorage.getItem(HANDOFF);
       if (!held) return;
       window.sessionStorage.removeItem(HANDOFF);
+      /*
+         Genuinely after mount rather than during render. The value lives in
+         session storage, which does not exist on the server — reading it in a
+         `useState` initialiser would render one thing on the server and
+         another on the client, and trade a lint warning for a hydration
+         mismatch. One extra render, once, on the way back from a save.
+      */
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setResult({ ok: true, message: held });
     } catch {
       // Private mode, or storage turned off. The save still happened; the only

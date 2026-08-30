@@ -202,6 +202,36 @@ export async function findCandidates(limit = 500): Promise<RescanResult> {
   return { created, considered: found.length, dropped: Math.max(0, found.length - limit) };
 }
 
+/**
+ * Merges that can still be put back.
+ *
+ * The reader `unmergeBusinesses` never had. `openCandidates` lists pairs
+ * nobody has decided yet; nothing listed the decisions already taken, so the
+ * reversal — thirty days of it, deliberately — was reachable from no screen.
+ *
+ * Ordered newest first, because a merge somebody regrets is usually the one
+ * they have just done.
+ */
+export async function recentMerges(now = new Date(), limit = 50) {
+  return prisma.businessMerge.findMany({
+    where: { reversedAt: null, reversibleUntil: { gte: now } },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+    select: {
+      id: true,
+      reason: true,
+      absorbedSlug: true,
+      reversibleUntil: true,
+      createdAt: true,
+      keep: { select: { displayName: true, slug: true } },
+      absorb: { select: { displayName: true } },
+      // What the reversal would put back, which is the number worth showing
+      // beside the button — the manifest is the whole point of the window.
+      _count: { select: { candidates: true } },
+    },
+  });
+}
+
 export async function openCandidates(band?: "certain" | "probable", limit = 100) {
   return prisma.mergeCandidate.findMany({
     where: { dismissedAt: null, mergeId: null, ...(band ? { band } : {}) },

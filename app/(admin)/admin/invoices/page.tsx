@@ -7,6 +7,8 @@ import { formatAED, formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { InvoiceTable, type InvoiceRowView } from "./InvoiceTable";
+import { CreditPanel, type CreditableBusiness } from "./CreditPanel";
+import { issueCredit } from "./actions";
 
 /**
  * Board 12e — invoices and credits.
@@ -40,6 +42,25 @@ export default async function InvoicesPage() {
   }));
 
   const issuedFils = list.rows.reduce((sum, row) => sum + row.totalFils, 0);
+
+  /*
+     The credit panel is gated on `subscription.credit` alone, and not on the
+     `revenue.read || subscription.credit` that opens the page.
+
+     §07 gives that row to finance and puts a dash against ops lead — the most
+     senior role does not hold every capability, and this is the row that
+     proves it. Reusing the page's OR would show the panel to an ops lead and
+     have the service refuse them.
+  */
+  const mayCredit = can(seat.actor, "subscription.credit");
+
+  const creditable: CreditableBusiness[] = mayCredit
+    ? [
+        ...new Map(
+          list.rows.map((row) => [row.businessId, { id: row.businessId, name: row.businessName }]),
+        ).values(),
+      ].sort((a, b) => a.name.localeCompare(b.name))
+    : [];
 
   return (
     <AdminPage
@@ -78,6 +99,12 @@ export default async function InvoicesPage() {
       <p className="mt-[var(--gutter)] max-w-prose text-caption text-muted">
         {t("admin.invoices.credit_note")}
       </p>
+
+      {mayCredit && (
+        <div className="mt-[var(--section-gap)]">
+          <CreditPanel businesses={creditable} issueCredit={issueCredit} />
+        </div>
+      )}
     </AdminPage>
   );
 }

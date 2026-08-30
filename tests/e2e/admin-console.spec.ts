@@ -330,14 +330,25 @@ test.describe("boards 4f, 12d and 12f — accounts", () => {
     const reason = `Trade licence and TRN both checked. ${Date.now()}`;
 
     await page.goto("/admin/businesses");
-    await page.getByRole("button", { name: "Decide" }).first().click();
+
+    /*
+       Move it somewhere it is not already. `setVerificationTier` refuses an
+       `unchanged` tier, correctly — a re-run of this test against a row it had
+       already set would otherwise fail for the wrong reason, which is exactly
+       what it did the first time it was written.
+    */
+    const row = page.getByRole("row").nth(1);
+    const current = Number((await row.getByRole("cell").nth(2).textContent())?.trim() ?? "0");
+    const target = current === 2 ? 1 : 2;
+
+    await row.getByRole("button", { name: "Decide" }).click();
 
     // The tier is a fixed list, so it is radios rather than a free field.
-    await page.getByRole("radio", { name: "Tier 2" }).check();
+    await page.getByRole("radio", { name: `Tier ${target}` }).check();
     await page.getByRole("textbox", { name: "Reason" }).fill(reason);
     await page.getByRole("button", { name: "Set tier", exact: true }).click();
 
-    await expect(page.getByText(/Tier set to 2/)).toBeVisible();
+    await expect(page.getByText(new RegExp(`Tier set to ${target}`))).toBeVisible();
 
     await page.goto("/admin/audit");
     await expect(page.getByText(reason)).toBeVisible();

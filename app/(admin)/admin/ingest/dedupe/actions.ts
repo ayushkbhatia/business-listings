@@ -7,6 +7,7 @@ import {
   dismissCandidate,
   findCandidates,
   mergeBusinesses,
+  unmergeBusinesses,
   REVERSIBLE_DAYS,
 } from "@/lib/dedupe/service";
 import { formatCount } from "@/lib/format";
@@ -58,6 +59,28 @@ export async function merge(formData: FormData): Promise<ActionResult> {
     return {
       ok: true,
       message: t("admin.dedupe.merged", { days: String(REVERSIBLE_DAYS) }),
+    };
+  } catch (error) {
+    return refused(error);
+  }
+}
+
+export async function unmerge(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const result = await unmergeBusinesses({
+      actor: seat.actor,
+      mergeId: String(formData.get("mergeId") ?? ""),
+      reason: String(formData.get("reason") ?? ""),
+    });
+    // `window_closed` names the date it closed, so it passes straight through
+    // rather than being flattened into a generic refusal.
+    if (!result.ok) return { ok: false, error: result.message };
+    revalidatePath("/admin/ingest/dedupe");
+    revalidatePath("/admin");
+    return {
+      ok: true,
+      message: t("admin.dedupe.unmerged", { count: formatCount(result.restored) }),
     };
   } catch (error) {
     return refused(error);

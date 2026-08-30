@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { $Enums } from "@/lib/db/generated/client";
 import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
 import { recentRuns } from "@/lib/ingest/service";
@@ -6,6 +7,8 @@ import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { RunTable } from "./RunTable";
+import { StageForm } from "./StageForm";
+import { stage } from "./actions";
 
 /**
  * Board 12a — the licence importer.
@@ -16,6 +19,15 @@ import { RunTable } from "./RunTable";
  */
 
 export const dynamic = "force-dynamic";
+
+/**
+ * The licensing authorities a run can come from, straight off the schema enum
+ * so a new free zone is one migration rather than two edits.
+ */
+const AUTHORITIES = Object.values($Enums.Authority).map((value) => ({
+  value,
+  label: value,
+}));
 
 export default async function IngestPage() {
   const seat = await requireStaff();
@@ -40,7 +52,16 @@ export default async function IngestPage() {
         </span>
       }
     >
-      <RunTable rows={runs} />
+      {/*
+         The way in. `stageRun` had no caller anywhere, so a run could only
+         arrive from a test — the approval half of this screen worked and there
+         was nothing for it to approve.
+      */}
+      <StageForm authorities={AUTHORITIES} stage={stage} />
+
+      <div className="mt-[var(--section-gap)]">
+        <RunTable rows={runs} />
+      </div>
 
       <p className="mt-[var(--gutter)] max-w-prose text-caption text-muted">
         {t("admin.ingest.note")}
