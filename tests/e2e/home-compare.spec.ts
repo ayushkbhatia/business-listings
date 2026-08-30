@@ -17,9 +17,26 @@ test.describe("home", () => {
 
   test("search works as a plain GET form, before any JavaScript", async ({ page }) => {
     await page.goto("/");
+    /*
+       Two on the home page now, and that is the fix rather than a regression:
+       the hero's, which has always worked, and the header's, which for a long
+       time was a bare input in no form and did nothing on all ~30 public
+       pages. Both are real GET forms with a `q`.
+    */
     const form = page.locator('form[action="/search"][method="get"]');
-    await expect(form).toHaveCount(1);
-    await expect(form.locator('input[name="q"]')).toHaveCount(1);
+    await expect(form).toHaveCount(2);
+    await expect(form.locator('input[name="q"]')).toHaveCount(2);
+  });
+
+  test("the header search submits from a page that is not the home page", async ({ page }) => {
+    // The half that was broken. The hero form only exists on `/`.
+    await page.goto("/c/valves-and-fittings");
+    const header = page.locator('form[action="/search"][method="get"]');
+    await expect(header).toHaveCount(1);
+
+    await header.locator('input[name="q"]').fill("gate valve");
+    await header.locator('input[name="q"]').press("Enter");
+    await expect(page).toHaveURL(/\/search\?.*q=gate\+valve/);
   });
 
   test("carries every home category through to a real category page", async ({ page }) => {
@@ -61,7 +78,12 @@ test.describe("home", () => {
     // this test fail on mobile for doing exactly what it should.
     // "Guides" left this list in handoff 5 step 1 — it is a built route now,
     // and the assertion below is that a `later` one is never a link.
-    const footer = ["Terms", "Privacy"];
+    //
+    // The footer's four left it here, for the same reason: the policy pages
+    // have been live since handoff 5 and the footer was still greying them
+    // out, so nothing on the site linked to the terms. `Pricing` is the only
+    // genuinely unbuilt route left.
+    const footer: string[] = [];
     const nav = ["Pricing"];
     const width = page.viewportSize()?.width ?? 0;
     const shown = width >= 1024 ? [...footer, ...nav] : footer;
@@ -72,6 +94,32 @@ test.describe("home", () => {
     // Never a link, at any width — that part does not depend on the viewport.
     for (const label of [...footer, ...nav]) {
       await expect(page.getByRole("link", { name: label, exact: true })).toHaveCount(0);
+    }
+  });
+
+  test("the footer links to all four policies, and they are reachable by clicking", async ({
+    page,
+  }) => {
+    /*
+       The other half of the test above, and the one that was missing while the
+       footer rendered four greyed spans. campaign.spec.ts asserts these four
+       paths resolve, but it fetches them directly — it would have gone on
+       passing however unreachable they were.
+    */
+    const policies = [
+      ["Terms", "/terms"],
+      ["Privacy", "/privacy"],
+      ["How we verify", "/verification-policy"],
+      ["Review policy", "/review-policy"],
+    ] as const;
+
+    for (const [label, href] of policies) {
+      await page.goto("/");
+      const link = page.getByRole("link", { name: label, exact: true });
+      await expect(link, label).toHaveCount(1);
+      await link.click();
+      await expect(page).toHaveURL(new RegExp(`${href}$`));
+      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     }
   });
 });

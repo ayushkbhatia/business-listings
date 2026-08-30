@@ -50,11 +50,37 @@ export async function descendantsOf(categoryId: string): Promise<string[]> {
   return [categoryId, ...children.map((child) => child.id)];
 }
 
+/**
+ * What ranking needs off a candidate. Shared by the category pool and the
+ * by-id top-up below, which have to return the same shape.
+ */
+const FANOUT_SELECT = (since: Date) =>
+  ({
+    id: true,
+    slug: true,
+    displayName: true,
+    primaryCategoryId: true,
+    verificationTier: true,
+    responseTimeMedianMs: true,
+    categories: { select: { categoryId: true } },
+    plan: { select: { enquiriesPerMonth: true, rankingMultiplier: true } },
+    locations: { where: { published: true }, select: { emirate: true }, take: 1 },
+    _count: {
+      select: {
+        // The month's load, which is what the cap counts.
+        recipients: { where: { createdAt: { gte: since } } },
+        products: { where: { status: "live" } },
+      },
+    },
+  }) as const;
+
 export async function findFanoutCandidates(
   request: FanoutRequest & { excludeBusinessIds?: readonly string[] },
   now: Date = new Date(),
 ): Promise<FanoutCandidate[]> {
   const since = monthStart(now);
+
+  const pinned = [...(request.pinned ?? [])];
 
   const businesses = await prisma.business.findMany({
     where: {
@@ -66,30 +92,58 @@ export async function findFanoutCandidates(
       OR: [
         { primaryCategoryId: { in: [...request.categoryIds] } },
         { categories: { some: { categoryId: { in: [...request.categoryIds] } } } },
+        /*
+           A supplier the buyer named is a candidate whatever they sell.
+
+           `selectRecipients` only *sorts* by pinned, so before this arm a
+           pinned supplier outside the requested category was never in the pool
+           to be sorted — a buyer pressing "Request a quote" on a storefront got
+           an enquiry that supplier was not on, silently and with no skip row to
+           find afterwards. Every `?to=` link in the app omits `?category=`, so
+           this was the normal path rather than an edge of it.
+
+           It belongs here rather than in `request.categoryIds`, because
+           `scoreCandidate` reads that set for its category term — widening it
+           would make an off-category supplier score as though they were in it.
+           This way they are present and still ranked honestly.
+        */
+        ...(pinned.length ? [{ id: { in: pinned } }] : []),
       ],
     },
-    select: {
-      id: true,
-      slug: true,
-      displayName: true,
-      primaryCategoryId: true,
-      verificationTier: true,
-      responseTimeMedianMs: true,
-      categories: { select: { categoryId: true } },
-      plan: { select: { enquiriesPerMonth: true, rankingMultiplier: true } },
-      locations: { where: { published: true }, select: { emirate: true }, take: 1 },
-      _count: {
-        select: {
-          // The month's load, which is what the cap counts.
-          recipients: { where: { createdAt: { gte: since } } },
-          products: { where: { status: "live" } },
-        },
-      },
-    },
-    // A bounded pool. Ranking eight out of a few hundred is the job; ranking
-    // eight out of every business in the country is a different one.
-    take: 60,
+    select: FANOUT_SELECT(since),
+    /*
+       A bounded pool. Ranking eight out of a few hundred is the job; ranking
+       eight out of every business in the country is a different one.
+
+       Ordered, unlike before, and by something stable. Without an `orderBy` the
+       sixty rows are whatever Postgres hands back, so an in-category supplier
+       could fall outside the window on one request and inside it on the next
+       with nothing changed — including a pinned one, which made the arm above
+       only probably work. Tier then id: the best-evidenced listings are the
+       ones worth ranking, and the id breaks ties the same way twice.
+
+       `pinned.length` is added to the window so naming eight suppliers cannot
+       push eight ordinary candidates out of a pool sized for the ranking.
+    */
+    orderBy: [{ verificationTier: "desc" }, { id: "asc" }],
+    take: 60 + pinned.length,
   });
+
+  /*
+     Anyone named but still missing — ranked below the window on tier, or
+     excluded by `claimStatus` — is fetched by id so the pool is complete
+     before ranking. Capped at eight by the page, so this is one small query.
+  */
+  const found = new Set(businesses.map((business) => business.id));
+  const missing = pinned.filter((id) => !found.has(id));
+  if (missing.length) {
+    businesses.push(
+      ...(await prisma.business.findMany({
+        where: { ...PUBLIC_BUSINESS, claimStatus: "claimed", id: { in: missing } },
+        select: FANOUT_SELECT(since),
+      })),
+    );
+  }
 
   return businesses.map((business) => ({
     businessId: business.id,

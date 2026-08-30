@@ -316,4 +316,77 @@ test.describe("boards 4f, 12d and 12f — accounts", () => {
       expect(results.violations, path).toEqual([]);
     }
   });
+
+  /*
+     The decisions this screen had no buttons for.
+
+     `setVerificationTier`, `suspendBusiness` and `liftSuspension` were written,
+     audited, capability-checked and tested, and called by nothing outside
+     their own test file — staff could read the state of every account here and
+     change none of it. These assert the wire, and that the row lands in the
+     audit log with the words somebody actually typed.
+  */
+  test("sets a verification tier, and the audit log says who and why", async ({ page }) => {
+    const reason = `Trade licence and TRN both checked. ${Date.now()}`;
+
+    await page.goto("/admin/businesses");
+
+    /*
+       Move it somewhere it is not already. `setVerificationTier` refuses an
+       `unchanged` tier, correctly — a re-run of this test against a row it had
+       already set would otherwise fail for the wrong reason, which is exactly
+       what it did the first time it was written.
+    */
+    const row = page.getByRole("row").nth(1);
+    const current = Number((await row.getByRole("cell").nth(2).textContent())?.trim() ?? "0");
+    const target = current === 2 ? 1 : 2;
+
+    await row.getByRole("button", { name: "Decide" }).click();
+
+    // The tier is a fixed list, so it is radios rather than a free field.
+    await page.getByRole("radio", { name: `Tier ${target}` }).check();
+    await page.getByRole("textbox", { name: "Reason" }).fill(reason);
+    await page.getByRole("button", { name: "Set tier", exact: true }).click();
+
+    await expect(page.getByText(new RegExp(`Tier set to ${target}`))).toBeVisible();
+
+    await page.goto("/admin/audit");
+    await expect(page.getByText(reason)).toBeVisible();
+  });
+
+  test("will not act without a reason", async ({ page }) => {
+    await page.goto("/admin/businesses");
+    await page.getByRole("button", { name: "Decide" }).first().click();
+
+    // Disabled until the reason is written, and the fence would refuse it
+    // anyway — the button is the courtesy, `assertReason` is the rule.
+    await expect(page.getByRole("button", { name: "Set tier", exact: true })).toBeDisabled();
+    await page.getByRole("textbox", { name: "Reason" }).fill("ok");
+    await expect(page.getByRole("button", { name: "Set tier", exact: true })).toBeDisabled();
+    await page.getByRole("textbox", { name: "Reason" }).fill("Checked the licence.");
+    await expect(page.getByRole("button", { name: "Set tier", exact: true })).toBeEnabled();
+  });
+
+  test("suspends a listing and lifts it again, each with its own reason", async ({ page }) => {
+    const stamp = Date.now();
+    await page.goto("/admin/businesses");
+
+    // A live row, so the control offered is Suspend rather than Lift.
+    const live = page.getByRole("row").filter({ hasText: "Live" }).first();
+    await live.getByRole("button", { name: "Decide" }).click();
+    const name = (await live.getByRole("cell").first().textContent())?.trim() ?? "";
+
+    await page.getByRole("textbox", { name: "Reason" }).fill(`Licence lapsed. ${stamp}`);
+    await page.getByRole("button", { name: "Suspend", exact: true }).click();
+    await expect(page.getByText(/off the directory/)).toBeVisible();
+
+    // "We were wrong" and "they fixed it" are different facts about the same
+    // business, so lifting asks again rather than reusing what was typed.
+    const suspended = page.getByRole("row").filter({ hasText: name }).first();
+    await suspended.getByRole("button", { name: "Decide" }).click();
+    await expect(page.getByRole("button", { name: "Lift suspension" })).toBeVisible();
+    await page.getByRole("textbox", { name: "Reason" }).fill(`Licence renewed. ${stamp}`);
+    await page.getByRole("button", { name: "Lift suspension" }).click();
+    await expect(page.getByText(/back/)).toBeVisible();
+  });
 });

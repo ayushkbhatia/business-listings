@@ -14,6 +14,7 @@ export type AuthErrorCode =
   | "invalid_identifier"
   | "code_incorrect"
   | "delivery_failed"
+  | "identifier_taken"
   | "unavailable"
   | "link_expired"
   | "too_many_attempts"
@@ -122,6 +123,14 @@ export function AuthFailure(params: FailureParams): React.ReactElement | null {
       return (
         <AuthNotice live title={t("auth.reset.too_short", { count: Number(params.length ?? 0) })} />
       );
+    case "identifier_taken":
+      /*
+         Verified, and still no seat. The identifier belongs to a profile row
+         with a different id — every seeded staff seat and seller owner is one,
+         because the seed mints their ids itself. Says so plainly rather than
+         reaching the browser as a 500, which is what it used to do.
+      */
+      return <AuthNotice live title={t("auth.error.identifier_taken")} />;
     case "unavailable":
       return <AuthNotice live title={t("auth.error.unavailable")} />;
     default:

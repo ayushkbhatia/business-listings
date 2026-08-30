@@ -37,7 +37,8 @@
     "fixture:licences": "tsx scripts/make-licence-fixture.mts",
     "acceptance:4": "./scripts/acceptance-handoff-4.sh",
     "acceptance:5": "./scripts/acceptance-handoff-5.sh",
-    "lighthouse:5": "./scripts/lighthouse-h5.sh"
+    "lighthouse:5": "./scripts/lighthouse-h5.sh",
+    "dev:seat": "tsx --env-file=.env.local scripts/dev-seat.mts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

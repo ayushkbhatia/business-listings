@@ -36,28 +36,62 @@ export default async function RfqNewPage({
   const params = await searchParams;
   const one = (key: string) => (typeof params[key] === "string" ? params[key] : undefined);
 
-  const categorySlug = one("category");
-  const category = categorySlug
-    ? await prisma.category.findFirst({ where: { slug: categorySlug }, select: { id: true, name: true } })
-    : await prisma.category.findFirst({
-        where: { showOnHome: true },
-        orderBy: { sortOrder: "asc" },
-        select: { id: true, name: true },
-      });
-  if (!category) notFound();
-
   const actor = await getActor();
-  // `?to=slug` from a storefront, `?to=a,b,c` from the comparison tray. Pinned
-  // suppliers are always included, unless they are at their monthly cap — see
-  // selectRecipients, which drops them rather than spending a slot.
+
+  /*
+     `?to=slug` from a storefront, `?to=a,b,c` from the comparison tray.
+
+     Resolved before the category, because it decides what the category is when
+     the link does not say. `claimStatus` is matched to `findFanoutCandidates`
+     deliberately: filtering only on published-and-not-suspended used to admit
+     an unclaimed listing, which then inflated the fan-out count and was absent
+     from the result — a slot spent on nobody.
+  */
   const pinnedSlugs = (one("to") ?? "").split(",").map((v) => v.trim()).filter(Boolean).slice(0, 8);
   const pinnedBusinesses = pinnedSlugs.length
     ? await prisma.business.findMany({
-        where: { slug: { in: pinnedSlugs }, suspendedAt: null, publishedAt: { not: null } },
-        select: { id: true },
+        where: {
+          slug: { in: pinnedSlugs },
+          suspendedAt: null,
+          publishedAt: { not: null },
+          claimStatus: "claimed",
+        },
+        select: { id: true, primaryCategoryId: true },
       })
     : [];
   const pinnedIds = pinnedBusinesses.map((b) => b.id);
+
+  /*
+     The category, in order of how much it is actually known:
+
+       1. `?category=` — the buyer came from a category or search page.
+       2. The first pinned supplier's own primary category. Every `?to=` link
+          in the app omits `?category=`, so without this the page fell through
+          to (3) and labelled a valve enquiry "HVAC and ventilation" — and,
+          before `findFanoutCandidates` learned about pinned suppliers, sent it
+          to five HVAC firms and not to the supplier the buyer clicked.
+       3. The first category on the home page. Only right for a bare
+          `/rfq/new`, where nothing has been said at all.
+
+     A tray holding four suppliers from four trades still names one of them
+     here. That is a labelling choice, not a routing one — every pinned
+     supplier is a recipient regardless of which category this resolves to.
+  */
+  const categorySlug = one("category");
+  const category = categorySlug
+    ? await prisma.category.findFirst({ where: { slug: categorySlug }, select: { id: true, name: true } })
+    : ((pinnedBusinesses[0]?.primaryCategoryId
+        ? await prisma.category.findUnique({
+            where: { id: pinnedBusinesses[0].primaryCategoryId },
+            select: { id: true, name: true },
+          })
+        : null) ??
+      (await prisma.category.findFirst({
+        where: { showOnHome: true },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, name: true },
+      })));
+  if (!category) notFound();
 
   const recipients = await previewRecipients({
     categoryId: category.id,

@@ -1,12 +1,13 @@
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
-import { openCandidates, REVERSIBLE_DAYS } from "@/lib/dedupe/service";
+import { openCandidates, recentMerges, REVERSIBLE_DAYS } from "@/lib/dedupe/service";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
 import { DedupeTable, type CandidateRow, type Signal } from "./DedupeTable";
-import { dismiss, merge } from "./actions";
+import { MergeTable, type MergeRow } from "./MergeTable";
+import { dismiss, merge, unmerge } from "./actions";
 
 /**
  * Board 12b — dedupe and merge.
@@ -22,8 +23,10 @@ export default async function DedupePage() {
   const seat = await requireStaff();
   if (!can(seat.actor, "business.merge")) notFound();
 
-  const [candidates, badges] = await Promise.all([
+  const now = new Date();
+  const [candidates, merges, badges] = await Promise.all([
     openCandidates(undefined, 200),
+    recentMerges(now),
     getAdminNavBadges(seat),
   ]);
 
@@ -48,6 +51,19 @@ export default async function DedupePage() {
 
   const certain = rows.filter((row) => row.band === "certain").length;
 
+  const mergeRows: MergeRow[] = merges.map((row) => ({
+    id: row.id,
+    keepName: row.keep.displayName,
+    absorbName: row.absorb.displayName,
+    absorbedSlug: row.absorbedSlug,
+    reason: row.reason,
+    // Rounded up, so the last day reads "1 day left" rather than "0".
+    daysLeft: Math.max(
+      0,
+      Math.ceil((row.reversibleUntil.getTime() - now.getTime()) / 86_400_000),
+    ),
+  }));
+
   return (
     <AdminPage
       seat={seat}
@@ -69,6 +85,18 @@ export default async function DedupePage() {
       <p className="mt-[var(--gutter)] max-w-prose text-caption text-muted">
         {t("admin.dedupe.note", { days: String(REVERSIBLE_DAYS) })}
       </p>
+
+      {/*
+         The other half of that note. The window has always been real and has
+         never been reachable — `unmergeBusinesses` existed, tested, with no
+         screen that called it.
+      */}
+      <section className="mt-[var(--section-gap)]">
+        <h2 className="mb-3 font-serif text-h2 text-ink">
+          {t("admin.dedupe.reversible_title")}
+        </h2>
+        <MergeTable rows={mergeRows} unmerge={unmerge} />
+      </section>
     </AdminPage>
   );
 }

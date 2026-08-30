@@ -8,7 +8,7 @@ import {
   unmergeBusinesses,
   REVERSIBLE_DAYS,
 } from "@/lib/dedupe/service";
-import { PermissionError } from "@/lib/auth/errors";
+import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
 
 /**
@@ -46,7 +46,19 @@ beforeAll(async () => {
     })
   ).id;
   categoryId = (
-    await prisma.category.findFirstOrThrow({ where: { parentId: null }, select: { id: true } })
+    /*
+       Ordered, because "the first root category" was whatever Postgres felt
+       like returning. This file creates 27 businesses in it, and on CI that
+       landed on a different category than it does on a laptop — which moved a
+       content metric in `page-matrix.test.ts` and turned a green suite red for
+       reasons neither file mentions. Undefined ordering in a fixture is a
+       fixture that means something different on every machine.
+    */
+    await prisma.category.findFirstOrThrow({
+      where: { parentId: null },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true },
+    })
   ).id;
   areaId = (await prisma.area.findFirstOrThrow({ select: { id: true } })).id;
 });
@@ -67,6 +79,16 @@ async function listingWithHistory(name: string) {
       primaryCategoryId: categoryId,
       claimStatus: "claimed",
       publishedAt: new Date(),
+      /*
+         Verified, so these do not drag the category's verified share.
+
+         Nothing in dedupe reads the tier — matching is on name, licence and
+         phone — but the SEO page matrix reads it, and 27 unverified fixtures
+         took a real category from 2/2 to 2/29 and pushed it under the thirty
+         per cent floor. A fixture for one subsystem should not move another
+         subsystem's numbers.
+      */
+      verificationTier: 2,
       locations: {
         create: {
           type: "head_office",
@@ -534,5 +556,97 @@ describe("the candidate list", () => {
 
     const open = await openCandidates();
     expect(open.map((c) => c.id)).not.toContain(candidate.id);
+  }, 60_000);
+
+  /*
+     Dismissal is inside the audit fence, like merging and unmerging. Deciding
+     two listings are not the same company is the decision a supplier disputes
+     when their second listing never comes back, so it is the one that has to
+     carry a written reason.
+
+     These three also pin the hole the fence closed: before it, the path had no
+     capability check anywhere. The screen 404s for a moderator, but the server
+     action behind it only called `requireStaff()`.
+  */
+  async function candidateFor(label: string) {
+    const stamp = `${Date.now()}`;
+    const first = await listingWithHistory(`${label} One`);
+    const second = await listingWithHistory(`${label} Two`);
+    await prisma.business.updateMany({
+      where: { id: { in: [first.id, second.id] } },
+      data: { licenceNumber: `DED-${stamp.slice(-6)}` },
+    });
+    await findCandidates(50_000);
+    return prisma.mergeCandidate.findFirstOrThrow({
+      where: {
+        OR: [
+          { keepId: first.id, absorbId: second.id },
+          { keepId: second.id, absorbId: first.id },
+        ],
+      },
+      select: { id: true, absorbId: true },
+    });
+  }
+
+  it("writes an audit row with the reason somebody typed", async () => {
+    const candidate = await candidateFor("Audited Dismiss");
+    const reason = "Different trade licence, different owner. Checked both.";
+
+    await dismissCandidate({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      candidateId: candidate.id,
+      reason,
+    });
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: {
+        actorId: opsLeadId,
+        action: "merge",
+        subject: `Business:${candidate.absorbId}`,
+      },
+      orderBy: { createdAt: "desc" },
+      select: { reason: true, before: true, after: true },
+    });
+    expect(audit?.reason).toBe(reason);
+    // What separates a dismissal from a merge in the log, since both write
+    // `merge` — the action name is 1:1 with the capability.
+    expect(audit?.before).toMatchObject({ absorbId: candidate.absorbId });
+    expect(audit?.after).toMatchObject({ dismissedById: opsLeadId });
+  }, 60_000);
+
+  it("refuses a blank reason, and dismisses nothing", async () => {
+    const candidate = await candidateFor("Blank Reason");
+
+    await expect(
+      dismissCandidate({
+        actor: actor(opsLeadId, "staff_ops_lead"),
+        candidateId: candidate.id,
+        reason: "   ",
+      }),
+    ).rejects.toThrow(AuditReasonError);
+
+    const row = await prisma.mergeCandidate.findUniqueOrThrow({
+      where: { id: candidate.id },
+      select: { dismissedAt: true },
+    });
+    expect(row.dismissedAt).toBeNull();
+  }, 60_000);
+
+  it("refuses a seat without business.merge, even though the screen already 404s", async () => {
+    const candidate = await candidateFor("Moderator Dismiss");
+
+    await expect(
+      dismissCandidate({
+        actor: actor(moderatorId, "staff_moderator"),
+        candidateId: candidate.id,
+        reason: "A moderator should not be able to decide this.",
+      }),
+    ).rejects.toThrow(PermissionError);
+
+    const row = await prisma.mergeCandidate.findUniqueOrThrow({
+      where: { id: candidate.id },
+      select: { dismissedAt: true },
+    });
+    expect(row.dismissedAt).toBeNull();
   }, 60_000);
 });

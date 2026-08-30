@@ -161,10 +161,31 @@ function buildSearchText(parts: {
 
 async function main() {
   console.log("→ clearing");
-  // Order matters only where a FK is Restrict rather than Cascade.
+  /*
+     Order matters only where a FK is Restrict rather than Cascade.
+
+     The list names 46 of the schema's 73 tables and that is enough: `truncate
+     … cascade` also empties every table holding a foreign key to a named one,
+     transitively, whatever the ON DELETE action. `staged_listing` goes with
+     `licence_import_run` → `user`, `merge_candidate` with `business`, and so on
+     for twenty-odd more. They are absent from this list because they are
+     unreachable by hand, not because they survive.
+
+     Two tables have no relations at all and so are reached by nothing:
+
+       - `auth_attempt` is named below. It is the throttle counter, and left
+         alone it is the one table a reseed does not clear — 933 rows on the
+         machine this comment was written on, which is what sent somebody
+         looking for a seed bug that was not there. Production needs the
+         `/api/jobs/prune-attempts` cron, not this line; this line is so that a
+         developer's OTP throttle does not outlive their database.
+       - `ranking_weights` is deliberately NOT named. Its singleton `current`
+         row is inserted by migration 20260827220000 and never by the seed, so
+         truncating it would leave `liveWeights()` returning null for good.
+  */
   await prisma.$executeRawUnsafe(`
     truncate table
-      "audit_event","contact_reveal","zero_result_query","saved_search","redirect","guide","area_page","curated_list","campaign","legal_page",
+      "audit_event","auth_attempt","contact_reveal","zero_result_query","saved_search","redirect","guide","area_page","curated_list","campaign","legal_page",
       "notification_delivery","notification_template","notification_preference","review_request",
       "invoice_line","invoice","placement_slot","subscription",
       "supplier_report","review","message","quote_line","quote",

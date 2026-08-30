@@ -305,7 +305,12 @@ export async function cancelSubscription(
 }
 
 /**
- * Apply an ended cancellation. Run by the same scheduled job as the metrics.
+ * Apply an ended cancellation. Run by the daily job at `/api/jobs/daily`,
+ * after dunning, which may itself have dropped the account.
+ *
+ * The comment here used to say the metrics job ran it. It did not, and had
+ * never imported it, so a cancelled subscription kept its plan past the period
+ * end until somebody noticed.
  *
  * Separate from `cancelSubscription` because the drop happens at period end and
  * nobody is holding a request open until then. Idempotent.
