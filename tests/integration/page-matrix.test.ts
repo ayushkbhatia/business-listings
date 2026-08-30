@@ -59,20 +59,6 @@ describe("what the matrix counts", () => {
      * The property the comment above describes is the one now being tested.
      */
     const matrix = await pageMatrix();
-
-    // TEMPORARY diagnostic — remove once CI has printed it once. Attributing a
-    // red run to a specific earlier test file needs the counts as CI sees them,
-    // and this suite's database is not reproducible from a laptop.
-    for (const row of matrix.rows) {
-      if (row.failing.length > 0) {
-        console.log(
-          `[matrix] ${row.path} listings=${row.listings} verified=${row.verified} ` +
-            `share=${row.verifiedShare.toFixed(2)} words=${row.introWords} ` +
-            `failing=[${row.failing.join(",")}]`,
-        );
-      }
-    }
-
     for (const row of matrix.rows) {
       if (row.failing.includes("copy")) expect(row.failing[0], row.path).toBe("copy");
     }
