@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/db/client";
+import { Prisma } from "@/lib/db/generated/client";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { checkThrottle, recordAttempt } from "./attempts";
@@ -47,6 +48,7 @@ export type AuthOutcome =
   | { ok: false; kind: "link_expired" }
   | { ok: false; kind: "suspended"; since: Date }
   | { ok: false; kind: "delivery_failed" }
+  | { ok: false; kind: "identifier_taken" }
   | { ok: false; kind: "unavailable" };
 
 export interface StartInput {
@@ -71,7 +73,29 @@ export interface SignUpInput extends StartInput {
  * one place they could be checked one at a time. The cost of the neutral answer
  * is that a typo waits for a code that never comes, which the verify screen
  * softens by naming the masked number it sent to.
+ *
+ * That neutrality is about *whether the account exists*, and it used to be
+ * applied to every error alike: the outcome was `code_sent` unconditionally,
+ * so with the project's phone provider switched off Supabase answered
+ * `phone_provider_disabled`, nothing was ever generated, and the screen sent
+ * everybody to `/verify` to wait for a code that did not exist. Sign-in
+ * looked broken to a user and looked fine to the code.
+ *
+ * The split below keeps the anti-enumeration property exactly: a refusal about
+ * *this identifier* still returns the neutral answer, and only refusals about
+ * *the platform* — the provider is off, the whole endpoint is rate-limited —
+ * are reported. Neither of those tells anybody whether an account exists,
+ * because they are the same for every identifier.
  */
+const NON_ENUMERATING = new Set([
+  "signup_disabled",
+  "email_provider_disabled",
+  "phone_provider_disabled",
+  "over_email_send_rate_limit",
+  "over_sms_send_rate_limit",
+  "over_request_rate_limit",
+]);
+
 export async function startSignIn(input: StartInput, deps: AuthDeps = {}): Promise<AuthOutcome> {
   const identifier = normaliseIdentifier(input.identifier);
   if (!identifier) return { ok: false, kind: "invalid_identifier" };
@@ -93,6 +117,10 @@ export async function startSignIn(input: StartInput, deps: AuthDeps = {}): Promi
     succeeded: !error,
     ip: input.ip ?? null,
   });
+
+  if (error && error.code && NON_ENUMERATING.has(error.code)) {
+    return fromSupabaseError(error);
+  }
 
   return { ok: true, kind: "code_sent", identifier, masked: maskIdentifier(identifier) };
 }
@@ -202,6 +230,13 @@ export async function verifyCode(input: VerifyInput, deps: AuthDeps = {}): Promi
 
   const profile = await adoptProfile(data.user.id, identifier, data.user.user_metadata ?? {});
 
+  if (profile === "identifier_taken") {
+    // Verified the code and still cannot be seated. Out again, so the session
+    // does not linger with no profile behind it.
+    await supabase.auth.signOut();
+    return { ok: false, kind: "identifier_taken" };
+  }
+
   if (profile.suspendedAt) {
     // Out again immediately. A suspended account holding a live session is a
     // suspended account that is not suspended.
@@ -274,22 +309,45 @@ async function adoptProfile(
     return existing;
   }
 
-  const profile = await prisma.user.create({
-    data: {
-      id: userId,
-      fullName,
-      ...(identifier.kind === "phone" ? { phone: identifier.value } : { email: identifier.value }),
-      // Always `buyer`. `seller_owner` is scoped to a business and there is no
-      // business until the claim flow in handoff 3 attaches one, so granting it
-      // here would grant it over nothing.
-      roles: ["buyer"],
-      wantsToList,
-    },
-    select: { id: true, roles: true, suspendedAt: true, businessId: true },
-  });
+  try {
+    const profile = await prisma.user.create({
+      data: {
+        id: userId,
+        fullName,
+        ...(identifier.kind === "phone" ? { phone: identifier.value } : { email: identifier.value }),
+        // Always `buyer`. `seller_owner` is scoped to a business and there is no
+        // business until the claim flow in handoff 3 attaches one, so granting it
+        // here would grant it over nothing.
+        roles: ["buyer"],
+        wantsToList,
+      },
+      select: { id: true, roles: true, suspendedAt: true, businessId: true },
+    });
 
-  await syncClaims(userId, profile.roles, profile.businessId);
-  return profile;
+    await syncClaims(userId, profile.roles, profile.businessId);
+    return profile;
+  } catch (error) {
+    /*
+       `User.email` and `User.phone` are both unique, and the row that holds
+       this one has a different id — so it cannot be adopted above and cannot
+       be created here.
+
+       Every seeded staff seat and seller owner is exactly this: `seed.mts`
+       mints their ids itself, so none of them corresponds to a Supabase auth
+       user. Signing up as one used to reach this line and throw a raw Prisma
+       error straight out through the server action, which reached the browser
+       as a 500 — "the site is broken" rather than "this account cannot be
+       signed into", which are very different things to be told.
+    */
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      console.error("[auth] identifier already held by a profile with another id", {
+        userId,
+        kind: identifier.kind,
+      });
+      return "identifier_taken" as const;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -378,6 +436,22 @@ async function findAuthUserByPhone(e164: string): Promise<string | undefined> {
     if (data.users.length < 200) return undefined;
   }
   return undefined;
+}
+
+/**
+ * The same write, for `getActor` to call when it finds a session whose claim
+ * is empty and whose profile row is not.
+ *
+ * Exported rather than duplicated so there is one place that decides what the
+ * claim contains. Still best-effort: a repair that throws would turn a page
+ * that renders thin into a page that does not render.
+ */
+export async function repairClaims(
+  userId: string,
+  roles: readonly Role[],
+  businessId: string | null,
+): Promise<void> {
+  await syncClaims(userId, roles, businessId);
 }
 
 /** Mirror roles into the JWT claim `getActor` reads. Service role only. */

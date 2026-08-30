@@ -1287,6 +1287,7 @@ export const en = {
   "auth.error.code_incorrect": "That code did not match. Check the digits, or send another one.",
   "auth.error.delivery_failed": "The code could not be sent. Try again in a moment, or use the other of your mobile and your email.",
   "auth.error.unavailable": "Sign-in is unavailable right now. Nothing was sent and nothing changed.",
+  "auth.error.identifier_taken": "That mobile or email is already on an account that cannot be signed into this way. Ask us to link it.",
   "auth.error.name_required": "Add a name so suppliers know who is asking.",
 
   "auth.expired.title": "That link has expired",
