@@ -54,9 +54,16 @@ export async function recordAttempt(input: {
 }
 
 /**
- * Drop rows past every window. Called from the flow rather than a cron: the
- * table is only interesting inside an hour, and a sweep on a fraction of
- * requests keeps it small without another moving part to operate.
+ * Drop rows past every window.
+ *
+ * This used to say it was "called from the flow rather than a cron". Nothing
+ * called it — not a request path, not a test — and `auth_attempt` grew without
+ * bound for it. It is now part of the daily job at `/api/jobs/daily`.
+ *
+ * `olderThan` is a security parameter and has no default on purpose. The
+ * longest window in `THROTTLES` is sixty minutes, so pruning anything newer
+ * than that resets a live throttle and hands back the attempts somebody has
+ * already spent. The caller picks the cutoff and says why.
  */
 export async function pruneAttempts(olderThan: Date): Promise<number> {
   const { count } = await prisma.authAttempt.deleteMany({

@@ -510,7 +510,24 @@ export async function unmergeBusinesses(
 
 export type DismissResult = { ok: true } | { ok: false; error: string };
 
-/** Not a match. It does not come back. */
+/**
+ * Not a match. It does not come back.
+ *
+ * Inside the fence, like `mergeBusinesses` and `unmergeBusinesses` above it.
+ * Deciding that two listings are *not* the same company is as much a judgement
+ * about a real supplier as deciding that they are — and it is the decision
+ * somebody disputes later, when their second listing never reappears.
+ *
+ * Before this went through `staffMutation` the path had no capability check at
+ * all: `/admin/ingest/dedupe` 404s for a seat without `business.merge`, but the
+ * server action behind it only called `requireStaff()`, so any staff seat could
+ * post to it. The fence closes that as well as writing the row.
+ *
+ * The audit action reads `merge`, because `ACTION_FOR_CAPABILITY` is 1:1 with
+ * the capability and a dismissal is `business.merge` work. `before`/`after` are
+ * what separate the three: a merge carries `mergedIntoId`, this carries the
+ * score and band the pair was judged on.
+ */
 export async function dismissCandidate(input: {
   actor: Actor;
   candidateId: string;
@@ -518,18 +535,56 @@ export async function dismissCandidate(input: {
 }): Promise<DismissResult> {
   const candidate = await prisma.mergeCandidate.findUnique({
     where: { id: input.candidateId },
-    select: { id: true, dismissedAt: true },
+    // Wider than the update needs: the audit row should say which two listings
+    // were judged apart and how close the scorer thought they were.
+    select: { id: true, dismissedAt: true, keepId: true, absorbId: true, score: true, band: true },
   });
   if (!candidate) return { ok: false, error: "That pair is not in the list." };
   if (candidate.dismissedAt) return { ok: false, error: "Somebody already dismissed that pair." };
 
-  await prisma.mergeCandidate.update({
-    where: { id: candidate.id },
-    data: {
-      dismissedAt: new Date(),
-      dismissedById: input.actor.id,
-      dismissReason: input.reason.trim(),
-    },
-  });
+  const dismissedAt = new Date();
+
+  // One UPDATE and one INSERT, so the default transaction options are right —
+  // the timeouts on the merge paths are for the thousands of rows they move.
+  await prisma.$transaction(async (tx) =>
+    staffMutation(
+      {
+        actor: input.actor,
+        capability: "business.merge",
+        // The absorbed listing, matching what merge and unmerge write for the
+        // same pair, so `/admin/audit` shows the whole history of one business
+        // together. A `MergeCandidate:` subject would be truthful and orphaned —
+        // that id appears nowhere a person would think to search.
+        subject: `Business:${candidate.absorbId}`,
+        reason: input.reason,
+        tx,
+      },
+      async () => {
+        const row = await tx.mergeCandidate.update({
+          where: { id: candidate.id },
+          data: {
+            dismissedAt,
+            dismissedById: input.actor.id,
+            // Kept on the row as well as in the audit event. The dedupe screen
+            // reads it back beside the pair; the audit row is the record.
+            dismissReason: input.reason.trim(),
+          },
+          select: { id: true },
+        });
+        return {
+          result: row.id,
+          before: {
+            dismissedAt: null,
+            keepId: candidate.keepId,
+            absorbId: candidate.absorbId,
+            score: candidate.score,
+            band: candidate.band,
+          },
+          after: { dismissedAt, dismissedById: input.actor.id },
+        };
+      },
+    ),
+  );
+
   return { ok: true };
 }

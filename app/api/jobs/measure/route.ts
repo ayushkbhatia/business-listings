@@ -1,34 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { timingSafeEqual } from "node:crypto";
 import { measureResponseTimes } from "@/lib/metrics/job";
 import { measureProfileStrength } from "@/lib/metrics/strength-job";
 import { pollDomains } from "@/lib/domains/service";
 import { sweepAreaPages } from "@/lib/seo/area";
 import { sweepAlerts } from "@/lib/alerts/service";
+import { authorizeJob } from "@/lib/jobs/authorize";
 
 /**
  * The scheduled measurement run.
  *
- * Vercel Cron calls this with an `Authorization: Bearer $CRON_SECRET` header.
- * Anything else is refused: the job is idempotent and reads nothing private,
- * but an open endpoint that walks every recipient row is a free way to make
- * the database work for somebody.
- *
- * A missing secret refuses everything rather than allowing everything. A job
- * that silently stops running is better than one anybody can run.
+ * The `CRON_SECRET` check this route used to carry inline now lives in
+ * `lib/jobs/authorize.ts`, because there are three job routes and the guard is
+ * the only thing standing between them and the internet — one copy of that is
+ * worth more than three that can drift.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const secret = process.env["CRON_SECRET"];
-  if (!secret) {
-    console.error("[jobs] measure called with no CRON_SECRET set");
-    return new NextResponse(null, { status: 500 });
-  }
-
-  const offered = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  if (!constantTimeEqual(offered, secret)) return new NextResponse(null, { status: 401 });
+  const refusal = authorizeJob(request, "measure");
+  if (refusal) return refusal;
 
   /*
    * Sequential, not parallel. Both write `Business.derivedAt` and running them
@@ -75,16 +66,4 @@ export async function GET(request: NextRequest) {
 
   console.info("[jobs] measured", { responseTimes, profileStrength, domains, areaPages, alerts });
   return NextResponse.json({ responseTimes, profileStrength, domains, areaPages, alerts });
-}
-
-function constantTimeEqual(a: string, b: string): boolean {
-  const left = Buffer.from(a);
-  const right = Buffer.from(b);
-  if (left.length !== right.length) {
-    // Compare something of equal length anyway, so a wrong-length secret costs
-    // the same as a wrong-value one.
-    timingSafeEqual(right, right);
-    return false;
-  }
-  return timingSafeEqual(left, right);
 }
