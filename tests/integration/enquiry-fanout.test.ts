@@ -233,6 +233,60 @@ describe("criterion 6 — a capped seller is not offered", () => {
     expect(result.recipients.map((r) => r.businessId)).not.toContain(free!.businessId);
     expect(result.skipped).toContainEqual({ businessId: free!.businessId, reason: "at_monthly_cap" });
   });
+
+  it("keeps a pinned supplier whose trade is not the one being asked about", async () => {
+    /*
+       The defect behind `/rfq/new?to=<slug>`: `selectRecipients` only sorts by
+       pinned, so a supplier outside the requested category was never in the
+       pool to be sorted and could not be a recipient. Every `?to=` link in the
+       app omits `?category=`, so a buyer pressing "Request a quote" on a
+       storefront got an enquiry that supplier was not on — silently, and with
+       no skipped row to find afterwards.
+
+       Asked here the hard way round: pick a supplier who is in no part of the
+       category being enquired about, pin them, and require them back.
+    */
+    const within = await descendantsOf(categoryId);
+
+    const outsider = await prisma.business.findFirstOrThrow({
+      where: {
+        publishedAt: { not: null },
+        suspendedAt: null,
+        claimStatus: "claimed",
+        // Outside the trade on both counts — neither their primary category nor
+        // any they also list in is part of what is being asked about.
+        primaryCategoryId: { notIn: within },
+        NOT: { categories: { some: { categoryId: { in: within } } } },
+      },
+      select: { id: true },
+    });
+
+    const candidates = await findFanoutCandidates({
+      categoryId,
+      categoryIds: within,
+      emirate: "dubai",
+      lineCount: 1,
+      want: 8,
+      pinned: [outsider.id],
+    });
+    expect(candidates.map((c) => c.businessId)).toContain(outsider.id);
+
+    const result = await createEnquiry({
+      buyerId,
+      requirement: "Pinned from a storefront in another trade",
+      lines: lines(),
+      categoryId,
+      emirate: "dubai",
+      fanoutTo: 5,
+      pinnedBusinessIds: [outsider.id],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    createdEnquiryIds.push(result.enquiryId);
+
+    // The supplier the buyer actually clicked is on their own enquiry.
+    expect(result.recipients.map((r) => r.businessId)).toContain(outsider.id);
+  });
 });
 
 describe("the checkpoint — five sellers, two quotes, accept one", () => {

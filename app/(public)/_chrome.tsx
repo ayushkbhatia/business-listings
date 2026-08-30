@@ -17,11 +17,27 @@ export function DirectoryNav() {
       label={t("nav.label.public")}
       brand="Business Listings"
       search={
-        <SearchField
-          label={t("search.label")}
-          clearLabel={t("search.clear")}
-          placeholder={t("search.placeholder")}
-        />
+        /*
+           A real GET form, because for a long time this was not one: a bare
+           `SearchField` with no `name` and nothing to submit to, so pressing
+           Enter in the header did nothing on every page but the home page.
+
+           No submit button — a single text input in a form submits on Enter,
+           and `type="search"` already gives a mobile keyboard its Search key,
+           so a button would only take room from a 68px bar.
+
+           Unnamed on purpose. Axe counts a form as a landmark only once it has
+           an accessible name, and the home page carries its own search form;
+           naming both would put two identically-named landmarks on that page.
+        */
+        <form action="/search" method="get" role="search" className="contents">
+          <SearchField
+            name="q"
+            label={t("search.label")}
+            clearLabel={t("search.clear")}
+            placeholder={t("search.placeholder")}
+          />
+        </form>
       }
       laterLabel={t("chrome.later")}
       links={[
@@ -54,22 +70,31 @@ export function DirectoryFooter({ listingCount }: { listingCount?: number }) {
           )}
         </div>
         <nav aria-label={t("chrome.footer_nav")} className="flex flex-wrap gap-x-8 gap-y-2">
+          {/*
+             Linked, at last. All four pages have been live since handoff 5 and
+             the footer went on rendering them as greyed spans, so the only way
+             to reach the terms of a platform taking subscriptions was to know
+             the URL. Two comments elsewhere in the codebase already claimed
+             "the footer links here from every page on the site"; now they are
+             true.
+          */}
           {[
-            { key: "terms", label: t("chrome.terms") },
-            { key: "privacy", label: t("chrome.privacy") },
-            { key: "verification", label: t("chrome.verification_policy") },
-            { key: "reviews", label: t("chrome.review_policy") },
+            { key: "terms", label: t("chrome.terms"), href: "/terms" },
+            { key: "privacy", label: t("chrome.privacy"), href: "/privacy" },
+            {
+              key: "verification",
+              label: t("chrome.verification_policy"),
+              href: "/verification-policy",
+            },
+            { key: "reviews", label: t("chrome.review_policy"), href: "/review-policy" },
           ].map((link) => (
-            // Policy pages are board 10j and belong to a later handoff. Named
-            // here so the footer is the right shape, not linked into a 404.
-            <span
+            <a
               key={link.key}
-              aria-disabled="true"
-              title={t("chrome.later")}
-              className="cursor-not-allowed text-caption text-faint"
+              href={link.href}
+              className="text-caption text-muted underline-offset-2 hover:text-ink hover:underline focus-visible:outline-none focus-visible:shadow-focus"
             >
               {link.label}
-            </span>
+            </a>
           ))}
         </nav>
       </div>
