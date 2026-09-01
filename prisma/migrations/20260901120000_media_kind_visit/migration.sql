@@ -1,0 +1,13 @@
+-- A media kind for site-visit photographs.
+--
+-- Evidence, not content. `lib/storefront/blocks.ts` renders `gallery` media on
+-- the public storefront, so a verifier's photographs of somebody's warehouse
+-- would have been published on that supplier's own page had they been filed
+-- under an existing kind. They are written to the private document bucket and
+-- read back through a signed URL, like a trade licence.
+--
+-- Hand-written rather than generated. `prisma migrate dev` against this schema
+-- wants to drop nine hand-written indexes and `business_sector_id_fkey`, none
+-- of which the datamodel declares and all of which are deliberate — see
+-- docs/database.md. An additive enum value does not need any of that.
+ALTER TYPE "media_kind" ADD VALUE IF NOT EXISTS 'visit';

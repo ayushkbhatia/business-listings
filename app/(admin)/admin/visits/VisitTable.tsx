@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { DataTable, type Column } from "@/components/structure";
 import { t } from "@/lib/i18n";
 
@@ -21,6 +22,7 @@ export interface VisitRow {
 }
 
 export function VisitTable({ rows }: { rows: readonly VisitRow[] }) {
+  const router = useRouter();
   const columns: Column<VisitRow>[] = [
     {
       key: "business",
@@ -68,6 +70,16 @@ export function VisitTable({ rows }: { rows: readonly VisitRow[] }) {
       rows={rows}
       rowKey={(row) => row.id}
       stickyHeader
+      /*
+         The way into the report. `recordVisit` had no screen at all, so this
+         table listed work nobody could complete — a queue that could only ever
+         grow.
+      */
+      rowAction={(row) => ({
+        label: t("admin.visits.file"),
+        onSelect: () => router.push(`/admin/visits/${row.id}`),
+      })}
+      actionsHeader={t("admin.visits.file")}
       empty={
         <div className="text-center">
           <p className="text-body-sm text-body">{t("admin.visits.empty.title")}</p>

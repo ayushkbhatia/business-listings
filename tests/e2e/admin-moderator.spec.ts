@@ -114,6 +114,16 @@ test.describe("the audit log a moderator sees", () => {
     const response = await page.goto("/admin/visits");
     expect(response?.status()).toBe(404);
   });
+
+  test("cannot reach a visit report either", async ({ page }) => {
+    /*
+       The queue 404s and so does the report behind it. A gate on the list that
+       is not also on the page it links to is not a gate — and this one carries
+       an upload path into a business's private folder.
+    */
+    const response = await page.goto("/admin/visits/any-id-at-all");
+    expect(response?.status()).toBe(404);
+  });
 });
 
 test.describe("the commercial screens a moderator cannot reach", () => {
