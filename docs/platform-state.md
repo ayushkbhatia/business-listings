@@ -3,12 +3,22 @@
 **Codebase audit · 30 August 2026 · `main` @ `8fc0ab9`**
 PRs #37–#44 merged · every claim verified against the tree · database queried live
 
-> **Status, same day.** Everything below was then acted on in PR #45. Eight of the
-> ten findings are fixed, one was **wrong** and is corrected in place (finding 7),
-> and one is deferred with a reason (finding 3, partially). Each finding carries
-> its outcome. The parts that cannot be fixed from inside the repo — Supabase
-> project settings, a Meta template approval, an SMTP provider, a key rotation —
-> are listed under *Still yours* at the end.
+> **Status.** Everything below was acted on in PR #45, and the job schedule was
+> revised in PR #46. Eight of the ten findings are fixed, one was **wrong** and is
+> corrected in place (finding 7), and one is partly deferred with reasons
+> (finding 3). Each finding carries its outcome.
+>
+> **Two of the four blockers are fully closed** — the audit fence and the
+> background jobs. Sign-in is fixed in code and waiting on provisioning that is
+> not in this repository. Six of the eight orphaned mutations have a screen;
+> `recordVisit` and `removeReview` do not, for reasons given under *Still yours*.
+>
+> The three surface tables describe the platform **as it is now**, not as the
+> audit found it. They were left stale for a while after the findings below were
+> updated, which made this document contradict itself — worth knowing if you read
+> a copy of it from before that was fixed. The parts that cannot be fixed from
+> inside the repo — Supabase project settings, a Meta template approval, an SMTP
+> provider, a key rotation — are under *Still yours* at the end.
 
 Six design handoffs are shipped. Ninety-eight routes render and ninety-five of ninety-seven server actions are wired to a screen. The platform is not blocked on screens — it is blocked on four things underneath them, and one of those breaks a non-negotiable.
 
@@ -48,7 +58,7 @@ My recommendation: **stop building features.** The next unit of work is closing 
 | `/c/[category]`, `/c/[category]/[sub]` | Wired | Filters, canonicalisation to area pages, spec templates now inherited by subcategories. |
 | `/b/[slug]` + 4 children | Wired | Storefront, products, branches, reviews, custom pages. Theming applied, badges exempt. |
 | `/b/[slug]/p/[product]` | Wired | Product JSON-LD omits price entirely rather than emitting an empty field. |
-| `/rfq/new` | **Partial** | **Drops the pinned supplier** when `?to=` arrives without `?category=`. See findings. |
+| `/rfq/new` | Wired | Was dropping the pinned supplier when `?to=` arrived without `?category=`. Fixed in `findFanoutCandidates`, so the comparison tray's multi-trade case is covered too. |
 | `/enquiry/[id]` + 3 children | Wired | Thread, quote comparison, accepted-quote terminal state. The funnel closes. |
 | `/account/enquiries` | Wired | Buyer's own enquiries, reachable by magic link. |
 | `/compare` | Wired | Tray persists, `noindex`. |
@@ -58,8 +68,8 @@ My recommendation: **stop building features.** The next unit of work is closing 
 | `/best/[slug]` | Wired | Membership is a comparator in code. Nothing here is purchasable. |
 | `/categories` | Wired | Full taxonomy index. |
 | `/lp/[campaign]` | Wired | Attribution captured in `proxy.ts`, survives the whole walk to enquiry. |
-| `/privacy`, `/terms`, `/review-policy`, `/verification-policy` | **Orphaned** | All four render. **Nothing links to them** — no footer, no nav. A passing test currently pins that absence in place. |
-| nav search field | **Inert** | On 27 of 28 pages the header search is an input with no `name` and no form. It cannot submit. |
+| `/privacy`, `/terms`, `/review-policy`, `/verification-policy` | Wired | Linked from the footer on every page, with a test that clicks each one through. Was rendering and linked from nothing. |
+| nav search field | Wired | A real GET form now. Was an input with no `name`, in no form, inert on 27 of 28 pages. |
 
 ---
 
@@ -69,16 +79,16 @@ My recommendation: **stop building features.** The next unit of work is closing 
 
 | Route | Status | Notes |
 |---|---|---|
-| `/signin`, `/signup`, `/verify`, `/reset` | **Blocked** | Phone OTP fails closed with no SMS provider configured. `/api/auth/send-otp` is one of only two API routes. |
+| `/signin`, `/signup`, `/verify`, `/reset` | **Partial** | The code is fixed — sign-in no longer fails open, a seeded-seat signup no longer 500s, and a failed claim write repairs itself. Reaching a real person still needs SMTP and the Supabase phone provider. `pnpm dev:seat <kind>` signs you in today. |
 | `/onboarding/claim` → `profile` → `locations` → `verify` → `plan` | Wired | Full 5-step wizard. Mobile Continue button fixed and now covered in CI. |
 | `/dashboard` | Wired | Overview with real counts. |
 | `/dashboard/leads`, `/dashboard/leads/[id]/thread` | Wired | The core loop. Fan-out now descends into subcategories. |
 | `/dashboard/quotes` | Wired | Quote lines are the only place a price legally exists. |
 | `/dashboard/products` + `[id]`, `/import` | Wired | CSV import included. |
-| `/dashboard/listing`, `/media`, `/locations`, `/hours`, `/team` | Wired | `mediaUrl()` in the media actions is exported and never called — check uploaded images actually display. |
+| `/dashboard/listing`, `/media`, `/locations`, `/hours`, `/team` | Wired | The dead `mediaUrl()` export is gone; the page calls `publicUrl` directly, so images do display. |
 | `/dashboard/verification` | Wired | Submits evidence. Tier itself stays staff-only, correctly. |
 | `/dashboard/billing` + `/change`, `/cancel` | Wired | No payment capture, as designed. |
-| `/dashboard/analytics` | Thin | Depends on `/api/jobs/measure`, the one job that *is* scheduled. Will populate. |
+| `/dashboard/analytics` | Thin | Fed by the measurements in `/api/jobs/daily`. Will populate. |
 | `/dashboard/promote` | Wired | Boosts write audit rows. |
 | `/dashboard/reviews` | Wired | Reply only. Removal is staff-side and orphaned — see findings. |
 | `/dashboard/domain` | **Fail-closed** | `VERCEL_DOMAINS_TOKEN` is blank and `stores.businesslistings.me` is not provisioned. Screen works, integration cannot. |
@@ -94,11 +104,11 @@ My recommendation: **stop building features.** The next unit of work is closing 
 |---|---|---|
 | `/admin` | Wired | Queue counts and the day's work. |
 | `/admin/queue` + `[id]`, `/conflict/[id]` | Wired | Moderation queue with conflict resolution. |
-| `/admin/businesses` | **Partial** | Lists and filters. `setVerificationTier` and `suspendBusiness` have no caller. |
-| `/admin/reports` | **Partial** | Supplier reports land. `removeReview` and `editReview` have no caller. |
-| `/admin/ingest` + `[id]`, `/dedupe` | **Fence breach** | `dismissCandidate` writes with a bare Prisma update. `stageRun` has no caller. 8,600 staged rows and climbing. |
-| `/admin/subscriptions`, `/dunning`, `/invoices`, `/revenue`, `/tax` | **Partial** | Screens read correctly. `issueSubscriptionCredit` has no caller; `runDunning` is never scheduled. |
-| `/admin/visits` | **Partial** | `recordVisit` has no caller — visits can be scheduled but never marked done. |
+| `/admin/businesses` | Wired | Tier, suspend and lift all have a control, gated per row and per seat. The screen also had **no capability gate at all** — line 23 was dead code — and now has one. |
+| `/admin/reports` | **Partial** | Supplier reports land. `removeReview` still has no host — see *Still yours*. `editReview` left this row: it is a buyer action, not a staff one. |
+| `/admin/ingest` + `[id]`, `/dedupe` | Wired | `dismissCandidate` is inside the fence, `stageRun` has an upload form, and `unmergeBusinesses` has a screen with the reader it needed. The "8,600 staged rows" in the first draft of this audit was wrong — the table is empty after a reseed. |
+| `/admin/subscriptions`, `/dunning`, `/invoices`, `/revenue`, `/tax` | Wired | `issueSubscriptionCredit` has a panel, gated on `subscription.credit` alone rather than the page's wider OR. `runDunning` runs daily. |
+| `/admin/visits` | **Partial** | `recordVisit` still has no caller — visits can be scheduled and never marked done. It needs an admin media upload path that does not exist yet; see *Still yours*. |
 | `/admin/audit` | Wired | Every audited mutation appears here. `reason` is `NOT NULL` and enforced in Postgres. |
 | `/admin/content/matrix`, `/guides` + `[id]`, `/home`, `/redirects`, `/attribution` | Wired | Handoff 5's CMS. Content added here costs no deploy — use it. |
 | `/admin/categories` | Wired | Rename moves every affected URL and repoints existing redirects to avoid chains. |
@@ -148,7 +158,7 @@ Read that list as a product statement: **you cannot verify a supplier, remove a 
 
 **Fixed.** Two new routes grouped by cadence — `/api/jobs/sweep` hourly and `/api/jobs/daily` — plus the `CRON_SECRET` guard extracted to `lib/jobs/authorize.ts` so there is one copy, and the first tests `app/api/jobs/` has ever had. One caveat kept visible rather than papered over: `flushDeferred` moves a delivery from `deferred` to `queued`, and **nothing reads `queued`**. Scheduling it is necessary and not sufficient.
 
-`vercel.json` has exactly one cron: `/api/jobs/measure`, hourly. `runDunning`, `applyEndedCancellations`, `flushDeferred` and `pruneAttempts` have no schedule and no API route to reach them.
+`vercel.json` had exactly one cron: `/api/jobs/measure`, hourly. `runDunning`, `applyEndedCancellations`, `flushDeferred` and `pruneAttempts` have no schedule and no API route to reach them.
 
 Consequence in order of pain: subscriptions that should lapse stay active, dunning never starts, deferred notifications never send, and `auth_attempt` grows without bound (922 rows already).
 
@@ -243,21 +253,41 @@ could not be, and why.
 
 ### Outside the repo — needs the Supabase dashboard
 
-The auth stack works; the project it talks to is not configured for phone.
+The auth stack works. Every Bird variable and `AUTH_HOOK_SECRET` are already
+set. Nothing here is a code change.
 
-- Enable `external.phone`. Until then the phone leg is dead — and now says so,
-  instead of sending people to wait for a code that was never generated.
-- Register `/api/auth/send-otp` under **Authentication → Hooks** with the same
-  `AUTH_HOOK_SECRET` that is already in `.env.local`.
-- Set the project OTP length to **6** and the expiry to **600s**, to match
+**The quickest way to a working sign-in is email, not WhatsApp.** Point Supabase
+at a real SMTP provider — Project Settings → Auth → SMTP — and the email OTP
+path works immediately: `normaliseIdentifier` already accepts an address,
+`startSignIn` already handles one, and `pnpm dev:seat` proves the whole
+`verifyOtp` → `adoptProfile` → `syncClaims` chain on it. The built-in sender
+exists for development and sends two messages an hour, which is the only reason
+that path is not usable today.
+
+WhatsApp is the slower half and is not blocked on us:
+
+- **A Meta-approved authentication template.** Category `authentication`, one
+  `otp` variable. Meta approves it, not Bird, and the WhatsApp Business number
+  must clear business verification first. Days, not hours.
+- **Enable `external.phone`.** Until then the phone leg is dead — and now says
+  so, instead of sending people to wait for a code that was never generated.
+- **Register `/api/auth/send-otp`** under Authentication → Hooks with the same
+  `AUTH_HOOK_SECRET`.
+- **Set the project OTP length to 6 and the expiry to 600s**, to match
   `OTP_LENGTH` and `OTP_EXPIRY_MINUTES`. The verify screen says "6 digits" and
   the project currently issues 8.
-- Get the Meta authentication template approved, and replace the built-in SMTP,
-  which sends two messages an hour.
+
+Two more, both easy to miss:
+
+- **Copy the secrets into Vercel.** `BIRD_*`, `AUTH_HOOK_SECRET` and
+  `CRON_SECRET` live only in `.env.local`. `resolveOtpSender` deliberately
+  throws in production rather than falling back to the console sender, so the
+  first production sign-in fails without them — and the cron routes answer 500
+  without `CRON_SECRET`.
 - **Rotate the `service_role` key.** It was pasted into a chat and is still
   live. This one is not optional.
 
-Until those land, `pnpm dev:seat <kind>` is how anybody signs in.
+Until the mail provider is set, `pnpm dev:seat <kind>` is how anybody signs in.
 
 ### Two mutations still without a screen
 

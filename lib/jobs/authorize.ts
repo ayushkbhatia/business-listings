@@ -13,9 +13,9 @@ import { timingSafeEqual } from "node:crypto";
  * A missing secret refuses everything rather than allowing everything. A job
  * that silently stops running is better than one anybody can run.
  *
- * Lifted verbatim out of `app/api/jobs/measure/route.ts`, which was the only
- * job for a while and is now one of three. The status codes are deliberately
- * asymmetric and both bodies are null:
+ * Lifted verbatim out of the old `measure` route, which was the only job for a
+ * while. The status codes are deliberately asymmetric and both bodies are
+ * null:
  *
  *   - **500** when `CRON_SECRET` is unset. That is our misconfiguration, not
  *     the caller's, and it should page somebody rather than look like a refusal.
