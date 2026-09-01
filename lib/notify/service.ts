@@ -107,8 +107,29 @@ export async function notify(input: NotifyInput): Promise<NotifyOutcome[]> {
     }
 
     if (decision.action === "defer") {
+      /*
+         Rendered now, not when it goes out.
+
+         The row carries the recipient, the event and the channel and not a word
+         of what the message said, so a deferred delivery could never be sent —
+         which is why `queued` had no consumer. Rendering here also means a
+         message held overnight says what was true when it happened: re-rendering
+         at send would quietly describe a quote that had since been amended.
+
+         `render` throws on a value shaped like contact details, and that guard
+         is worth keeping on this path too.
+      */
       outcomes.push(
-        await record(input, decision.channel, template.id, "deferred", decision.reason, now, decision.at),
+        await record(
+          input,
+          decision.channel,
+          template.id,
+          "deferred",
+          decision.reason,
+          now,
+          decision.at,
+          heldPayload(render(template, input.params), template.metaTemplateName),
+        ),
       );
       continue;
     }
@@ -224,6 +245,7 @@ async function record(
   reason: string | undefined,
   now: Date,
   scheduledFor?: Date,
+  payload?: HeldPayload,
 ): Promise<NotifyOutcome> {
   try {
     const row = await prisma.notificationDelivery.create({
@@ -239,6 +261,7 @@ async function record(
         enquiryId: input.enquiryId ?? null,
         reason: reason ?? null,
         scheduledFor: scheduledFor ?? null,
+        payload: (payload ?? null) as never,
         sentAt: status === "sent" ? now : null,
       },
       select: { id: true },
@@ -248,6 +271,158 @@ async function record(
     console.error("[notify] could not write a delivery row", { event: input.event, channel, cause });
     return { channel, status, ...(reason ? { reason } : {}), deliveryId: "" };
   }
+}
+
+/**
+ * What a held delivery needs to be sent later, and nothing more.
+ *
+ * Deliberately no address. The number or the email is read from the user when
+ * the message actually goes out — the delivery log is a record of what
+ * happened, not a copy of the address book, and a held row is still a log row.
+ */
+export interface HeldPayload {
+  subject: string | null;
+  body: string;
+  actionLabel: string | null;
+  actionUrl: string | null;
+  metaTemplateName: string | null;
+}
+
+function heldPayload(
+  rendered: ReturnType<typeof render>,
+  metaTemplateName: string | null,
+): HeldPayload {
+  return {
+    subject: rendered.subject,
+    body: rendered.body,
+    actionLabel: rendered.actionLabel,
+    // Absolute here, because by the time this is sent there is no request to
+    // resolve a relative path against.
+    actionUrl: rendered.actionPath ? absoluteUrl(rendered.actionPath) : null,
+    metaTemplateName,
+  };
+}
+
+function readHeldPayload(value: unknown): HeldPayload | null {
+  if (!value || typeof value !== "object") return null;
+  const p = value as Record<string, unknown>;
+  if (typeof p["body"] !== "string") return null;
+  return {
+    subject: typeof p["subject"] === "string" ? p["subject"] : null,
+    body: p["body"],
+    actionLabel: typeof p["actionLabel"] === "string" ? p["actionLabel"] : null,
+    actionUrl: typeof p["actionUrl"] === "string" ? p["actionUrl"] : null,
+    metaTemplateName: typeof p["metaTemplateName"] === "string" ? p["metaTemplateName"] : null,
+  };
+}
+
+export interface DeliverQueuedResult {
+  sent: number;
+  failed: number;
+  /** Queued before the payload column existed, so there is nothing to send. */
+  unsendable: number;
+}
+
+/**
+ * Send what `flushDeferred` released.
+ *
+ * The half that was missing. `flushDeferred` moved a row from `deferred` to
+ * `queued` and **nothing read `queued`**, so a notification held for quiet
+ * hours moved from one waiting state to another and reached nobody. Scheduling
+ * the flush was necessary and never sufficient.
+ *
+ * `queued` stays as the claim rather than being collapsed away: the flush marks
+ * a batch, this sends it, and a row that crashes between the two is still
+ * `queued` and gets picked up on the next run instead of being lost. It also
+ * means two runs cannot send the same row twice.
+ *
+ * The address is read from the user here, never from the row.
+ */
+export async function deliverQueued(limit = 200): Promise<DeliverQueuedResult> {
+  const due = await prisma.notificationDelivery.findMany({
+    where: { status: "queued" },
+    orderBy: { createdAt: "asc" },
+    take: limit,
+    select: {
+      id: true,
+      channel: true,
+      payload: true,
+      recipientUserId: true,
+      businessId: true,
+      enquiryId: true,
+    },
+  });
+  if (due.length === 0) return { sent: 0, failed: 0, unsendable: 0 };
+
+  /*
+     One query for the addresses, not one per row. `recipientUserId` is a plain
+     column with no relation declared, which is deliberate — the log points at a
+     user rather than owning one — so the lookup is explicit.
+  */
+  const ids = [...new Set(due.map((row) => row.recipientUserId).filter((id): id is string => !!id))];
+  const people = new Map(
+    (
+      await prisma.user.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, phone: true, email: true },
+      })
+    ).map((user) => [user.id, user]),
+  );
+
+  const senders = resolveNotificationSenders();
+  let sent = 0;
+  let failed = 0;
+  let unsendable = 0;
+
+  for (const row of due) {
+    const payload = readHeldPayload(row.payload);
+    const sender = senders[row.channel];
+    const person = row.recipientUserId ? people.get(row.recipientUserId) : undefined;
+    const to = person ? addressFor(row.channel, person) : null;
+
+    /*
+       No payload, no carrier, or no address. Marked failed with the reason
+       rather than left queued, because a row that can never be sent and is
+       never marked is a row this job retries for ever.
+    */
+    if (!payload || !sender || !to) {
+      const reason = !payload ? "no_payload" : !sender ? NO_SENDER : NO_ADDRESS;
+      if (!payload) unsendable += 1;
+      else failed += 1;
+      await prisma.notificationDelivery.update({
+        where: { id: row.id },
+        data: { status: "failed", reason },
+      });
+      continue;
+    }
+
+    const result = await sender.send({
+      channel: row.channel,
+      to,
+      subject: payload.subject,
+      body: payload.body,
+      actionLabel: payload.actionLabel,
+      actionUrl: payload.actionUrl,
+      metaTemplateName: payload.metaTemplateName,
+      recipientUserId: row.recipientUserId,
+      businessId: row.businessId,
+      enquiryId: row.enquiryId,
+    });
+
+    if (result.delivered) sent += 1;
+    else failed += 1;
+
+    await prisma.notificationDelivery.update({
+      where: { id: row.id },
+      data: {
+        status: result.delivered ? "sent" : "failed",
+        sentAt: result.delivered ? new Date() : null,
+        ...(result.detail ? { reason: result.detail } : {}),
+      },
+    });
+  }
+
+  return { sent, failed, unsendable };
 }
 
 /**

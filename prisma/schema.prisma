@@ -2857,6 +2857,18 @@ model NotificationDelivery {
 
   /// Why it was skipped or deferred, for the seller's own audit of their alerts.
   reason       String?
+  /// The rendered message, for a delivery that is going to be sent later.
+  ///
+  /// Written only when quiet hours defer one. Everything needed to hand it to a
+  /// carrier except the address: subject, body, action label and URL, and the
+  /// Meta template name. **Never contact details** — the number or address is
+  /// read from the user at send time, which is the rule the `recipientUserId`
+  /// comment above states and this column has to keep.
+  ///
+  /// Rendered when the event happened rather than when the message goes out, so
+  /// a notification held overnight says what was true at the time. Re-rendering
+  /// at send would quietly describe a quote that has since been amended.
+  payload      Json?
   scheduledFor DateTime? @map("scheduled_for")
   sentAt       DateTime? @map("sent_at")
   createdAt    DateTime  @default(now()) @map("created_at")
