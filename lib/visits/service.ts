@@ -181,6 +181,48 @@ export async function recordVisit(
   return { ok: true, reportId };
 }
 
+/**
+ * The `Media` row behind one uploaded visit photograph.
+ *
+ * Written after the bytes are in storage, so a failed upload leaves nothing
+ * behind, and here rather than in the server action because a console screen
+ * does not write to Prisma — `scripts/check-audit-coverage.mts` enforces that,
+ * and it caught this exact call sitting in `app/(admin)`.
+ *
+ * Not audited, and that is not an omission. The audited event is the report:
+ * `recordVisit` writes the row that says somebody went, and a photograph on its
+ * own changes nothing anybody can see. Auditing the upload as well would put
+ * "somebody added a file" in the same log as "somebody decided this business is
+ * tier 3", which makes the log harder to read rather than more complete.
+ *
+ * `kind: "visit"` keeps it out of the storefront. `lib/storefront/blocks.ts`
+ * renders `gallery`, and a verifier's photographs of somebody's warehouse are
+ * evidence rather than that supplier's marketing.
+ */
+export async function attachVisitPhoto(input: {
+  businessId: string;
+  path: string;
+  bytes?: number | null;
+}): Promise<{ ok: true; mediaId: string } | { ok: false; error: "wrong_folder" }> {
+  // The signature said this path was fine; this says it belongs to the business
+  // being reported on. A signed URL is not a claim about whose folder it is.
+  if (!input.path.startsWith(`${input.businessId}/visit/`)) {
+    return { ok: false, error: "wrong_folder" };
+  }
+
+  const media = await prisma.media.create({
+    data: {
+      businessId: input.businessId,
+      kind: "visit",
+      storagePath: input.path,
+      bytes: input.bytes ?? null,
+    },
+    select: { id: true },
+  });
+
+  return { ok: true, mediaId: media.id };
+}
+
 /** Visits asked for and not yet made, oldest first. */
 export async function openVisitRequests(limit = 100) {
   const rows = await prisma.siteVisitRequest.findMany({

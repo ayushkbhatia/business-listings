@@ -708,6 +708,11 @@ enum MediaKind {
   product
   review
   storefront
+  /// A site-visit photograph. Evidence, not content: the object lives in the
+  /// private document bucket and is read through a signed URL, because
+  /// `lib/storefront/blocks.ts` renders `gallery` on the public storefront and
+  /// a verifier's photograph of somebody's warehouse is not theirs to publish.
+  visit
 
   @@map("media_kind")
 }
