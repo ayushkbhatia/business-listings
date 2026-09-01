@@ -10,8 +10,10 @@ PRs #37–#44 merged · every claim verified against the tree · database querie
 >
 > **Two of the four blockers are fully closed** — the audit fence and the
 > background jobs. Sign-in is fixed in code and waiting on provisioning that is
-> not in this repository. Six of the eight orphaned mutations have a screen;
-> `recordVisit` and `removeReview` do not, for reasons given under *Still yours*.
+> not in this repository. **All eight orphaned mutations now have a caller** —
+> `removeReview` gained `/admin/reviews` and `recordVisit` gained a report form
+> and the admin upload path it needed. `editReview` left the list as a
+> misclassification: it is a buyer action, not a staff one.
 >
 > The three surface tables describe the platform **as it is now**, not as the
 > audit found it. They were left stale for a while after the findings below were
@@ -88,10 +90,10 @@ My recommendation: **stop building features.** The next unit of work is closing 
 | `/dashboard/listing`, `/media`, `/locations`, `/hours`, `/team` | Wired | The dead `mediaUrl()` export is gone; the page calls `publicUrl` directly, so images do display. |
 | `/dashboard/verification` | Wired | Submits evidence. Tier itself stays staff-only, correctly. |
 | `/dashboard/billing` + `/change`, `/cancel` | Wired | No payment capture, as designed. |
-| `/dashboard/analytics` | Thin | Fed by the measurements in `/api/jobs/daily`. Will populate. |
+| `/dashboard/analytics` | Thin | Fed by the measurements in `/api/jobs/daily`, which run nightly. Numbers appear after the first run against real traffic; nothing to build. |
 | `/dashboard/promote` | Wired | Boosts write audit rows. |
 | `/dashboard/reviews` | Wired | Reply only. Removal is staff-side and orphaned — see findings. |
-| `/dashboard/domain` | **Fail-closed** | `VERCEL_DOMAINS_TOKEN` is blank and `stores.businesslistings.me` is not provisioned. Screen works, integration cannot. |
+| `/dashboard/domain` | **Fail-closed** | The screen works; the integration cannot. Needs `VERCEL_DOMAINS_TOKEN` and `stores.businesslistings.me` provisioned — both outside the repo. Refuses rather than pretending, which is the intended behaviour until then. |
 | `/dashboard/setup`, `/setup/visit`, `/templates`, `/settings` | Wired | Visit scheduling exists; `recordVisit` behind it does not run — see findings. |
 
 ---
@@ -105,10 +107,11 @@ My recommendation: **stop building features.** The next unit of work is closing 
 | `/admin` | Wired | Queue counts and the day's work. |
 | `/admin/queue` + `[id]`, `/conflict/[id]` | Wired | Moderation queue with conflict resolution. |
 | `/admin/businesses` | Wired | Tier, suspend and lift all have a control, gated per row and per seat. The screen also had **no capability gate at all** — line 23 was dead code — and now has one. |
-| `/admin/reports` | **Partial** | Supplier reports land. `removeReview` still has no host — see *Still yours*. `editReview` left this row: it is a buyer action, not a staff one. |
+| `/admin/reports` | Wired | Supplier reports land. `removeReview` has a screen of its own at `/admin/reviews` — reports are one route to a bad review, not the only one. `editReview` left this row: it is a buyer action, not a staff one. |
 | `/admin/ingest` + `[id]`, `/dedupe` | Wired | `dismissCandidate` is inside the fence, `stageRun` has an upload form, and `unmergeBusinesses` has a screen with the reader it needed. The "8,600 staged rows" in the first draft of this audit was wrong — the table is empty after a reseed. |
 | `/admin/subscriptions`, `/dunning`, `/invoices`, `/revenue`, `/tax` | Wired | `issueSubscriptionCredit` has a panel, gated on `subscription.credit` alone rather than the page's wider OR. `runDunning` runs daily. |
-| `/admin/visits` | **Partial** | `recordVisit` still has no caller — visits can be scheduled and never marked done. It needs an admin media upload path that does not exist yet; see *Still yours*. |
+| `/admin/visits` | Wired | A request links to a report at `/admin/visits/[id]`: date, three separate findings, and at least two geotagged photographs. The admin upload path it needed was built with it. |
+| `/admin/reviews` | Wired | Removal with a ground and a written reason, ops lead only. Removed reviews stay listed and marked. |
 | `/admin/audit` | Wired | Every audited mutation appears here. `reason` is `NOT NULL` and enforced in Postgres. |
 | `/admin/content/matrix`, `/guides` + `[id]`, `/home`, `/redirects`, `/attribution` | Wired | Handoff 5's CMS. Content added here costs no deploy — use it. |
 | `/admin/categories` | Wired | Rename moves every affected URL and repoints existing redirects to avoid chains. |
@@ -289,27 +292,19 @@ Two more, both easy to miss:
 
 Until the mail provider is set, `pnpm dev:seat <kind>` is how anybody signs in.
 
-### Two mutations still without a screen
+### Nothing in the orphan list
 
-Both were deferred on purpose rather than half-built.
+All eight have a caller. The last two landed together: `/admin/reviews` for
+`removeReview`, and `/admin/visits/[id]` for `recordVisit` — the latter needed a
+staff-side media upload path, which is why it was last. Visit photographs are a
+`visit` media kind in the private document bucket, read through a signed URL,
+because `lib/storefront/blocks.ts` renders `gallery` and a verifier's
+photographs of somebody's warehouse are not that supplier's marketing.
 
-- **`recordVisit`** needs a visit report: a date, three booleans, and at least
-  two geotagged photographs, each with a `mediaId`, coordinates and a timestamp.
-  The coordinates are re-checked against a UAE bounding box by a database CHECK
-  constraint, so this is a real form, not a row strip — and there is **no
-  admin-side media upload path** today; the only `FileDrop` wiring is
-  seller-side. It also blocks something visible: `setVerificationTier`'s subject
-  check reads `Business.visitedByStaffId`, which only `recordVisit` writes, so
-  until it exists a field verifier sees no tier control anywhere and only an ops
-  lead can set one.
-- **`removeReview`** has nowhere to live. **No admin screen lists reviews at
-  all**, and `SupplierReport` has a `review_integrity` kind but no `reviewId` to
-  join on — only free text. So this is a choice between a migration that adds
-  the column and a new `/admin/reviews` screen over `Review` directly. Worth
-  knowing: `components/domain/ModerationRow.tsx` was built for exactly this and
-  has only ever rendered in `/dev/gallery`. Also note `review.remove` is **ops
-  lead only** — a moderator may resolve a supplier report and may not remove the
-  review it is about.
+Recording a visit also unblocked something that had been quietly broken:
+`setVerificationTier`'s subject check reads `Business.visitedByStaffId`, and
+until `recordVisit` had a screen only the seed ever wrote it — so a field
+verifier saw no tier control anywhere.
 
 ### One gap a cron does not close
 
@@ -418,3 +413,42 @@ And three the audit itself got wrong, found only by acting on it:
 ---
 
 *Audit performed against `main` at `8fc0ab9` on 30 August 2026, and acted on the same day in PR #45. Route counts from the filesystem; record counts queried live against the Supabase instance; every finding above re-verified by hand after the parallel pass, with a control case used to rule out grep artefacts.*
+
+---
+
+## What is left, in one place
+
+Nothing in this repository blocks a launch. Everything below is either
+provisioning outside it, or a decision.
+
+### Provisioning — yours
+
+1. **DNS for `businesslistings.me` at Spaceship.** The single thing between
+   "sign-in works" and "a supplier can sign up". Resend refuses to send from an
+   unverified domain, so email today reaches one address. The authoritative
+   nameserver serves none of Resend's records.
+2. **Rotate the `service_role` key.** It was pasted into a chat and is still
+   live.
+3. **Secrets into Vercel** — `BIRD_*`, `AUTH_HOOK_SECRET`, `CRON_SECRET`,
+   `RESEND_API_KEY`, `RESEND_FROM`. `resolveOtpSender` throws in production
+   rather than falling back to the console sender, and the cron routes answer
+   500 without `CRON_SECRET`.
+4. **OTP length 6, expiry 600s** in Supabase. The project issues eight digits
+   while the verify screen says six.
+5. **A public address.** `businesslistings.me` has no A record and the Vercel
+   deployment sits behind SSO protection, so nothing is reachable from outside.
+
+### Decisions — not mechanical, so not made unattended
+
+- **`business_sector_id_fkey`.** The one statement `prisma migrate diff` still
+  reports. Declaring the relation gets the diff to zero and makes a CI drift
+  check trivial; leaving it means anybody running `migrate dev` drops the
+  constraint. It is now the *only* thing that command would do, which makes it
+  more exposed than when it hid among nine index drops.
+- **`flushDeferred` writes `queued`, and nothing reads it.** Releasing a
+  quiet-hours notification moves it from one waiting state to another. Closing
+  it means re-rendering a delivery from its row — `NotificationDelivery` stores
+  the recipient, event and channel but not the body — which wants a path out of
+  `events.ts` that does not exist.
+- **WhatsApp OTP** waits on Meta approving an authentication template. Not ours
+  to grant, and email works without it.

@@ -244,6 +244,7 @@ model Category {
   defaultTemplate   SpecTemplate?        @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
   templates         SpecTemplate[]       @relation("TemplateCategory")
   primaryFor        Business[]           @relation("BusinessPrimaryCategory")
+  sectorFor         Business[]           @relation("BusinessSector")
   businesses        BusinessCategory[]
   products          Product[]
   placements        PlacementSlot[]
@@ -511,6 +512,15 @@ model Business {
   derivedAt            DateTime? @map("derived_at")
 
   primaryCategory        Category                @relation("BusinessPrimaryCategory", fields: [primaryCategoryId], references: [id], onDelete: Restrict)
+  /// Declared so Prisma knows the constraint the database already has.
+  ///
+  /// `sectorId` stays a denormalised pointer and is still read directly — see
+  /// the field's own comment. This changes nothing about how it is used; it
+  /// stops `migrate dev` proposing to drop `business_sector_id_fkey`, which it
+  /// did on every run because a constraint the datamodel cannot see is drift to
+  /// remove. Restrict, matching the database: a sector with listings standing
+  /// on it should not be deletable.
+  sector                 Category?               @relation("BusinessSector", fields: [sectorId], references: [id], onDelete: Restrict)
   categories             BusinessCategory[]
   plan                   Plan?                   @relation(fields: [planId], references: [id], onDelete: SetNull)
   visitedByStaff         User?                   @relation("BusinessVisitedBy", fields: [visitedByStaffId], references: [id], onDelete: SetNull)
@@ -560,7 +570,7 @@ model Business {
   boosts                 ListingBoost[]
 
   @@index([primaryCategoryId])
-  @@index([sectorId])
+  @@index([sectorId], map: "business_sector_idx")
   @@index([claimStatus])
   @@index([verificationTier])
   @@index([publishedAt])
@@ -896,7 +906,7 @@ model EnquiryLine {
   product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 
   @@index([enquiryId])
-  @@index([productId])
+  @@index([productId], map: "enquiry_line_product_idx")
   @@map("enquiry_line")
 }
 
@@ -1082,8 +1092,8 @@ model PlacementWaitlist {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
-  @@unique([businessId, categoryId, emirate])
-  @@index([categoryId, emirate, createdAt])
+  @@unique([businessId, categoryId, emirate], map: "placement_waitlist_business_category_emirate_key")
+  @@index([categoryId, emirate, createdAt], map: "placement_waitlist_category_emirate_created_idx")
   @@map("placement_waitlist")
 }
 
@@ -1223,6 +1233,7 @@ model LicenceImportRun {
   rows       StagedListing[]
   businesses Business[]
 
+  @@index([status, createdAt(sort: Desc)], map: "licence_import_run_status_created_at_idx")
   @@map("licence_import_run")
 }
 
@@ -1288,7 +1299,8 @@ model StagedListing {
   category Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   business Business?        @relation(fields: [businessId], references: [id], onDelete: SetNull)
 
-  @@unique([runId, rowNumber])
+  @@unique([runId, rowNumber], map: "staged_listing_run_row_key")
+  @@index([runId, disposition], map: "staged_listing_run_disposition_idx")
   @@map("staged_listing")
 }
 
@@ -1352,6 +1364,7 @@ model BusinessMerge {
   actor      User             @relation("MergeActor", fields: [actorId], references: [id], onDelete: Restrict)
   candidates MergeCandidate[]
 
+  @@index([absorbId], map: "business_merge_absorb_idx")
   @@map("business_merge")
 }
 
@@ -1379,6 +1392,7 @@ model SiteVisitReport {
   staff    User              @relation("VisitReporter", fields: [staffId], references: [id], onDelete: Restrict)
   photos   SiteVisitPhoto[]
 
+  @@index([businessId, visitedAt(sort: Desc)], map: "site_visit_report_business_idx")
   @@map("site_visit_report")
 }
 
@@ -1400,6 +1414,7 @@ model SiteVisitPhoto {
   report SiteVisitReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
   media  Media           @relation(fields: [mediaId], references: [id], onDelete: Restrict)
 
+  @@index([reportId], map: "site_visit_photo_report_idx")
   @@map("site_visit_photo")
 }
 
@@ -1493,6 +1508,7 @@ model ViewAsSession {
   staff    User     @relation("ViewAsStaff", fields: [staffId], references: [id], onDelete: Cascade)
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
+  @@index([businessId, startedAt(sort: Desc)], map: "view_as_session_business_idx")
   @@map("view_as_session")
 }
 
@@ -1527,6 +1543,7 @@ model CallOutcome {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   staff    User     @relation("CallStaff", fields: [staffId], references: [id], onDelete: Restrict)
 
+  @@index([businessId, createdAt(sort: Desc)], map: "call_outcome_business_idx")
   @@map("call_outcome")
 }
 
@@ -1549,7 +1566,8 @@ model SpecFieldProposal {
   promotedField SpecField? @relation(fields: [promotedFieldId], references: [id], onDelete: SetNull)
   decidedBy     User?      @relation("ProposalDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
 
-  @@unique([categoryId, key])
+  @@unique([categoryId, key], map: "spec_field_proposal_category_key_key")
+  @@index([state, businessCount(sort: Desc)], map: "spec_field_proposal_ranked_idx")
   @@map("spec_field_proposal")
 }
 
@@ -1808,6 +1826,7 @@ model PaymentAttempt {
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
+  @@index([subscriptionId, attemptedAt(sort: Desc)], map: "payment_attempt_subscription_idx")
   @@map("payment_attempt")
 }
 
@@ -1920,8 +1939,8 @@ model MrrMovement {
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  @@index([occurredAt])
-  @@index([businessId, occurredAt])
+  @@index([occurredAt], map: "mrr_movement_occurred_idx")
+  @@index([businessId, occurredAt], map: "mrr_movement_business_idx")
   @@map("mrr_movement")
 }
 
@@ -1991,8 +2010,8 @@ model ListingBoost {
   business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   createdBy User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
 
-  @@index([businessId, expiresAt])
-  @@index([expiresAt])
+  @@index([businessId, expiresAt], map: "listing_boost_business_idx")
+  @@index([expiresAt], map: "listing_boost_expiry_idx")
   @@map("listing_boost")
 }
 
@@ -2501,7 +2520,7 @@ model StorefrontTemplate {
   pages    TemplatePage[]
   versions TemplateVersion[]
 
-  @@index([sectorId, status])
+  @@index([sectorId, status], map: "storefront_template_sector_idx")
   @@map("storefront_template")
 }
 
@@ -2532,7 +2551,7 @@ model TemplateSection {
   template StorefrontTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
   content  StorefrontContent[]
 
-  @@index([templateId, sortOrder])
+  @@index([templateId, sortOrder], map: "template_section_order_idx")
   @@map("template_section")
 }
 
@@ -2559,7 +2578,7 @@ model StorefrontContent {
   section  TemplateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
 
   @@unique([businessId, sectionId])
-  @@index([sectionId])
+  @@index([sectionId], map: "storefront_content_section_idx")
   @@map("storefront_content")
 }
 
@@ -2645,7 +2664,7 @@ model TeamMember {
   location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
   media    Media?    @relation(fields: [mediaId], references: [id], onDelete: SetNull)
 
-  @@index([businessId, sortOrder])
+  @@index([businessId, sortOrder], map: "team_member_business_idx")
   @@map("team_member")
 }
 
@@ -2692,7 +2711,7 @@ model CustomDomain {
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
-  @@index([status, lastCheckedAt])
+  @@index([status, lastCheckedAt], map: "custom_domain_poll_idx")
   @@map("custom_domain")
 }
 
