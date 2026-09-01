@@ -6,6 +6,7 @@ import {
   getSpecFacets,
   getSponsoredBusinessId,
   getSpecTemplate,
+  recordSearch,
   recordZeroResult,
   searchBusinesses,
   searchProducts,
@@ -101,6 +102,21 @@ export async function Results({ query, basePath, category, tray = [], search = "
   // "DN100, PN16" narrows a valve search far faster than an emirate does.
   const facets = [...specFacets, ...fixedFacets];
   const total = query.tab === "products" ? productTotal : businessTotal;
+
+  /*
+     Every search is logged, whatever it returned. The home page's "Popular:"
+     chips are the five most-searched terms of the last thirty days that
+     returned something, so the row this writes is the only thing standing
+     between that panel and a hardcoded list.
+
+     Not awaited alongside the zero-result write below, and never allowed to
+     throw: a log that fails must not take a results page with it.
+  */
+  void recordSearch(
+    { q: query.q, tab: query.tab, emirate: query.emirate },
+    total,
+    category?.id ?? null,
+  );
 
   let suggestion = null;
   if (total === 0) {

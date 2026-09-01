@@ -46,3 +46,7 @@ export {
 
 export { PlanCard, type PlanCardProps, type PlanFeature } from "./PlanCard";
 export { ReviewCard, type ReviewCardProps } from "./ReviewCard";
+
+// Board 1a. The directory home's two compositions.
+export { DirectorySearchBar, type DirectorySearchBarProps } from "./DirectorySearchBar";
+export { RfqPanel, TrustPanel, type RfqPanelProps, type RfqPanelRow } from "./RfqPanel";

@@ -27,6 +27,9 @@ import {
   type ThreadMessageView,
   type QuoteLineDraft,
   type QuoteLineEditorLabels,
+  DirectorySearchBar,
+  RfqPanel,
+  TrustPanel,
 } from "@/components/domain";
 import { Button } from "@/components/primitives";
 import type { RamadanHours, WeekHours } from "@/lib/trade/hours";
@@ -415,9 +418,99 @@ export function Domain() {
           </Frame>
         </States>
       </Section>
+
+      <Section
+        id="directory-search-bar"
+        title="DirectorySearchBar"
+        note="board 1a's one job — a plain GET form, no JavaScript, works on the first try"
+      >
+        <States label="empty" stack>
+          <DirectorySearchBar
+            formLabel={`${t("home.search_landmark")} — empty`}
+            whatLabel={t("home.search_what")}
+            whereLabel={t("home.search_where")}
+            whatPlaceholder={t("home.search_what_placeholder")}
+            anywhereLabel={t("home.search_where_all")}
+            submitLabel={t("home.search_cta")}
+          />
+        </States>
+        <States label="carrying a query back from a search" stack>
+          <DirectorySearchBar
+            formLabel={`${t("home.search_landmark")} — prefilled`}
+            defaultQuery="Chilled water pumps"
+            defaultEmirate="dubai"
+            whatLabel={t("home.search_what")}
+            whereLabel={t("home.search_where")}
+            whatPlaceholder={t("home.search_what_placeholder")}
+            anywhereLabel={t("home.search_where_all")}
+            submitLabel={t("home.search_cta")}
+          />
+        </States>
+      </Section>
+
+      <Section
+        id="rfq-panel"
+        title="RfqPanel"
+        note="the most sensitive thing on the home page — no buyer identity finer than an emirate"
+      >
+        <States label="four open requests">
+          <RfqPanel label="Open requests — four" rows={RFQ_SPECIMENS} />
+        </States>
+        <States label="two — three is a fine panel, and so is two. never pad">
+          <RfqPanel label="Open requests — two" rows={RFQ_SPECIMENS.slice(0, 2)} />
+        </States>
+        <States label="signed in — the free qualifier goes">
+          <RfqPanel signedIn label="Open requests — signed in" rows={RFQ_SPECIMENS.slice(0, 2)} />
+        </States>
+        <States label="none qualify — the whole panel is replaced, never an empty state">
+          <TrustPanel />
+        </States>
+      </Section>
     </>
   );
 }
+
+/**
+ * Four requirements with nothing identifying in them.
+ *
+ * Written the way a buyer writes: a quantity, a specification and where it is
+ * going. Every one of these would survive `detectIdentityLeak`, which is the
+ * only reason a row reaches this component at all.
+ */
+const RFQ_SPECIMENS = [
+  {
+    id: "rfq-1",
+    requirement: "120× fire-rated ducting, Ø300 galvanised",
+    categoryName: "HVAC & ventilation",
+    place: "Dubai",
+    quoteCount: 4,
+    age: "11 min ago",
+  },
+  {
+    id: "rfq-2",
+    requirement: "Monthly deep-clean AMC, 3 retail units",
+    categoryName: "Facilities management",
+    place: "Sharjah",
+    quoteCount: 7,
+    age: "1 h ago",
+  },
+  {
+    id: "rfq-3",
+    requirement: "Sea freight, 2× 40HQ Jebel Ali to Dammam",
+    categoryName: "Logistics & freight",
+    place: "Dubai",
+    quoteCount: 12,
+    age: "2 h ago",
+  },
+  {
+    id: "rfq-4",
+    requirement: "Ramadan gift boxes, 500 units, printed",
+    categoryName: "Printing & signage",
+    place: "Abu Dhabi",
+    quoteCount: 3,
+    age: "3 h ago",
+  },
+];
 
 /**
  * The step 1 checkpoint state, as data: two lines the seller stocks — one of

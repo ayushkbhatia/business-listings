@@ -2154,6 +2154,42 @@ model ZeroResultQuery {
   @@map("zero_result_query")
 }
 
+/// Written on every search, whatever it returned. The sibling of
+/// `ZeroResultQuery`, and the store the home page's "Popular:" chips read.
+///
+/// Two tables rather than one, deliberately. `ZeroResultQuery` carries the
+/// applied facets so the gap report can say which filter to suggest dropping,
+/// and it is read by the recruitment call list — a table whose every row is a
+/// failure. This one is read for the opposite reason: the five things buyers
+/// most often searched for *and found*, which is what belongs on the home page.
+/// Folding them together would mean the gap report learning to exclude nine
+/// rows in ten, and the home page learning to exclude the other one.
+///
+/// No `actorId`. Nothing reads a popular query per person, and a log of what
+/// each buyer searched for is personal data kept for no reason. The
+/// normalised form is what is grouped on, so the raw text is kept only to
+/// render a chip a buyer will recognise.
+model SearchQueryLog {
+  id         String   @id @default(cuid())
+  /// As the buyer typed it. What a chip renders.
+  query      String
+  /// Lowercased, collapsed whitespace. What the grouping counts.
+  normalised String   @map("normalised")
+  /// How many results came back. The home page reads `> 0` only — a chip
+  /// leading to an empty page is worse than no chip.
+  resultCount Int     @map("result_count")
+  categoryId String?  @map("category_id")
+  emirate    Emirate?
+  tab        String   @default("businesses")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  /// The home page's read is "group by normalised, where createdAt >= 30 days
+  /// ago and resultCount > 0". This is that query's index, in that order.
+  @@index([normalised, createdAt])
+  @@index([createdAt])
+  @@map("search_query_log")
+}
+
 /// A saved search plus its alert cadence. /account/saved.
 model SavedSearch {
   id        String   @id @default(cuid())

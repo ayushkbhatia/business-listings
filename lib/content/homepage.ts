@@ -40,6 +40,80 @@ export interface HomeRow {
   publishable: boolean;
 }
 
+/**
+ * What the home page's "Popular:" chips are currently showing, and what came
+ * close.
+ *
+ * Board 1a puts five search terms under the hero and they are read from
+ * `search_query_log` — the top five of the last thirty days that returned
+ * something. Nobody chooses them, which is the point: they are what buyers
+ * actually typed. But "nobody chooses them" and "nobody can see them" are
+ * different things, and until this the only way to know what the most-linked
+ * page on the site was recommending was to load it.
+ *
+ * Read-only, deliberately. A staff pick would make the row a marketing slot and
+ * the whole argument for it is that it is not one. What this screen is for is
+ * noticing — a term climbing that leads somewhere thin, or a term the directory
+ * cannot answer at all, which is the recruitment signal the gap report reads.
+ *
+ * The zero-result rows are included and marked. They are the ones the home page
+ * refuses, and seeing them beside the ones it shows is the whole diagnosis: a
+ * term with three hundred searches and no results is a trade to go and sign.
+ */
+export interface PopularQueryRow {
+  query: string;
+  searches: number;
+  /** False when every search for this term came back empty. */
+  answered: boolean;
+  /** In the five the home page is rendering right now. */
+  onHome: boolean;
+}
+
+const POPULAR_WINDOW_DAYS = 30;
+const POPULAR_SHOWN = 5;
+
+export async function popularQueryReport(take = 12): Promise<PopularQueryRow[]> {
+  const since = new Date(Date.now() - POPULAR_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+
+  const grouped = await prisma.searchQueryLog.groupBy({
+    by: ["normalised"],
+    where: { createdAt: { gte: since } },
+    _count: { normalised: true },
+    _max: { resultCount: true },
+    orderBy: { _count: { normalised: "desc" } },
+    take,
+  });
+  if (grouped.length === 0) return [];
+
+  const spellings = await prisma.searchQueryLog.findMany({
+    where: { normalised: { in: grouped.map((row) => row.normalised) } },
+    distinct: ["normalised"],
+    orderBy: { createdAt: "desc" },
+    select: { normalised: true, query: true },
+  });
+  const bySpelling = new Map(spellings.map((row) => [row.normalised, row.query]));
+
+  /*
+     `onHome` is computed the same way the page computes it rather than by
+     taking the first five of this list — the page filters to answered terms
+     first and then takes five, so a list that marked the top five outright
+     would disagree with the page the moment an unanswerable term ranked.
+  */
+  const shown = new Set(
+    grouped
+      .filter((row) => (row._max.resultCount ?? 0) > 0)
+      .slice(0, POPULAR_SHOWN)
+      .map((row) => row.normalised),
+  );
+
+  return grouped.map((row) => ({
+    query: bySpelling.get(row.normalised) ?? row.normalised,
+    searches: row._count.normalised,
+    answered: (row._max.resultCount ?? 0) > 0,
+    onHome: shown.has(row.normalised),
+  }));
+}
+
 export async function homeCandidates(): Promise<HomeRow[]> {
   const { pageMatrix } = await import("./matrix");
   const [matrix, categories] = await Promise.all([

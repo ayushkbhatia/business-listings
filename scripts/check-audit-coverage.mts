@@ -81,6 +81,10 @@ const EXEMPT = new Map<string, string>([
     "As above.",
   ],
   [
+    "lib/db/queries/home.ts",
+    "`recordSearch` appends a row to the search log on every public search. It is a buyer typing into a box, not a staff decision, and `AuditEvent.actorId` is NOT NULL because the audit log should hold decisions only. Its sibling `recordZeroResult` in queries/search.ts is the same write for the same reason.",
+  ],
+  [
     "lib/crm/call-list.ts",
     "`logCall` records a phone call that happened outside the system. It changes nothing about the directory, and the CallOutcome row carries the staff id and the timestamp — it is the record, not a change needing one.",
   ],
