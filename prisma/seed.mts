@@ -833,12 +833,26 @@ async function seedOpenRequests(db: Db) {
       quotes: 5,
     },
     /*
-     * The two the detector must catch. Both are the kind of thing buyers
-     * actually write, and neither may ever appear on the home page.
+     * Two the detector must catch, so the home page's suppression rule has
+     * something exercising it in a browser rather than only in a unit test.
+     *
+     * Both name a company and neither carries a phone number or an email, and
+     * that is deliberate rather than squeamish. An enquiry goes to its
+     * recipients' leads inbox, which renders the requirement as the buyer
+     * wrote it — board 3j shows a first name and nothing else, and
+     * `dashboard.spec.ts` asserts no contact detail ever appears on it. A seed
+     * fixture carrying a mobile number therefore does not test the home page,
+     * it plants a buyer's phone number in a seller-facing screen and in every
+     * developer's database.
+     *
+     * The phone, email, IBAN, URL and TRN branches are covered where they
+     * belong: eleven cases in lib/enquiry/redaction.test.ts, and one
+     * integration fixture that creates a leaky enquiry, asserts the panel drops
+     * it, and deletes it again.
      */
     {
       sector: "valves-and-fittings",
-      requirement: "Butterfly valves DN200. Call Ahmed on 0506412288 or email ahmed@algulfcool.ae.",
+      requirement: "Butterfly valves DN200 for Al Bariq Contracting LLC, flanged PN16.",
       area: "Al Quoz Industrial 1",
       age: 27,
       quotes: 0,
