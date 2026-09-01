@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
 import { GET as sweep } from "@/app/api/jobs/sweep/route";
 import { GET as daily } from "@/app/api/jobs/daily/route";
-import { GET as measure } from "@/app/api/jobs/measure/route";
 import { runSteps } from "@/lib/jobs/authorize";
 
 /**
@@ -24,7 +23,6 @@ function call(path: string, bearer?: string) {
 const ROUTES: ReadonlyArray<[string, (r: NextRequest) => Promise<Response>]> = [
   ["/api/jobs/sweep", sweep],
   ["/api/jobs/daily", daily],
-  ["/api/jobs/measure", measure],
 ];
 
 let original: string | undefined;

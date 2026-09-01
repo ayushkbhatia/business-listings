@@ -78,7 +78,7 @@ My recommendation: **stop building features.** The next unit of work is closing 
 | `/dashboard/listing`, `/media`, `/locations`, `/hours`, `/team` | Wired | `mediaUrl()` in the media actions is exported and never called — check uploaded images actually display. |
 | `/dashboard/verification` | Wired | Submits evidence. Tier itself stays staff-only, correctly. |
 | `/dashboard/billing` + `/change`, `/cancel` | Wired | No payment capture, as designed. |
-| `/dashboard/analytics` | Thin | Depends on `/api/jobs/measure`, the one job that *is* scheduled. Will populate. |
+| `/dashboard/analytics` | Thin | Fed by the measurements in `/api/jobs/daily`. Will populate. |
 | `/dashboard/promote` | Wired | Boosts write audit rows. |
 | `/dashboard/reviews` | Wired | Reply only. Removal is staff-side and orphaned — see findings. |
 | `/dashboard/domain` | **Fail-closed** | `VERCEL_DOMAINS_TOKEN` is blank and `stores.businesslistings.me` is not provisioned. Screen works, integration cannot. |
@@ -148,7 +148,7 @@ Read that list as a product statement: **you cannot verify a supplier, remove a 
 
 **Fixed.** Two new routes grouped by cadence — `/api/jobs/sweep` hourly and `/api/jobs/daily` — plus the `CRON_SECRET` guard extracted to `lib/jobs/authorize.ts` so there is one copy, and the first tests `app/api/jobs/` has ever had. One caveat kept visible rather than papered over: `flushDeferred` moves a delivery from `deferred` to `queued`, and **nothing reads `queued`**. Scheduling it is necessary and not sufficient.
 
-`vercel.json` has exactly one cron: `/api/jobs/measure`, hourly. `runDunning`, `applyEndedCancellations`, `flushDeferred` and `pruneAttempts` have no schedule and no API route to reach them.
+`vercel.json` had exactly one cron: `/api/jobs/measure`, hourly. `runDunning`, `applyEndedCancellations`, `flushDeferred` and `pruneAttempts` have no schedule and no API route to reach them.
 
 Consequence in order of pain: subscriptions that should lapse stay active, dunning never starts, deferred notifications never send, and `auth_attempt` grows without bound (922 rows already).
 

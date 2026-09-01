@@ -213,7 +213,7 @@ cannot disagree; the sweep then clears the column so `publishedAt` stops lying t
 
 The sweep is **not audited**, following `runDunning`: it is the platform applying its own
 published rule, there is no actor to attribute it to, and `AuditEvent.actorId` is NOT NULL
-precisely so the log contains decisions. It rides on `/api/jobs/measure` beside the domain
+precisely so the log contains decisions. It rides on `/api/jobs/sweep` beside the domain
 poller, for the same reason — it writes no `Business` row, so it cannot race for `derivedAt`.
 
 ### Found on the way

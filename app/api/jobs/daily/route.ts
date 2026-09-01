@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { runDunning } from "@/lib/billing/dunning-job";
 import { applyEndedCancellations } from "@/lib/billing/service";
 import { pruneAttempts } from "@/lib/auth/attempts";
+import { measureResponseTimes } from "@/lib/metrics/job";
+import { measureProfileStrength } from "@/lib/metrics/strength-job";
+import { sweepAreaPages } from "@/lib/seo/area";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
 
 /**
@@ -51,6 +54,34 @@ export async function GET(request: NextRequest) {
       const pruned = await pruneAttempts(olderThan);
       return { pruned, olderThan };
     },
+    /*
+       The two measurements, moved here off an hourly schedule.
+
+       Both walk the whole directory and write a row per business:
+       `measureProfileStrength` reads every unsuspended business plus every
+       product, every media row and every spec field, then issues one UPDATE
+       each. At a few hundred listings that is nothing. At a few thousand it is
+       four full scans and a few thousand writes, twenty-four times a day, for
+       numbers that move on the timescale of a seller editing their profile.
+
+       Nothing reads them urgently. A median reply time and a completeness
+       percentage that are a day old are still true enough to rank and to show,
+       and both are recomputed from source rather than accumulated — so a
+       skipped run costs freshness and never correctness.
+
+       Sequential, and in this order, because both write `Business.derivedAt`
+       and running them together means two updates racing for the same row on
+       every business that changed in both.
+    */
+    responseTimes: () => measureResponseTimes(),
+    profileStrength: () => measureProfileStrength(),
+    /*
+       Bookkeeping, not enforcement, which is why it can wait a day:
+       `areaPageState.live` recomputes the publish floors at read time, so a
+       page whose supply has dropped stops being indexable in the same request.
+       This only makes the stored column agree with what is already served.
+    */
+    areaPages: () => sweepAreaPages(),
   });
 
   console.info("[jobs] daily", outcome.steps);
