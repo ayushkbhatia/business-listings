@@ -12,7 +12,7 @@ test.describe("home", () => {
     const body = (await page.textContent("body")) ?? "";
     // Voice rule: "218 suppliers in Al Quoz", never "many suppliers".
     expect(body).not.toMatch(/\b(many|lots of|hundreds of|thousands of) (suppliers|businesses)\b/i);
-    expect(body).toMatch(/\d+ licensed UAE businesses/);
+    expect(body).toMatch(/[\d,]+ licensed businesses across \d+ sectors/);
   });
 
   test("search works as a plain GET form, before any JavaScript", async ({ page }) => {
@@ -51,9 +51,132 @@ test.describe("home", () => {
     }
   });
 
-  test("renders no price", async ({ page }) => {
+  test("renders no product price", async ({ page }) => {
     await page.goto("/");
-    expect((await page.textContent("body")) ?? "").not.toMatch(/AED\s*[\d,]/);
+
+    /*
+       The rule is that `Product` has no price and no public surface renders
+       one. It is not "the string AED never appears": the supplier band shows
+       what a *subscription* costs, read from the `Plan` table, and board 1a
+       draws those three tiles. Asserting on the whole body conflated the two
+       and would have failed the moment the band shipped.
+
+       So: every product card says what goes where a price would, and no money
+       appears outside the one band that is allowed it.
+    */
+    const cards = page.locator("article").filter({ hasText: "Price on enquiry" });
+    if ((await cards.count()) > 0) {
+      for (const card of await cards.all()) {
+        expect((await card.textContent()) ?? "").not.toMatch(/AED\s*[\d,]/);
+      }
+    }
+
+    const money = await page.$$eval("body *", (nodes) =>
+      nodes
+        .filter((node) => node.children.length === 0 && /AED\s*[\d,]/.test(node.textContent ?? ""))
+        .map((node) => (node.closest("section a[href='/onboarding/claim']") ? "plan" : "leak")),
+    );
+    expect(money.filter((where) => where === "leak")).toEqual([]);
+  });
+
+  test("shows the plan prices the Plan table holds, not a number of its own", async ({ page }) => {
+    // Criterion 6. The band must not drift from /pricing, and the only way
+    // that holds is if it carries no constant. The seed's rows are 0/349/899;
+    // the mock was drawn with 99/299 and the table wins.
+    await page.goto("/");
+    const band = page.getByRole("link", { name: /Your storefront, live this afternoon/ });
+    await expect(band).toContainText("AED 0");
+    await expect(band).toContainText("AED 349");
+    await expect(band).toContainText("AED 899");
+  });
+
+  test("the open-requests panel names no buyer, and no area below an emirate", async ({ page }) => {
+    /*
+       Board 1a calls this "the most sensitive thing on the page". The rows are
+       written by buyers who have no idea they will be published, on the most
+       crawled surface the platform has.
+
+       The unit tests cover the detector and the integration tests cover the
+       query's shape. What is left for a browser is the thing neither can see:
+       what actually reached the HTML.
+    */
+    await page.goto("/");
+    const panel = page.getByRole("region", { name: /Open requests|Why suppliers/ });
+    await expect(panel).toBeVisible();
+    const text = (await panel.textContent()) ?? "";
+
+    expect(text, "a phone number").not.toMatch(/(?:\+|00)?\d[\d\s().-]{7,}/);
+    expect(text, "an email").not.toMatch(/[^\s@]+@[^\s@]+\.[a-z]{2,}/i);
+    expect(text, "a company form").not.toMatch(/\b(?:L\.?L\.?C|F\.?Z\.?E|FZCO|W\.?L\.?L)\b/i);
+
+    /*
+       The place rule bites on the meta line, not on the buyer's prose.
+
+       `deliverToArea` is free text and may be an address, so the panel resolves
+       it to an emirate and never echoes it — that is what "no granularity finer
+       than an emirate" constrains. The requirement itself is shown as written,
+       which the board is explicit about: its own specimen row reads "Sea
+       freight, 2× 40HQ Jebel Ali → Dammam". A buyer naming a district in their
+       own sentence is describing the job, and censoring it would leave a
+       requirement no supplier could quote against.
+    */
+    const metas = await page.locator("section[aria-label] li p:last-child").allTextContents();
+    expect(metas.length).toBeGreaterThan(0);
+    for (const meta of metas) {
+      for (const area of ["Al Quoz", "Mussafah", "Deira", "Jebel Ali", "KIZAD", "ICAD"]) {
+        expect(meta, area).not.toContain(area);
+      }
+      // Category · place · N quotes · age. Four fields, and place is one of
+      // the seven emirates or "UAE".
+      const place = meta.split("·")[1]?.trim() ?? "";
+      expect(
+        [
+          "Dubai",
+          "Abu Dhabi",
+          "Sharjah",
+          "Ajman",
+          "Ras Al Khaimah",
+          "Fujairah",
+          "Umm Al Quwain",
+          "UAE",
+        ],
+        meta,
+      ).toContain(place);
+    }
+  });
+
+  test("every count on the page is a number, not an adjective", async ({ page }) => {
+    await page.goto("/");
+    // Criterion 1, from the outside: the sector grid and the emirate row both
+    // carry live counts, and a missing query renders an empty chip rather than
+    // a wrong one.
+    const sectors = page.locator("ul li a[href^='/c/']");
+    expect(await sectors.count()).toBeGreaterThan(0);
+    for (const card of await sectors.all()) {
+      expect((await card.textContent()) ?? "", "a sector card with no count").toMatch(/\d/);
+    }
+
+    const emirates = page.locator("a[href^='/search?emirate=']");
+    // All seven, including the ones at zero — a country does not lose an
+    // emirate because nobody has signed up there yet.
+    expect(await emirates.count()).toBe(7);
+  });
+
+  test("the hero search is a GET form that works with JavaScript disabled", async ({ browser }) => {
+    // The buyer this page is for is on a warehouse floor with one bar. The
+    // search bar ships no client JavaScript and this is the assertion that
+    // keeps it that way.
+    const context = await browser.newContext({ javaScriptEnabled: false });
+    const page = await context.newPage();
+    await page.goto("/");
+
+    const hero = page.locator("form[action='/search']").last();
+    await hero.locator("input[name='q']").fill("gate valve");
+    await hero.locator("select[name='emirate']").selectOption("dubai");
+    await hero.getByRole("button", { name: "Search" }).click();
+
+    await expect(page).toHaveURL(/\/search\?.*q=gate\+valve.*emirate=dubai/);
+    await context.close();
   });
 
   test("has no dead links anywhere in the chrome", async ({ page }) => {

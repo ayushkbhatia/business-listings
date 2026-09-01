@@ -110,16 +110,25 @@ test.describe("acceptance criterion 6 — zero results is a designed state", () 
 });
 
 test.describe("two tabs, one query", () => {
+  /*
+     Scoped to the results tabs. Board 1a puts a "Products" item in the top bar
+     — it goes to /search?tab=products with no query — so an unscoped
+     `name: /Products/` now matches two links and resolves to neither. The tab
+     is the one carrying a count.
+  */
+  const productsTab = (page: import("@playwright/test").Page) =>
+    page.getByRole("link", { name: /Products \d/ });
+
   test("the tab is in the URL and the query survives switching", async ({ page }) => {
     await page.goto("/search?q=valve");
-    await page.getByRole("link", { name: /Products/ }).click();
+    await productsTab(page).click();
     await expect(page).toHaveURL(/tab=products/);
     await expect(page).toHaveURL(/q=valve/);
   });
 
   test("filters survive a tab switch", async ({ page }) => {
     await page.goto("/search?q=valve&emirate=dubai");
-    await page.getByRole("link", { name: /Products/ }).click();
+    await productsTab(page).click();
     await expect(page).toHaveURL(/emirate=dubai/);
   });
 });

@@ -57,7 +57,12 @@ export function PublicShell({
         {bleed ? children : <div className="mx-auto max-w-7xl px-5 py-[var(--section-pad)]">{children}</div>}
       </Content>
 
-      {footer && <footer className="border-t border-line bg-paper-sunk">{footer}</footer>}
+      {/*
+         No background and no border here. The directory footer is an ink band
+         that paints its own, and a paper-sunk wrapper behind it drew a 1px
+         line of the wrong colour across the top of every public page.
+      */}
+      {footer && <footer>{footer}</footer>}
     </div>
   );
 }

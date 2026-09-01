@@ -22,8 +22,10 @@ test.describe("one route, two compositions", () => {
   test("a claimed business renders the 1d composition", async ({ page }) => {
     await page.goto(`/b/${CLAIMED}`);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Al Marwan");
-    // Tabs, catalogue, verification ladder — none of which the unclaimed page has.
-    await expect(page.getByRole("link", { name: /Products/ })).toBeVisible();
+    // Tabs, catalogue, verification ladder — none of which the unclaimed page
+    // has. Scoped by its count: the top bar now carries a "Products" item too,
+    // and the storefront's own tab is the one that says how many.
+    await expect(page.getByRole("link", { name: /Products \d/ })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Verification ladder" })).toBeVisible();
     await expect(page.getByText("has not been claimed")).toHaveCount(0);
   });

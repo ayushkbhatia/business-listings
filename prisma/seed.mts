@@ -25,6 +25,9 @@ import { DN_SYNONYMS, sizeAliases } from "../lib/trade/nominal-size.js";
 import { matchLine } from "../lib/quote/match.js";
 import { medianResponseMs, windowStart } from "../lib/metrics/response-time.js";
 import { monthStart } from "../lib/enquiry/fanout.js";
+import { EXTRA_CATEGORIES } from "./seed-taxonomy.mjs";
+import { EXTRA_SUBCATEGORIES } from "./seed-taxonomy.mjs";
+import { DEEP_SUBCATEGORIES } from "./seed-taxonomy-depth.mjs";
 import { seedGuides } from "./seed-guides.mjs";
 import { seedSubcategories } from "./seed-subcategories.mjs";
 import { seedAreaPages } from "./seed-area-pages.mjs";
@@ -185,7 +188,7 @@ async function main() {
   */
   await prisma.$executeRawUnsafe(`
     truncate table
-      "audit_event","auth_attempt","contact_reveal","zero_result_query","saved_search","redirect","guide","area_page","curated_list","campaign","legal_page",
+      "audit_event","auth_attempt","contact_reveal","zero_result_query","search_query_log","saved_search","redirect","guide","area_page","curated_list","campaign","legal_page",
       "notification_delivery","notification_template","notification_preference","review_request",
       "invoice_line","invoice","placement_slot","subscription",
       "supplier_report","review","message","quote_line","quote",
@@ -304,6 +307,36 @@ async function main() {
     catBySlug.set(c.slug, row.id);
     sectorBySlug.set(c.slug, row.id);
   }
+
+  /*
+   * The six sectors board 1a adds beyond the original six.
+   *
+   * Seeded after, and with `sortOrder` continuing, so the six above keep their
+   * order and their ids are unaffected. No business is filed against these —
+   * `catSlugs` below still reads `CATEGORIES` alone — which is deliberate:
+   * forty listings redistributed over twelve sectors would move suppliers out
+   * of `valves-and-fittings`, where the spec template lives and where sixty
+   * assertions expect to find them.
+   *
+   * So these render on the home page with a real zero and sort last. That is
+   * the honest state of a directory that has recruited industrial supply and
+   * not yet recruited logistics, and board 1a asks for exactly that rather
+   * than for padding.
+   */
+  for (const [i, c] of EXTRA_CATEGORIES.entries()) {
+    const row = await prisma.category.create({
+      data: {
+        ...c,
+        synonyms: [...c.synonyms],
+        sortOrder: CATEGORIES.length + i,
+        publishThreshold: 60,
+        verifiedShareMin: 0.3,
+      },
+    });
+    catBySlug.set(c.slug, row.id);
+    sectorBySlug.set(c.slug, row.id);
+  }
+
   for (const [i, s] of SUBCATEGORIES.entries()) {
     const row = await prisma.category.create({
       data: {
@@ -319,6 +352,37 @@ async function main() {
     catBySlug.set(s.slug, row.id);
     sectorBySlug.set(s.slug, sectorBySlug.get(s.parent)!);
   }
+
+  /*
+   * The rest of the taxonomy. Board 1a's header link reads "All 12 sectors ·
+   * N subcategories" and both numbers are live, so the taxonomy has to be that
+   * size rather than the page claiming it is.
+   *
+   * `sortOrder` continues past the four above, which keeps `gate-valves` and
+   * `butterfly-valves` first among their sector's children. `seedSubcategories`
+   * files listings by child position, so anything else would move the two
+   * subcategory pages the tests read.
+   */
+  const MORE_SUBCATEGORIES = [...EXTRA_SUBCATEGORIES, ...DEEP_SUBCATEGORIES];
+  for (const [i, s] of MORE_SUBCATEGORIES.entries()) {
+    const row = await prisma.category.create({
+      data: {
+        parentId: catBySlug.get(s.parent)!,
+        slug: s.slug,
+        code: s.code,
+        name: s.name,
+        nameAr: s.nameAr,
+        synonyms: [...s.synonyms],
+        sortOrder: SUBCATEGORIES.length + i,
+      },
+    });
+    catBySlug.set(s.slug, row.id);
+    sectorBySlug.set(s.slug, sectorBySlug.get(s.parent)!);
+  }
+  console.log(
+    `   ${CATEGORIES.length + EXTRA_CATEGORIES.length} sectors, ` +
+      `${SUBCATEGORIES.length + MORE_SUBCATEGORIES.length} subcategories`,
+  );
 
   console.log("→ spec template");
   const template = await prisma.specTemplate.create({
@@ -567,9 +631,321 @@ async function main() {
   await seedCurated(prisma, NOW);
   console.log("→ campaign and legal");
   await seedCampaignLegal(prisma);
+  await seedHomeSignals(prisma, businesses, opsLead.id);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
+}
+
+/**
+ * The two things board 1a reads that nothing else in the seed produces.
+ *
+ * **Recent verifications.** Section 5 shows businesses whose tier *rose* in the
+ * last seven days, and it reads that from the audit log rather than from
+ * `verifiedAt` — a date tells you when a check happened, not that a tier went
+ * up. `seedTrust` writes one `tier_change` row, twelve days old, so the section
+ * had one candidate and its rule is to drop rather than pad.
+ *
+ * The tier itself is not moved. The audit row records the tier the business
+ * already has as its `after` and one step lower as its `before`, which says
+ * "this listing reached tier 3 four days ago" — true, and it leaves every
+ * tier-dependent fixture in the suite exactly where it was.
+ *
+ * **Search history.** The "Popular:" chips are the five most-searched terms of
+ * the last thirty days that returned something, and `search_query_log` is
+ * written by real searches. A fresh database has none, so the chips would show
+ * their hardcoded fallback and nobody would find out whether the query works.
+ * These are the terms this seed's catalogue actually answers.
+ */
+async function seedHomeSignals(db: Db, businesses: Biz[], opsLeadId: string) {
+  console.log("→ home signals");
+
+  /*
+   * Verified in the last week. Four, because the section asks for four and
+   * widening to fourteen and thirty days is a fallback rather than the state
+   * worth demonstrating.
+   *
+   * Claimed and already verified: an unclaimed listing has nobody to have
+   * verified, and tier 0 never rose to anything.
+   */
+  const recentlyVerified = businesses
+    .filter((b) => b.claim === "claimed" && b.tier >= 2)
+    .slice(0, 4);
+
+  for (const [i, business] of recentlyVerified.entries()) {
+    const when = days(-(i + 1));
+    await db.auditEvent.create({
+      data: {
+        actorId: opsLeadId,
+        action: "tier_change",
+        subject: `Business:${business.id}`,
+        reason:
+          business.tier >= 3
+            ? "Site visit completed. Trade counter, stock and licence board all confirmed on site."
+            : "Trade licence checked against the issuing authority and the contact number answered.",
+        before: { verificationTier: business.tier - 1 },
+        after: { verificationTier: business.tier },
+        createdAt: when,
+      },
+    });
+    // The badge's date has to agree with the audit row. A badge reading
+    // August beside a section headed "Verified this week" is the kind of
+    // small contradiction that costs the whole trust ladder its credit.
+    await db.business.update({
+      where: { id: business.id },
+      data: business.tier >= 3 ? { verifiedAt: when, visitedAt: when } : { verifiedAt: when },
+    });
+  }
+  console.log(`   ${recentlyVerified.length} tier increases inside 7 days`);
+
+  /*
+   * Thirty days of search history, weighted so the top five are stable.
+   *
+   * `resultCount` is what the home page filters on — a chip that leads to an
+   * empty results page is worse than no chip — so the terms below are ones
+   * this catalogue answers, and the tail carries a couple of misses to prove
+   * the filter does something.
+   */
+  const SEARCHES: readonly { query: string; hits: number; results: number }[] = [
+    { query: "gate valve DN100", hits: 34, results: 12 },
+    { query: "butterfly valve", hits: 28, results: 9 },
+    { query: "GI pipe", hits: 23, results: 7 },
+    { query: "cable tray", hits: 19, results: 6 },
+    { query: "safety helmet", hits: 16, results: 5 },
+    { query: "ducting", hits: 12, results: 4 },
+    { query: "stretch film", hits: 9, results: 3 },
+    { query: "pallet racking", hits: 7, results: 2 },
+    { query: "chilled water pump", hits: 5, results: 1 },
+    // Real misses. These are the gap report's rows, and the reason the home
+    // page's read is `resultCount > 0` rather than a bare count.
+    { query: "titanium heat exchanger", hits: 6, results: 0 },
+    { query: "helium leak testing", hits: 4, results: 0 },
+  ];
+
+  const rows = SEARCHES.flatMap(({ query, hits, results }) =>
+    Array.from({ length: hits }, (_, i) => ({
+      query,
+      normalised: query.toLowerCase().replace(/\s+/g, " ").trim(),
+      resultCount: results,
+      // Spread across the window rather than stacked on one day, so a
+      // thirty-day read and a seven-day read give different answers.
+      createdAt: days(-((i % 29) + 1)),
+      tab: "businesses",
+    })),
+  );
+  await db.searchQueryLog.createMany({ data: rows });
+  console.log(`   ${rows.length} logged searches across 30 days`);
+
+  await seedOpenRequests(db);
+}
+
+/**
+ * Open requirements across the trades, for the home page's hero panel.
+ *
+ * `seedEnquiries` builds a careful set for the quote pipeline — one accepted,
+ * one at cap, one from an account-less buyer — and every one of them targets
+ * valves, because valves is where the spec template and the catalogue depth
+ * are. That is right for those fixtures and wrong for this panel: the eight
+ * most recent open requests were all the same trade, at the same minute, with
+ * no quotes, so a panel whose whole job is to look like a live marketplace
+ * rendered four identical rows.
+ *
+ * These are real `Enquiry` rows and the panel reads them the way it reads any
+ * other — nothing here is a fixture the page knows about. What they add is the
+ * spread a directory has once more than one trade is using it: different
+ * sectors, staggered across two days, some with quotes against them and some
+ * without.
+ *
+ * Two are written to be suppressed. The panel's rule is that a requirement
+ * carrying a phone number, an email or a company name never reaches a stranger,
+ * and a rule with no row exercising it is a rule nobody can see working.
+ */
+async function seedOpenRequests(db: Db) {
+  /*
+   * These have to be the newest open enquiries in the table, and `hours()` is
+   * measured from the seed's own clock — noon today — which is exactly when
+   * `seedEnquiries` stamps its valves batch. Anything at `hours(-1)` is
+   * therefore an hour *older* than those, and the panel went on rendering four
+   * valve requests with the cross-trade ones sitting just below the cut.
+   *
+   * Anchored past that batch instead, and clamped to a minute ago so a seed run
+   * before noon cannot date a request into the future. The spread is minutes
+   * rather than hours so the panel reads the way board 1a draws it: "11 min
+   * ago" over "2 h ago" over "3 h ago".
+   */
+  const anchor = Math.min(Date.now() - 60_000, NOW.getTime() + 6 * 3_600_000);
+  const recently = (minutesAgo: number) => new Date(anchor - minutesAgo * 60_000);
+
+  const buyer = await db.user.findFirstOrThrow({
+    where: { roles: { has: "buyer" } },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+
+  const WANTED: readonly {
+    sector: string;
+    requirement: string;
+    area: string | null;
+    /** Minutes ago. Staggered so the panel's relative times differ. */
+    age: number;
+    quotes: number;
+  }[] = [
+    {
+      sector: "hvac-and-ventilation",
+      requirement: "Monthly AMC for 14 split units and two ducted splits across three retail units.",
+      area: "Al Quoz Industrial 3",
+      age: 11,
+      quotes: 4,
+    },
+    {
+      sector: "safety-and-ppe",
+      requirement: "Coveralls, helmets and safety boots for 60 site staff. Sizes to be confirmed.",
+      area: "Mussafah M-17",
+      age: 64,
+      quotes: 7,
+    },
+    {
+      sector: "packaging-and-materials",
+      requirement: "500 printed gift boxes, rigid, with a foam insert. Artwork ready.",
+      area: "Industrial Area 4",
+      age: 138,
+      quotes: 2,
+    },
+    {
+      sector: "electrical-and-cable",
+      requirement: "4-core 95mm² XLPE armoured cable, 400 m, plus glands and lugs.",
+      area: "Jebel Ali Free Zone",
+      age: 197,
+      quotes: 3,
+    },
+    {
+      sector: "pipes-and-tubing",
+      requirement: "GI pipes, 2 inch, medium grade, 300 m with fittings for a fire line.",
+      area: "New Industrial Area",
+      age: 320,
+      quotes: 1,
+    },
+    {
+      sector: "hvac-and-ventilation",
+      requirement: "Cold room panels, 100mm PUF, for a 40 m² chiller room in a central kitchen.",
+      area: "Deira",
+      age: 474,
+      quotes: 5,
+    },
+    /*
+     * Two the detector must catch, so the home page's suppression rule has
+     * something exercising it in a browser rather than only in a unit test.
+     *
+     * Both name a company and neither carries a phone number or an email, and
+     * that is deliberate rather than squeamish. An enquiry goes to its
+     * recipients' leads inbox, which renders the requirement as the buyer
+     * wrote it — board 3j shows a first name and nothing else, and
+     * `dashboard.spec.ts` asserts no contact detail ever appears on it. A seed
+     * fixture carrying a mobile number therefore does not test the home page,
+     * it plants a buyer's phone number in a seller-facing screen and in every
+     * developer's database.
+     *
+     * The phone, email, IBAN, URL and TRN branches are covered where they
+     * belong: eleven cases in lib/enquiry/redaction.test.ts, and one
+     * integration fixture that creates a leaky enquiry, asserts the panel drops
+     * it, and deletes it again.
+     */
+    {
+      sector: "valves-and-fittings",
+      requirement: "Butterfly valves DN200 for Al Bariq Contracting LLC, flanged PN16.",
+      area: "Al Quoz Industrial 1",
+      age: 27,
+      quotes: 0,
+    },
+    {
+      sector: "safety-and-ppe",
+      requirement: "Fire extinguisher refills for Gulf Crest Trading LLC, 40 units, annual contract.",
+      area: "Deira",
+      age: 92,
+      quotes: 0,
+    },
+  ];
+
+  let made = 0;
+  for (const [index, want] of WANTED.entries()) {
+    /*
+     * Every claimed supplier in the trade, up to the fan-out's ceiling of
+     * eight. A quote count is a count of *suppliers who answered*, so the
+     * recipients are what bounds it — `Quote` is unique on
+     * (enquiry, business, revision), and eight quotes from one seller would be
+     * eight revisions of one price rather than eight competing ones.
+     */
+    const sellers = await db.business.findMany({
+      where: {
+        claimStatus: "claimed",
+        suspendedAt: null,
+        publishedAt: { not: null },
+        primaryCategory: { OR: [{ slug: want.sector }, { parent: { slug: want.sector } }] },
+        /*
+         * Never the seller `seedAtMonthlyCap` puts exactly on their free-plan
+         * limit. Board 11a argues from a counter reading three of three, and
+         * `onlyOneSellerAtCap` deliberately leaves this one alone when it
+         * trims everybody else — so a recipient row added here lands on top of
+         * the fixture and the board starts claiming a three-enquiry limit was
+         * reached at four.
+         */
+        slug: { not: FREE_AT_CAP_SLUG },
+      },
+      orderBy: [{ verificationTier: "desc" }, { slug: "asc" }],
+      take: 8,
+      select: { id: true },
+    });
+    // No claimed supplier in that trade yet is a real state in a young
+    // directory, and it means there is nobody the fan-out could have reached.
+    if (sellers.length === 0) continue;
+
+    const createdAt = recently(want.age);
+    const enquiry = await db.enquiry.create({
+      data: {
+        ref: `ENQ-91${String(index).padStart(2, "0")}`,
+        buyerId: buyer.id,
+        requirement: want.requirement,
+        deliverToArea: want.area,
+        // Open, which is the whole point. Two weeks out from when it was sent.
+        closesAt: new Date(createdAt.getTime() + 14 * 24 * 3_600_000),
+        createdAt,
+      },
+    });
+
+    const quoted = Math.min(want.quotes, sellers.length);
+    for (const [i, seller] of sellers.entries()) {
+      const answered = i < quoted;
+      await db.enquiryRecipient.create({
+        data: {
+          enquiryId: enquiry.id,
+          businessId: seller.id,
+          state: answered ? "quoted" : "delivered",
+          ...(answered ? { firstReplyAt: new Date(createdAt.getTime() + 2 * 60_000) } : {}),
+          createdAt,
+        },
+      });
+      if (!answered) continue;
+
+      /*
+       * A quote with no lines. The panel renders the count and never the
+       * quote, and a priced line is private to one buyer and one seller — so
+       * the seed has no business inventing one here.
+       */
+      await db.quote.create({
+        data: {
+          ref: `QT-91${String(index).padStart(2, "0")}-${i + 1}`,
+          enquiryId: enquiry.id,
+          businessId: seller.id,
+          status: "sent",
+          sentAt: new Date(createdAt.getTime() + 2 * 60_000),
+          expiresAt: new Date(createdAt.getTime() + 14 * 24 * 3_600_000),
+          createdAt: new Date(createdAt.getTime() + 2 * 60_000),
+        },
+      });
+    }
+    made += 1;
+  }
+  console.log(`   ${made} open requests across the trades`);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

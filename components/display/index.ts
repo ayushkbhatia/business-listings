@@ -3,6 +3,8 @@ export { Alert, type AlertProps, type AlertTone } from "./Alert";
 export { StatusBadge, type StatusBadgeProps, type StatusTone } from "./StatusBadge";
 export { PlanBadge, type PlanBadgeProps, type PlanTier } from "./PlanBadge";
 export { FilterChip, type FilterChipProps } from "./FilterChip";
+// A pill that navigates, as against FilterChip, which is one you remove.
+export { ChipLink, type ChipLinkProps } from "./ChipLink";
 export { Tag, type TagProps } from "./Tag";
 export { StatCard, type StatCardProps } from "./StatCard";
 export { ProgressBar, type ProgressBarProps } from "./ProgressBar";

@@ -5,6 +5,7 @@ import { Button } from "@/components/primitives";
 import {
   Alert,
   CategoryMark,
+  ChipLink,
   FilterChip,
   FunnelBars,
   ImagePlaceholder,
@@ -147,6 +148,51 @@ export function Display() {
               </FilterChip>
             )}
           </div>
+        </States>
+      </Section>
+
+      <Section
+        id="chip-link"
+        title="ChipLink"
+        note="a pill that navigates — FilterChip is the one you remove"
+      >
+        <States label="sm — the popular-search row under the home hero">
+          <div className="flex flex-wrap gap-2">
+            {["HVAC maintenance AMC", "Steel fabrication", "Pallet racking"].map((query) => (
+              <ChipLink key={query} size="sm" href={`/search?q=${encodeURIComponent(query)}`}>
+                {query}
+              </ChipLink>
+            ))}
+          </div>
+        </States>
+        <States label="md, with a live count">
+          <Specimen caption="default">
+            <ChipLink href="/search?emirate=dubai" count={formatCount(18940)}>
+              Dubai
+            </ChipLink>
+          </Specimen>
+          <Specimen caption="selected — only on a stated preference">
+            <ChipLink selected href="/search?emirate=dubai" count={formatCount(18940)}>
+              Dubai
+            </ChipLink>
+          </Specimen>
+          <Specimen caption="dashed — a filter, not a place">
+            <ChipLink dashed href="/search?freeZone=1" count={formatCount(2410)}>
+              Free zones only
+            </ChipLink>
+          </Specimen>
+          <Specimen caption="zero, which is a real answer">
+            <ChipLink href="/search?emirate=fujairah" count={formatCount(0)}>
+              Fujairah
+            </ChipLink>
+          </Specimen>
+        </States>
+        <States label="focus">
+          <Specimen caption="focus-visible">
+            <ChipLink data-force="focus" href="/search?emirate=sharjah" count={formatCount(6205)}>
+              Sharjah
+            </ChipLink>
+          </Specimen>
         </States>
       </Section>
 

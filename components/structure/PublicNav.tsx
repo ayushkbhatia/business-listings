@@ -29,6 +29,13 @@ export interface PublicNavProps {
   label: string;
   /** Tooltip on an unbuilt route, already localised. */
   laterLabel?: string;
+  /**
+   * The `key` of the link this page is. Empty on the home page, which is not
+   * one of them — a nav where something is always current cannot say "you are
+   * on the directory home", and marking Categories current there would be
+   * wrong rather than merely unhelpful.
+   */
+  active?: string;
 }
 
 export function PublicNav({
@@ -39,6 +46,7 @@ export function PublicNav({
   actions,
   label,
   laterLabel,
+  active,
 }: PublicNavProps) {
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-paper/95 backdrop-blur">
@@ -76,10 +84,12 @@ export function PublicNav({
                 <li key={link.key}>
                   <a
                     href={link.href}
+                    aria-current={active === link.key ? "page" : undefined}
                     className={cn(
-                      "rounded-ctl px-2.5 py-1.5 text-body-sm text-muted",
+                      "rounded-ctl px-2.5 py-1.5 text-body-sm",
                       "transition-colors duration-120 ease-out hover:bg-fill hover:text-ink",
                       "focus-visible:outline-none focus-visible:shadow-focus",
+                      active === link.key ? "font-medium text-ink" : "text-muted",
                     )}
                   >
                     {link.label}

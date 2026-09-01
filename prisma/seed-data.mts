@@ -38,7 +38,7 @@ export const CATEGORIES = [
   { slug: "hvac-and-ventilation", code: "HV", name: "HVAC & ventilation", nameAr: "تكييف وتهوية", synonyms: ["hvac", "تكييف", "air conditioning", "chiller", "ahu", "fcu", "duct", "ventilation"], showOnHome: true },
   { slug: "electrical-and-cable", code: "EC", name: "Electrical & cable", nameAr: "كهرباء وكابلات", synonyms: ["cable", "كابلات", "كهرباء", "switchgear", "busbar", "conduit", "lv panel"], showOnHome: true },
   { slug: "safety-and-ppe", code: "SP", name: "Safety & PPE", nameAr: "السلامة ومعدات الوقاية", synonyms: ["ppe", "سلامة", "safety", "helmet", "harness", "fire extinguisher", "coverall"], showOnHome: true },
-  { slug: "packaging-and-materials", code: "PK", name: "Packaging & materials", nameAr: "تغليف ومواد", synonyms: ["packaging", "تغليف", "carton", "stretch film", "pallet", "strapping"], showOnHome: false },
+  { slug: "packaging-and-materials", code: "PK", name: "Packaging & materials", nameAr: "تغليف ومواد", synonyms: ["packaging", "تغليف", "carton", "stretch film", "pallet", "strapping"], showOnHome: true },
 ] as const;
 
 export const SUBCATEGORIES = [

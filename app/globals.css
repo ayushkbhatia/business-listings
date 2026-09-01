@@ -280,6 +280,15 @@
    stays a verbatim copy of docs/tokens.css.
    ========================================================================== */
 @layer base {
+  /* The moss-tinted raised surface on ink.
+     Board 1a's supplier band marks one plan tile out from the other two, and
+     `--ink-raised` cannot do it — the tile has to read as the same family as
+     `--moss-on-ink`, which is the only accent §01 permits on a dark surface.
+     A status wash would be wrong for the same reason a paid tier may never
+     borrow the trust palette. Not in tokens.css because tokens.css is the
+     canvas's file, pasted unchanged. */
+  :root { --ink-moss: #2E3A2F; }
+
   /* A fieldset defaults to `min-inline-size: min-content`, so it refuses to
      narrow below its widest child and an `overflow-x-auto` inside it never
      scrolls. On /rfq/new that pushed the line-items table's `min-w-[40rem]`
@@ -314,6 +323,7 @@
   --color-ink-surface:  var(--ink);
   --color-ink-raised:   var(--ink-raised);
   --color-ink-line:     var(--ink-line);
+  --color-ink-moss:     var(--ink-moss);
 
   /* Lines */
   --color-line:         var(--line);

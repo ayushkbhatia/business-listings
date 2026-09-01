@@ -28,20 +28,20 @@ test.describe("the guide index", () => {
     await expect(page).toHaveURL(new RegExp(`/guides/${SLUG}$`));
   });
 
-  test("is reachable from the directory nav rather than greyed out", async ({ page }) => {
+  test("is reachable from the site chrome rather than greyed out", async ({ page }) => {
     /*
        The nav carried `later: true` on this link from handoff 1 — named so the
        shape was right, not linked because the page did not exist. This is the
        assertion that it stopped being a placeholder.
 
-       The nav's own links sit in a `hidden lg:flex` list, so below 1024 there
-       is nothing to click. That is the design, and `home-compare.spec.ts` says
-       so at the same width.
+       Board 1a gives the top bar four items — Categories, Products, Suppliers,
+       Pricing — so Guides moved to the footer's Company column. It is still one
+       click from every page on the site, which is what this test is about; the
+       header was never the point. The footer renders at every width, so this no
+       longer skips on mobile.
     */
-    test.skip((page.viewportSize()?.width ?? 0) < 1024, "the nav list is desktop-only");
-
     await page.goto("/");
-    await page.getByRole("navigation").first().getByRole("link", { name: "Guides" }).click();
+    await page.getByRole("navigation", { name: "Company" }).getByRole("link", { name: "Guides" }).click();
     await expect(page).toHaveURL(/\/guides$/);
   });
 });

@@ -768,6 +768,9 @@ export const en = {
 
   // ── Public chrome ──
   "chrome.categories": "Categories",
+  "chrome.products": "Products",
+  "chrome.suppliers": "Suppliers",
+  "chrome.sign_in": "Sign in",
   "chrome.guides": "Guides",
   "chrome.pricing": "Pricing",
   "chrome.terms": "Terms",
@@ -901,25 +904,88 @@ export const en = {
   "seo.category_description": "{count} {category} suppliers across the UAE. Filter by verification, emirate and specification, then send one enquiry.",
 
   // ── Home ──
-  "home.hero_title": "Find a supplier who actually has it",
-  "home.hero_body": "{listings} licensed UAE businesses, {verified} of them verified by us. Search by product, size or specification, then send one enquiry. No account needed, and no price until a supplier quotes you directly.",
+  //
+  // Board 1a was drawn before the e-commerce pivot and two strings survived it.
+  // The spec corrects both, and they are corrected here: "then talk to them",
+  // not "then buy from them"; "published specs", not "live prices". Nothing on
+  // this page may imply buying, a cart, a checkout or a price.
+  "home.hero_title": "Find a verified UAE supplier, then talk to them.",
+  "home.hero_body":
+    "{listings} licensed businesses across {sectors} sectors — with real catalogues, published specs and trade licences we've checked ourselves.",
   "home.search_cta": "Search",
-  "home.browse_title": "Browse by trade",
+  "home.search_landmark": "Search the directory",
+  "home.search_what": "What",
+  "home.search_what_placeholder": "What do you need?",
+  "home.search_where": "Where",
+  "home.search_where_all": "All UAE",
+  "home.search_where_area": "{emirate} · All areas",
+  "home.popular": "Popular:",
+
+  // The open-RFQ panel. Its own rules are in lib/db/queries/home.ts.
+  "home.rfq_title": "Open requests for quotes",
+  "home.rfq_live": "LIVE",
+  "home.rfq_meta": "{category} · {place} · {quotes} · {age}",
+  "home.rfq_quotes": { one: "{count} QUOTE", other: "{count} QUOTES" },
+  "home.rfq_uae": "UAE",
+  "home.rfq_footer": "Post a request, get quotes free",
+  "home.rfq_footer_signed_in": "Post a request",
+  "home.rfq_cta": "Post RFQ →",
+
+  // The panel that replaces it when no open request can be shown safely.
+  "home.trust_title": "Why suppliers here are different",
+  "home.trust_1": "Every listing starts from a trade licence we read ourselves.",
+  "home.trust_2": "Tier 2 means we called the number on the licence and someone answered.",
+  "home.trust_3": "Tier 3 means one of our team stood in the warehouse.",
+  "home.trust_4": "Response time is measured from real replies, never claimed by the seller.",
+  "home.trust_cta": "How verification works →",
+
+  "home.browse_title": "Browse by category",
+  "home.browse_all": "All {sectors} sectors · {subcategories} subcategories →",
   "home.suppliers_in": { one: "{count} supplier", other: "{count} suppliers" },
-  "home.verified_title": "Recently verified",
-  "home.verified_body": "Suppliers whose trade licence we have checked, and in some cases whose premises we have visited.",
-  "home.geography_title": "By emirate",
-  "home.stat_listings": "listed businesses",
-  "home.stat_verified": "verified",
-  "home.stat_products": "products with specifications",
-  "home.stat_categories": "trades",
-  "home.how_title": "How this works",
-  "home.how_1_title": "Search or post a requirement",
-  "home.how_1_body": "Find a supplier yourself, or send one requirement to up to eight and let them come to you.",
-  "home.how_2_title": "They quote you directly",
-  "home.how_2_body": "Prices are between you and the supplier. We never see the number, never take a cut, and never hold your money.",
-  "home.how_3_title": "You accept one",
-  "home.how_3_body": "Accepting a quote releases your contact details to that supplier and closes the others. Nothing else happens.",
+  "home.listings_count": { one: "{count} listing", other: "{count} listings" },
+
+  "home.emirate_eyebrow": "By emirate",
+  "home.free_zones": "Free zones only",
+
+  "home.verified_title": "Verified this week",
+  "home.verified_body":
+    "Licence checked, contact confirmed, and for the visited tier, someone from our team stood in the warehouse.",
+  "home.verified_all": "See all verified →",
+
+  "home.catalogue_title": "New in supplier catalogues",
+  "home.catalogue_all": "Browse all products →",
+
+  "home.seller_title": "Your storefront, live this afternoon.",
+  "home.seller_body":
+    "Claim your listing free. Add locations, upload your catalogue, pick a spec template for your category, and start taking enquiries — no developer, no agency retainer.",
+  "home.seller_cta": "Claim your listing",
+  // Shown instead of the claim band to somebody who has already claimed one.
+  "home.seller_signed_in": "You have a listing here. Everything above is what a buyer sees.",
+  "home.seller_dashboard": "Go to your dashboard →",
+  "home.plan_free": "1 location · contact · 3 photos",
+  "home.plan_month": "/mo",
+
+  "home.footer_blurb":
+    "The UAE's self-serve business directory and storefront platform. Licensed businesses only.",
+  "home.footer_buyers": "Buyers",
+  "home.footer_businesses": "Businesses",
+  "home.footer_company": "Company",
+  "home.footer_legal": "© {year} BUSINESSLISTINGS.ME · DUBAI, UAE",
+  "home.footer_locale": "EN",
+  "home.link_browse_categories": "Browse categories",
+  "home.link_post_rfq": "Post an RFQ",
+  "home.link_browse_products": "Browse products",
+  "home.link_my_enquiries": "My enquiries",
+  "home.link_list_business": "List your business",
+  "home.link_claim": "Claim a listing",
+  "home.link_pricing": "Pricing & plans",
+  "home.link_verification": "Verification guide",
+  "home.link_about": "About",
+  "home.link_contact": "Contact",
+  "home.link_terms": "Terms & privacy",
+  "home.link_report": "Report a listing",
+
+  "seo.home_title": "UAE business directory — {listings} verified suppliers",
   "seo.home_description": "{listings} licensed UAE suppliers across {categories} trades. Search by product, size or specification, then send one enquiry.",
 
   // ── Compare ──
@@ -1859,6 +1925,7 @@ export const en = {
   "plan.products": "{n} products",
   "plan.products_unlimited": "Unlimited products",
   "plan.locations": "{n} locations",
+  "plan.locations_unlimited": "Unlimited locations",
   "plan.location_one": "1 location",
   "plan.photos": "{n} photographs",
   "plan.seats": "{n} team seats",
@@ -2322,6 +2389,17 @@ export const en = {
   "home.eyebrow": "Content",
   "home.meta": "{count} trades on the home page",
   "home.caption": "Which trades the directory home leads with",
+  "home.popular_title": "Popular searches on the home page",
+  "home.popular_note":
+    "The five chips under the hero are the most-searched terms of the last 30 days that returned something. Read from the search log, never chosen — a staff pick would make the row a marketing slot.",
+  "home.popular_caption": "Search terms over the last 30 days",
+  "home.popular_col_query": "Term",
+  "home.popular_col_searches": "Searches",
+  "home.popular_col_state": "On the home page",
+  "home.popular_on_home": "Showing",
+  "home.popular_ranked": "Ranked below",
+  "home.popular_unanswered": "No results",
+  "home.popular_empty": "No searches recorded yet. The home page is showing its fallback five.",
   "home.col.trade": "Trade",
   "home.col.listings": "Listings",
   "home.col.page": "Its own page",
