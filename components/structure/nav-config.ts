@@ -179,6 +179,12 @@ export const ADMIN_NAV: readonly NavGroup[] = [
       { key: "admin", labelKey: "nav.platform", href: "/admin" },
       { key: "queue", labelKey: "nav.queue", href: "/admin/queue", capability: "queue.decide" },
       { key: "reports", labelKey: "nav.reports", href: "/admin/reports", capability: "report.resolve" },
+      /*
+         Ops lead alone. A moderator holds `report.resolve` and sees the row
+         above; removing a buyer's published words is held one rung higher, so
+         this row is absent for them entirely rather than linking into a 404.
+      */
+      { key: "reviews", labelKey: "nav.reviews", href: "/admin/reviews", capability: "review.remove" },
     ],
   },
   {

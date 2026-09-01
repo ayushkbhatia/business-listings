@@ -69,6 +69,33 @@ test.describe("what a moderator is not offered", () => {
   });
 });
 
+test.describe("removing a review is not a moderator's row", () => {
+  /*
+     §07, both tables. A moderator may reject a submission and resolve a
+     supplier report about a review, and may not remove the review. Removing a
+     buyer's published words is held one rung higher — `review.remove` is ops
+     lead alone.
+
+     This is the screen that closes criterion 9's last gap, so the refusal is
+     asserted the moment the screen exists rather than after somebody notices.
+  */
+  test("cannot reach /admin/reviews", async ({ page }) => {
+    const response = await page.goto("/admin/reviews");
+    expect(response?.status()).toBe(404);
+  });
+
+  test("is not offered it in the sidebar", async ({ page }) => {
+    await page.goto("/admin");
+    const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
+    await expect(sidebar.getByRole("link", { name: "Reviews", exact: true })).toHaveCount(0);
+  });
+
+  test("has no control anywhere that removes a review", async ({ page }) => {
+    await page.goto("/admin/reports");
+    await expect(page.getByRole("button", { name: /remove/i })).toHaveCount(0);
+  });
+});
+
 test.describe("the audit log a moderator sees", () => {
   test("is their own actions, and says so", async ({ page }) => {
     /*

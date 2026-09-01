@@ -390,3 +390,65 @@ test.describe("boards 4f, 12d and 12f — accounts", () => {
     await expect(page.getByText(/back/)).toBeVisible();
   });
 });
+
+test.describe("criterion 9 — removing a review", () => {
+  /*
+     `removeReview` was written, audited and capability-checked from the start
+     and no screen ever called it. The only conceivable entry point was a
+     supplier report, and `SupplierReport` carries a `review_integrity` kind
+     with no `reviewId` on it — so a review nobody had reported could not be
+     reached at all.
+  */
+  test("lists reviews and quotes what somebody wrote", async ({ page }) => {
+    await page.goto("/admin/reviews");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Reviews");
+
+    // Scoped to main: the sidebar is a list too, and its first item is a nav
+    // row rather than a review.
+    const first = page.getByRole("main").getByRole("listitem").first();
+    await expect(first).toBeVisible();
+    await expect(first.getByRole("button", { name: "Remove" })).toBeVisible();
+  });
+
+  test("will not remove without both a ground and a reason", async ({ page }) => {
+    await page.goto("/admin/reviews");
+    await page.getByRole("main").getByRole("button", { name: "Remove" }).first().click();
+
+    const confirm = page.getByRole("button", { name: "Remove", exact: true }).last();
+    await expect(confirm).toBeDisabled();
+
+    // A ground on its own is not an explanation.
+    await page.getByRole("radio", { name: "Abuse" }).check();
+    await expect(confirm).toBeDisabled();
+
+    await page.getByRole("textbox", { name: "Reason" }).fill("ok");
+    await expect(confirm).toBeDisabled();
+  });
+
+  test("removes one, and the audit log carries the reason", async ({ page }) => {
+    const reason = `Names the buyer's own staff. Removed on request. ${Date.now()}`;
+
+    await page.goto("/admin/reviews");
+    await page.getByRole("main").getByRole("button", { name: "Remove" }).first().click();
+    await page.getByRole("radio", { name: "Private information" }).check();
+    await page.getByRole("textbox", { name: "Reason" }).fill(reason);
+    await page.getByRole("button", { name: "Remove", exact: true }).last().click();
+
+    await expect(page.getByText(/rating average is recalculated/)).toBeVisible();
+
+    /*
+       The ground and the reason are separate all the way down. `removeReview`
+       validates the reason before composing "${ground}: ${reason}", because
+       composing first meant an empty reason arrived as "abuse: " — seven
+       characters containing letters, which passed.
+    */
+    await page.goto("/admin/audit");
+    await expect(page.getByText(reason)).toBeVisible();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    await page.goto("/admin/reviews");
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
