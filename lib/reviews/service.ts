@@ -226,6 +226,64 @@ export async function removeReview(input: RemoveReviewInput): Promise<{ ok: true
   return { ok: true };
 }
 
+/**
+ * Published reviews, newest first, for the removal screen.
+ *
+ * The reader `removeReview` never had. Removal was written, audited and
+ * capability-checked from the start, and no screen listed a review — so the
+ * only conceivable entry point was a supplier report, and `SupplierReport`
+ * carries a `review_integrity` kind with no `reviewId` to join on. A review
+ * nobody had reported could not be reached at all.
+ *
+ * Already-removed rows are included and marked rather than filtered out. The
+ * question a moderator arrives with is usually "what happened to that review",
+ * and a list that answers it only when the answer is "nothing" sends them to
+ * the audit log to find out. Open ones sort first because they are the work.
+ */
+export interface ModerationReview {
+  id: string;
+  businessName: string;
+  businessSlug: string;
+  buyerName: string | null;
+  overall: number;
+  body: string;
+  createdAt: Date;
+  removedAt: Date | null;
+  removalReason: string | null;
+  hasSellerReply: boolean;
+}
+
+export async function reviewsForModeration(limit = 200): Promise<ModerationReview[]> {
+  const rows = await prisma.review.findMany({
+    orderBy: [{ removedAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
+    take: limit,
+    select: {
+      id: true,
+      overall: true,
+      body: true,
+      createdAt: true,
+      removedAt: true,
+      removalReason: true,
+      sellerReply: true,
+      business: { select: { displayName: true, slug: true } },
+      buyer: { select: { fullName: true } },
+    },
+  });
+
+  return rows.map((row) => ({
+    id: row.id,
+    businessName: row.business.displayName,
+    businessSlug: row.business.slug,
+    buyerName: row.buyer.fullName,
+    overall: row.overall,
+    body: row.body,
+    createdAt: row.createdAt,
+    removedAt: row.removedAt,
+    removalReason: row.removalReason,
+    hasSellerReply: row.sellerReply !== null,
+  }));
+}
+
 export type RequestReviewResult =
   | { ok: true; requestId: string }
   | { ok: false; error: "no_accepted_quote" | "too_old" | "already_asked" | "already_reviewed" };
