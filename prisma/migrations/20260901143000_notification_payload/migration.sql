@@ -1,0 +1,20 @@
+-- The rendered message, for a delivery quiet hours held back.
+--
+-- `flushDeferred` moved a row from `deferred` to `queued` and nothing read
+-- `queued`, so a notification held overnight moved from one waiting state to
+-- another and reached nobody. Sending one later needs the message, and the row
+-- carried the recipient, the event and the channel but not a word of what it
+-- said.
+--
+-- Rendered when the event happened rather than when it goes out, so a message
+-- held overnight says what was true at the time. Re-rendering at send would
+-- quietly describe a quote that had since been amended.
+--
+-- Never contact details. The number or address is read from the user at send
+-- time, which is the rule `recipient_user_id` exists to keep.
+--
+-- Hand-written rather than generated: `prisma migrate dev` on this branch still
+-- wants to drop nine indexes and a foreign key, because the declarations that
+-- stop it are on an unmerged branch. Additive column, no backfill — rows
+-- deferred before this ship with a null payload and are handled as unsendable.
+ALTER TABLE "notification_delivery" ADD COLUMN IF NOT EXISTS "payload" JSONB;

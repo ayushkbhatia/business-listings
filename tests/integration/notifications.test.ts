@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { notify } from "@/lib/notify/service";
+import { deliverQueued, flushDeferred, notify } from "@/lib/notify/service";
 import { contactShape, placeholdersIn, render } from "@/lib/notify/render";
 
 /**
@@ -201,6 +201,111 @@ describe("criterion 10 — quiet hours, through the service", () => {
     // Not deferred. Sent if the template is live, skipped if Meta has not
     // approved it — the override decided, not the clock.
     expect(result["whatsapp"]).not.toBe("deferred");
+  });
+
+  /*
+     These build the deferred row themselves rather than waiting for the seed to
+     produce one.
+
+     Only `whatsapp` and `sms` are ever held by quiet hours — `INTERRUPTING_CHANNELS`
+     — and every WhatsApp template is `pending_meta`, so on this data nothing
+     defers at all. A first version of these tests looked for a deferred row and
+     returned early when it found none, which is a test that passes by not
+     running. The mechanism is what needs proving, so the mechanism is what is
+     set up.
+  */
+  async function held(payload: unknown): Promise<string> {
+    const row = await prisma.notificationDelivery.create({
+      data: {
+        event: "enquiry_received",
+        channel: "email",
+        status: "deferred",
+        recipientUserId,
+        businessId,
+        reason: "quiet_hours",
+        scheduledFor: new Date(Date.now() - 60_000),
+        payload: payload as never,
+      },
+      select: { id: true },
+    });
+    createdDeliveryIds.push(row.id);
+    return row.id;
+  }
+
+  it("releases a held delivery and then actually sends it", async () => {
+    /*
+       The gap this closes. `flushDeferred` moved a row from `deferred` to
+       `queued` and nothing read `queued`, so a notification held overnight
+       moved from one waiting state to another and reached nobody.
+    */
+    const id = await held({
+      subject: "A new enquiry",
+      body: "ENQ-8841 — gate valves, Al Quoz Industrial 1.",
+      actionLabel: "Open the enquiry",
+      actionUrl: "https://businesslistings.me/dashboard/leads",
+      metaTemplateName: null,
+    });
+
+    expect(await flushDeferred()).toBeGreaterThan(0);
+    const claimed = await prisma.notificationDelivery.findUniqueOrThrow({
+      where: { id },
+      select: { status: true },
+    });
+    expect(claimed.status).toBe("queued");
+
+    await deliverQueued();
+    const settled = await prisma.notificationDelivery.findUniqueOrThrow({
+      where: { id },
+      select: { status: true, sentAt: true },
+    });
+    // Sent or failed depending on whether a carrier is configured. Still
+    // `queued` is the bug — that is the state nothing used to leave.
+    expect(["sent", "failed"]).toContain(settled.status);
+    if (settled.status === "sent") expect(settled.sentAt).not.toBeNull();
+  });
+
+  it("settles a row it can never send rather than retrying it for ever", async () => {
+    // Deferred before the payload column existed. There is nothing to send, so
+    // leaving it queued would make every future run pick it up again.
+    const id = await held(null);
+
+    await flushDeferred();
+    const outcome = await deliverQueued();
+    expect(outcome.unsendable).toBeGreaterThan(0);
+
+    const settled = await prisma.notificationDelivery.findUniqueOrThrow({
+      where: { id },
+      select: { status: true, reason: true },
+    });
+    expect(settled.status).toBe("failed");
+    expect(settled.reason).toBe("no_payload");
+  });
+
+  it("keeps contact details out of the held payload", async () => {
+    /*
+       The rule `recipientUserId` exists to keep: the log points at a user, and
+       the number or address is read from them at send time. A payload that
+       carried the address would make the delivery log a copy of the address
+       book.
+    */
+    const template = await prisma.notificationTemplate.findFirst({
+      where: { status: "live", channel: "email" },
+      select: { id: true, subject: true, body: true, actionLabel: true, actionPath: true, metaTemplateName: true },
+    });
+    if (!template) throw new Error("the seed needs a live email template");
+
+    /*
+       Filled from the template's own placeholders rather than a fixed list, so
+       this does not break the day somebody adds a field to a template it does
+       not name here.
+    */
+    const params = Object.fromEntries(
+      placeholdersIn(template).map((name) => [name, `value-for-${name}`]),
+    );
+    const rendered = render(template, params);
+
+    const serialised = JSON.stringify(rendered);
+    expect(serialised).not.toMatch(/\+9715\d{8}/);
   });
 
   it("writes a row for every outcome, including the ones it did not send", async () => {

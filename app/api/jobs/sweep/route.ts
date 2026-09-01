@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { flushDeferred } from "@/lib/notify/service";
+import { deliverQueued, flushDeferred } from "@/lib/notify/service";
 import { sweepAlerts } from "@/lib/alerts/service";
 import { pollDomains } from "@/lib/domains/service";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
@@ -18,16 +18,16 @@ import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
  * walks the whole directory to recompute a number went there; everything a
  * person is waiting on stayed here.
  *
- * ## What this does not fix
+ * ## Releasing and sending are two steps
  *
- * `flushDeferred` moves a delivery from `deferred` to `queued`. **Nothing in
- * this codebase reads `queued`.** There is no carrier hand-off yet, so a row
- * this job releases still does not reach anybody's phone — it moves from one
- * waiting state to another.
+ * `flushDeferred` claims the rows whose quiet-hours window has lifted and marks
+ * them `queued`; `deliverQueued` hands them to a carrier. For a while only the
+ * first half existed, nothing read `queued`, and a notification held overnight
+ * moved from one waiting state to another and reached nobody.
  *
- * Scheduling it is necessary and not sufficient, and it is written down here
- * rather than left for somebody to discover, because a cron entry against a
- * job named "flush" reads like the gap is closed. It is not.
+ * They stay two steps rather than being collapsed. A row that crashes between
+ * the claim and the send is still `queued`, so the next run picks it up instead
+ * of losing it — and two runs cannot send the same row twice.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -61,6 +61,15 @@ export async function GET(request: NextRequest) {
       // seeing — the next run picks the rest up, but somebody should know.
       return { flushed, passes, capped: passes === MAX_PASSES };
     },
+    /*
+       After the claim, in the same run. A row released at :42 that waited for
+       the next hour to be sent would spend an hour in a state whose whole
+       purpose is to be transient.
+
+       `unsendable` counts rows queued before the payload column existed, which
+       have nothing to send and are marked failed rather than retried for ever.
+    */
+    releasedNotifications: () => deliverQueued(),
     /*
        Criterion 8, and the end of the flywheel: a search that found nothing
        becomes an enquiry when somebody finally lists the thing.
