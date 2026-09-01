@@ -244,6 +244,7 @@ model Category {
   defaultTemplate   SpecTemplate?        @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
   templates         SpecTemplate[]       @relation("TemplateCategory")
   primaryFor        Business[]           @relation("BusinessPrimaryCategory")
+  sectorFor         Business[]           @relation("BusinessSector")
   businesses        BusinessCategory[]
   products          Product[]
   placements        PlacementSlot[]
@@ -511,6 +512,15 @@ model Business {
   derivedAt            DateTime? @map("derived_at")
 
   primaryCategory        Category                @relation("BusinessPrimaryCategory", fields: [primaryCategoryId], references: [id], onDelete: Restrict)
+  /// Declared so Prisma knows the constraint the database already has.
+  ///
+  /// `sectorId` stays a denormalised pointer and is still read directly — see
+  /// the field's own comment. This changes nothing about how it is used; it
+  /// stops `migrate dev` proposing to drop `business_sector_id_fkey`, which it
+  /// did on every run because a constraint the datamodel cannot see is drift to
+  /// remove. Restrict, matching the database: a sector with listings standing
+  /// on it should not be deletable.
+  sector                 Category?               @relation("BusinessSector", fields: [sectorId], references: [id], onDelete: Restrict)
   categories             BusinessCategory[]
   plan                   Plan?                   @relation(fields: [planId], references: [id], onDelete: SetNull)
   visitedByStaff         User?                   @relation("BusinessVisitedBy", fields: [visitedByStaffId], references: [id], onDelete: SetNull)
