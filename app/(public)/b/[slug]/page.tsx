@@ -3,10 +3,9 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
 import { Button } from "@/components/primitives";
 import { Breadcrumb, Card, KeyValuePanel, Panel, PublicShell } from "@/components/structure";
-import { Tag } from "@/components/display";
-import { ListingCard, VerificationLadder, tierSpec } from "@/components/domain";
+import { ListingCard, tierSpec } from "@/components/domain";
 import { getBusinessBySlug, getSimilarClaimedBusinesses } from "@/lib/db/queries";
-import { formatDate, formatDuration, maskTRN } from "@/lib/format";
+import { formatDate, formatDuration } from "@/lib/format";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
@@ -15,6 +14,13 @@ import { StorefrontHeader, storefrontCrumbs } from "./_storefront";
 import { renderSection } from "@/components/storefront";
 import { storefrontPlan } from "@/lib/storefront/loader";
 import { ContactCard } from "./ContactCard";
+import {
+  BusinessDetails,
+  EnquiryComposer,
+  HoursPanel,
+  LocationsPanel,
+  VerificationPanel,
+} from "./_rail";
 import { EnquireButton } from "./EnquireDrawer";
 import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
@@ -274,12 +280,30 @@ async function ClaimedStorefront({ business }: { business: Business }) {
               </section>
             )}
 
+            {/*
+               Board 1d's business details, in the left column where the board
+               puts them. They were in the rail as "at a glance" and moved with
+               the rail's rebuild — the licence, the authority and the masked
+               TRN are platform-owned facts and were not going to be quietly
+               dropped on the way.
+            */}
+            <BusinessDetails business={business} lastUpdated={formatDate(business.updatedAt)} />
+
             {plan.sections
               /*
-                The header section is chrome and `StorefrontHeader` already drew
-                it. Rendering both would put the trade name on the page twice.
+                Two sections are chrome and are drawn elsewhere.
+
+                `header` was already filtered: `StorefrontHeader` draws it, and
+                rendering both would put the trade name on the page twice.
+                `enquiry_form` joins it now that board 1d puts a real composer
+                in the rail — a page offering the same form twice makes a buyer
+                choose between two identical doors, and the rail's copy is the
+                one carrying the measured reply time and the privacy line.
+
+                The section stays in the template and stays editable; it is this
+                composition that has somewhere better to put it.
               */
-              .filter((section) => section.type !== "header")
+              .filter((section) => section.type !== "header" && section.type !== "enquiry_form")
               .map((section) => (
                 <div key={section.id}>
                   {renderSection({
@@ -308,142 +332,44 @@ async function ClaimedStorefront({ business }: { business: Business }) {
             a seller's to compose away.
           */}
 
-          <aside className="min-w-0">
-            {/*
-              The ladder, moved out of the main column and into chrome.
+          {/*
+            Board 1d's rail: the composer, the hours, where they are, and what
+            we checked. Chrome rather than template sections, and the reason is
+            unchanged from when the ladder sat here — non-negotiable 2 says
+            trust signals render identically on every storefront, which is an
+            argument that a seller's template must not be able to reorder them,
+            restyle them or switch them off. A sector whose template dropped the
+            licence panel would be a sector where we quietly stopped showing
+            what we checked.
 
-              It was a section of hardcoded JSX beside the catalogue. It is the
-              clearest statement the platform makes about what it checked and
-              what it has not, and it renders identically on every storefront
-              for the same reason the badge does — so it is not a section a
-              template may reorder or switch off.
-            */}
-            <Card>
-              <h2 className="text-h3 text-brand-ink">{t("verify.ladder")}</h2>
-              <div className="mt-2">
-                <VerificationLadder
-                  label={t("verify.ladder")}
-                  reachedLabel={t("verify.reached")}
-                  current={business.verificationTier}
-                  rungs={[1, 2, 3, 4].map((tier) => ({
-                    tier,
-                    label: t(tierSpec(tier).labelKey as never),
-                    requirement: t(`verify.requirement.t${tier}` as never),
-                    date:
-                      tier <= business.verificationTier
-                        ? tier >= 3
-                          ? business.visitedAt
-                            ? formatDate(business.visitedAt)
-                            : undefined
-                          : business.verifiedAt
-                            ? formatDate(business.verifiedAt)
-                            : undefined
-                        : undefined,
-                  }))}
-                />
-              </div>
-            </Card>
+            The composer is here for the neighbouring reason: the enquiry is the
+            conversion event and it is not a seller's to compose away.
+          */}
+          <aside className="flex min-w-0 flex-col gap-3">
+            <EnquiryComposer
+              business={business}
+              emirates={EMIRATES}
+              signedIn={Boolean(actor)}
+              responseLabel={
+                business.responseTimeMedianMs === null
+                  ? t("response.unmeasured")
+                  : t("response.median", {
+                      duration: formatDuration(business.responseTimeMedianMs),
+                    })
+              }
+              {...(business.responseTimeMedianMs !== null
+                ? { answeredWithin: formatDuration(business.responseTimeMedianMs) }
+                : {})}
+            />
 
-            <div className="mt-3">
-              <Card>
-                <h2 className="text-h3 text-brand-ink">{t("storefront.at_a_glance")}</h2>
-              <div className="mt-2">
-                <KeyValuePanel
-                  columns={1}
-                  notProvidedLabel={t("table.not_provided")}
-                  entries={[
-                    {
-                      key: "licence",
-                      label: t("storefront.licence"),
-                      value: business.licenceNumber,
-                      mono: true,
-                    },
-                    {
-                      key: "authority",
-                      label: t("storefront.authority"),
-                      value: business.licenceAuthority,
-                    },
-                    {
-                      key: "trn",
-                      label: t("trade.trn"),
-                      // Masked on every surface except the seller's own.
-                      value: business.trn ? maskTRN(business.trn) : undefined,
-                      mono: true,
-                    },
-                    {
-                      key: "established",
-                      label: t("storefront.established"),
-                      value: business.establishedYear ?? undefined,
-                    },
-                    {
-                      key: "team",
-                      label: t("storefront.team"),
-                      value: business.teamSize
-                        ? t(`storefront.team_band.${business.teamSize}` as never)
-                        : undefined,
-                    },
-                    {
-                      key: "languages",
-                      label: t("storefront.languages"),
-                      value: business.languages.length > 0 ? business.languages.join(", ") : undefined,
-                    },
-                  ]}
-                />
-              </div>
+            <HoursPanel
+              hours={(head?.hours ?? null) as never}
+              ramadanHours={(head?.ramadanHours ?? null) as never}
+            />
 
-              {business.categories.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-caption text-muted">{t("storefront.categories")}</p>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {business.categories.map((link) => (
-                      <Tag key={link.categoryId} size="sm" href={`/c/${link.category.slug}`}>
-                        {link.category.name}
-                      </Tag>
-                    ))}
-                  </div>
-                </div>
-              )}
-              </Card>
-            </div>
+            <LocationsPanel business={business} />
 
-            {/*
-              Masking is not a growth trick — the reveal is the event that
-              proves the platform delivered the enquiry, and it is what a
-              seller's subscription is ultimately judged on.
-            */}
-            <div className="mt-3">
-              <ContactCard
-                businessId={business.id}
-                businessSlug={business.slug}
-                phone={head?.phone ?? null}
-                whatsapp={head?.whatsapp ?? null}
-                enquire={
-                  <EnquireButton
-                    block
-                    businessId={business.id}
-                    businessSlug={business.slug}
-                    displayName={business.displayName}
-                    categoryId={business.primaryCategoryId}
-                    emirates={EMIRATES}
-                    signedIn={Boolean(actor)}
-                    triggerLabel={t("product.enquire")}
-                    recipient={{
-                      businessId: business.id,
-                      displayName: business.displayName,
-                      areaName: head?.area?.name ?? null,
-                      verificationTier: business.verificationTier,
-                      responseLabel:
-                        business.responseTimeMedianMs === null
-                          ? t("response.unmeasured")
-                          : t("response.median", {
-                              duration: formatDuration(business.responseTimeMedianMs),
-                            }),
-                      pinned: true,
-                    }}
-                  />
-                }
-              />
-            </div>
+            <VerificationPanel business={business} />
           </aside>
         </div>
       </div>

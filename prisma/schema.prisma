@@ -445,6 +445,20 @@ model Business {
   teamSize         TeamSizeBand? @map("team_size")
   languages        String[]      @default([])
   description      String?
+  /// "30 days on approved account", "50% advance, balance on delivery".
+  ///
+  /// The seller's own words, not a picklist. Terms in this trade are a
+  /// negotiation and the useful thing to publish is what they usually agree to,
+  /// which no enumeration would hold. Never a price, and nothing here is a
+  /// commitment the platform is party to.
+  paymentTerms     String?       @map("payment_terms")
+  /// "Same-day within Dubai, next day to the Northern Emirates."
+  ///
+  /// Board 1d's details panel asks for delivery as a fact a buyer can plan
+  /// around. Free text for the same reason as payment terms: a supplier who
+  /// delivers to site on their own truck and one who uses a courier are both
+  /// answering the question, and a dropdown would make one of them lie.
+  deliveryNote     String?       @map("delivery_note")
   /// Denormalised match surface: this supplier's own words, their categories
   /// and synonyms, and every product name, SKU and spec value in their
   /// catalogue — sizes and trade abbreviations expanded to every spelling.
