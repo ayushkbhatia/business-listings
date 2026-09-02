@@ -274,7 +274,9 @@ export function VerificationPanel({
   ];
 
   return (
-    <Card>
+    // Marked so criterion 8's visual test can find it without guessing at
+    // classnames, which would make the test pass the day somebody renames one.
+    <Card data-verification-panel="">
       <h2 className="text-h3 text-ink">{t("verify.panel_title")}</h2>
 
       {licenceExpired && (

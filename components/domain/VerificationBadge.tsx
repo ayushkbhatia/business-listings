@@ -64,6 +64,12 @@ export function VerificationBadge({
 
   const badge = (
     <span
+      /*
+         A hook for the theme-invariance tests, on the pill itself rather than
+         the wrapper — the pill is what carries the status palette, and a test
+         measuring the wrapper would measure nothing.
+      */
+      data-verification-badge=""
       className={cn(
         "inline-flex items-center gap-1.5 rounded-pill border whitespace-nowrap",
         size === "sm" ? "px-1.5 py-px text-eyebrow" : "px-2 py-0.5 text-caption",
