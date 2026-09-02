@@ -2851,9 +2851,30 @@ export const en = {
   "faq.price.a": "Prices are between you and the supplier. Send an enquiry and they quote you directly — we never see the number, never take a cut and never hold your money.",
 
   // ── Category index, board 6c ──────────────────────────────────────────────
+  // The emirate × sector landing page, /:emirate/:category.
+  "emirate_page.title": "{category} suppliers in {emirate}",
+  "emirate_page.subject": "{category} in {emirate}",
+  "emirate_page.description":
+    "{count} licensed {category} suppliers across {emirate}. Filter by verification and specification, then send one enquiry.",
+  "emirate_page.lede":
+    "{count} licensed businesses in {emirate}, {verified} of them verified by us.",
   "categories.matrix_eyebrow": "Browse any trade by emirate — {pages} pages",
-  "categories.title": "Every trade",
-  "categories.lede": "{categories} trades across {listings} licensed UAE businesses, {verified} of them verified by us.",
+  // Board 6c. The h1 the board draws, and a sub-line carrying four live counts.
+  "categories.title": "Every trade we cover",
+  "categories.lede":
+    "{sectors} sectors, {subcategories} subcategories, {emirates} emirates. {listings} licensed businesses mapped to them.",
+  "categories.seo_title": "All UAE business categories — {sectors} sectors, {subcategories} subcategories",
+  "categories.seo_description":
+    "{sectors} sectors and {subcategories} subcategories covering {listings} licensed UAE businesses, with a listing count for every trade in every emirate.",
+  "categories.more_subcategories": {
+    one: "+ {count} more subcategory",
+    other: "+ {count} more subcategories",
+  },
+  "categories.no_subcategories": "Subcategory pages open as more suppliers list.",
+  "categories.matrix_caption": "Listings by sector and emirate",
+  "categories.col_sector": "Sector",
+  "categories.threshold_note":
+    "Greyed cells have fewer than {count} businesses — those pages stay unindexed until supply grows, so we never publish a near-empty page.",
   "categories.subcategories": { one: "{count} subcategory", other: "{count} subcategories" },
   "categories.listings": { one: "{count} supplier", other: "{count} suppliers" },
   "categories.empty": "No trades yet.",

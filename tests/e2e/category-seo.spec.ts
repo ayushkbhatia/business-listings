@@ -26,7 +26,10 @@ test.describe("board 6c — the category index", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Every trade" })).toBeVisible();
 
     // Say the number: the lede carries three of them.
-    await expect(page.getByText(/\d+ trades across \d+ licensed UAE businesses/)).toBeVisible();
+    // Board 6c's sub-line, and all four of its numbers are live.
+    await expect(
+      page.getByText(/\d+ sectors, [\d,]+ subcategories, \d+ emirates\. [\d,]+ licensed businesses/),
+    ).toBeVisible();
 
     const sector = page.getByRole("heading", { level: 2, name: "HVAC & ventilation" });
     await expect(sector).toBeVisible();
