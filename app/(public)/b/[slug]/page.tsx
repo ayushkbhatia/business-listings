@@ -154,6 +154,58 @@ async function ClaimedStorefront({ business }: { business: Business }) {
      is where a buyer looks for them. The rail keeps the composer — a form is
      not a button row, and the two are doing different jobs.
   */
+  const enquireTrigger = (
+    <EnquireButton
+      block
+      size="lg"
+      businessId={business.id}
+      businessSlug={business.slug}
+      displayName={business.displayName}
+      categoryId={business.primaryCategoryId}
+      emirates={EMIRATES}
+      signedIn={Boolean(actor)}
+      /*
+         "Enquire", not "Send enquiry".
+
+         Board 1d sets the rule: "Request a quote" opens a composer, "Send
+         enquiry" is the submit inside one, and "Enquire" is the compact control
+         where there is room for neither. This bar is the compact control.
+      */
+      triggerLabel={t("listing.enquire")}
+      recipient={{
+        businessId: business.id,
+        displayName: business.displayName,
+        areaName: head?.area?.name ?? null,
+        verificationTier: business.verificationTier,
+        responseLabel:
+          business.responseTimeMedianMs === null
+            ? t("response.unmeasured")
+            : t("response.median", {
+                duration: formatDuration(business.responseTimeMedianMs),
+              }),
+        pinned: true,
+      }}
+    />
+  );
+
+  /*
+     The same actions twice, at opposite breakpoints, hidden with `display`.
+
+     Exactly one is in the accessibility tree at any width — `visibility` or
+     opacity would leave two sets of identically-labelled buttons for a screen
+     reader, which is the trap board 1b's filter rail already had to avoid.
+  */
+  const mobileActionBar = (
+    <ContactCard
+      layout="bar"
+      businessId={business.id}
+      businessSlug={business.slug}
+      phone={head?.phone ?? null}
+      whatsapp={head?.whatsapp ?? null}
+      enquire={enquireTrigger}
+    />
+  );
+
   const identityActions = (
     <ContactCard
       layout="row"
@@ -188,7 +240,23 @@ async function ClaimedStorefront({ business }: { business: Business }) {
     />
   );
 
-  const photos = business.media.filter((item) => item.kind === "gallery");
+  /*
+     Free plan, and what it does not get.
+
+     Board 1d: no plan chip, no featured products, three photos maximum, no
+     certificates. The composer stays — "that is the free tier's whole value",
+     and a directory that took the enquiry form away from its free listings
+     would be a directory with nothing to sell an upgrade against.
+
+     A listing with no plan row is treated as Free rather than as Pro. Most of
+     them are unclaimed imports; defaulting the other way would hand the best
+     storefront to every listing nobody has claimed.
+  */
+  const freePlan = (business.plan?.id ?? "free") === "free";
+
+  const FREE_PHOTO_LIMIT = 3;
+  const allPhotos = business.media.filter((item) => item.kind === "gallery");
+  const photos = freePlan ? allPhotos.slice(0, FREE_PHOTO_LIMIT) : allPhotos;
 
   return (
     <PublicShell
@@ -319,8 +387,39 @@ async function ClaimedStorefront({ business }: { business: Business }) {
           {...(photos.length > 0 ? { photoHref: "#photos" } : {})}
         />
 
-        <div className="mx-auto mt-6 grid max-w-7xl gap-[var(--gutter)] px-5 pb-[var(--section-pad)] lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="flex min-w-0 flex-col gap-8">
+        {/*
+           Criterion 12: on a tablet the composer sits directly below the
+           identity block, not below the left column.
+
+           Done with grid order on one DOM node rather than by rendering the
+           form twice. A second composer is what this page already had and what
+           the section filter removed — duplicating it here to satisfy a
+           breakpoint would put two identical forms back on the page, with the
+           same field ids, for a reader on a tablet.
+
+           So the composer is its own grid child: first in source order, moved
+           into the rail's first row at `lg`. Below that it simply stays where
+           it is, which is exactly where the board wants it.
+        */}
+        <div className="mx-auto mt-6 grid max-w-7xl gap-[var(--gutter)] px-5 pb-[var(--section-pad)] lg:grid-cols-[minmax(0,1fr)_18.75rem] lg:grid-rows-[auto_1fr] xl:grid-cols-[minmax(0,1fr)_21.25rem]">
+          <div className="order-1 min-w-0 lg:order-none lg:col-start-2 lg:row-start-1">
+            <EnquiryComposer
+              business={business}
+              emirates={EMIRATES}
+              signedIn={Boolean(actor)}
+              responseLabel={
+                business.responseTimeMedianMs === null
+                  ? t("response.unmeasured")
+                  : t("response.median", {
+                      duration: formatDuration(business.responseTimeMedianMs),
+                    })
+              }
+              {...(business.responseTimeMedianMs !== null
+                ? { answeredWithin: formatDuration(business.responseTimeMedianMs) }
+                : {})}
+            />
+          </div>
+          <div className="order-2 flex min-w-0 flex-col gap-8 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1">
             {/*
                The photos the cover's button points at.
 
@@ -380,6 +479,17 @@ async function ClaimedStorefront({ business }: { business: Business }) {
                 composition that has somewhere better to put it.
               */
               .filter((section) => section.type !== "header" && section.type !== "enquiry_form")
+              /*
+                 Featured products and certificates are what a paid storefront
+                 buys. Gated here rather than in the template so the rule holds
+                 whatever a seller's sections say — a Free listing whose
+                 template still lists them would render them.
+              */
+              .filter(
+                (section) =>
+                  !freePlan ||
+                  (section.type !== "featured_products" && section.type !== "certifications"),
+              )
               .map((section) => (
                 <div key={section.id}>
                   {renderSection({
@@ -421,23 +531,7 @@ async function ClaimedStorefront({ business }: { business: Business }) {
             The composer is here for the neighbouring reason: the enquiry is the
             conversion event and it is not a seller's to compose away.
           */}
-          <aside className="flex min-w-0 flex-col gap-3">
-            <EnquiryComposer
-              business={business}
-              emirates={EMIRATES}
-              signedIn={Boolean(actor)}
-              responseLabel={
-                business.responseTimeMedianMs === null
-                  ? t("response.unmeasured")
-                  : t("response.median", {
-                      duration: formatDuration(business.responseTimeMedianMs),
-                    })
-              }
-              {...(business.responseTimeMedianMs !== null
-                ? { answeredWithin: formatDuration(business.responseTimeMedianMs) }
-                : {})}
-            />
-
+          <aside className="order-3 flex min-w-0 flex-col gap-3 lg:order-none lg:col-start-2 lg:row-start-2">
             <HoursPanel
               hours={(head?.hours ?? null) as never}
               ramadanHours={(head?.ramadanHours ?? null) as never}
@@ -448,6 +542,13 @@ async function ClaimedStorefront({ business }: { business: Business }) {
             <VerificationPanel business={business} />
           </aside>
         </div>
+
+        {/*
+           Padding so the last section is not sitting under the bar, and the bar
+           itself. Both only exist below `md`.
+        */}
+        <div className="h-16 md:hidden" aria-hidden />
+        {mobileActionBar}
       </div>
     </PublicShell>
   );

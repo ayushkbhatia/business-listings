@@ -860,6 +860,7 @@ export const en = {
      in yet, so it names what they get back — a priced quote. "Send enquiry" is
      the submit inside the composer; "Enquire" is the compact form on cards. */
   "storefront.request_quote": "Request a quote",
+  "storefront.call": "Call",
   "storefront.photos_heading": "Photos",
   "storefront.overview": "Overview",
   "storefront.products": "Products",

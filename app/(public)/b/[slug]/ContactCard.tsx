@@ -43,7 +43,7 @@ export function ContactCard({
    * delivered the enquiry, and a second implementation is a second chance to
    * forget the write. Only the arrangement differs.
    */
-  layout?: "card" | "row";
+  layout?: "card" | "row" | "bar";
   /** The save control, rendered by the caller. Row layout only. */
   saveAction?: React.ReactNode;
 }) {
@@ -55,6 +55,43 @@ export function ContactCard({
     startTransition(async () => {
       await revealContact({ businessId, channel, surface: `/b/${businessSlug}` });
     });
+  }
+
+  if (layout === "bar") {
+    /*
+       Board 1d's mobile bar: WhatsApp · Call · Enquire, 44px each.
+
+       Rendered alongside the identity row rather than instead of it, and both
+       are hidden with `display` at their opposite breakpoint — so exactly one
+       is in the accessibility tree at any width. `visibility` or opacity would
+       leave two sets of identically-labelled buttons for a screen reader, which
+       is the trap the filter rail on board 1b already had to avoid.
+
+       44px because that is the touch target the design system floors at, and a
+       bar somebody stabs at while standing in a warehouse is the last place to
+       shave it.
+    */
+    return (
+      <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t border-line bg-card p-2 md:hidden">
+        {whatsapp && (
+          <Button
+            size="lg"
+            variant="secondary"
+            block
+            loading={pending}
+            onClick={() => reveal("whatsapp")}
+          >
+            {revealed ? formatPhone(whatsapp) : t("storefront.whatsapp")}
+          </Button>
+        )}
+        {phone && (
+          <Button size="lg" variant="secondary" block loading={pending} onClick={() => reveal("phone")}>
+            {revealed ? formatPhone(phone) : t("storefront.call")}
+          </Button>
+        )}
+        <div className="flex-1">{enquire}</div>
+      </div>
+    );
   }
 
   if (layout === "row") {

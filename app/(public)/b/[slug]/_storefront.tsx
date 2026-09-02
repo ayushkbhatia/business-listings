@@ -29,6 +29,7 @@ export function StorefrontHeader({
   pages = [],
   actions,
   photoHref,
+  now = new Date(),
 }: {
   business: PublicBusiness;
   /** A page slug where a template page is the active tab. */
@@ -57,6 +58,8 @@ export function StorefrontHeader({
    * the overview is currently the only route that has somewhere to send them.
    */
   photoHref?: string;
+  /** A parameter, not a call in the body — the purity rule, and it is right. */
+  now?: Date;
 }) {
   const spec = tierSpec(business.verificationTier);
   const badgeDate =
@@ -69,6 +72,22 @@ export function StorefrontHeader({
         : business.verifiedAt
           ? formatDate(business.verifiedAt)
           : undefined;
+
+  /*
+     Criterion 10: an expired licence takes the badge off the same day.
+
+     The schema says the tier "drops to 2 automatically the day licenceExpiry
+     passes — a scheduled job, no grace period". No such job exists; nothing in
+     the codebase reads `licenceExpiry` to move a tier. So the badge was
+     outliving the licence, which is the one direction a verification signal
+     must never fail in.
+
+     Checked here rather than waiting for a job to be written, because a render
+     that asks "is this licence valid now" cannot be late. The page stays live
+     and the verification panel states the renewal in warn: an expired licence
+     is grounds for de-badging, not for delisting.
+  */
+  const licenceExpired = business.licenceExpiry.getTime() < now.getTime();
 
   const head = business.locations[0];
   const cover = business.media.find((item) => item.kind === "cover");
@@ -171,6 +190,7 @@ export function StorefrontHeader({
               </div>
 
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                {!licenceExpired && (
                 <VerificationBadge
                   tier={business.verificationTier}
                   label={t(spec.labelKey as never)}
@@ -178,6 +198,7 @@ export function StorefrontHeader({
                   date={badgeDate}
                   tierLabel={t("verify.tier", { tier: business.verificationTier })}
                 />
+                )}
               </div>
 
               {/*
@@ -233,7 +254,11 @@ export function StorefrontHeader({
               </p>
             </div>
 
-            {actions && <div className="shrink-0 pt-2">{actions}</div>}
+            {/*
+               Hidden below `md`, where the sticky bar carries the same actions.
+               `hidden` rather than a visual trick, so only one set is exposed.
+            */}
+            {actions && <div className="hidden shrink-0 pt-2 md:block">{actions}</div>}
           </div>
         </div>
       </div>
