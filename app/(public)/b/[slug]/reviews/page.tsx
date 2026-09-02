@@ -67,6 +67,7 @@ export default async function ReviewsPage({ params }: Params) {
 
   return (
     <PublicShell
+      bleed
       nav={<DirectoryNav />}
       breadcrumb={
         <Breadcrumb
@@ -86,12 +87,14 @@ export default async function ReviewsPage({ params }: Params) {
           and no empty star row.
         */}
         {summary.count === 0 ? (
-          <div className="mt-6 max-w-[var(--measure-prose)]">
+          <div className="mx-auto mt-6 max-w-7xl px-5 pb-[var(--section-pad)]">
+            <div className="max-w-[var(--measure-prose)]">
             <h2 className="text-h2 text-brand-ink">{t("storefront.no_reviews_title")}</h2>
             <p className="mt-2 text-prose text-prose">{t("storefront.no_reviews_body")}</p>
+            </div>
           </div>
         ) : (
-          <div className="mt-5 grid gap-[var(--gutter)] lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
+          <div className="mx-auto mt-5 grid max-w-7xl gap-[var(--gutter)] px-5 pb-[var(--section-pad)] lg:grid-cols-[minmax(0,18rem)_minmax(0,1fr)]">
             <aside className="min-w-0">
               <Card>
                 <p className="font-mono text-eyebrow uppercase text-faint">

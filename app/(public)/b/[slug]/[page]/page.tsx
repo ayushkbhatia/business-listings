@@ -87,6 +87,7 @@ export default async function TemplatePageRoute({ params }: Params) {
 
   return (
     <PublicShell
+      bleed
       nav={<DirectoryNav />}
       breadcrumb={
         <Breadcrumb
@@ -99,7 +100,7 @@ export default async function TemplatePageRoute({ params }: Params) {
       <div data-theme={plan.theme}>
         <StorefrontHeader business={business} active="overview" pages={pages} />
 
-        <article className="mt-6 max-w-3xl">
+        <article className="mx-auto mt-6 max-w-3xl px-5 pb-[var(--section-pad)]">
           {/*
             An h2, not an h1. `StorefrontHeader` carries the h1 on every
             storefront route and it is the business name — two h1s is two

@@ -85,6 +85,7 @@ export default async function BranchesPage({ params }: Params) {
 
   return (
     <PublicShell
+      bleed
       nav={<DirectoryNav />}
       breadcrumb={
         <Breadcrumb
@@ -97,7 +98,7 @@ export default async function BranchesPage({ params }: Params) {
       <div data-theme={business.themePreset ?? "default"}>
         <StorefrontHeader business={business} active="branches" pages={pages} />
 
-        <div className="mt-5 grid gap-[var(--gutter)] lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+        <div className="mx-auto mt-5 grid max-w-7xl gap-[var(--gutter)] px-5 pb-[var(--section-pad)] lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
           <div className="flex min-w-0 flex-col gap-3">
             {business.locations.map((location) => {
               const unpinned = location.lat == null || location.lng == null;

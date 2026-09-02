@@ -852,6 +852,15 @@ export const en = {
   "product.no_template": "This category has no specification template yet.",
 
   // ── Storefront ──
+  /* Board 1d — the cover and identity block. */
+  "storefront.view_photos": { one: "View {formatted} photo", other: "View all {formatted} photos" },
+  /* Pro only. A "Free storefront" badge is an insult to a paying competitor. */
+  "storefront.plan_chip": "Pro storefront",
+  /* The identity block's primary. It opens a composer the buyer has not filled
+     in yet, so it names what they get back — a priced quote. "Send enquiry" is
+     the submit inside the composer; "Enquire" is the compact form on cards. */
+  "storefront.request_quote": "Request a quote",
+  "storefront.photos_heading": "Photos",
   "storefront.overview": "Overview",
   "storefront.products": "Products",
   "storefront.branches": "Branches",

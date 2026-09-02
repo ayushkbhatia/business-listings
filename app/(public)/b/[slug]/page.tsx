@@ -7,6 +7,7 @@ import { Tag } from "@/components/display";
 import { ListingCard, VerificationLadder, tierSpec } from "@/components/domain";
 import { getBusinessBySlug, getSimilarClaimedBusinesses } from "@/lib/db/queries";
 import { formatDate, formatDuration, maskTRN } from "@/lib/format";
+import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
@@ -120,8 +121,52 @@ async function ClaimedStorefront({ business }: { business: Business }) {
   const pages = business.sectorId ? await navPages(business.sectorId) : [];
 
 
+  /*
+     The action row, hoisted out of the rail and into the identity block.
+
+     Board 1d puts the quote, the two channels and save beside the name, which
+     is where a buyer looks for them. The rail keeps the composer — a form is
+     not a button row, and the two are doing different jobs.
+  */
+  const identityActions = (
+    <ContactCard
+      layout="row"
+      businessId={business.id}
+      businessSlug={business.slug}
+      phone={head?.phone ?? null}
+      whatsapp={head?.whatsapp ?? null}
+      enquire={
+        <EnquireButton
+          businessId={business.id}
+          businessSlug={business.slug}
+          displayName={business.displayName}
+          categoryId={business.primaryCategoryId}
+          emirates={EMIRATES}
+          signedIn={Boolean(actor)}
+          triggerLabel={t("storefront.request_quote")}
+          recipient={{
+            businessId: business.id,
+            displayName: business.displayName,
+            areaName: head?.area?.name ?? null,
+            verificationTier: business.verificationTier,
+            responseLabel:
+              business.responseTimeMedianMs === null
+                ? t("response.unmeasured")
+                : t("response.median", {
+                    duration: formatDuration(business.responseTimeMedianMs),
+                  }),
+            pinned: true,
+          }}
+        />
+      }
+    />
+  );
+
+  const photos = business.media.filter((item) => item.kind === "gallery");
+
   return (
     <PublicShell
+      bleed
       nav={<DirectoryNav />}
       breadcrumb={<Breadcrumb label={t("gallery.breadcrumb_label")} items={crumbs} />}
       footer={<DirectoryFooter />}
@@ -186,10 +231,49 @@ async function ClaimedStorefront({ business }: { business: Business }) {
         the status palette and is unaffected by design.
       */}
       <div data-theme={plan.theme}>
-        <StorefrontHeader business={business} active="overview" pages={pages} />
+        <StorefrontHeader
+          business={business}
+          active="overview"
+          pages={pages}
+          actions={identityActions}
+          {...(photos.length > 0 ? { photoHref: "#photos" } : {})}
+        />
 
-        <div className="mt-6 grid gap-[var(--gutter)] lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="mx-auto mt-6 grid max-w-7xl gap-[var(--gutter)] px-5 pb-[var(--section-pad)] lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="flex min-w-0 flex-col gap-8">
+            {/*
+               The photos the cover's button points at.
+
+               Gallery media existed and the overview rendered none of it — it
+               was reachable only through a template page's gallery block, which
+               most storefronts do not have. So "View all 28 photos" had a count
+               and nowhere to go, and the honest options were to drop the button
+               or give it a destination. This is the destination.
+
+               Removed entirely at zero, like every other section on this page.
+            */}
+            {photos.length > 0 && (
+              <section id="photos" className="scroll-mt-6">
+                <h2 className="text-h2 text-brand-ink">{t("storefront.photos_heading")}</h2>
+                <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                  {photos.map((photo) => (
+                    <li
+                      key={photo.id}
+                      className="relative aspect-[4/3] overflow-hidden rounded-chip border border-line"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={publicUrl(MEDIA_BUCKET, photo.storagePath)}
+                        alt={photo.alt ?? ""}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
             {plan.sections
               /*
                 The header section is chrome and `StorefrontHeader` already drew
