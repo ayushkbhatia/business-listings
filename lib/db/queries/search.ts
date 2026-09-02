@@ -149,6 +149,14 @@ function relevanceOf(name: string, q: string): number {
  * Unclaimed listings sink in every order. They have no rating, no measured
  * reply and nobody behind them, so a "newest" sort that floated a licence
  * import above a claimed supplier would be worse than useless. Criterion 7.
+ *
+ * Only the three single-signal sorts re-order; everything else is the ranking,
+ * `best` and an absent value alike. That test is deliberately the whole
+ * condition rather than `sort === "best"`, because the earlier version fell
+ * through to the switch's `default` when `sort` was undefined and quietly
+ * returned the newest-first order — which is not a worse ranking, it is no
+ * ranking at all. A caller that omits the field must get the ranking, since
+ * that is what every caller that omits it means.
  */
 function orderFor<T extends {
   claimStatus: string;
@@ -156,7 +164,7 @@ function orderFor<T extends {
   responseTimeMedianMs: number | null;
   publishedAt: Date | null;
 }>(rows: readonly T[], sort: SearchSort): T[] {
-  if (sort === "best") return [...rows];
+  if (sort !== "rating" && sort !== "reply" && sort !== "newest") return [...rows];
 
   const claimed = (row: T) => (row.claimStatus === "claimed" ? 0 : 1);
   /* Nulls last within each group, whichever way the signal points. */
