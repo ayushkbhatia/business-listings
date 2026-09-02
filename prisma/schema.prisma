@@ -792,6 +792,33 @@ model Document {
   mimeType    String?      @map("mime_type")
   createdAt   DateTime     @default(now()) @map("created_at")
 
+  /// Listed on the public storefront. The **file never is**.
+  ///
+  /// Board 1d: "Certificates list name and validity month only, never the
+  /// document." A trade licence PDF carries the licence number, the manager's
+  /// name and often a signature; an ISO certificate carries the auditor's
+  /// reference. Publishing that a supplier holds ISO 9001 until March 2027 is
+  /// useful to a buyer, and publishing the scan is handing over a forgeable
+  /// original. So this flag governs the *row*, and `storagePath` stays behind
+  /// the signed-URL route in every case.
+  ///
+  /// Defaults to false. A document becomes public because somebody said so,
+  /// never because it was uploaded.
+  isPublic    Boolean      @default(false) @map("is_public")
+  /// What a buyer would call it — "ISO 9001:2015", not "scan_0043_final.pdf".
+  ///
+  /// `filename` is whatever came off the seller's desktop and is not fit to
+  /// render. Null means the row has never been prepared for the public list,
+  /// which is another reason it is not on it.
+  displayName String?      @map("display_name")
+  /// Validity, rendered to the month.
+  ///
+  /// The board asks for the month rather than the day on purpose: a certificate
+  /// that expires "March 2027" is the fact a buyer needs, and a precise date
+  /// invites a page that looks wrong for the twenty-four hours around it. Null
+  /// for documents that do not expire.
+  validUntil  DateTime?    @map("valid_until")
+
   businessId String? @map("business_id")
   productId  String? @map("product_id")
   enquiryId  String? @map("enquiry_id")
@@ -804,6 +831,8 @@ model Document {
   @@index([businessId])
   @@index([productId])
   @@index([enquiryId])
+  /// The storefront's certificates block reads exactly this.
+  @@index([businessId, isPublic])
   @@map("document")
 }
 
