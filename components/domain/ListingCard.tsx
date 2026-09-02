@@ -1,6 +1,6 @@
 import { cn } from "@/lib/cn";
 import { Card } from "@/components/structure";
-import { LogoTile, StatusBadge, Tag } from "@/components/display";
+import { ImagePlaceholder, LogoTile, StatusBadge, Tag } from "@/components/display";
 import { Button, buttonClassName } from "@/components/primitives";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -57,6 +57,33 @@ export interface ListingCardBusiness {
   branchCount?: number;
   /** Sponsored placement. Always labelled, never silent. */
   sponsored?: boolean;
+
+  /* ── Board 1c, the map row ────────────────────────────────────────────── */
+
+  /**
+   * Position in the list, matching the number on the map pin.
+   *
+   * The board draws the two together, and that is the whole point of it: a
+   * buyer looking at a pin in Jebel Ali needs to find its row without reading
+   * twenty names. Absent outside the map context.
+   */
+  rank?: number;
+  /**
+   * "2.1 km". Already formatted, and deliberately a string.
+   *
+   * Distance is computed from the buyer's filters on the server. Formatting it
+   * in the component would mean the number rendering one way at prerender and
+   * another at hydration, which is the class of bug that produced the React 418 hydration error on
+   * board 1a's relative timestamps.
+   */
+  distanceLabel?: string;
+  /**
+   * One live fact: "Open until 18:00", "Closed · opens 08:00", "18 pumps in
+   * catalogue". Formatted by the caller for the same reason as `distanceLabel`
+   * — an opening-hours string measured against "now" cannot be computed twice
+   * and agree.
+   */
+  liveFact?: string;
 }
 
 export interface ListingCardProps {
@@ -131,6 +158,156 @@ export function ListingCard({
       {business.areaName} · {business.emirateName}
     </span>
   );
+
+  if (context === "map") {
+    /*
+       Board 1c's result row, beside the map.
+
+       Denser than the search row and arranged around one job: reconciling a pin
+       with a supplier. The rank number leads because that is the thing the map
+       and the list agree on, and it takes the moss treatment when selected for
+       the same reason the pin does.
+
+       Unverified rows get "View listing" and nothing else. The board is
+       explicit, and it is the same rule the unclaimed context runs on: an
+       "Enquire" button on a listing nobody has checked sends a buyer's details
+       to a record rather than to a supplier.
+    */
+    const verified = business.verificationTier >= 2;
+
+    return (
+      <Card as="article" elevation="flat" interactive selected={selected} padded={false}>
+        <div className="flex gap-3 p-4">
+          <LogoTile
+            src={business.logoUrl}
+            name={business.displayName}
+            categoryCode={business.categoryCode}
+            size="md"
+          />
+
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-start gap-2">
+              {business.rank !== undefined && (
+                /*
+                   Not an ordered-list marker, because the list is already an
+                   `ol` and this has to be visible next to the name rather than
+                   in the gutter. `aria-hidden` so a screen reader hears the
+                   position once, from the list, not twice.
+                */
+                <span
+                  aria-hidden
+                  className={cn(
+                    "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-pill",
+                    "font-mono text-eyebrow tabular-nums",
+                    selected ? "bg-moss text-on-ink" : "bg-ink text-on-ink",
+                  )}
+                >
+                  {business.rank}
+                </span>
+              )}
+
+              <h3 className="min-w-0 flex-1 text-body-sm text-ink">
+                <a
+                  href={link}
+                  className={cn(
+                    "rounded-tag underline-offset-2 hover:underline",
+                    "focus-visible:outline-none focus-visible:shadow-focus",
+                  )}
+                >
+                  {business.displayName}
+                </a>
+              </h3>
+
+              {business.sponsored && sponsoredLabel && (
+                <StatusBadge tone="neutral" size="sm">
+                  {sponsoredLabel}
+                </StatusBadge>
+              )}
+            </div>
+
+            <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-caption text-muted">
+              <span className="truncate">{business.categoryName}</span>
+              <span aria-hidden>·</span>
+              <span className="truncate">{business.areaName}</span>
+              {business.distanceLabel && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span className="tabular-nums">{business.distanceLabel}</span>
+                </>
+              )}
+            </div>
+
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+              {verification}
+
+              {!unclaimed && business.responseTimeMedianMs !== undefined && (
+                <ResponseTime
+                  size="sm"
+                  medianMs={business.responseTimeMedianMs}
+                  durationLabel={business.responseDurationLabel}
+                  label={
+                    business.responseDurationLabel
+                      ? t("response.median", { duration: business.responseDurationLabel })
+                      : undefined
+                  }
+                  unmeasuredLabel={t("response.unmeasured")}
+                />
+              )}
+
+              {/* Exactly one, as the board draws it. The caller decides which. */}
+              {business.liveFact && (
+                <span className="text-caption text-muted">{business.liveFact}</span>
+              )}
+            </div>
+
+            <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              {verified ? (
+                <>
+                  <a href={link} className="contents">
+                    <Button size="sm" tabIndex={-1}>
+                      {t("listing.storefront")}
+                    </Button>
+                  </a>
+                  {enquireHref ? (
+                    <a href={enquireHref} className={buttonClassName({ size: "sm", variant: "secondary" })}>
+                      {t("listing.enquire")}
+                    </a>
+                  ) : (
+                    <Button size="sm" variant="secondary" disabled>
+                      {t("listing.enquire")}
+                    </Button>
+                  )}
+                  {contactAction}
+                </>
+              ) : (
+                <a href={link} className={buttonClassName({ size: "sm", variant: "secondary" })}>
+                  {t("listing.view_listing")}
+                </a>
+              )}
+            </div>
+          </div>
+
+          {/*
+             96px square, reserved whether or not there is a photo — the same
+             rule as the search row, for the same reason: a list whose row
+             heights depend on who uploaded an image jumps as you scroll it.
+          */}
+          <div className="relative hidden size-24 shrink-0 overflow-hidden rounded-chip lg:block">
+            {business.coverImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={business.coverImageUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              <ImagePlaceholder kind="empty" className="absolute inset-0 h-full w-full" />
+            )}
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   if (context === "search") {
     /*
@@ -319,17 +496,17 @@ export function ListingCard({
       selected={selected}
       padded={false}
     >
-      <div className={cn("flex gap-3 p-4", context === "map" && "gap-2.5 p-3")}>
+      <div className="flex gap-3 p-4">
         <LogoTile
           src={business.logoUrl}
           name={business.displayName}
           categoryCode={business.categoryCode}
-          size={context === "map" ? "sm" : "md"}
+          size="md"
         />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <h3 className={cn("min-w-0 text-ink", context === "map" ? "text-body-sm" : "text-h3")}>
+            <h3 className="min-w-0 text-h3 text-ink">
               <a
                 href={link}
                 className={cn(
@@ -349,7 +526,7 @@ export function ListingCard({
 
           <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
             {place}
-            {context !== "map" && <Tag size="sm">{business.categoryName}</Tag>}
+            <Tag size="sm">{business.categoryName}</Tag>
           </div>
 
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">

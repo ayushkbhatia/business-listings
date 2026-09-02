@@ -21,7 +21,8 @@ import {
   SUBCATEGORIES,
   VALVE_TEMPLATE_FIELDS,
 } from "./seed-data.mjs";
-import { DN_SYNONYMS, sizeAliases } from "../lib/trade/nominal-size.js";
+import { DN_SYNONYMS } from "../lib/trade/nominal-size.js";
+import { buildProductSearchText, valueAliases } from "../lib/search/index-text.js";
 import { matchLine } from "../lib/quote/match.js";
 import { medianResponseMs, windowStart } from "../lib/metrics/response-time.js";
 import { monthStart } from "../lib/enquiry/fanout.js";
@@ -136,6 +137,18 @@ const INCH_TO_DN: Record<string, string> = Object.fromEntries(
  * The denormalised match surface. Both DN100 and 4" land here whichever way the
  * seller typed it, which is what lets each query find the other's products.
  */
+/**
+ * The seed's products, indexed by the same function the app uses.
+ *
+ * A thin wrapper, not a copy. This builder used to live here in full, which
+ * made the seed the only writer of `search_text` in the entire codebase — the
+ * importer and the dashboard's edit action both left it null. `nominal-size.ts`
+ * already carries a note about that table having been written twice; this is
+ * the last of it.
+ *
+ * `size` is passed as a value rather than a field because the seed knows the
+ * size it generated but not which template field id holds it in every category.
+ */
 function buildSearchText(parts: {
   name: string;
   sku?: string | null;
@@ -143,23 +156,14 @@ function buildSearchText(parts: {
   specValues: Record<string, unknown>;
   size?: string;
 }): string {
-  const tokens = new Set<string>();
-  const add = (v: unknown) => {
-    if (v === null || v === undefined) return;
-    const s = String(v).trim();
-    if (s) tokens.add(s.toLowerCase());
-  };
-  add(parts.name);
-  add(parts.sku);
-  add(parts.categoryName);
-  for (const alias of sizeAliases(parts.size)) add(alias);
-  for (const value of Object.values(parts.specValues)) {
-    if (Array.isArray(value)) value.forEach(add);
-    else add(value);
-    // A spec value may itself be a size — nominal_diameter usually is.
-    for (const alias of sizeAliases(String(value))) add(alias);
-  }
-  return [...tokens].join(" ");
+  const base = buildProductSearchText({
+    name: parts.name,
+    sku: parts.sku,
+    categoryName: parts.categoryName,
+    specValues: parts.specValues,
+  });
+  const sizeTokens = valueAliases(parts.size).join(" ");
+  return sizeTokens ? `${base} ${sizeTokens}` : base;
 }
 
 async function main() {
@@ -632,9 +636,191 @@ async function main() {
   console.log("→ campaign and legal");
   await seedCampaignLegal(prisma);
   await seedHomeSignals(prisma, businesses, opsLead.id);
+  /*
+     Board 1c's supply, built after everything above it.
+
+     Placement is not stylistic. The PRNG is a sequence and two comments in this
+     file already record what happens when a draw moves: every business
+     generated afterwards is renamed, and a dozen test files pin those slugs.
+     Adding suppliers at the end consumes values nothing existing depends on.
+  */
+  await seedPumps(prisma, catBySlug);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
+}
+
+/**
+ * Pumps & motors — the sector board 1c's own example query needs.
+ *
+ * `/search?q=chilled+water+pumps` is the board's canonical URL and its first
+ * acceptance criterion: those three words must reach a supplier whose products
+ * carry `Application: chilled water`, not merely one who wrote the phrase about
+ * themselves. Until this existed the query demonstrated the zero-result state,
+ * which is a real state and not the one the board is about.
+ *
+ * Twelve suppliers, not sixty. The publish floor is sixty and this is under it
+ * on purpose: the sector's landing page stays unpublished, `showOnHome` stays
+ * false, and the honest cold-start behaviour the rest of the seed models is not
+ * quietly undone for one demo. Search does not require a published landing
+ * page; it requires supply.
+ *
+ * Two of the twelve are left unpinned, so criterion 4 has something to report
+ * on this page as well — a supplier in the list and not on the map.
+ */
+async function seedPumps(db: Db, catBySlug: Map<string, string>) {
+  console.log("→ pumps & motors, for board 1c");
+
+  const categoryId = catBySlug.get("pumps-and-motors");
+  if (!categoryId) throw new Error("pumps-and-motors category missing");
+
+  /*
+     The template, and the field the whole board turns on.
+
+     `Application` is what makes `chilled water pumps` a specification search
+     rather than a name search: the buyer names the duty, and the index carries
+     it under its own label because `buildProductSearchText` writes both.
+  */
+  const template = await db.specTemplate.create({
+    data: {
+      categoryId,
+      name: "Pump",
+      version: 1,
+      status: "live",
+      fields: {
+        create: [
+          { key: "application", label: "Application", labelAr: "التطبيق", type: "select", required: true, isFilterable: true, sortOrder: 0,
+            options: ["Chilled water", "Potable water", "Fire fighting", "Drainage", "Process"] },
+          { key: "nominal_diameter", label: "Nominal diameter", labelAr: "القطر الاسمي", type: "select", unit: "DN", required: true, isFilterable: true, sortOrder: 1,
+            options: ["DN50", "DN65", "DN80", "DN100", "DN150", "DN200"] },
+          { key: "pump_type", label: "Pump type", labelAr: "نوع المضخة", type: "select", required: false, isFilterable: true, sortOrder: 2,
+            options: ["End suction", "Split case", "Vertical multistage", "Submersible", "Inline circulator"] },
+          { key: "head_max", label: "Maximum head", labelAr: "أقصى ضاغط", type: "number", unit: "m", required: false, isFilterable: false, sortOrder: 3, options: [] },
+        ],
+      },
+    },
+    include: { fields: true },
+  });
+
+  const fieldId = (key: string) => template.fields.find((f) => f.key === key)!.id;
+  const fields = template.fields.map((f) => ({ id: f.id, label: f.label, unit: f.unit }));
+
+  const dubaiAreas = await db.area.findMany({
+    where: { emirate: "dubai" },
+    select: { id: true, lat: true, lng: true },
+  });
+  if (dubaiAreas.length === 0) throw new Error("no Dubai areas to place pump suppliers in");
+
+  /*
+     Names that share no token with `NAME_PREFIX`.
+
+     The first draft reused eight of them — "Al Marwan Pump Systems", "Northbay
+     Pump Services", "Al Waha", "Al Qimma", "Al Bariq", "Silver Dune" — and the
+     onboarding claim test searches "Al Marwan" expecting one result. It got two
+     and failed on a strict-mode violation, which is the right failure: a buyer
+     searching their own trade name and finding two candidates is the exact
+     ambiguity board 2a's dispute route exists for, and the seed should not
+     manufacture it.
+
+     Three of these are the board's own render — Technopump, Gulf Cool, Marina —
+     and the rest are built to collide with nothing.
+  */
+  const PUMP_NAMES = [
+    "Technopump Trading", "Gulf Cool Technical Services", "Hydroline Pump Systems",
+    "Marina Pumps & Controls", "Cascade Hydro Equipment", "Aquaforce Pump Trading",
+    "Deira Flow Systems", "Zenith Pumping Solutions", "Riverbend Pump Services",
+    "Clearwater Systems Trading", "Circulon Trading", "Torque Hydraulics",
+  ] as const;
+
+  const PUMP_PRODUCTS = [
+    { name: "End suction centrifugal pump", type: "End suction", application: "Chilled water" },
+    { name: "Split case chilled water pump", type: "Split case", application: "Chilled water" },
+    { name: "Inline circulator pump", type: "Inline circulator", application: "Chilled water" },
+    { name: "Vertical multistage booster pump", type: "Vertical multistage", application: "Potable water" },
+    { name: "Fire fighting jockey pump", type: "End suction", application: "Fire fighting" },
+    { name: "Submersible drainage pump", type: "Submersible", application: "Drainage" },
+  ] as const;
+
+  for (const [i, name] of PUMP_NAMES.entries()) {
+    const slug = slugify(`${name} ${i}`);
+    // Two of twelve unpinned, so the map's excluded count has something true to
+    // say on this page too.
+    const unpinned = i >= PUMP_NAMES.length - 2;
+    const area = dubaiAreas[i % dubaiAreas.length]!;
+    const tier = i < 3 ? 3 : i < 8 ? 2 : 0;
+
+    const business = await db.business.create({
+      data: {
+        tradeName: `${name} LLC`,
+        displayName: name,
+        slug,
+        licenceNumber: `DED-${700000 + i}`,
+        licenceAuthority: "DED",
+        licenceExpiry: days(int(120, 900)),
+        establishedYear: tier > 0 ? int(1998, 2020) : null,
+        description:
+          tier > 0
+            ? "Pump supplier serving MEP contractors across Dubai. Chilled water, potable water and fire sets, with commissioning and spares."
+            : null,
+        verificationTier: tier,
+        verifiedAt: tier > 0 ? days(-int(20, 200)) : null,
+        visitedAt: tier >= 3 ? days(-int(20, 90)) : null,
+        visitedByStaffId: tier >= 3 ? uuid(3) : null,
+        claimStatus: tier > 0 ? "claimed" : "unclaimed",
+        primaryCategoryId: categoryId,
+        source: "licence_import",
+        publishedAt: days(-int(20, 300)),
+        ratingOverall: null,
+        reviewCount: 0,
+        derivedAt: NOW,
+        locations: {
+          create: {
+            type: "head_office",
+            emirate: "dubai",
+            areaId: area.id,
+            addressLine: `Unit ${int(1, 90)}`,
+            published: true,
+            // Jittered off the area centroid, or absent entirely. Never the
+            // centroid itself — that is the approximation criterion 4 forbids.
+            lat: unpinned || area.lat === null ? null : Number((area.lat + (rnd() - 0.5) * 0.01).toFixed(6)),
+            lng: unpinned || area.lng === null ? null : Number((area.lng + (rnd() - 0.5) * 0.01).toFixed(6)),
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    for (const [p, seed] of PUMP_PRODUCTS.entries()) {
+      const size = pick(["DN50", "DN80", "DN100", "DN150", "DN200"]);
+      const specValues: Record<string, string> = {
+        [fieldId("application")]: seed.application,
+        [fieldId("nominal_diameter")]: size,
+        [fieldId("pump_type")]: seed.type,
+      };
+      const productName = `${seed.name} ${size}`;
+      await db.product.create({
+        data: {
+          businessId: business.id,
+          name: productName,
+          slug: slugify(`${productName}-${p}`),
+          sku: `PM-${i}${p}-${size.replace("DN", "")}`,
+          categoryId,
+          availability: p % 3 === 2 ? "made_to_order" : "in_stock",
+          stockQty: p % 3 === 2 ? null : int(2, 40),
+          specValues,
+          searchText: buildProductSearchText({
+            name: productName,
+            sku: `PM-${i}${p}-${size.replace("DN", "")}`,
+            categoryName: "Pumps & motors",
+            specValues,
+            fields,
+          }),
+          description: "Supplied with test certificate. Commissioning and spares available.",
+          status: "live",
+        },
+      });
+    }
+  }
 }
 
 /**

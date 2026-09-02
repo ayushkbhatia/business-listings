@@ -19,5 +19,13 @@ export { CategoryMark, type CategoryMarkProps } from "./CategoryMark";
 // The mono uppercase label. One of exactly two places §08 allows uppercase.
 export { Eyebrow, type EyebrowProps } from "./Eyebrow";
 export { MapCanvas, type MapCanvasProps, type MapPin } from "./MapCanvas";
+// Board 1c's results map. Separate from MapCanvas because it clusters, which
+// means a GeoJSON source and paint layers rather than DOM markers.
+export {
+  ResultsMap,
+  type ResultsMapProps,
+  type ResultsMapPin,
+  type FreeZoneMark,
+} from "./ResultsMap";
 
 export { SERIES, seriesFill } from "./chart-series";

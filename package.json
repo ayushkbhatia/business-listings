@@ -21,6 +21,7 @@
     "check:tokens": "./scripts/check-tokens.sh",
     "check:schema": "./scripts/check-schema-invariants.sh",
     "check:audit": "tsx scripts/check-audit-coverage.mts",
+    "reindex": "tsx scripts/reindex.mts",
     "verify": "pnpm typecheck && pnpm lint && pnpm check:tokens && pnpm check:schema && pnpm check:audit && pnpm test && pnpm test:integration && pnpm build",
     "postinstall": "prisma generate",
     "matrix": "tsx scripts/print-matrix.mts",

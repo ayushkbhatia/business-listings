@@ -7,6 +7,7 @@ import { applyImport, previewImport, revertImport, type ImportPreview } from "@/
 import { getSpecFieldOptions } from "@/lib/db/queries/catalogue";
 import type { ColumnPlan } from "@/lib/import/columns";
 import { cloneTemplate, saveTemplateEdits, type FieldEdit } from "@/lib/catalogue/template";
+import { reindexBusiness, reindexProduct } from "@/lib/search/reindex";
 import { t } from "@/lib/i18n";
 import { getSellerSeat } from "../_shell";
 
@@ -73,6 +74,10 @@ export async function bulkUpdateProducts(formData: FormData): Promise<BulkResult
   let changed = 0;
   if (action === "delete") {
     ({ count: changed } = await prisma.product.deleteMany({ where }));
+    // The catalogue this business is findable by just shrank. Status changes
+    // below do not need this: a draft is still something the supplier carries,
+    // so it stays in their surface either way.
+    if (changed > 0) await reindexBusiness(seat.businessId);
   } else {
     const status = action === "publish" ? "live" : action === "draft" ? "draft" : "out_of_stock";
     ({ count: changed } = await prisma.product.updateMany({
@@ -229,6 +234,17 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
       specValues,
     },
   });
+
+  /*
+     The match surface, rebuilt from what was just written.
+
+     Without this the edit is invisible to search: `search_text` was only ever
+     written by the seed, so a seller who corrected a size here kept whatever
+     the row said before, and one who added a spec value was never findable by
+     it. The business's own surface is refreshed with it — its catalogue just
+     changed — which is why this is one call and not two.
+  */
+  await reindexProduct(id);
 
   revalidatePath("/dashboard/products");
   revalidatePath(`/dashboard/products/${id}`);

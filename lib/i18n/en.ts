@@ -703,6 +703,37 @@ export const en = {
   "display.map_empty": "No pinned locations to show",
   "display.map_excluded": { one: "{count} branch has no map pin", other: "{count} branches have no map pin" },
   "display.map_label": "Supplier locations",
+
+  /* Board 1c — the results map. Its controls, and the legend that names all
+     three pin states in words rather than relying on colour alone. */
+  /* Board 1c — the search page's own chrome. */
+  "search.scope_uae": "UAE",
+  /* `count` selects the plural form and must stay numeric; `formatted` is what
+     is printed, so 1,046 keeps its separator. Passing only a formatted string
+     would fall back to the plural form for every value, including one. */
+  "search.result_count": { one: "{formatted} result", other: "{formatted} results" },
+  "search.sorted_by_distance": "Sorted by distance from {origin}",
+  "search.sorted_by_relevance": "Sorted by relevance",
+  "search.draw_area": "Draw area on map",
+  "search.show_list": "List",
+  "search.show_map": "Map",
+  "search.show_more": { one: "Show {count} more", other: "Show {count} more" },
+  "search.bounds_empty_title": "No suppliers here",
+  "search.bounds_empty_body": { one: "{formatted} supplier matches elsewhere in {place}.", other: "{formatted} suppliers match elsewhere in {place}." },
+  "search.bounds_empty_action": "Zoom out to {place}",
+  "search.area_page_prompt": "Browsing {category} in {area}?",
+  "search.area_page_link": "See the full page",
+
+  "map.search_area": "Search this area",
+  "map.free_zones": "Free zones overlay",
+  "map.legend": "Legend",
+  "map.legend_visited": "Verified by site visit",
+  "map.legend_verified": "Licence verified",
+  "map.legend_unverified": "Unverified / unclaimed",
+  "map.results_label": "Suppliers matching this search",
+  "map.empty": "No pinned suppliers in this view",
+  "map.capped": { one: "Showing the first {count} pin", other: "Showing the first {count} pins" },
+  "map.excluded": { one: "{count} supplier here has no map pin", other: "{count} suppliers here have no map pin" },
   "display.remove_filter": "Remove the {facet} filter",
   "display.conversion": "{pct}% of the step before",
   "display.profile_strength": "Profile strength",
@@ -740,6 +771,11 @@ export const en = {
   "listing.no_reviews": "No reviews yet",
   "listing.trn_on_file": "TRN on file",
   "listing.view_storefront": "View storefront",
+  /* Board 1c's map row. Shorter than the search row's labels because the
+     column is 664px and carries three actions rather than one. */
+  "listing.storefront": "Storefront",
+  "listing.enquire": "Enquire",
+  "listing.view_listing": "View listing",
   "listing.branches": { one: "{count} branch", other: "{count} branches" },
   "listing.years": "Trading since {year}",
   "listing.unclaimed_title": "This listing has not been claimed",
@@ -888,6 +924,11 @@ export const en = {
   "facet.reply_option": "{hours} hours",
   "facet.years": "Years trading",
   "facet.years_option": "{years} years or more",
+  "facet.area": "Area",
+  /* The map viewport is a filter like any other, and removable like one. A
+     buyer who cannot see why they have eleven results cannot undo it. */
+  "facet.map_area": "Map area",
+  "facet.map_area_option": "This part of the map",
 
   // ── Zero results, board 10c. A designed state, not a fallback. ──
   "zero.title": "Nothing matches all of that",

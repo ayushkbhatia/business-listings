@@ -11,6 +11,8 @@ import {
   type SpecFieldOption,
 } from "./columns";
 import { columnValues, parseCsv, type ParsedCsv } from "./csv";
+import { buildProductSearchText } from "@/lib/search/index-text";
+import { reindexBusiness } from "@/lib/search/reindex";
 
 /**
  * Applying a mapping, and undoing it.
@@ -211,6 +213,28 @@ export async function applyImport(actor: Actor, input: ApplyImportInput): Promis
     return { ok: false, error: "No rows in that file could be imported. Nothing has changed." };
   }
 
+  /*
+     The material for each row's match surface, read once for the whole file.
+
+     This path created products with `search_text` null — every one of them,
+     and the schema calls this the widest path into the table. A seller's entire
+     imported catalogue was therefore unfindable by size or specification, which
+     is the one thing `Product.searchText` exists to make findable.
+
+     Built inline below rather than by a second pass afterwards: `createMany`
+     cannot return ids, so a pass would mean re-reading every row we are holding
+     right here.
+  */
+  const [importCategory, importTemplate] = await Promise.all([
+    prisma.category.findUnique({ where: { id: input.categoryId }, select: { name: true } }),
+    prisma.specTemplate.findFirst({
+      where: { categoryId: input.categoryId },
+      orderBy: { version: "desc" },
+      select: { fields: { select: { id: true, label: true, unit: true } } },
+    }),
+  ]);
+  const importFields = importTemplate?.fields ?? [];
+
   const run = await prisma.$transaction(async (tx) => {
     const created = await tx.importRun.create({
       data: {
@@ -240,6 +264,14 @@ export async function applyImport(actor: Actor, input: ApplyImportInput): Promis
         leadTimeDays: product.leadTimeDays,
         minOrderQty: product.minOrderQty,
         specValues: product.specValues,
+        searchText: buildProductSearchText({
+          name: product.name,
+          sku: product.sku,
+          description: product.description,
+          categoryName: importCategory?.name ?? null,
+          specValues: product.specValues,
+          fields: importFields,
+        }),
         // Imported products land as drafts. A seller who mapped a column wrong
         // should find out on their own catalogue screen, not from a buyer.
         status: "draft",
@@ -261,6 +293,14 @@ export async function applyImport(actor: Actor, input: ApplyImportInput): Promis
 
     return created;
   });
+
+  /*
+     The business's own surface, now that its catalogue has grown. Outside the
+     transaction deliberately: it reads the catalogue back, and holding a pooled
+     connection open across that turns one slow import into a queue for
+     everybody else.
+  */
+  await reindexBusiness(input.businessId);
 
   return { ok: true, importRunId: run.id, created: toCreate.length, skipped };
 }
@@ -313,6 +353,11 @@ export async function revertImport(
     await tx.importRun.update({ where: { id: run.id }, data: { revertedAt: now } });
     return count;
   });
+
+  // The catalogue shrank back. Without this the business would still be
+  // findable by products it no longer has — an undo that leaves the search
+  // index behind has not undone the import.
+  if (deleted > 0) await reindexBusiness(run.businessId);
 
   return { ok: true, deleted };
 }

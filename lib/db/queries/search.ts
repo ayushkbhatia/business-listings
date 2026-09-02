@@ -1,6 +1,15 @@
 import "server-only";
 import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
+import { isCode, matchNeedle } from "@/lib/search/index-text";
+import { nearestKm } from "@/lib/geo/distance";
+import {
+  resolveOrigin,
+  shapeOf,
+  weightsForShape,
+  type QueryShape,
+  type SortOrigin,
+} from "@/lib/search/origin";
 import { liveBoosts, liveWeights } from "@/lib/search/settings";
 import {
   placeSponsored,
@@ -63,8 +72,30 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
   }
 
   for (const token of tokens(query.q)) {
-    and.push({
-      OR: [
+    /*
+       The match surface first, then the columns it was built from.
+
+       `searchText` is what makes a *specification* find a supplier — board 1c's
+       first requirement, and the thing the four clauses below cannot do however
+       they are arranged, because none of them can see a product's spec values.
+
+       The originals stay as a second branch rather than being replaced. The
+       column is null on every row until `pnpm reindex` has run, and a search
+       that returned nothing at all on a freshly-migrated database would look
+       exactly like a broken index.
+    */
+    const branches: Prisma.BusinessWhereInput[] = [
+      { searchText: { contains: matchNeedle(token), mode: "insensitive" } },
+    ];
+
+    /*
+       Only names get the loose branches. A code matched as a bare substring is
+       criterion 2's failure — `DN10` reaching a supplier whose name or
+       catalogue carries `DN100` — and `matchNeedle` has already padded it so
+       the surface above matches it whole. Nothing else may widen that back out.
+    */
+    if (!isCode(token)) {
+      branches.push(
         { displayName: { contains: token, mode: "insensitive" } },
         { tradeName: { contains: token, mode: "insensitive" } },
         // Category synonyms are how an Arabic query reaches an English listing:
@@ -72,8 +103,10 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
         // matches without a word of Arabic in their own record.
         { primaryCategory: { OR: [{ name: { contains: token, mode: "insensitive" } }, { synonyms: { has: token } }] } },
         { categories: { some: { category: { OR: [{ name: { contains: token, mode: "insensitive" } }, { synonyms: { has: token } }] } } } },
-      ],
-    });
+      );
+    }
+
+    and.push({ OR: branches });
   }
 
   if (query.tier) and.push({ verificationTier: { gte: query.tier } });
@@ -85,6 +118,26 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
   }
 
   const locationFilters: Prisma.LocationWhereInput = { published: true };
+  /*
+     The map viewport, when the buyer pressed "Search this area".
+
+     It belongs here rather than only in the pin query: criterion 6 says the
+     button *re-queries*, and a box that moved the pins while leaving the list
+     showing suppliers in Fujairah would be the map and the list disagreeing
+     about what was asked.
+
+     Panning still changes nothing, because panning does not write `bounds` —
+     only the button does. That is the whole of "panning alone does not re-rank".
+
+     A supplier with no coordinates drops out of a bounded search, and that is
+     correct rather than unfortunate: the buyer has asked "who is *here*", and
+     we do not know whether an unpinned supplier is. The unbounded search still
+     finds them, which is what the zoom-out state offers.
+  */
+  if (query.bounds) {
+    locationFilters.lat = { gte: query.bounds.south, lte: query.bounds.north };
+    locationFilters.lng = { gte: query.bounds.west, lte: query.bounds.east };
+  }
   if (query.emirate) locationFilters.emirate = query.emirate as never;
   if (query.area) locationFilters.area = { slug: query.area };
   // A free zone is a cross-cutting toggle, not a place in the area hierarchy.
@@ -105,7 +158,15 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
 const BUSINESS_INCLUDE = {
   primaryCategory: true,
   plan: true,
-  locations: { where: { published: true }, include: { area: true }, take: 1 },
+  /*
+     Up to five branches, not one.
+
+     The card still shows the first, but distance is measured to the *nearest*
+     of them: a Jebel Ali supplier with a Deira trade counter is close to a
+     Deira buyer, and ranking them by whichever branch the database happened to
+     return first would be a coin toss dressed as a distance.
+  */
+  locations: { where: { published: true }, include: { area: true }, take: 5 },
   /*
      Board 1b's row carries a photo, the trades they carry and a branch count.
 
@@ -197,6 +258,10 @@ export async function searchBusinesses(
     sponsoredId?: string | null;
     /** Live boost points by business id. Omit to read them. */
     boosts?: Map<string, number>;
+    /** Omit to resolve from the query's own filters. `null` means no origin. */
+    origin?: SortOrigin | null;
+    /** Omit to read it from the catalogue. */
+    shape?: QueryShape;
   } = {},
 ) {
   const { categoryIds, sponsoredId = null } = options;
@@ -209,10 +274,22 @@ export async function searchBusinesses(
    * here rather than at every call site, because a caller that forgot would
    * silently get the old ranking.
    */
-  const [weights, boosts] = await Promise.all([
+  const [storedWeights, boosts, origin, shape] = await Promise.all([
     options.weights ? Promise.resolve(options.weights) : liveWeights(),
     options.boosts ? Promise.resolve(options.boosts) : liveBoosts(),
+    options.origin !== undefined ? Promise.resolve(options.origin) : resolveOrigin(query),
+    options.shape ? Promise.resolve(options.shape) : shapeOf(query),
   ]);
+
+  /*
+     Distance is the only weight the query itself moves, and the board says why:
+     somebody who typed an exact part number wants that part and will drive for
+     it, while somebody searching `AMC contractor` is looking for a person who
+     will come to their site. The other five stay exactly as staff set them —
+     a search that quietly rewrote those would make the admin editor a
+     suggestion rather than a setting.
+  */
+  const weights = weightsForShape(storedWeights, shape);
   const where = businessWhere(query, categoryIds);
 
   const [candidates, total] = await Promise.all([
@@ -230,11 +307,31 @@ export async function searchBusinesses(
   const ranked = rank(
     candidates,
     (business) => ({
-      relevance: relevanceOf(business.displayName, query.q),
+      /*
+         Scored against the whole match surface, not just the name.
+
+         A supplier found *because* their catalogue carries `Application:
+         chilled water` scored 0.35 on a name that says nothing about chilled
+         water — the floor, indistinguishable from a bare category-synonym
+         match. The row that matched best was ranked as though it had barely
+         matched at all.
+      */
+      relevance: relevanceOf(`${business.displayName} ${business.searchText ?? ""}`, query.q),
       verificationTier: business.verificationTier,
       responseTimeMedianMs: business.responseTimeMedianMs,
       specCompleteness: business.specCompleteness,
-      distanceKm: null,
+      /*
+         Kilometres from the buyer's own filters, never from their device.
+
+         Hardcoded null until now, which meant the distance weight had never
+         once moved a result — the admin editor has always shown a slider that
+         did nothing. Null still happens, and legitimately: no area and no
+         emirate filter is no origin, and a supplier whose every branch is
+         unpinned has no position. Both score as unknown rather than as far,
+         because not knowing where somebody is must not read as evidence that
+         they are inconvenient.
+      */
+      distanceKm: nearestKm(origin, business.locations),
       planMultiplier: business.plan?.rankingMultiplier ?? 1,
       // Ops moving a listing for a reason of ours, with an expiry on it. Never
       // labelled sponsored: nobody paid for this one.
@@ -257,6 +354,13 @@ export async function searchBusinesses(
     rows: placed.rows.slice(from, from + PAGE_SIZE),
     total,
     sponsoredId: placed.sponsoredId,
+    /*
+       Returned rather than recomputed by the page. Board 1c's sort strip names
+       the origin it sorted by, and a strip that worked it out separately could
+       name a place the ranking did not actually use.
+    */
+    origin,
+    shape,
   };
 }
 
@@ -274,13 +378,24 @@ function productWhere(query: SearchQuery, categoryIds?: string[]): Prisma.Produc
   if (categoryIds?.length) and.push({ categoryId: { in: categoryIds } });
 
   for (const token of tokens(query.q)) {
-    and.push({
-      OR: [
-        { searchText: { contains: token, mode: "insensitive" } },
+    // Same split as `businessWhere`, and it matters more here: a product search
+    // is where an exact part number is typed, and `6205-2RS` reaching
+    // `6205-2RSH` is a bearing that does not fit.
+    const branches: Prisma.ProductWhereInput[] = [
+      { searchText: { contains: matchNeedle(token), mode: "insensitive" } },
+    ];
+    if (!isCode(token)) {
+      branches.push(
         { name: { contains: token, mode: "insensitive" } },
         { category: { OR: [{ name: { contains: token, mode: "insensitive" } }, { synonyms: { has: token } }] } },
-      ],
-    });
+      );
+    } else {
+      // A code still reaches the SKU column directly, whole. That is the one
+      // place a part number is stored verbatim rather than as an index token,
+      // and a seller whose catalogue predates the reindex still has it.
+      branches.push({ sku: { equals: token, mode: "insensitive" } });
+    }
+    and.push({ OR: branches });
   }
 
   if (query.availability?.length) and.push({ availability: { in: query.availability as never[] } });
@@ -320,17 +435,31 @@ const PRODUCT_INCLUDE = {
     include: {
       primaryCategory: true,
       plan: true,
-      locations: { where: { published: true }, include: { area: true }, take: 1 },
+      // Five, for the same reason as the business include: distance is to the
+      // nearest branch, not to whichever one came back first.
+      locations: { where: { published: true }, include: { area: true }, take: 5 },
     },
   },
 } as const;
 
 export async function searchProducts(
   query: SearchQuery,
-  options: { categoryIds?: string[]; weights?: RankingWeights } = {},
+  options: {
+    categoryIds?: string[];
+    weights?: RankingWeights;
+    origin?: SortOrigin | null;
+    shape?: QueryShape;
+  } = {},
 ) {
   const { categoryIds } = options;
-  const weights = options.weights ?? (await liveWeights());
+  const [storedWeights, origin, shape] = await Promise.all([
+    options.weights ? Promise.resolve(options.weights) : liveWeights(),
+    options.origin !== undefined ? Promise.resolve(options.origin) : resolveOrigin(query),
+    options.shape ? Promise.resolve(options.shape) : shapeOf(query),
+  ]);
+  // Same rule as the suppliers tab. A buyer who typed a part number is willing
+  // to travel for it whichever tab they are looking at.
+  const weights = weightsForShape(storedWeights, shape);
   const where = productWhere(query, categoryIds);
 
   const [candidates, total] = await Promise.all([
@@ -345,14 +474,14 @@ export async function searchProducts(
       verificationTier: product.business.verificationTier,
       responseTimeMedianMs: product.business.responseTimeMedianMs,
       specCompleteness: product.business.specCompleteness,
-      distanceKm: null,
+      distanceKm: nearestKm(origin, product.business.locations),
       planMultiplier: product.business.plan?.rankingMultiplier ?? 1,
     }),
     weights,
   );
 
   const from = (query.page - 1) * PAGE_SIZE;
-  return { rows: ranked.slice(from, from + PAGE_SIZE), total };
+  return { rows: ranked.slice(from, from + PAGE_SIZE), total, origin, shape };
 }
 
 export type ProductResult = Awaited<ReturnType<typeof searchProducts>>["rows"][number];

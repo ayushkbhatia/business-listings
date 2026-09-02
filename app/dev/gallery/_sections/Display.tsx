@@ -12,6 +12,7 @@ import {
   ImagePlaceholder,
   LogoTile,
   MapCanvas,
+  ResultsMap,
   PlanBadge,
   ProgressBar,
   ShareBars,
@@ -28,6 +29,23 @@ import { t } from "@/lib/i18n";
 import { Frame, Section, Specimen, States } from "../_kit";
 
 const TONES: StatusTone[] = ["ok", "warn", "bad", "info", "neutral"];
+
+/*
+   Enough pins that the clusterer has something to do, spread across three
+   emirates. Board 1c caps the real query at 200 and clusters past that; a
+   gallery that only ever showed four would never render the fourth pin state.
+*/
+const GALLERY_PINS = [
+  { id: "b1", locationId: "l1", lat: 25.1412, lng: 55.2311, label: "Al Marwan Trading — Al Quoz Industrial 1", kind: "head_office" as const },
+  { id: "b2", locationId: "l2", lat: 25.1783, lng: 55.3486, label: "Gulf Line Industrial — Ras Al Khor", kind: "verified" as const },
+  { id: "b3", locationId: "l3", lat: 25.2697, lng: 55.3095, label: "Al Sahra General Trading — Deira", kind: "unverified" as const },
+  { id: "b4", locationId: "l4", lat: 25.3197, lng: 55.4083, label: "Al Wadi Building Materials — Sharjah Industrial 4", kind: "verified" as const },
+  { id: "b5", locationId: "l5", lat: 25.1355, lng: 55.2280, label: "Technopump Trading — Al Quoz Industrial 3", kind: "verified" as const },
+  { id: "b6", locationId: "l6", lat: 25.1390, lng: 55.2265, label: "Emirates Valve Centre — Al Quoz Industrial 3", kind: "unverified" as const },
+  { id: "b7", locationId: "l7", lat: 25.1401, lng: 55.2299, label: "Desert Cooling Systems — Al Quoz Industrial 2", kind: "head_office" as const },
+  { id: "b8", locationId: "l8", lat: 24.9857, lng: 55.0654, label: "Jebel Ali Pipe & Fittings — JAFZA South", kind: "verified" as const },
+  { id: "b9", locationId: "l9", lat: 24.9902, lng: 55.0701, label: "Gulf Cool Technical — JAFZA South", kind: "unverified" as const },
+];
 
 export function Display() {
   const [filters, setFilters] = useState(["dubai", "dn100", "tier3"]);
@@ -453,6 +471,54 @@ export function Display() {
               excluded={3}
               excludedLabel={t("display.map_excluded", { count: 3 })}
               emptyLabel={t("display.map_empty")}
+            />
+          </div>
+        </States>
+      </Section>
+
+      <Section
+        id="results-map"
+        title="ResultsMap"
+        note="board 1c · clusters past ~44px · moss = hovered or selected · ink = verified · outlined = unverified · legend names all three in words, never colour alone"
+      >
+        <States label="clustered, with the overlay and legend" stack>
+          <div className="h-96 w-full max-w-3xl overflow-hidden rounded-card border border-line">
+            <ResultsMap
+              label={t("map.results_label")}
+              excluded={3}
+              excludedLabel={t("map.excluded", { count: 3 })}
+              labels={{
+                searchArea: t("map.search_area"),
+                freeZones: t("map.free_zones"),
+                legend: t("map.legend"),
+                legendVisited: t("map.legend_visited"),
+                legendVerified: t("map.legend_verified"),
+                legendUnverified: t("map.legend_unverified"),
+                empty: t("map.empty"),
+              }}
+              onSearchArea={() => {}}
+              freeZones={[
+                { id: "jafza", name: "Jebel Ali Free Zone", lat: 25.0107, lng: 55.0632 },
+                { id: "dic", name: "Dubai Investment Park", lat: 24.9857, lng: 55.1745 },
+              ]}
+              pins={GALLERY_PINS}
+            />
+          </div>
+        </States>
+        <States label="nothing in this view" stack>
+          <div className="h-64 w-full max-w-3xl overflow-hidden rounded-card border border-line">
+            <ResultsMap
+              label={t("map.results_label")}
+              pins={[]}
+              labels={{
+                searchArea: t("map.search_area"),
+                freeZones: t("map.free_zones"),
+                legend: t("map.legend"),
+                legendVisited: t("map.legend_visited"),
+                legendVerified: t("map.legend_verified"),
+                legendUnverified: t("map.legend_unverified"),
+                empty: t("map.empty"),
+              }}
             />
           </div>
         </States>
