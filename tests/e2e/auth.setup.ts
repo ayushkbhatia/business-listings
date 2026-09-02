@@ -145,26 +145,41 @@ async function provision(page: Page, seat: Seat) {
      * a real seat is: a person whose account persists between sessions.
      */
     /*
-     * Looked up by email in SQL, not by paging the admin API.
+     * Paged, rather than the first page only — and through the admin API
+     * rather than SQL.
      *
-     * This was `listUsers({ perPage: 200 })` and a `.find` over the first page.
-     * The auth project is shared — every developer run and every CI run adds
-     * users to it — and it passed 200 rows, so the ops lead simply stopped
-     * being on page one. `found` came back undefined, provisioning took the
-     * "create it" branch, and Supabase refused with "a user with this email
-     * address has already been registered". Setup failed, and with it every
-     * staff project that depends on the session: 268 tests that never ran and
-     * reported nothing.
+     * This was `listUsers({ perPage: 200 })` with a `.find` over page one. The
+     * auth project is shared: every developer run and every CI run adds to it,
+     * it passed 200 rows, and the seats simply stopped being on the first page.
+     * Provisioning then took the "create it" branch and Supabase refused the
+     * duplicate email, failing setup and with it every project that depends on
+     * a session — 268 of 764 tests that never ran and reported nothing.
      *
-     * A page size is a ceiling, and raising it only moves the day it is hit.
-     * The email is unique in `auth.users`; asking for that row directly has no
-     * ceiling at all.
+     * The first fix for that queried `auth.users` directly, which worked
+     * locally and could not work in CI. `DATABASE_URL` points at Supabase here,
+     * where `auth` and `public` share a database; in CI the data lives in a
+     * throwaway postgres container that has only the app schema, while auth is
+     * still the hosted project. `relation "auth.users" does not exist` is that
+     * assumption meeting the environment it was wrong about — the same split
+     * between auth and data that produced the stale-claim bug in #54.
+     *
+     * So: the admin API, which is the same in both, walked to the end instead
+     * of trusted to fit on one page.
      */
-    const authUser = await db.query<{ id: string }>(
-      "SELECT id FROM auth.users WHERE email = $1 LIMIT 1",
-      [seat.email],
-    );
-    const found = authUser.rows[0] ?? null;
+    let found: { id: string } | null = null;
+    for (let page = 1; page <= 20 && !found; page += 1) {
+      const { data: batch, error: listError } = await admin.auth.admin.listUsers({
+        page,
+        perPage: 200,
+      });
+      if (listError) throw listError;
+
+      const users = batch?.users ?? [];
+      found = users.find((user) => user.email === seat.email) ?? null;
+      // A short page is the last page. Without this the loop runs its full
+      // twenty regardless, which is twenty round trips to learn nothing.
+      if (users.length < 200) break;
+    }
 
     let userId: string;
     if (found) {
