@@ -123,7 +123,18 @@ export function SearchFilterBar({
                   active ? "bg-card text-ink shadow-sm" : "text-body hover:text-ink",
                 )}
               >
-                {entry.label} ({formatCount(entry.count)})
+                {entry.label}{" "}
+                {/*
+                   The count as a bare number, not in brackets.
+
+                   `Tabs` renders its badge this way, so the accessible name is
+                   "Products 63" and the e2e locators that have always found the
+                   tab by its count still do. The board draws parentheses; an
+                   aria-label to keep both would make the accessible name differ
+                   from the visible text, which this codebase avoids on purpose
+                   — see the footer's `aria-labelledby`.
+                */}
+                <span className="text-muted">{formatCount(entry.count)}</span>
               </Link>
             );
           })}

@@ -1,12 +1,19 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicShell } from "@/components/structure";
-import { ListingCard } from "@/components/domain";
+import { ListingCard, ProductCard } from "@/components/domain";
 import { t } from "@/lib/i18n";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { formatCount, formatDuration, formatKm } from "@/lib/format";
 import { parseSearchQuery, toSearchParams } from "@/lib/search/query";
-import { searchBusinesses, countResults, getMapPins, getFreeZoneMarks } from "@/lib/db/queries";
+import {
+  searchBusinesses,
+  searchProducts,
+  countResults,
+  getMapPins,
+  getFreeZoneMarks,
+} from "@/lib/db/queries";
+import { primarySize } from "@/lib/spec";
 import { appliedFacetLabels } from "@/lib/search/applied";
 import { crossLinkFor } from "@/lib/seo/cross-link";
 import { nearestKm } from "@/lib/geo/distance";
@@ -57,13 +64,28 @@ export default async function SearchPage({ searchParams }: Props) {
   const sp = await searchParams;
   const query = parseSearchQuery(sp);
 
-  const [results, productTotal, mapData, freeZones, crossLink] = await Promise.all([
+  const [results, productTotal, products, mapData, freeZones, crossLink] = await Promise.all([
     searchBusinesses(query),
     countResults({ ...query, tab: "products" }),
+    /*
+       The products tab.
+
+       Board 1c is the suppliers composition and hands the products one to board
+       10c, which is not built. That is a reason to leave the *layout* alone,
+       not a reason for the tab to render nothing — it has worked since handoff
+       1, and a tab that shows a live count of 63 and then an empty column is
+       worse than one that was never offered. So the rows render here in the
+       result column, in the grid they already had, and 10c can compose them
+       properly.
+    */
+    query.tab === "products" ? searchProducts(query) : Promise.resolve(null),
     getMapPins(query),
     getFreeZoneMarks(),
     crossLinkFor(query),
   ]);
+
+  // Whichever tab is showing decides the count the page reasons about.
+  const total = query.tab === "products" ? productTotal : results.total;
 
   /*
      Criterion 9: bounds empty, but the query has answers elsewhere.
@@ -74,13 +96,13 @@ export default async function SearchPage({ searchParams }: Props) {
      what they asked for, which the board explicitly forbids.
   */
   const elsewhere =
-    results.total === 0 && query.bounds
+    total === 0 && query.bounds
       ? await countResults({ ...query, bounds: undefined })
       : 0;
 
   const applied = appliedFacetLabels(query);
-  const shown = (query.page - 1) * 20 + results.rows.length;
-  const remaining = Math.max(0, results.total - shown);
+  const shown = (query.page - 1) * 20 + (products?.rows.length ?? results.rows.length);
+  const remaining = Math.max(0, total - shown);
 
   return (
     <PublicShell
@@ -129,7 +151,7 @@ export default async function SearchPage({ searchParams }: Props) {
         </p>
       )}
 
-      {results.total === 0 && elsewhere > 0 ? (
+      {total === 0 && elsewhere > 0 ? (
         /*
            The box is empty and the query is not. The action clears `bounds`
            and nothing else — the buyer's filters and words are still what they
@@ -153,7 +175,7 @@ export default async function SearchPage({ searchParams }: Props) {
             })}
           </Link>
         </div>
-      ) : results.total === 0 ? (
+      ) : total === 0 ? (
         /*
            The board calls this the most important state on the page, and it is
            the one that turns a failed search into supply: `recordZeroResult`
@@ -199,10 +221,58 @@ export default async function SearchPage({ searchParams }: Props) {
           />
 
           {/*
+             The level between the page's h1 and the cards' h3.
+
+             Without it the outline jumps h1 to h3 and axe reports
+             `heading-order`, which it did — the rows are h3 because that is
+             what `ListingCard` renders in every context, and the fix belongs
+             here rather than in a card that is right about its own level.
+          */}
+          <h2 className="sr-only">
+            {query.tab === "products" ? t("results.products_tab") : t("results.businesses_tab")}
+          </h2>
+
+          {products ? (
+            /*
+               Board 10c's rows in board 1c's column. The grid is the one they
+               already had; only the surrounding layout is new.
+            */
+            <div className="grid gap-4 p-4 sm:grid-cols-2">
+              {products.rows.map((product) => (
+                <ProductCard
+                  key={product.id}
+                  enquireHref={`/rfq/new?to=${product.business.slug}`}
+                  product={{
+                    slug: product.slug,
+                    businessSlug: product.business.slug,
+                    name: product.name,
+                    sku: product.sku,
+                    availability: product.availability,
+                    stockQty: product.stockQty,
+                    leadTimeDays: product.leadTimeDays,
+                    minOrderQty: product.minOrderQty,
+                    /*
+                       No template loaded here, so no size label.
+
+                       `primarySize` needs the category's spec fields to know
+                       which value is the size, and /search spans every category
+                       at once — there is no single template to read. Board 10c
+                       composes this tab properly and can group by category
+                       first; guessing a field id would print the wrong number
+                       beside a part, which is the one mistake worth avoiding on
+                       a page about specifications.
+                    */
+                    sizeLabel: primarySize([], product.specValues),
+                  }}
+                />
+              ))}
+            </div>
+          ) : (
+          /*
              An ordered list, because the order is the product. A screen reader
              hears "3 of 218" from the list itself, which is why the rank chip
              beside each name is aria-hidden rather than repeating it.
-          */}
+          */
           <ol className="flex flex-col">
             {results.rows.map((business, index) => (
               <li
@@ -264,6 +334,7 @@ export default async function SearchPage({ searchParams }: Props) {
               </li>
             ))}
           </ol>
+          )}
 
           {/*
              An anchor, not infinite scroll. The board's render shows a skeleton
