@@ -12,6 +12,9 @@ import {
   countResults,
   getMapPins,
   getFreeZoneMarks,
+  recordSearch,
+  recordZeroResult,
+  suggestFilterToDrop,
 } from "@/lib/db/queries";
 import { primarySize } from "@/lib/spec";
 import { appliedFacetLabels } from "@/lib/search/applied";
@@ -21,6 +24,8 @@ import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { MapResults } from "@/app/(public)/_results/MapResults";
 import { SearchFilterBar, SortStrip } from "@/app/(public)/_results/SearchFilterBar";
 import { ZeroResult } from "@/app/(public)/_results/ZeroResult";
+import { AlertForm } from "@/app/(public)/_results/AlertForm";
+import { setAlert } from "@/app/(public)/_results/alert-actions";
 
 /**
  * Board 1c — search results and the map.
@@ -86,6 +91,31 @@ export default async function SearchPage({ searchParams }: Props) {
 
   // Whichever tab is showing decides the count the page reasons about.
   const total = query.tab === "products" ? productTotal : results.total;
+
+  /*
+     Every search is logged, whatever it returned.
+
+     `Results` did this for the category pages and this page was rewritten
+     without it, which quietly cut two things off at once: the home page's
+     "Popular:" chips read the most-searched terms of the last thirty days, and
+     they read them from this row. Not awaited and never allowed to throw — a
+     log that fails must not take a results page with it.
+  */
+  void recordSearch({ q: query.q, tab: query.tab, emirate: query.emirate }, total, null);
+
+  /*
+     The zero-result row, and the suggestion that names a filter worth dropping.
+
+     Board 1c calls this the most important state on the page and says why: the
+     row feeds the admin gap report and the recruitment call list. It *is* the
+     mechanism that turns a failed search into supply, and the rewrite had left
+     a comment saying so above code that never wrote one.
+  */
+  let suggestion = null;
+  if (total === 0) {
+    await recordZeroResult(query, null);
+    suggestion = await suggestFilterToDrop(query);
+  }
 
   /*
      Criterion 9: bounds empty, but the query has answers elsewhere.
@@ -177,19 +207,33 @@ export default async function SearchPage({ searchParams }: Props) {
         </div>
       ) : total === 0 ? (
         /*
-           The board calls this the most important state on the page, and it is
-           the one that turns a failed search into supply: `recordZeroResult`
-           has already written the row that feeds the admin gap report and the
-           recruitment call list. The map collapses out entirely rather than
-           showing an empty rectangle.
+           The board calls this the most important state on the page. The row
+           that feeds the admin gap report and the recruitment call list is
+           written above; the map collapses out entirely rather than showing an
+           empty rectangle beside an empty list.
         */
         <div className="mx-auto max-w-3xl px-4 py-10">
           <ZeroResult
             rfqHref="/rfq/new"
             query={query}
             basePath="/search"
-            suggestion={null}
+            suggestion={suggestion}
             facetLabel={(key) => applied.find((f) => f.key === key)?.facet ?? key}
+            alert={
+              /*
+                 Criterion 8, and only where there are words to watch for. An
+                 alert on an empty query would fire on the next product anybody
+                 lists — the false positive that loses the buyer on the one
+                 message they get.
+              */
+              query.q.trim().length > 0 ? (
+                <AlertForm
+                  query={query.q}
+                  {...(query.emirate ? { emirate: query.emirate } : {})}
+                  create={setAlert}
+                />
+              ) : null
+            }
           />
         </div>
       ) : (

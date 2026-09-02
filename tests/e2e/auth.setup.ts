@@ -144,8 +144,27 @@ async function provision(page: Page, seat: Seat) {
      * log — so the provisioning is what changes. Reusing is also closer to what
      * a real seat is: a person whose account persists between sessions.
      */
-    const { data: existing } = await admin.auth.admin.listUsers({ perPage: 200 });
-    const found = (existing?.users ?? []).find((user) => user.email === seat.email);
+    /*
+     * Looked up by email in SQL, not by paging the admin API.
+     *
+     * This was `listUsers({ perPage: 200 })` and a `.find` over the first page.
+     * The auth project is shared — every developer run and every CI run adds
+     * users to it — and it passed 200 rows, so the ops lead simply stopped
+     * being on page one. `found` came back undefined, provisioning took the
+     * "create it" branch, and Supabase refused with "a user with this email
+     * address has already been registered". Setup failed, and with it every
+     * staff project that depends on the session: 268 tests that never ran and
+     * reported nothing.
+     *
+     * A page size is a ceiling, and raising it only moves the day it is hit.
+     * The email is unique in `auth.users`; asking for that row directly has no
+     * ceiling at all.
+     */
+    const authUser = await db.query<{ id: string }>(
+      "SELECT id FROM auth.users WHERE email = $1 LIMIT 1",
+      [seat.email],
+    );
+    const found = authUser.rows[0] ?? null;
 
     let userId: string;
     if (found) {

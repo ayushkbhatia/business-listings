@@ -393,6 +393,20 @@ export function ResultsMap({
           });
         }
 
+        /*
+           MapLibre stamps `role="region" aria-label="Map"` onto its canvas.
+
+           The figure around it is already a labelled `role="group"`, so that
+           makes two nested landmarks describing one map — and two maps on a
+           page produce two landmarks with the identical name "Map", which is
+           `landmark-unique`. The outer one carries the caller's own label and
+           is the useful one; this leaves the canvas focusable and named, and
+           stops it claiming to be a landmark of its own.
+        */
+        const canvas = map.getCanvas();
+        canvas.removeAttribute("role");
+        canvas.setAttribute("aria-label", label);
+
         setReady(true);
       });
     })();
@@ -546,7 +560,17 @@ export function ResultsMap({
 
       {/* ── Legend, bottom-left, always visible ──────────────────────────── */}
       <div className="absolute bottom-3 left-3 rounded-card border border-line bg-card/95 px-3 py-2.5">
-        <p className="mb-1.5 font-mono text-eyebrow uppercase text-faint">{labels.legend}</p>
+        {/*
+             `text-muted`, not `text-faint`.
+
+             `Eyebrow` already carries this decision in as many words — the
+             boards draw these labels in the faint token and it measures 2.67:1
+             on card, under the §09.2 floor. Hand-rolling the mark here
+             reintroduced exactly what that component exists to avoid, and a map
+             legend is the last place to do it: it is the key, and a key nobody
+             can read is a map with three unexplained colours on it.
+          */}
+          <p className="mb-1.5 font-mono text-eyebrow uppercase text-muted">{labels.legend}</p>
         <ul className="flex flex-col gap-1">
           {[
             { key: "visited", dot: "border-moss bg-moss", text: labels.legendVisited },
@@ -573,7 +597,7 @@ export function ResultsMap({
       </ul>
 
       {(excluded > 0 || labels.capped) && (
-        <figcaption className="absolute inset-x-0 bottom-0 bg-card/90 px-3 py-1 font-mono text-eyebrow text-faint">
+        <figcaption className="absolute inset-x-0 bottom-0 bg-card/90 px-3 py-1 font-mono text-eyebrow text-muted">
           {excluded > 0 ? excludedLabel : labels.capped}
         </figcaption>
       )}

@@ -711,11 +711,25 @@ async function seedPumps(db: Db, catBySlug: Map<string, string>) {
   });
   if (dubaiAreas.length === 0) throw new Error("no Dubai areas to place pump suppliers in");
 
+  /*
+     Names that share no token with `NAME_PREFIX`.
+
+     The first draft reused eight of them — "Al Marwan Pump Systems", "Northbay
+     Pump Services", "Al Waha", "Al Qimma", "Al Bariq", "Silver Dune" — and the
+     onboarding claim test searches "Al Marwan" expecting one result. It got two
+     and failed on a strict-mode violation, which is the right failure: a buyer
+     searching their own trade name and finding two candidates is the exact
+     ambiguity board 2a's dispute route exists for, and the seed should not
+     manufacture it.
+
+     Three of these are the board's own render — Technopump, Gulf Cool, Marina —
+     and the rest are built to collide with nothing.
+  */
   const PUMP_NAMES = [
-    "Technopump Trading", "Gulf Cool Technical Services", "Al Marwan Pump Systems",
-    "Marina Pumps & Controls", "Emirates Hydro Equipment", "Al Waha Pump Trading",
-    "Deira Flow Systems", "Al Qimma Pumping Solutions", "Northbay Pump Services",
-    "Al Bariq Water Systems", "Falcon Circulator Trading", "Silver Dune Hydraulics",
+    "Technopump Trading", "Gulf Cool Technical Services", "Hydroline Pump Systems",
+    "Marina Pumps & Controls", "Cascade Hydro Equipment", "Aquaforce Pump Trading",
+    "Deira Flow Systems", "Zenith Pumping Solutions", "Riverbend Pump Services",
+    "Clearwater Systems Trading", "Circulon Trading", "Torque Hydraulics",
   ] as const;
 
   const PUMP_PRODUCTS = [
