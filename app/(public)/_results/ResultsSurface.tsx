@@ -3,6 +3,8 @@ import { FilterChip, StatusBadge } from "@/components/display";
 import { ListingCard, ProductCard } from "@/components/domain";
 import { formatCount, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
+import { RevealWhatsApp } from "./RevealWhatsApp";
 import { primarySize } from "@/lib/spec";
 import {
   PAGE_SIZE,
@@ -213,7 +215,23 @@ export function ResultsList({
   return (
     <>
       <h2 className="sr-only">{t("results.businesses_tab")}</h2>
-      <div className="flex flex-col gap-[var(--gutter)]">
+      {/*
+         List or grid, the buyer's choice, carried in the URL.
+
+         The grid reuses `ListingCard`'s own `grid` context rather than a second
+         layout: that composition already exists for the home page and the
+         category cards, and inventing a third arrangement of the same facts is
+         how two surfaces drift apart. What the grid trades away is the
+         description and the decision column — it is the denser scan, for
+         somebody who knows the trade and is looking for a name they recognise.
+      */}
+      <div
+        className={
+          query.view === "grid"
+            ? "grid gap-[var(--gutter)] sm:grid-cols-2 xl:grid-cols-3"
+            : "flex flex-col gap-[var(--gutter)]"
+        }
+      >
         {businesses.rows.map((business) => {
           const sponsored = business.id === businesses.sponsoredId;
           return (
@@ -228,7 +246,13 @@ export function ResultsList({
               )}
               <ListingCard
                 enquireHref={`/rfq/new?to=${business.slug}`}
-                context={business.claimStatus === "unclaimed" ? "unclaimed" : "search"}
+                context={
+                  business.claimStatus === "unclaimed"
+                    ? "unclaimed"
+                    : query.view === "grid"
+                      ? "grid"
+                      : "search"
+                }
                 business={{
                   slug: business.slug,
                   displayName: business.displayName,
@@ -248,7 +272,45 @@ export function ResultsList({
                     ? formatDuration(business.responseTimeMedianMs)
                     : undefined,
                   establishedYear: business.establishedYear,
+                  ratingOverall: business.ratingOverall,
+                  branchCount: business._count.locations,
+                  // A TRN on the record, said as a fact. The number itself is
+                  // masked on every surface but the seller's own.
+                  trnOnFile: Boolean(business.trn),
+                  description: business.description,
+                  coverImageUrl: business.media[0]
+                    ? publicUrl(MEDIA_BUCKET, business.media[0].storagePath)
+                    : null,
+                  // The trades they actually carry, not the one they were
+                  // filed under. Four is what fits before the line wraps.
+                  tradeLine:
+                    business.categories.length > 0
+                      ? business.categories
+                          .slice(0, 4)
+                          .map((row) => row.category.name)
+                          .join(" · ")
+                      : business.primaryCategory.name,
+                  sponsored,
                 }}
+                sponsoredLabel={t("results.sponsored")}
+                contactAction={
+                  <RevealWhatsApp
+                    businessId={business.id}
+                    /*
+                       Only a verified number reaches a buyer. `Location`
+                       carries the rule in a comment — "an unverified number is
+                       hidden from buyers" — and the branches page already
+                       honours it; a results row is a wider surface than that
+                       one, not a narrower one.
+                    */
+                    whatsapp={
+                      business.locations[0]?.phoneVerified
+                        ? (business.locations[0]?.whatsapp ?? null)
+                        : null
+                    }
+                    surface={basePath}
+                  />
+                }
                 compareHref={compareHref(business.slug)}
                 inCompare={tray.includes(business.slug)}
                 compareLabel={tray.includes(business.slug) ? t("action.in_compare") : undefined}

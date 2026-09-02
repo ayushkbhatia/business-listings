@@ -738,6 +738,8 @@ export const en = {
   "listing.products": { one: "{count} product", other: "{count} products" },
   "listing.reviews": { one: "{count} review", other: "{count} reviews" },
   "listing.no_reviews": "No reviews yet",
+  "listing.trn_on_file": "TRN on file",
+  "listing.view_storefront": "View storefront",
   "listing.branches": { one: "{count} branch", other: "{count} branches" },
   "listing.years": "Trading since {year}",
   "listing.unclaimed_title": "This listing has not been claimed",
@@ -899,6 +901,38 @@ export const en = {
 
   // ── Category pages ──
   "category.subcategories": "Browse by type",
+  // ── Board 1b, the category browse header ──
+  //
+  // "RFQ" is internal vocabulary and appears on no control here; the route is
+  // /rfq/new and the button says what the buyer is doing.
+  // Board 10e, the half of it board 1b's save button needs.
+  "saved.title": "Saved searches",
+  "saved.lede": "Open one to see today's results for the same filters.",
+  "saved.empty": "Nothing saved yet. Use “Save this search” on any results page.",
+  "saved.forget": "Remove",
+  "browse.heading_uae": "{category} in the UAE",
+  "browse.heading_emirate": "{category} in {emirate}",
+  "browse.heading_area": "{category} in {area}, {emirate}",
+  "browse.stat_suppliers": { one: "{count} licensed supplier", other: "{count} licensed suppliers" },
+  "browse.stat_catalogues": "{count} with online catalogues",
+  "browse.stat_products": "{count} products listed",
+  "browse.save_search": "Save this search",
+  "browse.saved": "Saved",
+  "browse.save_needs_account": "Sign in to keep this search.",
+  "browse.enquire_all": "Send one enquiry to {count}",
+  "browse.subcategories": "Browse by type",
+  "browse.all": "All",
+  "browse.more_subcategories": "+ {count} more",
+  "browse.sort": "Sort",
+  "browse.sort_best": "Best match",
+  "browse.sort_rating": "Rating",
+  "browse.sort_reply": "Fastest reply",
+  "browse.sort_newest": "Newest",
+  "browse.view_list": "List",
+  "browse.view_grid": "Grid",
+  "browse.range": "{from}–{to} of {total}",
+  "browse.sponsored_note": "Pro subscribers appear in the top slot for their subcategory and emirate.",
+  "browse.sponsored_rates": "See placement rates →",
   "category.suppliers_in": "{category} suppliers in the UAE",
   "category.intro_count": "{count} listed suppliers, {verified} of them verified.",
   "seo.category_description": "{count} {category} suppliers across the UAE. Filter by verification, emirate and specification, then send one enquiry.",

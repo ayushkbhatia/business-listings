@@ -131,6 +131,17 @@ async function recruit(db: PrismaClient, spec: Recruit) {
         // halfway through a test run.
         licenceExpiry: new Date(Date.UTC(2027, 11, 31)),
         primaryCategoryId: category.id,
+        /*
+           A line of the seller's own words.
+
+           Board 1b's result row is built around one: name, trade, then two
+           sentences saying what they actually stock. Without it the card is a
+           name and a rating with a hole where the reason to click goes, and
+           sixty of these rows are most of what the HVAC page shows.
+        */
+        description:
+          `Trade counter and scheduled delivery across ${emirateName(area.emirate)}. ` +
+          `Stocked lines ex-shelf, everything else to order with a confirmed lead time.`,
         claimStatus: "unclaimed",
         publishedAt: new Date(Date.UTC(2026, 0, 1)),
         verificationTier: tier,
@@ -182,6 +193,14 @@ async function recruit(db: PrismaClient, spec: Recruit) {
   console.log(
     `   ${spec.areaSlug}/${spec.categorySlug}: ${spec.listings} listings, ${spec.verified} verified, ${words} words${spec.publish ? ", published" : ", held back"}`,
   );
+}
+
+/** "abu_dhabi" reads as "Abu Dhabi" in a sentence, not as an enum. */
+function emirateName(value: string): string {
+  return value
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 export async function seedAreaPages(db: PrismaClient) {

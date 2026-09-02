@@ -40,6 +40,14 @@ export interface ListingCardBusiness {
   verifiedAt?: Date | string | null;
   visitedAt?: Date | string | null;
   logoUrl?: string | null;
+  /** The 214px photo on a search row. Placeholder where a seller has none. */
+  coverImageUrl?: string | null;
+  /** The seller's own words, trimmed by the caller. */
+  description?: string | null;
+  /** "Valves & actuators · Pumps & motors", from the categories they carry. */
+  tradeLine?: string;
+  /** A TRN on the record. One of the attribute chips, never a number shown. */
+  trnOnFile?: boolean;
   productCount?: number;
   reviewCount?: number;
   ratingOverall?: number | null;
@@ -72,6 +80,15 @@ export interface ListingCardProps {
   /** Already in the tray: the control says so and removes instead. */
   inCompare?: boolean;
   compareLabel?: string;
+  /**
+   * The WhatsApp reveal, rendered by the caller.
+   *
+   * A reveal needs client state and an action; this component is a server
+   * component and should stay one. `ContactCard` takes its composer trigger the
+   * same way and for the same reason — the island is the caller's, the layout
+   * is ours.
+   */
+  contactAction?: React.ReactNode;
 }
 
 function badgeDate(business: ListingCardBusiness): string | undefined {
@@ -91,6 +108,7 @@ export function ListingCard({
   enquireHref,
   inCompare = false,
   compareLabel,
+  contactAction,
 }: ListingCardProps) {
   const spec = tierSpec(business.verificationTier);
   const link = href ?? `/b/${business.slug}`;
@@ -113,6 +131,185 @@ export function ListingCard({
       {business.areaName} · {business.emirateName}
     </span>
   );
+
+  if (context === "search") {
+    /*
+       Board 1b's row: a photo, what they do, and the column a buyer decides in.
+       The three are separated so the eye can skip the middle — somebody
+       scanning twenty suppliers reads names and reply times, and reads the
+       description only once something has caught them.
+    */
+    return (
+      <Card as="article" elevation="flat" interactive selected={selected} padded={false}>
+        <div className="flex flex-col overflow-hidden sm:flex-row">
+          {/*
+             Always reserved, even with nothing in it. A row whose height
+             depends on whether a seller uploaded a photo makes the list jump,
+             and the empty state is a recruiting signal rather than a gap.
+          */}
+          {/*
+             The column takes the row's height rather than setting it. An
+             aspect-ratio here would make an empty listing taller than a full
+             one, which is the list jumping for the worst possible reason.
+          */}
+          <div className="relative h-32 w-full shrink-0 self-stretch sm:h-auto sm:w-[214px]">
+            {business.coverImageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={business.coverImageUrl}
+                alt=""
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              <span className="absolute inset-0 flex items-center justify-center border-e border-line bg-[repeating-linear-gradient(135deg,var(--placeholder-stripe-a)_0_1px,var(--placeholder-stripe-b)_1px_8px)]">
+                <span className="rounded-tag bg-card/70 px-2 py-1 font-mono text-eyebrow text-muted">
+                  {t("display.no_image")}
+                </span>
+              </span>
+            )}
+            {business.sponsored && sponsoredLabel && (
+              <span className="absolute left-2.5 top-2.5">
+                <StatusBadge tone="warn" size="sm">
+                  {sponsoredLabel}
+                </StatusBadge>
+              </span>
+            )}
+          </div>
+
+          <div className="flex min-w-0 flex-1 flex-col gap-5 p-4 lg:flex-row lg:gap-6">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="min-w-0 text-h2 text-ink">
+                  <a
+                    href={link}
+                    className={cn(
+                      "rounded-tag underline-offset-2 hover:underline",
+                      "focus-visible:outline-none focus-visible:shadow-focus",
+                    )}
+                  >
+                    {business.displayName}
+                  </a>
+                </h3>
+                {verification}
+              </div>
+
+              {business.tradeLine && (
+                <p className="mt-1.5 text-body-sm text-muted">{business.tradeLine}</p>
+              )}
+
+              {business.description && (
+                <p className="mt-2.5 max-w-[520px] text-body-sm leading-relaxed text-body">
+                  {business.description}
+                </p>
+              )}
+
+              {/*
+                 Facts, not adjectives. Every chip here is a count or a state
+                 from the record — §08 asks for the number, and "1,204 products"
+                 is a reason to click where "wide range" is not.
+              */}
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {business.productCount !== undefined && business.productCount > 0 && (
+                  <Tag size="sm">{t("listing.products", { count: business.productCount })}</Tag>
+                )}
+                {business.branchCount !== undefined && business.branchCount > 1 && (
+                  <Tag size="sm">{t("listing.branches", { count: business.branchCount })}</Tag>
+                )}
+                {business.establishedYear && (
+                  <Tag size="sm">{t("listing.years", { year: business.establishedYear })}</Tag>
+                )}
+                {business.trnOnFile && <Tag size="sm">{t("listing.trn_on_file")}</Tag>}
+              </div>
+            </div>
+
+            {/* Where the decision happens. */}
+            <div className="flex shrink-0 flex-col gap-2 lg:w-[196px] lg:border-s lg:border-line-mid lg:ps-5">
+              {business.ratingOverall != null && (
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-h1 font-medium tabular-nums text-ink">
+                    {business.ratingOverall.toFixed(1)}
+                  </span>
+                  <span className="text-caption text-muted">
+                    {business.reviewCount
+                      ? t("listing.reviews", { count: business.reviewCount })
+                      : t("listing.no_reviews")}
+                  </span>
+                </div>
+              )}
+
+              {business.responseTimeMedianMs !== undefined && (
+                <ResponseTime
+                  size="sm"
+                  medianMs={business.responseTimeMedianMs}
+                  durationLabel={business.responseDurationLabel}
+                  label={
+                    business.responseDurationLabel
+                      ? t("response.median", { duration: business.responseDurationLabel })
+                      : undefined
+                  }
+                  unmeasuredLabel={t("response.unmeasured")}
+                />
+              )}
+
+              {place}
+
+              <div className="mt-auto flex flex-col gap-1.5 pt-3">
+                <a href={link} className={buttonClassName({ size: "sm", block: true })}>
+                  {t("listing.view_storefront")}
+                </a>
+                {/*
+                   Contact actions belong to a claimed listing only. An
+                   unclaimed one has nobody behind it to answer, and offering a
+                   WhatsApp button that reaches a licence record is worse than
+                   offering nothing — criterion 7.
+                */}
+                {!unclaimed && (
+                  <>
+                    <div className="flex gap-1.5">
+                      {contactAction}
+                      {enquireHref ? (
+                        <a
+                          href={enquireHref}
+                          className={cn(buttonClassName({ size: "sm", variant: "secondary" }), "flex-1")}
+                        >
+                          {t("product.enquire")}
+                        </a>
+                      ) : (
+                        <span className="flex-1">
+                          <Button size="sm" variant="secondary" block disabled title={t("enquiry.disabled")}>
+                            {t("product.enquire")}
+                          </Button>
+                        </span>
+                      )}
+                    </div>
+                    {/*
+                       Board 1b does not draw this, and it stays anyway. The
+                       comparison tray is a shipped feature with its own board
+                       and its own tests — a buyer builds a shortlist from this
+                       row and nowhere else, so dropping the control to match a
+                       render would quietly delete the feature. Kept as a link
+                       under the buttons rather than a third button, so the two
+                       the board does draw keep their weight.
+                    */}
+                    <a
+                      href={compareHref ?? `/compare?p=${business.slug}`}
+                      className={cn(
+                        "rounded-tag text-center text-caption underline-offset-2 hover:underline",
+                        "focus-visible:outline-none focus-visible:shadow-focus",
+                        inCompare ? "font-medium text-moss-deep" : "text-moss",
+                      )}
+                    >
+                      {compareLabel ?? t("action.compare")}
+                    </a>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card
@@ -212,42 +409,6 @@ export function ListingCard({
             </div>
           )}
 
-          {context === "search" && !unclaimed && (
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              {/*
-                Live from handoff 2 step 3. Without an href it stays disabled,
-                which is how the gallery still shows the state handoff 1 shipped
-                and how a surface that has nowhere to send the buyer degrades.
-              */}
-              {enquireHref ? (
-                <a href={enquireHref} className={buttonClassName({ size: "sm" })}>
-                  {t("product.enquire")}
-                </a>
-              ) : (
-                <Button size="sm" disabled title={t("enquiry.disabled")}>
-                  {t("product.enquire")}
-                </Button>
-              )}
-              <a
-                href={compareHref ?? `/compare?p=${business.slug}`}
-                className={cn(
-                  "inline-flex h-8 items-center justify-center rounded-ctl border px-3 text-caption font-medium",
-                  "transition-colors duration-120 ease-out",
-                  "focus-visible:outline-none focus-visible:shadow-focus",
-                  inCompare
-                    ? "border-[1.5px] border-moss bg-moss-wash text-moss-deep"
-                    : "border-line-strong bg-card text-ink hover:bg-fill",
-                )}
-              >
-                {compareLabel ?? t("action.compare")}
-              </a>
-              {business.establishedYear && (
-                <span className="font-mono text-eyebrow tabular-nums text-faint">
-                  {t("listing.years", { year: business.establishedYear })}
-                </span>
-              )}
-            </div>
-          )}
         </div>
       </div>
     </Card>
