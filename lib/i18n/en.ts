@@ -703,6 +703,19 @@ export const en = {
   "display.map_empty": "No pinned locations to show",
   "display.map_excluded": { one: "{count} branch has no map pin", other: "{count} branches have no map pin" },
   "display.map_label": "Supplier locations",
+
+  /* Board 1c — the results map. Its controls, and the legend that names all
+     three pin states in words rather than relying on colour alone. */
+  "map.search_area": "Search this area",
+  "map.free_zones": "Free zones overlay",
+  "map.legend": "Legend",
+  "map.legend_visited": "Verified by site visit",
+  "map.legend_verified": "Licence verified",
+  "map.legend_unverified": "Unverified / unclaimed",
+  "map.results_label": "Suppliers matching this search",
+  "map.empty": "No pinned suppliers in this view",
+  "map.capped": { one: "Showing the first {count} pin", other: "Showing the first {count} pins" },
+  "map.excluded": { one: "{count} supplier here has no map pin", other: "{count} suppliers here have no map pin" },
   "display.remove_filter": "Remove the {facet} filter",
   "display.conversion": "{pct}% of the step before",
   "display.profile_strength": "Profile strength",

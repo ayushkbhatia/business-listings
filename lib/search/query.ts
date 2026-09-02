@@ -42,11 +42,55 @@ export interface SearchQuery {
   sort: SearchSort;
   view: SearchView;
   page: number;
+  /**
+   * The map viewport, when the buyer pressed "Search this area".
+   *
+   * In the URL rather than in client state because board 1c requires a pasted
+   * link to reproduce the result set *and* the viewport. It is deliberately not
+   * written by panning: the board is explicit that panning alone must not
+   * re-rank the list, so this changes only on the button.
+   */
+  bounds?: MapBounds;
+}
+
+/** West, south, east, north — the order MapLibre's `toArray` produces. */
+export interface MapBounds {
+  west: number;
+  south: number;
+  east: number;
+  north: number;
+}
+
+/**
+ * `west,south,east,north`, to six decimal places.
+ *
+ * Four numbers in one parameter rather than four parameters: they are only ever
+ * meaningful together, and a URL carrying three of them is a bug that should not
+ * be representable.
+ */
+export function formatBounds(bounds: MapBounds): string {
+  return [bounds.west, bounds.south, bounds.east, bounds.north]
+    .map((n) => n.toFixed(6))
+    .join(",");
+}
+
+export function parseBounds(raw: string | undefined): MapBounds | undefined {
+  if (!raw) return undefined;
+  const parts = raw.split(",").map(Number);
+  if (parts.length !== 4 || parts.some((n) => !Number.isFinite(n))) return undefined;
+
+  const [west, south, east, north] = parts as [number, number, number, number];
+  // A degenerate or inverted box would select everything or nothing depending
+  // on which side of the comparison it landed. Neither is what the buyer drew.
+  if (west >= east || south >= north) return undefined;
+  if (south < -90 || north > 90 || west < -180 || east > 180) return undefined;
+
+  return { west, south, east, north };
 }
 
 const RESERVED = new Set([
   "q", "tab", "emirate", "area", "tier", "freeZone", "availability",
-  "replyWithinHours", "yearsTrading", "page", "sort", "view",
+  "replyWithinHours", "yearsTrading", "page", "sort", "view", "bounds",
   // The comparison tray rides in the URL alongside the query. It is not a
   // facet and must never land in the spec bucket, or it becomes a filter on a
   // SpecField id that does not exist.
@@ -97,6 +141,7 @@ export function parseSearchQuery(
     sort: SORTS.includes(one(params.sort) as SearchSort) ? (one(params.sort) as SearchSort) : "best",
     view: one(params.view) === "grid" ? "grid" : "list",
     page: Number.isFinite(page) && page > 1 ? page : 1,
+    bounds: parseBounds(one(params.bounds)),
   };
 }
 
@@ -131,6 +176,7 @@ export function toSearchParams(query: SearchQuery, overrides: Partial<SearchQuer
   if (merged.sort !== "best") params.set("sort", merged.sort);
   if (merged.view !== "list") params.set("view", merged.view);
   if (merged.page > 1) params.set("page", String(merged.page));
+  if (merged.bounds) params.set("bounds", formatBounds(merged.bounds));
 
   return params.toString();
 }
