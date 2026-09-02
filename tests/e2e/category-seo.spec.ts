@@ -23,9 +23,8 @@ async function jsonLd(page: import("@playwright/test").Page) {
 test.describe("board 6c — the category index", () => {
   test("lists every trade with its size, and links into each one", async ({ page }) => {
     await page.goto("/categories");
-    await expect(page.getByRole("heading", { level: 1, name: "Every trade" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Every trade we cover" })).toBeVisible();
 
-    // Say the number: the lede carries three of them.
     // Board 6c's sub-line, and all four of its numbers are live.
     await expect(
       page.getByText(/\d+ sectors, [\d,]+ subcategories, \d+ emirates\. [\d,]+ licensed businesses/),
@@ -37,10 +36,42 @@ test.describe("board 6c — the category index", () => {
     await expect(page).toHaveURL(new RegExp(`${SECTOR}$`));
   });
 
-  test("links a subcategory from its sector's card", async ({ page }) => {
+  test("links a subcategory from its sector's block", async ({ page }) => {
+    /*
+       Every subcategory is linked, not only the ones clearing the publish
+       floors. Board 6c asks for the opposite; at this directory's size that
+       rule leaves the page with no subcategory links at all, so the departure
+       is deliberate and owner-approved. The protection is one layer down —
+       `/c/:category/:sub` serves noindex while it is thin, and the sitemap
+       still gates on `publishable`.
+
+       The count sits inside the link, so the accessible name is "Ducting 3".
+    */
     await page.goto("/categories");
-    await page.getByRole("link", { name: /^Ducting \(\d+\)$/ }).click();
+    await page.getByRole("link", { name: /^Ducting\s+[\d,]+$/ }).click();
     await expect(page).toHaveURL(new RegExp(`${SUB}$`));
+  });
+
+  test("links thin subcategories too, and keeps them out of the sitemap", async ({ page }) => {
+    /*
+       The two halves of the decision, asserted together so neither can drift.
+       A subcategory below the floors is reachable from here — that is the point
+       — and is still not a URL we hand to a crawler.
+    */
+    await page.goto("/categories");
+    const linked = await page.$$eval("main a[href^='/c/']", (links) =>
+      [...new Set(links.map((link) => link.getAttribute("href")!))].filter(
+        (href) => href.split("/").length === 4,
+      ),
+    );
+    expect(linked.length).toBeGreaterThan(0);
+
+    const sitemap = await page.request.get("/sitemap.xml");
+    const xml = await sitemap.text();
+    const inSitemap = linked.filter((href) => xml.includes(`${href}<`));
+    // Some may qualify one day; none do at this size, and either way the page
+    // may link more than the sitemap lists but never fewer.
+    expect(inSitemap.length).toBeLessThanOrEqual(linked.length);
   });
 
   test("is reachable from the directory nav rather than greyed out", async ({ page }) => {

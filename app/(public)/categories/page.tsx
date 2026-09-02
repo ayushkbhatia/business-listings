@@ -43,20 +43,19 @@ export const revalidate = 3600;
 
 export async function generateMetadata(): Promise<Metadata> {
   const [sectors, matrix] = await Promise.all([categoryIndex(), emirateMatrix()]);
-  const published = sectors.reduce(
-    (total, sector) => total + sector.children.filter((child) => child.publishable).length,
-    0,
-  );
+  // The same set the page lists, so the title cannot claim a number the body
+  // does not show.
+  const subcategories = sectors.reduce((total, sector) => total + sector.children.length, 0);
   const listings = matrix.reduce((total, row) => total + row.listings, 0);
 
   return {
     title: t("categories.seo_title", {
       sectors: sectors.length,
-      subcategories: formatCount(published),
+      subcategories: formatCount(subcategories),
     }),
     description: t("categories.seo_description", {
       sectors: sectors.length,
-      subcategories: formatCount(published),
+      subcategories: formatCount(subcategories),
       listings: formatCount(listings),
     }),
     alternates: { canonical: absoluteUrl("/categories") },
@@ -67,22 +66,36 @@ export default async function CategoriesPage() {
   const [sectors, matrix] = await Promise.all([categoryIndex(), emirateMatrix()]);
 
   /*
-     Published subcategories only, everywhere on this page.
+     Every subcategory is listed, including the ones below the publish floors.
 
-     "An unpublished one is not listed at all — not greyed, not shown. It does
-     not exist to a crawler." So the header count, the five links in each block
-     and the overflow number all count the same set, and none of them can
-     advertise a page that would tell Google not to index it.
+     Board 6c says the opposite — "an unpublished one is not listed at all, not
+     greyed, not shown" — and that rule is right at the 41,200 listings the
+     board was drawn against, where nearly every subcategory clears its floors.
+     At the size this directory is now it clears none of them, and following the
+     rule literally produced a crawlable spine that linked to twelve sector
+     pages and nothing else. A link surface with no links is not the honest
+     version of the page; it is a broken one.
+
+     So this is a deliberate, owner-approved departure, and the risk it takes is
+     named rather than hidden: a link is a crawl signal, so thin subcategory
+     pages will be crawled. What protects the domain is the layer below —
+     `/c/:category/:sub` already serves `robots: noindex` while it is thin, and
+     `sitemap.ts` still gates its entries on `publishable`. We do not ask Google
+     to index these; we simply stop hiding them from buyers, which is what the
+     page did before board 6c and why it did it.
+
+     Sorted by size so the five shown are the five largest, which is the half of
+     the board's rule that survives intact.
   */
-  const publishedChildren = new Map(
+  const listedChildren = new Map(
     sectors.map((sector) => [
       sector.id,
-      [...sector.children]
-        .filter((child) => child.publishable)
-        .sort((a, b) => b.listings - a.listings || a.name.localeCompare(b.name)),
+      [...sector.children].sort(
+        (a, b) => b.listings - a.listings || a.name.localeCompare(b.name),
+      ),
     ]),
   );
-  const publishedCount = [...publishedChildren.values()].reduce(
+  const listedCount = [...listedChildren.values()].reduce(
     (total, children) => total + children.length,
     0,
   );
@@ -143,7 +156,7 @@ export default async function CategoriesPage() {
             */}
             {t("categories.lede", {
               sectors: sectors.length,
-              subcategories: formatCount(publishedCount),
+              subcategories: formatCount(listedCount),
               emirates: MATRIX_EMIRATES.length,
               listings: formatCount(listings),
             })}
@@ -155,7 +168,7 @@ export default async function CategoriesPage() {
       <section className="border-b border-line bg-card">
         <div className="mx-auto grid max-w-7xl gap-x-10 gap-y-8 px-5 py-8 md:grid-cols-2 xl:grid-cols-3">
           {ordered.map(({ row, sector }) => {
-            const children = publishedChildren.get(row.id) ?? [];
+            const children = listedChildren.get(row.id) ?? [];
             const shown = children.slice(0, 5);
             const overflow = children.length - shown.length;
 
