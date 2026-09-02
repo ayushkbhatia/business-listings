@@ -57,6 +57,35 @@ export interface SubcategorySeed {
  * here would be the seed overruling the rule the admin screen enforces.
  */
 export const EXTRA_CATEGORIES = [
+  /*
+     Pumps & motors, and the one sector here that carries listings.
+
+     Board 1c's canonical URL is `/search?q=chilled+water+pumps`, and its first
+     acceptance criterion is that those three words reach a supplier whose
+     products carry `Application: chilled water` rather than only one who wrote
+     the words about themselves. With no pumps sector that query demonstrated
+     the zero-result state, which is a real state and not the one the board is
+     about.
+
+     Added here rather than to `CATEGORIES` deliberately. The seed files its
+     forty businesses against `CATEGORIES` by index, and a seventh entry would
+     redistribute them — moving suppliers out of `valves-and-fittings`, where
+     the spec template lives and where sixty assertions expect to find them.
+     This sector gets its own suppliers instead, built after the main run and
+     touching nothing that already exists.
+
+     `showOnHome` stays false like its neighbours: the curator's rule is that a
+     sector reaches the home page when its landing page can publish, and a
+     dozen listings is well under the sixty that takes.
+  */
+  {
+    slug: "pumps-and-motors",
+    code: "PM",
+    name: "Pumps & motors",
+    nameAr: "مضخات ومحركات",
+    synonyms: ["pump", "pumps", "مضخات", "motor", "motors", "chilled water", "booster", "circulator", "end suction", "submersible"],
+    showOnHome: false,
+  },
   {
     slug: "construction-and-building-materials",
     code: "CN",
