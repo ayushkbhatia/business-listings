@@ -23,7 +23,9 @@ export interface LogoTileProps {
 }
 
 const SIZE = { sm: "size-8", md: "size-11", lg: "size-16" } as const;
-const MARK = { sm: "sm", md: "md", lg: "lg" } as const;
+// The mark replaces the tile rather than sitting inside it, so it takes the
+// largest step. `xl` is the 44px the old `lg` was, so nothing here moves.
+const MARK = { sm: "sm", md: "xl", lg: "xl" } as const;
 
 export function LogoTile({ src, name, categoryCode, size = "md", rounded = "chip" }: LogoTileProps) {
   const radius = rounded === "card" ? "rounded-card" : "rounded-chip";

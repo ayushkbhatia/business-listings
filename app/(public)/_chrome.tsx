@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Button, SearchField } from "@/components/primitives";
+import { Eyebrow } from "@/components/display";
 import { PublicNav } from "@/components/structure";
 import { t } from "@/lib/i18n";
 
@@ -155,12 +156,9 @@ export function DirectoryFooter() {
              guarantee.
           */
           <nav key={column.key} aria-labelledby={`footer-${column.key}`}>
-            <p
-              id={`footer-${column.key}`}
-              className="mb-3.5 font-mono text-eyebrow uppercase tracking-[.1em] text-on-ink-muted"
-            >
+            <Eyebrow as="p" onInk id={`footer-${column.key}`} className="mb-3.5">
               {column.heading}
-            </p>
+            </Eyebrow>
             <ul className="flex flex-col gap-2.5">
               {column.links.map((link) => (
                 <li key={link.key}>

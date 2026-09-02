@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { absoluteUrl } from "@/lib/site";
 import { livePages } from "@/lib/seo/area";
 import { liveLists } from "@/lib/seo/curated";
+import { emiratePagePath, liveEmiratePages } from "@/lib/seo/emirate";
 import { categoryIndex } from "@/lib/seo/taxonomy";
 
 /**
@@ -24,7 +25,7 @@ export const revalidate = 3600;
 const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } } as const;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [businesses, products, categories, areaPages, lists, guides] = await Promise.all([
+  const [businesses, products, categories, areaPages, lists, guides, emiratePages] = await Promise.all([
     prisma.business.findMany({
       where: PUBLIC_BUSINESS,
       select: { slug: true, updatedAt: true, claimStatus: true },
@@ -70,6 +71,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       where: { publishedAt: { not: null } },
       select: { slug: true, updatedAt: true },
     }),
+    /*
+       Board 6c's matrix, filtered to the cells that clear their floors. The
+       category index renders its links from the same call, so the two sets
+       cannot disagree.
+    */
+    liveEmiratePages(),
   ]);
 
   const entries: MetadataRoute.Sitemap = [
@@ -112,6 +119,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   // The category index itself. Core navigation, linked from every page.
   entries.push({ url: absoluteUrl("/categories"), changeFrequency: "weekly", priority: 0.7 });
+
+  /*
+     The emirate × sector pages board 6c's matrix links to.
+
+     Read from `liveEmiratePages`, which is `emirateMatrix` filtered to the
+     cells that clear their floors — the same call the matrix itself renders
+     from. That is what makes criterion 4 hold by construction: the set of
+     links on /categories and the set of URLs here cannot drift, because there
+     is one function and both read it. A cell that stops clearing its floors
+     loses its anchor and its sitemap entry in the same build.
+  */
+  for (const page of emiratePages) {
+    entries.push({
+      url: absoluteUrl(emiratePagePath(page.emirate, page.categorySlug)),
+      changeFrequency: "daily",
+      priority: 0.8,
+    });
+  }
 
   for (const sector of categories) {
     /*

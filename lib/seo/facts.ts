@@ -58,15 +58,27 @@ export interface FactsScope {
   categoryIds: string[];
   /** Step 3 passes this for an area landing page. */
   areaId?: string;
+  /**
+   * The whole emirate rather than one area inside it, for `/:emirate/:category`.
+   *
+   * Mutually exclusive with `areaId` in practice — an area already belongs to
+   * an emirate, so passing both would narrow to the area and say the emirate
+   * out loud for no reason. The narrower one wins if both arrive.
+   */
+  emirate?: string;
 }
 
 function businessWhere(scope: FactsScope) {
+  const place = scope.areaId
+    ? { locations: { some: { areaId: scope.areaId, published: true } } }
+    : scope.emirate
+      ? { locations: { some: { emirate: scope.emirate as never, published: true } } }
+      : {};
+
   return {
     ...PUBLIC_BUSINESS,
     primaryCategoryId: { in: scope.categoryIds },
-    ...(scope.areaId
-      ? { locations: { some: { areaId: scope.areaId, published: true } } }
-      : {}),
+    ...place,
   };
 }
 

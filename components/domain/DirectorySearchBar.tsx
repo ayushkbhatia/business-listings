@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { Eyebrow } from "@/components/display";
 import { EMIRATES } from "@/lib/uae";
 
 /**
@@ -52,7 +53,6 @@ export interface DirectorySearchBarProps {
 }
 
 const CELL = "flex flex-col justify-center gap-1 px-4 py-2";
-const EYEBROW = "font-mono text-eyebrow uppercase tracking-[.12em] text-muted";
 
 export function DirectorySearchBar({
   formLabel,
@@ -78,7 +78,7 @@ export function DirectorySearchBar({
       )}
     >
       <label className={cn(CELL, "min-w-0 flex-1 border-b border-line sm:border-b-0 sm:border-e")}>
-        <span className={EYEBROW}>{whatLabel}</span>
+        <Eyebrow>{whatLabel}</Eyebrow>
         <input
           type="search"
           name="q"
@@ -94,7 +94,7 @@ export function DirectorySearchBar({
       </label>
 
       <label className={cn(CELL, "border-b border-line sm:w-[210px] sm:border-b-0 sm:border-e")}>
-        <span className={EYEBROW}>{whereLabel}</span>
+        <Eyebrow>{whereLabel}</Eyebrow>
         <select
           name="emirate"
           defaultValue={defaultEmirate ?? ""}
