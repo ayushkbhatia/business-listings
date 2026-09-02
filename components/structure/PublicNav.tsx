@@ -68,14 +68,18 @@ export function PublicNav({
         {search && <div className="min-w-0 flex-1">{search}</div>}
 
         {links && links.length > 0 && (
-          <ul className="hidden shrink-0 items-center gap-1 lg:flex">
+          <ul className="hidden shrink-0 items-stretch gap-1 self-stretch lg:flex">
             {links.map((link) =>
               link.later ? (
                 <li key={link.key}>
                   <span
                     aria-disabled="true"
                     title={laterLabel}
-                    className="cursor-not-allowed px-2.5 py-1.5 text-body-sm text-faint"
+                    // Same full-bar height as a real link. The list stretches
+                    // its items so the current one's underline can reach the
+                    // nav's bottom edge, and a span left on default padding
+                    // floats above the others.
+                    className="flex h-[68px] cursor-not-allowed items-center px-2.5 text-body-sm text-faint"
                   >
                     {link.label}
                   </span>
@@ -86,10 +90,19 @@ export function PublicNav({
                     href={link.href}
                     aria-current={active === link.key ? "page" : undefined}
                     className={cn(
-                      "rounded-ctl px-2.5 py-1.5 text-body-sm",
-                      "transition-colors duration-120 ease-out hover:bg-fill hover:text-ink",
+                      // `relative` and the full bar height so the current item's
+                      // rule can sit on the nav's own bottom edge, which is
+                      // where board 6c draws it — a 2px moss underline meeting
+                      // the 1px line under the bar.
+                      "relative flex h-[68px] items-center px-2.5 text-body-sm",
+                      "transition-colors duration-120 ease-out hover:text-ink",
                       "focus-visible:outline-none focus-visible:shadow-focus",
                       active === link.key ? "font-medium text-ink" : "text-muted",
+                      // Weight alone was the whole signal before this. Medium
+                      // against regular at 13.5px is not a difference anyone
+                      // notices, and "you are here" is worth more than that.
+                      active === link.key &&
+                        "after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-moss after:content-['']",
                     )}
                   >
                     {link.label}

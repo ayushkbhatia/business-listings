@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ChipLink, CategoryMark } from "@/components/display";
+import { CategoryMark, ChipLink, Eyebrow } from "@/components/display";
 import { DirectorySearchBar, ListingCard, ProductCard, RfqPanel, TrustPanel } from "@/components/domain";
 import { PublicShell } from "@/components/structure";
 import { getActor } from "@/lib/auth/session";
@@ -262,9 +262,9 @@ export default async function HomePage() {
       <section className="border-b border-line bg-paper-sunk">
         <div className="mx-auto max-w-7xl px-5 py-5">
           <div className="flex items-center gap-2.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:flex-wrap md:overflow-visible">
-            <h2 className="me-1 shrink-0 font-mono text-eyebrow uppercase tracking-[.12em] text-muted">
+            <Eyebrow as="h2" className="me-1 shrink-0">
               {t("home.emirate_eyebrow")}
-            </h2>
+            </Eyebrow>
             {emirates.chips.map((chip) => (
               <ChipLink
                 key={chip.emirate}
@@ -460,14 +460,13 @@ export default async function HomePage() {
                         : "border-ink-line bg-ink-raised")
                     }
                   >
-                    <p
-                      className={
-                        "font-mono text-eyebrow uppercase tracking-[.1em] " +
-                        (featured ? "text-moss-on-ink" : "text-on-ink-muted")
-                      }
+                    <Eyebrow
+                      as="p"
+                      onInk
+                      className={featured ? "text-moss-on-ink" : undefined}
                     >
                       {plan.name}
-                    </p>
+                    </Eyebrow>
                     {/*
                        AED 0 / AED 349 / AED 899, from the `Plan` row. This band
                        must not drift from /pricing, and the only way that holds

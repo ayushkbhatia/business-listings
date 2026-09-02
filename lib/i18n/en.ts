@@ -2851,6 +2851,7 @@ export const en = {
   "faq.price.a": "Prices are between you and the supplier. Send an enquiry and they quote you directly — we never see the number, never take a cut and never hold your money.",
 
   // ── Category index, board 6c ──────────────────────────────────────────────
+  "categories.matrix_eyebrow": "Browse any trade by emirate — {pages} pages",
   "categories.title": "Every trade",
   "categories.lede": "{categories} trades across {listings} licensed UAE businesses, {verified} of them verified by us.",
   "categories.subcategories": { one: "{count} subcategory", other: "{count} subcategories" },

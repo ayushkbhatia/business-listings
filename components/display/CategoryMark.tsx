@@ -11,15 +11,28 @@ import { cn } from "@/lib/cn";
 export interface CategoryMarkProps {
   /** The category's two-letter code from the database. */
   code: string;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   /** On a dark surface. */
   onInk?: boolean;
 }
 
+/*
+ * The four sizes the boards actually draw.
+ *
+ * `md` and `lg` are 30px and 34px because board 6c's sector header and board
+ * 1a's category card are 30px and 34px. The scale used to be 24 / 32 / 44,
+ * which offered neither, so the home page reached for `lg` and rendered a 44px
+ * mark where the board specified 34 — the kind of drift that is invisible on
+ * one page and obvious across five.
+ *
+ * `xl` keeps the old 44px for `LogoTile`, whose fallback mark stands in for a
+ * logo tile rather than sitting beside a name.
+ */
 const SIZE = {
   sm: "size-6 text-eyebrow",
-  md: "size-8 text-caption",
-  lg: "size-11 text-body-sm",
+  md: "size-[30px] text-eyebrow",
+  lg: "size-[34px] text-caption",
+  xl: "size-11 text-body-sm",
 } as const;
 
 export function CategoryMark({ code, size = "md", onInk = false }: CategoryMarkProps) {

@@ -6,6 +6,7 @@ import {
   Alert,
   CategoryMark,
   ChipLink,
+  Eyebrow,
   FilterChip,
   FunnelBars,
   ImagePlaceholder,
@@ -196,9 +197,29 @@ export function Display() {
         </States>
       </Section>
 
+      <Section
+        id="eyebrow"
+        title="Eyebrow"
+        note="§08 allows uppercase in exactly two places — this is one of them"
+      >
+        <States label="surfaces">
+          <Specimen caption="on paper">
+            <Eyebrow>{t("home.emirate_eyebrow")}</Eyebrow>
+          </Specimen>
+          <Specimen caption="on ink">
+            <span className="inline-flex rounded-chip bg-ink-surface px-3 py-2">
+              <Eyebrow onInk>{t("home.footer_buyers")}</Eyebrow>
+            </span>
+          </Specimen>
+        </States>
+        <States label="carrying a live count" stack>
+          <Eyebrow as="h2">{t("categories.matrix_eyebrow", { pages: 84 })}</Eyebrow>
+        </States>
+      </Section>
+
       <Section id="category-mark" title="CategoryMark" note="two letters from the taxonomy, never generated initials">
         <States label="sizes">
-          {(["sm", "md", "lg"] as const).map((size) => (
+          {(["sm", "md", "lg", "xl"] as const).map((size) => (
             <Specimen key={size} caption={size}>
               <CategoryMark code="VF" size={size} />
             </Specimen>

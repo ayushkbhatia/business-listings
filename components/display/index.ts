@@ -16,6 +16,8 @@ export { Waterfall, type WaterfallProps, type WaterfallStep } from "./Waterfall"
 export { ImagePlaceholder, type ImagePlaceholderProps, type PlaceholderKind } from "./ImagePlaceholder";
 export { LogoTile, type LogoTileProps } from "./LogoTile";
 export { CategoryMark, type CategoryMarkProps } from "./CategoryMark";
+// The mono uppercase label. One of exactly two places §08 allows uppercase.
+export { Eyebrow, type EyebrowProps } from "./Eyebrow";
 export { MapCanvas, type MapCanvasProps, type MapPin } from "./MapCanvas";
 
 export { SERIES, seriesFill } from "./chart-series";

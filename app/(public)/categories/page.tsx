@@ -47,7 +47,7 @@ export default async function CategoriesPage() {
 
   return (
     <PublicShell
-      nav={<DirectoryNav />}
+      nav={<DirectoryNav active="categories" />}
       breadcrumb={<Breadcrumb label={t("gallery.breadcrumb_label")} items={crumbs} />}
       footer={<DirectoryFooter />}
     >
