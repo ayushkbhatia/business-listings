@@ -29,14 +29,31 @@ test.describe("home", () => {
   });
 
   test("the header search submits from a page that is not the home page", async ({ page }) => {
-    // The half that was broken. The hero form only exists on `/`.
-    await page.goto("/c/valves-and-fittings");
+    // The half that was broken once: the hero form only exists on `/`, and for
+    // a long time the header's was a bare input in no form.
+    await page.goto("/guides");
     const header = page.locator('form[action="/search"][method="get"]');
     await expect(header).toHaveCount(1);
 
     await header.locator('input[name="q"]').fill("gate valve");
     await header.locator('input[name="q"]').press("Enter");
     await expect(page).toHaveURL(/\/search\?.*q=gate\+valve/);
+  });
+
+  test("the header search stays inside the category it is standing in", async ({ page }) => {
+    /*
+       Board 1b: "typing here searches within the category, not site-wide", and
+       the scope pill beside the field is the promise. A buyer who has navigated
+       into valves and types "DN100" means DN100 valves — sending them to a
+       site-wide search would be the pill lying.
+    */
+    await page.goto("/c/valves-and-fittings");
+    const header = page.locator('form[action="/c/valves-and-fittings"][method="get"]');
+    await expect(header).toHaveCount(1);
+
+    await header.locator('input[name="q"]').fill("gate valve");
+    await header.locator('input[name="q"]').press("Enter");
+    await expect(page).toHaveURL(/\/c\/valves-and-fittings\?.*q=gate\+valve/);
   });
 
   test("carries every home category through to a real category page", async ({ page }) => {

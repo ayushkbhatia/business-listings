@@ -1,15 +1,22 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Breadcrumb, PublicShell } from "@/components/structure";
-import { Tag } from "@/components/display";
-import { categoryIdsFor, countResults, getCategoryBySlug } from "@/lib/db/queries";
+import {
+  categoryIdsFor,
+  countResults,
+  getBrowseStats,
+  getCategoryBySlug,
+  getSubcategoryChips,
+} from "@/lib/db/queries";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { prisma } from "@/lib/db/client";
 import { canonicalFor } from "@/lib/seo/canonical";
 import { parseSearchQuery } from "@/lib/search/query";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { Results } from "@/app/(public)/_results/Results";
+import { BrowseHeader } from "@/app/(public)/_results/BrowseHeader";
 
 export const revalidate = 300;
 
@@ -67,11 +74,58 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     ),
   ).toString();
   const ids = categoryIdsFor(category);
-  const crumbs = [{ label: t("chrome.directory"), href: "/" }, { label: category.name }];
+
+  const [stats, chips, area] = await Promise.all([
+    getBrowseStats(query, ids),
+    getSubcategoryChips(query, { id: category.id }),
+    // Named for the heading only. The filter itself is already applied by slug.
+    query.area
+      ? prisma.area.findUnique({ where: { slug: query.area }, select: { name: true } })
+      : Promise.resolve(null),
+  ]);
+
+  /*
+     The heading names the scope, not the category.
+
+     It is also the page title and the thing a buyer checks before trusting the
+     list, so "in Dubai" and "in the UAE" have to be different sentences. An
+     area narrows it one step further.
+  */
+  const emirateName = query.emirate ? t(`emirate.${query.emirate}` as never) : null;
+  const areaName = area?.name ?? null;
+  const heading = areaName && emirateName
+    ? t("browse.heading_area", { category: category.name, area: areaName, emirate: emirateName })
+    : emirateName
+      ? t("browse.heading_emirate", { category: category.name, emirate: emirateName })
+      : t("browse.heading_uae", { category: category.name });
+
+  // The filters go with them. A buyer who narrowed to Dubai and DN100 is
+  // sending an enquiry about Dubai and DN100, not about the whole trade.
+  const enquireHref = `/rfq/new?category=${category.slug}${
+    query.emirate ? `&emirate=${query.emirate}` : ""
+  }`;
+
+  const crumbs = [
+    { label: t("chrome.directory"), href: "/" },
+    { label: t("categories.title"), href: "/categories" },
+    { label: category.name },
+  ];
 
   return (
     <PublicShell
-      nav={<DirectoryNav />}
+      bleed
+      nav={
+        <DirectoryNav
+          active="categories"
+          scope={{
+            action: `/c/${category.slug}`,
+            // The two-letter mark and the emirate, which together are the
+            // scope the results are already in.
+            label: emirateName ? `${category.code} · ${emirateName}` : category.code,
+            placeholder: t("browse.search_in", { category: category.name }),
+          }}
+        />
+      }
       breadcrumb={<Breadcrumb label={t("gallery.breadcrumb_label")} items={crumbs} />}
       footer={<DirectoryFooter />}
     >
@@ -88,39 +142,29 @@ export default async function CategoryPage({ params, searchParams }: Props) {
         }}
       />
 
-      <header className="border-b border-line pb-4">
-        <h1 className="font-serif text-h1-serif text-ink">
-          {t("category.suppliers_in", { category: category.name })}
-        </h1>
-        {category.children.length > 0 && (
-          <div className="mt-3">
-            <p className="font-mono text-eyebrow uppercase text-faint">
-              {t("category.subcategories")}
-            </p>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {category.children.map((child) => (
-                <Tag key={child.id} href={`/c/${category.slug}/${child.slug}`}>
-                  {child.name}
-                </Tag>
-              ))}
-            </div>
-          </div>
-        )}
-        {category.intro && (
-          /*
-             Board 6f. A category page with a heading and a grid of results is a
-             page search engines have nothing to rank and a buyer has no reason
-             to trust. This is written by staff on the page matrix, where its
-             word count is measured against the same floor that decides whether
-             the page publishes at all.
-          */
-          <p className="mt-4 max-w-[var(--measure-prose)] text-prose text-prose">
-            {category.intro}
-          </p>
-        )}
-      </header>
+      <BrowseHeader
+        heading={heading}
+        stats={stats}
+        chips={chips}
+        basePath={`/c/${category.slug}`}
+        enquireHref={enquireHref}
+        search={search}
+      />
 
-      <div className="mt-5">
+      {category.intro && (
+        /*
+           Board 6f. A category page with a heading and a grid of results is a
+           page search engines have nothing to rank and a buyer has no reason to
+           trust. Written by staff on the page matrix, where its word count is
+           measured against the same floor that decides whether the page
+           publishes at all.
+        */
+        <div className="mx-auto max-w-7xl px-5 pt-6">
+          <p className="max-w-[var(--measure-prose)] text-prose text-prose">{category.intro}</p>
+        </div>
+      )}
+
+      <div className="mx-auto max-w-7xl px-5 py-6">
         <Results
           query={query}
           basePath={`/c/${category.slug}`}

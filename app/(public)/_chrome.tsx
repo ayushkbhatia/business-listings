@@ -12,7 +12,19 @@ import { t } from "@/lib/i18n";
  * those down to the page below it. One line at the top of each page is a
  * smaller cost than splitting the shell in half.
  */
-export function DirectoryNav({ active }: { active?: string } = {}) {
+export interface DirectoryNavScope {
+  /** Where the header search submits. A category page searches within itself. */
+  action: string;
+  /** The pill: "IN · DUBAI". Already built by the caller. */
+  label: string;
+  /** "Search in HVAC & ventilation". */
+  placeholder: string;
+}
+
+export function DirectoryNav({
+  active,
+  scope,
+}: { active?: string; scope?: DirectoryNavScope } = {}) {
   return (
     <PublicNav
       label={t("nav.label.public")}
@@ -39,12 +51,19 @@ export function DirectoryNav({ active }: { active?: string } = {}) {
            an accessible name, and the home page carries its own search form;
            naming both would put two identically-named landmarks on that page.
         */
-        <form action="/search" method="get" role="search" className="contents">
+        /*
+           On a category page this submits back to that category rather than to
+           /search, which is what the scope pill is promising — board 1b: "typing
+           here searches within the category, not site-wide". Everywhere else it
+           is the site search it has always been.
+        */
+        <form action={scope?.action ?? "/search"} method="get" role="search" className="contents">
           <SearchField
             name="q"
-            label={t("search.label")}
+            label={scope ? scope.placeholder : t("search.label")}
             clearLabel={t("search.clear")}
-            placeholder={t("search.placeholder")}
+            placeholder={scope?.placeholder ?? t("search.placeholder")}
+            scope={scope?.label}
           />
         </form>
       }

@@ -34,10 +34,29 @@ test.describe("acceptance criterion 3 — spec-aware matching", () => {
   });
 });
 
+/**
+ * The filter rail, reached the way the current width reaches it.
+ *
+ * Board 1b collapses the rail behind a "Filters" button below 1024px, so the
+ * same assertions have to open the drawer first. The rail is rendered in both
+ * places — a `<dialog>` cannot share a subtree with a column — and exactly one
+ * is ever visible, so this picks whichever that is rather than guessing from
+ * the viewport.
+ */
+async function openRail(page: import("@playwright/test").Page) {
+  const trigger = page.getByRole("button", { name: /^Filters/ });
+  if (await trigger.isVisible().catch(() => false)) {
+    await trigger.click();
+    return page.locator("dialog[open]").getByRole("complementary", { name: "Filters" });
+  }
+  // Above 1024 both exist in the DOM; the column is the visible one.
+  return page.getByRole("complementary", { name: "Filters" }).first();
+}
+
 test.describe("acceptance criterion 4 — the rail comes from the template", () => {
   test("the valves rail is built from that category's filterable spec fields", async ({ page }) => {
     await page.goto("/c/valves-and-fittings");
-    const rail = page.getByRole("complementary", { name: "Filters" });
+    const rail = await openRail(page);
 
     // Spec facets, from SpecField where isFilterable.
     for (const field of ["Nominal diameter", "Pressure rating", "Body material"]) {
@@ -55,7 +74,7 @@ test.describe("acceptance criterion 4 — the rail comes from the template", () 
 
   test("a different category gets a different rail", async ({ page }) => {
     await page.goto("/c/safety-and-ppe");
-    const rail = page.getByRole("complementary", { name: "Filters" });
+    const rail = await openRail(page);
     // No spec template for this category, so only the fixed facets appear.
     await expect(rail.getByText("Nominal diameter")).toHaveCount(0);
     await expect(rail.getByText("Verification", { exact: true })).toBeVisible();
@@ -65,6 +84,8 @@ test.describe("acceptance criterion 4 — the rail comes from the template", () 
     await page.goto("/c/valves-and-fittings?tab=products");
     const before = await page.locator('a[href*="/p/"]').count();
 
+    // Below 1024 the facet link lives inside the drawer, so open it first.
+    await openRail(page);
     await page.getByRole("link", { name: /^DN100/ }).first().click();
     await expect(page.getByText("Remove the Nominal diameter filter")).toHaveCount(0);
     const chip = page.getByLabel(/Remove the .* filter/).first();

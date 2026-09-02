@@ -11,9 +11,12 @@ import {
   searchBusinesses,
   searchProducts,
   suggestFilterToDrop,
+  PAGE_SIZE,
   type FacetGroup,
 } from "@/lib/db/queries";
 import { appliedKeys, toSearchParams, type SearchQuery } from "@/lib/search/query";
+import { BrowseToolbar } from "./BrowseToolbar";
+import { FilterPanel } from "./FilterPanel";
 import { FacetLinks } from "./FacetLinks";
 import { AlertForm } from "./AlertForm";
 import { setAlert } from "./alert-actions";
@@ -51,6 +54,13 @@ export interface ResultsProps {
   /** The raw query string, so tray links can preserve every other facet. */
   search?: string;
 }
+
+/**
+ * Below this a category is thin, and the sort chips and the sponsored
+ * explainer come off. Ordering five suppliers is noise, and an explainer about
+ * paid placement on a page with five results reads as an excuse.
+ */
+const THIN_CATEGORY = 20;
 
 const FIXED_FACET_LABELS = {
   tier: "facet.tier",
@@ -130,8 +140,10 @@ export async function Results({ query, basePath, category, tray = [], search = "
 
   return (
     <div className="grid gap-[var(--gutter)] lg:grid-cols-[16rem_minmax(0,1fr)]">
-      <div className="min-w-0">
-        <FilterRail
+      <FilterPanel
+        appliedCount={appliedCount}
+        rail={
+          <FilterRail
           label={t("results.filters")}
           appliedCount={appliedCount}
           appliedLabel={t("results.applied", { count: appliedCount })}
@@ -162,23 +174,39 @@ export async function Results({ query, basePath, category, tray = [], search = "
               />
             ),
           }))}
-        />
-      </div>
+          />
+        }
+      />
 
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <ResultsTabs
-            query={query}
-            basePath={basePath}
-            businessTotal={businessTotal}
-            productTotal={productTotal}
-          />
-          <p className="font-mono text-eyebrow tabular-nums text-muted">
-            {query.tab === "products"
-              ? t("results.product_count", { count: productTotal })
-              : t("results.count", { count: businessTotal })}
-          </p>
-        </div>
+        <ResultsTabs
+          query={query}
+          basePath={basePath}
+          businessTotal={businessTotal}
+          productTotal={productTotal}
+        />
+
+        {/*
+           Board 1b's toolbar. Only on the suppliers tab: sorting by reply time
+           or rating is a statement about a supplier, and the products tab is
+           listing things rather than the people who sell them.
+        */}
+        {query.tab === "businesses" && (
+          <div className="mt-3">
+            <BrowseToolbar
+              query={query}
+              basePath={basePath}
+              total={businessTotal}
+              pageSize={PAGE_SIZE}
+              // Sorting five results is noise — the spec's thin-category state.
+              showSort={businessTotal > THIN_CATEGORY}
+              // The *placed* sponsor, not the candidate. One that failed a
+              // verification filter the buyer set is dropped from the slot
+              // entirely, and then there is nothing to explain.
+              sponsored={Boolean(businesses?.sponsoredId)}
+            />
+          </div>
+        )}
 
         <div className="mt-3 flex flex-col gap-2">
           <AppliedChips query={query} basePath={basePath} facets={facets} />

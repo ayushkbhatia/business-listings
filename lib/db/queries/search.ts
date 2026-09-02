@@ -7,7 +7,12 @@ import {
   rank,
   type RankingWeights,
 } from "@/lib/search/ranking";
-import { appliedKeys, withoutFacet, type SearchQuery } from "@/lib/search/query";
+import {
+  appliedKeys,
+  withoutFacet,
+  type SearchQuery,
+  type SearchSort,
+} from "@/lib/search/query";
 import { VERIFIED_TIER } from "@/lib/verification";
 
 /**
@@ -37,7 +42,15 @@ function tokens(q: string): string[] {
 // Business filters
 // ─────────────────────────────────────────────────────────────────────────────
 
-function businessWhere(query: SearchQuery, categoryIds?: string[]): Prisma.BusinessWhereInput {
+/**
+ * The filter set, as one `where`.
+ *
+ * Exported so board 1b's header and chip counts are the same predicate the
+ * results are, rather than a second one that drifts. Facet counts that do not
+ * respect the other active filters are the classic mistake here, and the only
+ * durable fix is that there is one function.
+ */
+export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prisma.BusinessWhereInput {
   const and: Prisma.BusinessWhereInput[] = [PUBLIC_BUSINESS];
 
   if (categoryIds?.length) {
@@ -93,7 +106,23 @@ const BUSINESS_INCLUDE = {
   primaryCategory: true,
   plan: true,
   locations: { where: { published: true }, include: { area: true }, take: 1 },
-  _count: { select: { products: { where: { status: { not: "draft" } } } } },
+  /*
+     Board 1b's row carries a photo, the trades they carry and a branch count.
+
+     `media` takes one gallery image: the card reserves a 214px slot whether or
+     not there is anything in it, and a second image would be bytes nobody
+     renders. `categories` is the "Valves & actuators · Pumps & motors" line,
+     which is what tells a buyer scanning twenty rows that this supplier is the
+     right kind of supplier.
+  */
+  media: { where: { kind: "gallery" }, orderBy: { sortOrder: "asc" }, take: 1 },
+  categories: { include: { category: { select: { name: true } } }, take: 5 },
+  _count: {
+    select: {
+      products: { where: { status: { not: "draft" } } },
+      locations: { where: { published: true } },
+    },
+  },
 } as const;
 
 /** How well a row matches the words the buyer typed. 0..1. */
@@ -107,6 +136,48 @@ function relevanceOf(name: string, q: string): number {
   // A category-synonym match contributes nothing here and everything to the
   // fact the row is in the set at all, so the floor is deliberately not zero.
   return 0.35 + 0.65 * (hits / words.length);
+}
+
+/**
+ * The buyer's chosen order, applied over the ranked candidates.
+ *
+ * `best` is the ranking itself and is left alone. The other three are single
+ * signals, because that is what a buyer picking them is asking for — "Fastest
+ * reply" that still weighted relevance at 34 would return a list whose top row
+ * is not the fastest, which is the sort quietly not working.
+ *
+ * Unclaimed listings sink in every order. They have no rating, no measured
+ * reply and nobody behind them, so a "newest" sort that floated a licence
+ * import above a claimed supplier would be worse than useless. Criterion 7.
+ */
+function orderFor<T extends {
+  claimStatus: string;
+  ratingOverall: number | null;
+  responseTimeMedianMs: number | null;
+  publishedAt: Date | null;
+}>(rows: readonly T[], sort: SearchSort): T[] {
+  if (sort === "best") return [...rows];
+
+  const claimed = (row: T) => (row.claimStatus === "claimed" ? 0 : 1);
+  /* Nulls last within each group, whichever way the signal points. */
+  const by = (value: number | null | undefined, worst: number) => value ?? worst;
+
+  return [...rows].sort((a, b) => {
+    const claim = claimed(a) - claimed(b);
+    if (claim !== 0) return claim;
+
+    switch (sort) {
+      case "rating":
+        return by(b.ratingOverall, -1) - by(a.ratingOverall, -1);
+      case "reply":
+        return (
+          by(a.responseTimeMedianMs, Number.MAX_SAFE_INTEGER) -
+          by(b.responseTimeMedianMs, Number.MAX_SAFE_INTEGER)
+        );
+      default:
+        return (b.publishedAt?.getTime() ?? 0) - (a.publishedAt?.getTime() ?? 0);
+    }
+  });
 }
 
 export async function searchBusinesses(
@@ -164,8 +235,10 @@ export async function searchBusinesses(
     weights,
   );
 
+  const ordered = orderFor(ranked, query.sort);
+
   const placed = placeSponsored(
-    ranked,
+    ordered,
     sponsoredId,
     (business) => business.id,
     Boolean(query.tier),

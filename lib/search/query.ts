@@ -7,6 +7,23 @@
  */
 export type SearchTab = "businesses" | "products";
 
+/**
+ * How the result list is ordered.
+ *
+ * `best` is the ranked order — relevance, verification, response time, spec
+ * completeness, distance and plan tier, weighted by the config the admin screen
+ * edits. The other three are single-signal orders a buyer asks for explicitly,
+ * and they are deliberately *not* the ranking with a thumb on one weight: a
+ * buyer who picks "Fastest reply" means fastest reply, not "mostly relevance
+ * but sorted a bit by speed".
+ */
+export type SearchSort = "best" | "rating" | "reply" | "newest";
+
+const SORTS: readonly SearchSort[] = ["best", "rating", "reply", "newest"];
+
+/** List or grid. The board draws the list; the grid is the denser view. */
+export type SearchView = "list" | "grid";
+
 export interface SearchQuery {
   q: string;
   tab: SearchTab;
@@ -22,12 +39,14 @@ export interface SearchQuery {
   yearsTrading?: number;
   /** Spec facets, keyed by SpecField id. */
   spec: Record<string, string[]>;
+  sort: SearchSort;
+  view: SearchView;
   page: number;
 }
 
 const RESERVED = new Set([
   "q", "tab", "emirate", "area", "tier", "freeZone", "availability",
-  "replyWithinHours", "yearsTrading", "page",
+  "replyWithinHours", "yearsTrading", "page", "sort", "view",
   // The comparison tray rides in the URL alongside the query. It is not a
   // facet and must never land in the spec bucket, or it becomes a filter on a
   // SpecField id that does not exist.
@@ -73,6 +92,10 @@ export function parseSearchQuery(
     replyWithinHours: Number.isFinite(hours) && hours > 0 ? hours : undefined,
     yearsTrading: Number.isFinite(years) && years > 0 ? years : undefined,
     spec,
+    // Unknown values fall back rather than 404: a hand-edited URL should give
+    // somebody the default list, not an error page.
+    sort: SORTS.includes(one(params.sort) as SearchSort) ? (one(params.sort) as SearchSort) : "best",
+    view: one(params.view) === "grid" ? "grid" : "list",
     page: Number.isFinite(page) && page > 1 ? page : 1,
   };
 }
@@ -103,6 +126,10 @@ export function toSearchParams(query: SearchQuery, overrides: Partial<SearchQuer
   for (const [field, values] of Object.entries(merged.spec)) {
     if (values.length > 0) params.set(field, values.join(","));
   }
+  // Defaults stay out of the URL: `?sort=best&view=list` on every link would
+  // make the canonical of an unfiltered page differ from the page itself.
+  if (merged.sort !== "best") params.set("sort", merged.sort);
+  if (merged.view !== "list") params.set("view", merged.view);
   if (merged.page > 1) params.set("page", String(merged.page));
 
   return params.toString();
