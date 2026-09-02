@@ -26,47 +26,68 @@ export async function getActor(): Promise<Actor | null> {
   if (error || !user) return null;
 
   const claimed = user.app_metadata?.["roles"];
-  const roles: Role[] = Array.isArray(claimed) ? claimed.filter((r): r is Role => typeof r === "string" && isRole(r)) : [];
-
-  const businessId = user.app_metadata?.["business_id"];
+  const claimedRoles: Role[] = Array.isArray(claimed) ? claimed.filter((r): r is Role => typeof r === "string" && isRole(r)) : [];
+  const claimedBusinessId = user.app_metadata?.["business_id"];
 
   /*
-     A session with no roles whose profile row has some is always a bug, and
-     until now it was a permanent one.
+     The profile row, every request.
 
-     `syncClaims` swallows its own failure on the way in, on the reasoning that
-     a thin session "the next request repairs" beats failing the sign-in over
-     it. Nothing repaired it: roles are read here and only here, out of a claim
-     only the service role can write, so a staff member whose `updateUserById`
-     call failed got a valid session and a 404 on every page behind a
-     capability, with no signal anywhere.
+     `businessId` decides which business this person owns, and roughly a hundred
+     and fifty call sites read it to answer "is this mine?" — it is an ownership
+     boundary, not a routing hint. A JWT claim is a cache of that, and a cache
+     on an ownership boundary is only safe while it cannot go stale.
 
-     This is the repair the comment promised. It costs one indexed lookup on
-     the empty-roles path only — a signed-in buyer with no roles is the normal
-     case and reads their own row once per request, and everybody else skips it
-     entirely.
+     It can. `syncClaims` writes the claim at sign-in and nothing re-checks it,
+     so a claim outlives whatever it pointed at: a restore, a merge, a reseed,
+     or — the way this was actually found — an environment that shares an auth
+     project with a database it does not share. CI signed a seller in, read a
+     `business_id` written months earlier against a different database, found no
+     such business, and 404'd every page of that seller's dashboard.
+
+     Failing closed is the good version of that bug. The bad version is an id
+     that resolves to somebody else's business, and nothing in the old code
+     would have noticed.
+
+     So the record wins and the claim is repaired to match. The cost is one
+     lookup on a primary key per authenticated request, which is what this
+     function already paid whenever the roles claim was empty.
   */
-  if (roles.length === 0) {
-    const profile = await prisma.user.findUnique({
-      where: { id: user.id },
-      select: { roles: true, businessId: true },
-    });
+  const profile = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { roles: true, businessId: true },
+  });
 
-    if (profile && profile.roles.length > 0) {
-      const repaired = profile.roles.filter((role): role is Role => isRole(role));
-      await repairClaims(user.id, repaired, profile.businessId);
-      return {
-        id: user.id,
-        roles: repaired,
-        ...(profile.businessId ? { businessId: profile.businessId } : {}),
-      };
-    }
+  /*
+     Roles still come from the claim first.
+
+     That is deliberate and unchanged: the claim is written by the service role
+     alone, and reading permissions from a second place is a second place to get
+     permissions wrong. The profile is the fallback for a session that has none
+     yet, which is the repair this function has always done.
+  */
+  const roles: Role[] =
+    claimedRoles.length > 0
+      ? claimedRoles
+      : (profile?.roles ?? []).filter((role): role is Role => isRole(role));
+
+  const businessId = profile?.businessId ?? null;
+
+  /*
+     Self-healing, and quietly: a claim that disagrees with the record is
+     rewritten so the next request costs nothing extra. It never blocks — the
+     answer this request returns is already correct, and `syncClaims` swallows
+     its own failure.
+  */
+  const claimIsStale =
+    claimedRoles.length !== roles.length || claimedBusinessId !== (businessId ?? undefined);
+  if (profile && claimIsStale) {
+    await repairClaims(user.id, roles, businessId);
   }
 
   return {
     id: user.id,
     roles,
-    ...(typeof businessId === "string" ? { businessId } : {}),
+    ...(businessId ? { businessId } : {}),
   };
 }
 

@@ -1,7 +1,14 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { destinationFor, fromSupabaseError, isSafeNext, verifyCode } from "@/lib/auth/flow";
+import {
+  destinationFor,
+  fromSupabaseError,
+  isSafeNext,
+  repairClaims,
+  verifyCode,
+} from "@/lib/auth/flow";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * The whole sign-up and verify path, against the real Supabase project.
@@ -237,5 +244,46 @@ describe("where a session lands", () => {
 
   it("accepts an ordinary same-origin path", () => {
     expect(isSafeNext("/search?q=valve")).toBe(true);
+  });
+});
+
+describe("a business_id claim is a cache, and caches go stale", () => {
+  /*
+     The bug this pins cost a whole CI run.
+
+     `syncClaims` used to omit `business_id` when there was none, which meant a
+     claim could be written once and never removed. `getActor` then trusted it,
+     so a seller carried an id pointing at a business that no longer existed —
+     and roughly a hundred and fifty call sites read that id to answer "is this
+     mine?".
+
+     It surfaced where an environment shares an auth project with a database it
+     does not share: the claim was written against one database and read against
+     another. It fails closed there, which is the lucky version. The unlucky one
+     is an id that resolves to somebody else's business.
+  */
+  it("clears the claim when the record says there is no business", async () => {
+    const admin = createAdminClient();
+    const email = `bl.claim.${Date.now()}@example.com`;
+
+    const created = await admin.auth.admin.createUser({ email, email_confirm: true });
+    const userId = created.data.user?.id;
+    expect(userId).toBeTruthy();
+    if (!userId) return;
+
+    try {
+      await repairClaims(userId, ["seller_owner"], "cbogusbusinessid0000000000");
+      const withClaim = await admin.auth.admin.getUserById(userId);
+      expect(withClaim.data.user?.app_metadata?.business_id).toBe("cbogusbusinessid0000000000");
+
+      // The record now says they belong to nothing. The claim has to be able to
+      // say that too, or it outlives every correction.
+      await repairClaims(userId, ["seller_owner"], null);
+      const cleared = await admin.auth.admin.getUserById(userId);
+      expect(cleared.data.user?.app_metadata?.business_id ?? null).toBeNull();
+      expect(cleared.data.user?.app_metadata?.roles).toEqual(["seller_owner"]);
+    } finally {
+      await admin.auth.admin.deleteUser(userId);
+    }
   });
 });

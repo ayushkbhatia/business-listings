@@ -454,11 +454,20 @@ export async function repairClaims(
   await syncClaims(userId, roles, businessId);
 }
 
-/** Mirror roles into the JWT claim `getActor` reads. Service role only. */
+/**
+ * Mirror roles into the JWT claim `getActor` reads. Service role only.
+ *
+ * `business_id` is written as `null` rather than omitted when there is none.
+ * Omitting it left the key untouched, so a claim could be written once and
+ * never removed — a seller who left a business, or an id whose business no
+ * longer exists, kept the stale value for good. `getActor` treats the profile
+ * row as the truth and calls this to correct the claim, which only works if
+ * "no business" is something this can actually say.
+ */
 async function syncClaims(userId: string, roles: readonly Role[], businessId: string | null) {
   try {
     await createAdminClient().auth.admin.updateUserById(userId, {
-      app_metadata: { roles, ...(businessId ? { business_id: businessId } : {}) },
+      app_metadata: { roles, business_id: businessId },
     });
   } catch (cause) {
     // The session is valid; it just has no roles yet, so it can browse and not
