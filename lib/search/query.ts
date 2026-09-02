@@ -107,6 +107,21 @@ function one(value: string | string[] | undefined): string | undefined {
   return first;
 }
 
+/**
+ * The first value, whole — no comma splitting.
+ *
+ * `one` goes through `list`, which splits on commas because that is how a
+ * multi-value facet travels. A compound value has to be read past it:
+ * `bounds=56.1,25.9,56.2,26.0` through `one` yields `"56.1"`, and
+ * `parseBounds` then rejects it as a box with one number in it. Silently — the
+ * viewport simply stopped being applied.
+ */
+function whole(value: string | string[] | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const first = Array.isArray(value) ? value[0] : value;
+  return first === "" ? undefined : first;
+}
+
 export function parseSearchQuery(
   params: Record<string, string | string[] | undefined>,
 ): SearchQuery {
@@ -141,7 +156,7 @@ export function parseSearchQuery(
     sort: SORTS.includes(one(params.sort) as SearchSort) ? (one(params.sort) as SearchSort) : "best",
     view: one(params.view) === "grid" ? "grid" : "list",
     page: Number.isFinite(page) && page > 1 ? page : 1,
-    bounds: parseBounds(one(params.bounds)),
+    bounds: parseBounds(whole(params.bounds)),
   };
 }
 

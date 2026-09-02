@@ -6,3 +6,4 @@ export * from "./time";
 export * from "./phone";
 export * from "./trn";
 export * from "./size";
+export * from "./distance";

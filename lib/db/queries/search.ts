@@ -118,6 +118,26 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
   }
 
   const locationFilters: Prisma.LocationWhereInput = { published: true };
+  /*
+     The map viewport, when the buyer pressed "Search this area".
+
+     It belongs here rather than only in the pin query: criterion 6 says the
+     button *re-queries*, and a box that moved the pins while leaving the list
+     showing suppliers in Fujairah would be the map and the list disagreeing
+     about what was asked.
+
+     Panning still changes nothing, because panning does not write `bounds` —
+     only the button does. That is the whole of "panning alone does not re-rank".
+
+     A supplier with no coordinates drops out of a bounded search, and that is
+     correct rather than unfortunate: the buyer has asked "who is *here*", and
+     we do not know whether an unpinned supplier is. The unbounded search still
+     finds them, which is what the zoom-out state offers.
+  */
+  if (query.bounds) {
+    locationFilters.lat = { gte: query.bounds.south, lte: query.bounds.north };
+    locationFilters.lng = { gte: query.bounds.west, lte: query.bounds.east };
+  }
   if (query.emirate) locationFilters.emirate = query.emirate as never;
   if (query.area) locationFilters.area = { slug: query.area };
   // A free zone is a cross-cutting toggle, not a place in the area hierarchy.
