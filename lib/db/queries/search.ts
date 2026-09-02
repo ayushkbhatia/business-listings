@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
+import { isCode, matchNeedle } from "@/lib/search/index-text";
 import { liveBoosts, liveWeights } from "@/lib/search/settings";
 import {
   placeSponsored,
@@ -63,8 +64,30 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
   }
 
   for (const token of tokens(query.q)) {
-    and.push({
-      OR: [
+    /*
+       The match surface first, then the columns it was built from.
+
+       `searchText` is what makes a *specification* find a supplier — board 1c's
+       first requirement, and the thing the four clauses below cannot do however
+       they are arranged, because none of them can see a product's spec values.
+
+       The originals stay as a second branch rather than being replaced. The
+       column is null on every row until `pnpm reindex` has run, and a search
+       that returned nothing at all on a freshly-migrated database would look
+       exactly like a broken index.
+    */
+    const branches: Prisma.BusinessWhereInput[] = [
+      { searchText: { contains: matchNeedle(token), mode: "insensitive" } },
+    ];
+
+    /*
+       Only names get the loose branches. A code matched as a bare substring is
+       criterion 2's failure — `DN10` reaching a supplier whose name or
+       catalogue carries `DN100` — and `matchNeedle` has already padded it so
+       the surface above matches it whole. Nothing else may widen that back out.
+    */
+    if (!isCode(token)) {
+      branches.push(
         { displayName: { contains: token, mode: "insensitive" } },
         { tradeName: { contains: token, mode: "insensitive" } },
         // Category synonyms are how an Arabic query reaches an English listing:
@@ -72,8 +95,10 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
         // matches without a word of Arabic in their own record.
         { primaryCategory: { OR: [{ name: { contains: token, mode: "insensitive" } }, { synonyms: { has: token } }] } },
         { categories: { some: { category: { OR: [{ name: { contains: token, mode: "insensitive" } }, { synonyms: { has: token } }] } } } },
-      ],
-    });
+      );
+    }
+
+    and.push({ OR: branches });
   }
 
   if (query.tier) and.push({ verificationTier: { gte: query.tier } });
@@ -230,7 +255,16 @@ export async function searchBusinesses(
   const ranked = rank(
     candidates,
     (business) => ({
-      relevance: relevanceOf(business.displayName, query.q),
+      /*
+         Scored against the whole match surface, not just the name.
+
+         A supplier found *because* their catalogue carries `Application:
+         chilled water` scored 0.35 on a name that says nothing about chilled
+         water — the floor, indistinguishable from a bare category-synonym
+         match. The row that matched best was ranked as though it had barely
+         matched at all.
+      */
+      relevance: relevanceOf(`${business.displayName} ${business.searchText ?? ""}`, query.q),
       verificationTier: business.verificationTier,
       responseTimeMedianMs: business.responseTimeMedianMs,
       specCompleteness: business.specCompleteness,
@@ -274,13 +308,24 @@ function productWhere(query: SearchQuery, categoryIds?: string[]): Prisma.Produc
   if (categoryIds?.length) and.push({ categoryId: { in: categoryIds } });
 
   for (const token of tokens(query.q)) {
-    and.push({
-      OR: [
-        { searchText: { contains: token, mode: "insensitive" } },
+    // Same split as `businessWhere`, and it matters more here: a product search
+    // is where an exact part number is typed, and `6205-2RS` reaching
+    // `6205-2RSH` is a bearing that does not fit.
+    const branches: Prisma.ProductWhereInput[] = [
+      { searchText: { contains: matchNeedle(token), mode: "insensitive" } },
+    ];
+    if (!isCode(token)) {
+      branches.push(
         { name: { contains: token, mode: "insensitive" } },
         { category: { OR: [{ name: { contains: token, mode: "insensitive" } }, { synonyms: { has: token } }] } },
-      ],
-    });
+      );
+    } else {
+      // A code still reaches the SKU column directly, whole. That is the one
+      // place a part number is stored verbatim rather than as an index token,
+      // and a seller whose catalogue predates the reindex still has it.
+      branches.push({ sku: { equals: token, mode: "insensitive" } });
+    }
+    and.push({ OR: branches });
   }
 
   if (query.availability?.length) and.push({ availability: { in: query.availability as never[] } });

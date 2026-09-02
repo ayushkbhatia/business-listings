@@ -21,7 +21,8 @@ import {
   SUBCATEGORIES,
   VALVE_TEMPLATE_FIELDS,
 } from "./seed-data.mjs";
-import { DN_SYNONYMS, sizeAliases } from "../lib/trade/nominal-size.js";
+import { DN_SYNONYMS } from "../lib/trade/nominal-size.js";
+import { buildProductSearchText, valueAliases } from "../lib/search/index-text.js";
 import { matchLine } from "../lib/quote/match.js";
 import { medianResponseMs, windowStart } from "../lib/metrics/response-time.js";
 import { monthStart } from "../lib/enquiry/fanout.js";
@@ -136,6 +137,18 @@ const INCH_TO_DN: Record<string, string> = Object.fromEntries(
  * The denormalised match surface. Both DN100 and 4" land here whichever way the
  * seller typed it, which is what lets each query find the other's products.
  */
+/**
+ * The seed's products, indexed by the same function the app uses.
+ *
+ * A thin wrapper, not a copy. This builder used to live here in full, which
+ * made the seed the only writer of `search_text` in the entire codebase — the
+ * importer and the dashboard's edit action both left it null. `nominal-size.ts`
+ * already carries a note about that table having been written twice; this is
+ * the last of it.
+ *
+ * `size` is passed as a value rather than a field because the seed knows the
+ * size it generated but not which template field id holds it in every category.
+ */
 function buildSearchText(parts: {
   name: string;
   sku?: string | null;
@@ -143,23 +156,14 @@ function buildSearchText(parts: {
   specValues: Record<string, unknown>;
   size?: string;
 }): string {
-  const tokens = new Set<string>();
-  const add = (v: unknown) => {
-    if (v === null || v === undefined) return;
-    const s = String(v).trim();
-    if (s) tokens.add(s.toLowerCase());
-  };
-  add(parts.name);
-  add(parts.sku);
-  add(parts.categoryName);
-  for (const alias of sizeAliases(parts.size)) add(alias);
-  for (const value of Object.values(parts.specValues)) {
-    if (Array.isArray(value)) value.forEach(add);
-    else add(value);
-    // A spec value may itself be a size — nominal_diameter usually is.
-    for (const alias of sizeAliases(String(value))) add(alias);
-  }
-  return [...tokens].join(" ");
+  const base = buildProductSearchText({
+    name: parts.name,
+    sku: parts.sku,
+    categoryName: parts.categoryName,
+    specValues: parts.specValues,
+  });
+  const sizeTokens = valueAliases(parts.size).join(" ");
+  return sizeTokens ? `${base} ${sizeTokens}` : base;
 }
 
 async function main() {

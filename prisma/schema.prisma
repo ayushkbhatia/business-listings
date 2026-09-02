@@ -445,6 +445,21 @@ model Business {
   teamSize         TeamSizeBand? @map("team_size")
   languages        String[]      @default([])
   description      String?
+  /// Denormalised match surface: this supplier's own words, their categories
+  /// and synonyms, and every product name, SKU and spec value in their
+  /// catalogue — sizes and trade abbreviations expanded to every spelling.
+  ///
+  /// Board 1c's first requirement is that a query naming a *specification*
+  /// finds the supplier who can meet it: `chilled water pumps` must reach a
+  /// pumps supplier whose products carry `Application: chilled water`, not only
+  /// one who wrote those words about themselves. Joining products at read time
+  /// would mean normalising sizes across every candidate row, which is a
+  /// sequential scan with a regex in it. Normalised once on write instead.
+  ///
+  /// Goes stale by construction, so a product write refreshes its business's
+  /// row too — `lib/search/reindex.ts` owns both. Null means never indexed and
+  /// is matched as empty, never as "matches everything".
+  searchText       String?       @map("search_text")
 
   /// 0..4. STAFF WRITE ONLY, ops_lead role. There is no API path and no
   /// seller-editable field. Drops to 2 automatically the day licenceExpiry
@@ -578,6 +593,7 @@ model Business {
   @@index([licenceExpiry])
   @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([tradeName(ops: raw("gin_trgm_ops"))], type: Gin)
+  @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("business")
 }
 
