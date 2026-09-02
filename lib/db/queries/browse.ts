@@ -63,15 +63,30 @@ export async function getSubcategoryChips(
   });
   if (children.length === 0) return [];
 
-  const counts = await Promise.all(
-    children.map(async (child) => ({
-      ...child,
-      // Scoped to this child alone, with every other filter still applied.
-      count: await prisma.business.count({ where: businessWhere(query, [child.id]) }),
-    })),
-  );
+  /*
+     One grouped query, not one per chip.
 
-  return counts
+     This was a count per subcategory, which on HVAC's thirty-six children was
+     thirty-six sequential round trips to render one header — enough to make the
+     page the slowest thing on the site and, against a pooled connection, enough
+     to start timing other requests out. `groupBy` over the same predicate gives
+     the identical numbers in one.
+
+     The predicate is the page's own, so the counts still respect every other
+     active filter: ticking Dubai moves these, which is the whole point of them.
+  */
+  const grouped = await prisma.business.groupBy({
+    by: ["primaryCategoryId"],
+    where: {
+      ...businessWhere(query, children.map((child) => child.id)),
+    },
+    _count: { _all: true },
+  });
+
+  const countFor = new Map(grouped.map((row) => [row.primaryCategoryId, row._count._all]));
+
+  return children
+    .map((child) => ({ ...child, count: countFor.get(child.id) ?? 0 }))
     .filter((child) => child.count > 0)
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 }

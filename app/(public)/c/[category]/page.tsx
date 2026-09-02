@@ -114,7 +114,18 @@ export default async function CategoryPage({ params, searchParams }: Props) {
   return (
     <PublicShell
       bleed
-      nav={<DirectoryNav active="categories" />}
+      nav={
+        <DirectoryNav
+          active="categories"
+          scope={{
+            action: `/c/${category.slug}`,
+            // The two-letter mark and the emirate, which together are the
+            // scope the results are already in.
+            label: emirateName ? `${category.code} · ${emirateName}` : category.code,
+            placeholder: t("browse.search_in", { category: category.name }),
+          }}
+        />
+      }
       breadcrumb={<Breadcrumb label={t("gallery.breadcrumb_label")} items={crumbs} />}
       footer={<DirectoryFooter />}
     >

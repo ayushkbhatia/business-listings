@@ -16,6 +16,7 @@ import {
 } from "@/lib/db/queries";
 import { appliedKeys, toSearchParams, type SearchQuery } from "@/lib/search/query";
 import { BrowseToolbar } from "./BrowseToolbar";
+import { FilterPanel } from "./FilterPanel";
 import { FacetLinks } from "./FacetLinks";
 import { AlertForm } from "./AlertForm";
 import { setAlert } from "./alert-actions";
@@ -139,8 +140,10 @@ export async function Results({ query, basePath, category, tray = [], search = "
 
   return (
     <div className="grid gap-[var(--gutter)] lg:grid-cols-[16rem_minmax(0,1fr)]">
-      <div className="min-w-0">
-        <FilterRail
+      <FilterPanel
+        appliedCount={appliedCount}
+        rail={
+          <FilterRail
           label={t("results.filters")}
           appliedCount={appliedCount}
           appliedLabel={t("results.applied", { count: appliedCount })}
@@ -171,8 +174,9 @@ export async function Results({ query, basePath, category, tray = [], search = "
               />
             ),
           }))}
-        />
-      </div>
+          />
+        }
+      />
 
       <div className="min-w-0">
         <ResultsTabs

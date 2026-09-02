@@ -147,6 +147,19 @@ async function recruit(db: PrismaClient, spec: Recruit) {
         verificationTier: tier,
         verifiedAt: tier > 0 ? new Date(Date.UTC(2026, 5, 1)) : null,
         source: "licence_import",
+        /*
+           The facts board 1b's row puts on a card as chips.
+
+           All three come off a licence or a phone call, which is why they are
+           set here and `ratingOverall` is not: a rating is derived from reviews
+           by `recomputeDerived`, and inventing one would put "4.5 · 15 reviews"
+           on a card with no reviews behind it. A trust signal nobody earned is
+           the one thing this directory cannot seed.
+
+           Deterministic from the index, so two runs agree.
+        */
+        establishedYear: 1996 + (i % 27),
+        trn: `100${String(400000000 + i * 7919).padStart(9, "0")}${String(100 + (i % 900))}`.slice(0, 15),
         locations: {
           create: {
             type: "trade_counter",
@@ -154,6 +167,21 @@ async function recruit(db: PrismaClient, spec: Recruit) {
             areaId: area.id,
             addressLine: `Warehouse ${n}, Street 6`,
             published: true,
+            /*
+               A number on two in three, and verified on those.
+
+               `Location.whatsapp` is only ever shown to a buyer when
+               `phoneVerified` — the schema says so and the results row honours
+               it — so seeding one without the flag would seed a button nobody
+               can ever press.
+            */
+            ...(i % 3 === 2
+              ? {}
+              : {
+                  phone: `+9714${String(2000000 + i * 37).slice(0, 7)}`,
+                  whatsapp: `+9715${String(2000000 + i * 37).slice(0, 7)}`,
+                  phoneVerified: true,
+                }),
             /*
                Scattered around the area centre on a fixed lattice — the map is
                part of board 6a and a page whose every pin sits on one point is

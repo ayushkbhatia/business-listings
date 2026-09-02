@@ -24,6 +24,15 @@ export interface SearchFieldProps
   onClear?: () => void;
   /** Shows a spinner in place of the magnifier while results are in flight. */
   loading?: boolean;
+  /**
+   * A scope marker at the end of the field — `IN · DUBAI` on a category page.
+   *
+   * It exists because the same bar means two different things depending on
+   * where you are standing: on the home page it searches the directory, and on
+   * a category page it searches inside that category. A field that looked
+   * identical in both places would be quietly lying in one of them.
+   */
+  scope?: string;
 }
 
 export function SearchField({
@@ -32,6 +41,7 @@ export function SearchField({
   clearLabel,
   onClear,
   loading = false,
+  scope,
   disabled,
   value,
   defaultValue,
@@ -74,13 +84,27 @@ export function SearchField({
             size,
             disabled: Boolean(disabled),
             hasLeading: true,
-            hasTrailing: hasText,
+            hasTrailing: hasText || Boolean(scope),
           }),
           // The platform clear affordance is inconsistent and unlabelled.
           "[&::-webkit-search-cancel-button]:appearance-none",
         )}
         {...rest}
       />
+
+      {scope && !hasText && (
+        /*
+           Decorative: the scope is already in the URL and in the h1, and this
+           is a third rendering of it rather than new information. Announcing it
+           would put "IN · DUBAI" between the field's own name and its value.
+        */
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-tag bg-fill px-1.5 py-1 font-mono text-eyebrow uppercase tracking-[.06em] text-muted"
+        >
+          {scope}
+        </span>
+      )}
 
       {hasText && !disabled && (
         <button
