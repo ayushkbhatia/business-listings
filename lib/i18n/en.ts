@@ -2925,6 +2925,8 @@ export const en = {
   "section.brands.title": "Brands we stock",
   "section.certifications.title": "Certifications",
   "section.certifications.open": "Open",
+  /* Month, not a date — see formatMonth. */
+  "section.certifications.valid_until": "Valid until {month}",
   "document.kind.certificate": "Certificate",
   "document.kind.catalogue": "Catalogue",
   "document.kind.datasheet": "Datasheet",

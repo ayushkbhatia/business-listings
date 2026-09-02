@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Card, KeyValuePanel } from "@/components/structure";
-import { MapCanvas, StatusBadge } from "@/components/display";
+import { MapCanvas, StatusBadge, Tag } from "@/components/display";
 import { cn } from "@/lib/cn";
 import { formatDate, maskTRN } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -523,6 +523,59 @@ export function BusinessDetails({
             },
           ]}
         />
+      </div>
+    </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Capability chips
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The trades they carry, and what they can do with them.
+ *
+ * Board 1d asks for "the seller's subcategories plus capability flags (Site
+ * delivery, etc)". The subcategories are real — `BusinessCategory` rows the
+ * seller chose. The capability flags are derived from facts already on the
+ * record rather than invented as a new set of checkboxes nobody fills in:
+ * a service radius means they deliver, a free-zone address means they trade
+ * from one, more than one branch means they have counters in more than one
+ * place.
+ *
+ * A flag that came from a field a seller had to tick would be a flag that is
+ * blank on almost every listing, which is how a capability row becomes noise.
+ */
+export function CapabilityChips({ business }: { business: PublicBusiness }) {
+  const trades = business.categories
+    .map((link) => link.category.name)
+    .filter((name) => name !== business.primaryCategory.name);
+
+  const radius = business.locations.find((location) => location.serviceRadiusKm !== null);
+  const freeZone = business.locations.some((location) => location.area.isFreeZone);
+
+  const capabilities = [
+    radius?.serviceRadiusKm
+      ? t("storefront.service_radius", { km: radius.serviceRadiusKm })
+      : null,
+    freeZone ? t("facet.free_zone_option") : null,
+    business.locations.length > 1
+      ? t("listing.branches", { count: business.locations.length })
+      : null,
+  ].filter((label): label is string => label !== null);
+
+  if (trades.length === 0 && capabilities.length === 0) return null;
+
+  return (
+    <section>
+      <h2 className="sr-only">{t("storefront.categories")}</h2>
+      <div className="flex flex-wrap gap-1.5">
+        {trades.map((name) => (
+          <Tag key={name}>{name}</Tag>
+        ))}
+        {capabilities.map((label) => (
+          <Tag key={label}>{label}</Tag>
+        ))}
       </div>
     </section>
   );

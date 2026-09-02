@@ -8,14 +8,17 @@ import { getBusinessBySlug, getSimilarClaimedBusinesses } from "@/lib/db/queries
 import { formatDate, formatDuration } from "@/lib/format";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
+import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { StorefrontHeader, storefrontCrumbs } from "./_storefront";
 import { renderSection } from "@/components/storefront";
 import { storefrontPlan } from "@/lib/storefront/loader";
+import { openingHoursSchema } from "@/lib/trade/open-now";
 import { ContactCard } from "./ContactCard";
 import {
   BusinessDetails,
+  CapabilityChips,
   EnquiryComposer,
   HoursPanel,
   LocationsPanel,
@@ -27,6 +30,23 @@ import { getActor } from "@/lib/auth/session";
 import { navPages } from "@/lib/storefront/pages";
 
 export const revalidate = 300;
+
+/**
+ * Our availability vocabulary, in schema.org's.
+ *
+ * `made_to_order` and `indent` both map to `PreOrder` rather than `InStock`:
+ * they describe something a buyer cannot collect today, which is what the
+ * schema term means. `BackOrder` would be the closer literal match for indent
+ * and is the wrong word here — CLAUDE.md's vocabulary table names backorder as
+ * a term this product does not use, because an indent order is the supplier's
+ * own process rather than a failure to stock something.
+ */
+const SCHEMA_AVAILABILITY: Record<string, string> = {
+  in_stock: "https://schema.org/InStock",
+  made_to_order: "https://schema.org/PreOrder",
+  indent: "https://schema.org/PreOrder",
+  out_of_stock: "https://schema.org/OutOfStock",
+};
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -198,6 +218,26 @@ async function ClaimedStorefront({ business }: { business: Business }) {
             head?.lat != null && head.lng != null
               ? { "@type": "GeoCoordinates", latitude: head.lat, longitude: head.lng }
               : undefined,
+          /*
+             The real number, not the masked one.
+
+             The mask exists so that asking for a supplier's number is an event
+             we can count, and that reasoning does not apply to a crawler: it
+             will not send an enquiry, and a search result showing "04 88• ••••"
+             helps nobody. Board 1d says it in as many words — schema is for
+             machines.
+          */
+          telephone: head?.phone ?? undefined,
+          /*
+             The week as the schema expects it, from the same source the rail
+             renders — including the Ramadan override, because a machine reading
+             this during Ramadan should be told the hours that are actually in
+             effect rather than the ones on file.
+          */
+          openingHoursSpecification: openingHoursSchema(
+            (head?.hours ?? null) as never,
+            (head?.ramadanHours ?? null) as never,
+          ),
           // aggregateRating only when reviews exist. A rating object with a zero
           // count is a rich result built on nothing.
           aggregateRating:
@@ -236,6 +276,40 @@ async function ClaimedStorefront({ business }: { business: Business }) {
         heading, links and buttons inside; the verification badge is drawn from
         the status palette and is unaffected by design.
       */}
+      {/*
+         Criterion 11's other half: `Product` on the featured cards, with
+         `offers.availability` and **no price at all**.
+
+         Omitted entirely rather than left blank, which is the difference
+         between "we do not publish prices" and "this product costs nothing".
+         `Product` has no price column and `QuoteLine` is where a price lives,
+         private to one buyer and one seller — so there is nothing here to omit
+         from, and that is the point.
+
+         Capped at the four the board draws. A page emitting a hundred Product
+         objects is asking a crawler to treat a catalogue as a shop window.
+      */}
+      {plan.data.products.slice(0, 4).map((product) => (
+        <JsonLd
+          key={product.id}
+          data={{
+            "@context": "https://schema.org",
+            "@type": "Product",
+            name: product.name,
+            sku: product.sku ?? undefined,
+            url: absoluteUrl(`/b/${business.slug}/p/${product.slug}`),
+            image: product.imageUrl ?? undefined,
+            brand: { "@type": "Brand", name: business.displayName },
+            offers: {
+              "@type": "Offer",
+              availability: SCHEMA_AVAILABILITY[product.availability],
+              seller: { "@type": "Organization", name: business.displayName },
+              url: absoluteUrl(`/b/${business.slug}/p/${product.slug}`),
+            },
+          }}
+        />
+      ))}
+
       <div data-theme={plan.theme}>
         <StorefrontHeader
           business={business}
@@ -287,6 +361,8 @@ async function ClaimedStorefront({ business }: { business: Business }) {
                TRN are platform-owned facts and were not going to be quietly
                dropped on the way.
             */}
+            <CapabilityChips business={business} />
+
             <BusinessDetails business={business} lastUpdated={formatDate(business.updatedAt)} />
 
             {plan.sections

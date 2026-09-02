@@ -144,3 +144,48 @@ export function openNow(
     ? { state: "closed", opensAt: next.opensAt, opensDay: next.opensDay, isRamadan }
     : { state: "closed", isRamadan };
 }
+
+/**
+ * `openingHoursSpecification`, for `LocalBusiness` JSON-LD.
+ *
+ * Built from the same evaluation the storefront renders, Ramadan window and
+ * all: a machine reading this page during Ramadan should be told the hours that
+ * are in effect, not the ones on file. Two surfaces disagreeing about when a
+ * supplier is open is worse than either being slightly coarse.
+ *
+ * Returns undefined rather than an empty array when there are no hours.
+ * Schema.org treats an empty specification as a claim about opening times, and
+ * we have nothing to claim.
+ */
+export function openingHoursSchema(
+  hours: WeekHours | null | undefined,
+  ramadan: RamadanHours | null | undefined,
+  now = new Date(),
+):
+  | { "@type": "OpeningHoursSpecification"; dayOfWeek: string; opens: string; closes: string }[]
+  | undefined {
+  if (!hours) return undefined;
+
+  const { hours: week } = hoursInEffect(hours, ramadan ?? null, now);
+
+  const SCHEMA_DAY: Record<Day, string> = {
+    sun: "Sunday",
+    mon: "Monday",
+    tue: "Tuesday",
+    wed: "Wednesday",
+    thu: "Thursday",
+    fri: "Friday",
+    sat: "Saturday",
+  };
+
+  const out = DAYS.flatMap((day) =>
+    (week[day] ?? []).map((shift) => ({
+      "@type": "OpeningHoursSpecification" as const,
+      dayOfWeek: SCHEMA_DAY[day],
+      opens: shift.open,
+      closes: shift.close,
+    })),
+  );
+
+  return out.length > 0 ? out : undefined;
+}
