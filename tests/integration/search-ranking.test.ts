@@ -44,7 +44,43 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+/*
+   No `sort`, on purpose. The cast is what lets that compile, and for one
+   release it hid a real defect: `orderFor` fell through to its `default` branch
+   on an absent sort and returned the newest-first order, so nothing below could
+   ever have reordered anything. The tests here are the ones that caught it, and
+   this stays uncast-and-incomplete so they keep catching it.
+*/
 const query = { q: "", page: 1 } as Parameters<typeof searchBusinesses>[0];
+
+describe("an absent sort is the ranking, never a different order", () => {
+  it("orders a query with no sort exactly as sort=best does", async () => {
+    /*
+     * The guard on the bug this file found. "Newest first" is not a milder
+     * ranking, it is the absence of one: every weight, every boost and the
+     * sponsored slot stop reaching the page at all. A caller that omits the
+     * field means the ranking, because there is nothing else it could mean.
+     */
+    const [absent, best] = await Promise.all([
+      searchBusinesses(query),
+      searchBusinesses({ ...query, sort: "best" }),
+    ]);
+
+    expect(absent.rows.length).toBeGreaterThan(1);
+    expect(absent.rows.map((row) => row.id)).toEqual(best.rows.map((row) => row.id));
+  }, 60_000);
+
+  it("still lets an explicit single-signal sort take over", async () => {
+    // The other half: closing the fallback must not close the feature.
+    const byReply = await searchBusinesses({ ...query, sort: "reply" });
+    const claimed = byReply.rows.filter((row) => row.claimStatus === "claimed");
+
+    // Unclaimed listings sink whatever the signal says — criterion 7 — so the
+    // ordering assertion belongs inside the claimed group.
+    const replies = claimed.map((row) => row.responseTimeMedianMs ?? Number.MAX_SAFE_INTEGER);
+    expect(replies).toEqual([...replies].sort((a, b) => a - b));
+  }, 60_000);
+});
 
 describe("criterion 5 — weights reorder live results", () => {
   it("reads the stored weights, not the constant", async () => {
