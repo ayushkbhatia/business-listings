@@ -2,6 +2,14 @@ import "server-only";
 import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { isCode, matchNeedle } from "@/lib/search/index-text";
+import { nearestKm } from "@/lib/geo/distance";
+import {
+  resolveOrigin,
+  shapeOf,
+  weightsForShape,
+  type QueryShape,
+  type SortOrigin,
+} from "@/lib/search/origin";
 import { liveBoosts, liveWeights } from "@/lib/search/settings";
 import {
   placeSponsored,
@@ -130,7 +138,15 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
 const BUSINESS_INCLUDE = {
   primaryCategory: true,
   plan: true,
-  locations: { where: { published: true }, include: { area: true }, take: 1 },
+  /*
+     Up to five branches, not one.
+
+     The card still shows the first, but distance is measured to the *nearest*
+     of them: a Jebel Ali supplier with a Deira trade counter is close to a
+     Deira buyer, and ranking them by whichever branch the database happened to
+     return first would be a coin toss dressed as a distance.
+  */
+  locations: { where: { published: true }, include: { area: true }, take: 5 },
   /*
      Board 1b's row carries a photo, the trades they carry and a branch count.
 
@@ -222,6 +238,10 @@ export async function searchBusinesses(
     sponsoredId?: string | null;
     /** Live boost points by business id. Omit to read them. */
     boosts?: Map<string, number>;
+    /** Omit to resolve from the query's own filters. `null` means no origin. */
+    origin?: SortOrigin | null;
+    /** Omit to read it from the catalogue. */
+    shape?: QueryShape;
   } = {},
 ) {
   const { categoryIds, sponsoredId = null } = options;
@@ -234,10 +254,22 @@ export async function searchBusinesses(
    * here rather than at every call site, because a caller that forgot would
    * silently get the old ranking.
    */
-  const [weights, boosts] = await Promise.all([
+  const [storedWeights, boosts, origin, shape] = await Promise.all([
     options.weights ? Promise.resolve(options.weights) : liveWeights(),
     options.boosts ? Promise.resolve(options.boosts) : liveBoosts(),
+    options.origin !== undefined ? Promise.resolve(options.origin) : resolveOrigin(query),
+    options.shape ? Promise.resolve(options.shape) : shapeOf(query),
   ]);
+
+  /*
+     Distance is the only weight the query itself moves, and the board says why:
+     somebody who typed an exact part number wants that part and will drive for
+     it, while somebody searching `AMC contractor` is looking for a person who
+     will come to their site. The other five stay exactly as staff set them —
+     a search that quietly rewrote those would make the admin editor a
+     suggestion rather than a setting.
+  */
+  const weights = weightsForShape(storedWeights, shape);
   const where = businessWhere(query, categoryIds);
 
   const [candidates, total] = await Promise.all([
@@ -268,7 +300,18 @@ export async function searchBusinesses(
       verificationTier: business.verificationTier,
       responseTimeMedianMs: business.responseTimeMedianMs,
       specCompleteness: business.specCompleteness,
-      distanceKm: null,
+      /*
+         Kilometres from the buyer's own filters, never from their device.
+
+         Hardcoded null until now, which meant the distance weight had never
+         once moved a result — the admin editor has always shown a slider that
+         did nothing. Null still happens, and legitimately: no area and no
+         emirate filter is no origin, and a supplier whose every branch is
+         unpinned has no position. Both score as unknown rather than as far,
+         because not knowing where somebody is must not read as evidence that
+         they are inconvenient.
+      */
+      distanceKm: nearestKm(origin, business.locations),
       planMultiplier: business.plan?.rankingMultiplier ?? 1,
       // Ops moving a listing for a reason of ours, with an expiry on it. Never
       // labelled sponsored: nobody paid for this one.
@@ -291,6 +334,13 @@ export async function searchBusinesses(
     rows: placed.rows.slice(from, from + PAGE_SIZE),
     total,
     sponsoredId: placed.sponsoredId,
+    /*
+       Returned rather than recomputed by the page. Board 1c's sort strip names
+       the origin it sorted by, and a strip that worked it out separately could
+       name a place the ranking did not actually use.
+    */
+    origin,
+    shape,
   };
 }
 
@@ -365,17 +415,31 @@ const PRODUCT_INCLUDE = {
     include: {
       primaryCategory: true,
       plan: true,
-      locations: { where: { published: true }, include: { area: true }, take: 1 },
+      // Five, for the same reason as the business include: distance is to the
+      // nearest branch, not to whichever one came back first.
+      locations: { where: { published: true }, include: { area: true }, take: 5 },
     },
   },
 } as const;
 
 export async function searchProducts(
   query: SearchQuery,
-  options: { categoryIds?: string[]; weights?: RankingWeights } = {},
+  options: {
+    categoryIds?: string[];
+    weights?: RankingWeights;
+    origin?: SortOrigin | null;
+    shape?: QueryShape;
+  } = {},
 ) {
   const { categoryIds } = options;
-  const weights = options.weights ?? (await liveWeights());
+  const [storedWeights, origin, shape] = await Promise.all([
+    options.weights ? Promise.resolve(options.weights) : liveWeights(),
+    options.origin !== undefined ? Promise.resolve(options.origin) : resolveOrigin(query),
+    options.shape ? Promise.resolve(options.shape) : shapeOf(query),
+  ]);
+  // Same rule as the suppliers tab. A buyer who typed a part number is willing
+  // to travel for it whichever tab they are looking at.
+  const weights = weightsForShape(storedWeights, shape);
   const where = productWhere(query, categoryIds);
 
   const [candidates, total] = await Promise.all([
@@ -390,14 +454,14 @@ export async function searchProducts(
       verificationTier: product.business.verificationTier,
       responseTimeMedianMs: product.business.responseTimeMedianMs,
       specCompleteness: product.business.specCompleteness,
-      distanceKm: null,
+      distanceKm: nearestKm(origin, product.business.locations),
       planMultiplier: product.business.plan?.rankingMultiplier ?? 1,
     }),
     weights,
   );
 
   const from = (query.page - 1) * PAGE_SIZE;
-  return { rows: ranked.slice(from, from + PAGE_SIZE), total };
+  return { rows: ranked.slice(from, from + PAGE_SIZE), total, origin, shape };
 }
 
 export type ProductResult = Awaited<ReturnType<typeof searchProducts>>["rows"][number];
