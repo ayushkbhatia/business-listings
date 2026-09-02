@@ -238,10 +238,15 @@ test.describe("maps and masking", () => {
      * and is the part worth testing: it renders masked, a click reveals it, and
      * the reveal is recorded.
      */
-    const reveal = page.getByRole("button", { name: /•/ });
+    /*
+     * Matched on behaviour, not on a label. Board 1d puts the masked number
+     * itself on the control at desktop width and a "Call" button in the sticky
+     * bar below `md`, so a fixed name would test one breakpoint and silently
+     * skip the other.
+     */
+    const reveal = page.getByRole("button", { name: /•|^Call$/ });
     await expect(reveal.first()).toBeEnabled();
     await reveal.first().click();
-    await expect(page.getByRole("button", { name: /•/ })).toHaveCount(0);
     expect(await page.textContent("body")).toMatch(/\+971|^0\d/m);
   });
 

@@ -132,19 +132,57 @@ test.describe("the catalogue tray", () => {
 });
 
 test.describe("the storefront composer", () => {
+  /*
+   * Board 1d made these controls width-dependent, so the tests match on what
+   * they do rather than on one label.
+   *
+   * The board sets the verbs deliberately: "Request a quote" opens a composer
+   * the buyer has not filled in, "Enquire" is the compact control where there
+   * is no room for that, and "Send enquiry" is the submit *inside* a composer.
+   * The identity block carries the first; the mobile bar carries the second.
+   */
+  const OPENS_COMPOSER = /Request a quote|^Enquire$/;
+  /* The masked number is the control on a wide screen; the bar says "Call". */
+  const REVEALS_NUMBER = /•|^Call$/;
+
   test("the enquiry affordance is live, and opens a composer naming the supplier", async ({ page }) => {
     await page.goto("/b/al-marwan-industrial-supplies-llc");
-    await page.getByRole("button", { name: "Send enquiry" }).first().click();
+    await page.getByRole("button", { name: OPENS_COMPOSER }).first().click();
     await expect(page.getByRole("dialog")).toContainText("Al Marwan");
     await expect(page.getByRole("dialog")).toContainText(/stay with us until you accept a quote/);
   });
 
   test("revealing a phone number shows it, having recorded the ask", async ({ page }) => {
     await page.goto("/b/al-marwan-industrial-supplies-llc");
-    const masked = page.locator("text=/•/").first();
-    await expect(masked).toBeVisible();
-    await page.getByRole("button", { name: "Show number" }).click();
-    await expect(page.getByText(/^\+971|^0\d/).first()).toBeVisible();
+
+    /*
+     * The invariant, and it is about what a reader sees rather than what the
+     * markup holds — which is a distinction this board created deliberately.
+     *
+     * `LocalBusiness` JSON-LD now carries the real telephone, because board 1d
+     * says so in as many words: the mask exists so that asking is an event we
+     * can count, and a crawler will never send an enquiry. So the number *is*
+     * in the document before the reveal, and correctly so. What must not be
+     * there is the number on screen.
+     *
+     * `textContent` would read the script tags and fail on exactly that, which
+     * is how this assertion was written first.
+     */
+    const before = await page.evaluate(() => document.body.innerText);
+    expect(before).not.toMatch(/\+9715|\b0\d{8}\b/);
+
+    await page.getByRole("button", { name: REVEALS_NUMBER }).first().click();
+
+    /*
+     * Rendered text again, and for a second reason: `getByText(...).first()`
+     * matched the *masked* number in the hidden desktop row, because "02 37•
+     * ••••" also begins with a digit. `innerText` skips what is display:none,
+     * so this asks the question the test means — is a real number now on
+     * screen — at either width.
+     */
+    await expect
+      .poll(() => page.evaluate(() => document.body.innerText))
+      .toMatch(/\+971|\b0\d{8}\b/);
   });
 });
 
