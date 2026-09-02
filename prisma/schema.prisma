@@ -254,6 +254,7 @@ model Category {
   stagedListings    StagedListing[]
   guideCtas         Guide[]              @relation("GuideCtaCategory")
   areaPages         AreaPage[]
+  emiratePages      EmiratePage[]
   campaignCtas      Campaign[]           @relation("CampaignCtaCategory")
   productAlerts     ProductAlert[]
   curatedLists      CuratedList[]
@@ -2265,6 +2266,52 @@ model AreaPage {
   @@unique([areaId, categoryId])
   @@index([publishedAt])
   @@map("area_page")
+}
+
+/// One trade across one whole emirate — `/:emirate/:category`, board 6c's matrix.
+///
+/// The sibling of `AreaPage` and deliberately its twin: same two authored
+/// fields, same floors, same "staff intent AND supply" reading of live. The two
+/// are different pages because they answer different questions — "HVAC in Al
+/// Quoz" is where a buyer goes when they know the industrial estate, and "HVAC
+/// in Dubai" is where they go when they do not — and an area is not an emirate,
+/// so neither can stand in for the other.
+///
+/// It exists because the paragraph has to. Before this table the emirate page
+/// borrowed its sector's `Category.intro`, which meant seven pages sharing one
+/// paragraph: thin-content risk on exactly the pages the acquisition engine
+/// depends on, and no way for a writer to say anything true about Sharjah that
+/// is not also true about Fujairah.
+///
+/// Keyed on the enum rather than a relation. An emirate is a fixed list of
+/// seven in the schema, not a row somebody can add, so there is nothing to
+/// point a foreign key at.
+model EmiratePage {
+  id         String  @id @default(cuid())
+  emirate    Emirate
+  categoryId String  @map("category_id")
+
+  /// The paragraph a person writes, and the only one. Everything else on the
+  /// page is derived. Counted against the same 250 words as every other
+  /// landing page, by the same function.
+  intro String?
+
+  /// Staff intent, not the live state.
+  ///
+  /// The page is live only if this is set *and* the board 6f floors currently
+  /// hold, which is how `AreaPage` reads it and for the same reason: a page
+  /// whose supply dropped this morning must stop being indexable now rather
+  /// than when a job next runs.
+  publishedAt DateTime? @map("published_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([emirate, categoryId])
+  @@index([publishedAt])
+  @@map("emirate_page")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

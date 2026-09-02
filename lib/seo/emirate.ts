@@ -1,5 +1,9 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import "@/lib/audit/prisma-writer";
+import { staffMutation } from "@/lib/audit/staff-mutation";
+import type { Actor } from "@/lib/auth/roles";
+import type { SubjectRef } from "@/lib/audit/types";
 import { VERIFIED_TIER } from "@/lib/verification";
 import {
   DEFAULT_THRESHOLDS,
@@ -18,17 +22,16 @@ import {
  *
  * ## Where the intro comes from
  *
- * Board 6f's third gate is 250 words of genuine copy, and there is no
- * `EmiratePage` table to hold one. Rather than add a table and an admin screen
- * for it, the gate reads the sector's own `Category.intro` — which already
- * exists, is already word-counted by the page matrix, and is already edited in
- * the taxonomy admin.
+ * `EmiratePage`, one row per (emirate, sector), holding the paragraph and the
+ * staff intent to publish. It is `AreaPage`'s twin on purpose — same two
+ * authored fields, same floors, same reading of live — because the two page
+ * types differ in what they are about and not in how they behave.
  *
- * The cost is worth stating plainly: seven emirate pages for one sector share
- * one paragraph. What differentiates them is everything else on the page — the
- * counts, the supplier list, the area breakdown — and that is real. If these
- * pages ever earn their own copy, this is the function that changes and the
- * table arrives behind it.
+ * This started out reading the sector's own `Category.intro` instead, to avoid
+ * a table. That meant seven emirate pages sharing one paragraph: thin-content
+ * risk on exactly the pages the acquisition engine depends on, and no way to
+ * write something true about Sharjah that is not also true about Fujairah. The
+ * table is the smaller cost.
  *
  * ## Why the floors are re-checked and never cached
  *
@@ -48,8 +51,13 @@ export interface EmiratePageState {
   categoryId: string;
   listings: number;
   verified: number;
+  intro: string | null;
   introWords: number;
-  /** All three floors hold right now. */
+  /** Staff intent. Not the live state on its own. */
+  publishedAt: Date | null;
+  /** The three floors hold right now, whatever staff have decided. */
+  clearsFloors: boolean;
+  /** Published *and* clearing the floors. The only thing that is indexable. */
   live: boolean;
   failing: readonly PublishFailure[];
 }
@@ -93,14 +101,20 @@ export async function emirateCategoryState(
   emirate: string,
   categoryId: string,
 ): Promise<EmiratePageState | null> {
-  const category = await prisma.category.findUnique({
-    where: { id: categoryId },
-    select: { publishThreshold: true, verifiedShareMin: true, intro: true },
-  });
+  const [category, page] = await Promise.all([
+    prisma.category.findUnique({
+      where: { id: categoryId },
+      select: { publishThreshold: true, verifiedShareMin: true },
+    }),
+    prisma.emiratePage.findUnique({
+      where: { emirate_categoryId: { emirate: emirate as never, categoryId } },
+      select: { intro: true, publishedAt: true },
+    }),
+  ]);
   if (!category) return null;
 
   const { listings, verified } = await supply(emirate, categoryId);
-  const introWords = countWords(category.intro);
+  const introWords = countWords(page?.intro);
   const decision = evaluatePublish(
     { listings, verified, introWords },
     thresholdsFor(category),
@@ -111,8 +125,12 @@ export async function emirateCategoryState(
     categoryId,
     listings,
     verified,
+    intro: page?.intro ?? null,
     introWords,
-    live: decision.publishable,
+    publishedAt: page?.publishedAt ?? null,
+    clearsFloors: decision.publishable,
+    // Staff intent AND supply, exactly as an area page reads it.
+    live: page?.publishedAt != null && decision.publishable,
     failing: decision.failures,
   };
 }
@@ -168,7 +186,7 @@ interface SupplyRow {
  * published locations in Dubai is one Dubai supplier, not three.
  */
 export async function emirateMatrix(): Promise<MatrixRow[]> {
-  const [sectors, rows] = await Promise.all([
+  const [sectors, rows, pages] = await Promise.all([
     prisma.category.findMany({
       where: { parentId: null },
       select: {
@@ -176,7 +194,6 @@ export async function emirateMatrix(): Promise<MatrixRow[]> {
         slug: true,
         name: true,
         code: true,
-        intro: true,
         publishThreshold: true,
         verifiedShareMin: true,
       },
@@ -193,7 +210,19 @@ export async function emirateMatrix(): Promise<MatrixRow[]> {
          AND b.sector_id IS NOT NULL
        GROUP BY b.sector_id, l.emirate
     `,
+    /*
+       Every authored page in one read. Eighty-four rows at most, and usually
+       far fewer — the alternative is a lookup per cell, which is the 84 queries
+       the spec forbids wearing a different hat.
+    */
+    prisma.emiratePage.findMany({
+      select: { emirate: true, categoryId: true, intro: true, publishedAt: true },
+    }),
   ]);
+
+  const pageFor = new Map(
+    pages.map((page) => [`${page.categoryId}:${page.emirate}`, page]),
+  );
 
   const bySector = new Map<string, Map<string, { listings: number; verified: number }>>();
   for (const row of rows) {
@@ -208,16 +237,25 @@ export async function emirateMatrix(): Promise<MatrixRow[]> {
   return sectors
     .map((sector) => {
       const perEmirate = bySector.get(sector.id) ?? new Map();
-      const introWords = countWords(sector.intro);
       const thresholds = thresholdsFor(sector);
 
       const cells = MATRIX_EMIRATES.map((emirate) => {
         const found = perEmirate.get(emirate) ?? { listings: 0, verified: 0 };
+        const page = pageFor.get(`${sector.id}:${emirate}`);
         const decision = evaluatePublish(
-          { listings: found.listings, verified: found.verified, introWords },
+          {
+            listings: found.listings,
+            verified: found.verified,
+            // Each cell's own paragraph now, not the sector's one shared one.
+            introWords: countWords(page?.intro),
+          },
           thresholds,
         );
-        return { emirate, listings: found.listings, live: decision.publishable };
+        return {
+          emirate,
+          listings: found.listings,
+          live: page?.publishedAt != null && decision.publishable,
+        };
       });
 
       return {
@@ -242,6 +280,10 @@ export async function emirateMatrix(): Promise<MatrixRow[]> {
  * Derived from the same matrix the page renders, so criterion 4 — the set of
  * hrefs on `/categories` equals the set of URLs in the sitemap — holds by
  * construction rather than by two functions being kept in step by hand.
+ *
+ * `cell.live` is staff intent and supply together, so an unpublished page is
+ * absent from both and a published one whose supply fell this morning leaves
+ * both on the next read.
  */
 export async function liveEmiratePages(): Promise<
   { emirate: string; categorySlug: string }[]
@@ -257,4 +299,218 @@ export async function liveEmiratePages(): Promise<
 /** The one place the URL shape is written down. */
 export function emiratePagePath(emirate: string, categorySlug: string): string {
   return `/${emirate}/${categorySlug}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The service half
+//
+// `AreaPage`'s, mirrored. Every function here writes an audit row with a
+// written reason, because a staff member deciding that a page may be indexed is
+// a state change somebody should be able to look up in six months.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type EmiratePageRefusal = "not_found" | "below_floors" | "not_published";
+
+export type EmiratePageResult<T = unknown> =
+  | ({ ok: true } & T)
+  | { ok: false; error: EmiratePageRefusal; message: string; failing?: PublishFailure[] };
+
+/**
+ * The refusal, in numbers somebody can act on.
+ *
+ * "Needs 60, has 41" tells a recruiter how many calls to make. "Not eligible"
+ * tells them to go and find out, which is the same information one screen
+ * further away — §08.
+ */
+function refusalMessage(failing: readonly PublishFailure[]): string {
+  return failing
+    .map((failure) => {
+      switch (failure.reason) {
+        case "listings":
+          return `${failure.have} listings, and it publishes at ${failure.need}.`;
+        case "verified_share":
+          return `${Math.round(failure.have * 100)}% verified, and it publishes at ${Math.round(
+            failure.need * 100,
+          )}%.`;
+        default:
+          return `${failure.have} words of intro, and it publishes at ${failure.need}.`;
+      }
+    })
+    .join(" ");
+}
+
+async function subjectFor(emirate: string, categoryId: string): Promise<SubjectRef> {
+  const category = await prisma.category.findUniqueOrThrow({
+    where: { id: categoryId },
+    select: { slug: true },
+  });
+  return `EmiratePage:${emirate}/${category.slug}` as SubjectRef;
+}
+
+export interface SaveEmirateIntroInput {
+  actor: Actor;
+  emirate: string;
+  categoryId: string;
+  intro: string;
+  reason: string;
+}
+
+/** Write the paragraph. Creates the row on first save. */
+export async function saveEmirateIntro(
+  input: SaveEmirateIntroInput,
+): Promise<EmiratePageResult<{ words: number }>> {
+  const category = await prisma.category.findUnique({
+    where: { id: input.categoryId },
+    select: { id: true },
+  });
+  if (!category) {
+    return { ok: false, error: "not_found", message: "That trade is not here." };
+  }
+
+  const intro = input.intro.trim();
+  const key = { emirate: input.emirate as never, categoryId: input.categoryId };
+  const subject = await subjectFor(input.emirate, input.categoryId);
+
+  await prisma.$transaction(async (tx) =>
+    staffMutation(
+      { actor: input.actor, capability: "taxonomy.write", subject, reason: input.reason, tx },
+      async () => {
+        const before = await tx.emiratePage.findUnique({
+          where: { emirate_categoryId: key },
+          select: { intro: true },
+        });
+        await tx.emiratePage.upsert({
+          where: { emirate_categoryId: key },
+          create: { ...key, intro: intro || null },
+          update: { intro: intro || null },
+        });
+        return {
+          result: null,
+          // The words, not the prose. An audit row is a record of a decision,
+          // and pasting two paragraphs into it twice a week is not that.
+          before: { words: countWords(before?.intro) },
+          after: { words: countWords(intro) },
+        };
+      },
+    ),
+  );
+
+  return { ok: true, words: countWords(intro) };
+}
+
+/**
+ * Publish one emirate page.
+ *
+ * The floors are checked here, in the service, which is what "cannot be
+ * published by API or by admin action" means — the screen and any future API
+ * call go through this and there is no second path.
+ */
+export async function publishEmiratePage(
+  actor: Actor,
+  emirate: string,
+  categoryId: string,
+  reason: string,
+): Promise<EmiratePageResult<{ publishedAt: Date }>> {
+  const state = await emirateCategoryState(emirate, categoryId);
+  if (!state) return { ok: false, error: "not_found", message: "That trade is not here." };
+
+  if (!state.clearsFloors) {
+    return {
+      ok: false,
+      error: "below_floors",
+      message: refusalMessage(state.failing),
+      failing: [...state.failing],
+    };
+  }
+
+  const key = { emirate: emirate as never, categoryId };
+  const subject = await subjectFor(emirate, categoryId);
+
+  const publishedAt = await prisma.$transaction(async (tx) =>
+    staffMutation({ actor, capability: "taxonomy.write", subject, reason, tx }, async () => {
+      const row = await tx.emiratePage.update({
+        where: { emirate_categoryId: key },
+        // An already-published page keeps its original date: `lastmod` is a
+        // claim about when the content changed, not when somebody clicked.
+        data: { publishedAt: state.publishedAt ?? new Date() },
+        select: { publishedAt: true },
+      });
+      return {
+        result: row.publishedAt as Date,
+        before: { publishedAt: state.publishedAt },
+        after: {
+          publishedAt: row.publishedAt,
+          listings: state.listings,
+          verified: state.verified,
+        },
+      };
+    }),
+  );
+
+  return { ok: true, publishedAt };
+}
+
+/** Take one back out of the index. Always allowed, floors or no floors. */
+export async function unpublishEmiratePage(
+  actor: Actor,
+  emirate: string,
+  categoryId: string,
+  reason: string,
+): Promise<EmiratePageResult> {
+  const state = await emirateCategoryState(emirate, categoryId);
+  if (!state) return { ok: false, error: "not_found", message: "That trade is not here." };
+  if (state.publishedAt === null) {
+    return { ok: false, error: "not_published", message: "That page is not published." };
+  }
+
+  const key = { emirate: emirate as never, categoryId };
+  const subject = await subjectFor(emirate, categoryId);
+
+  await prisma.$transaction(async (tx) =>
+    staffMutation({ actor, capability: "taxonomy.write", subject, reason, tx }, async () => {
+      await tx.emiratePage.update({
+        where: { emirate_categoryId: key },
+        data: { publishedAt: null },
+      });
+      return { result: null, before: { publishedAt: state.publishedAt }, after: { publishedAt: null } };
+    }),
+  );
+
+  return { ok: true };
+}
+
+export interface EmiratePageRow extends EmiratePageState {
+  categoryName: string;
+  categorySlug: string;
+  path: string;
+}
+
+/**
+ * Every (emirate, sector) pair for the admin screen, whether or not a row
+ * exists yet.
+ *
+ * Eighty-four rows, and the ones nobody has written are the interesting ones —
+ * a screen that only listed authored pages would hide exactly the work that
+ * needs doing.
+ */
+export async function emiratePageRows(): Promise<EmiratePageRow[]> {
+  const matrix = await emirateMatrix();
+  const rows: EmiratePageRow[] = [];
+
+  for (const sector of matrix) {
+    for (const emirate of MATRIX_EMIRATES) {
+      const state = await emirateCategoryState(emirate, sector.id);
+      if (!state) continue;
+      rows.push({
+        ...state,
+        categoryName: sector.name,
+        categorySlug: sector.slug,
+        path: emiratePagePath(emirate, sector.slug),
+      });
+    }
+  }
+
+  // Closest to publishing first: that is the order somebody working the list
+  // wants, rather than alphabetical.
+  return rows.sort((a, b) => b.listings - a.listings);
 }

@@ -158,13 +158,14 @@ export default async function EmirateCategoryPage({ params, searchParams }: Prop
       </header>
 
       {/*
-         The sector's own intro. It is the third publish gate for this page, so
-         where it is missing the page is already not indexable and there is
-         nothing to render.
+         This page's own paragraph, from its `EmiratePage` row — not the
+         sector's, which seven emirates would have shared. It is the third
+         publish gate, so where it is missing the page is already not indexable
+         and there is nothing to render.
       */}
-      {category.intro && (
+      {state.intro && (
         <div className="mt-6">
-          <Prose text={category.intro} />
+          <Prose text={state.intro} />
         </div>
       )}
 

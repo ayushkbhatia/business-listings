@@ -2909,6 +2909,11 @@ export const en = {
   // ── Area pages on the admin matrix, board 6f ──────────────────────────────
   "matrix.area_tab": "Area pages",
   "matrix.area_caption": "Every trade in every area, and whether it publishes",
+  "matrix.col.emirate": "Emirate",
+  "matrix.emirate_tab": "Emirate pages",
+  "matrix.emirate_caption": "One trade across one emirate — board 6c's matrix",
+  "matrix.emirate_note":
+    "Each of these has its own paragraph. Seven emirates sharing one would be the same page seven times, which is the thin content the floors exist to stop.",
   "matrix.col.area": "Area",
   "matrix.col.live": "Live",
   "matrix.live_yes": "Live",

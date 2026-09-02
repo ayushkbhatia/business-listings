@@ -2,11 +2,15 @@ import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import {
   emirateCategoryState,
+  publishEmiratePage,
+  saveEmirateIntro,
+  unpublishEmiratePage,
   emirateMatrix,
   emiratePagePath,
   liveEmiratePages,
   MATRIX_EMIRATES,
 } from "@/lib/seo/emirate";
+import type { Actor } from "@/lib/auth/roles";
 import { VERIFIED_TIER } from "@/lib/verification";
 
 /**
@@ -28,7 +32,17 @@ function stamp() {
   return `${Date.now().toString(36)}${seq}`;
 }
 
+/** An ops lead, for the service calls that write an audit row. */
+async function opsLead(): Promise<Actor> {
+  const user = await prisma.user.findFirstOrThrow({
+    where: { roles: { has: "staff_ops_lead" } },
+    select: { id: true, roles: true },
+  });
+  return { id: user.id, roles: user.roles as Actor["roles"] };
+}
+
 async function removeFixtures() {
+  await prisma.emiratePage.deleteMany({ where: { category: { slug: { startsWith: PREFIX } } } });
   await prisma.business.deleteMany({ where: { slug: { startsWith: PREFIX } } });
   await prisma.category.deleteMany({ where: { slug: { startsWith: PREFIX } } });
   await prisma.area.deleteMany({ where: { slug: { startsWith: PREFIX } } });
@@ -86,12 +100,26 @@ async function sectorWithSupply(options: {
       slug: `${PREFIX}${tag}`,
       name: `Test sector ${tag}`,
       code: "TS",
-      intro: options.withIntro ? intro() : null,
       publishThreshold: 60,
       verifiedShareMin: 0.3,
     },
     select: { id: true, slug: true },
   });
+
+  /*
+     The paragraph belongs to this (emirate, sector) pair now, not to the
+     sector. Written through the service so the fixture exercises the same
+     path the admin screen does, audit row and all.
+  */
+  if (options.withIntro) {
+    await saveEmirateIntro({
+      actor: await opsLead(),
+      emirate: options.emirate,
+      categoryId: category.id,
+      intro: intro(),
+      reason: "Fixture for the category index tests.",
+    });
+  }
 
   for (let i = 0; i < options.listings; i += 1) {
     await prisma.business.create({
@@ -122,8 +150,7 @@ async function sectorWithSupply(options: {
 }
 
 describe("the threshold rule decides whether a cell is a link", () => {
-  it("goes live only when all three floors hold", async () => {
-    // 60 listings, 30% verified, 250 words — all three, exactly.
+  it("clears the floors on 60 listings, 30% verified and 250 words", async () => {
     const category = await sectorWithSupply({
       listings: 60,
       verified: 18,
@@ -134,7 +161,60 @@ describe("the threshold rule decides whether a cell is a link", () => {
     const state = await emirateCategoryState("sharjah", category.id);
     expect(state?.listings).toBe(60);
     expect(state?.verified).toBe(18);
-    expect(state?.live, JSON.stringify(state?.failing)).toBe(true);
+    expect(state?.clearsFloors, JSON.stringify(state?.failing)).toBe(true);
+    // Clearing the floors is permission, not publication. Nobody has said yes.
+    expect(state?.live).toBe(false);
+  });
+
+  it("goes live only once staff publish it as well", async () => {
+    const category = await sectorWithSupply({
+      listings: 60,
+      verified: 18,
+      emirate: "sharjah",
+      withIntro: true,
+    });
+
+    const published = await publishEmiratePage(
+      await opsLead(),
+      "sharjah",
+      category.id,
+      "Supply and copy are both there.",
+    );
+    expect(published.ok).toBe(true);
+    expect((await emirateCategoryState("sharjah", category.id))?.live).toBe(true);
+
+    // And back out again, which is always allowed.
+    const pulled = await unpublishEmiratePage(
+      await opsLead(),
+      "sharjah",
+      category.id,
+      "Taking it back for a rewrite.",
+    );
+    expect(pulled.ok).toBe(true);
+    expect((await emirateCategoryState("sharjah", category.id))?.live).toBe(false);
+  });
+
+  it("refuses to publish a page below the floors, in the service", async () => {
+    // The screen disables the button; this is the rule that actually holds,
+    // because an API call would come through here too.
+    const category = await sectorWithSupply({
+      listings: 10,
+      verified: 10,
+      emirate: "ajman",
+      withIntro: true,
+    });
+    const result = await publishEmiratePage(
+      await opsLead(),
+      "ajman",
+      category.id,
+      "Trying it on.",
+    );
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toBe("below_floors");
+      // The refusal says the numbers, not "not eligible".
+      expect(result.message).toMatch(/\d+ listings, and it publishes at 60/);
+    }
   });
 
   it("holds a cell back on listings alone", async () => {
@@ -145,7 +225,7 @@ describe("the threshold rule decides whether a cell is a link", () => {
       withIntro: true,
     });
     const state = await emirateCategoryState("ajman", category.id);
-    expect(state?.live).toBe(false);
+    expect(state?.clearsFloors).toBe(false);
     expect(state?.failing.map((f) => f.reason)).toContain("listings");
   });
 
@@ -160,7 +240,7 @@ describe("the threshold rule decides whether a cell is a link", () => {
       withIntro: true,
     });
     const state = await emirateCategoryState("fujairah", category.id);
-    expect(state?.live).toBe(false);
+    expect(state?.clearsFloors).toBe(false);
     expect(state?.failing.map((f) => f.reason)).toContain("verified_share");
   });
 
@@ -172,7 +252,7 @@ describe("the threshold rule decides whether a cell is a link", () => {
       withIntro: false,
     });
     const state = await emirateCategoryState("umm_al_quwain", category.id);
-    expect(state?.live).toBe(false);
+    expect(state?.clearsFloors).toBe(false);
     expect(state?.failing.map((f) => f.reason)).toContain("intro_words");
   });
 });
@@ -227,7 +307,13 @@ describe("criterion 5 — every sector is a matrix row", () => {
 
 describe("criterion 4 — the page's links and the sitemap agree", () => {
   it("lists exactly the cells the matrix calls live", async () => {
-    await sectorWithSupply({ listings: 60, verified: 20, emirate: "sharjah", withIntro: true });
+    const category = await sectorWithSupply({
+      listings: 60,
+      verified: 20,
+      emirate: "sharjah",
+      withIntro: true,
+    });
+    await publishEmiratePage(await opsLead(), "sharjah", category.id, "Ready.");
 
     const matrix = await emirateMatrix();
     const fromMatrix = matrix
@@ -257,6 +343,8 @@ describe("criterion 4 — the page's links and the sitemap agree", () => {
       emirate: "sharjah",
       withIntro: true,
     });
+    await publishEmiratePage(await opsLead(), "sharjah", category.id, "Ready.");
+
     const path = emiratePagePath("sharjah", category.slug);
     expect((await liveEmiratePages()).map((p) => emiratePagePath(p.emirate, p.categorySlug)))
       .toContain(path);
@@ -271,9 +359,15 @@ describe("criterion 4 — the page's links and the sitemap agree", () => {
       data: { suspendedAt: new Date() },
     });
 
-    // Criterion 8: reverts to text and leaves the sitemap in the same pass.
-    // Nothing is cached between the two reads, which is the point.
+    /*
+       Criterion 8: reverts to text and leaves the sitemap in the same pass.
+       Nothing is cached between the two reads, and note that `publishedAt` is
+       untouched — staff intent survives; it is the supply that failed, and it
+       is re-checked on every read rather than trusted to a job having run.
+    */
     const state = await emirateCategoryState("sharjah", category.id);
+    expect(state?.publishedAt).not.toBeNull();
+    expect(state?.clearsFloors).toBe(false);
     expect(state?.live).toBe(false);
     expect((await liveEmiratePages()).map((p) => emiratePagePath(p.emirate, p.categorySlug)))
       .not.toContain(path);
