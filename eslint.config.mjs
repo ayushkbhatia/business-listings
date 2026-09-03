@@ -38,6 +38,13 @@ const eslintConfig = defineConfig([
     "lib/db/generated/**",
     "playwright-report/**",
     "test-results/**",
+    // `supabase start` writes a running stack's scratch state here, including a
+    // minified edge-runtime entrypoint. It is gitignored, but lint walks the
+    // filesystem rather than the index — and in CI the stack is up before lint
+    // runs, so without this the job fails on 182 errors in somebody else's
+    // bundle.
+    "supabase/.temp/**",
+    "supabase/.branches/**",
   ]),
 ]);
 

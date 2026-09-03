@@ -74,14 +74,30 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-/** Clear any leftover from an interrupted run. */
+/**
+ * Clear any leftover from an interrupted run.
+ *
+ * Paged, because this used to read the first 200 users and stop. Against a
+ * throwaway instance that is every user; against the project `.env.local`
+ * points at, it stopped being every user somewhere around 200, and from then on
+ * the cleanup quietly found nothing and each interrupted run left one more
+ * account behind. `nextPage` comes from the server's Link header, so this ends
+ * on what the API actually returned rather than on a page size it may clamp.
+ */
 async function removeExisting(email: string) {
-  const { data } = await admin.auth.admin.listUsers({ perPage: 200 });
-  for (const user of data?.users ?? []) {
-    if (user.email === email) {
-      await prisma.user.deleteMany({ where: { id: user.id } });
-      await admin.auth.admin.deleteUser(user.id).catch(() => undefined);
+  for (let page = 1; ; ) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error) throw error;
+
+    for (const user of data.users) {
+      if (user.email === email) {
+        await prisma.user.deleteMany({ where: { id: user.id } });
+        await admin.auth.admin.deleteUser(user.id).catch(() => undefined);
+      }
     }
+
+    if (!data.nextPage) return;
+    page = data.nextPage;
   }
 }
 
