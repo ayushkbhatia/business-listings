@@ -646,9 +646,139 @@ async function main() {
   */
   await seedPumps(prisma, catBySlug);
   await seedCertificates(prisma);
+  await seedDeepCatalogue(prisma);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
+}
+
+/**
+ * One seller with a catalogue deep enough to need a rail.
+ *
+ * Board 1e's page is a filter rail, a sort and pagination, and none of the
+ * three does anything on the eight-product catalogues the main seeding
+ * produces: spec filters are suppressed below twelve products by design, and
+ * "Show 24 more" needs more than twenty-four.
+ *
+ * So one flagship seller gets a real catalogue. Not all of them — a directory
+ * where every supplier has sixty products is not the shape of this market, and
+ * the small catalogues are what the rail-collapse rule exists for.
+ *
+ * Appended at the end for the same reason `seedPumps` is: the PRNG is a
+ * sequence, and a draw inserted earlier renames every business generated after
+ * it, which a dozen test files pin by slug.
+ */
+async function seedDeepCatalogue(db: Db) {
+  console.log("→ a deep catalogue, for board 1e");
+
+  const seller = await db.business.findFirst({
+    where: { slug: "al-marwan-industrial-supplies-llc" },
+    select: { id: true, slug: true, primaryCategoryId: true },
+  });
+  if (!seller) {
+    console.log("   skipped — the flagship seller is not in this seed");
+    return;
+  }
+
+  const template = await db.specTemplate.findFirst({
+    where: { categoryId: seller.primaryCategoryId },
+    orderBy: { version: "desc" },
+    select: { fields: { select: { id: true, key: true, label: true, unit: true, options: true } } },
+  });
+  const fields = template?.fields ?? [];
+  const fieldByKey = new Map(fields.map((f) => [f.key, f]));
+
+  const subcategories = await db.category.findMany({
+    where: { parentId: seller.primaryCategoryId },
+    select: { id: true, name: true },
+  });
+  const categories = subcategories.length > 0
+    ? subcategories
+    : [{ id: seller.primaryCategoryId, name: "Valves & fittings" }];
+
+  const BODIES = ["Cast iron", "Ductile iron", "Stainless steel 316", "Brass", "Bronze"];
+  const RATINGS = ["PN10", "PN16", "PN25", "PN40"];
+  const SIZES = ["DN50", "DN80", "DN100", "DN150", "DN200", "DN300"];
+  const KINDS = [
+    "Resilient seated gate valve",
+    "Wafer butterfly valve",
+    "Ductile iron check valve",
+    "Cast iron Y-strainer",
+    "Brass ball valve",
+    "Gear operated butterfly valve",
+    "Flanged globe valve",
+    "Swing check valve",
+  ];
+
+  let made = 0;
+  for (let i = 0; i < 56; i += 1) {
+    const kind = KINDS[i % KINDS.length]!;
+    const size = SIZES[i % SIZES.length]!;
+    const name = `${kind} ${size}`;
+    const slug = slugify(`${name}-deep-${i}`);
+
+    // Skip anything the main pass already created under the same slug.
+    const clash = await db.product.findFirst({
+      where: { businessId: seller.id, slug },
+      select: { id: true },
+    });
+    if (clash) continue;
+
+    const specValues: Record<string, string> = {};
+    const put = (key: string, value: string) => {
+      const field = fieldByKey.get(key);
+      if (field) specValues[field.id] = value;
+    };
+    put("nominal_diameter", size);
+    put("body_material", BODIES[i % BODIES.length]!);
+    put("pressure_rating", RATINGS[i % RATINGS.length]!);
+    put("end_connection", i % 2 === 0 ? "Flanged" : "Threaded");
+
+    /*
+       Every band appears, and one in eight is out of stock so criterion 7's
+       "Notify me" has somewhere to render.
+    */
+    const availability =
+      i % 8 === 7 ? "out_of_stock" : i % 5 === 4 ? "indent" : i % 3 === 2 ? "made_to_order" : "in_stock";
+
+    /*
+       Two thirds of the stock counts are recent and the rest are stale, so
+       criterion 8 is visible on the page rather than only in a unit test: the
+       stale ones render a band with no number.
+    */
+    const stale = i % 3 === 0;
+    const hasCount = availability === "in_stock";
+
+    const category = categories[i % categories.length]!;
+
+    await db.product.create({
+      data: {
+        businessId: seller.id,
+        categoryId: category.id,
+        name,
+        slug,
+        sku: `AM-${1000 + i}`,
+        availability: availability as never,
+        stockQty: hasCount ? 20 + i * 3 : null,
+        stockUpdatedAt: hasCount ? days(stale ? -120 : -4) : null,
+        leadTimeDays: availability === "indent" ? 45 : availability === "made_to_order" ? 14 : null,
+        minOrderQty: i % 4 === 0 ? 10 : null,
+        specValues,
+        searchText: buildSearchText({
+          name,
+          sku: `AM-${1000 + i}`,
+          categoryName: category.name,
+          specValues,
+          size,
+        }),
+        description: "Supplied ex-stock or to order. Datasheet available on request.",
+        status: "live",
+      },
+    });
+    made += 1;
+  }
+
+  console.log(`   ${made} products on ${seller.slug}`);
 }
 
 /**

@@ -47,6 +47,18 @@ export interface ProductCardProps {
    * leaves it disabled — the state handoff 1 shipped and the gallery shows.
    */
   enquireHref?: string;
+  /**
+   * The watch control for an out-of-stock line, rendered by the caller.
+   *
+   * "Notify me" is not an enquiry and must not open a composer: the buyer is
+   * asking to be told when this comes back, which needs a server action and,
+   * for an anonymous buyer, somewhere to be told. When absent the card falls
+   * back to the disabled label, which is the honest state on a surface with
+   * nothing wired behind it.
+   */
+  notifyAction?: React.ReactNode;
+  /** An inline spec table, expanded in place rather than navigating away. */
+  specs?: React.ReactNode;
 }
 
 const AVAILABILITY_TONE: Record<Availability, StatusTone> = {
@@ -63,7 +75,14 @@ const AVAILABILITY_KEY = {
   out_of_stock: "availability.out_of_stock",
 } as const;
 
-export function ProductCard({ product, layout = "grid", href, enquireHref }: ProductCardProps) {
+export function ProductCard({
+  product,
+  layout = "grid",
+  href,
+  enquireHref,
+  notifyAction,
+  specs,
+}: ProductCardProps) {
   const link = href ?? `/b/${product.businessSlug}/p/${product.slug}`;
   const outOfStock = product.availability === "out_of_stock";
 
@@ -159,17 +178,40 @@ export function ProductCard({ product, layout = "grid", href, enquireHref }: Pro
           gallery still shows that state, and so does any surface with nowhere
           to send the buyer.
         */}
-        {enquireHref ? (
-          <a
-            href={enquireHref}
-            className={buttonClassName({ size: "sm", variant: outOfStock ? "secondary" : "primary" })}
-          >
-            {outOfStock ? t("product.notify") : t("product.enquire")}
+        {/*
+          Out of stock is a different action, not the same one relabelled.
+
+          It used to send the buyer to the enquiry composer under the word
+          "Notify me", which is a button that does not do what it says. A watch
+          is its own thing — see `notifyAction`.
+        */}
+        {outOfStock ? (
+          notifyAction ?? (
+            <Button size="sm" variant="secondary" disabled title={t("enquiry.disabled")}>
+              {t("product.notify")}
+            </Button>
+          )
+        ) : enquireHref ? (
+          <a href={enquireHref} className={buttonClassName({ size: "sm", variant: "primary" })}>
+            {t("product.enquire")}
           </a>
         ) : (
-          <Button size="sm" variant={outOfStock ? "secondary" : "primary"} disabled title={t("enquiry.disabled")}>
-            {outOfStock ? t("product.notify") : t("product.enquire")}
+          <Button size="sm" variant="primary" disabled title={t("enquiry.disabled")}>
+            {t("product.enquire")}
           </Button>
+        )}
+
+        {/*
+          Specs expand in place rather than navigating away — a buyer comparing
+          four products should not lose the grid to check one of them.
+        */}
+        {specs && (
+          <details className="mt-1.5">
+            <summary className="cursor-pointer list-none rounded-tag text-caption text-moss underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus">
+              {t("catalogue.specs_toggle")}
+            </summary>
+            <div className="mt-2">{specs}</div>
+          </details>
         )}
       </div>
     </div>
