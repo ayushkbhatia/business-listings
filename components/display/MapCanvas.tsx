@@ -229,10 +229,8 @@ export function MapCanvas({
          because the effects that own them only fire when their value changes.
       */
       applySelectionRef.current(selectedIdRef.current);
-      if (radiiRef.current?.length) {
-        if (map.isStyleLoaded()) applyRadiiRef.current(radiiRef.current);
-        else map.once("load", () => applyRadiiRef.current(radiiRef.current));
-      }
+      // `drawRadii` defers on its own when the style is not ready.
+      if (radiiRef.current?.length) applyRadiiRef.current(radiiRef.current);
     })();
 
     return () => {
@@ -330,6 +328,23 @@ export function MapCanvas({
  * reaching for `mapRef` would race a remount.
  */
 function drawRadii(map: MapLibreMap, rings: MapCanvasProps["radii"]): void {
+  /*
+     Nothing can be added to a style that has not loaded.
+
+     `addSource` and `getSource` both throw on a map whose style is still in
+     flight, and this is reachable by hand: the overlay button is live from
+     first paint, and a buyer who clicks it while the tiles are still arriving
+     took down the whole column. Deferring is the fix rather than a try/catch —
+     the ring should appear when the style is ready, not be dropped.
+
+     `once` rather than `on`, so a buyer toggling twice does not accumulate
+     handlers that all fire on the next style load.
+  */
+  if (!map.isStyleLoaded()) {
+    map.once("load", () => drawRadii(map, rings));
+    return;
+  }
+
   const SOURCE = "service-radius";
   const existing = map.getSource(SOURCE);
 

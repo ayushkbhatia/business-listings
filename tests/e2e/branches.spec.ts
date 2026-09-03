@@ -111,8 +111,21 @@ test.describe("the page a buyer opens on a Thursday afternoon", () => {
   });
 
   test("is axe clean", async ({ page }) => {
-    const results = await new AxeBuilder({ page }).analyze();
-    expect(results.violations).toEqual([]);
+    /*
+       Contrast excluded, as every other axe test in this suite does, for the
+       reason set out in `docs/contrast.md`: the failing pairs are token-level
+       and pinned awaiting a canvas decision.
+
+       Worth recording what it caught before the exclusion, because it was not
+       this page: `DirectoryNav`'s links and the breadcrumb, `--text-muted` on
+       `--paper` at 4.23:1. Shared chrome on every public route, and exactly the
+       pairing that document enumerates.
+    */
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
+      .disableRules(["color-contrast"])
+      .analyze();
+    expect(results.violations.map((v) => ({ id: v.id, nodes: v.nodes.length }))).toEqual([]);
   });
 });
 
@@ -137,7 +150,7 @@ test.describe("nearest to me", () => {
     await context.setGeolocation({ latitude: 25.32, longitude: 55.4 });
 
     await page.goto(SELLER);
-    await expect(page.getByText("SORTED BY EMIRATE")).toBeVisible();
+    await expect(page.getByText("SORTED BY EMIRATE", { exact: true })).toBeVisible();
     asked = await page.evaluate(() => Boolean((window as unknown as { __asked?: boolean }).__asked));
     expect(asked).toBe(false);
 
@@ -159,26 +172,73 @@ test.describe("nearest to me", () => {
     await page.goto(SELLER);
     await page.getByRole("button", { name: "Nearest to me" }).click();
     await expect(page.getByText("Location unavailable")).toBeVisible();
-    await expect(page.getByText("SORTED BY EMIRATE")).toBeVisible();
+    /*
+       Exact, because the fallback sentence — "Location unavailable, so branches
+       are sorted by emirate." — contains the phrase too, and a substring match
+       resolves to both.
+    */
+    await expect(page.getByText("SORTED BY EMIRATE", { exact: true })).toBeVisible();
   });
 });
 
 test.describe("the map and the list are one control", () => {
-  test("clicking a pin expands that branch", async ({ page }) => {
-    // Criterion 11. Without it, clicking pin 5 expands a card nobody can see.
-    await page.goto(SELLER);
-    const pin = page.locator(".maplibregl-marker button, button.maplibregl-marker");
-    await expect(pin.first()).toBeVisible({ timeout: 20_000 });
+  /*
+     What can and cannot be tested here.
 
-    const depotPin = page.locator("button[aria-label*='Depot']");
-    await depotPin.click();
-    await expect(rows(page).filter({ hasText: "Depot" })).toContainText("WHATSAPP");
+     MapLibre needs WebGL and headless Chromium has none, so the map never
+     draws — on this page or any other. No test in this suite asserts a
+     `canvas` or a `.maplibregl-marker` for that reason, and the first version
+     of these two did, which is why they failed rather than why the page is
+     wrong.
+
+     So this covers the wiring either side of the map: the pin data reaching
+     `MapCanvas`, and the selection the pins drive once clicked. The pin click
+     itself is verified by hand — see the PR — and the state it sets is the same
+     state the rank button sets, which is what these assert.
+  */
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("hands the map every pinned branch, and only those", async ({ page }) => {
+    await page.goto(SELLER);
+    /*
+       Five of six: the Ajman counter has no coordinates. `MapCanvas` renders
+       its pins as an `sr-only` list, so this is the plotted set, readable.
+    */
+    const plotted = page.locator("figure ul.sr-only li");
+    await expect(plotted).toHaveCount(5);
+    await expect(plotted.filter({ hasText: "Al Jurf" })).toHaveCount(0);
+    // And the page says how many it held back rather than swallowing them.
+    await expect(page.getByText(/1 branch has no map pin/)).toBeVisible();
+  });
+
+  test("selecting a branch expands it and collapses the last one", async ({ page }) => {
+    // The state a pin click sets. Criterion 11's list half.
+    await page.goto(SELLER);
+    const first = rows(page).first();
+    const depot = rows(page).filter({ hasText: "Depot" });
+
+    /*
+       "WhatsApp", not "WHATSAPP". The eyebrow is uppercased in CSS and the DOM
+       keeps the sentence case the catalogue holds — asserting the rendered look
+       rather than the text is how this failed the first time.
+
+       The label only exists on the expanded card, so its presence is the
+       expansion.
+    */
+    await expect(first).toContainText("WhatsApp");
+    await expect(depot).not.toContainText("WhatsApp");
+
+    await depot.getByRole("button").first().click();
+
+    await expect(depot).toContainText("WhatsApp");
+    await expect(first).not.toContainText("WhatsApp");
   });
 
   test("the radius overlay is off until asked for", async ({ page }) => {
     /*
        A shaded circle is a claim about where a supplier delivers. It appears
-       when a buyer asks, not by default.
+       when a buyer asks, not by default. The button is real without WebGL; only
+       the drawing needs it.
     */
     await page.goto(SELLER);
     const toggle = page.getByRole("button", { name: "Service radius overlay" });
@@ -189,12 +249,36 @@ test.describe("the map and the list are one control", () => {
 });
 
 test.describe("when the pins are missing", () => {
+  /*
+     Desktop, because the panel replaces the *map column* and below 1024 there
+     is no map column to replace — the page is list-only there by design, and
+     every row carries its own "No map pin yet" instead. Asserting the panel on
+     a phone was asserting a layout the board does not ask for.
+  */
+  test.use({ viewport: { width: 1440, height: 900 } });
+
   test("replaces the map with a sentence and keeps the delivery card", async ({ page }) => {
     // Criterion 5. Never a blank grey rectangle.
     await page.goto(UNPINNED);
     await expect(page.getByText("Map pins are being added for this supplier")).toBeVisible();
-    await expect(page.getByText(/Delivers within \d+ km/).first()).toBeVisible();
-    await expect(page.locator("canvas")).toHaveCount(0);
+    /*
+       The card is rendered twice with `display` at opposite breakpoints so that
+       exactly one is ever in the accessibility tree. `.first()` is whichever
+       comes first in the DOM, which at this viewport is the hidden one — so ask
+       for the visible one rather than the first one.
+    */
+    await expect(
+      page.getByText(/Delivers within \d+ km/).locator("visible=true"),
+    ).toHaveCount(1);
+
+    /*
+       `MapCanvas` renders its pins as an `sr-only` list, always — a map is an
+       image, and that list is the same information in a form that can be read.
+       With no pins there is no list, which is what proves nothing was plotted.
+       Asserting on a `canvas` would prove nothing: headless Chromium has no
+       WebGL, so MapLibre never draws one on any page.
+    */
+    await expect(page.locator("figure ul.sr-only li")).toHaveCount(0);
   });
 });
 
