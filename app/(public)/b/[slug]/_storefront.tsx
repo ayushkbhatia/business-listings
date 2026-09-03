@@ -4,6 +4,7 @@ import { ResponseTime, VerificationBadge, tierSpec } from "@/components/domain";
 import { formatCount, formatDate, formatDuration } from "@/lib/format";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { cn } from "@/lib/cn";
+import { licenceExpired as hasLapsed } from "@/lib/verification";
 import { t } from "@/lib/i18n";
 import type { PublicBusiness } from "@/lib/db/queries";
 
@@ -76,18 +77,17 @@ export function StorefrontHeader({
   /*
      Criterion 10: an expired licence takes the badge off the same day.
 
-     The schema says the tier "drops to 2 automatically the day licenceExpiry
-     passes — a scheduled job, no grace period". No such job exists; nothing in
-     the codebase reads `licenceExpiry` to move a tier. So the badge was
-     outliving the licence, which is the one direction a verification signal
-     must never fail in.
+     `sweepExpiredLicences` now drops the stored tier to 1 on the daily run, so
+     this is no longer the only thing standing between a lapsed licence and a
+     badge. It stays anyway, and not as a belt-and-braces gesture: the job runs
+     once a day, and a licence that expires at midnight is expired for every
+     render until the cron catches up. A render that asks "is this licence valid
+     now" cannot be late; a job always can.
 
-     Checked here rather than waiting for a job to be written, because a render
-     that asks "is this licence valid now" cannot be late. The page stays live
-     and the verification panel states the renewal in warn: an expired licence
-     is grounds for de-badging, not for delisting.
+     The page stays live and the verification panel states the renewal in warn —
+     an expired licence is grounds for de-badging, not for delisting.
   */
-  const licenceExpired = business.licenceExpiry.getTime() < now.getTime();
+  const licenceExpired = hasLapsed(business.licenceExpiry, now);
 
   const head = business.locations[0];
   const cover = business.media.find((item) => item.kind === "cover");

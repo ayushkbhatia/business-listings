@@ -5,6 +5,7 @@ import { pruneAttempts } from "@/lib/auth/attempts";
 import { measureResponseTimes } from "@/lib/metrics/job";
 import { measureProfileStrength } from "@/lib/metrics/strength-job";
 import { sweepAreaPages } from "@/lib/seo/area";
+import { sweepExpiredLicences } from "@/lib/verification/expiry-job";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
 
 /**
@@ -75,6 +76,19 @@ export async function GET(request: NextRequest) {
     */
     responseTimes: () => measureResponseTimes(),
     profileStrength: () => measureProfileStrength(),
+    /*
+       The tier drop the schema has promised since handoff 1.
+
+       Before `areaPages`, and that ordering is load-bearing: `sweepAreaPages`
+       counts verified suppliers with `verificationTier >= VERIFIED_TIER` to
+       decide whether an area page clears its publish floor. Run it first and
+       the floors are computed from tiers this step is about to invalidate — an
+       area page held open by a supplier whose licence lapsed last night.
+
+       Also before the two measurements is not required and would not help:
+       neither reads the tier.
+    */
+    expiredLicences: () => sweepExpiredLicences(),
     /*
        Bookkeeping, not enforcement, which is why it can wait a day:
        `areaPageState.live` recomputes the publish floors at read time, so a

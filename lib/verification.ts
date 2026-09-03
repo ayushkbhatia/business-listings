@@ -21,3 +21,36 @@ export const VERIFIED_TIER = 2;
 export function isVerified(tier: number): boolean {
   return tier >= VERIFIED_TIER;
 }
+
+/**
+ * Where an expired trade licence puts a listing.
+ *
+ * Rung 1 is "licence number recorded" — a number somebody typed — and that
+ * stays true after expiry. Rung 2, the badge threshold, means "checked with the
+ * issuing authority and confirmed current", which is the one claim expiry
+ * falsifies. The schema said "drops to 2" until the sweep was written; see
+ * `lib/verification/expiry-job.ts` for why that was wrong in the dangerous
+ * direction.
+ *
+ * Beside `VERIFIED_TIER` because the two are one decision. The nightly sweep
+ * drops to this and `setVerificationTier` refuses to raise above it while the
+ * licence is lapsed — a floor only one of them knew about would be a nightly
+ * flip-flop between staff and cron.
+ */
+export const EXPIRED_LICENCE_TIER = 1;
+
+/**
+ * True where a trade licence has lapsed.
+ *
+ * Here rather than beside the sweep that acts on it, because the sweep is
+ * `server-only` and imports Prisma, and this is a date comparison two server
+ * components need. One definition, because the render and the job disagreeing
+ * about what "expired" means is how a badge outlives its licence in exactly one
+ * of the two places somebody remembered to check.
+ *
+ * `now` is a parameter and never `Date.now()` in a body: the purity lint refuses
+ * it in render, and it is right to.
+ */
+export function licenceExpired(licenceExpiry: Date, now: Date): boolean {
+  return licenceExpiry.getTime() < now.getTime();
+}
