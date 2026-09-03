@@ -97,8 +97,50 @@ jobs:
         run: pnpm build
 
   acceptance:
+    # Named for the slice it runs, so a red check says which one.
+    name: acceptance (${{ matrix.shard }})
     runs-on: ubuntu-latest
-    needs: verify
+
+    #
+    # No `needs: verify`.
+    #
+    # The two jobs are independent — acceptance consumes nothing verify
+    # produces, it builds the app itself. Chaining them made the pipeline
+    # additive: 5m35s of verify, then three seconds later, fifteen minutes of
+    # acceptance. Running them together costs nothing and returns that 5m35s.
+    #
+    # A red verify no longer cancels acceptance, which is the small price and
+    # arguably the better behaviour: two independent answers beat one answer and
+    # a cancellation.
+    #
+    strategy:
+      # Every shard reports. One failing slice must not hide the other two —
+      # that turns one red run into three round trips.
+      fail-fast: false
+      matrix:
+        include:
+          #
+          # The split is drawn where the auth boundary is, not where the test
+          # counts are even.
+          #
+          # Every signed-in project depends on the `setup` project, and setup
+          # provisions seats against the **shared** Supabase auth project — one
+          # magic link per seat, invalidated when the next is generated. Two
+          # shards running setup at the same time would be two jobs asking for
+          # the same link and each invalidating the other's, which is a new
+          # flake source in exchange for a faster pipeline.
+          #
+          # So the public projects, which touch no auth at all, split freely;
+          # everything that signs in stays in one shard behind one setup.
+          #
+          - shard: chromium
+            projects: --project=chromium
+          - shard: mobile
+            projects: --project=mobile
+          - shard: signed-in
+            projects: >-
+              --project=seller --project=seller-free
+              --project=staff --project=staff-moderator --project=staff-finance
 
     services:
       postgres:
@@ -156,15 +198,13 @@ jobs:
       # ever called and one screen whose capability gate was dead code. The
       # projects existed the whole time; this line did not name them.
       - name: Axe and the acceptance surface
-        run: >-
-          pnpm test:e2e
-          --project=chromium --project=mobile
-          --project=seller --project=seller-free
-          --project=staff --project=staff-moderator --project=staff-finance
+        run: pnpm test:e2e ${{ matrix.projects }}
 
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          # One name per shard, or the three uploads collide and only one
+          # report survives — the one you did not need.
+          name: playwright-report-${{ matrix.shard }}
           path: playwright-report/
           retention-days: 7
