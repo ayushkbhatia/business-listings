@@ -210,15 +210,22 @@ export function DataTable<Row>({
    */
   const bands = useMemo(() => {
     if (!groupBy) return null;
-    const out: { key: string; rows: Row[] }[] = [];
+    const out: { id: string; key: string; rows: Row[] }[] = [];
     for (const row of rows) {
       const key = groupBy(row);
       const last = out[out.length - 1];
       if (last && last.key === key) last.rows.push(row);
-      else out.push({ key, rows: [row] });
+      // A band is a run, not a group. Because grouping does not sort, the same
+      // key opens a new band every time it reappears — six rows tiered
+      // 3,2,4,1,0,2 band as verified/unverified/verified/unverified. So `key`
+      // is not unique across bands and cannot be the React key; the first row
+      // of the run is, and unlike an index it survives a band being inserted
+      // above it. Keying on `key` gave React two children called `verified`,
+      // which is a licence to duplicate or drop whole bands of rows.
+      else out.push({ id: rowKey(row), key, rows: [row] });
     }
     return out;
-  }, [rows, groupBy]);
+  }, [rows, groupBy, rowKey]);
 
   const cellPad = "px-3";
   const headSticky = stickyHeader ? "sticky top-0 z-10" : "";
@@ -476,7 +483,7 @@ export function DataTable<Row>({
 
             {!loading && !error && bands
               ? bands.map((band) => (
-                  <Fragment key={band.key}>
+                  <Fragment key={band.id}>
                     <tr className="border-t border-line">
                       <th
                         scope="colgroup"

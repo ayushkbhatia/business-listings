@@ -191,6 +191,47 @@ describe("DataTable — the rules that are not preferences", () => {
     );
     expect(screen.getByText("No results for these filters")).toBeInTheDocument();
   });
+
+  /*
+   * Grouping does not sort, so a group key reappears further down the table and
+   * opens a second band under the same name. Keying the bands on that name gave
+   * React two children called "busy", and duplicate keys are what lets it
+   * duplicate or drop rows on the next render.
+   */
+  it("gives each band its own key when a group key reappears", () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(
+      <DataTable
+        caption="Businesses"
+        columns={COLUMNS}
+        rows={ROWS}
+        rowKey={(r) => r.id}
+        groupBy={(r) => (r.count >= 40 ? "busy" : "quiet")}
+      />,
+    );
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
+  });
+
+  it("bands in the order the rows arrived, without merging a repeated group", () => {
+    const { container } = render(
+      <DataTable
+        caption="Businesses"
+        columns={COLUMNS}
+        rows={ROWS}
+        rowKey={(r) => r.id}
+        groupBy={(r) => (r.count >= 40 ? "busy" : "quiet")}
+        groupLabel={(key, count) => `${key} (${count})`}
+      />,
+    );
+    // Three bands, not two: 41 busy, 18 quiet, 96 busy again.
+    const bands = [...container.querySelectorAll('th[scope="colgroup"]')].map(
+      (th) => th.textContent,
+    );
+    expect(bands).toEqual(["busy (1)", "quiet (1)", "busy (1)"]);
+    // And every row survives the banding.
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(6);
+  });
 });
 
 describe("Pagination", () => {
