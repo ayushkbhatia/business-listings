@@ -62,10 +62,21 @@ export function sortRecipients(rows: readonly TrackedRecipient[]): TrackedRecipi
   });
 }
 
-/** `quotedAt − deliveredAt`. Computed, never stored as an editable figure. */
+/**
+ * `quotedAt − deliveredAt`. Computed, never stored as an editable figure.
+ *
+ * Floored at zero. A quote cannot precede its own delivery, but the data can
+ * say it did — a backfill, a clock skew between two writers, or a fixture
+ * built in the wrong order — and `formatDuration` throws on a negative. That
+ * turned one odd row into a 500 for the whole tracking page, which is the last
+ * page that should break: a buyer opens it to find out whether anybody replied.
+ *
+ * Zero reads as "immediately", which is the honest rendering of a figure that
+ * cannot be trusted to be anything else.
+ */
 export function latencyMs(row: TrackedRecipient): number {
   if (!row.quotedAt) return Number.POSITIVE_INFINITY;
-  return row.quotedAt.getTime() - row.deliveredAt.getTime();
+  return Math.max(0, row.quotedAt.getTime() - row.deliveredAt.getTime());
 }
 
 /**

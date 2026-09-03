@@ -4363,10 +4363,17 @@ async function seedTrackingStates(db: Db) {
       },
       recipients: {
         create: [
-          /* One who quoted, two who have not — the state under test. */
-          { businessId: businesses[0]!.id, state: "quoted", openedAt: days(-2) },
-          { businessId: businesses[1]!.id, state: "opened", openedAt: days(-1) },
-          { businessId: businesses[2]!.id, state: "delivered" },
+          /*
+             One who quoted, two who have not — the state under test.
+
+             `createdAt` is set explicitly because it is the delivery moment,
+             and the latency the page prints is `quotedAt − deliveredAt`. Left
+             to default it would be seed time, which is *after* the quote below
+             and produces a negative duration.
+          */
+          { businessId: businesses[0]!.id, state: "quoted", createdAt: days(-3), openedAt: days(-2) },
+          { businessId: businesses[1]!.id, state: "opened", createdAt: days(-3), openedAt: days(-1) },
+          { businessId: businesses[2]!.id, state: "delivered", createdAt: days(-3) },
         ],
       },
     },

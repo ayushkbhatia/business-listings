@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canAddRecipients,
+  latencyMs,
   canNudge,
   compareBlockedBy,
   effectiveState,
@@ -177,5 +178,23 @@ describe("the two limits on the action row", () => {
     expect(compareBlockedBy(0, labels)).toBe("none yet");
     expect(compareBlockedBy(1, labels)).toBe("one more");
     expect(compareBlockedBy(2, labels)).toBeNull();
+  });
+});
+
+describe("a latency the data got wrong", () => {
+  it("floors at zero rather than throwing the page away", () => {
+    /*
+       A quote cannot precede its own delivery, but the data can say it did —
+       a backfill, a clock skew, a fixture built in the wrong order. The
+       formatter throws on a negative, and one odd row used to take the whole
+       tracking page down with a 500: the last page that should break, since a
+       buyer opens it to find out whether anybody replied.
+    */
+    const backwards = row({
+      state: "quoted",
+      deliveredAt: new Date("2026-09-03T00:00:00.000Z"),
+      quotedAt: new Date("2026-09-01T00:00:00.000Z"),
+    });
+    expect(latencyMs(backwards)).toBe(0);
   });
 });
