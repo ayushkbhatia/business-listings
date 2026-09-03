@@ -649,6 +649,7 @@ async function main() {
   await seedDeepCatalogue(prisma);
   await seedBranchNetwork(prisma);
   await seedProductDetail(prisma);
+  await seedTestimonials(prisma);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
@@ -3884,6 +3885,77 @@ async function seedQueues(
  * sequence, and a draw inserted earlier renames every business generated after
  * it.
  */
+/**
+ * The quotes on `/for-buyers` and `/list-your-business`.
+ *
+ * Development data, and nothing more. These people do not exist — they are the
+ * same invented cast as the businesses and buyers above, written so the entry
+ * pages have a populated state to render in the gallery and in e2e.
+ *
+ * They are deliberately not in the production database, and this file is the
+ * reason they can be: a testimonial is an attributed claim, `attribution` is
+ * `NOT NULL` because an unsigned one is the platform talking about itself in a
+ * borrowed voice, and a directory that checks trade licences for a living
+ * cannot be the thing publishing quotes nobody said. Real ones are written
+ * through `/admin/content/testimonials` by somebody who has the sender's
+ * permission.
+ *
+ * Voice, per §08: each names something specific — an area, a lead time, a
+ * count — because the vague version is what an invented quote reads like and
+ * the specific version is what a real one does. If these ever get mistaken for
+ * production copy, the specificity is what will give them away.
+ */
+async function seedTestimonials(db: Db) {
+  console.log("→ entry page testimonials");
+
+  const quotes = [
+    {
+      audience: "buyer" as const,
+      body: "We had three days to find a stockist for DN100 gate valves in Al Quoz. Four suppliers quoted by the next morning and two of them had the stock on the shelf.",
+      attribution: "Rashid Al Hameli",
+      context: "Procurement Manager, Harbour Contracting LLC",
+      sortOrder: 0,
+    },
+    {
+      audience: "buyer" as const,
+      body: "The licence check is the part we use most. Half the suppliers we used to ring had a website and nothing behind it, and we were the ones finding that out.",
+      attribution: "Fatima Al Zaabi",
+      context: "Facilities, Sharjah",
+      sortOrder: 1,
+    },
+    {
+      audience: "supplier" as const,
+      body: "Eleven enquiries in the first month and we quoted nine of them. The two we let go were outside our range, which is a better problem than silence.",
+      attribution: "Imran Qureshi",
+      context: "Owner, Al Marwan Industrial Supplies",
+      sortOrder: 0,
+    },
+    {
+      audience: "supplier" as const,
+      body: "Being able to point at a badge we did not award ourselves ended an argument we used to have on every first call.",
+      attribution: "Deepa Nair",
+      context: "Sales Director, Gulf Valve & Fitting Co",
+      sortOrder: 1,
+    },
+  ];
+
+  for (const quote of quotes) {
+    const already = await db.testimonial.findFirst({
+      where: { attribution: quote.attribution },
+      select: { id: true },
+    });
+    if (already) continue;
+
+    await db.testimonial.create({
+      // Published, because an unpublished one renders nothing and the whole
+      // point of seeding these is that the section has something to draw.
+      data: { ...quote, publishedAt: days(-21) },
+    });
+  }
+
+  console.log(`   ${quotes.length} quotes across the two entry pages`);
+}
+
 async function seedBranchNetwork(db: Db) {
   console.log("→ a branch network, for board 1f");
 
