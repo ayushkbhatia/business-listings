@@ -45,7 +45,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Full history. `check:migrations` diffs this branch against the commit it
+      # left `main` at, and the default depth-1 clone has no such commit. The
+      # repo is small enough that fetching all of it is not worth measuring.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       # Version comes from package.json#packageManager.
       - uses: pnpm/action-setup@v4
@@ -84,6 +89,24 @@ jobs:
 
       - name: Schema invariants
         run: pnpm check:schema
+
+      # A PR that adds a migration has to name it. `prisma migrate deploy`
+      # applies every pending migration rather than the caller's, so whoever
+      # deploys next inherits this one — and can only review it if the merge
+      # commit says it is there. See docs/deployments.md.
+      #
+      # The title and body arrive through the environment rather than through
+      # `${{ }}` inside `run:`. Both are text a PR author controls, and
+      # interpolating them into a shell command is how that becomes an
+      # execution. `github.event_name` gates the step because a push to `main`
+      # has no pull request to read.
+      - name: Migrations are declared
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: pnpm check:migrations
 
       - name: Formatter coverage
         run: pnpm check:formatters
