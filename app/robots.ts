@@ -14,6 +14,12 @@ import { siteUrl } from "@/lib/site";
  *          anybody without a staff role, so this changes nothing about who can
  *          reach it — it keeps the URLs out of a search result, which is where
  *          somebody finds out they exist.
+ * /staff   the staff sign-in form. Same reason as /admin and rather more
+ *          pointed: the console is unguessable only while nothing advertises
+ *          it, and a sign-in page in a search result is an advertisement. The
+ *          page also sets `robots: { index: false }` itself, because a
+ *          disallow is a request and a meta directive is the one crawlers that
+ *          ignore the first tend to honour.
  */
 export default function robots(): MetadataRoute.Robots {
   return {
@@ -21,7 +27,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/search", "/compare", "/dev", "/admin"],
+        disallow: ["/search", "/compare", "/dev", "/admin", "/staff"],
       },
     ],
     sitemap: `${siteUrl()}/sitemap.xml`,

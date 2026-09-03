@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/primitives";
 import { t } from "@/lib/i18n";
 import { checkThrottle } from "@/lib/auth/attempts";
+import { isSafeNext } from "@/lib/auth/flow";
 import { normaliseIdentifier } from "@/lib/auth/identity";
 import { retryAfterSeconds } from "@/lib/auth/throttle";
 import { AuthCard } from "../_components/AuthCard";
@@ -33,6 +34,17 @@ export default async function VerifyPage({
   const to = one("to") ?? "";
   const identifier = normaliseIdentifier(to);
 
+  /*
+     Which door they came through. `/signin` is the default and always was;
+     `/for-buyers`, `/list-your-business` and `/staff` post here too, and
+     sending a supplier back to the plain sign-in page to start again drops
+     them out of the flow they were reading. Validated as a same-origin path,
+     the same as `next` — it is attacker-controlled and decides nothing but
+     which page a link points at.
+  */
+  const fromParam = one("from");
+  const from = fromParam && isSafeNext(fromParam) ? fromParam : "/signin";
+
   if (!identifier) {
     return (
       <AuthCard title={t("auth.verify.title")}>
@@ -41,7 +53,7 @@ export default async function VerifyPage({
           title={t("auth.verify.no_identifier")}
           action={
             <Link
-              href="/signin"
+              href={from}
               className="rounded-tag underline underline-offset-2 focus-visible:shadow-focus focus-visible:outline-none"
             >
               {t("auth.signin.title")}
@@ -76,7 +88,7 @@ export default async function VerifyPage({
         <p className="flex flex-wrap items-center gap-x-2 text-muted">
           {t("auth.verify.wrong_number")}
           <Link
-            href="/signin"
+            href={from}
             className="rounded-tag text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
           >
             {t("auth.verify.start_again")}
@@ -92,12 +104,13 @@ export default async function VerifyPage({
             since: one("since"),
             limit: one("limit"),
           }}
-          restartHref="/signin"
+          restartHref={from}
         />
 
         <form action={verifyAction} className="space-y-4">
           <input type="hidden" name="identifier" value={identifier.value} />
           {one("next") ? <input type="hidden" name="next" value={one("next")} /> : null}
+          {fromParam ? <input type="hidden" name="from" value={fromParam} /> : null}
 
           <OtpField
             autoFocus={!lockedOut}
@@ -115,6 +128,7 @@ export default async function VerifyPage({
         <form action={resendAction}>
           <input type="hidden" name="identifier" value={identifier.value} />
           {one("next") ? <input type="hidden" name="next" value={one("next")} /> : null}
+          {fromParam ? <input type="hidden" name="from" value={fromParam} /> : null}
           <ResendButton initialSeconds={cooldown} />
         </form>
       </div>

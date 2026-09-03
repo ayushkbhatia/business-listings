@@ -27,6 +27,9 @@ const ROUTES = [
   "/rfq/new?category=valves-and-fittings",
   "/signin",
   "/signup",
+  "/for-buyers",
+  "/list-your-business",
+  "/staff",
 ];
 
 for (const route of ROUTES) {
