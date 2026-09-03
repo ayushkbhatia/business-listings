@@ -1,8 +1,126 @@
 # Deployments
 
-Vercel, one project, production tracking `main`. Two things are worth knowing
-before you push: what a deploy costs, and why a push to a branch no longer
-builds by itself.
+Vercel, one project, production tracking `main`. Three things are worth knowing
+before you push: that the database is not part of a deploy, what a deploy costs,
+and why a push to a branch no longer builds by itself.
+
+## Schema does not deploy with the code
+
+A merge to `main` ships the application. It does not ship the database. Nothing
+in `package.json`'s build script, nothing in `vercel.json` and nothing in
+`.github/workflows/ci.yml` runs a migration against the production project — CI
+migrates only the throwaway `supabase start` container on its own runner.
+
+Schema reaches production when a person runs one command:
+
+```bash
+pnpm db:deploy
+```
+
+That is the whole mechanism. It is deliberate, and the rest of this section is
+about making it visible rather than removing it.
+
+### Look before you apply
+
+```bash
+pnpm db:pending
+```
+
+Read-only. It names the database it is pointed at, lists every migration the
+database has not applied, and for each one prints the commit, the author and the
+PR that added it, plus any statement in it that loses or rewrites data:
+
+```
+  target   aws-0-ap-south-1.pooler.supabase.com:5432/postgres
+
+  2 migration(s) pending, applied in this order:
+
+  20260903132133_testimonial
+    added by  #64 · ayushkbhatia · 2026-09-03
+              feat(auth): a door each for buyers, suppliers and staff, over one sign-in flow (#64)
+
+  20260826140000_licence_ingest
+    added by  #21 · ayushkbhatia · 2026-08-26
+              feat(admin): the licence importer, and a CSV parser that was dropping rows in silence (#21)
+    DATA LOSS L171  ALTER TABLE "business" DROP COLUMN "import_run_id"
+```
+
+`pnpm db:deploy` prints exactly that report first, then asks for the word
+`apply` before running `prisma migrate deploy` underneath. When any pending
+migration loses or rewrites data the word is `apply destructive`, so the
+confirmation cannot be muscle memory. It refuses outright when it is not
+attached to a terminal — `--yes` is the deliberate way past that, and there is
+no flag that skips the report.
+
+It also reports two states `prisma migrate status` mentions only in passing: a
+migration applied to the database that this checkout does not have, which means
+you are about to deploy from a branch that is behind, and a migration that
+started and never finished, which `migrate deploy` will refuse to run past.
+
+### Why this exists
+
+`prisma migrate deploy` applies **every** pending migration, not the one the
+person running it has in mind.
+
+On 2026-09-03, #64 added a `testimonial` table and merged. That migration
+reached production not through anything in #64, but through whoever next ran
+`db:deploy` while shipping #66 or #68 — an unrelated session shipped a schema
+change it had never reviewed and did not know existed. It was purely additive,
+so nothing broke. A `DROP COLUMN` travels the same path just as quietly, and the
+`licence_ingest` migration above proves this repo writes those.
+
+Nothing here stops `migrate deploy` doing what it does. What changed is that the
+list, and the name on each line of it, is now in front of the person typing the
+command.
+
+### Naming a migration in its PR
+
+`pnpm check:migrations` fails CI when a PR adds a migration and neither the PR
+title nor the body names it. It runs on pull requests only, and inside
+`pnpm verify` it is advisory — it prints the line to paste rather than failing,
+so the answer arrives before the PR exists:
+
+```
+Migrations: 20260903132133_testimonial
+```
+
+A squash merge copies the PR body into the commit, which is what `db:pending`
+reads back to whoever deploys next. It is also what makes
+`git log --grep=20260903132133_testimonial` answer "when did this reach `main`,
+and alongside what".
+
+The same check fails on a migration **modified** relative to `main`. Prisma
+checksums applied migrations: editing one that production has already run does
+not re-run it, it makes the next `migrate deploy` refuse. Write a new migration.
+
+### Ordering, when a migration and its code both need to ship
+
+Vercel deploys on merge; the database waits for a person. So the two are never
+simultaneous, and the order is a choice worth making on purpose:
+
+| The migration | Apply it |
+|---|---|
+| Adds a table, column, index or constraint nothing yet reads | before the merge |
+| Adds a `NOT NULL` column, or a constraint the old code would violate | before the merge, and only if the old code still satisfies it |
+| Drops or renames anything | after the merge, once no running code refers to it |
+
+The middle row is the one that bites: production runs the previous deployment
+until the new one is live, and that code is still writing rows the new
+constraint may reject.
+
+### Why there is no workflow that does this
+
+A `push`-triggered job that migrates production would still apply every pending
+migration. It would move the surprise from a terminal to a workflow log without
+removing it, and it would run against the same pooled Postgres as the Vercel
+production build that the merge just started.
+
+A `workflow_dispatch` job is the version worth having later: manual, auditable,
+and with the production password in one place instead of on every laptop. It
+needs `DIRECT_URL` as a repository secret, and a `production-db` environment —
+whose required-reviewer rule needs a paid plan on a private repository, and with
+one committer approves nothing anyway. Not built. The two guards above are what
+the incident actually called for.
 
 ## Preview builds are opt-in
 

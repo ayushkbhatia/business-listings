@@ -15,6 +15,11 @@ port. The tenant lives on `aws-0`; `aws-1` answers `tenant/user not found`.
 `db.<ref>.supabase.co` resolves AAAA only, so the pooler is the portable choice.
 Percent-encode reserved characters in the password: `&` is `%26`.
 
+Nothing applies a migration on its own. Schema reaches production when a person
+runs `pnpm db:deploy`, which shows what is pending and who wrote it before it
+applies anything —
+[docs/deployments.md](deployments.md#schema-does-not-deploy-with-the-code).
+
 ## PostgREST is closed
 
 This is the one piece of the setup that is not obvious, and it was a live hole

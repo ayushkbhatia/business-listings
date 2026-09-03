@@ -85,12 +85,19 @@ is not the same on every project.
 | `pnpm db:migrate` | `prisma migrate dev` |
 | `pnpm db:seed` | Seed UAE-shaped fixture data |
 | `pnpm db:studio` | Prisma Studio |
+| `pnpm db:pending` | What a database has not applied yet, and who wrote it |
+| `pnpm db:deploy` | Apply those, after showing you what they are |
 
 ## Deploying
 
-Production tracks `main` and deploys on merge as usual. **Preview builds are
-opt-in**: a push to a branch does not build unless the commit message contains
-`[preview]`.
+Production tracks `main` and deploys on merge as usual. **The database does not
+go with it.** Schema reaches production only when a person runs `pnpm db:deploy`,
+which prints every migration the database has not applied — with the PR and
+author behind each — and asks before applying them. `prisma migrate deploy`
+applies every pending migration rather than yours, so that list is the review.
+
+**Preview builds are opt-in**: a push to a branch does not build unless the
+commit message contains `[preview]`.
 
 ```bash
 git commit --allow-empty -m "chore: preview build [preview]"
