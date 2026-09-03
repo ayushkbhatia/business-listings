@@ -10,8 +10,14 @@ import AxeBuilder from "@axe-core/playwright";
  * buyer's target price being mistaken for a no-price violation.
  */
 
-/** Seeded by `seedProductDetail`; matched line, and its seller pinned. */
-const SEED_PRODUCT = "cmtlsnfud00glhf8o37nyano4";
+/**
+ * Seeded by `seedProductDetail`; a matched line whose seller gets pinned.
+ *
+ * The product's *slug*, not its id. An id was hardcoded here first and passed
+ * locally and failed on CI: cuids are generated per seed, so the id existed
+ * only in the database it was copied from. A slug is stable across reseeds.
+ */
+const SEED_PRODUCT = "cast-iron-gate-valve-imperial-0";
 
 const rows = (page: import("@playwright/test").Page) =>
   page.locator("table tbody tr");

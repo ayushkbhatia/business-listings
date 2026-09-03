@@ -128,10 +128,25 @@ export default async function RfqNewPage({
      matched nothing by definition — that is why the buyer is here — and the
      page says so above the table rather than pretending otherwise.
   */
-  const productIds = (one("products") ?? "").split(",").map((v) => v.trim()).filter(Boolean).slice(0, 20);
-  const seededProducts = productIds.length
+  /*
+     Ids or slugs, because both are things a person may reasonably put here.
+
+     Board 1g's crossover builds the link from ids it already holds. A slug is
+     what anybody writing the URL by hand — or a test — would reach for, and it
+     is readable in a way a cuid is not. Matching either costs one `OR`.
+
+     Slugs are unique per business rather than globally, so a bare slug can in
+     principle match two sellers' products. That is acceptable for a seed: the
+     lines are a starting point the buyer edits, and the crossover that matters
+     passes ids.
+  */
+  const productKeys = (one("products") ?? "").split(",").map((v) => v.trim()).filter(Boolean).slice(0, 20);
+  const seededProducts = productKeys.length
     ? await prisma.product.findMany({
-        where: { id: { in: productIds }, status: { not: "draft" } },
+        where: {
+          OR: [{ id: { in: productKeys } }, { slug: { in: productKeys } }],
+          status: { not: "draft" },
+        },
         select: {
           id: true,
           name: true,
@@ -139,6 +154,7 @@ export default async function RfqNewPage({
           minOrderQty: true,
           business: { select: { id: true, displayName: true, primaryCategoryId: true } },
         },
+        take: 20,
       })
     : [];
 
