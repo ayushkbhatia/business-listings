@@ -128,16 +128,43 @@ export function RfqComposer({
 }) {
   const labels = useMemo(() => rfqLabels({ emirateName }), [emirateName]);
   /*
-     A seeded arrival wins over a stale draft: a buyer who just clicked "add to
-     an RFQ" means the thing they clicked, not what they were typing an hour ago.
+     The lines live in the draft store, not in component state.
+
+     Mirroring the store into `useState` did not work and could not: during
+     hydration `useSyncExternalStore` returns the *server* snapshot, which is
+     empty by design — that is what avoids the mismatch — and a `useState`
+     initialiser runs once, against exactly that empty value. So the restored
+     draft never landed and criterion 11 failed while looking implemented.
+
+     With the store as the source of truth the value is read on every render,
+     the restore happens the moment the client snapshot is available, and there
+     is no second copy to drift.
+
+     A seeded arrival still wins: a buyer who just clicked "add to an RFQ" means
+     the thing they clicked, not what they were typing an hour ago.
   */
-  const restored = useSyncExternalStore(subscribeDraft, draftSnapshot, draftServerSnapshot);
-  const [lines, setLines] = useState<RfqLine[]>(() =>
-    initialLines && initialLines.length > 0
-      ? [...initialLines]
-      : restored.length > 0
-        ? [...restored]
-        : [blankLine()],
+  const stored = useSyncExternalStore(subscribeDraft, draftSnapshot, draftServerSnapshot);
+  /*
+     Memoised so the identity is stable. Both are derived arrays, and a fresh
+     one each render would make every hook that depends on them re-run — which
+     for the recipient effect means re-matching on keystrokes that changed
+     nothing.
+  */
+  const seededLines = useMemo(
+    () => (initialLines && initialLines.length > 0 ? [...initialLines] : null),
+    [initialLines],
+  );
+  const lines: RfqLine[] = useMemo(
+    () => seededLines ?? (stored.length > 0 ? [...stored] : [blankLine()]),
+    [seededLines, stored],
+  );
+  const setLines = useCallback(
+    (next: RfqLine[] | ((current: RfqLine[]) => RfqLine[])) => {
+      const current = draftSnapshot();
+      const base = seededLines ?? (current.length > 0 ? [...current] : [blankLine()]);
+      saveDraft(typeof next === "function" ? next(base) : next);
+    },
+    [seededLines],
   );
   const [recipients, setRecipients] = useState<readonly RecipientPreview[]>(initialRecipients);
   const [showAll, setShowAll] = useState(false);
@@ -220,14 +247,21 @@ export function RfqComposer({
     };
   }, [categoryId, lineCount, value?.emirate, pinnedBusinessIds]);
 
-  /* Criterion 11. Written on every change; cleared once it has been sent. */
+  /*
+     A seeded arrival is written to the draft once, so that leaving the page and
+     coming back keeps the seeded lines rather than dropping to a blank row.
+  */
   useEffect(() => {
-    saveDraft(lines);
-  }, [lines]);
+    if (seededLines && draftSnapshot().length === 0) saveDraft(seededLines);
+    // Once per seeded mount; derived from a prop that does not change.
+  }, [seededLines]);
 
-  const updateLine = useCallback((key: string, patch: Partial<RfqLine>) => {
-    setLines((current) => current.map((l) => (l.key === key ? { ...l, ...patch } : l)));
-  }, []);
+  const updateLine = useCallback(
+    (key: string, patch: Partial<RfqLine>) => {
+      setLines((current) => current.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+    },
+    [setLines],
+  );
 
   const blocked = sendBlockedBy(state, {
     noLines: labels.blockedNoLines,
@@ -621,7 +655,18 @@ function SendBlock({
           {error}
         </p>
       )}
-      <Button type="button" block loading={pending} disabled={Boolean(blocked)} onClick={onSend}>
+      {/*
+         Criterion 15: 44px on a phone. The default control height is 36, and a
+         thumb does not get smaller because the button is in a bar.
+      */}
+      <Button
+        type="button"
+        block
+        size={compact ? "lg" : "md"}
+        loading={pending}
+        disabled={Boolean(blocked)}
+        onClick={onSend}
+      >
         {/*
            The count appears once there is one. "Send to 0 sellers" is honest and
            reads like a bug; the plain label plus the reason underneath says the

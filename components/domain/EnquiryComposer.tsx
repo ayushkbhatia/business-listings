@@ -336,11 +336,17 @@ export function EnquiryComposer({
           </div>
 
           {/*
-             `panel` renders no lines editor: `/rfq/new` owns the items table,
-             with the three row types and the target-price column the inline
-             composer has no use for.
+             `panel` renders no lines editor at all: `/rfq/new` owns the items
+             table, with the three row types and the target-price column the
+             inline composer has no use for.
+
+             Not rendered rather than hidden with a class. A hidden copy still
+             put a second `TARGET PRICE` header in the DOM, which is dead markup
+             and a second thing for a test — or a person reading the tree — to
+             find under the same name.
           */}
-          <fieldset className={shape === "panel" ? "hidden" : undefined}>
+          {shape === "panel" ? null : (
+          <fieldset>
             <legend className="text-body-sm text-ink">{labels.lines}</legend>
             <p className="mt-1 mb-2 text-caption text-muted">{labels.linesHint}</p>
 
@@ -442,6 +448,7 @@ export function EnquiryComposer({
               </Button>
             </div>
           </fieldset>
+          )}
         </div>
       ) : null}
 

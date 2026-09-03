@@ -108,7 +108,17 @@ test.describe("the recipient picker", () => {
   });
 
   test("unticking to zero disables Send and says why", async ({ page }) => {
-    // Criterion 6: never a silent dead button.
+    /*
+       Criterion 6: never a silent dead button.
+
+       The delivery area is filled first on purpose. `sendBlockedBy` names the
+       *first* thing missing, in order, so without an area the page correctly
+       reports the area rather than the recipients — an earlier version of this
+       test asserted the recipients message against a form that was also missing
+       its area, and read the right behaviour as a failure.
+    */
+    await page.locator("select").first().selectOption("dubai");
+
     const boxes = page.locator("input[type=checkbox]");
     const count = await boxes.count();
     for (let i = 0; i < count; i += 1) {
@@ -136,7 +146,7 @@ test.describe("the buyer's target price is protected, not stripped", () => {
        private composer is the same class of private figure as a QuoteLine.
     */
     await page.goto(`/rfq/new?products=${SEED_PRODUCT}`);
-    const header = page.locator("th", { hasText: "TARGET PRICE" });
+    const header = page.getByRole("columnheader", { name: "TARGET PRICE" });
     await expect(header).toBeVisible();
 
     const headers = await page.locator("table th[scope=col]").allInnerTexts();

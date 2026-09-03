@@ -496,7 +496,18 @@ async function ClaimedStorefront({ business }: { business: Business }) {
                     section,
                     data: plan.data,
                     content: plan.content[section.id] ?? {},
-                    enquireHref: `/rfq/new?to=${business.slug}`,
+                    /*
+                       Criterion 3: a storefront contains no link to the
+                       fan-out. It is a single-seller surface — the buyer has
+                       chosen, and a picker would undo the choice. The section
+                       composes in place instead, through the same island the
+                       identity block uses.
+
+                       `enquireHref` stays pointed at this storefront's own
+                       catalogue for the sections that link rather than compose.
+                    */
+                    enquireHref: `/b/${business.slug}/products`,
+                    enquireSlot: enquireTrigger,
                   })}
                 </div>
               ))}
@@ -661,7 +672,13 @@ async function UnclaimedStorefront({ business }: { business: Business }) {
               <div className="flex flex-col gap-2 p-3">
                 {similar.businesses.map((other) => (
                   <ListingCard
-                    enquireHref={`/rfq/new?to=${other.slug}`}
+                    /*
+                       Another supplier's card, on this supplier's storefront.
+                       It goes to their storefront, where a buyer can compose in
+                       place — criterion 3 again, and a fan-out started from
+                       somebody else's card is the wrong shape twice over.
+                    */
+                    enquireHref={`/b/${other.slug}`}
                     key={other.id}
                     context="map"
                     business={{

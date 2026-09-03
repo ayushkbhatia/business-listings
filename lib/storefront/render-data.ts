@@ -137,8 +137,24 @@ export interface SectionProps {
   section: ResolvedSection;
   data: SectionData;
   content: SectionContent;
-  /** Where an enquiry from this storefront goes. */
+  /**
+   * Where an enquiry from this storefront goes.
+   *
+   * Kept for the sections that link rather than compose — a "see the
+   * catalogue" style call to action. It must never point at `/rfq/new`:
+   * board 1h criterion 3 says a storefront and a catalogue contain no link to
+   * the fan-out, because those are single-seller surfaces and a buyer standing
+   * on one has already chosen. Sending them to a fan-out undoes the choice.
+   */
   enquireHref: string;
+  /**
+   * The in-place composer, pre-rendered.
+   *
+   * A node rather than a handler, because the section system is server-rendered
+   * and the composer is a client island — a function cannot cross that
+   * boundary, which four boards in this repo have each proved once.
+   */
+  enquireSlot?: React.ReactNode;
 }
 
 /** A seller-filled line, or the template's own fallback. */
