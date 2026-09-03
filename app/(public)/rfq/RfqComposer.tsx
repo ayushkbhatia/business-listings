@@ -391,14 +391,28 @@ export function RfqComposer({
                it matched nothing. Never force a catalogue match — the spec
                calls that the fastest way to lose an RFQ.
             */}
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[30rem] border-collapse text-body-sm">
+            {/*
+               `contain-paint`, and a floor that fits a phone.
+
+               `globals.css` records why: a scroll container does not stop the
+               document's own scroll width from counting the content it clips,
+               and this table's floor previously pushed the layout viewport out
+               to 725px on a 412px phone — the page rendered zoomed out and the
+               action could not be tapped. The same trap, found again by
+               `viewport.spec.ts`.
+
+               20rem rather than 30 so the table fits a 412px viewport outright
+               instead of relying on the clip. The columns are three inputs and
+               a remove control; they are legible narrow.
+            */}
+            <div className="mt-3 overflow-x-auto contain-paint">
+              <table className="w-full min-w-[20rem] border-collapse text-body-sm">
                 <caption className="sr-only">{labels.itemsCaption}</caption>
                 <thead>
                   <tr className="border-b border-line">
                     <Th>{labels.colProduct}</Th>
-                    <Th className="w-24">{labels.colQty}</Th>
-                    <Th className="w-36">{labels.colTarget}</Th>
+                    <Th className="w-16 sm:w-24">{labels.colQty}</Th>
+                    <Th className="w-24 sm:w-36">{labels.colTarget}</Th>
                     <th scope="col" className="w-10">
                       <span className="sr-only">{labels.colRemove}</span>
                     </th>
