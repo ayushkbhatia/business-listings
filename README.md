@@ -86,6 +86,22 @@ is not the same on every project.
 | `pnpm db:seed` | Seed UAE-shaped fixture data |
 | `pnpm db:studio` | Prisma Studio |
 
+## Deploying
+
+Production tracks `main` and deploys on merge as usual. **Preview builds are
+opt-in**: a push to a branch does not build unless the commit message contains
+`[preview]`.
+
+```bash
+git commit --allow-empty -m "chore: preview build [preview]"
+```
+
+The rule lives in `scripts/vercel-ignore-build.sh`, wired to `ignoreCommand` in
+`vercel.json`. A deploy is billed build time and each new deployment starts with
+a cold ISR cache, so building every push cost real money on a site with no
+traffic. Full reasoning, the inverted exit codes and the other escape hatch are
+in [docs/deployments.md](docs/deployments.md).
+
 ## The three things that become migrations if ignored
 
 1. A verification badge must never take a seller theme colour.
