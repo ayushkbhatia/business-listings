@@ -1588,6 +1588,78 @@ export const en = {
   "thread.chip.certificate": "We can attach the CD certificate.",
 
   // ── Buyer: tracking an enquiry [1i] [1n] [7c] [10e] ──
+  /* Board 1i — the buyer's home for one enquiry. */
+  /*
+     The badge and the h1 track the most useful fact, not the original one:
+     what was sent until something comes back, what came back after that. Both
+     are derived from the rows, so they cannot lag them.
+  */
+  "track.badge_sent": { one: "Sent to {count} supplier", other: "Sent to {count} suppliers" },
+  "track.badge_quoted": { one: "{count} quote received", other: "{count} quotes received" },
+  "track.badge_accepted": "Quote accepted",
+  /* Spelled as a word in the h1, digits everywhere else. */
+  "track.h1_sent": "Your enquiry is with {word} suppliers.",
+  "track.h1_sent_one": "Your enquiry is with one supplier.",
+  "track.h1_quoted": "{Word} suppliers have quoted.",
+  "track.h1_quoted_one": "One supplier has quoted.",
+  "track.h1_accepted": "You accepted a quote.",
+  "track.h1_all_declined": "No supplier took this one on.",
+  /* Removes the fear that sending an RFQ is a commitment. */
+  "track.sub": "We'll text and email you as each one replies. Nothing is committed — you compare what comes back and take it forward with whoever suits.",
+
+  "track.asked_for": "What you asked for",
+  "track.happens_next": "What happens next",
+  "track.next_1": "Suppliers reply with a priced quote inside the platform",
+  "track.next_2": "You compare line by line and pick one",
+  /* The promise, repeated from 1h because this is where trust is decided. */
+  "track.next_3": "Your number is released only to the supplier you choose",
+
+  "track.live_status": "Live status",
+  "track.closes_in": "CLOSES IN {duration}",
+  "track.closed_on": "CLOSED {when}",
+  "track.recipients_label": "Suppliers this went to",
+
+  /* The five row states. Mono, and each says the one thing that matters. */
+  "track.state.delivered": "DELIVERED · NOT YET OPENED",
+  "track.state.opened": "OPENED · PREPARING A QUOTE",
+  "track.state.opened_seen": "Seen {when}",
+  "track.state.quoted": "QUOTED · {quoted} OF {total} LINES · {latency}",
+  "track.state.declined": "DECLINED · {reason}",
+  "track.state.declined_bare": "DECLINED",
+  "track.state.no_response": "NO RESPONSE · CLOSED",
+  "track.state.superseded": "QUOTED R{revision} · REQUIREMENT CHANGED SINCE",
+  "track.state.chose_another": "DECLINED · YOU CHOSE ANOTHER SUPPLIER",
+
+  "track.view_quote": "View quote",
+  "track.nudge": "Nudge",
+  "track.nudged": "NUDGED · {when}",
+  "track.nudge_wait": "You can nudge a supplier after a day without a reply.",
+
+  "track.compare": "Compare the quotes",
+  "track.compare_none": "Quotes will appear here as they arrive",
+  "track.compare_one": "One more quote and you can compare side by side",
+  "track.add_suppliers": "Add two more suppliers",
+  "track.edit_requirement": "Edit the requirement",
+  "track.view_accepted": "View the accepted quote",
+  "track.more_actions": "More",
+
+  "track.reference": "REFERENCE",
+  "track.sent_at": "Sent {when}. Quotes appear here and in your email — no login needed to read them.",
+  "track.privacy_title": "Your number stays private",
+  /* A specification, not reassurance: enforced at the query layer. */
+  "track.privacy_body": "Suppliers see the requirement and your first name. Nobody gets your mobile until you accept a quote, so one enquiry doesn't become five cold calls.",
+  "track.template_title": "Save as template",
+  "track.template_body": "Buying the same lines each quarter? Save the requirement and re-send it in two clicks.",
+  "track.save_template": "Save the requirement",
+
+  "track.revised": "REVISED {when} · R{revision}",
+  /* All declined: a problem to solve, not a wait to sit through. */
+  "track.all_declined": { one: "The supplier declined. Widening the area or relaxing a spec usually finds a match.", other: "All {count} suppliers declined. Widening the area or relaxing a spec usually finds a match." },
+  "track.all_declined_reason": "The most common reason given was \u201c{reason}\u201d.",
+  "track.send_more": { one: "Send to {count} more supplier", other: "Send to {count} more suppliers" },
+  "track.closed_no_quotes": "This enquiry closed without a quote. Nobody we could reach stocks it at the moment — sending it wider usually finds somebody.",
+  "track.new_quote_announced": { one: "{count} new quote has arrived.", other: "{count} new quotes have arrived." },
+
   "enquiry.ref": "Enquiry {ref}",
   "enquiry.sent_title": "Enquiry sent",
   "enquiry.sent_body": { one: "Delivered to {count} supplier. Quotes arrive here and on WhatsApp.", other: "Delivered to {count} suppliers. Quotes arrive here and on WhatsApp." },

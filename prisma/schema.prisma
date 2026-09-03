@@ -982,6 +982,18 @@ model Enquiry {
   neededBy                    DateTime?     @map("needed_by")
   termsWanted                 PaymentTerms? @map("terms_wanted")
   closesAt                    DateTime      @map("closes_at")
+
+  /// Board 1i: editing a requirement creates a revision, never a silent edit.
+  ///
+  /// A seller who has already priced 40 valves must not find the quantity
+  /// changed underneath their quote. So the number goes up, recipients who have
+  /// not quoted receive the new text, and the ones who have are told and their
+  /// quote is marked superseded — they may re-quote against R2.
+  ///
+  /// The buyer sees `REVISED 2 SEP · R2` under the header. `revisedAt` is null
+  /// on R1, which is every enquiry that was sent once and left alone.
+  revision                    Int           @default(1)
+  revisedAt                   DateTime?     @map("revised_at")
   /// Set only on acceptance. Releases contact to exactly one business.
   contactReleasedToBusinessId String?       @map("contact_released_to_business_id")
   contactReleasedAt           DateTime?     @map("contact_released_at")
@@ -1802,6 +1814,15 @@ model Quote {
   /// sentAt + validityDays, materialised so the expiry job and the buyer's
   /// countdown read the same number.
   expiresAt    DateTime?   @map("expires_at")
+  /// Set when the buyer revised the requirement after this quote was sent.
+  ///
+  /// Not a status, because the quote is still live and still acceptable — the
+  /// buyer may prefer it to anything the revision brings back. It records that
+  /// the thing quoted has changed since, which board 1i renders as
+  /// `QUOTED R1 · REQUIREMENT CHANGED SINCE`.
+  supersededAt DateTime?   @map("superseded_at")
+  /// The enquiry revision this quote was priced against.
+  againstRevision Int      @default(1) @map("against_revision")
   createdAt    DateTime    @default(now()) @map("created_at")
 
   enquiry  Enquiry     @relation(fields: [enquiryId], references: [id], onDelete: Cascade)

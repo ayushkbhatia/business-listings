@@ -650,6 +650,7 @@ async function main() {
   await seedBranchNetwork(prisma);
   await seedProductDetail(prisma);
   await seedTestimonials(prisma);
+  await seedTrackingStates(prisma);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
@@ -4310,4 +4311,87 @@ async function seedProductDetail(db: Db) {
       console.log(`   a spec twin at ${twinSeller.slug}, for the comparison table`);
     }
   }
+}
+
+/**
+ * The tracking states board 1i needs and no seed produced.
+ *
+ * `ENQ-8871` is the five-recipient, two-quote state the render depicts, and
+ * `ENQ-8879` turned out to be the *accepted* state — its one quote was taken.
+ * Neither is the single-quote-still-open state, which is its own thing: the
+ * header reframes to "One supplier has quoted", Compare stays blocked because
+ * one quote is not a comparison, and that quote still carries a primary action
+ * because it is perfectly actionable on its own.
+ *
+ * Appended for the reason the blocks above it are: the PRNG is a sequence, and
+ * a draw inserted earlier renames every business generated after it.
+ */
+async function seedTrackingStates(db: Db) {
+  console.log("→ a single-quote enquiry, for board 1i");
+
+  const existing = await db.enquiry.findFirst({ where: { ref: "ENQ-8890" }, select: { id: true } });
+  if (existing) return;
+
+  const buyer = await db.user.findFirst({
+    where: { isProvisional: true, claimToken: "seed-0000-4000-8000-provisional01" },
+    select: { id: true },
+  });
+  const businesses = await db.business.findMany({
+    where: { publishedAt: { not: null }, suspendedAt: null, claimStatus: "claimed" },
+    orderBy: { slug: "asc" },
+    select: { id: true },
+    take: 3,
+  });
+  if (!buyer || businesses.length < 3) {
+    console.log("   skipped — no provisional buyer or too few claimed suppliers");
+    return;
+  }
+
+  const enquiry = await db.enquiry.create({
+    data: {
+      ref: "ENQ-8890",
+      buyerId: buyer.id,
+      requirement:
+        "Chilled water riser replacement at a hotel in Dubai Marina. UL/FM listed valves, Civil Defence acceptable.",
+      deliverToArea: "Dubai Marina",
+      closesAt: days(4),
+      lines: {
+        create: [
+          { description: "Grooved butterfly valve DN100, PN16", qty: 18, unit: "pcs", sortOrder: 0 },
+          { description: "Grooved gasket, EPDM, 4 inch", qty: 40, unit: "pcs", sortOrder: 1 },
+        ],
+      },
+      recipients: {
+        create: [
+          /* One who quoted, two who have not — the state under test. */
+          { businessId: businesses[0]!.id, state: "quoted", openedAt: days(-2) },
+          { businessId: businesses[1]!.id, state: "opened", openedAt: days(-1) },
+          { businessId: businesses[2]!.id, state: "delivered" },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  /*
+     A partial quote: two lines asked, one priced. Board 1i insists the row says
+     which count, because a buyer needs to know a line went unpriced *before*
+     they compare rather than during.
+  */
+  await db.quote.create({
+    data: {
+      ref: "QTE-8890-1",
+      enquiryId: enquiry.id,
+      businessId: businesses[0]!.id,
+      status: "sent",
+      sentAt: days(-2),
+      validityDays: 7,
+      expiresAt: days(5),
+      lines: {
+        create: [
+          { description: "Grooved butterfly valve DN100, PN16", qty: 18, unitPrice: 182, sortOrder: 0 },
+        ],
+      },
+    },
+  });
 }
