@@ -228,6 +228,21 @@ export interface CatalogueProduct {
   watchers?: number;
 }
 
+/**
+ * The one filter worth dropping, and what dropping it yields.
+ *
+ * Criterion 10 asks the zero-result state to name a filter rather than shrug.
+ * Tried one at a time and the most generous kept: telling somebody "drop
+ * availability and you get 31" is actionable, and "try fewer filters" is not.
+ */
+export interface DroppableFilter {
+  /** Query-string key, so the link can remove exactly this one. */
+  key: string;
+  /** Already-localised facet name, filled by the caller. */
+  facet: string;
+  count: number;
+}
+
 export interface CatalogueView {
   products: CatalogueProduct[];
   total: number;
@@ -236,6 +251,8 @@ export interface CatalogueView {
   subcategories: CatalogueSubcategory[];
   availability: AvailabilityFacet[];
   specFilters: SpecFilter[];
+  /** Set only when the current filters return nothing. */
+  dropSuggestion: DroppableFilter | null;
 }
 
 const AVAILABILITY_ORDER = ["in_stock", "made_to_order", "indent", "out_of_stock"] as const;
@@ -318,7 +335,61 @@ export async function getCatalogueView(
 
   const products = await getPage(businessId, query, now, options.withWatchers ?? false);
 
-  return { products, total, catalogueTotal, subcategories, availability, specFilters };
+  /*
+     Only computed when it is needed. A suggestion costs one count per active
+     filter, which is not worth paying on every page that returned results.
+  */
+  const dropSuggestion =
+    total === 0 ? await suggestDrop(businessId, query) : null;
+
+  return {
+    products,
+    total,
+    catalogueTotal,
+    subcategories,
+    availability,
+    specFilters,
+    dropSuggestion,
+  };
+}
+
+/**
+ * Which single filter, dropped, opens the most back up.
+ *
+ * One at a time rather than in combination: a buyer can act on "drop this one",
+ * and cannot act on "drop some subset of these four". Ties go to whichever
+ * yields more, and a filter that changes nothing is not offered — suggesting a
+ * drop that still returns zero is worse than saying nothing.
+ */
+async function suggestDrop(
+  businessId: string,
+  query: CatalogueQuery,
+): Promise<DroppableFilter | null> {
+  const candidates: { key: string; without: CatalogueQuery }[] = [];
+
+  if (query.q) candidates.push({ key: "q", without: { ...query, q: "" } });
+  if (query.subcategory) {
+    candidates.push({ key: "subcategory", without: { ...query, subcategory: undefined } });
+  }
+  if (query.availability.length > 0) {
+    candidates.push({ key: "availability", without: { ...query, availability: [] } });
+  }
+  for (const fieldId of Object.keys(query.spec)) {
+    const spec = { ...query.spec };
+    delete spec[fieldId];
+    candidates.push({ key: fieldId, without: { ...query, spec } });
+  }
+
+  let best: DroppableFilter | null = null;
+  for (const candidate of candidates) {
+    const count = await prisma.product.count({
+      where: productWhere(businessId, candidate.without),
+    });
+    if (count > 0 && (!best || count > best.count)) {
+      best = { key: candidate.key, facet: candidate.key, count };
+    }
+  }
+  return best;
 }
 
 /**

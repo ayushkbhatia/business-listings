@@ -124,6 +124,30 @@ export default async function CataloguePage({ params, searchParams }: Params) {
       .filter((row) => row.raw !== undefined && row.raw !== null && String(row.raw).trim() !== "")
       .map((row) => ({ key: row.key, label: row.label, value: String(row.raw) }));
 
+  /** A filter's name as the rail shows it, for the drop suggestion. */
+  const facetLabel = (key: string): string => {
+    if (key === "q") return t("catalogue.search_scope");
+    if (key === "subcategory") return t("catalogue.block_catalogue");
+    if (key === "availability") return t("catalogue.block_availability");
+    // Anything else is a spec field, and the rail already knows its platform
+    // label — the one criterion 5 insists on.
+    return view.specFilters.find((filter) => filter.fieldId === key)?.label ?? key;
+  };
+
+  /** The same view with exactly that one filter removed. */
+  const dropHref = (key: string): string => {
+    const spec = { ...query.spec };
+    if (key in spec) delete spec[key];
+    const params = toCatalogueParams(query, {
+      page: 1,
+      ...(key === "q" ? { q: "" } : {}),
+      ...(key === "subcategory" ? { subcategory: undefined } : {}),
+      ...(key === "availability" ? { availability: [] } : {}),
+      spec,
+    });
+    return params ? `${basePath}?${params}` : basePath;
+  };
+
   const allOutOfStock =
     view.products.length > 0 &&
     view.products.every((product) => product.availability === "out_of_stock");
@@ -256,10 +280,35 @@ export default async function CataloguePage({ params, searchParams }: Params) {
                 */
                 <div className="mt-6 max-w-[var(--measure-prose)]">
                   <h3 className="text-h3 text-ink">{t("catalogue.zero_title")}</h3>
+
+                  {/*
+                     The named filter, and what dropping it yields. "Try fewer
+                     filters" is not something a buyer can act on; "dropping
+                     Availability gives you 31 of them" is.
+                  */}
+                  {view.dropSuggestion && (
+                    <p className="mt-2 text-body-sm text-ink">
+                      {t("catalogue.zero_drop", {
+                        facet: facetLabel(view.dropSuggestion.key),
+                        count: view.dropSuggestion.count,
+                      })}
+                    </p>
+                  )}
+
                   <p className="mt-2 text-body-sm text-body">
                     {t("catalogue.zero_describe")}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
+                    {view.dropSuggestion && (
+                      <Link
+                        href={dropHref(view.dropSuggestion.key)}
+                        className="rounded-ctl bg-ink px-3 py-2 text-body-sm font-medium text-on-ink hover:opacity-90 focus-visible:outline-none focus-visible:shadow-focus"
+                      >
+                        {t("catalogue.zero_drop_cta", {
+                          facet: facetLabel(view.dropSuggestion.key),
+                        })}
+                      </Link>
+                    )}
                     <Link
                       href={basePath}
                       className="rounded-ctl border border-line bg-card px-3 py-2 text-body-sm font-medium text-ink hover:bg-paper focus-visible:outline-none focus-visible:shadow-focus"

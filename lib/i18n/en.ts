@@ -3148,6 +3148,7 @@ export const en = {
   "catalogue.compare_cta": "Open the comparison tray",
   "catalogue.zero_title": "Nothing in this catalogue matches all of that",
   "catalogue.zero_drop": "Dropping {facet} gives you {count} of them.",
+  "catalogue.zero_drop_cta": "Drop {facet}",
   "catalogue.zero_describe": "Or send one enquiry describing what you need — the supplier may have it even where the catalogue does not say so.",
   "catalogue.all_out_title": "Everything here is currently out of stock",
   "catalogue.all_out_body": "The supplier still quotes on indent orders.",
