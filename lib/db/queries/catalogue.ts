@@ -27,6 +27,15 @@ export interface CatalogueRow {
   updatedAt: Date;
   /** Set when a CSV created this row and the run can still be undone. */
   fromImport: boolean;
+  /**
+   * Buyers waiting for this line to come back into stock.
+   *
+   * Board 1e's "Notify me" creates one of these, and this is where the seller
+   * meets it: on the row they would edit to fix it, rather than on a screen
+   * they have to remember to visit. A count on an out-of-stock line is the
+   * clearest argument the directory makes for restocking something.
+   */
+  watchers: number;
 }
 
 export interface CatalogueView {
@@ -62,7 +71,13 @@ export async function getCatalogue(businessId: string): Promise<CatalogueView> {
           },
         },
       },
-      _count: { select: { media: true } },
+      _count: {
+        select: {
+          media: true,
+          // Open watches only. A fired one has already done its job.
+          watches: { where: { notifiedAt: null } },
+        },
+      },
     },
   });
 
@@ -89,6 +104,7 @@ export async function getCatalogue(businessId: string): Promise<CatalogueView> {
       photoCount: product._count.media,
       updatedAt: product.updatedAt,
       fromImport: product.importRunId !== null,
+      watchers: product._count.watches,
     };
   });
 

@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
+import { isCode, matchNeedle } from "@/lib/search/index-text";
 
 /**
  * Board 1e — the catalogue behind one seller's Products tab.
@@ -37,6 +38,15 @@ export const SPEC_FILTER_MIN_PRODUCTS = 12;
 export const STOCK_FRESH_DAYS = 30;
 
 export interface CatalogueQuery {
+  /**
+   * Words typed into the header search, which is scoped to this store.
+   *
+   * Matched against the same `search_text` surface the site-wide search uses,
+   * with the same code/name split — a buyer typing `DN100` in a supplier's
+   * catalogue means the same thing they mean everywhere else, and `DN10` must
+   * not reach `DN100` here either.
+   */
+  q: string;
   /** A subcategory of this seller's catalogue, by slug. */
   subcategory?: string;
   availability: string[];
@@ -77,6 +87,7 @@ export function parseCatalogueQuery(
   const sort = one(params.sort);
 
   return {
+    q: (one(params.q) ?? "").trim(),
     subcategory: one(params.subcategory),
     availability: list(params.availability),
     spec,
@@ -88,7 +99,8 @@ export function parseCatalogueQuery(
 /** True when any filter is set — the page is then noindex and canonicalises up. */
 export function isFiltered(query: CatalogueQuery): boolean {
   return Boolean(
-    query.subcategory ||
+    query.q ||
+      query.subcategory ||
       query.availability.length > 0 ||
       Object.keys(query.spec).length > 0,
   );
@@ -101,6 +113,7 @@ export function toCatalogueParams(
   const merged = { ...query, ...overrides };
   const params = new URLSearchParams();
 
+  if (merged.q) params.set("q", merged.q);
   if (merged.subcategory) params.set("subcategory", merged.subcategory);
   if (merged.availability.length > 0) params.set("availability", merged.availability.join(","));
   for (const [field, values] of Object.entries(merged.spec)) {
@@ -123,6 +136,26 @@ function productWhere(
   options: { ignoreAvailability?: boolean; ignoreSpecField?: string } = {},
 ): Prisma.ProductWhereInput {
   const and: Prisma.ProductWhereInput[] = [{ businessId, ...PUBLIC_PRODUCT }];
+
+  /*
+     The same matcher the site-wide search uses, scoped to one seller.
+
+     `matchNeedle` pads a code so `DN10` cannot reach `DN100`, and leaves a name
+     loose so `valv` still finds valves. Reimplementing that here would be a
+     second place for the rule to drift — and the rule is the one that decides
+     whether somebody is quoted the wrong part.
+  */
+  for (const token of query.q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 8)) {
+    const branches: Prisma.ProductWhereInput[] = [
+      { searchText: { contains: matchNeedle(token), mode: "insensitive" } },
+    ];
+    if (!isCode(token)) {
+      branches.push({ name: { contains: token, mode: "insensitive" } });
+    } else {
+      branches.push({ sku: { equals: token, mode: "insensitive" } });
+    }
+    and.push({ OR: branches });
+  }
 
   if (query.subcategory) and.push({ category: { slug: query.subcategory } });
 

@@ -170,7 +170,8 @@ export async function createAlert(input: CreateAlertInput): Promise<AlertResult>
  */
 export async function watchProduct(input: {
   productId: string;
-  identity?: { kind: "phone" | "email"; value: string } | undefined;
+  /** Raw, as typed. Normalised here exactly as `createAlert` does. */
+  contact?: string | undefined;
   fullName?: string | undefined;
   userId?: string | undefined;
 }): Promise<AlertResult> {
@@ -192,16 +193,25 @@ export async function watchProduct(input: {
 
   let userId = input.userId;
   if (!userId) {
-    if (input.identity?.kind !== "phone") {
+    const contact = input.contact?.trim();
+    if (!contact) {
+      return {
+        ok: false,
+        error: "no_identity",
+        message: "A mobile number, so we have somewhere to tell you.",
+      };
+    }
+    const identity = normaliseIdentifier(contact);
+    if (identity?.kind !== "phone") {
       return {
         ok: false,
         error: "no_identity",
         message:
-          "A mobile number for now. Email alerts need an account, and signing in is at the top of the page.",
+          "A UAE mobile number like 050 123 4567. Email alerts need an account, and signing in is at the top of the page.",
       };
     }
     const provisional = await createProvisionalIdentity({
-      phone: input.identity.value,
+      phone: identity.value,
       fullName: input.fullName?.trim() || null,
     });
     if (!provisional) {

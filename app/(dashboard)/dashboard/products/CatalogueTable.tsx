@@ -208,6 +208,20 @@ export function CatalogueTable({ rows, action }: CatalogueTableProps) {
                   </td>
                   <td className="px-3 py-3 text-body-sm text-ink">
                     {AVAILABILITY_LABEL[row.availability] ?? row.availability}
+                    {/*
+                       Board 1e's "Notify me", met where the seller can act on
+                       it: on the row they would edit to fix it, rather than on
+                       a screen they have to remember to visit.
+
+                       Only on an out-of-stock line, and only when somebody is
+                       actually waiting — a zero here would be a column of
+                       zeroes teaching nobody anything.
+                    */}
+                    {row.availability === "out_of_stock" && row.watchers > 0 && (
+                      <span className="ms-2 inline-block rounded-pill bg-warn-wash px-1.5 py-px font-mono text-eyebrow tabular-nums text-ink">
+                        {t("catalogue.watchers", { count: row.watchers })}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-3 font-mono tabular-nums text-body-sm text-ink">
                     {row.photoCount}

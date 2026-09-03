@@ -21,6 +21,7 @@ import {
  */
 
 const query = (over: Partial<CatalogueQuery> = {}): CatalogueQuery => ({
+  q: "",
   availability: [],
   spec: {},
   sort: "availability",
@@ -67,6 +68,12 @@ describe("the query string", () => {
       sort: "name",
       page: 3,
     });
+  });
+
+  it("counts the store search as a filter", () => {
+    // Criterion 11 hangs off this too: a search result inside one catalogue is
+    // not a page worth indexing separately from the catalogue.
+    expect(isFiltered(query({ q: "valve" }))).toBe(true);
   });
 
   it("knows when a view is filtered", () => {
