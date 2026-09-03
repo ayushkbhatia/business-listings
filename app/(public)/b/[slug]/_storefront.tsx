@@ -30,6 +30,7 @@ export function StorefrontHeader({
   pages = [],
   actions,
   photoHref,
+  subline,
   now = new Date(),
 }: {
   business: PublicBusiness;
@@ -59,6 +60,17 @@ export function StorefrontHeader({
    * the overview is currently the only route that has somewhere to send them.
    */
   photoHref?: string;
+  /**
+   * A per-tab context line under the display name.
+   *
+   * Board 1e wants "Catalogue · 1,204 products", 1f wants "4 branches · Dubai,
+   * Sharjah". A slot rather than a computed field, because what is worth saying
+   * differs per tab and the header has no business knowing which tab it is on.
+   *
+   * The meta row below it stays identical everywhere — that row is the
+   * supplier's identity, and this line is the tab's.
+   */
+  subline?: React.ReactNode;
   /** A parameter, not a call in the body — the purity rule, and it is right. */
   now?: Date;
 }) {
@@ -188,6 +200,10 @@ export function StorefrontHeader({
                   </StatusBadge>
                 )}
               </div>
+
+              {subline && (
+                <p className="mt-1 text-body-sm text-muted">{subline}</p>
+              )}
 
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
                 {!licenceExpired && (
