@@ -424,3 +424,58 @@ test.describe("criterion 7 — renaming a trade on the taxonomy screen", () => {
     ).toBeVisible();
   });
 });
+
+test.describe("entry page quotes", () => {
+  /*
+     The screen behind `/for-buyers` and `/list-your-business`.
+
+     What it must refuse is the point of it: a quote nobody signed, and a quote
+     too thin to be worth quoting. Both refusals are proved in
+     tests/integration/proof.test.ts against the real service; what is proved
+     here is that the screen reaches them, says what happened, and cannot be
+     driven without a reason.
+  */
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/admin/content/testimonials");
+  });
+
+  test("renders, and says the numbers are not edited here", async ({ page }) => {
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Entry page quotes");
+    await expect(page.getByText(/counted from the database and are not edited here/)).toBeVisible();
+  });
+
+  test("will not write anything without a reason", async ({ page }) => {
+    // Every save on this screen is a staff mutation, and CLAUDE.md's third
+    // non-negotiable makes the reason NOT NULL. The controls are disabled
+    // rather than the save failing.
+    await expect(page.getByRole("button", { name: "Save" }).first()).toBeDisabled();
+
+    await page.getByRole("textbox", { name: "Reason" }).fill("Adding the first quote.");
+    await expect(page.getByRole("button", { name: "Save" }).first()).toBeEnabled();
+  });
+
+  test("refuses a quote with no name on it", async ({ page }) => {
+    await page.getByRole("textbox", { name: "Reason" }).fill("Trying it without a name.");
+
+    /*
+       Scoped by the new-quote form's own field ids rather than by an enclosing
+       role: `Panel` is a plain div, so there is no landmark to filter on, and
+       every saved quote renders the same field labels.
+    */
+    await page
+      .locator("#body-new")
+      .fill("They found us a valve supplier in Al Quoz on the same afternoon we asked.");
+    await page
+      .locator("#body-new")
+      .locator("xpath=ancestor::form")
+      .getByRole("button", { name: "Save" })
+      .click();
+
+    await expect(page.getByText(/quote nobody is willing to sign/)).toBeVisible();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});

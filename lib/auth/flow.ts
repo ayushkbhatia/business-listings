@@ -248,7 +248,7 @@ export async function verifyCode(input: VerifyInput, deps: AuthDeps = {}): Promi
     ok: true,
     kind: "signed_in",
     userId: data.user.id,
-    destination: destinationFor(profile.roles, input.next ?? null),
+    destination: destinationFor(profile.roles, input.next ?? null, profile.wantsToList),
   };
 }
 
@@ -282,7 +282,7 @@ async function adoptProfile(
 
   const existing = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, roles: true, suspendedAt: true, businessId: true, isProvisional: true },
+    select: { id: true, roles: true, suspendedAt: true, businessId: true, wantsToList: true, isProvisional: true },
   });
 
   if (existing?.isProvisional) {
@@ -298,7 +298,7 @@ async function adoptProfile(
         ...(wantsToList ? { wantsToList: true } : {}),
         ...(existing.roles.length === 0 ? { roles: ["buyer" as Role] } : {}),
       },
-      select: { id: true, roles: true, suspendedAt: true, businessId: true },
+      select: { id: true, roles: true, suspendedAt: true, businessId: true, wantsToList: true },
     });
     await syncClaims(userId, claimed.roles, claimed.businessId);
     return claimed;
@@ -321,7 +321,7 @@ async function adoptProfile(
         roles: ["buyer"],
         wantsToList,
       },
-      select: { id: true, roles: true, suspendedAt: true, businessId: true },
+      select: { id: true, roles: true, suspendedAt: true, businessId: true, wantsToList: true },
     });
 
     await syncClaims(userId, profile.roles, profile.businessId);
@@ -555,8 +555,20 @@ export function fromSupabaseError(error: {
  * `/account/enquiries`, which docs/routes.md names and step 3 of this handoff
  * builds. Landing a new account on a 404 is worse than landing it on the
  * directory. Change this line when that route exists.
+ *
+ * `wantsToList` is the intent captured at signup, not a role — `adoptProfile`
+ * writes it and grants `buyer` regardless, because `seller_owner` is scoped to
+ * a business and there is no business yet. Which is exactly the case this
+ * handles: somebody who arrived through `/list-your-business`, said they want
+ * to list, and would otherwise be dropped on the directory home page with no
+ * hint that claiming a listing is the next thing. It ranks below the seller
+ * check, so a supplier who already has a business still gets their dashboard.
  */
-export function destinationFor(roles: readonly Role[], next: string | null): string {
+export function destinationFor(
+  roles: readonly Role[],
+  next: string | null,
+  wantsToList = false,
+): string {
   if (next && isSafeNext(next)) return next;
   /*
    * Staff before seller, because somebody can hold both — a small operations
@@ -566,6 +578,7 @@ export function destinationFor(roles: readonly Role[], next: string | null): str
    */
   if (roles.some((r) => r.startsWith("staff_"))) return "/admin";
   if (roles.some((r) => r.startsWith("seller_"))) return "/dashboard/leads";
+  if (wantsToList) return "/onboarding/claim";
   return "/";
 }
 

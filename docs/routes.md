@@ -34,6 +34,9 @@ they 404 until their handoff.
 /report/:subject                        Report a listing (modal route)       [10j]
 /terms · /privacy · /verification-policy · /review-policy                    [10j]  built h5s5
 /signin · /signup · /verify · /reset                                          [7a]  built h2s2
+/for-buyers                             Buyer entry surface                         built h5s7
+/list-your-business                     Supplier entry surface                      built h5s7
+/staff                                  Staff sign in — noindex, unlinked         built h5s7
 /account/enquiries                      Buyer enquiry inbox                  [10e]  built h2s3
 /account/saved                          Saved searches & alerts              [10e]
 /account/suppliers                      Saved suppliers                       later
@@ -114,6 +117,7 @@ they 404 until their handoff.
 /admin/content/guides/:id               One guide, or new               [10b, 6d]  built h5s1
 /admin/content/attribution              Enquiry attribution                  [10i]  built h5s5
 /admin/content/home                     Homepage curation                    [12g]  built h4s7
+/admin/content/testimonials             Entry page testimonials                     built h5s7
 /admin/content/redirects                Redirects                            [12g]  built h4s7
 /admin/storefront-templates             Templates & section library      [5c]  built h4s6
 /admin/storefront-templates/specimens   Section specimens           [5g, 5h]  built h4s6
@@ -141,6 +145,23 @@ state at once, which is the only way to notice that two of them disagree.
 ```
 
 ## Rules
+
+Three doors, one flow. `/signin` is the neutral one and is where the root 404
+sends people. `/for-buyers` and `/list-your-business` are the same sign-in form
+with an audience's own copy and its own measured numbers around it. `/staff` is
+the console's door: nothing links to it, `robots.ts` disallows it and the page
+sets `noindex`, because the staff console is undiscoverable only while nothing
+advertises it. All four post to the same server actions in `app/(auth)/actions.ts`
+and get the same throttle and the same neutral outcome — a second sign-in *path*
+would be a second rate limiter and a second set of bugs, and an entry page that
+answered differently for a staff number than for anyone else's would be an
+enumeration oracle.
+
+`?as=buyer|supplier` on `/signup` preselects an intent checkbox and nothing else.
+`?from=` carries which door a person came through so a refusal returns there; it
+is validated by `isSafeNext` and is never a destination for a signed-in session.
+Neither grants anything: roles are read from the profile row after the code is
+verified.
 
 Slugs are immutable once published. Renaming a category or merging two listings creates a
 301 automatically; deleting a page without one is blocked at the service layer.

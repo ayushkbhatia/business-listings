@@ -245,6 +245,32 @@ describe("where a session lands", () => {
     );
   });
 
+  it("sends a new supplier to the claim flow rather than the directory", () => {
+    /*
+       The gap `/list-your-business` opens. `adoptProfile` grants `buyer` and
+       nothing else — `seller_owner` is scoped to a business and there is no
+       business yet — so somebody who has just said they want to list would
+       otherwise land on the home page with no hint that claiming a listing is
+       the next thing.
+    */
+    expect(destinationFor(["buyer"], null, true)).toBe("/onboarding/claim");
+  });
+
+  it("still sends a supplier who already has a listing to their dashboard", () => {
+    // Intent ranks below the role. Somebody with a business does not need the
+    // claim flow, whatever they ticked at signup.
+    expect(destinationFor(["seller_owner"], null, true)).toBe("/dashboard/leads");
+  });
+
+  it("puts staff ahead of a listing intent", () => {
+    expect(destinationFor(["staff_ops_lead"], null, true)).toBe("/admin");
+  });
+
+  it("leaves a buyer with no listing intent on the directory", () => {
+    expect(destinationFor(["buyer"], null, false)).toBe("/");
+    expect(destinationFor(["buyer"], null)).toBe("/");
+  });
+
   it("refuses a next that leaves the site", () => {
     // An open redirect with a fresh session attached is the worst kind.
     for (const hostile of [
@@ -255,6 +281,8 @@ describe("where a session lands", () => {
     ]) {
       expect(isSafeNext(hostile), hostile).toBe(false);
       expect(destinationFor(["buyer"], hostile)).toBe("/");
+      // And a listing intent does not turn a hostile next into a way out.
+      expect(destinationFor(["buyer"], hostile, true)).toBe("/onboarding/claim");
     }
   });
 

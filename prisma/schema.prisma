@@ -2541,6 +2541,61 @@ model Campaign {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Entry surfaces — /for-buyers and /list-your-business
+//
+// The two audiences arrive for opposite reasons. A buyer wants to know the
+// directory has the supplier they need; a supplier wants to know buyers are
+// asking. One sign-in page cannot argue both, so each audience gets its own
+// page and its own evidence.
+//
+// The numbers on those pages are measured — `getDirectoryStats` counts rows.
+// The quotes are not, so they live here rather than in a constant: a quote
+// written through the admin costs a revalidation, and one written into
+// `lib/…` costs a build, a deploy and a cold cache for every page on the site.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum TestimonialAudience {
+  buyer
+  supplier
+
+  @@map("testimonial_audience")
+}
+
+/// One quote on one entry surface. Staff-authored from `/admin/content/testimonials`.
+///
+/// Attribution is required and free text. A quote with no name attached is a
+/// claim the platform is making about itself in someone else's voice, which is
+/// the one thing §08 will not let a trust signal do — and `verification_tier`
+/// exists precisely because we do not take unattributed word for anything.
+model Testimonial {
+  id       String        @id @default(cuid())
+  audience TestimonialAudience
+
+  /// The quote. Held to a floor in `lib/content/testimonials.ts` — a five-word
+  /// testimonial persuades nobody and costs the page its credibility.
+  body String
+
+  /// Who said it. A person's name, not a company: a company cannot speak.
+  attribution String
+
+  /// Their role and firm, on the line under the name. Optional, because a
+  /// buyer who will give a name but not a company is still a real buyer.
+  context String?
+
+  /// Ascending. Ties break on `createdAt`, so an unset order is still stable.
+  sortOrder Int @default(0) @map("sort_order")
+
+  /// Null is a draft. The entry pages read published rows only.
+  publishedAt DateTime? @map("published_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([audience, publishedAt, sortOrder])
+  @@map("testimonial")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Legal pages — board 10j
 //
 // Four of them, one template. Content again: a change to the review policy

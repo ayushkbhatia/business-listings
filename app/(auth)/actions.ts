@@ -34,10 +34,32 @@ async function callerIp(): Promise<string | null> {
   return h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
 }
 
-/** Where an outcome sends the browser. One place, so the screens stay dumb. */
-function outcomeUrl(outcome: AuthOutcome, base: string, identifier: string, next: string | null): string {
+/**
+ * Where an outcome sends the browser. One place, so the screens stay dumb.
+ *
+ * `from` is the screen the form was on. It exists because there is now more
+ * than one door: `/signin`, `/for-buyers`, `/list-your-business` and `/staff`
+ * all post to these same actions, and a refusal that always landed on
+ * `/signin` would drop a supplier out of the flow they were reading. It is
+ * carried on to `/verify` for the same reason — "start again" should start
+ * again where they started, not somewhere they have never been.
+ *
+ * Attacker-controlled, like `next`, and validated the same way. Unlike `next`
+ * it decides nothing but which page renders a form; it is never a destination
+ * for a signed-in session.
+ */
+function outcomeUrl(
+  outcome: AuthOutcome,
+  base: string,
+  identifier: string,
+  next: string | null,
+  from: string | null,
+): string {
   const params = new URLSearchParams();
   if (next && isSafeNext(next)) params.set("next", next);
+
+  const origin = from && isSafeNext(from) ? from : base;
+  if (origin !== "/signin") params.set("from", origin);
 
   if (outcome.ok && outcome.kind === "code_sent") {
     params.set("to", identifier);
@@ -55,14 +77,18 @@ function outcomeUrl(outcome: AuthOutcome, base: string, identifier: string, next
   if ("limit" in outcome) params.set("limit", String(outcome.limit));
   if (outcome.kind === "suspended") params.set("since", outcome.since.toISOString());
   if (identifier) params.set("to", identifier);
-  return `${base}?${params}`;
+  // Back to the page the form was on, with its own copy intact — so `from` is
+  // the destination here rather than a parameter on it.
+  params.delete("from");
+  return `${origin}?${params}`;
 }
 
 export async function signInAction(formData: FormData): Promise<void> {
   const identifier = String(formData.get("identifier") ?? "");
   const next = asString(formData.get("next"));
+  const from = asString(formData.get("from"));
   const outcome = await startSignIn({ identifier, ip: await callerIp() });
-  redirect(outcomeUrl(outcome, "/signin", identifier, next));
+  redirect(outcomeUrl(outcome, "/signin", identifier, next, from));
 }
 
 export async function signUpAction(formData: FormData): Promise<void> {
@@ -71,6 +97,7 @@ export async function signUpAction(formData: FormData): Promise<void> {
   const wantsToBuy = formData.get("wantsToBuy") === "on";
   const wantsToList = formData.get("wantsToList") === "on";
   const next = asString(formData.get("next"));
+  const from = asString(formData.get("from"));
 
   if (!fullName) {
     redirect(`/signup?error=name_required&to=${encodeURIComponent(identifier)}`);
@@ -86,24 +113,26 @@ export async function signUpAction(formData: FormData): Promise<void> {
     wantsToList,
     ip: await callerIp(),
   });
-  redirect(outcomeUrl(outcome, "/signup", identifier, next));
+  redirect(outcomeUrl(outcome, "/signup", identifier, next, from));
 }
 
 export async function verifyAction(formData: FormData): Promise<void> {
   const identifier = String(formData.get("identifier") ?? "");
   const code = String(formData.get("code") ?? "");
   const next = asString(formData.get("next"));
+  const from = asString(formData.get("from"));
 
   const outcome = await verifyCode({ identifier, code, next, ip: await callerIp() });
-  redirect(outcomeUrl(outcome, "/verify", identifier, next));
+  redirect(outcomeUrl(outcome, "/verify", identifier, next, from));
 }
 
 /** The resend on the verify screen. Same throttle, same cooldown. */
 export async function resendAction(formData: FormData): Promise<void> {
   const identifier = String(formData.get("identifier") ?? "");
   const next = asString(formData.get("next"));
+  const from = asString(formData.get("from"));
   const outcome = await startSignIn({ identifier, ip: await callerIp() });
-  redirect(outcomeUrl(outcome, "/verify", identifier, next));
+  redirect(outcomeUrl(outcome, "/verify", identifier, next, from));
 }
 
 export async function requestResetAction(formData: FormData): Promise<void> {
@@ -113,7 +142,7 @@ export async function requestResetAction(formData: FormData): Promise<void> {
     ip: await callerIp(),
     redirectTo: absoluteUrl("/auth/callback?flow=reset"),
   });
-  redirect(outcomeUrl(outcome, "/reset", identifier, null));
+  redirect(outcomeUrl(outcome, "/reset", identifier, null, null));
 }
 
 /**
