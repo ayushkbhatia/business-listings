@@ -445,6 +445,20 @@ model Business {
   teamSize         TeamSizeBand? @map("team_size")
   languages        String[]      @default([])
   description      String?
+  /// "30 days on approved account", "50% advance, balance on delivery".
+  ///
+  /// The seller's own words, not a picklist. Terms in this trade are a
+  /// negotiation and the useful thing to publish is what they usually agree to,
+  /// which no enumeration would hold. Never a price, and nothing here is a
+  /// commitment the platform is party to.
+  paymentTerms     String?       @map("payment_terms")
+  /// "Same-day within Dubai, next day to the Northern Emirates."
+  ///
+  /// Board 1d's details panel asks for delivery as a fact a buyer can plan
+  /// around. Free text for the same reason as payment terms: a supplier who
+  /// delivers to site on their own truck and one who uses a courier are both
+  /// answering the question, and a dropdown would make one of them lie.
+  deliveryNote     String?       @map("delivery_note")
   /// Denormalised match surface: this supplier's own words, their categories
   /// and synonyms, and every product name, SKU and spec value in their
   /// catalogue — sizes and trade abbreviations expanded to every spelling.
@@ -792,6 +806,33 @@ model Document {
   mimeType    String?      @map("mime_type")
   createdAt   DateTime     @default(now()) @map("created_at")
 
+  /// Listed on the public storefront. The **file never is**.
+  ///
+  /// Board 1d: "Certificates list name and validity month only, never the
+  /// document." A trade licence PDF carries the licence number, the manager's
+  /// name and often a signature; an ISO certificate carries the auditor's
+  /// reference. Publishing that a supplier holds ISO 9001 until March 2027 is
+  /// useful to a buyer, and publishing the scan is handing over a forgeable
+  /// original. So this flag governs the *row*, and `storagePath` stays behind
+  /// the signed-URL route in every case.
+  ///
+  /// Defaults to false. A document becomes public because somebody said so,
+  /// never because it was uploaded.
+  isPublic    Boolean      @default(false) @map("is_public")
+  /// What a buyer would call it — "ISO 9001:2015", not "scan_0043_final.pdf".
+  ///
+  /// `filename` is whatever came off the seller's desktop and is not fit to
+  /// render. Null means the row has never been prepared for the public list,
+  /// which is another reason it is not on it.
+  displayName String?      @map("display_name")
+  /// Validity, rendered to the month.
+  ///
+  /// The board asks for the month rather than the day on purpose: a certificate
+  /// that expires "March 2027" is the fact a buyer needs, and a precise date
+  /// invites a page that looks wrong for the twenty-four hours around it. Null
+  /// for documents that do not expire.
+  validUntil  DateTime?    @map("valid_until")
+
   businessId String? @map("business_id")
   productId  String? @map("product_id")
   enquiryId  String? @map("enquiry_id")
@@ -804,6 +845,8 @@ model Document {
   @@index([businessId])
   @@index([productId])
   @@index([enquiryId])
+  /// The storefront's certificates block reads exactly this.
+  @@index([businessId, isPublic])
   @@map("document")
 }
 

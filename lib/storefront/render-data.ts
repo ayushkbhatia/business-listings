@@ -65,15 +65,23 @@ export interface StorefrontReview {
 export interface StorefrontDocument {
   id: string;
   /**
-   * The filename. `Document` has no title column and no validity dates —
-   * `filename`, `kind` and `mimeType` are the whole of what a seller gives us
-   * about a file.
+   * The name a buyer would use — "ISO 9001:2015", not "scan_0043_final.pdf".
    *
-   * The board's Certifications card draws an expiry beside each one. That needs
-   * columns nobody has argued for yet, so the card shows what exists rather
-   * than a date the data cannot supply.
+   * This used to be the raw filename, and the note here used to say that
+   * `Document` had no title column and no validity dates, so the card showed
+   * what existed rather than a date the data could not supply. Board 1d argued
+   * for those columns and they exist: `display_name` and `valid_until`, with a
+   * CHECK refusing a public document that has no name.
    */
   title: string;
+  /**
+   * Validity, or null for a document that does not expire.
+   *
+   * Rendered to the month. The board asks for the month rather than the day on
+   * purpose — "expires March 2027" is the fact a buyer uses, and a precise date
+   * invites a page that looks wrong for the twenty-four hours around it.
+   */
+  validUntil?: Date | null;
   /** Always one of `PUBLISHABLE_DOCUMENT_KINDS`. The loader fences it. */
   kind: string;
   /**

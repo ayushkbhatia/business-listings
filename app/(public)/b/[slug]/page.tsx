@@ -3,23 +3,50 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
 import { Button } from "@/components/primitives";
 import { Breadcrumb, Card, KeyValuePanel, Panel, PublicShell } from "@/components/structure";
-import { Tag } from "@/components/display";
-import { ListingCard, VerificationLadder, tierSpec } from "@/components/domain";
+import { ListingCard, tierSpec } from "@/components/domain";
 import { getBusinessBySlug, getSimilarClaimedBusinesses } from "@/lib/db/queries";
-import { formatDate, formatDuration, maskTRN } from "@/lib/format";
+import { formatDate, formatDuration } from "@/lib/format";
+import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
+import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { StorefrontHeader, storefrontCrumbs } from "./_storefront";
 import { renderSection } from "@/components/storefront";
 import { storefrontPlan } from "@/lib/storefront/loader";
+import { openingHoursSchema } from "@/lib/trade/open-now";
 import { ContactCard } from "./ContactCard";
+import {
+  BusinessDetails,
+  CapabilityChips,
+  EnquiryComposer,
+  HoursPanel,
+  LocationsPanel,
+  VerificationPanel,
+} from "./_rail";
 import { EnquireButton } from "./EnquireDrawer";
 import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
 import { navPages } from "@/lib/storefront/pages";
 
 export const revalidate = 300;
+
+/**
+ * Our availability vocabulary, in schema.org's.
+ *
+ * `made_to_order` and `indent` both map to `PreOrder` rather than `InStock`:
+ * they describe something a buyer cannot collect today, which is what the
+ * schema term means. `BackOrder` would be the closer literal match for indent
+ * and is the wrong word here — CLAUDE.md's vocabulary table names backorder as
+ * a term this product does not use, because an indent order is the supplier's
+ * own process rather than a failure to stock something.
+ */
+const SCHEMA_AVAILABILITY: Record<string, string> = {
+  in_stock: "https://schema.org/InStock",
+  made_to_order: "https://schema.org/PreOrder",
+  indent: "https://schema.org/PreOrder",
+  out_of_stock: "https://schema.org/OutOfStock",
+};
 
 interface Params {
   params: Promise<{ slug: string }>;
@@ -120,8 +147,120 @@ async function ClaimedStorefront({ business }: { business: Business }) {
   const pages = business.sectorId ? await navPages(business.sectorId) : [];
 
 
+  /*
+     The action row, hoisted out of the rail and into the identity block.
+
+     Board 1d puts the quote, the two channels and save beside the name, which
+     is where a buyer looks for them. The rail keeps the composer — a form is
+     not a button row, and the two are doing different jobs.
+  */
+  const enquireTrigger = (
+    <EnquireButton
+      block
+      size="lg"
+      businessId={business.id}
+      businessSlug={business.slug}
+      displayName={business.displayName}
+      categoryId={business.primaryCategoryId}
+      emirates={EMIRATES}
+      signedIn={Boolean(actor)}
+      /*
+         "Enquire", not "Send enquiry".
+
+         Board 1d sets the rule: "Request a quote" opens a composer, "Send
+         enquiry" is the submit inside one, and "Enquire" is the compact control
+         where there is room for neither. This bar is the compact control.
+      */
+      triggerLabel={t("listing.enquire")}
+      recipient={{
+        businessId: business.id,
+        displayName: business.displayName,
+        areaName: head?.area?.name ?? null,
+        verificationTier: business.verificationTier,
+        responseLabel:
+          business.responseTimeMedianMs === null
+            ? t("response.unmeasured")
+            : t("response.median", {
+                duration: formatDuration(business.responseTimeMedianMs),
+              }),
+        pinned: true,
+      }}
+    />
+  );
+
+  /*
+     The same actions twice, at opposite breakpoints, hidden with `display`.
+
+     Exactly one is in the accessibility tree at any width — `visibility` or
+     opacity would leave two sets of identically-labelled buttons for a screen
+     reader, which is the trap board 1b's filter rail already had to avoid.
+  */
+  const mobileActionBar = (
+    <ContactCard
+      layout="bar"
+      businessId={business.id}
+      businessSlug={business.slug}
+      phone={head?.phone ?? null}
+      whatsapp={head?.whatsapp ?? null}
+      enquire={enquireTrigger}
+    />
+  );
+
+  const identityActions = (
+    <ContactCard
+      layout="row"
+      businessId={business.id}
+      businessSlug={business.slug}
+      phone={head?.phone ?? null}
+      whatsapp={head?.whatsapp ?? null}
+      enquire={
+        <EnquireButton
+          businessId={business.id}
+          businessSlug={business.slug}
+          displayName={business.displayName}
+          categoryId={business.primaryCategoryId}
+          emirates={EMIRATES}
+          signedIn={Boolean(actor)}
+          triggerLabel={t("storefront.request_quote")}
+          recipient={{
+            businessId: business.id,
+            displayName: business.displayName,
+            areaName: head?.area?.name ?? null,
+            verificationTier: business.verificationTier,
+            responseLabel:
+              business.responseTimeMedianMs === null
+                ? t("response.unmeasured")
+                : t("response.median", {
+                    duration: formatDuration(business.responseTimeMedianMs),
+                  }),
+            pinned: true,
+          }}
+        />
+      }
+    />
+  );
+
+  /*
+     Free plan, and what it does not get.
+
+     Board 1d: no plan chip, no featured products, three photos maximum, no
+     certificates. The composer stays — "that is the free tier's whole value",
+     and a directory that took the enquiry form away from its free listings
+     would be a directory with nothing to sell an upgrade against.
+
+     A listing with no plan row is treated as Free rather than as Pro. Most of
+     them are unclaimed imports; defaulting the other way would hand the best
+     storefront to every listing nobody has claimed.
+  */
+  const freePlan = (business.plan?.id ?? "free") === "free";
+
+  const FREE_PHOTO_LIMIT = 3;
+  const allPhotos = business.media.filter((item) => item.kind === "gallery");
+  const photos = freePlan ? allPhotos.slice(0, FREE_PHOTO_LIMIT) : allPhotos;
+
   return (
     <PublicShell
+      bleed
       nav={<DirectoryNav />}
       breadcrumb={<Breadcrumb label={t("gallery.breadcrumb_label")} items={crumbs} />}
       footer={<DirectoryFooter />}
@@ -147,6 +286,26 @@ async function ClaimedStorefront({ business }: { business: Business }) {
             head?.lat != null && head.lng != null
               ? { "@type": "GeoCoordinates", latitude: head.lat, longitude: head.lng }
               : undefined,
+          /*
+             The real number, not the masked one.
+
+             The mask exists so that asking for a supplier's number is an event
+             we can count, and that reasoning does not apply to a crawler: it
+             will not send an enquiry, and a search result showing "04 88• ••••"
+             helps nobody. Board 1d says it in as many words — schema is for
+             machines.
+          */
+          telephone: head?.phone ?? undefined,
+          /*
+             The week as the schema expects it, from the same source the rail
+             renders — including the Ramadan override, because a machine reading
+             this during Ramadan should be told the hours that are actually in
+             effect rather than the ones on file.
+          */
+          openingHoursSpecification: openingHoursSchema(
+            (head?.hours ?? null) as never,
+            (head?.ramadanHours ?? null) as never,
+          ),
           // aggregateRating only when reviews exist. A rating object with a zero
           // count is a rich result built on nothing.
           aggregateRating:
@@ -185,17 +344,152 @@ async function ClaimedStorefront({ business }: { business: Business }) {
         heading, links and buttons inside; the verification badge is drawn from
         the status palette and is unaffected by design.
       */}
-      <div data-theme={plan.theme}>
-        <StorefrontHeader business={business} active="overview" pages={pages} />
+      {/*
+         Criterion 11's other half: `Product` on the featured cards, with
+         `offers.availability` and **no price at all**.
 
-        <div className="mt-6 grid gap-[var(--gutter)] lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <div className="flex min-w-0 flex-col gap-8">
+         Omitted entirely rather than left blank, which is the difference
+         between "we do not publish prices" and "this product costs nothing".
+         `Product` has no price column and `QuoteLine` is where a price lives,
+         private to one buyer and one seller — so there is nothing here to omit
+         from, and that is the point.
+
+         Capped at the four the board draws. A page emitting a hundred Product
+         objects is asking a crawler to treat a catalogue as a shop window.
+      */}
+      {plan.data.products.slice(0, 4).map((product) => (
+        <JsonLd
+          key={product.id}
+          data={{
+            "@context": "https://schema.org",
+            "@type": "Product",
+            name: product.name,
+            sku: product.sku ?? undefined,
+            url: absoluteUrl(`/b/${business.slug}/p/${product.slug}`),
+            image: product.imageUrl ?? undefined,
+            brand: { "@type": "Brand", name: business.displayName },
+            offers: {
+              "@type": "Offer",
+              availability: SCHEMA_AVAILABILITY[product.availability],
+              seller: { "@type": "Organization", name: business.displayName },
+              url: absoluteUrl(`/b/${business.slug}/p/${product.slug}`),
+            },
+          }}
+        />
+      ))}
+
+      <div data-theme={plan.theme}>
+        <StorefrontHeader
+          business={business}
+          active="overview"
+          pages={pages}
+          actions={identityActions}
+          {...(photos.length > 0 ? { photoHref: "#photos" } : {})}
+        />
+
+        {/*
+           Criterion 12: on a tablet the composer sits directly below the
+           identity block, not below the left column.
+
+           Done with grid order on one DOM node rather than by rendering the
+           form twice. A second composer is what this page already had and what
+           the section filter removed — duplicating it here to satisfy a
+           breakpoint would put two identical forms back on the page, with the
+           same field ids, for a reader on a tablet.
+
+           So the composer is its own grid child: first in source order, moved
+           into the rail's first row at `lg`. Below that it simply stays where
+           it is, which is exactly where the board wants it.
+        */}
+        <div className="mx-auto mt-6 grid max-w-7xl gap-[var(--gutter)] px-5 pb-[var(--section-pad)] lg:grid-cols-[minmax(0,1fr)_18.75rem] lg:grid-rows-[auto_1fr] xl:grid-cols-[minmax(0,1fr)_21.25rem]">
+          <div className="order-1 min-w-0 lg:order-none lg:col-start-2 lg:row-start-1">
+            <EnquiryComposer
+              business={business}
+              emirates={EMIRATES}
+              signedIn={Boolean(actor)}
+              responseLabel={
+                business.responseTimeMedianMs === null
+                  ? t("response.unmeasured")
+                  : t("response.median", {
+                      duration: formatDuration(business.responseTimeMedianMs),
+                    })
+              }
+              {...(business.responseTimeMedianMs !== null
+                ? { answeredWithin: formatDuration(business.responseTimeMedianMs) }
+                : {})}
+            />
+          </div>
+          <div className="order-2 flex min-w-0 flex-col gap-8 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1">
+            {/*
+               The photos the cover's button points at.
+
+               Gallery media existed and the overview rendered none of it — it
+               was reachable only through a template page's gallery block, which
+               most storefronts do not have. So "View all 28 photos" had a count
+               and nowhere to go, and the honest options were to drop the button
+               or give it a destination. This is the destination.
+
+               Removed entirely at zero, like every other section on this page.
+            */}
+            {photos.length > 0 && (
+              <section id="photos" className="scroll-mt-6">
+                <h2 className="text-h2 text-brand-ink">{t("storefront.photos_heading")}</h2>
+                <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                  {photos.map((photo) => (
+                    <li
+                      key={photo.id}
+                      className="relative aspect-[4/3] overflow-hidden rounded-chip border border-line"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={publicUrl(MEDIA_BUCKET, photo.storagePath)}
+                        alt={photo.alt ?? ""}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        loading="lazy"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            )}
+
+            {/*
+               Board 1d's business details, in the left column where the board
+               puts them. They were in the rail as "at a glance" and moved with
+               the rail's rebuild — the licence, the authority and the masked
+               TRN are platform-owned facts and were not going to be quietly
+               dropped on the way.
+            */}
+            <CapabilityChips business={business} />
+
+            <BusinessDetails business={business} lastUpdated={formatDate(business.updatedAt)} />
+
             {plan.sections
               /*
-                The header section is chrome and `StorefrontHeader` already drew
-                it. Rendering both would put the trade name on the page twice.
+                Two sections are chrome and are drawn elsewhere.
+
+                `header` was already filtered: `StorefrontHeader` draws it, and
+                rendering both would put the trade name on the page twice.
+                `enquiry_form` joins it now that board 1d puts a real composer
+                in the rail — a page offering the same form twice makes a buyer
+                choose between two identical doors, and the rail's copy is the
+                one carrying the measured reply time and the privacy line.
+
+                The section stays in the template and stays editable; it is this
+                composition that has somewhere better to put it.
               */
-              .filter((section) => section.type !== "header")
+              .filter((section) => section.type !== "header" && section.type !== "enquiry_form")
+              /*
+                 Featured products and certificates are what a paid storefront
+                 buys. Gated here rather than in the template so the rule holds
+                 whatever a seller's sections say — a Free listing whose
+                 template still lists them would render them.
+              */
+              .filter(
+                (section) =>
+                  !freePlan ||
+                  (section.type !== "featured_products" && section.type !== "certifications"),
+              )
               .map((section) => (
                 <div key={section.id}>
                   {renderSection({
@@ -224,144 +518,37 @@ async function ClaimedStorefront({ business }: { business: Business }) {
             a seller's to compose away.
           */}
 
-          <aside className="min-w-0">
-            {/*
-              The ladder, moved out of the main column and into chrome.
+          {/*
+            Board 1d's rail: the composer, the hours, where they are, and what
+            we checked. Chrome rather than template sections, and the reason is
+            unchanged from when the ladder sat here — non-negotiable 2 says
+            trust signals render identically on every storefront, which is an
+            argument that a seller's template must not be able to reorder them,
+            restyle them or switch them off. A sector whose template dropped the
+            licence panel would be a sector where we quietly stopped showing
+            what we checked.
 
-              It was a section of hardcoded JSX beside the catalogue. It is the
-              clearest statement the platform makes about what it checked and
-              what it has not, and it renders identically on every storefront
-              for the same reason the badge does — so it is not a section a
-              template may reorder or switch off.
-            */}
-            <Card>
-              <h2 className="text-h3 text-brand-ink">{t("verify.ladder")}</h2>
-              <div className="mt-2">
-                <VerificationLadder
-                  label={t("verify.ladder")}
-                  reachedLabel={t("verify.reached")}
-                  current={business.verificationTier}
-                  rungs={[1, 2, 3, 4].map((tier) => ({
-                    tier,
-                    label: t(tierSpec(tier).labelKey as never),
-                    requirement: t(`verify.requirement.t${tier}` as never),
-                    date:
-                      tier <= business.verificationTier
-                        ? tier >= 3
-                          ? business.visitedAt
-                            ? formatDate(business.visitedAt)
-                            : undefined
-                          : business.verifiedAt
-                            ? formatDate(business.verifiedAt)
-                            : undefined
-                        : undefined,
-                  }))}
-                />
-              </div>
-            </Card>
+            The composer is here for the neighbouring reason: the enquiry is the
+            conversion event and it is not a seller's to compose away.
+          */}
+          <aside className="order-3 flex min-w-0 flex-col gap-3 lg:order-none lg:col-start-2 lg:row-start-2">
+            <HoursPanel
+              hours={(head?.hours ?? null) as never}
+              ramadanHours={(head?.ramadanHours ?? null) as never}
+            />
 
-            <div className="mt-3">
-              <Card>
-                <h2 className="text-h3 text-brand-ink">{t("storefront.at_a_glance")}</h2>
-              <div className="mt-2">
-                <KeyValuePanel
-                  columns={1}
-                  notProvidedLabel={t("table.not_provided")}
-                  entries={[
-                    {
-                      key: "licence",
-                      label: t("storefront.licence"),
-                      value: business.licenceNumber,
-                      mono: true,
-                    },
-                    {
-                      key: "authority",
-                      label: t("storefront.authority"),
-                      value: business.licenceAuthority,
-                    },
-                    {
-                      key: "trn",
-                      label: t("trade.trn"),
-                      // Masked on every surface except the seller's own.
-                      value: business.trn ? maskTRN(business.trn) : undefined,
-                      mono: true,
-                    },
-                    {
-                      key: "established",
-                      label: t("storefront.established"),
-                      value: business.establishedYear ?? undefined,
-                    },
-                    {
-                      key: "team",
-                      label: t("storefront.team"),
-                      value: business.teamSize
-                        ? t(`storefront.team_band.${business.teamSize}` as never)
-                        : undefined,
-                    },
-                    {
-                      key: "languages",
-                      label: t("storefront.languages"),
-                      value: business.languages.length > 0 ? business.languages.join(", ") : undefined,
-                    },
-                  ]}
-                />
-              </div>
+            <LocationsPanel business={business} />
 
-              {business.categories.length > 0 && (
-                <div className="mt-3">
-                  <p className="text-caption text-muted">{t("storefront.categories")}</p>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {business.categories.map((link) => (
-                      <Tag key={link.categoryId} size="sm" href={`/c/${link.category.slug}`}>
-                        {link.category.name}
-                      </Tag>
-                    ))}
-                  </div>
-                </div>
-              )}
-              </Card>
-            </div>
-
-            {/*
-              Masking is not a growth trick — the reveal is the event that
-              proves the platform delivered the enquiry, and it is what a
-              seller's subscription is ultimately judged on.
-            */}
-            <div className="mt-3">
-              <ContactCard
-                businessId={business.id}
-                businessSlug={business.slug}
-                phone={head?.phone ?? null}
-                whatsapp={head?.whatsapp ?? null}
-                enquire={
-                  <EnquireButton
-                    block
-                    businessId={business.id}
-                    businessSlug={business.slug}
-                    displayName={business.displayName}
-                    categoryId={business.primaryCategoryId}
-                    emirates={EMIRATES}
-                    signedIn={Boolean(actor)}
-                    triggerLabel={t("product.enquire")}
-                    recipient={{
-                      businessId: business.id,
-                      displayName: business.displayName,
-                      areaName: head?.area?.name ?? null,
-                      verificationTier: business.verificationTier,
-                      responseLabel:
-                        business.responseTimeMedianMs === null
-                          ? t("response.unmeasured")
-                          : t("response.median", {
-                              duration: formatDuration(business.responseTimeMedianMs),
-                            }),
-                      pinned: true,
-                    }}
-                  />
-                }
-              />
-            </div>
+            <VerificationPanel business={business} />
           </aside>
         </div>
+
+        {/*
+           Padding so the last section is not sitting under the bar, and the bar
+           itself. Both only exist below `md`.
+        */}
+        <div className="h-16 md:hidden" aria-hidden />
+        {mobileActionBar}
       </div>
     </PublicShell>
   );

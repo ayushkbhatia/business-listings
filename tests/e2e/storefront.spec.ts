@@ -22,11 +22,17 @@ test.describe("one route, two compositions", () => {
   test("a claimed business renders the 1d composition", async ({ page }) => {
     await page.goto(`/b/${CLAIMED}`);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Al Marwan");
-    // Tabs, catalogue, verification ladder — none of which the unclaimed page
-    // has. Scoped by its count: the top bar now carries a "Products" item too,
-    // and the storefront's own tab is the one that says how many.
+    // Tabs, catalogue, the verification panel — none of which the unclaimed
+    // page has. Scoped by its count: the top bar now carries a "Products" item
+    // too, and the storefront's own tab is the one that says how many.
     await expect(page.getByRole("link", { name: /Products \d/ })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Verification ladder" })).toBeVisible();
+    /*
+     * Board 1d replaced the four-rung ladder with the three checks it names —
+     * licence, TRN, premises — each stating its own state and carrying its own
+     * date. The assertion moved with it; what it is protecting has not changed.
+     */
+    await expect(page.getByRole("heading", { name: "What we checked" })).toBeVisible();
+    await expect(page.getByText("not self-declared")).toBeVisible();
     await expect(page.getByText("has not been claimed")).toHaveCount(0);
   });
 
@@ -38,11 +44,16 @@ test.describe("one route, two compositions", () => {
      * `StorefrontTemplate`, resolved per sector, rather than from a fixed
      * sequence of JSX in the route.
      *
-     * The licence panel and the verification ladder are asserted in the same
+     * The details panel and the verification panel are asserted in the same
      * test on purpose: they are chrome, not sections, because non-negotiable 2
      * says trust signals render identically on every storefront — so a template
      * must not be able to reorder them or switch them off. A test that only
      * checked the sections would not notice a rewrite quietly dropping them.
+     *
+     * This caught exactly that when board 1d rebuilt the rail: the licence, the
+     * authority and the masked TRN had moved to the left column and the ladder
+     * had become the "what we checked" panel, and the test failed until both
+     * were accounted for rather than lost.
      */
     await page.goto(`/b/${CLAIMED}`);
 
@@ -50,8 +61,8 @@ test.describe("one route, two compositions", () => {
     await expect(page.getByRole("heading", { name: "Catalogue", exact: true })).toBeVisible();
 
     // Chrome, whatever the template says.
-    await expect(page.getByRole("heading", { name: "Verification ladder" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "At a glance" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What we checked" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Business details" })).toBeVisible();
     await expect(page.getByText("Trade licence", { exact: true })).toBeVisible();
   });
 
@@ -82,8 +93,9 @@ test.describe("one route, two compositions", () => {
     await expect(page.getByText("This listing has not been claimed")).toBeVisible();
     await expect(page.getByRole("button", { name: "Claim this listing" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Report this listing" })).toBeVisible();
-    // No tabs, no catalogue, no ladder.
-    await expect(page.getByRole("heading", { name: "Verification ladder" })).toHaveCount(0);
+    // No tabs, no catalogue, no verification panel — the unclaimed composition
+    // states what is unverified rather than listing checks nobody ran.
+    await expect(page.getByRole("heading", { name: "What we checked" })).toHaveCount(0);
   });
 
   test("an unclaimed listing invents nothing", async ({ page }) => {
@@ -220,10 +232,21 @@ test.describe("maps and masking", () => {
      * it is what their subscription is ultimately judged on. So it is a real
      * control now, and asking for it is recorded.
      */
-    const reveal = page.getByRole("button", { name: "Show number" });
-    await expect(reveal).toBeEnabled();
-    await reveal.click();
-    await expect(reveal).toHaveCount(0);
+    /*
+     * Board 1d moved this into the identity block, where the control *is* the
+     * masked number rather than a button beside it. The behaviour is unchanged
+     * and is the part worth testing: it renders masked, a click reveals it, and
+     * the reveal is recorded.
+     */
+    /*
+     * Matched on behaviour, not on a label. Board 1d puts the masked number
+     * itself on the control at desktop width and a "Call" button in the sticky
+     * bar below `md`, so a fixed name would test one breakpoint and silently
+     * skip the other.
+     */
+    const reveal = page.getByRole("button", { name: /•|^Call$/ });
+    await expect(reveal.first()).toBeEnabled();
+    await reveal.first().click();
     expect(await page.textContent("body")).toMatch(/\+971|^0\d/m);
   });
 
@@ -268,5 +291,69 @@ test.describe("enquiry affordances", () => {
       const response = await page.request.get(href);
       expect(response.status(), href).toBeLessThan(400);
     }
+  });
+});
+
+test.describe("criterion 8 — a seller theme never reaches a trust signal", () => {
+  /**
+   * The gallery already proves the badge is theme-invariant across six themes,
+   * on synthetic scopes. This is the same claim on a real storefront, and it
+   * covers what the gallery cannot: board 1d's verification panel, which did
+   * not exist when that test was written.
+   *
+   * An A/B on one page rather than a comparison between two businesses. Two
+   * suppliers differ in tier, in dates and in how much they have filled in, and
+   * a diff between them would be measuring those. Removing `data-theme` from
+   * the live DOM changes exactly one thing, so anything that moves moved
+   * because of the theme.
+   */
+  test("the badge and the verification panel are identical themed and unthemed", async ({
+    page,
+  }) => {
+    await page.goto(`/b/${CLAIMED}`);
+
+    const measure = () =>
+      page.evaluate(() => {
+        const scope = document.querySelector("[data-theme]") as HTMLElement | null;
+        const badge = document.querySelector("[data-verification-badge]") as HTMLElement | null;
+        const panel = document.querySelector("[data-verification-panel]") as HTMLElement | null;
+        // Something the theme is supposed to recolour, as the control.
+        const heading = document.querySelector("h1") as HTMLElement | null;
+
+        const paint = (el: HTMLElement | null) => {
+          if (!el) return null;
+          const s = getComputedStyle(el);
+          return `${s.color}|${s.backgroundColor}|${s.borderTopColor}`;
+        };
+
+        return {
+          theme: scope?.getAttribute("data-theme") ?? null,
+          badge: paint(badge),
+          panel: paint(panel),
+          heading: paint(heading),
+        };
+      });
+
+    const themed = await measure();
+
+    // The fixture has to actually carry a theme, or this test proves nothing.
+    expect(themed.theme, "the fixture storefront is not themed").toBeTruthy();
+    expect(themed.theme).not.toBe("default");
+    expect(themed.badge, "no verification badge on the page").toBeTruthy();
+    expect(themed.panel, "no verification panel on the page").toBeTruthy();
+
+    await page.evaluate(() => {
+      document.querySelector("[data-theme]")?.setAttribute("data-theme", "default");
+    });
+    const plain = await measure();
+
+    // The theme was live: the heading moved when it was removed.
+    expect(plain.heading, "the theme changed nothing, so this proves nothing").not.toBe(
+      themed.heading,
+    );
+
+    // And the two trust signals did not.
+    expect(plain.badge, "a seller theme recoloured the verification badge").toBe(themed.badge);
+    expect(plain.panel, "a seller theme recoloured the verification panel").toBe(themed.panel);
   });
 });

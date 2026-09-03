@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCountdown, formatDate, formatDateRange, formatDateShort, formatDateTime, formatDuration, formatRelative, isWithinRelativeWindow } from "./date";
+import { formatCountdown, formatDate, formatDateRange, formatDateShort, formatDateTime, formatDuration, formatMonth, formatRelative, isWithinRelativeWindow } from "./date";
 
 const AUG_14 = new Date("2026-08-14T09:30:00+04:00");
 
@@ -161,5 +161,41 @@ describe("formatCountdown", () => {
     // "Closes in 2 h" and "replied 2 h ago" share a number.
     expect(formatCountdown("2026-08-24T14:00:00+04:00", { now })).toBe("2 h");
     expect(formatCountdown("2026-08-24T10:00:00+04:00", { now })).toBe("2 h");
+  });
+});
+
+describe("formatMonth", () => {
+  /**
+   * Board 1d asks for certificate validity to the month, and the reason is the
+   * test: a precise expiry makes a page look wrong for the twenty-four hours
+   * either side of it, and "valid until March 2027" is the fact a buyer uses.
+   */
+  it("renders a month and a year, and no day", () => {
+    const value = formatMonth("2027-03-18T00:00:00Z");
+    expect(value).toMatch(/Mar/);
+    expect(value).toMatch(/2027/);
+    expect(value).not.toMatch(/18/);
+  });
+
+  it("reads the date in Dubai, not the host's zone", () => {
+    /*
+     * 21:00 UTC on the last day of February is already March in Dubai. A
+     * formatter using the host clock would print February here for four hours
+     * every night, which on a certificate is the difference between valid and
+     * expired.
+     */
+    expect(formatMonth("2027-02-28T21:00:00Z")).toMatch(/Mar/);
+  });
+
+  it("accepts a Date as readily as a string", () => {
+    expect(formatMonth(new Date("2027-03-18T00:00:00Z"))).toBe(
+      formatMonth("2027-03-18T00:00:00Z"),
+    );
+  });
+
+  it("refuses a value that is not a date", () => {
+    // Same contract as every other formatter here: a bad input is a throw, not
+    // a quietly wrong month on somebody's certificate.
+    expect(() => formatMonth("not a date")).toThrow(TypeError);
   });
 });

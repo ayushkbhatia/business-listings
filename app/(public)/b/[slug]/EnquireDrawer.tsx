@@ -86,12 +86,13 @@ export function EnquireDrawer({
 export function EnquireButton({
   triggerLabel,
   block = false,
+  size = "md",
   ...props
-}: EnquireProps & { triggerLabel: string; block?: boolean }) {
+}: EnquireProps & { triggerLabel: string; block?: boolean; size?: "sm" | "md" | "lg" }) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className={buttonClassName({ block })} onClick={() => setOpen(true)}>
+      <button type="button" className={buttonClassName({ block, size })} onClick={() => setOpen(true)}>
         {triggerLabel}
       </button>
       <EnquireDrawer {...props} open={open} onClose={() => setOpen(false)} />

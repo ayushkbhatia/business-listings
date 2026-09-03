@@ -26,6 +26,8 @@ export function ContactCard({
   phone,
   whatsapp,
   enquire,
+  layout = "card",
+  saveAction,
 }: {
   businessId: string;
   businessSlug: string;
@@ -33,6 +35,17 @@ export function ContactCard({
   whatsapp: string | null;
   /** The composer's trigger, rendered by the server page. */
   enquire: React.ReactNode;
+  /**
+   * `card` in a rail, `row` in board 1d's identity block.
+   *
+   * One component rather than two because the thing that must not be
+   * duplicated is the reveal: it writes the event that proves the platform
+   * delivered the enquiry, and a second implementation is a second chance to
+   * forget the write. Only the arrangement differs.
+   */
+  layout?: "card" | "row" | "bar";
+  /** The save control, rendered by the caller. Row layout only. */
+  saveAction?: React.ReactNode;
 }) {
   const [revealed, setRevealed] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -42,6 +55,76 @@ export function ContactCard({
     startTransition(async () => {
       await revealContact({ businessId, channel, surface: `/b/${businessSlug}` });
     });
+  }
+
+  if (layout === "bar") {
+    /*
+       Board 1d's mobile bar: WhatsApp · Call · Enquire, 44px each.
+
+       Rendered alongside the identity row rather than instead of it, and both
+       are hidden with `display` at their opposite breakpoint — so exactly one
+       is in the accessibility tree at any width. `visibility` or opacity would
+       leave two sets of identically-labelled buttons for a screen reader, which
+       is the trap the filter rail on board 1b already had to avoid.
+
+       44px because that is the touch target the design system floors at, and a
+       bar somebody stabs at while standing in a warehouse is the last place to
+       shave it.
+    */
+    return (
+      <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t border-line bg-card p-2 md:hidden">
+        {whatsapp && (
+          <Button
+            size="lg"
+            variant="secondary"
+            block
+            loading={pending}
+            onClick={() => reveal("whatsapp")}
+          >
+            {revealed ? formatPhone(whatsapp) : t("storefront.whatsapp")}
+          </Button>
+        )}
+        {phone && (
+          <Button size="lg" variant="secondary" block loading={pending} onClick={() => reveal("phone")}>
+            {revealed ? formatPhone(phone) : t("storefront.call")}
+          </Button>
+        )}
+        <div className="flex-1">{enquire}</div>
+      </div>
+    );
+  }
+
+  if (layout === "row") {
+    /*
+       Board 1d's identity actions, in the order the board sets: the quote
+       first because it is what the page is for, then the two channels, then
+       save. The number renders masked and stays masked until asked for — the
+       reveal is the same call either way.
+    */
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {enquire}
+
+        {whatsapp && (
+          <Button
+            size="md"
+            variant="secondary"
+            loading={pending}
+            onClick={() => reveal("whatsapp")}
+          >
+            {revealed ? formatPhone(whatsapp) : t("storefront.whatsapp")}
+          </Button>
+        )}
+
+        {phone && (
+          <Button size="md" variant="secondary" loading={pending} onClick={() => reveal("phone")}>
+            <span className="font-mono">{revealed ? formatPhone(phone) : maskPhone(phone)}</span>
+          </Button>
+        )}
+
+        {saveAction}
+      </div>
+    );
   }
 
   return (

@@ -71,6 +71,7 @@ export default async function CataloguePage({ params }: Params) {
 
   return (
     <PublicShell
+      bleed
       nav={<DirectoryNav />}
       breadcrumb={
         <Breadcrumb
@@ -83,7 +84,7 @@ export default async function CataloguePage({ params }: Params) {
       <div data-theme={business.themePreset ?? "default"}>
         <StorefrontHeader business={business} active="products" pages={pages} />
 
-        <div className="mt-5">
+        <div className="mx-auto max-w-7xl px-5 pb-[var(--section-pad)] mt-5">
           {/* h1 is the business name in the header; the grid needs its own h2
               or the product headings jump a level. */}
           <h2 className="text-h2 text-brand-ink">{t("storefront.catalogue")}</h2>

@@ -180,9 +180,21 @@ async function sectionData(businessId: string, slug: string): Promise<SectionDat
        * cannot reach a page by any route — which is a stronger guarantee than
        * a component that remembers to filter.
        */
-      where: { businessId, kind: { in: [...PUBLISHABLE_DOCUMENT_KINDS] } },
+      /*
+         And `isPublic`, which is the seller's own decision on top of the kind
+         fence. A document becomes public because somebody said so, never
+         because it was uploaded — the column defaults to false for exactly that
+         reason.
+      */
+      where: { businessId, isPublic: true, kind: { in: [...PUBLISHABLE_DOCUMENT_KINDS] } },
       orderBy: { createdAt: "desc" },
-      select: { id: true, filename: true, kind: true },
+      select: {
+        id: true,
+        filename: true,
+        displayName: true,
+        validUntil: true,
+        kind: true,
+      },
     }),
     prisma.media.findMany({
       where: { businessId, kind: { in: ["storefront", "cover", "logo"] } },
@@ -259,7 +271,18 @@ async function sectionData(businessId: string, slug: string): Promise<SectionDat
     },
     documents: documents.map((document) => ({
       id: document.id,
-      title: document.filename,
+      /*
+         The name a buyer would use, never the filename.
+
+         This was `document.filename` — whatever came off the seller's desktop,
+         rendered onto their shop window. "scan_0043_final.pdf" is the polite
+         version; the impolite one is a filename containing their licence
+         number. A public document is now required by the database to carry a
+         display name, so the fallback here is for rows that predate that and
+         should not be public anyway.
+      */
+      title: document.displayName ?? document.filename,
+      validUntil: document.validUntil,
       kind: document.kind,
       // A route, never the storage path. The bucket is private and stays that
       // way; the route signs a link at request time.

@@ -25,6 +25,25 @@ export function formatDate(value: DateInput, { timeZone = UAE_TIME_ZONE }: ZoneO
   }).format(toDate(value));
 }
 
+/**
+ * `Mar 2027`. A month and a year, deliberately without the day.
+ *
+ * Board 1d asks for certificate validity to the month, and the reason is worth
+ * keeping: a precise expiry date makes the page look wrong for the twenty-four
+ * hours either side of it, and "valid until March 2027" is the fact a buyer is
+ * actually using. Precision nobody needs is precision that can be wrong.
+ */
+export function formatMonth(
+  value: DateInput,
+  { timeZone = UAE_TIME_ZONE }: ZoneOption = {},
+): string {
+  return new Intl.DateTimeFormat(UAE_LOCALE, {
+    timeZone,
+    month: "short",
+    year: "numeric",
+  }).format(toDate(value));
+}
+
 /** `14 Aug`. Same year is implied; use it only where the year is already on screen. */
 export function formatDateShort(
   value: DateInput,

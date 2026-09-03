@@ -645,9 +645,59 @@ async function main() {
      Adding suppliers at the end consumes values nothing existing depends on.
   */
   await seedPumps(prisma, catBySlug);
+  await seedCertificates(prisma);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
+}
+
+/**
+ * Public certificates, for board 1d's certificates block.
+ *
+ * On the verified suppliers only, because the block means something on a
+ * storefront that has earned the rest of the page. Each carries a display name
+ * and an expiry and no file: `storagePath` points at an object that does not
+ * exist, and nothing public links to it — a certificate lists what it is and
+ * until when, and the scan stays private.
+ *
+ * `isPublic` is set explicitly for the same reason the column defaults to
+ * false: a document is on a shop window because somebody said so.
+ */
+async function seedCertificates(db: Db) {
+  console.log("→ public certificates");
+
+  const CERTS = [
+    { name: "ISO 9001:2015 — Quality management", months: 18 },
+    { name: "ISO 14001:2015 — Environmental management", months: 26 },
+    { name: "Civil Defence approval", months: 9 },
+  ] as const;
+
+  const suppliers = await db.business.findMany({
+    where: { claimStatus: "claimed", verificationTier: { gte: 2 } },
+    select: { id: true, slug: true },
+    take: 12,
+  });
+
+  let made = 0;
+  for (const [i, supplier] of suppliers.entries()) {
+    // Not every verified supplier holds one, which is the honest distribution.
+    if (i % 3 === 2) continue;
+    const cert = CERTS[i % CERTS.length]!;
+
+    await db.document.create({
+      data: {
+        businessId: supplier.id,
+        kind: "certificate",
+        storagePath: `certificates/${supplier.slug}/${i}.pdf`,
+        filename: `scan_${1000 + i}.pdf`,
+        displayName: cert.name,
+        validUntil: days(cert.months * 30),
+        isPublic: true,
+      },
+    });
+    made += 1;
+  }
+  console.log(`   ${made} public certificates across ${suppliers.length} verified suppliers`);
 }
 
 /**

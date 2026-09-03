@@ -1,6 +1,7 @@
 import { Tag } from "@/components/display";
 import { isPublishableDocumentKind } from "@/lib/storefront/section-types";
 import { picks, type SectionProps } from "@/lib/storefront/render-data";
+import { formatMonth } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
 /**
@@ -36,12 +37,38 @@ export function Certifications({ data, content }: SectionProps) {
             <p className="text-body-sm text-ink">{document.title}</p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <Tag>{t(`document.kind.${document.kind}` as never)}</Tag>
-              <a
-                href={document.href}
-                className="rounded-tag font-mono text-eyebrow uppercase text-brand underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-              >
-                {t("section.certifications.open")}
-              </a>
+
+              {document.validUntil && (
+                <span className="font-mono text-eyebrow uppercase tabular-nums text-muted">
+                  {t("section.certifications.valid_until", {
+                    month: formatMonth(document.validUntil),
+                  })}
+                </span>
+              )}
+
+              {/*
+                 A certificate lists its name and its validity, and nothing
+                 opens it.
+
+                 Board 1d: "Certificates list name and validity month only,
+                 never the document." The reason is not squeamishness — an ISO
+                 certificate carries the auditor's reference and a scan of one
+                 is a forgeable original, and the fact a buyer needs is that the
+                 supplier holds it until March 2027.
+
+                 A catalogue or a datasheet is the opposite: it exists to be
+                 downloaded, and a buyer who cannot open it has been shown a
+                 filename for no reason. So the link stays for those two kinds
+                 and goes for the one the board names.
+              */}
+              {document.kind !== "certificate" && (
+                <a
+                  href={document.href}
+                  className="rounded-tag font-mono text-eyebrow uppercase text-brand underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+                >
+                  {t("section.certifications.open")}
+                </a>
+              )}
             </div>
           </li>
         ))}

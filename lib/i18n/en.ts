@@ -852,12 +852,32 @@ export const en = {
   "product.no_template": "This category has no specification template yet.",
 
   // ── Storefront ──
+  /* Board 1d — the cover and identity block. */
+  "storefront.view_photos": { one: "View {formatted} photo", other: "View all {formatted} photos" },
+  /* Pro only. A "Free storefront" badge is an insult to a paying competitor. */
+  "storefront.plan_chip": "Pro storefront",
+  /* The identity block's primary. It opens a composer the buyer has not filled
+     in yet, so it names what they get back — a priced quote. "Send enquiry" is
+     the submit inside the composer; "Enquire" is the compact form on cards. */
+  "storefront.request_quote": "Request a quote",
+  "storefront.call": "Call",
+  "storefront.photos_heading": "Photos",
   "storefront.overview": "Overview",
   "storefront.products": "Products",
   "storefront.branches": "Branches",
   "storefront.reviews": "Reviews",
   "storefront.about": "About this supplier",
   "storefront.at_a_glance": "At a glance",
+  "storefront.details_title": "Business details",
+  "storefront.last_updated": "LAST UPDATED {date}",
+  /* The legal name, and the fact that the seller cannot edit it. */
+  "storefront.trade_name": "Trade name",
+  "storefront.licence_locked": "licence-locked",
+  /* The display name — what every card linking here shows. */
+  "storefront.trading_as": "Trading as",
+  "storefront.payment_terms": "Payment terms",
+  "storefront.delivery": "Delivery",
+  "storefront.verified_tick": "checked",
   "storefront.licence": "Trade licence",
   "storefront.authority": "Licensing authority",
   "storefront.established": "Established",
@@ -871,6 +891,30 @@ export const en = {
   "storefront.catalogue_empty": "This supplier has not listed any products yet.",
   "storefront.view_all_products": "See all {count} products",
   "storefront.hours": "Hours",
+  /* Board 1d — the right rail. */
+  "storefront.open_until": "Open until {time}",
+  "storefront.closed_opens": "Closed · opens {time}",
+  /* Said as something that happened, not something the reader must do. */
+  "storefront.ramadan_applied": "Ramadan hours are in effect and applied automatically.",
+  "storefront.locations": "Locations",
+  "storefront.all_branches": "All {count} →",
+  "storefront.directions": "Directions",
+  "storefront.copy_address": "Copy address",
+  "storefront.address_copied": "Address copied",
+  "storefront.send_enquiry_title": "Send an enquiry",
+  "storefront.answered_within": "Typically answered within {duration}",
+  "storefront.answered_unmeasured": "New to the directory — no reply time measured yet",
+  /* Both halves of this have to be true, and both are. */
+  "storefront.composer_privacy": "No account needed · your number stays hidden until they reply",
+  "verify.panel_title": "What we checked",
+  "verify.row_licence": "Trade licence checked",
+  "verify.row_trn": "TRN matched",
+  "verify.row_visit": "Premises visited",
+  "verify.row_not_yet": "{check} — not yet",
+  "verify.licence_renewal_pending": "Licence renewal pending",
+  /* Board 1d: "the most valuable copy on the page. Do not soften it." */
+  "verify.not_self_declared": "Verification is carried out by Business Listings, not self-declared.",
+  "verify.report_issue": "Report an issue",
   "storefront.ramadan_hours": "Ramadan hours",
   "storefront.closed": "Closed",
   "storefront.service_radius": "Delivers within {km} km",
@@ -2882,6 +2926,8 @@ export const en = {
   "section.brands.title": "Brands we stock",
   "section.certifications.title": "Certifications",
   "section.certifications.open": "Open",
+  /* Month, not a date — see formatMonth. */
+  "section.certifications.valid_until": "Valid until {month}",
   "document.kind.certificate": "Certificate",
   "document.kind.catalogue": "Catalogue",
   "document.kind.datasheet": "Datasheet",
