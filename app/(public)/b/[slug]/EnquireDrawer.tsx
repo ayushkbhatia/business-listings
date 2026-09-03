@@ -14,8 +14,11 @@ import { RfqForm } from "@/app/(public)/rfq/RfqForm";
  * right call: a buyer writing to this supplier should not lose sight of who
  * they are writing to. The drawer keeps the storefront behind it.
  *
- * Widening to a fan-out is a link to /rfq/new carrying this supplier as pinned,
- * so nothing typed is lost and this supplier stays on the enquiry.
+ * Widening to a fan-out happens *in* the form, not by leaving it. Board 1h's
+ * composer model: "1e's selection can be promoted to an RFQ — adding a second
+ * recipient turns a single-seller enquiry into a fan-out with the lines intact.
+ * That is a recipient change, not a different flow." A link out was also a link
+ * to /rfq/new from a storefront, which criterion 3 forbids.
  *
  * Two exports. `EnquireDrawer` is controlled and draws no trigger, because the
  * selection bar on the catalogue renders its own buttons and cannot host one.
@@ -38,7 +41,6 @@ export function EnquireDrawer({
   open,
   onClose,
   businessId,
-  businessSlug,
   displayName,
   categoryId,
   emirates,
@@ -56,14 +58,6 @@ export function EnquireDrawer({
         title={t("enquiry.to_supplier", { supplier: displayName })}
         description={t("rfq.privacy")}
         closeLabel={t("action.cancel")}
-        footer={
-          <a
-            href={`/rfq/new?to=${businessSlug}`}
-            className="rounded-tag text-body-sm text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
-          >
-            {t("enquiry.widen")}
-          </a>
-        }
       >
         <RfqForm
           shape="single"

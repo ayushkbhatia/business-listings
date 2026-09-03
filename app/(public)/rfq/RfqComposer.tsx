@@ -154,17 +154,33 @@ export function RfqComposer({
     () => (initialLines && initialLines.length > 0 ? [...initialLines] : null),
     [initialLines],
   );
+  /*
+     Before the mount effect below has run, `stored` is empty and this renders a
+     throwaway blank row so the table is never headless. Once the effect writes
+     one, the store is the only source and its keys are stable.
+  */
+  const placeholder = useMemo(() => [blankLine()], []);
   const lines: RfqLine[] = useMemo(
-    () => seededLines ?? (stored.length > 0 ? [...stored] : [blankLine()]),
-    [seededLines, stored],
+    () => (stored.length > 0 ? [...stored] : (seededLines ?? placeholder)),
+    [seededLines, stored, placeholder],
   );
   const setLines = useCallback(
     (next: RfqLine[] | ((current: RfqLine[]) => RfqLine[])) => {
+      /*
+         The base is whatever the store holds, and never a fresh `blankLine()`.
+
+         `blankLine()` mints a new key every call. Building the base from one
+         meant `updateLine` looked for a key that had just been replaced by a
+         different key, found no match, and silently changed nothing — typing
+         into the first row did nothing at all and the page never left step 1.
+
+         The empty store is seeded with one stable blank row on mount instead,
+         so there is always something with a durable key to edit.
+      */
       const current = draftSnapshot();
-      const base = seededLines ?? (current.length > 0 ? [...current] : [blankLine()]);
-      saveDraft(typeof next === "function" ? next(base) : next);
+      saveDraft(typeof next === "function" ? next([...current]) : next);
     },
-    [seededLines],
+    [],
   );
   const [recipients, setRecipients] = useState<readonly RecipientPreview[]>(initialRecipients);
   const [showAll, setShowAll] = useState(false);
@@ -248,12 +264,16 @@ export function RfqComposer({
   }, [categoryId, lineCount, value?.emirate, pinnedBusinessIds]);
 
   /*
-     A seeded arrival is written to the draft once, so that leaving the page and
-     coming back keeps the seeded lines rather than dropping to a blank row.
+     The store always holds at least one row, with a stable key.
+     
+     A seeded arrival writes its lines once, so leaving the page and coming back
+     keeps them rather than dropping to a blank row. A cold arrival writes a
+     single blank row, which is the one the cursor sits in — and, crucially, the
+     one `updateLine` will later find by key.
   */
   useEffect(() => {
-    if (seededLines && draftSnapshot().length === 0) saveDraft(seededLines);
-    // Once per seeded mount; derived from a prop that does not change.
+    if (draftSnapshot().length > 0) return;
+    saveDraft(seededLines ?? [blankLine()]);
   }, [seededLines]);
 
   const updateLine = useCallback(

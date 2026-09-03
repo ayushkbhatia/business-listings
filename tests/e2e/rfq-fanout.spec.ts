@@ -126,7 +126,9 @@ test.describe("the recipient picker", () => {
       if (await box.isChecked()) await box.uncheck();
     }
     await expect(page.getByRole("button", { name: /^Send/ })).toBeDisabled();
-    await expect(page.getByText("Pick at least one seller to send to.")).toBeVisible();
+    await expect(
+      page.getByText("Pick at least one seller to send to.").locator("visible=true"),
+    ).toHaveCount(1);
   });
 
   test("no seller name carries a legal suffix", async ({ page }) => {

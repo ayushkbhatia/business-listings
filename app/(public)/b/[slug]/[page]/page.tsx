@@ -114,7 +114,8 @@ export default async function TemplatePageRoute({ params }: Params) {
               blocks={page.blocks}
               documents={plan.data.documents}
               catalogueHref={`/b/${business.slug}/products`}
-              enquireHref={`/rfq/new?to=${business.slug}`}
+              /* Criterion 3: a storefront page composes in place. */
+              enquireHref={`/b/${business.slug}/products`}
             />
           </div>
         </article>
