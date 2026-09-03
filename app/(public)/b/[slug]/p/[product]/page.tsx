@@ -493,6 +493,7 @@ export default async function ProductPage({ params }: Params) {
               whatsappLabel={t("pdp.whatsapp_seller")}
               rfqLabel={t("pdp.add_to_rfq")}
               rfqAddedLabel={t("pdp.added_to_rfq")}
+              rfqCrossoverLabel={t("pdp.send_to_several")}
               quantityLabel={t("pdp.qty_label")}
               decrementLabel={t("stepper.decrement")}
               incrementLabel={t("stepper.increment")}

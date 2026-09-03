@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { Stepper } from "@/components/primitives";
 import { cn } from "@/lib/cn";
 import {
   selectionKey,
+  selectionServerSnapshot,
   selectionSnapshot,
   setSelection,
+  subscribeSelection,
 } from "../../products/selection-store";
 import { useEnquiry, useQuantity } from "./_enquiry-context";
 
@@ -42,6 +44,8 @@ export interface EnquiryCardProps {
   whatsappLabel: string;
   rfqLabel: string;
   rfqAddedLabel: string;
+  /** Shown once the selection holds more than one item. */
+  rfqCrossoverLabel: string;
   quantityLabel: string;
   decrementLabel: string;
   incrementLabel: string;
@@ -65,6 +69,7 @@ export function EnquiryCard({
   whatsappLabel,
   rfqLabel,
   rfqAddedLabel,
+  rfqCrossoverLabel,
   quantityLabel,
   decrementLabel,
   incrementLabel,
@@ -79,6 +84,19 @@ export function EnquiryCard({
   const [added, setAdded] = useState(false);
 
   /*
+     The live selection, read from board 1e's store rather than mirrored into
+     local state. A count kept here would go stale the moment the buyer added
+     something from the catalogue in another tab, and the store already
+     publishes changes — the same `useSyncExternalStore` shape 1e uses.
+  */
+  const key = selectionKey(storefrontSlug);
+  const selected = useSyncExternalStore(
+    subscribeSelection(key),
+    () => selectionSnapshot(key),
+    selectionServerSnapshot,
+  );
+
+  /*
      The bridge to board 1e. A buyer who needs four things starts on one product
      page and accumulates rather than sending four separate enquiries — so this
      writes through the catalogue's own store, keyed by the same seller. Going
@@ -88,8 +106,21 @@ export function EnquiryCard({
      It is not a basket: nothing crosses storefronts and nothing survives the
      session.
   */
+  /*
+     Two handoffs give this button different destinations, and it does both.
+
+     Board 1g calls it "the bridge to 1e's selection mechanic — a buyer who
+     needs four things starts here and accumulates". Board 1h's composer model
+     lists it as the one control that "crosses over" to `/rfq/new`.
+
+     Accumulating first is right either way: a buyer who has added one thing has
+     not yet said whether they want several *suppliers*. The crossover appears
+     once there is more than one item, which is the moment the composer model
+     describes — a buyer who "realises they need several things from several
+     suppliers". Neither document specifies this exact shape; it is a product
+     decision, flagged as one in the PR.
+  */
   function addToRfq() {
-    const key = selectionKey(storefrontSlug);
     const current = selectionSnapshot(key);
     if (!current.includes(productId)) setSelection(key, [...current, productId]);
     setAdded(true);
@@ -128,6 +159,19 @@ export function EnquiryCard({
             <button type="button" onClick={addToRfq} className={SECONDARY} disabled={added}>
               {added ? rfqAddedLabel : rfqLabel}
             </button>
+            {/*
+               The crossover, once there is more than one thing to ask about.
+               Below that it would be a fan-out button on a single item, which
+               is the enquiry the primary already sends.
+            */}
+            {selected.length > 1 && (
+              <a
+                href={`/rfq/new?products=${encodeURIComponent(selected.join(","))}`}
+                className={SECONDARY}
+              >
+                {rfqCrossoverLabel}
+              </a>
+            )}
             {/*
                Out of stock keeps an enquiry path. The primary becomes "Notify
                me", so this is the door for a buyer who wants the lead time

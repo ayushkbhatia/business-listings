@@ -31,6 +31,8 @@ export interface SendEnquiryInput {
   contactPhone: string;
   contactName: string;
   pinnedBusinessIds?: string[];
+  /** Board 1h's picker: exactly who the buyer ticked. */
+  chosenBusinessIds?: string[];
 }
 
 export type SendEnquiryResult = { ok: false; error: string };
@@ -55,6 +57,7 @@ export async function sendEnquiry(input: SendEnquiryInput): Promise<SendEnquiryR
     closesInDays: input.closesInDays,
     fanoutTo: input.fanoutTo,
     ...(input.pinnedBusinessIds ? { pinnedBusinessIds: input.pinnedBusinessIds } : {}),
+    ...(input.chosenBusinessIds ? { chosenBusinessIds: input.chosenBusinessIds } : {}),
   });
 
   if (!result.ok) {
@@ -127,4 +130,44 @@ export async function previewRecipients(input: {
         : t("response.median", { duration: formatDuration(r.responseTimeMedianMs) }),
     ...(pinned.has(r.businessId) ? { pinned: true } : {}),
   }));
+}
+
+/**
+ * Board 1h's zero-match fallback: "Send it to us and we'll route it."
+ *
+ * Writes a `ZeroResultQuery` row, which is the table board 12d's recruitment
+ * queue already reads — a buyer who described a requirement nobody on the
+ * platform can answer is the single most useful signal for deciding which trade
+ * to recruit next, and it is the same signal a search that found nothing gives.
+ *
+ * `tab` marks where it came from, so the queue can tell an unanswerable RFQ
+ * from an unanswerable search. Those are different failures: the first is a
+ * buyer who wrote out a whole requirement, which is a warmer lead and a more
+ * specific gap.
+ */
+export async function routeUnmatched(input: {
+  categoryId: string;
+  requirement: string;
+  lines: readonly string[];
+  emirate: string | null;
+}): Promise<{ ok: true }> {
+  const actor = await getActor();
+  /*
+     The lines are the query. A requirement is prose about a job; the lines are
+     the things nobody stocks, which is what a recruiter needs to read.
+  */
+  const query = input.lines.filter(Boolean).join(" · ").slice(0, 500) || input.requirement.slice(0, 500);
+
+  await prisma.zeroResultQuery.create({
+    data: {
+      query,
+      categoryId: input.categoryId,
+      ...(input.emirate ? { emirate: input.emirate as never } : {}),
+      tab: "rfq",
+      filters: { requirement: input.requirement.slice(0, 2000) },
+      ...(actor ? { actorId: actor.id } : {}),
+    },
+  });
+
+  return { ok: true };
 }

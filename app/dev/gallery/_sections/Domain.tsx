@@ -729,7 +729,7 @@ export function EnquiryComposerSpecimens() {
       <States label="the fan-out wizard, on its first step" stack>
         <Frame>
           <EnquiryComposer
-            shape="wizard"
+            shape="panel"
             labels={{ ...ENQUIRY_LABELS, formLabel: "Enquiry — fan-out wizard" }}
             recipients={ENQUIRY_RECIPIENTS}
           />
