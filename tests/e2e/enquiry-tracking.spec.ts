@@ -121,7 +121,14 @@ test.describe("the action row's limits", () => {
     */
     await page.goto(`/enquiry/ENQ-8890?t=${TOKEN}`);
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("One supplier has quoted.");
-    await expect(page.getByText("One more quote and you can compare side by side")).toBeVisible();
+    /*
+       The action row renders at both breakpoints with `display` choosing one,
+       so the reason line matches twice. Ask for the visible one — the same
+       shape boards 1f and 1h both needed.
+    */
+    await expect(
+      page.getByText("One more quote and you can compare side by side").locator("visible=true"),
+    ).toHaveCount(1);
     await expect(page.getByRole("link", { name: "View quote" })).toBeVisible();
   });
 
@@ -142,7 +149,10 @@ test.describe("once a quote is accepted", () => {
     await page.goto(`/enquiry/ENQ-8879?t=${TOKEN}`);
     await expect(page.getByText("Quote accepted")).toBeVisible();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("You accepted a quote.");
-    await expect(page.getByRole("link", { name: "View the accepted quote" })).toBeVisible();
+    /* Rendered at both breakpoints, so ask for the visible one. */
+    await expect(
+      page.getByRole("link", { name: "View the accepted quote" }).locator("visible=true"),
+    ).toHaveCount(1);
     // The page is still reachable and still shows the enquiry: a permanent record.
     await expect(page.getByText("ENQ-8879")).toBeVisible();
   });

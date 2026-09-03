@@ -295,20 +295,35 @@ export default async function EnquiryPage({
          The other two actions are secondary and a phone has no room to offer
          three; losing Compare below the fold is what loses the comparison.
       */}
-      {!tracking.accepted && (
-        <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card px-4 py-2.5 shadow-overlay md:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-card px-4 py-2.5 shadow-overlay md:hidden">
+        {tracking.accepted ? (
+          /*
+             An accepted enquiry still needs its one action on a phone. The
+             first version rendered the bar only while the enquiry was open, so
+             a buyer who had accepted a quote had no way to reach it below
+             768px — the page became a record with no door.
+          */
           <a
-            href={compareBlocked ? undefined : withToken(`/enquiry/${tracking.ref}/compare`)}
-            aria-disabled={Boolean(compareBlocked)}
-            className={cn(PRIMARY, "w-full justify-center", compareBlocked && DISABLED)}
+            href={withToken(`/enquiry/${tracking.ref}/accepted`)}
+            className={cn(PRIMARY, "w-full justify-center")}
           >
-            {t("track.compare")}
+            {t("track.view_accepted")}
           </a>
-          {compareBlocked && (
-            <p className="mt-1 text-center text-caption text-body">{compareBlocked}</p>
-          )}
-        </div>
-      )}
+        ) : (
+          <>
+            <a
+              href={compareBlocked ? undefined : withToken(`/enquiry/${tracking.ref}/compare`)}
+              aria-disabled={Boolean(compareBlocked)}
+              className={cn(PRIMARY, "w-full justify-center", compareBlocked && DISABLED)}
+            >
+              {t("track.compare")}
+            </a>
+            {compareBlocked && (
+              <p className="mt-1 text-center text-caption text-body">{compareBlocked}</p>
+            )}
+          </>
+        )}
+      </div>
     </PublicShell>
   );
 }
