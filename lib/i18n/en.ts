@@ -183,6 +183,7 @@ export const en = {
   "nav.leads": "Leads & RFQ",
   "nav.quotes": "Quotes",
   "nav.reviews": "Reviews",
+  "nav.questions": "Questions",
   "nav.analytics": "Analytics",
   "nav.promote": "Sponsored placement",
   "nav.billing": "Subscription",
@@ -851,6 +852,99 @@ export const en = {
   // ── Product page ──
   "product.supplied_by": "Supplied by",
   "product.no_template": "This category has no specification template yet.",
+
+  /* Board 1g — product detail. Where a price would sit, and everything around it. */
+  /*
+     The sentence that turns an apparent omission into a reason. It is true in
+     this market: volume, delivery point and terms all move the number. Never
+     "log in to see prices", "contact for pricing" or a masked figure — all
+     three read as a paywall, which is the one thing this page must not be.
+  */
+  "pdp.price_reason": "This seller quotes per job — volume, delivery point and payment terms all move the number.",
+  "pdp.price_reason_reply": "This seller quotes per job — volume, delivery point and payment terms all move the number. Typical reply in about {duration}.",
+  "pdp.quantity": "QUANTITY",
+  "pdp.availability_col": "AVAILABILITY",
+  "pdp.lead_time_col": "LEAD TIME",
+  "pdp.qty_caption": "How fast you can have this many, by quantity",
+  "pdp.out_of_stock_note": "The seller quotes on indent orders.",
+  "pdp.enquire_lead_time": "Enquire about lead time",
+  "pdp.request_lead_time_seed": "What is the lead time on {product}, and what quantity would you need?",
+  "pdp.whatsapp_seller": "WhatsApp the seller",
+  "pdp.add_to_rfq": "Add to a multi-item RFQ",
+  "pdp.added_to_rfq": "Added to your RFQ",
+  "pdp.qty_label": "Quantity",
+  /* This page is the Stepper's first caller, so its labels start here. */
+  "stepper.decrement": "One fewer",
+  "stepper.increment": "One more",
+  "pdp.visit_storefront": "Visit storefront →",
+  "pdp.delivery": "Delivery",
+  "pdp.collection": "Collection",
+  "pdp.payment_terms": "Payment terms",
+  "pdp.min_order": "Min order",
+  "pdp.min_order_value": "{qty} pcs",
+  "pdp.documents": "Documents",
+  "pdp.doc_meta": "{kind} · {size}",
+  "pdp.in_stock_at": "In stock — {qty} units at {location}",
+  "pdp.in_stock_at_unknown": "In stock at {location}",
+  "pdp.stock_stale": "In stock",
+  /* The header count and the table must agree. See the spec-section comment. */
+  "pdp.spec_meta": "TEMPLATE: {template} v{version} · {filled} OF {total} FIELDS FILLED",
+  "pdp.spec_footnote": "Grey fields are template attributes the seller has not filled. Buyers can request them in one click.",
+  "pdp.request_specs": "Request the missing fields",
+  "pdp.request_specs_seed": "Please confirm these specifications for {product}: {fields}.",
+  "pdp.comparison_title": "Same spec, other sellers — enquire with all",
+  "pdp.col_seller": "Seller",
+  "pdp.col_distinguishing": "Material / seat",
+  "pdp.col_lead": "Lead time",
+  "pdp.col_replies": "Replies in",
+  "pdp.this_page": "· this page",
+  "pdp.lead_days": "{days} days",
+  "pdp.lead_unstated": "On enquiry",
+  "pdp.other_sellers": "OTHER SELLERS",
+  "pdp.other_sellers_count": { one: "{count} other verified seller stocks this size", other: "{count} other verified sellers stock this size" },
+  "pdp.enquire_with_all": "Enquire with all {count} →",
+  /* A genuine selling point, not an empty state. */
+  "pdp.only_listing": "This is the only verified listing for this spec.",
+  "pdp.ask_seller": "ASK THE SELLER",
+  "pdp.questions_answered": { one: "{count} question answered", other: "{count} questions answered" },
+  "pdp.no_questions": "No questions answered yet. Ask the first one in an enquiry.",
+  "pdp.sticky_enquire": "Send enquiry",
+
+  /* Availability bands. Never a figure in any of them. */
+  "bands.collect_today": "Collect today",
+  "bands.same_day": "Same-day Dubai",
+  "bands.two_days": "48 h",
+  "bands.two_days_better": "48 h · better rate",
+  "bands.contract": "Contract pricing",
+  "bands.weeks": { one: "{count} week", other: "{count} weeks" },
+  "bands.by_arrangement": "By arrangement",
+  "bands.on_enquiry": "On enquiry",
+
+  /* Board 1g — the seller's questions screen and the staff removal. */
+  "questions.title": "Questions",
+  "questions.eyebrow": "Buyers asked",
+  "questions.intro": "Questions buyers asked about your products. An answer appears on the product page, in your words, beside the question.",
+  "questions.unanswered": { one: "{count} waiting for an answer", other: "{count} waiting for an answer" },
+  "questions.none": "No questions yet. They arrive from your product pages.",
+  "questions.asked_about": "About {product}",
+  "questions.asked_when": "Asked {when}",
+  "questions.answered_when": "Answered {when}",
+  "questions.answer_label": "Your answer",
+  "questions.answer_hint": "Buyers see this exactly as you write it, next to the question. You can answer once.",
+  "questions.answer_submit": "Post answer",
+  "questions.answer_once": "That question already has an answer. A correction is a new question, publicly.",
+  "questions.answer_empty": "Write an answer first. Buyers see it beside the question.",
+  "questions.answer_too_long": "That answer is over 1,000 characters. Shorten it, or send the detail in a quote.",
+  "questions.removed": "Staff removed that question, so it can no longer be answered.",
+  "questions.view_product": "View product →",
+  /* Staff. */
+  "admin.questions.title": "Product questions",
+  "admin.questions.none": "No questions to review.",
+  "admin.questions.remove": "Remove",
+  "admin.questions.reason_label": "Why it is being removed",
+  "admin.questions.removed": "Question removed.",
+  "admin.questions.already_removed": "That question was already removed.",
+  "admin.questions.on": "{business} · {product}",
 
   // ── Storefront ──
   /* Board 1d — the cover and identity block. */

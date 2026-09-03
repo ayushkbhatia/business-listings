@@ -85,6 +85,12 @@ export const CAPABILITIES = {
     source: "stated",
     why: "§07, both tables. A moderator may reject a submission and resolve a report but may not remove a review — this was inferred as moderator + ops lead and the matrix says ops lead alone. Removing a buyer's published words is held one rung higher than moderating a queue.",
   },
+  "question.remove": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "inferred",
+    why: "Board 1g. A product question carries a buyer's published words and a seller's answer, and taking it down is the same decision as removing a review — so it sits at the same rung rather than with the moderation queue. Held at ops lead deliberately: erring higher is the safe direction for removing something a person wrote in public.",
+  },
   "report.resolve": {
     roles: ["staff_moderator", "staff_ops_lead"],
     audited: true,

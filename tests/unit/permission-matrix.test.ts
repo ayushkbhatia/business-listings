@@ -163,12 +163,22 @@ describe("the cross-surface matrix", () => {
 });
 
 describe("every row cites the document", () => {
-  it("leaves only the two rows §07 does not contain marked inferred", () => {
-    // Both are real capabilities with no row in permissions.md. Naming them
-    // here is what stops "inferred" quietly spreading back through the file.
+  it("names every row §07 does not contain, so inferred cannot spread quietly", () => {
+    /*
+       Real capabilities with no row in permissions.md. Naming them here is what
+       stops "inferred" spreading back through the file — adding one has to be a
+       deliberate edit to this list rather than a quiet default.
+
+       `question.remove` joined on board 1g. §07 has no row for it because
+       product questions did not exist when the document was written. It is held
+       at the ops-lead rung alongside `review.remove`, on the argument that
+       taking down a buyer's published words is the same decision whichever
+       surface it was written on — and erring higher is the safe direction for
+       a removal.
+    */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
     );
-    expect(inferred.sort()).toEqual(["business.merge", "staff.manage"]);
+    expect(inferred.sort()).toEqual(["business.merge", "question.remove", "staff.manage"]);
   });
 });
