@@ -14,33 +14,35 @@ concurrency:
 # surface is server-rendered from seed data — a CI run without a database
 # proves nothing about any of it.
 env:
-  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
-  DIRECT_URL: postgresql://postgres:postgres@localhost:5432/postgres
-  NEXT_PUBLIC_SUPABASE_URL: https://irywaycgqjeeoklfmzzd.supabase.co
+  # `supabase start` — see supabase/config.toml. Postgres on 54322, auth and the
+  # rest of the API on 54321.
+  DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+  DIRECT_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+  NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
   NEXT_PUBLIC_SITE_URL: http://localhost:3000
 
-  # Real keys, so the acceptance job can sign a seller in and cover /dashboard.
-  # The development seat is inert under `next start` — deliberately — so a
-  # signed-in session is the only way those five screens get a browser test.
-  # Both are repository secrets; neither is ever printed.
-  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY }}
-  SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
+  # The CLI's fixed local keys. They are identical on every machine that runs
+  # `supabase start` and authenticate against nothing but a container on this
+  # runner, so they are values, not secrets — printing one costs nothing.
+  #
+  # They replace two repository secrets that pointed at the production project.
+  # CI used to build the app against a disposable database and provision **auth**
+  # against production: `createProvisionalIdentity` minted a real auth user for
+  # every enquiry a test sent, the profile row that belongs beside it died with
+  # the container, and `auth-flow.test.ts` cleaned up after itself by scanning
+  # the first 200 users — which quietly stopped covering the project once it held
+  # more than 200. 240 orphaned users had collected by 2026-09-03. When that list
+  # crossed 200 the e2e seat lookup stopped finding its seats on page one and all
+  # five setup projects failed, taking 267 tests with them.
+  #
+  # A fork gets the full suite now, rather than the reduced one it got when these
+  # were secrets it could not read.
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
+  SUPABASE_SECRET_KEY: sb_secret_N7UND0UgjKTVK-Uodkm0Hg_xSvEMPvz
 
 jobs:
   verify:
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
 
     steps:
       - uses: actions/checkout@v4
@@ -55,13 +57,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # The PostgREST lockdown migration revokes from Supabase's `anon` and
-      # `authenticated` roles. They do not exist on a stock Postgres, so CI
-      # creates them rather than the migration being weakened to suit CI.
-      - name: Create the Supabase roles the lockdown migration expects
-        run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE anon NOLOGIN;"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE authenticated NOLOGIN;"
+      # Brings up Postgres, GoTrue and Storage on this runner. The stack is the
+      # reason the roles above are no longer created by hand: `anon` and
+      # `authenticated` ship with the Supabase image, so the lockdown migration
+      # meets the roles it was written against rather than ones CI invented.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.115.0
+
+      - name: Start Supabase
+        run: supabase start
 
       - name: Migrate and seed
         run: |
@@ -124,11 +129,14 @@ jobs:
           # counts are even.
           #
           # Every signed-in project depends on the `setup` project, and setup
-          # provisions seats against the **shared** Supabase auth project — one
-          # magic link per seat, invalidated when the next is generated. Two
-          # shards running setup at the same time would be two jobs asking for
-          # the same link and each invalidating the other's, which is a new
-          # flake source in exchange for a faster pipeline.
+          # provisions seats — one magic link per seat, invalidated when the
+          # next is generated. Two shards running setup against one auth
+          # instance would each invalidate the other's link.
+          #
+          # That instance is now this job's own, so the shards no longer share
+          # anything and this split could be redrawn on test count instead. It
+          # is left as it is here to keep one change to one thing; the reason it
+          # was drawn this way is gone.
           #
           # So the public projects, which touch no auth at all, split freely;
           # everything that signs in stays in one shard behind one setup.
@@ -142,18 +150,6 @@ jobs:
               --project=seller --project=seller-free
               --project=staff --project=staff-moderator --project=staff-finance
 
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 12
-
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -164,10 +160,16 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Create the Supabase roles the lockdown migration expects
-        run: |
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE anon NOLOGIN;"
-          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -c "CREATE ROLE authenticated NOLOGIN;"
+      # Brings up Postgres, GoTrue and Storage on this runner. The stack is the
+      # reason the roles above are no longer created by hand: `anon` and
+      # `authenticated` ship with the Supabase image, so the lockdown migration
+      # meets the roles it was written against rather than ones CI invented.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.115.0
+
+      - name: Start Supabase
+        run: supabase start
 
       - name: Migrate and seed
         run: |
@@ -182,9 +184,10 @@ jobs:
       # app itself.
       #
       # `seller` runs the /dashboard specs as a genuinely signed-in seller; its
-      # setup project provisions one against the real Supabase project. It is
-      # registered only when the keys are present, so a fork without them gets
-      # a smaller suite that says so rather than a failing one.
+      # setup project provisions one against the stack this job started. The
+      # projects register only when the keys are present, and the keys are now
+      # fixed values rather than repository secrets — so a fork gets the whole
+      # suite instead of the reduced one it used to get.
       #
       # `mobile` was missing here until handoff 2's acceptance pass, and four
       # specs had been red across six merged PRs because nothing in CI ever ran
