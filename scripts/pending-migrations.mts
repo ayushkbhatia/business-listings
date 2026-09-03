@@ -50,13 +50,61 @@ export type Pending = {
   findings: Finding[];
 };
 
+/** One row of `_prisma_migrations`, in the only three columns that decide anything. */
+export type MigrationRow = {
+  migration_name: string;
+  finished_at: Date | null;
+  rolled_back_at: Date | null;
+};
+
+/**
+ * Three states, and the middle one is the reason this is a function rather than
+ * a boolean:
+ *
+ *   done         `finished_at` set, `rolled_back_at` null — applied.
+ *   failed       neither set. It died mid-flight, and Prisma refuses to apply
+ *                anything else until somebody resolves it.
+ *   rolled back  `rolled_back_at` set — somebody already did. That IS the
+ *                resolution, and Prisma does not block on it.
+ *
+ * Production carries two rolled-back rows for
+ * `20260827120000_storefront_templates`, both from 2026-08-26: a datatype
+ * mismatch, then a duplicate column, then a third attempt that finished 1.7
+ * seconds later. Reading those two as failures made `pnpm db:deploy` refuse on
+ * a database whose migration history is in perfectly good order — the guard
+ * blocking the path it exists to protect.
+ *
+ * A rolled-back migration with no later success is not lost by skipping it
+ * here: it is absent from `applied`, so it comes back as pending, which is
+ * exactly what it is. Prisma would re-attempt it too.
+ */
+export function classify(rows: readonly MigrationRow[]): {
+  applied: string[];
+  failed: string[];
+} {
+  const applied: string[] = [];
+  const failed: string[] = [];
+
+  for (const row of rows) {
+    if (row.rolled_back_at !== null) continue;
+    if (row.finished_at === null) failed.push(row.migration_name);
+    else applied.push(row.migration_name);
+  }
+
+  return { applied, failed };
+}
+
 export type Report = {
   target: string;
   /** On disk, not yet applied. In the order Prisma will apply them. */
   pending: Pending[];
   /** Applied in the database but absent from this checkout — the checkout is behind. */
   unknown: string[];
-  /** Started and never finished. `migrate deploy` refuses to run until these are resolved. */
+  /**
+   * Started, never finished, never rolled back. `migrate deploy` refuses to run
+   * until one of these is resolved. A rolled-back row is not one of these — it
+   * is what resolving looks like.
+   */
   failed: string[];
 };
 
@@ -137,14 +185,14 @@ export async function report(): Promise<Report> {
       applied = [];
       failed = [];
     } else {
-      const rows = await client.query<{ migration_name: string; done: boolean }>(
-        `select migration_name,
-                (finished_at is not null and rolled_back_at is null) as done
+      const rows = await client.query<MigrationRow>(
+        `select migration_name, finished_at, rolled_back_at
            from _prisma_migrations
           order by started_at`,
       );
-      applied = rows.rows.filter((row) => row.done).map((row) => row.migration_name);
-      failed = rows.rows.filter((row) => !row.done).map((row) => row.migration_name);
+      const classified = classify(rows.rows);
+      applied = classified.applied;
+      failed = classified.failed;
     }
   } finally {
     await client.end();
