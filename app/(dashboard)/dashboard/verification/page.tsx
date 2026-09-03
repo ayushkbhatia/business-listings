@@ -4,6 +4,7 @@ import { VerificationLadder } from "@/components/domain";
 import { TIERS } from "@/components/domain/verification";
 import { Panel } from "@/components/structure";
 import { formatDate } from "@/lib/format";
+import { licenceExpired as hasLapsed } from "@/lib/verification";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 import { deleteDocument, recordDocument, signDocumentUpload } from "./actions";
@@ -43,7 +44,7 @@ export default async function VerificationPage() {
   ]);
 
   const now = new Date();
-  const licenceExpired = business.licenceExpiry < now;
+  const licenceExpired = hasLapsed(business.licenceExpiry, now);
 
   return (
     <SellerPage

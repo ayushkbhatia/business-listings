@@ -476,8 +476,17 @@ model Business {
   searchText       String?       @map("search_text")
 
   /// 0..4. STAFF WRITE ONLY, ops_lead role. There is no API path and no
-  /// seller-editable field. Drops to 2 automatically the day licenceExpiry
+  /// seller-editable field. Drops to 1 automatically the day licenceExpiry
   /// passes — a scheduled job, no grace period. Tier 3 also requires visitedAt.
+  ///
+  /// This said "drops to 2" until the job was written, and 2 was wrong in the
+  /// dangerous direction: 2 IS the badge threshold (`VERIFIED_TIER`), and tier
+  /// 2 means "we checked the licence with the issuing authority and confirm it
+  /// is current" — the one claim an expired licence falsifies. Dropping to 2
+  /// would have left a lapsed supplier wearing a badge that says the opposite
+  /// of the truth, and contradicted board 1d, which removes the badge the same
+  /// day. Tier 1 is "the supplier gives us a licence number", which stays true
+  /// after expiry. See `lib/verification/expiry-job.ts`.
   verificationTier Int       @default(0) @map("verification_tier")
   verifiedAt       DateTime? @map("verified_at")
   visitedAt        DateTime? @map("visited_at")

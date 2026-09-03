@@ -6,7 +6,7 @@ import { formatDate, maskTRN } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { DAYS, type RamadanHours, type WeekHours } from "@/lib/trade/hours";
 import { openNow } from "@/lib/trade/open-now";
-import { VERIFIED_TIER } from "@/lib/verification";
+import { VERIFIED_TIER, licenceExpired as hasLapsed } from "@/lib/verification";
 import type { PublicBusiness } from "@/lib/db/queries";
 import { RfqForm } from "@/app/(public)/rfq/RfqForm";
 import { CopyAddress } from "./CopyAddress";
@@ -250,7 +250,7 @@ export function VerificationPanel({
   */
   now?: Date;
 }) {
-  const licenceExpired = business.licenceExpiry.getTime() < now.getTime();
+  const licenceExpired = hasLapsed(business.licenceExpiry, now);
 
   const rows = [
     {

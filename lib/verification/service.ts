@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import { assertCanSetVerificationTier } from "@/lib/auth/subject";
+import { EXPIRED_LICENCE_TIER, licenceExpired } from "@/lib/verification";
 import type { Actor } from "@/lib/auth/roles";
 
 /**
@@ -33,7 +34,12 @@ export type TierResult =
   | { ok: true; tier: number }
   | {
       ok: false;
-      error: "not_found" | "out_of_range" | "needs_a_visit" | "unchanged";
+      error:
+        | "not_found"
+        | "out_of_range"
+        | "needs_a_visit"
+        | "licence_expired"
+        | "unchanged";
       message: string;
     };
 
@@ -58,6 +64,7 @@ export async function setVerificationTier(input: SetTierInput): Promise<TierResu
       verifiedAt: true,
       visitedAt: true,
       visitedByStaffId: true,
+      licenceExpiry: true,
     },
   });
   if (!business) {
@@ -96,6 +103,32 @@ export async function setVerificationTier(input: SetTierInput): Promise<TierResu
       ok: false,
       error: "needs_a_visit",
       message: `Tier ${input.tier} needs a recorded site visit. Record the visit first, then set the tier.`,
+    };
+  }
+
+  /*
+     The fourth thing that has to be true, and the one the nightly sweep would
+     otherwise fight.
+
+     `sweepExpiredLicences` drops a lapsed listing to `EXPIRED_LICENCE_TIER`
+     every night. Without this, an ops lead could set tier 4 on a licence that
+     expired last year, the sweep would undo it before morning, and the console
+     would show a tier that keeps reverting with nothing on screen saying why.
+     Two writers to one column need one floor between them.
+
+     Refused rather than silently clamped: the tier is the most guarded field in
+     the system and a staff member who asked for 4 should be told they got 1,
+     not discover it. The message names the fix, because the fix is real — a
+     renewed licence is a new expiry date on the record, and once it is in, this
+     returns to allowing the tier.
+  */
+  if (input.tier > EXPIRED_LICENCE_TIER && licenceExpired(business.licenceExpiry, new Date())) {
+    return {
+      ok: false,
+      error: "licence_expired",
+      message:
+        `That trade licence expired on ${business.licenceExpiry.toISOString().slice(0, 10)}. ` +
+        `Tier ${EXPIRED_LICENCE_TIER} is the ceiling until the renewed licence is recorded.`,
     };
   }
 
