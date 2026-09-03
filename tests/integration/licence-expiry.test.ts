@@ -3,6 +3,8 @@ import { NextRequest } from "next/server";
 import { GET as daily } from "@/app/api/jobs/daily/route";
 import { prisma } from "@/lib/db/client";
 import { sweepExpiredLicences } from "@/lib/verification/expiry-job";
+import { setVerificationTier } from "@/lib/verification/service";
+import type { Actor, Role } from "@/lib/auth/roles";
 import {
   EXPIRED_LICENCE_TIER,
   VERIFIED_TIER,
@@ -280,5 +282,94 @@ describe("the daily run actually performs it", () => {
     );
     expect(source.indexOf("expiredLicences:")).toBeGreaterThan(-1);
     expect(source.indexOf("expiredLicences:")).toBeLessThan(source.indexOf("areaPages:"));
+  });
+});
+
+describe("staff cannot raise a tier the sweep would take back", () => {
+  /*
+     Two writers to one column. Without a floor both know about, an ops lead
+     sets tier 4 on a lapsed licence, the nightly sweep undoes it before
+     morning, and the console shows a tier that keeps reverting with nothing on
+     screen saying why. This is the other half of the fix, not a bonus.
+  */
+  const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
+  const REASON = "Checked the trade licence against the DED register.";
+  let opsLeadId: string;
+
+  beforeAll(async () => {
+    const lead = await prisma.user.findFirstOrThrow({
+      where: { roles: { has: "staff_ops_lead" } },
+      select: { id: true },
+    });
+    opsLeadId = lead.id;
+  });
+
+  it("refuses a raise while the licence is lapsed, and names the fix", async () => {
+    const slug = await addBusiness({ expiry: new Date(Date.now() - 30 * DAY), tier: 0 });
+    const business = await prisma.business.findUniqueOrThrow({
+      where: { slug },
+      select: { id: true },
+    });
+
+    const result = await setVerificationTier({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      businessId: business.id,
+      tier: 2,
+      reason: REASON,
+    });
+
+    expect(result).toMatchObject({ ok: false, error: "licence_expired" });
+    if (result.ok) return;
+    // The date, so a staff member can see which licence, and the ceiling.
+    expect(result.message).toMatch(/expired on \d{4}-\d{2}-\d{2}/);
+    expect(result.message).toMatch(/renewed licence is recorded/i);
+    // Refused, never silently clamped to the ceiling.
+    expect((await tierOf(slug)).verificationTier).toBe(0);
+  });
+
+  it("still allows the floor itself — 1 is a licence number on file", async () => {
+    const slug = await addBusiness({ expiry: new Date(Date.now() - 30 * DAY), tier: 0 });
+    const business = await prisma.business.findUniqueOrThrow({
+      where: { slug },
+      select: { id: true },
+    });
+
+    const result = await setVerificationTier({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      businessId: business.id,
+      tier: EXPIRED_LICENCE_TIER,
+      reason: REASON,
+    });
+
+    expect(result.ok).toBe(true);
+    expect((await tierOf(slug)).verificationTier).toBe(EXPIRED_LICENCE_TIER);
+  });
+
+  it("allows the raise once the licence is current again", async () => {
+    /*
+       The refusal has to be a state, not a mark on the record. A renewal is a
+       new expiry date, and the moment it is in the tier is available again —
+       otherwise the guard becomes a supplier who can never be re-verified.
+    */
+    const slug = await addBusiness({ expiry: new Date(Date.now() - 30 * DAY), tier: 0 });
+    const business = await prisma.business.findUniqueOrThrow({
+      where: { slug },
+      select: { id: true },
+    });
+
+    await prisma.business.update({
+      where: { id: business.id },
+      data: { licenceExpiry: new Date(Date.now() + 365 * DAY) },
+    });
+
+    const result = await setVerificationTier({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      businessId: business.id,
+      tier: 2,
+      reason: REASON,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(isVerified((await tierOf(slug)).verificationTier)).toBe(true);
   });
 });
