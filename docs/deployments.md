@@ -55,7 +55,16 @@ no flag that skips the report.
 It also reports two states `prisma migrate status` mentions only in passing: a
 migration applied to the database that this checkout does not have, which means
 you are about to deploy from a branch that is behind, and a migration that
-started and never finished, which `migrate deploy` will refuse to run past.
+started, never finished and was never rolled back, which `migrate deploy` will
+refuse to run past.
+
+A **rolled-back** row is none of those and is reported as nothing at all. It is
+what resolving a failure looks like — `prisma migrate resolve --rolled-back` —
+and Prisma does not block on one. Production carries two, both for
+`20260827120000_storefront_templates` on 2026-08-26: a datatype mismatch, then
+a duplicate column, then a third attempt that finished 1.7 seconds later. If a
+rolled-back migration has no later success it simply reads as pending, which is
+what it is.
 
 ### Why this exists
 

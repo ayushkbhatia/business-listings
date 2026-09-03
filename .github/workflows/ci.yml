@@ -87,6 +87,12 @@ jobs:
       - name: Tokens and strings
         run: pnpm check:tokens
 
+      - name: Vocabulary and identity
+        run: pnpm check:vocabulary
+
+      - name: Table markup
+        run: pnpm check:markup
+
       - name: Schema invariants
         run: pnpm check:schema
 

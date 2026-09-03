@@ -595,7 +595,8 @@ async function UnclaimedStorefront({ business }: { business: Business }) {
         data={{
           "@context": "https://schema.org",
           "@type": "LocalBusiness",
-          name: business.tradeName,
+          name: business.displayName,
+          legalName: business.tradeName, // licence-locked
           identifier: business.licenceNumber,
           address: head
             ? {
@@ -612,7 +613,7 @@ async function UnclaimedStorefront({ business }: { business: Business }) {
         <p className="font-mono text-eyebrow uppercase text-faint">
           {business.primaryCategory.name}
         </p>
-        <h1 className="mt-0.5 font-serif text-h1-serif text-ink">{business.tradeName}</h1>
+        <h1 className="mt-0.5 font-serif text-h1-serif text-ink">{business.displayName}</h1>
         {head && (
           <p className="mt-1 text-body-sm text-muted">
             {head.area.name} · {t(`emirate.${head.emirate}` as never)}
@@ -647,7 +648,7 @@ async function UnclaimedStorefront({ business }: { business: Business }) {
               <KeyValuePanel
                 notProvidedLabel={t("table.not_provided")}
                 entries={[
-                  { key: "trade", label: t("storefront.about"), value: business.tradeName },
+                  { key: "trade", label: t("storefront.about"), value: business.tradeName }, // licence-locked
                   { key: "licence", label: t("storefront.licence"), value: business.licenceNumber, mono: true },
                   { key: "authority", label: t("storefront.authority"), value: business.licenceAuthority },
                   { key: "expiry", label: t("listing.licence_expiry"), value: formatDate(business.licenceExpiry) },
