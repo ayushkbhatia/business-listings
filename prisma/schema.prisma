@@ -97,6 +97,7 @@ model User {
 
   @@index([businessId])
   @@map("user")
+  askedQuestions ProductQuestion[]
 }
 
 /// What was attempted. Kept separate because the thresholds differ: asking for
@@ -566,6 +567,7 @@ model Business {
   team                   User[]                  @relation("BusinessTeam")
   locations              Location[]
   products               Product[]
+  productQuestions ProductQuestion[]
   media                  Media[]
   documents              Document[]
   sellerTemplates        SellerTemplate[]
@@ -764,6 +766,7 @@ model Product {
   alerts       ProductAlert[]
   /// Buyers waiting for this one to come back into stock.
   watches      ProductAlert[] @relation("ProductWatch")
+  questions    ProductQuestion[]
 
   @@unique([businessId, slug])
   @@index([businessId])
@@ -776,6 +779,52 @@ model Product {
   @@index([importRunId])
   @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
   @@map("product")
+}
+
+/// A buyer's question about one product, and the seller's answer.
+///
+/// Board 1g's "Ask the seller" card renders one answered question verbatim and
+/// counts the rest. Verbatim matters: a paraphrase would be the platform
+/// speaking for a supplier about their own goods, and the value of the card is
+/// that another buyer already asked the thing you are about to.
+///
+/// Only an answered, unremoved question is public. An unanswered one is a lead
+/// for the seller, not content for the page — a page full of unanswered
+/// questions reads as a supplier who ignores people, and that is a claim we
+/// would be making on their behalf out of an absence.
+///
+/// Moderation mirrors `Review`: `removedAt` with a `removalReason`, staff only,
+/// audited. Same shape because it is the same decision, and a second mechanism
+/// would be a second place for a removal to be forgotten.
+model ProductQuestion {
+  id         String  @id @default(cuid())
+  productId  String  @map("product_id")
+  businessId String  @map("business_id")
+  /// Null for a buyer with no account. An enquiry needs no signup and neither
+  /// does a question — requiring one before the first ask is how a card like
+  /// this ends up with nothing in it.
+  askerId    String? @map("asker_id") @db.Uuid
+  body       String
+
+  answer     String?
+  answeredAt DateTime? @map("answered_at")
+  /// The seat that answered. For the seller's own record, never shown to buyers.
+  answeredBy String?   @map("answered_by") @db.Uuid
+
+  removedAt     DateTime? @map("removed_at")
+  removalReason String?   @map("removal_reason")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  asker    User?    @relation(fields: [askerId], references: [id], onDelete: SetNull)
+
+  /// The public read: answered, not removed.
+  @@index([productId, removedAt, answeredAt])
+  /// The seller's queue: unanswered, oldest first.
+  @@index([businessId, answeredAt])
+  @@map("product_question")
 }
 
 enum MediaKind {

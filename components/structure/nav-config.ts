@@ -112,6 +112,12 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
       { key: "leads", labelKey: "nav.leads", href: "/dashboard/leads", capability: "enquiry.respond" },
       { key: "quotes", labelKey: "nav.quotes", href: "/dashboard/quotes", capability: "quote.send" },
       { key: "reviews", labelKey: "nav.reviews", href: "/dashboard/reviews" },
+      /*
+         Board 1g. In `demand` rather than `catalogue`, because an unanswered
+         question is a buyer waiting with their intent already written down —
+         the same thing a lead is, arriving by a different door.
+      */
+      { key: "questions", labelKey: "nav.questions", href: "/dashboard/questions" },
     ],
   },
   {
@@ -185,6 +191,9 @@ export const ADMIN_NAV: readonly NavGroup[] = [
          this row is absent for them entirely rather than linking into a 404.
       */
       { key: "reviews", labelKey: "nav.reviews", href: "/admin/reviews", capability: "review.remove" },
+      /* Same rung as reviews, and gated on its own capability so the matrix
+         answers for it rather than the screen. */
+      { key: "questions", labelKey: "nav.questions", href: "/admin/questions", capability: "question.remove" },
     ],
   },
   {

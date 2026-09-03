@@ -31,16 +31,35 @@ interface Params {
 export async function GET(_request: Request, { params }: Params) {
   const { slug, document: documentId } = await params;
 
+  /*
+     A document belongs to the seller directly, or to one of their products.
+
+     `Document` carries `businessId` and `productId` independently, and a
+     datasheet uploaded against a product has only the second. Board 1g's
+     Documents card links here, so matching on `business` alone 404'd every
+     product datasheet — the criterion is that a datasheet downloads without an
+     enquiry or a login, and it could not download at all.
+
+     Both branches run the same three checks. The product branch reaches the
+     business through the product rather than relaxing anything: an unpublished
+     product's datasheet is as private as an unpublished listing's, and a draft
+     product is not a public surface.
+  */
+  const visibleBusiness = {
+    slug,
+    publishedAt: { not: null },
+    suspendedAt: null,
+    mergedIntoId: null,
+  } as const;
+
   const document = await prisma.document.findFirst({
     where: {
       id: documentId,
       kind: { in: [...PUBLISHABLE_DOCUMENT_KINDS] },
-      business: {
-        slug,
-        publishedAt: { not: null },
-        suspendedAt: null,
-        mergedIntoId: null,
-      },
+      OR: [
+        { business: visibleBusiness },
+        { product: { status: { not: "draft" }, business: visibleBusiness } },
+      ],
     },
     select: { storagePath: true },
   });

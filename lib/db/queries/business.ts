@@ -76,7 +76,18 @@ export async function getProductBySlug(businessSlug: string, productSlug: string
       business: {
         include: {
           primaryCategory: true,
-          locations: { where: { published: true }, include: { area: true }, take: 1 },
+          /*
+             Every published location, not one.
+
+             `take: 1` was enough while the product page showed a single
+             address. Board 1g derives the delivery band from the seller's
+             coverage — `deliversLocally` asks whether any branch states a
+             service radius — and with one arbitrary row that answer was
+             whichever branch sorted first. A supplier delivering from their
+             warehouse read as not delivering at all, and the band quietly
+             dropped from same-day to 48 hours.
+          */
+          locations: { where: { published: true }, include: { area: true } },
         },
       },
     },

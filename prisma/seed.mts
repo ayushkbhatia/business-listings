@@ -648,6 +648,7 @@ async function main() {
   await seedCertificates(prisma);
   await seedDeepCatalogue(prisma);
   await seedBranchNetwork(prisma);
+  await seedProductDetail(prisma);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
@@ -4046,5 +4047,195 @@ async function seedBranchNetwork(db: Db) {
       data: { lat: null, lng: null },
     });
     console.log(`   ${unpinnable.slug} left unpinned, for the no-pins panel`);
+  }
+}
+
+/**
+ * What board 1g's product page needs and no seed produced.
+ *
+ * Four of its sections could not be seen at all: no product carried a
+ * datasheet, an image or an answered question, and no two verified sellers
+ * carried the same spec — so the comparison table and the other-sellers card
+ * rendered their empty states on every product on the platform, which made the
+ * "only verified listing" copy look like the normal case rather than the
+ * notable one.
+ *
+ * Appended, for the reason the two blocks above it are: the PRNG is a sequence,
+ * and a draw inserted earlier renames every business generated after it.
+ */
+async function seedProductDetail(db: Db) {
+  console.log("→ documents, questions and a spec twin, for board 1g");
+
+  const seller = await db.business.findFirst({
+    where: { slug: "al-marwan-industrial-supplies-llc" },
+    select: { id: true, primaryCategoryId: true },
+  });
+  if (!seller) {
+    console.log("   skipped — the flagship seller is not in this seed");
+    return;
+  }
+
+  /*
+     A product that actually has a spec.
+
+     The comparison table matches on filterable spec values, and a listing with
+     none of them filled has nothing to match — so hanging these fixtures on
+     whichever product sorted first produced a page where every 1g section was
+     its own empty state. `specValues` is JSON, so "has any" is a `not: {}`
+     rather than a length check.
+  */
+  const flagship = await db.product.findFirst({
+    where: {
+      businessId: seller.id,
+      status: { not: "draft" },
+      availability: "in_stock",
+      specValues: { not: {} },
+    },
+    orderBy: { slug: "asc" },
+    select: { id: true, name: true, categoryId: true, specValues: true, slug: true },
+  });
+  if (!flagship) {
+    console.log("   skipped — the flagship seller has no published product");
+    return;
+  }
+
+  /*
+     Payment terms, so the detail list has four rows rather than three and a
+     gap. Free text because terms here are a negotiation — board 1d's reason.
+  */
+  await db.business.update({
+    where: { id: seller.id },
+    data: { paymentTerms: "30 days on approved account · 50% with order otherwise" },
+  });
+
+  /*
+     A datasheet, downloadable without an enquiry or a login.
+
+     `datasheet` is in `PUBLISHABLE_DOCUMENT_KINDS`, so the signed-URL route
+     will serve it. The storage path is the shape the uploader writes; nothing
+     is actually in the bucket for a seeded row, and the link 404s at the
+     storage layer rather than at ours — which is the honest failure for a
+     fixture and does not pretend the file exists.
+  */
+  const existingDoc = await db.document.findFirst({
+    where: { productId: flagship.id, kind: "datasheet" },
+    select: { id: true },
+  });
+  if (!existingDoc) {
+    await db.document.createMany({
+      data: [
+        {
+          productId: flagship.id,
+          kind: "datasheet",
+          storagePath: `products/${flagship.id}/datasheet.pdf`,
+          filename: "scan_0043_final.pdf",
+          displayName: `${flagship.name} — technical datasheet`,
+          isPublic: true,
+          bytes: 491_520,
+          mimeType: "application/pdf",
+        },
+        {
+          productId: flagship.id,
+          kind: "certificate",
+          storagePath: `products/${flagship.id}/wras.pdf`,
+          filename: "WRAS-2024-scan.pdf",
+          displayName: "WRAS approval — potable water",
+          isPublic: true,
+          bytes: 212_992,
+          mimeType: "application/pdf",
+        },
+      ],
+    });
+  }
+
+  /*
+     Two answered questions and one unanswered.
+
+     The unanswered one is the point of the third: it must not reach the public
+     card. A page listing questions nobody replied to reads as a supplier who
+     ignores people, and that is a claim we would be making on their behalf out
+     of an absence — so it sits in the seller's queue instead.
+  */
+  const questionCount = await db.productQuestion.count({ where: { productId: flagship.id } });
+  if (questionCount === 0) {
+    await db.productQuestion.createMany({
+      data: [
+        {
+          productId: flagship.id,
+          businessId: seller.id,
+          body: "Is the seat EPDM or NBR? We are on potable water and the consultant has specified WRAS.",
+          answer:
+            "EPDM as standard, and it is WRAS approved — the certificate is on this page. NBR is available on indent, about three weeks.",
+          answeredAt: days(-9),
+        },
+        {
+          productId: flagship.id,
+          businessId: seller.id,
+          body: "Can you supply with the counter flanges and bolts as a set?",
+          answer: "Yes. Tell us the flange standard on the enquiry and we will quote it as one line.",
+          answeredAt: days(-21),
+        },
+        {
+          productId: flagship.id,
+          businessId: seller.id,
+          body: "Do you hold DN200 in the same range?",
+        },
+      ],
+    });
+  }
+
+  /*
+     A second verified seller carrying the same spec, so the comparison table
+     and the other-sellers card have something true to say.
+
+     The values are copied from the flagship rather than invented: the table's
+     whole premise is that specs are templated and the rows line up, and a twin
+     built from different values would demonstrate the opposite. Lead time and
+     reply time differ, which is what the table is actually comparing.
+  */
+  /*
+     Any verified, published seller will do — the twin's own primary category is
+     irrelevant, because the product it carries names its category explicitly.
+     Requiring a matching `primaryCategoryId` found nobody and left the
+     comparison table with a single row, which renders as nothing at all.
+  */
+  const twinSeller = await db.business.findFirst({
+    where: {
+      id: { not: seller.id },
+      verificationTier: { gte: 2 },
+      publishedAt: { not: null },
+      suspendedAt: null,
+    },
+    orderBy: { slug: "asc" },
+    select: { id: true, slug: true },
+  });
+
+  if (twinSeller) {
+    const twinSlug = `${flagship.slug}-alt`;
+    const already = await db.product.findFirst({
+      where: { businessId: twinSeller.id, slug: twinSlug },
+      select: { id: true },
+    });
+    if (!already) {
+      await db.product.create({
+        data: {
+          businessId: twinSeller.id,
+          categoryId: flagship.categoryId,
+          name: flagship.name,
+          slug: twinSlug,
+          sku: "IND-GV-150",
+          availability: "in_stock",
+          stockQty: 40,
+          stockUpdatedAt: days(-4),
+          leadTimeDays: 2,
+          minOrderQty: 1,
+          status: "live",
+          specValues: flagship.specValues as never,
+          description:
+            "Same range, stocked in Sharjah. Counter flanges and bolts available as a set.",
+        },
+      });
+      console.log(`   a spec twin at ${twinSeller.slug}, for the comparison table`);
+    }
   }
 }

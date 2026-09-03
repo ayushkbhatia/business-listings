@@ -9,6 +9,7 @@ import type { Actor } from "@/lib/auth/roles";
 export type AuditAction =
   | "tier_change"
   | "review_removed"
+  | "question_removed"
   | "credit_issued"
   | "suspend"
   | "merge"
@@ -34,6 +35,7 @@ export const ACTION_FOR_CAPABILITY = {
   "business.suspend": "suspend",
   "business.merge": "merge",
   "review.remove": "review_removed",
+  "question.remove": "question_removed",
   "report.resolve": "report_resolved",
   "queue.decide": "queue_decided",
   "visit.record": "visit_recorded",
