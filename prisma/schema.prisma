@@ -702,6 +702,16 @@ model Product {
   categoryId   String        @map("category_id")
   availability Availability
   stockQty     Int?          @map("stock_qty")
+  /// When the stock number was last stated, not when the row last changed.
+  ///
+  /// Board 1e shows a quantity only while it is under thirty days old, and
+  /// `updatedAt` cannot answer that: it moves when a seller fixes a typo in the
+  /// description, which says nothing about whether 240 units are still on the
+  /// shelf. A stale number is worse than no number — "In stock" is honest and
+  /// "240 units" from March is a promise the seller never made.
+  ///
+  /// Null means the count has never been dated, which is read as stale.
+  stockUpdatedAt DateTime?   @map("stock_updated_at")
   leadTimeDays Int?          @map("lead_time_days")
   minOrderQty  Int?          @map("min_order_qty")
   /// Keyed by SpecField id. Normalised size tokens land in searchText so a
@@ -728,6 +738,8 @@ model Product {
   quoteLines   QuoteLine[]
   enquiryLines EnquiryLine[]
   alerts       ProductAlert[]
+  /// Buyers waiting for this one to come back into stock.
+  watches      ProductAlert[] @relation("ProductWatch")
 
   @@unique([businessId, slug])
   @@index([businessId])
@@ -2434,9 +2446,22 @@ model ProductAlert {
   id String @id @default(cuid())
 
   /// The words they typed. Matched against `Product.searchText`.
+  ///
+  /// Empty for a restock watch, where `productId` is the subject instead. The
+  /// two are one table on purpose: both are "tell me when this exists", both
+  /// fire once, and both are swept by the same job — a second table would be a
+  /// second sweep to keep correct and a second place for a notification to go
+  /// missing.
   query      String
   categoryId String?  @map("category_id")
   emirate    Emirate?
+
+  /// The product being watched, for "Notify me" on an out-of-stock line.
+  ///
+  /// Board 1e criterion 7. A watch on a *specific* product is a stronger
+  /// promise than a query alert that fires when anybody lists something
+  /// similar, and it is the promise the button makes.
+  productId  String?  @map("product_id")
 
   /// Who to tell. Provisional is normal here rather than exceptional.
   userId String @map("user_id") @db.Uuid
@@ -2455,9 +2480,12 @@ model ProductAlert {
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
   matched  Product?  @relation(fields: [matchedProductId], references: [id], onDelete: SetNull)
+  product  Product?  @relation("ProductWatch", fields: [productId], references: [id], onDelete: Cascade)
 
   /// The sweep reads the open ones. Partial in spirit; most rows end up closed.
   @@index([notifiedAt])
+  /// The seller's catalogue screen counts open watches per product.
+  @@index([productId, notifiedAt])
   @@map("product_alert")
 }
 
