@@ -21,6 +21,7 @@ import { ProductTray } from "./ProductTray";
 import { CatalogueRail, CatalogueToolbar } from "./_rail";
 import { NotifyButton } from "./NotifyButton";
 import { watchProductAction } from "./actions";
+import { EnquireButton } from "../EnquireDrawer";
 import { CatalogueFilters } from "./CatalogueFilters";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
@@ -156,6 +157,24 @@ export default async function CataloguePage({ params, searchParams }: Params) {
 
   const pages = business.sectorId ? await navPages(business.sectorId) : [];
 
+  /*
+     One recipient preview, built once. The tray, the price-list button and the
+     zero-result composer all send to the same seller — criterion 3's whole
+     point is that this page composes in place rather than handing the buyer to
+     a picker.
+  */
+  const storefrontRecipient = {
+    businessId: business.id,
+    displayName: business.displayName,
+    areaName: business.locations[0]?.area?.name ?? null,
+    verificationTier: business.verificationTier,
+    responseLabel:
+      business.responseTimeMedianMs === null
+        ? t("response.unmeasured")
+        : t("response.median", { duration: formatDuration(business.responseTimeMedianMs) }),
+    pinned: true,
+  };
+
 
   return (
     <PublicShell
@@ -241,12 +260,22 @@ export default async function CataloguePage({ params, searchParams }: Params) {
                directly. Never "Download price list" — nothing is downloaded and
                no price exists here to download.
             */}
-            <Link
-              href={`/rfq/new?to=${business.slug}&about=price-list`}
-              className="rounded-ctl bg-moss px-3.5 py-2 text-body-sm font-medium text-on-ink hover:bg-moss-hover focus-visible:outline-none focus-visible:shadow-focus"
-            >
-              {t("catalogue.price_list")}
-            </Link>
+            {/*
+               Criterion 3: the catalogue composes in place. `1e`'s Enquire
+               sends one enquiry to one seller, which is a different mechanic
+               from the fan-out however similar the button looks.
+            */}
+            <EnquireButton
+              businessId={business.id}
+              businessSlug={business.slug}
+              displayName={business.displayName}
+              categoryId={business.primaryCategoryId}
+              emirates={EMIRATES}
+              signedIn={Boolean(actor)}
+              triggerLabel={t("catalogue.price_list")}
+              initialRequirementSeed={t("catalogue.price_list")}
+              recipient={storefrontRecipient}
+            />
           </div>
 
           <div className="mt-5 grid gap-[var(--gutter)] lg:grid-cols-[13.5rem_minmax(0,1fr)]">
@@ -315,12 +344,16 @@ export default async function CataloguePage({ params, searchParams }: Params) {
                     >
                       {t("results.clear_all")}
                     </Link>
-                    <Link
-                      href={`/rfq/new?to=${business.slug}`}
-                      className="rounded-ctl bg-moss px-3 py-2 text-body-sm font-medium text-on-ink hover:bg-moss-hover focus-visible:outline-none focus-visible:shadow-focus"
-                    >
-                      {t("product.enquire")}
-                    </Link>
+                    <EnquireButton
+                      businessId={business.id}
+                      businessSlug={business.slug}
+                      displayName={business.displayName}
+                      categoryId={business.primaryCategoryId}
+                      emirates={EMIRATES}
+                      signedIn={Boolean(actor)}
+                      triggerLabel={t("product.enquire")}
+                      recipient={storefrontRecipient}
+                    />
                   </div>
                 </div>
               ) : (

@@ -1,11 +1,9 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Button, IconButton, Input, Select, Textarea } from "@/components/primitives";
 import { Close } from "@/components/primitives/icons";
-import { StepHeader } from "@/components/structure";
 import { StatusBadge } from "@/components/display/StatusBadge";
-import { cn } from "@/lib/cn";
 
 /**
  * EnquiryComposer — tier 4, buyer side.
@@ -134,7 +132,20 @@ export interface EnquiryComposerLabels {
 }
 
 export interface EnquiryComposerProps {
-  shape: "single" | "wizard";
+  /**
+   * `single`  Composer A — the inline card on 1d and 1g. Everything stacked,
+   *           its own lines editor, its own submit.
+   * `panel`   Composer B's requirement half, mounted inside `/rfq/new`
+   *           alongside a lines table and a recipient picker the page owns.
+   *
+   * There was a third, `wizard`, which navigated between three steps and showed
+   * one at a time. Board 1h's composer model removed it in as many words: "the
+   * stepper reflects completion, not navigation", "all three steps live on one
+   * route and the page never reloads", and "steps never gate backwards". A
+   * component that hid two thirds of the form could honour none of those, and
+   * the page owns the progress statement now.
+   */
+  shape: "single" | "panel";
   labels: EnquiryComposerLabels;
   initialLines?: readonly EnquiryLineDraft[];
   initialRequirement?: string;
@@ -149,6 +160,19 @@ export interface EnquiryComposerProps {
   onFanoutChange?: (count: number) => void;
   busy?: boolean;
   error?: string;
+  /**
+   * `panel` only: fired on every change so the page can mirror the value.
+   * The page owns Send, the lines and the recipients, so it needs the
+   * requirement fields as they are typed rather than at submit.
+   */
+  onChange?: (value: EnquiryComposerValue) => void;
+  /**
+   * `panel` only: board 1h's step 1. The fields render so a buyer can see what
+   * is coming, and refuse input so they cannot fill them out of order. Dimmed
+   * rather than hidden, and `disabled` rather than `readonly`, so the state
+   * reaches a screen reader as well as the eye.
+   */
+  disabled?: boolean;
 }
 
 let seq = 0;
@@ -174,9 +198,10 @@ export function EnquiryComposer({
   onFanoutChange,
   busy = false,
   error,
+  onChange,
+  disabled = false,
 }: EnquiryComposerProps) {
   const formId = useId();
-  const [step, setStep] = useState(0);
   const [requirement, setRequirement] = useState(initialRequirement);
   const [lines, setLines] = useState<EnquiryLineDraft[]>(() =>
     initialLines && initialLines.length > 0 ? [...initialLines] : [blankLine()],
@@ -191,7 +216,36 @@ export function EnquiryComposer({
   const [contactName, setContactName] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
+  /*
+     `panel` publishes its value on every change, because `/rfq/new` owns Send
+     and needs the requirement fields as they are typed rather than at submit.
+     In an effect rather than in each handler: one place, and it cannot drift
+     from the state it describes.
+  */
+  useEffect(() => {
+    if (!onChange) return;
+    onChange({
+      requirement: requirement.trim(),
+      lines: [],
+      emirate: emirate || null,
+      deliverToArea: area.trim() || null,
+      neededBy: neededBy || null,
+      termsWanted: terms || null,
+      closesInDays: Number(closesInDays) || 7,
+      fanoutTo,
+      contactPhone: contactPhone.trim(),
+      contactName: contactName.trim(),
+    });
+  }, [onChange, requirement, emirate, area, neededBy, terms, closesInDays, fanoutTo, contactPhone, contactName]);
+
   const totalSteps = labels.steps.length;
+
+  /*
+     Every section renders. Board 1h's steps are a reading of the form, not a
+     filter on it — the wizard that showed one at a time is gone, and with it
+     the buyer who corrected a line and found themselves two steps back.
+  */
+  const showStep = () => true;
 
   const filledLines = useMemo(
     () => lines.filter((l) => l.description.trim() !== "" && l.qty > 0),
@@ -214,23 +268,17 @@ export function EnquiryComposer({
     return null;
   }
 
-  function goNext() {
-    const problem = problemWith(step);
-    if (problem) {
-      setLocalError(problem);
-      return;
-    }
-    setLocalError(null);
-    setStep((s) => Math.min(totalSteps - 1, s + 1));
-  }
-
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
+    /*
+       Validation is no longer a walk back to the offending step, because there
+       are no steps to walk to — everything is on screen. The first problem is
+       named and the field it names is visible.
+    */
     for (let i = 0; i < totalSteps; i += 1) {
       const problem = problemWith(i);
       if (problem) {
         setLocalError(problem);
-        setStep(i);
         return;
       }
     }
@@ -258,20 +306,17 @@ export function EnquiryComposer({
   }
 
   const message = error ?? localError;
-  const showStep = (index: number) => shape === "single" || step === index;
-
   return (
     <form onSubmit={handleSubmit} noValidate aria-label={labels.formLabel} className="space-y-5">
-      {shape === "wizard" ? (
-        <StepHeader
-          steps={labels.steps.map((label, i) => ({ key: `step-${i}`, label }))}
-          current={step}
-          label={labels.formLabel}
-          progressLabel={labels.stepOf}
-        />
-      ) : null}
+      {/*
+         Board 1h step 1. A fieldset rather than a per-input flag: one element
+         disables every control inside it, and a screen reader reads the group
+         as unavailable rather than announcing nine separate disabled fields.
+      */}
+      <fieldset disabled={disabled} className="contents">
+      {/* The progress statement belongs to the page, not the form. */}
 
-      {showStep(0) ? (
+      {showStep() ? (
         <div className="space-y-5">
           <div>
             <label htmlFor={`${formId}-req`} className="mb-1.5 block text-body-sm text-ink">
@@ -290,6 +335,17 @@ export function EnquiryComposer({
             </p>
           </div>
 
+          {/*
+             `panel` renders no lines editor at all: `/rfq/new` owns the items
+             table, with the three row types and the target-price column the
+             inline composer has no use for.
+
+             Not rendered rather than hidden with a class. A hidden copy still
+             put a second `TARGET PRICE` header in the DOM, which is dead markup
+             and a second thing for a test — or a person reading the tree — to
+             find under the same name.
+          */}
+          {shape === "panel" ? null : (
           <fieldset>
             <legend className="text-body-sm text-ink">{labels.lines}</legend>
             <p className="mt-1 mb-2 text-caption text-muted">{labels.linesHint}</p>
@@ -392,10 +448,11 @@ export function EnquiryComposer({
               </Button>
             </div>
           </fieldset>
+          )}
         </div>
       ) : null}
 
-      {showStep(1) ? (
+      {showStep() ? (
         <div className="grid gap-4 md:grid-cols-2">
           <div>
             <label htmlFor={`${formId}-emirate`} className="mb-1.5 block text-body-sm text-ink">
@@ -471,9 +528,15 @@ export function EnquiryComposer({
         </div>
       ) : null}
 
-      {showStep(2) ? (
+      {showStep() ? (
         <div className="space-y-4">
-          {shape === "wizard" ? (
+          {/*
+             `panel` renders no recipient control at all: `/rfq/new` owns the
+             picker, with checkboxes per seller, the 1-8 cap and the free-plan
+             exclusion. The slider below is Composer A's "also send to N similar
+             suppliers", which is a count rather than a choice of sellers.
+          */}
+          {shape === "single" && recipients.length > 0 ? (
             <div>
               <p className="text-body-sm text-ink">{labels.recipients}</p>
               <p className="mt-1 text-caption text-muted">{labels.recipientsHint}</p>
@@ -531,10 +594,6 @@ export function EnquiryComposer({
                 ))}
               </ul>
             </div>
-          ) : shape === "wizard" ? (
-            <p className="rounded-ctl border border-warn-line bg-warn-surface px-3 py-2 text-body-sm text-warn-ink">
-              {labels.recipientsNone}
-            </p>
           ) : null}
 
           {askForContact ? (
@@ -585,25 +644,18 @@ export function EnquiryComposer({
         </p>
       ) : null}
 
-      <div className={cn("flex items-center gap-2", shape === "wizard" && "justify-between")}>
-        {shape === "wizard" && step > 0 ? (
-          <Button type="button" variant="secondary" onClick={() => setStep((s) => s - 1)}>
-            {labels.back}
-          </Button>
-        ) : (
-          <span />
-        )}
-
-        {shape === "wizard" && step < totalSteps - 1 ? (
-          <Button type="button" onClick={goNext}>
-            {labels.next}
-          </Button>
-        ) : (
-          <Button type="submit" loading={busy} block={shape === "single"}>
-            {busy ? labels.sending : labels.submit}
-          </Button>
-        )}
-      </div>
+      {/*
+         `panel` has no submit of its own. `/rfq/new` owns Send, because the
+         count it carries — "Send to 5 sellers" — comes from the recipient
+         picker the page owns, and two submit buttons on one surface is the
+         duplicate-composer defect board 1d removed from the storefront.
+      */}
+      {shape === "single" ? (
+        <Button type="submit" loading={busy} block>
+          {busy ? labels.sending : labels.submit}
+        </Button>
+      ) : null}
+      </fieldset>
     </form>
   );
 }

@@ -16,7 +16,7 @@ import { t } from "@/lib/i18n";
  * slogan we wrote. A storefront that says "Quality you can trust" above a name
  * nobody recognises is worse than one that just says the name.
  */
-export function Hero({ data, content, enquireHref }: SectionProps) {
+export function Hero({ data, content, enquireHref, enquireSlot }: SectionProps) {
   const eyebrow = line(content, "eyebrow");
   const headline = line(content, "headline", data.business.displayName);
   const buttonLabel = line(content, "buttonLabel", t("section.hero.enquire"));
@@ -53,9 +53,16 @@ export function Hero({ data, content, enquireHref }: SectionProps) {
           </p>
         )}
         <div className="mt-5">
-          <a className={buttonClassName({ variant: "primary" })} href={enquireHref}>
-            {buttonLabel}
-          </a>
+          {/*
+               Composes in place. Board 1h criterion 3: a storefront must not
+               link to the fan-out — the buyer has already chosen a supplier,
+               and sending them to a picker undoes that.
+            */}
+            {enquireSlot ?? (
+              <a className={buttonClassName({ variant: "primary" })} href={enquireHref}>
+                {buttonLabel}
+              </a>
+            )}
         </div>
       </div>
     </section>

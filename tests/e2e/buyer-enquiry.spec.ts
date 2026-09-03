@@ -22,42 +22,61 @@ const ENQUIRY_REF = "ENQ-8871";
 /** Both fixed in prisma/seed.mts, so no test-only endpoint is needed. */
 const enquiryPath = (suffix = "") => `/enquiry/${ENQUIRY_ID}${suffix}?t=${TOKEN}`;
 
-test.describe("the fan-out wizard", () => {
-  test("walks three steps and shows who the enquiry will reach", async ({ page }) => {
+test.describe("the fan-out, in one route", () => {
+  /*
+     These pinned the wizard: "Step 1 of 3", a Continue button between each
+     step, and validation that refused to advance. Board 1h removed all three —
+     "the stepper reflects completion, not navigation", "all three steps live on
+     one route and the page never reloads", "steps never gate backwards" — so
+     they assert the same intents against the model that replaced it.
+
+     Rewritten rather than deleted. What they were protecting is still worth
+     protecting: that a buyer can see who the enquiry reaches, that the page
+     says what is missing rather than dead-ending, and that the privacy promise
+     is made before anything is sent.
+  */
+
+  test("shows who the enquiry will reach, with no step to walk through", async ({ page }) => {
     await page.goto("/rfq/new?category=valves-and-fittings");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Send one enquiry");
-    await expect(page.getByText("Step 1 of 3")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Request a quote");
+    await expect(page.getByText("1 / 3")).toBeVisible();
 
-    await page.getByLabel("Describe the job").fill(
-      "Isolation valves for a pump room upgrade at a district cooling plant in Mussafah.",
-    );
+    // One line is the whole of step 1. There is no Continue.
     await page.getByLabel("Item on line 1").fill("Resilient seated gate valve, flanged");
-    await page.getByLabel("Quantity on line 1").fill("24");
-    await page.getByRole("button", { name: "Continue" }).click();
+    await expect(page.getByText("2 / 3")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue" })).toHaveCount(0);
 
-    await expect(page.getByText("Step 2 of 3")).toBeVisible();
-    await page.getByRole("button", { name: "Continue" }).click();
-
-    await expect(page.getByText("Step 3 of 3")).toBeVisible();
     // Matched, not guessed: the same selector the send uses.
-    await expect(page.getByText(/Going to \d+ suppliers?/)).toBeVisible();
-    await expect(page.getByRole("button", { name: "Send the enquiry" })).toBeVisible();
+    await expect(page.getByText(/Sending to \d+ sellers?/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Send to \d+ seller/ })).toBeVisible();
   });
 
-  test("refuses to advance without a description, and says what is missing", async ({ page }) => {
+  test("says what is missing rather than refusing to advance", async ({ page }) => {
+    /*
+       The old shape blocked a Continue and raised an alert. There is nothing to
+       advance past now, so the same information is on the Send button's reason
+       line — and it is visible from the first paint rather than after a click
+       that fails.
+    */
     await page.goto("/rfq/new?category=valves-and-fittings");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.getByRole("alert").first()).toContainText(/Describe the job in a sentence/);
-    await expect(page.getByText("Step 1 of 3")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Send/ })).toBeDisabled();
+    /*
+       The Send block renders at both breakpoints with `display` deciding which
+       is shown, so the reason line matches twice. Ask for the visible one — the
+       same shape board 1f's delivery card needed.
+    */
+    await expect(
+      page.getByText("Add what you need, and sellers will match.").locator("visible=true"),
+    ).toHaveCount(1);
   });
 
   test("says a buyer's number is withheld before they type it", async ({ page }) => {
-    // Rule 1, said before the enquiry is sent rather than after.
+    /*
+       Rule 1, said before the enquiry is sent rather than after — and now said
+       on arrival, because nothing is hidden behind a step. The old version had
+       to click through two Continues to reach it.
+    */
     await page.goto("/rfq/new?category=valves-and-fittings");
-    await page.getByLabel("Describe the job").fill("Valves for a chilled water riser at Al Quoz.");
-    await page.getByLabel("Item on line 1").fill("Gate valve");
-    await page.getByRole("button", { name: "Continue" }).click();
-    await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.getByText(/stay with us until you accept a quote/)).toBeVisible();
   });
 });

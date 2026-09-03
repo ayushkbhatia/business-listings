@@ -195,6 +195,22 @@ export interface CreateEnquiryInput {
 
   /** The storefront the buyer came from. Always a recipient if it can answer. */
   pinnedBusinessIds?: readonly string[];
+  /**
+   * Exactly who to send to, when the buyer has said.
+   *
+   * Board 1h's picker is a list of checkboxes, not a count — a buyer who
+   * unticks two sellers has made a decision about those two. Routing that
+   * through `pinnedBusinessIds` and `fanoutTo` came close but was not the same
+   * thing: pinning only *sorts* a candidate to the front, so a seller who
+   * became ineligible between the preview and the send would have been quietly
+   * replaced by whoever ranked next — an enquiry delivered to somebody the
+   * buyer had not chosen, and possibly to one they had deliberately removed.
+   *
+   * When this is set the matcher still runs, and still refuses anyone it would
+   * not have offered — a seller at their monthly cap stays out even if the id
+   * is in this list. What it may no longer do is substitute.
+   */
+  chosenBusinessIds?: readonly string[];
   /** 1..8. "also send to N similar suppliers". */
   fanoutTo: number;
   /**
@@ -272,7 +288,19 @@ export async function createEnquiry(
   };
 
   const candidates = await findFanoutCandidates(request, now);
-  const { recipients, skipped } = selectRecipients(candidates, request);
+  const selection = selectRecipients(candidates, request);
+  const skipped = selection.skipped;
+
+  /*
+     The buyer's choice, intersected with what the matcher would allow.
+
+     Intersected rather than trusted: the ids arrive from a form and a seller
+     who has hit their cap since the page rendered must still be excluded, or
+     the cap is advisory. Nobody is added who was not ticked.
+  */
+  const recipients = input.chosenBusinessIds
+    ? candidates.filter((c) => input.chosenBusinessIds!.includes(c.businessId)).slice(0, MAX_RECIPIENTS)
+    : selection.recipients;
   if (recipients.length === 0) return { ok: false, error: "no_recipients" };
 
   /*

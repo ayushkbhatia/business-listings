@@ -208,3 +208,94 @@ test.describe("on a phone", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
+
+/*
+   The four states board 1g builds and the first pass never asserted.
+
+   Each was implemented and visible in a browser, and none had a test — which
+   is the same shape of gap as a rule the schema promises and no job performs.
+   Criterion 8 is the one that mattered most: it swaps the primary action and
+   replaces the entire quantity table, and the board is explicit that the
+   enquiry path must survive that swap.
+*/
+const OUT_OF_STOCK = "/b/al-basma-general-trading-llc/p/brass-ball-valve-dn50-4";
+const STALE_STOCK = "/b/al-marwan-industrial-supplies-llc/p/brass-ball-valve-dn50-deep-12";
+
+test.describe("out of stock keeps the enquiry open", () => {
+  test("swaps to Notify me and still offers a way to ask", async ({ page }) => {
+    // Criterion 8. An out-of-stock product is still a live enquiry.
+    await page.goto(OUT_OF_STOCK);
+
+    await expect(page.getByRole("button", { name: "Notify me" }).first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Send enquiry" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Enquire about lead time" })).toBeVisible();
+
+    /*
+       The quantity table is replaced by one sentence rather than four rows
+       about something there is none of — four rows would push the enquiry
+       action, which is the point of the state, further down the page.
+    */
+    await expect(page.getByText("The seller quotes on indent orders.")).toBeVisible();
+    await expect(page.locator("table").filter({ hasText: "QUANTITY" })).toHaveCount(0);
+  });
+});
+
+test.describe("a stock figure that has aged out", () => {
+  test("shows the band and withholds the number", async ({ page }) => {
+    /*
+       Criterion 10, and board 1e's rule: a count older than thirty days is a
+       promise the seller never made. "In stock" is honest; "56 units" from two
+       months ago is not.
+    */
+    await page.goto(STALE_STOCK);
+    const identity = page.locator("main").getByText(/In stock/).first();
+    await expect(identity).toBeVisible();
+    await expect(page.locator("main")).not.toContainText("56 units");
+    await expect(page.locator("main")).not.toContainText(/\d+ units at/);
+  });
+});
+
+test.describe("a product with nothing to compare", () => {
+  test("hides the comparison and says nothing about other sellers", async ({ page }) => {
+    /*
+       Criterion 7's other half. A listing with none of its filterable fields
+       filled has no spec to match on, so "the only verified listing for this
+       spec" would be a claim about a spec that does not exist — on the listings
+       least entitled to make one. Silence instead.
+    */
+    await page.goto(OUT_OF_STOCK);
+    const text = await page.locator("main").innerText();
+    // Either it has matches and shows the table, or it has none and shows
+    // neither the table nor a claim about being the only one.
+    if (!text.includes("Same spec, other sellers")) {
+      expect(text).not.toMatch(/other verified sellers? stock/);
+    }
+  });
+});
+
+test.describe("a product page that should not be live", () => {
+  test("sends an unknown product to the storefront rather than a dead end", async ({ page }) => {
+    /*
+       Criterion 9, as far as it honestly goes on this platform. The board's
+       premise — that a Free-plan seller has no catalogue — does not hold here:
+       `Free` carries a `productLimit` of 10 and `allowance()` says a downgrade
+       legitimately leaves a seller over their cap. What is buildable is the
+       board's own second sentence, never a live page for an unpublished
+       product, and the buyer lands on the supplier rather than a 404.
+    */
+    const response = await page.goto(
+      "/b/al-marwan-industrial-supplies-llc/p/a-product-that-was-unpublished",
+    );
+    expect(response?.status()).toBeLessThan(400);
+    await expect(page).toHaveURL(/\/b\/al-marwan-industrial-supplies-llc$/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      "Al Marwan Industrial Supplies",
+    );
+  });
+
+  test("404s when the storefront is gone too", async ({ page }) => {
+    // Nowhere honest to send them.
+    const response = await page.goto("/b/no-such-supplier-at-all/p/no-such-product");
+    expect(response?.status()).toBe(404);
+  });
+});

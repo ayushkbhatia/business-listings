@@ -1,6 +1,4 @@
-import Link from "next/link";
 import { ChipLink, Eyebrow } from "@/components/display";
-import { buttonClassName } from "@/components/primitives";
 import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -33,8 +31,12 @@ export interface BrowseHeaderProps {
   basePath: string;
   /** The current subcategory slug, where the page is one. */
   activeChild?: string;
-  /** Carries the buyer's filters into the enquiry composer. */
-  enquireHref: string;
+  /**
+   * Unused since board 1h removed the fan-out button from this header. Kept on
+   * the type because the category and search pages both still compute it and
+   * removing it is their change, not this component's.
+   */
+  enquireHref?: string;
   /** The whole query string, so a saved search reproduces this exact view. */
   search: string;
 }
@@ -48,7 +50,6 @@ export function BrowseHeader({
   chips,
   basePath,
   activeChild,
-  enquireHref,
   search,
 }: BrowseHeaderProps) {
   const shown = chips.slice(0, CHIPS_SHOWN);
@@ -78,11 +79,20 @@ export function BrowseHeader({
             <p className="mt-2 text-body text-body">{clauses.join(" · ")}</p>
           </div>
 
+          {/*
+             No "enquire all N" button.
+
+             Board 1h criterion 3 lists `1b` among the pages that contain no
+             link to the fan-out, and the spec gives the reason: the board
+             originally carried "Post an RFQ to 1,842" here and it was removed,
+             because fan-out is capped at eight recipients and a button offering
+             1,842 promises something the engine cannot do. A buyer at browse
+             stage has not described a requirement yet either, so the composer
+             would open cold — which is what the home page's own "Post RFQ"
+             already covers.
+          */}
           <div className="flex shrink-0 flex-wrap gap-2">
             <SaveSearch search={search} heading={heading} />
-            <Link href={enquireHref} className={buttonClassName({ size: "md" })}>
-              {t("browse.enquire_all", { count: formatCount(stats.listings) })}
-            </Link>
           </div>
         </div>
 

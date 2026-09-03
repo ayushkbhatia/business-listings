@@ -11,10 +11,13 @@ import { enquiryLabels } from "./_labels";
 import { previewRecipients, sendEnquiry } from "./actions";
 
 /**
- * The client half of every enquiry composer.
+ * The client half of Composer A — the inline enquiry on a storefront or a
+ * product page.
  *
- * Shared by the fan-out wizard, the storefront composer and the product tray:
- * they differ in their shape and their starting lines, not in their behaviour.
+ * Shared by the storefront composer and the product tray: they differ in their
+ * starting lines, not in their behaviour. `/rfq/new` is Composer B and owns its
+ * own layout, but sends through the same action, because a single-seller
+ * enquiry is an RFQ with one recipient.
  *
  * The recipient preview is re-queried when the buyer moves the slider, through
  * the same matcher the send uses — so what they are shown and what is delivered
@@ -31,7 +34,16 @@ export function RfqForm({
   askForContact,
   defaultFanout = 5,
 }: {
-  shape: "single" | "wizard";
+  /**
+   * Composer A only.
+   *
+   * `/rfq/new` used to mount this with `shape="wizard"`. Board 1h's composer
+   * model replaced that with a page that owns its own lines table, recipient
+   * picker and Send — see `app/(public)/rfq/new`. This wrapper stays as the
+   * inline composer the storefront and the product page use, and both still
+   * submit through the same `sendEnquiry` action the fan-out does.
+   */
+  shape: "single";
   categoryId: string;
   emirates: readonly { value: string; label: string }[];
   initialRecipients?: readonly RecipientPreview[];
@@ -90,7 +102,7 @@ export function RfqForm({
       {...(initialLines ? { initialLines } : {})}
       {...(initialRequirement ? { initialRequirement } : {})}
       onSubmit={handleSubmit}
-      onFanoutChange={shape === "wizard" ? handleFanoutChange : undefined}
+      {...(recipients.length > 0 ? { onFanoutChange: handleFanoutChange } : {})}
       busy={pending}
       {...(error ? { error } : {})}
     />

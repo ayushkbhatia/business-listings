@@ -139,12 +139,27 @@ export function scoreCandidate(candidate: FanoutCandidate, request: FanoutReques
       ? 0.5
       : Math.max(0, 1 - candidate.responseTimeMedianMs / (24 * 3_600_000));
 
-  const base =
-    coverage * 0.34 + stock * 0.2 + category * 0.18 + locality * 0.12 + trust * 0.1 + speed * 0.06;
+  /*
+     No plan multiplier here, and that is the whole point.
 
-  // The plan's nudge, applied last and bounded, so it can reorder two similar
-  // suppliers and never promote one who cannot fill the order.
-  return Math.min(1, base * Math.min(1.35, Math.max(1, candidate.rankingMultiplier)));
+     `/rfq/new` tells a buyer, in the recipient card, how the list was chosen:
+     "We pick them on what they stock, where they are and how fast they reply.
+     Never on what they pay us." That sentence shipped, and this function
+     multiplied the score by `Plan.rankingMultiplier` — free 1.0, basic 1.15,
+     pro 1.35 — so what they paid us moved a supplier by up to 35%, which is
+     further than the entire tier-0-to-tier-4 span of the trust term.
+
+     Search keeps the multiplier (`lib/search/ranking.ts`), and a paid boost
+     there is disclosed: it renders as sponsored placement and is always
+     labelled. A fan-out is different on both counts. There are eight slots and
+     they are scarce, the buyer is not browsing but asking, and the page makes
+     an explicit promise at the moment of highest intent. A promise the code
+     contradicts is worse than no promise.
+  */
+  return Math.min(
+    1,
+    coverage * 0.34 + stock * 0.2 + category * 0.18 + locality * 0.12 + trust * 0.1 + speed * 0.06,
+  );
 }
 
 export function selectRecipients(

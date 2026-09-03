@@ -1,21 +1,44 @@
 import { notFound } from "next/navigation";
-import { Card, PublicShell } from "@/components/structure";
+import { PublicShell } from "@/components/structure";
 import { prisma } from "@/lib/db/client";
 import { getActor } from "@/lib/auth/session";
-import { DEFAULT_FANOUT } from "@/lib/enquiry/fanout";
 import { t } from "@/lib/i18n";
-import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
+import { DirectoryNav } from "@/app/(public)/_chrome";
 import { previewRecipients } from "../actions";
-import { RfqForm } from "../RfqForm";
+import { RfqComposer } from "../RfqComposer";
+import type { RfqLine } from "../rfq-state";
 
 /**
- * Board 1h — the RFQ fan-out, in three steps.
+ * Board 1h — the RFQ fan-out. One route, three arrival states.
  *
- * A buyer can reach this from a category, a search or the home page. The
- * category decides who could answer, so it is required; everything else the
+ * The category decides who could answer, so it is required; everything else the
  * form asks for is optional and says so.
+ *
+ * ## The three arrivals
+ *
+ *   **Cold** from `1a`. Nothing seeded, so the page opens at step 1: a blank
+ *   line with the cursor in it, the requirement fields dimmed and disabled, and
+ *   the recipient card explaining that matching needs an item first.
+ *
+ *   **Query-seeded** from `1c`'s zero results — `?q=`. The failed query becomes
+ *   a free-text line, so the page opens at step 2 with a notice saying why.
+ *
+ *   **Product-seeded** from `1g` — `?products=`. Each product becomes a matched
+ *   line carrying its SKU and seller, and that seller is pinned first in the
+ *   recipient list and pre-ticked.
+ *
+ * A warm arrival never opens at step 1 with an empty table the buyer has to
+ * refill — that is the composer model's rule and the reason there is no
+ * separate "add items" route to send them through.
  */
-export const metadata = { title: "Send an enquiry" };
+export const metadata = {
+  title: "Request a quote",
+  /*
+     A composer has nothing to index and a crawler filling it wastes budget.
+     `follow`, because the links out of it are worth crawling.
+  */
+  robots: { index: false, follow: true },
+};
 export const dynamic = "force-dynamic";
 
 const EMIRATES = [
@@ -93,35 +116,114 @@ export default async function RfqNewPage({
       })));
   if (!category) notFound();
 
+  /*
+     The seeded lines, and the shape of the arrival.
+
+     `?products=` from board 1g — each becomes a *matched* line carrying its SKU
+     and its seller, which is what makes the row read `AW-VLV-BF-100 · FROM AL
+     WAHA` rather than "not matched to a listing". Capped, because a URL is not
+     a basket and twenty lines is the composer's own limit.
+
+     `?q=` from board 1c's zero results becomes a single *free-text* line. It
+     matched nothing by definition — that is why the buyer is here — and the
+     page says so above the table rather than pretending otherwise.
+  */
+  /*
+     Ids or slugs, because both are things a person may reasonably put here.
+
+     Board 1g's crossover builds the link from ids it already holds. A slug is
+     what anybody writing the URL by hand — or a test — would reach for, and it
+     is readable in a way a cuid is not. Matching either costs one `OR`.
+
+     Slugs are unique per business rather than globally, so a bare slug can in
+     principle match two sellers' products. That is acceptable for a seed: the
+     lines are a starting point the buyer edits, and the crossover that matters
+     passes ids.
+  */
+  const productKeys = (one("products") ?? "").split(",").map((v) => v.trim()).filter(Boolean).slice(0, 20);
+  const seededProducts = productKeys.length
+    ? await prisma.product.findMany({
+        where: {
+          OR: [{ id: { in: productKeys } }, { slug: { in: productKeys } }],
+          status: { not: "draft" },
+        },
+        select: {
+          id: true,
+          name: true,
+          sku: true,
+          minOrderQty: true,
+          business: { select: { id: true, displayName: true, primaryCategoryId: true } },
+        },
+        take: 20,
+      })
+    : [];
+
+  const seededQuery = (one("q") ?? "").trim().slice(0, 200);
+
+  const initialLines: RfqLine[] = [
+    ...seededProducts.map((product, i) => ({
+      key: `seed-${i}`,
+      description: product.name,
+      qty: product.minOrderQty ?? 1,
+      targetUnitPriceAed: "",
+      productId: product.id,
+      sku: product.sku,
+      /* The display name, as everywhere. A legal name here would name one
+         supplier on the line and another on the storefront it links to. */
+      sellerName: product.business.displayName,
+    })),
+    ...(seededQuery && seededProducts.length === 0
+      ? [
+          {
+            key: "seed-q",
+            description: seededQuery,
+            qty: 1,
+            targetUnitPriceAed: "",
+            productId: null,
+            sku: null,
+            sellerName: null,
+          },
+        ]
+      : []),
+  ];
+
+  /*
+     A seeded product pins its own seller. The buyer came from that page, so
+     unticking them should be a decision rather than a default.
+  */
+  const seededSellerIds = [...new Set(seededProducts.map((p) => p.business.id))];
+  const pinned = [...new Set([...pinnedIds, ...seededSellerIds])].slice(0, 8);
+
+  /*
+     Eight, not five. The picker shows the top five ticked and keeps the rest
+     behind "Add all" — the footer's "3 more match your spec" is a real count of
+     sellers already fetched, not a promise about a query nobody ran.
+  */
   const recipients = await previewRecipients({
     categoryId: category.id,
     emirate: null,
-    lineCount: 1,
-    fanoutTo: Math.max(DEFAULT_FANOUT, pinnedIds.length),
-    ...(pinnedIds.length ? { pinnedBusinessIds: pinnedIds } : {}),
+    lineCount: Math.max(1, initialLines.length),
+    fanoutTo: 8,
+    ...(pinned.length ? { pinnedBusinessIds: pinned } : {}),
   });
 
   return (
-    <PublicShell nav={<DirectoryNav />} footer={<DirectoryFooter />}>
-      <div className="mx-auto w-full max-w-[46rem] px-[var(--section-pad)] py-8">
-      <p className="font-mono text-eyebrow uppercase text-faint">{category.name}</p>
-      <h1 className="mt-2 font-serif text-h1-serif text-ink">{t("rfq.title")}</h1>
-      <p className="mt-2 max-w-[var(--measure-prose)] text-prose text-prose">{t("rfq.lede")}</p>
-
-      <div className="mt-6">
-        <Card padded>
-          <RfqForm
-            shape="wizard"
-            categoryId={category.id}
-            emirates={EMIRATES}
-            initialRecipients={recipients}
-            askForContact={!actor}
-            defaultFanout={Math.max(DEFAULT_FANOUT, pinnedIds.length)}
-            {...(pinnedIds.length ? { pinnedBusinessIds: pinnedIds } : {})}
-          />
-        </Card>
-      </div>
-      </div>
+    <PublicShell nav={<DirectoryNav />}>
+      {/*
+         No footer. A composer is a task surface, and the site footer would
+         offer twelve ways to abandon it — the spec says so in as many words.
+      */}
+      <RfqComposer
+        emirateName={t("emirate.dubai")}
+        categoryId={category.id}
+        emirates={EMIRATES}
+        initialLines={initialLines}
+        {...(seededQuery ? { initialRequirement: seededQuery } : {})}
+        initialRecipients={recipients}
+        {...(pinned.length ? { pinnedBusinessIds: pinned } : {})}
+        askForContact={!actor}
+        seeded={Boolean(seededQuery)}
+      />
     </PublicShell>
   );
 }
