@@ -20,8 +20,8 @@ import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
-import { EnquireButton } from "../../EnquireDrawer";
-import { EnquiryCard } from "./_enquiry-card";
+import { EnquiryCard, SpecRequestButton } from "./_enquiry-card";
+import { ProductEnquiryProvider } from "./_enquiry-context";
 
 /**
  * Board 1g — product detail & spec table.
@@ -293,6 +293,24 @@ export default async function ProductPage({ params }: Params) {
         }}
       />
 
+      {/*
+         One composer for the page, however many things open it. Four triggers
+         live in three different sections and every one of them is an enquiry to
+         the same seller about the same product — only the seed differs.
+      */}
+      <ProductEnquiryProvider
+        enquire={enquire}
+        defaultSeed={product.name}
+        line={{
+          key: product.id,
+          productId: product.id,
+          description: product.name,
+          unit: "pcs",
+          size: sizeLabel ?? "",
+          targetUnitPriceAed: "",
+        }}
+      >
+
       {/* Media 540px, commercial column takes the rest. */}
       <div className="grid gap-[var(--gutter)] lg:grid-cols-[minmax(0,28.75rem)_minmax(0,1fr)] xl:grid-cols-[minmax(0,33.75rem)_minmax(0,1fr)]">
         <div className="min-w-0">
@@ -457,17 +475,16 @@ export default async function ProductPage({ params }: Params) {
 
           <div className="mt-4">
             <EnquiryCard
-              enquire={enquire}
-              line={{
-                key: product.id,
-                productId: product.id,
-                description: product.name,
-                unit: "pcs",
-                size: sizeLabel ?? "",
-              }}
+              productId={product.id}
+              enquirySeed={product.name}
               minOrderQty={product.minOrderQty ?? 1}
               primaryLabel={outOfStock ? t("product.notify") : t("product.enquire")}
-              {...(outOfStock ? { leadTimeLabel: t("pdp.enquire_lead_time") } : {})}
+              {...(outOfStock
+                ? {
+                    leadTimeLabel: t("pdp.enquire_lead_time"),
+                    leadTimeSeed: t("pdp.request_lead_time_seed", { product: product.name }),
+                  }
+                : {})}
               {...(head?.whatsapp
                 ? {
                     whatsappHref: `https://wa.me/${head.whatsapp.replace(/[^\d]/g, "")}`,
@@ -650,12 +667,18 @@ export default async function ProductPage({ params }: Params) {
                  material and the face-to-face dimension" can answer in a line,
                  and that is what makes it high-intent rather than a chore.
               */}
-              <EnquiryLinkForSpecs
-                enquire={enquire}
-                product={product.name}
-                productId={product.id}
-                minOrderQty={product.minOrderQty ?? 1}
-                fields={missing}
+              {/*
+                 Criterion 5. The enquiry names the fields rather than saying
+                 "please send full specs" — a seller who reads "confirm the seat
+                 material and the face-to-face dimension" can answer in a line,
+                 and that is what makes it high-intent rather than a chore.
+              */}
+              <SpecRequestButton
+                label={t("pdp.request_specs")}
+                seed={t("pdp.request_specs_seed", {
+                  product: product.name,
+                  fields: missing.join(", "),
+                })}
               />
             </div>
           )}
@@ -737,6 +760,8 @@ export default async function ProductPage({ params }: Params) {
         </section>
       )}
 
+      </ProductEnquiryProvider>
+
       {/* The sticky bar is fixed; this keeps the last section clear of it. */}
       <div className="h-16 md:hidden" aria-hidden />
     </PublicShell>
@@ -772,52 +797,5 @@ function Th({ children, className }: { children: React.ReactNode; className?: st
     >
       {children}
     </th>
-  );
-}
-
-/**
- * The one-click request for the fields the seller has not filled.
- *
- * An `EnquireButton` seeded with the field names, rather than a bespoke form:
- * this lands in the leads inbox the seller already reads, and handoff 2's
- * composer is the only enquiry path there is. The seed is the whole of the
- * work — an enquiry saying "please confirm the seat material and the
- * face-to-face dimension" is answerable in a line, and that is what makes it
- * high-intent rather than a chore.
- */
-function EnquiryLinkForSpecs({
-  enquire,
-  product,
-  productId,
-  minOrderQty,
-  fields,
-}: {
-  enquire: React.ComponentProps<typeof EnquiryCard>["enquire"];
-  product: string;
-  productId: string;
-  minOrderQty: number;
-  fields: readonly string[];
-}) {
-  return (
-    <EnquireButton
-      {...enquire}
-      size="sm"
-      triggerLabel={t("pdp.request_specs")}
-      initialRequirementSeed={t("pdp.request_specs_seed", {
-        product,
-        fields: fields.join(", "),
-      })}
-      initialLines={[
-        {
-          key: productId,
-          productId,
-          description: product,
-          qty: minOrderQty,
-          unit: "pcs",
-          size: "",
-          targetUnitPriceAed: "",
-        },
-      ]}
-    />
   );
 }

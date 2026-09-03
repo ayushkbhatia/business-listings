@@ -3,45 +3,41 @@
 import { useState } from "react";
 import { Stepper } from "@/components/primitives";
 import { cn } from "@/lib/cn";
-import { EnquireButton } from "../../EnquireDrawer";
-import type { EnquireProps } from "../../EnquireDrawer";
 import {
   selectionKey,
   selectionSnapshot,
   setSelection,
 } from "../../products/selection-store";
+import { useEnquiry, useQuantity } from "./_enquiry-context";
 
 /**
  * The enquiry card, and the sticky bar it becomes on a phone.
  *
- * The quantity lives here because it is the one field the buyer sets before
- * sending, and it has to reach the enquiry as a line rather than as a sentence
- * in the free-text box — a seller quoting for 40 units should see 40 in the
- * line, not have to read for it.
+ * No composer of its own: every trigger on this page opens the one
+ * `EnquireDrawer` the provider renders. Three drawers were three identical
+ * forms in the DOM, which is board 1d's duplicate-composer defect by a
+ * different route.
  *
- * Everything except the quantity arrives already rendered from the server:
- * the confidence block, the band table and the detail list are all nodes. That
- * keeps the localisation, the band derivation and the measured reply time on
- * the server, where they can be tested without a browser — and it is the shape
- * boards 1d, 1e and 1f each arrived at after passing a function across the
- * boundary and rendering nothing at all.
+ * The quantity lives in the provider for the same reason — it is the one field
+ * a buyer sets before sending, and it has to reach the enquiry as a line rather
+ * than as a sentence in the free-text box. A seller quoting for forty units
+ * should see forty in the line, not have to read for it.
+ *
+ * Everything else arrives already rendered from the server: the confidence
+ * block, the band table and the detail list are nodes. That keeps the
+ * localisation, the band derivation and the measured reply time on the server,
+ * where they can be tested without a browser.
  */
 
 export interface EnquiryCardProps {
-  enquire: EnquireProps;
-  /** The line this page is about, minus the quantity, which is state. */
-  line: {
-    key: string;
-    productId: string;
-    description: string;
-    unit: string;
-    size: string;
-  };
   minOrderQty: number;
+  productId: string;
   /** Board 1g: "Send enquiry", or "Notify me" when there is none in stock. */
   primaryLabel: string;
   /** Shown beside the primary when the product is out of stock. */
   leadTimeLabel?: string;
+  leadTimeSeed?: string;
+  enquirySeed: string;
   whatsappHref?: string;
   whatsappLabel: string;
   rfqLabel: string;
@@ -49,22 +45,22 @@ export interface EnquiryCardProps {
   quantityLabel: string;
   decrementLabel: string;
   incrementLabel: string;
-  /** Server-rendered blocks. */
   confidence: React.ReactNode;
   bands: React.ReactNode;
   details: React.ReactNode;
   /** For the sticky bar below 768, which names what it is sending about. */
   productName: string;
-  /** Adds this product to the storefront catalogue's selection, per board 1e. */
+  /** Adds this product to the catalogue's selection, per board 1e. */
   storefrontSlug: string;
 }
 
 export function EnquiryCard({
-  enquire,
-  line,
   minOrderQty,
+  productId,
   primaryLabel,
   leadTimeLabel,
+  leadTimeSeed,
+  enquirySeed,
   whatsappHref,
   whatsappLabel,
   rfqLabel,
@@ -78,42 +74,31 @@ export function EnquiryCard({
   productName,
   storefrontSlug,
 }: EnquiryCardProps) {
-  const [qty, setQty] = useState(Math.max(1, minOrderQty));
+  const { open } = useEnquiry();
+  const { qty, setQty } = useQuantity();
   const [added, setAdded] = useState(false);
-
-  const lines = [{ ...line, qty, targetUnitPriceAed: "" }];
 
   /*
      The bridge to board 1e. A buyer who needs four things starts on one product
-     page and accumulates, rather than sending four separate enquiries — so this
-     writes into the same session store the catalogue's tray reads, keyed by the
-     same seller. It is not a basket: nothing crosses storefronts and nothing
-     survives the session.
+     page and accumulates rather than sending four separate enquiries — so this
+     writes through the catalogue's own store, keyed by the same seller. Going
+     through `setSelection` also notifies its subscribers, so a tray open in
+     another tab of the same session updates rather than drifting.
+
+     It is not a basket: nothing crosses storefronts and nothing survives the
+     session.
   */
   function addToRfq() {
-    /*
-       Through board 1e's own store rather than touching `sessionStorage`
-       directly. The first version wrote a key of its own invention and would
-       have accumulated a selection nothing ever read — and going through
-       `setSelection` also notifies the catalogue's subscribers, so a tray open
-       in another tab of the same session updates rather than drifting.
-    */
     const key = selectionKey(storefrontSlug);
     const current = selectionSnapshot(key);
-    if (!current.includes(line.productId)) {
-      setSelection(key, [...current, line.productId]);
-    }
+    if (!current.includes(productId)) setSelection(key, [...current, productId]);
     setAdded(true);
   }
 
   const primary = (
-    <EnquireButton
-      {...enquire}
-      block
-      size="lg"
-      triggerLabel={primaryLabel}
-      initialLines={lines}
-    />
+    <button type="button" onClick={() => open(enquirySeed)} className={PRIMARY}>
+      {primaryLabel}
+    </button>
   );
 
   return (
@@ -124,7 +109,7 @@ export function EnquiryCard({
 
         <div className="mt-4 flex flex-col gap-2.5">
           <Stepper
-            value={qty}
+            value={Math.max(qty, minOrderQty)}
             onChange={setQty}
             min={Math.max(1, minOrderQty)}
             label={quantityLabel}
@@ -136,11 +121,7 @@ export function EnquiryCard({
 
           <div className="flex flex-wrap gap-2">
             {whatsappHref && (
-              <a
-                href={whatsappHref}
-                rel="nofollow noopener"
-                className={SECONDARY}
-              >
+              <a href={whatsappHref} rel="nofollow noopener" className={SECONDARY}>
                 {whatsappLabel}
               </a>
             )}
@@ -153,13 +134,14 @@ export function EnquiryCard({
                rather than a notification — removing it would leave the state
                with no way to ask a question.
             */}
-            {leadTimeLabel && (
-              <EnquireButton
-                {...enquire}
-                size="sm"
-                triggerLabel={leadTimeLabel}
-                initialLines={lines}
-              />
+            {leadTimeLabel && leadTimeSeed && (
+              <button
+                type="button"
+                onClick={() => open(leadTimeSeed)}
+                className={SECONDARY}
+              >
+                {leadTimeLabel}
+              </button>
             )}
           </div>
         </div>
@@ -172,8 +154,8 @@ export function EnquiryCard({
          search, so the action has to travel with them — losing it above the
          fold loses the enquiry.
 
-         Hidden with `display` above the breakpoint rather than moved, so there
-         is exactly one enquiry trigger in the accessibility tree at any width.
+         Hidden with `display` above the breakpoint, so exactly one trigger is
+         in the accessibility tree at any width.
       */}
       <div
         className={cn(
@@ -182,11 +164,33 @@ export function EnquiryCard({
         )}
       >
         <p className="min-w-0 flex-1 truncate text-caption text-body">{productName}</p>
-        <div className="shrink-0 [&_button]:min-h-11">{primary}</div>
+        <button
+          type="button"
+          onClick={() => open(enquirySeed)}
+          className={cn(PRIMARY, "w-auto shrink-0 px-5")}
+        >
+          {primaryLabel}
+        </button>
       </div>
     </>
   );
 }
+
+/** The one-click request for the fields the seller has not filled. */
+export function SpecRequestButton({ label, seed }: { label: string; seed: string }) {
+  const { open } = useEnquiry();
+  return (
+    <button type="button" onClick={() => open(seed)} className={SECONDARY}>
+      {label}
+    </button>
+  );
+}
+
+const PRIMARY = cn(
+  "inline-flex min-h-11 w-full items-center justify-center rounded-ctl bg-moss px-4",
+  "text-body-sm font-medium text-white hover:bg-moss-deep",
+  "focus-visible:outline-none focus-visible:shadow-focus",
+);
 
 const SECONDARY = cn(
   "inline-flex min-h-11 items-center rounded-ctl border border-line bg-card px-3.5",

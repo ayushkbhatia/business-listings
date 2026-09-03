@@ -868,6 +868,7 @@ export const en = {
   "pdp.qty_caption": "How fast you can have this many, by quantity",
   "pdp.out_of_stock_note": "The seller quotes on indent orders.",
   "pdp.enquire_lead_time": "Enquire about lead time",
+  "pdp.request_lead_time_seed": "What is the lead time on {product}, and what quantity would you need?",
   "pdp.whatsapp_seller": "WhatsApp the seller",
   "pdp.add_to_rfq": "Add to a multi-item RFQ",
   "pdp.added_to_rfq": "Added to your RFQ",
