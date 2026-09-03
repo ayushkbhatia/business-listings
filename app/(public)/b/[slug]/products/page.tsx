@@ -366,11 +366,24 @@ export default async function CataloguePage({ params, searchParams }: Params) {
                          elements. The tray is a client component and a function
                          cannot cross that boundary — passing one rendered the
                          whole grid as nothing at all.
+
+                         Both carry a key even though neither is a list here.
+                         An element built on the server arrives on the client
+                         through the Flight payload rather than through the JSX
+                         runtime, so it never gets the mark that exempts a
+                         statically positioned child from the key check. The
+                         card drops `notify` into a three-child array beside the
+                         price line and the specs toggle, React reconciles that
+                         array as a list, and an unkeyed member warns. `specs`
+                         sits alone in its own element today and so stays quiet,
+                         which is luck rather than a difference — key it too, or
+                         the next layout change inherits this bug.
                       */
                       ...(product.availability === "out_of_stock"
                         ? {
                             notify: (
                               <NotifyButton
+                                key={product.id}
                                 productId={product.id}
                                 productName={product.name}
                                 signedIn={Boolean(actor)}
@@ -383,6 +396,7 @@ export default async function CataloguePage({ params, searchParams }: Params) {
                         ? {
                             specs: (
                               <SpecTable
+                                key={product.id}
                                 caption={t("catalogue.specs_caption", { product: product.name })}
                                 rows={specRowsFor(product)}
                                 notProvidedLabel={t("table.not_provided")}
