@@ -26,7 +26,11 @@ import type { Emirate } from "@/lib/db/generated/enums";
  * the category and emirate filters they had set still apply.
  */
 
-export type AlertRefusal = "no_identity" | "query_too_short";
+export type AlertRefusal =
+  | "no_identity"
+  | "query_too_short"
+  /** A restock watch on a product that is no longer listed. */
+  | "not_found";
 
 export type AlertResult =
   | { ok: true; alertId: string }
@@ -153,6 +157,79 @@ export async function createAlert(input: CreateAlertInput): Promise<AlertResult>
   return { ok: true, alertId: alert.id };
 }
 
+/**
+ * Watch one product for coming back into stock.
+ *
+ * Board 1e criterion 7. A `ProductAlert` with a `productId` and no query: the
+ * buyer is not asking "tell me if anyone lists something like this", they are
+ * asking about *this* line from *this* seller, which is a stronger promise and
+ * the one the button on an out-of-stock card makes.
+ *
+ * Idempotent per buyer and product. Pressing it twice is a buyer checking they
+ * pressed it, not a request for two messages.
+ */
+export async function watchProduct(input: {
+  productId: string;
+  identity?: { kind: "phone" | "email"; value: string } | undefined;
+  fullName?: string | undefined;
+  userId?: string | undefined;
+}): Promise<AlertResult> {
+  const product = await prisma.product.findFirst({
+    where: {
+      id: input.productId,
+      status: { not: "draft" },
+      business: { suspendedAt: null, publishedAt: { not: null } },
+    },
+    select: { id: true },
+  });
+  if (!product) {
+    return {
+      ok: false,
+      error: "not_found",
+      message: "That product is no longer listed.",
+    };
+  }
+
+  let userId = input.userId;
+  if (!userId) {
+    if (input.identity?.kind !== "phone") {
+      return {
+        ok: false,
+        error: "no_identity",
+        message:
+          "A mobile number for now. Email alerts need an account, and signing in is at the top of the page.",
+      };
+    }
+    const provisional = await createProvisionalIdentity({
+      phone: input.identity.value,
+      fullName: input.fullName?.trim() || null,
+    });
+    if (!provisional) {
+      return {
+        ok: false,
+        error: "no_identity",
+        message: "A UAE mobile number like 050 123 4567.",
+      };
+    }
+    userId = provisional.userId;
+  }
+
+  const existing = await prisma.productAlert.findFirst({
+    where: { productId: product.id, userId, notifiedAt: null },
+    select: { id: true },
+  });
+  if (existing) return { ok: true, alertId: existing.id };
+
+  const alert = await prisma.productAlert.create({
+    // Empty query on purpose. The product is the subject; putting its name here
+    // would make the gap report count a search nobody typed.
+    data: { query: "", productId: product.id, userId },
+    select: { id: true },
+  });
+
+  return { ok: true, alertId: alert.id };
+}
+
 export interface SweepResult {
   open: number;
   fired: { alertId: string; productId: string; query: string }[];
@@ -176,12 +253,45 @@ export async function sweepAlerts(now: Date = new Date()): Promise<SweepResult> 
       emirate: true,
       createdAt: true,
       userId: true,
+      productId: true,
     },
   });
 
   const fired: SweepResult["fired"] = [];
 
   for (const alert of open) {
+    /*
+       A restock watch is a different question and gets a different answer.
+
+       The query branch below asks "has anything like this been listed since
+       they asked". This one asks "is that specific line back", which is
+       answered by the product's own availability rather than by matching text.
+       Before this, a watch with no query fell through the token check and sat
+       open forever — which is why the check constraint refuses a row that is
+       neither.
+    */
+    if (alert.productId) {
+      const back = await prisma.product.findFirst({
+        where: {
+          id: alert.productId,
+          status: "live",
+          availability: { not: "out_of_stock" },
+          business: { suspendedAt: null, publishedAt: { not: null }, mergedIntoId: null },
+        },
+        select: { id: true },
+      });
+      if (!back) continue;
+
+      await prisma.productAlert.update({
+        where: { id: alert.id },
+        // Together, or the check constraint refuses the row. The match is the
+        // watched product itself — there was never another candidate.
+        data: { notifiedAt: now, matchedProductId: back.id },
+      });
+      fired.push({ alertId: alert.id, productId: back.id, query: alert.query });
+      continue;
+    }
+
     const tokens = tokensOf(alert.query);
     if (tokens.length === 0) continue;
 

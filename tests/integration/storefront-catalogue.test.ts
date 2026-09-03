@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
+import { sweepAlerts, watchProduct } from "@/lib/alerts/service";
 import {
   freshStock,
   getCatalogueView,
@@ -207,4 +208,104 @@ describe("the grid", () => {
     });
     expect(foreign).toBe(0);
   }, 60_000);
+});
+
+describe("criterion 7 — a restock watch is about one product", () => {
+  const made: string[] = [];
+  afterAll(async () => {
+    if (made.length > 0) {
+      await prisma.productAlert.deleteMany({ where: { id: { in: made } } });
+    }
+  });
+
+  async function buyer() {
+    const user = await prisma.user.findFirstOrThrow({ select: { id: true } });
+    return user.id;
+  }
+
+  it("watches a product without inventing a search nobody made", async () => {
+    /*
+     * The query column means "the words the buyer typed", and the gap report
+     * counts it as demand expressed through search. Putting the product's name
+     * there to satisfy the old constraint would have been a lie in a table
+     * somebody reports from.
+     */
+    const product = await prisma.product.findFirstOrThrow({
+      where: { status: { not: "draft" } },
+      select: { id: true },
+    });
+    const result = await watchProduct({ productId: product.id, userId: await buyer() });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    made.push(result.alertId);
+
+    const row = await prisma.productAlert.findUniqueOrThrow({
+      where: { id: result.alertId },
+      select: { query: true, productId: true, notifiedAt: true },
+    });
+    expect(row.query).toBe("");
+    expect(row.productId).toBe(product.id);
+    expect(row.notifiedAt).toBeNull();
+  }, 60_000);
+
+  it("is idempotent — pressing it twice is not two messages", async () => {
+    const product = await prisma.product.findFirstOrThrow({
+      where: { status: { not: "draft" } },
+      select: { id: true },
+    });
+    const userId = await buyer();
+    const first = await watchProduct({ productId: product.id, userId });
+    const second = await watchProduct({ productId: product.id, userId });
+    expect(first.ok && second.ok).toBe(true);
+    if (first.ok && second.ok) {
+      expect(second.alertId).toBe(first.alertId);
+      made.push(first.alertId);
+    }
+  }, 60_000);
+
+  it("refuses a product that is no longer listed", async () => {
+    const result = await watchProduct({ productId: "does-not-exist", userId: await buyer() });
+    expect(result).toMatchObject({ ok: false, error: "not_found" });
+  }, 60_000);
+
+  it("fires when the line comes back, and only then", async () => {
+    /*
+     * The sweep used to skip any alert with no query tokens, so a watch would
+     * have sat open forever. This is the branch that fixes it.
+     */
+    const product = await prisma.product.findFirstOrThrow({
+      where: { status: "live", availability: { not: "out_of_stock" } },
+      select: { id: true, availability: true },
+    });
+    const userId = await buyer();
+
+    // Out of stock: the watch stays open.
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { availability: "out_of_stock" },
+    });
+    const watch = await watchProduct({ productId: product.id, userId });
+    expect(watch.ok).toBe(true);
+    if (!watch.ok) return;
+    made.push(watch.alertId);
+
+    await sweepAlerts(new Date());
+    let row = await prisma.productAlert.findUniqueOrThrow({
+      where: { id: watch.alertId },
+      select: { notifiedAt: true },
+    });
+    expect(row.notifiedAt, "fired while still out of stock").toBeNull();
+
+    // Back in stock: it fires.
+    await prisma.product.update({
+      where: { id: product.id },
+      data: { availability: product.availability },
+    });
+    await sweepAlerts(new Date());
+    row = await prisma.productAlert.findUniqueOrThrow({
+      where: { id: watch.alertId },
+      select: { notifiedAt: true },
+    });
+    expect(row.notifiedAt, "did not fire once back in stock").not.toBeNull();
+  }, 120_000);
 });
