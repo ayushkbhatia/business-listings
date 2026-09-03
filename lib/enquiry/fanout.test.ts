@@ -124,10 +124,22 @@ describe("who ranks first", () => {
 });
 
 describe("what the plan can and cannot buy", () => {
-  it("reorders two similar suppliers", () => {
+  it("buys no place on a fan-out at all", () => {
+    /*
+       It used to reorder two similar suppliers, and this test asserted that.
+       The recipient card on `/rfq/new` tells the buyer how the list was
+       chosen — "we pick them on what they stock, where they are and how fast
+       they reply, never on what they pay us" — and the multiplier made that
+       sentence false by up to 35%, which is more than the whole trust term can
+       move a supplier.
+
+       Search keeps the multiplier, where a paid boost is disclosed as sponsored
+       placement and always labelled. Eight RFQ slots are scarce and the buyer is
+       asking rather than browsing, so the promise governs here.
+    */
     const plain = candidate({ businessId: "plain", rankingMultiplier: 1 });
     const paid = candidate({ businessId: "paid", rankingMultiplier: 1.35 });
-    expect(scoreCandidate(paid, REQUEST)).toBeGreaterThan(scoreCandidate(plain, REQUEST));
+    expect(scoreCandidate(paid, REQUEST)).toBe(scoreCandidate(plain, REQUEST));
   });
 
   it("cannot promote a supplier who cannot fill the order", () => {
