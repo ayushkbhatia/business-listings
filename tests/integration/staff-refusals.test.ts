@@ -75,8 +75,29 @@ beforeAll(async () => {
    * anybody should be suspending or tiering, and the dedupe suite leaves some
    * behind in a database this suite does not reset.
    */
+  /*
+     A current licence, and ordered, so this picks the same business every run.
+     
+     `setVerificationTier` refuses a raise above `EXPIRED_LICENCE_TIER` while
+     the licence has lapsed — the floor added with the licence-expiry sweep, so
+     that a nightly job and an ops lead cannot fight over one column. Without
+     the constraint this query returns an arbitrary row, and the run passes or
+     fails on whether that row's licence happens to be current. It went red the
+     first time a seed elsewhere wrote to `business` and shifted the row order.
+
+     The rule under test is "a field verifier may tier a business they visited",
+     which presupposes a licence worth tiering. Asserting it against a lapsed
+     one was testing two rules at once and pinning neither.
+  */
   const visited = await prisma.business.findFirstOrThrow({
-    where: { visitedAt: { not: null }, visitedByStaffId: { not: null }, suspendedAt: null, mergedIntoId: null },
+    where: {
+      visitedAt: { not: null },
+      visitedByStaffId: { not: null },
+      suspendedAt: null,
+      mergedIntoId: null,
+      licenceExpiry: { gt: new Date() },
+    },
+    orderBy: { slug: "asc" },
     select: { id: true, verificationTier: true, verifiedAt: true },
   });
   visitedBusinessId = visited.id;
