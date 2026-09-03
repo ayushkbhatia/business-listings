@@ -465,7 +465,7 @@ export function BusinessDetails({
             {
               key: "trade_name",
               label: `${t("storefront.trade_name")} · ${t("storefront.licence_locked")}`,
-              value: business.tradeName,
+              value: business.tradeName, // licence-locked
             },
             {
               key: "trading_as",

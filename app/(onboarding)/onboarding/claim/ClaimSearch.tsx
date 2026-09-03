@@ -105,7 +105,14 @@ export function ClaimSearch({ searchAction }: ClaimSearchProps) {
                 >
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <span className="block text-body-sm text-ink">{candidate.tradeName}</span>
+                      {/*
+                        This list matches a person against licence records, so the
+                        licence name is the thing being matched. Every buyer surface
+                        owes displayName instead.
+                      */}
+                      <span className="block text-body-sm text-ink">
+                        {candidate.tradeName /* licence-locked */}
+                      </span>
                       <span className="mt-0.5 block font-mono text-caption text-faint">
                         {candidate.licenceAuthority} · {candidate.licenceNumber}
                         {candidate.areaName ? ` · ${candidate.areaName}` : ""}
