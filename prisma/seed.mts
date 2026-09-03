@@ -647,6 +647,7 @@ async function main() {
   await seedPumps(prisma, catBySlug);
   await seedCertificates(prisma);
   await seedDeepCatalogue(prisma);
+  await seedBranchNetwork(prisma);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
@@ -3866,4 +3867,184 @@ async function seedQueues(
     where: { id: visitDone.id },
     data: { visitedAt: days(-21), visitedByStaffId: uuid(3) },
   });
+}
+
+/**
+ * A branch network, for board 1f.
+ *
+ * Every catalogue in this seed was in one emirate, every location was pinned,
+ * and no business had a sales office or a closure. Four of board 1f's states
+ * were therefore unreachable in a browser and could only be seen in a unit
+ * test — the emirate cap on the header sub-line, the type badge that stops a
+ * buyer driving to an office, the unpinned branch that keeps its address and
+ * loses its pin, and the closure strip.
+ *
+ * Appended for the reason `seedDeepCatalogue` above it is: the PRNG is a
+ * sequence, and a draw inserted earlier renames every business generated after
+ * it.
+ */
+async function seedBranchNetwork(db: Db) {
+  console.log("→ a branch network, for board 1f");
+
+  const seller = await db.business.findFirst({
+    where: { slug: "al-marwan-industrial-supplies-llc" },
+    select: { id: true },
+  });
+  if (!seller) {
+    console.log("   skipped — the flagship seller is not in this seed");
+    return;
+  }
+
+  const areaBySlug = new Map(
+    (
+      await db.area.findMany({
+        where: {
+          slug: {
+            in: ["mussafah-m17", "sharjah-industrial-area-12", "ajman-new-industrial-area"],
+          },
+        },
+        select: { id: true, slug: true },
+      })
+    ).map((area) => [area.slug, area.id]),
+  );
+
+  /* The standard week these branches keep. Split shifts, as the market runs. */
+  const WEEK = {
+    mon: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
+    tue: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
+    wed: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
+    thu: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "18:00" }],
+    sat: [{ open: "08:00", close: "13:00" }],
+  };
+  const OFFICE_WEEK = {
+    mon: [{ open: "08:30", close: "17:30" }],
+    tue: [{ open: "08:30", close: "17:30" }],
+    wed: [{ open: "08:30", close: "17:30" }],
+    thu: [{ open: "08:30", close: "17:30" }],
+    fri: [{ open: "08:30", close: "12:00" }],
+  };
+  /* Reduced hours, applied automatically inside the platform's Ramadan window. */
+  const RAMADAN = { all: [{ open: "09:00", close: "15:00" }] };
+
+  const rows = [
+    {
+      /*
+         Criterion 6. A buyer must not drive to an office expecting a trade
+         counter, so this one renders "Sales only" where the others show hours.
+      */
+      slug: "mussafah-m17",
+      type: "sales_office" as const,
+      emirate: "abu_dhabi" as const,
+      addressLine: "Office 402, Al Fahim Building, Mussafah M-14",
+      lat: 24.3512,
+      lng: 54.5089,
+      phone: "025531190",
+      hours: OFFICE_WEEK,
+      radius: null,
+      closure: null,
+    },
+    {
+      /* A closure, which outranks the hours on the badge and gets its own strip. */
+      slug: "sharjah-industrial-area-12",
+      type: "depot" as const,
+      emirate: "sharjah" as const,
+      addressLine: "Plot 217, Industrial Area 12",
+      lat: 25.3218,
+      lng: 55.4033,
+      phone: "065528810",
+      hours: WEEK,
+      radius: 40,
+      closure: {
+        from: days(-6),
+        until: days(24),
+        reason: "Roof repairs after the storm. Collections are running from Al Quoz until then.",
+      },
+    },
+    {
+      /*
+         Criterion 4. No coordinates, so no pin — and the address still renders,
+         because it is useful, and it is never approximated to an area centroid.
+      */
+      slug: "ajman-new-industrial-area",
+      type: "trade_counter" as const,
+      emirate: "ajman" as const,
+      addressLine: "Shop 11, Al Jurf Industrial 1",
+      lat: null,
+      lng: null,
+      phone: "067481120",
+      hours: WEEK,
+      radius: null,
+      closure: null,
+    },
+  ];
+
+  for (const row of rows) {
+    const areaId = areaBySlug.get(row.slug);
+    if (!areaId) continue;
+    const existing = await db.location.findFirst({
+      where: { businessId: seller.id, areaId, type: row.type },
+      select: { id: true },
+    });
+    if (existing) continue;
+
+    await db.location.create({
+      data: {
+        businessId: seller.id,
+        areaId,
+        type: row.type,
+        emirate: row.emirate,
+        addressLine: row.addressLine,
+        lat: row.lat,
+        lng: row.lng,
+        phone: row.phone,
+        whatsapp: row.type === "sales_office" ? null : "+971506412288",
+        phoneVerified: true,
+        hours: row.hours,
+        ramadanHours: row.type === "sales_office" ? undefined : RAMADAN,
+        serviceRadiusKm: row.radius,
+        published: true,
+        closedFrom: row.closure?.from ?? null,
+        closedUntil: row.closure?.until ?? null,
+        closureReason: row.closure?.reason ?? null,
+      },
+    });
+  }
+
+  /*
+     The delivery promise, in the seller's own words.
+
+     `coverageOf` will not invent one — a business that has said nothing about
+     delivery gets no card rather than a reassuring sentence the platform made
+     up. This is what a supplier actually writes.
+  */
+  await db.business.update({
+    where: { id: seller.id },
+    data: {
+      deliveryNote:
+        "Same-day inside Dubai on stocked lines · 48h to Northern Emirates and Abu Dhabi",
+    },
+  });
+
+  /*
+     Criterion 5 needs a supplier whose locations are *all* unpinned, so the map
+     column is replaced by the explanatory panel rather than showing a partial
+     map. Unpinning one branch of a multi-branch business would not reach it.
+  */
+  const unpinnable = await db.business.findFirst({
+    where: {
+      claimStatus: { not: "unclaimed" },
+      publishedAt: { not: null },
+      slug: { not: "al-marwan-industrial-supplies-llc" },
+      locations: { every: { lat: { not: null } } },
+    },
+    orderBy: { slug: "asc" },
+    select: { id: true, slug: true, _count: { select: { locations: true } } },
+  });
+  if (unpinnable && unpinnable._count.locations > 0) {
+    await db.location.updateMany({
+      where: { businessId: unpinnable.id },
+      data: { lat: null, lng: null },
+    });
+    console.log(`   ${unpinnable.slug} left unpinned, for the no-pins panel`);
+  }
 }

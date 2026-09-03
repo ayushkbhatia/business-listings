@@ -907,6 +907,43 @@ export const en = {
   "storefront.answered_unmeasured": "New to the directory — no reply time measured yet",
   /* Both halves of this have to be true, and both are. */
   "storefront.composer_privacy": "No account needed · your number stays hidden until they reply",
+
+  /* Board 1f — branches & hours. */
+  "branches.title": "{name} branches — {emirates}",
+  "branches.count_eyebrow": { one: "{count} LOCATION", other: "{count} LOCATIONS" },
+  "branches.subline": { one: "{count} branch · {emirates}", other: "{count} branches · {emirates}" },
+  "branches.emirates_more": "{list} +{count} more",
+  "branches.nearest": "Nearest to me",
+  /* The strip label changes with the order, so the list never sorts silently. */
+  "branches.sorted_emirate": "SORTED BY EMIRATE",
+  "branches.sorted_distance": "NEAREST FIRST",
+  "branches.locating": "Finding your location",
+  /* Says what happened and what the page did instead. Never blames the reader. */
+  "branches.location_declined": "Location unavailable, so branches are sorted by emirate.",
+  "branches.distance_km": "{km} km away",
+  "branches.open_now": "Open now",
+  "branches.closed": "Closed",
+  "branches.hours_unknown": "Hours not listed",
+  "branches.sales_only": "Sales only",
+  "branches.call_branch": "Call branch",
+  "branches.collection_point": "Collection point",
+  "branches.open_map": "Map",
+  "branches.list_view": "List",
+  "branches.map_view": "Map",
+  "branches.mon_thu": "MON–THU",
+  "branches.fri_sat": "FRI / SAT",
+  "branches.closed_short": "Closed",
+  "branches.radius_overlay": "Service radius overlay",
+  "branches.delivers_within": "Delivers within {km} km",
+  "branches.free_zone": "Free zone address",
+  /* Explains the absence rather than showing a grey rectangle. */
+  "branches.no_pins": "Map pins are being added for this supplier",
+  "branches.unpinned_note": "No map pin yet",
+  /* Ramadan: the platform owns the dates, the seller owns the hours. */
+  "branches.ramadan_live": "Ramadan hours are live.",
+  "branches.ramadan_detail": "Branches that set Ramadan hours switch to them automatically until {until}.",
+  "branches.closure_title": "Closed until {until}",
+  "branches.closure_dates": "{from} – {until}",
   "verify.panel_title": "What we checked",
   "verify.row_licence": "Trade licence checked",
   "verify.row_trn": "TRN matched",

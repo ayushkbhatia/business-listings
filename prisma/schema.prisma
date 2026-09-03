@@ -666,6 +666,21 @@ model Location {
   /// Applied automatically on announced dates.
   ramadanHours    Json?        @map("ramadan_hours")
   serviceRadiusKm Int?         @map("service_radius_km")
+
+  /// A branch that is shut for a stated stretch — a fit-out, a relocation, a
+  /// flood. Distinct from `published = false`, and deliberately so: unpublishing
+  /// removes the address from the directory, which is the wrong answer for a
+  /// counter that reopens in three weeks. A buyer who knows this branch needs to
+  /// be told the dates, not shown nothing.
+  ///
+  /// Board 3d writes these. Board 1f renders them above the branch's hours.
+  /// A CHECK refuses a half-set window and a reason-less closure — the strip
+  /// says what is wrong and when it ends, and it can only do that if both are
+  /// there.
+  closedFrom      DateTime?    @map("closed_from")
+  closedUntil     DateTime?    @map("closed_until")
+  closureReason   String?      @map("closure_reason")
+
   published       Boolean      @default(false)
   createdAt       DateTime     @default(now()) @map("created_at")
 

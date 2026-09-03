@@ -55,6 +55,15 @@ export interface MapCanvasProps {
   /** Shown instead of the map when there is nothing to plot. */
   emptyLabel?: string;
   styleUrl?: string;
+  /**
+   * Service-radius rings, drawn under the pins.
+   *
+   * Off unless the caller passes them, because a shaded circle over a map is a
+   * claim about where a supplier delivers and it should appear when a buyer asks
+   * for it, not by default. Board 1f's toggle is the caller passing or omitting
+   * this — no internal open state, so the button and the overlay cannot disagree.
+   */
+  radii?: readonly { id: string; lat: number; lng: number; km: number }[];
 }
 
 const DEFAULT_STYLE =
@@ -72,10 +81,46 @@ export function MapCanvas({
   height = 360,
   emptyLabel,
   styleUrl = DEFAULT_STYLE,
+  radii,
 }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markersRef = useRef<Marker[]>([]);
+  /*
+     Two handles the initialisation effect publishes, and the select callback.
+
+     They exist so that changing the selection does not rebuild the map.
+     `selectedId` and `onSelect` used to sit in the initialisation effect's
+     dependency array, which meant every selection tore MapLibre down and
+     streamed the tiles again. Board 1f drives the selection from row *hover*,
+     so that shape would have re-created the map on every mouse move.
+
+     Functions rather than element maps: the marker elements stay local to the
+     effect that made them, and the later effects call in rather than reaching
+     in. Mutating DOM nodes held in a ref across effects is what the
+     immutability rule refuses, and it is right to — the elements belong to the
+     map instance, and the map instance belongs to that effect.
+  */
+  const applySelectionRef = useRef<(id: string | undefined) => void>(() => {});
+  const applyRadiiRef = useRef<(rings: MapCanvasProps["radii"]) => void>(() => {});
+  const onSelectRef = useRef(onSelect);
+  const selectedIdRef = useRef(selectedId);
+  const radiiRef = useRef(radii);
+
+  /*
+     Kept current for the initialisation effect below, which creates the map in
+     an async import and therefore finishes *after* the effects that own these
+     values have already run. Written in an effect rather than during render —
+     a ref written during render is torn state under a concurrent re-render, and
+     the lint refuses it.
+
+     Declared before the initialisation effect so that on mount it runs first.
+  */
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+    selectedIdRef.current = selectedId;
+    radiiRef.current = radii;
+  });
   const [failed, setFailed] = useState(false);
   // No IntersectionObserver (jsdom, an old browser) means mount immediately
   // rather than never. Decided at initialisation, not from inside an effect.
@@ -157,27 +202,71 @@ export function MapCanvas({
         }
       });
 
+      const elements = new Map<string, { node: HTMLElement; kind: MapPin["kind"] }>();
       for (const pin of pins) {
         const element = document.createElement("button");
         element.type = "button";
         element.setAttribute("aria-label", pin.label);
         element.title = pin.label;
-        element.className = pinClass(pin.kind, pin.id === selectedId);
-        element.addEventListener("click", () => onSelect?.(pin.id));
+        element.className = pinClass(pin.kind, pin.id === selectedIdRef.current);
+        element.addEventListener("click", () => onSelectRef.current?.(pin.id));
+        elements.set(pin.id, { node: element, kind: pin.kind });
         markersRef.current.push(
           new maplibre.Marker({ element }).setLngLat([pin.lng, pin.lat]).addTo(map),
         );
       }
+
+      applySelectionRef.current = (id) => {
+        for (const [pinId, entry] of elements) {
+          entry.node.className = pinClass(entry.kind, pinId === id);
+        }
+      };
+      applyRadiiRef.current = (rings) => drawRadii(map, rings);
+
+      /*
+         A map created while a selection or an overlay is already live catches
+         up here. Without this the first paint after a remount would drop both,
+         because the effects that own them only fire when their value changes.
+      */
+      applySelectionRef.current(selectedIdRef.current);
+      // `drawRadii` defers on its own when the style is not ready.
+      if (radiiRef.current?.length) applyRadiiRef.current(radiiRef.current);
     })();
 
     return () => {
       cancelled = true;
-      for (const marker of markersRef.current) marker.remove();
+      const markers = markersRef.current;
+      for (const marker of markers) marker.remove();
       markersRef.current = [];
+      applySelectionRef.current = () => {};
+      applyRadiiRef.current = () => {};
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [visible, pins, styleUrl, center, zoom, selectedId, onSelect]);
+  }, [visible, pins, styleUrl, center, zoom]);
+
+  /*
+     Selection, applied to the markers already on the map.
+
+     A class swap on an existing element, not a rebuild. `selectedIdRef` carries
+     the current value into the initialisation effect above so a map created
+     while something is already selected draws it selected on first paint.
+  */
+  useEffect(() => {
+    applySelectionRef.current(selectedId);
+  }, [selectedId]);
+
+  /*
+     The radius rings.
+
+     Circles are drawn as GeoJSON polygons rather than a `circle` layer, because
+     a `circle` layer's radius is in screen pixels and would grow and shrink with
+     the zoom — a 65 km promise that changes size as the buyer zooms is not a
+     promise about distance at all.
+  */
+  useEffect(() => {
+    applyRadiiRef.current(radii);
+  }, [radii]);
 
   if (pins.length === 0) {
     return (
@@ -229,6 +318,102 @@ export function MapCanvas({
       )}
     </figure>
   );
+}
+
+/**
+ * Add, update or remove the service-radius rings on a live map.
+ *
+ * Called through a handle the initialisation effect publishes, so the layer is
+ * always added to the map instance that owns it — a module-level function
+ * reaching for `mapRef` would race a remount.
+ */
+function drawRadii(map: MapLibreMap, rings: MapCanvasProps["radii"]): void {
+  /*
+     Nothing can be added to a style that has not loaded.
+
+     `addSource` and `getSource` both throw on a map whose style is still in
+     flight, and this is reachable by hand: the overlay button is live from
+     first paint, and a buyer who clicks it while the tiles are still arriving
+     took down the whole column. Deferring is the fix rather than a try/catch —
+     the ring should appear when the style is ready, not be dropped.
+
+     `once` rather than `on`, so a buyer toggling twice does not accumulate
+     handlers that all fire on the next style load.
+  */
+  if (!map.isStyleLoaded()) {
+    map.once("load", () => drawRadii(map, rings));
+    return;
+  }
+
+  const SOURCE = "service-radius";
+  const existing = map.getSource(SOURCE);
+
+  if (!rings || rings.length === 0) {
+    if (map.getLayer(`${SOURCE}-fill`)) map.removeLayer(`${SOURCE}-fill`);
+    if (map.getLayer(`${SOURCE}-line`)) map.removeLayer(`${SOURCE}-line`);
+    if (existing) map.removeSource(SOURCE);
+    return;
+  }
+
+  const data = {
+    type: "FeatureCollection" as const,
+    features: rings.map((ring) => ({
+      type: "Feature" as const,
+      properties: { id: ring.id },
+      geometry: { type: "Polygon" as const, coordinates: [ringOf(ring)] },
+    })),
+  };
+
+  if (existing) {
+    // Only a GeoJSON source has setData, and this source is always one.
+    (existing as unknown as { setData: (d: unknown) => void }).setData(data);
+    return;
+  }
+
+  /*
+     The colour comes from the token, and if the token is not there the rings do
+     not render. A hard-coded fallback would be a second definition of moss that
+     nobody would notice had drifted — and the lint refuses raw hex for exactly
+     that reason.
+  */
+  const moss = getComputedStyle(document.documentElement).getPropertyValue("--moss").trim();
+  if (!moss) return;
+
+  map.addSource(SOURCE, { type: "geojson", data });
+  map.addLayer({
+    id: `${SOURCE}-fill`,
+    type: "fill",
+    source: SOURCE,
+    paint: { "fill-color": moss, "fill-opacity": 0.1 },
+  });
+  map.addLayer({
+    id: `${SOURCE}-line`,
+    type: "line",
+    source: SOURCE,
+    paint: { "line-color": moss, "line-opacity": 0.4, "line-width": 1 },
+  });
+}
+
+/**
+ * A circle of `km` around a point, as polygon coordinates.
+ *
+ * 64 points is enough that the edge reads as curved at any zoom a storefront
+ * map reaches, and the latitude correction matters at this one: a degree of
+ * longitude in the UAE is about 0.9 of a degree of latitude, and skipping it
+ * draws an ellipse that overstates the reach east and west.
+ */
+function ringOf(ring: { lat: number; lng: number; km: number }): [number, number][] {
+  const points: [number, number][] = [];
+  const latDegrees = ring.km / 110.574;
+  const lngDegrees = ring.km / (111.32 * Math.cos((ring.lat * Math.PI) / 180));
+  for (let i = 0; i <= 64; i += 1) {
+    const angle = (i / 64) * 2 * Math.PI;
+    points.push([
+      ring.lng + lngDegrees * Math.cos(angle),
+      ring.lat + latDegrees * Math.sin(angle),
+    ]);
+  }
+  return points;
 }
 
 function pinClass(kind: MapPin["kind"], selected: boolean): string {
