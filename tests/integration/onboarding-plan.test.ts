@@ -19,6 +19,20 @@ let seller: { id: string; slug: string };
 let actor: Actor;
 /** Rows this file made, cleaned up whatever the assertions did. */
 let madeProducts: string[] = [];
+/**
+ * The fixture seller's own products, as they were found.
+ *
+ * This file drafts them on purpose — that is what the cap does — and an earlier
+ * version left them that way. Eight seeded products stayed hidden, and the next
+ * end-to-end run failed in three places that read live products: the
+ * subcategory landing page's filter chips, the product comparison, and the
+ * spec-aware search. None of those tests is about plans, which is what made it
+ * expensive to trace.
+ *
+ * So the statuses are captured before anything touches them and put back after
+ * every test. A shared seed is somebody else's fixture too.
+ */
+let originalStatuses: { id: string; status: "draft" | "live" | "out_of_stock" }[] = [];
 
 beforeAll(async () => {
   seller = await prisma.business.findFirstOrThrow({
@@ -32,12 +46,24 @@ beforeAll(async () => {
     roles: ["seller_owner"],
     businessId: seller.id,
   } as Actor;
+
+  originalStatuses = await prisma.product.findMany({
+    where: { businessId: seller.id },
+    select: { id: true, status: true },
+  });
 });
 
 afterEach(async () => {
   if (madeProducts.length > 0) {
     await prisma.product.deleteMany({ where: { id: { in: madeProducts } } });
     madeProducts = [];
+  }
+  // The seeded catalogue, exactly as it was found. See `originalStatuses`.
+  for (const product of originalStatuses) {
+    await prisma.product.updateMany({
+      where: { id: product.id },
+      data: { status: product.status },
+    });
   }
   await prisma.subscription.deleteMany({ where: { businessId: seller.id } });
   await prisma.business.update({ where: { id: seller.id }, data: { planId: "free" } });
@@ -289,12 +315,19 @@ describe("criterion 20 — hidden, not deleted", () => {
        the absence of a record refuses the hide rather than doing it blind.
     */
     await prisma.subscription.deleteMany({ where: { businessId: seller.id } });
-    await stockUp(3);
+    const made = await stockUp(3);
     expect(await hideOverPlanCap(seller.id, { productLimit: 1 })).toEqual({
       hidden: 0,
       restored: 0,
     });
-    expect(await prisma.product.count({ where: { businessId: seller.id, status: "live" } })).toBe(3);
+    /*
+       Scoped to the rows this test made, not to the seller's whole catalogue.
+       The seeded eight are live too, and a global count here passed only
+       because an earlier test had drafted them and never put them back.
+    */
+    expect(
+      await prisma.product.count({ where: { id: { in: made }, status: "live" } }),
+    ).toBe(3);
   });
 });
 
