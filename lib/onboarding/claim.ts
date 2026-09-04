@@ -20,6 +20,24 @@ import { openConflictIfContested } from "./conflict";
  * user to a business that already exists, and touches nothing that hangs off it
  * — and the screen says so, because a supplier's first fear is that claiming
  * resets them to zero.
+ *
+ * ## What an unclaimed record is allowed to show
+ *
+ * The legal trade name, and only here. An unclaimed record has no display name
+ * that anybody chose: nobody has claimed it, so `displayName` on those rows is
+ * a derivation of the licence name and not a decision. More than that, the
+ * legal name is what makes this screen work — three near-identical results are
+ * told apart by their suffix, their authority prefix and their area, and a
+ * supplier scanning the list is looking for *their* licence. Board 2a and the
+ * details panel on `1d` are the only two surfaces a legal name belongs on.
+ *
+ * ## What a result never carries
+ *
+ * The incumbent claimant. A supplier who finds their business already claimed
+ * is offered the dispute route, never the other party's name — that is a
+ * privacy leak and an invitation to settle it off-platform. `ClaimCandidate`
+ * has no field for it, which is the version of that rule a screen cannot break
+ * by accident.
  */
 
 export interface ClaimCandidate {
@@ -29,6 +47,8 @@ export interface ClaimCandidate {
   slug: string;
   licenceNumber: string;
   licenceAuthority: string;
+  categoryName: string | null;
+  categoryCode: string | null;
   areaName: string | null;
   emirate: string | null;
   claimStatus: string;
@@ -39,63 +59,260 @@ export interface ClaimCandidate {
 }
 
 /**
- * Search the imported records by trade name, licence number or phone.
+ * How the query found them, which decides what the screen renders.
  *
- * All three in one box, because a supplier looking for their own listing does
- * not know which of the three we hold. Licence numbers and phone numbers are
- * matched on their digits alone: an export writes `DED-123456`, a person types
- * `123456`, and a search that misses on the punctuation sends them to "add from
- * scratch" — which creates the duplicate this screen exists to prevent.
+ * `exact_licence` is a single result under an `EXACT LICENCE MATCH` line: a
+ * licence number is unambiguous, so offering alternatives beside it would
+ * invite somebody to pick the wrong one.
  */
-export async function findClaimCandidates(query: string, limit = 8): Promise<ClaimCandidate[]> {
-  const text = query.trim();
-  if (text.length < 2) return [];
+export type ClaimMatchKind = "exact_licence" | "similar" | "none";
 
-  const digits = text.replace(/\D/g, "");
+export interface ClaimMatches {
+  kind: ClaimMatchKind;
+  results: ClaimCandidate[];
+  /** Everything found, before the six-row fold. The screen expands in place. */
+  total: number;
+}
 
-  const businesses = await prisma.business.findMany({
-    where: {
-      OR: [
-        { tradeName: { contains: text, mode: "insensitive" } },
-        { displayName: { contains: text, mode: "insensitive" } },
-        ...(digits.length >= 4
-          ? [
-              { licenceNumber: { contains: digits } },
-              { locations: { some: { phone: { contains: digits } } } },
-            ]
-          : []),
-      ],
-    },
-    take: limit,
-    orderBy: [{ claimStatus: "asc" }, { tradeName: "asc" }],
-    select: {
-      id: true,
-      tradeName: true,
-      displayName: true,
-      slug: true,
-      licenceNumber: true,
-      licenceAuthority: true,
-      claimStatus: true,
-      verificationTier: true,
-      locations: { take: 1, select: { emirate: true, area: { select: { name: true } } } },
-      _count: { select: { reviews: true, recipients: true } },
-    },
-  });
+/** How many rows the results card shows before "12 more matches". */
+export const VISIBLE_MATCHES = 6;
 
-  return businesses.map((business) => ({
+/** Below this a query means nothing and the database is not asked. */
+const MIN_QUERY = 2;
+
+/** Shorter than this and a run of digits is not a licence or a phone number. */
+const MIN_DIGITS = 4;
+
+/** The ceiling on one search. Six are shown; the rest expand in place. */
+const MAX_MATCHES = 30;
+
+const CANDIDATE_SELECT = {
+  id: true,
+  tradeName: true,
+  displayName: true,
+  slug: true,
+  licenceNumber: true,
+  licenceAuthority: true,
+  claimStatus: true,
+  verificationTier: true,
+  primaryCategory: { select: { name: true, code: true } },
+  locations: {
+    orderBy: { createdAt: "asc" },
+    take: 1,
+    select: { emirate: true, area: { select: { name: true } } },
+  },
+  _count: { select: { reviews: true, recipients: true } },
+} as const;
+
+type CandidateRow = {
+  id: string;
+  tradeName: string;
+  displayName: string;
+  slug: string;
+  licenceNumber: string;
+  licenceAuthority: string;
+  claimStatus: string;
+  verificationTier: number;
+  primaryCategory: { name: string; code: string } | null;
+  locations: { emirate: string; area: { name: string } | null }[];
+  _count: { reviews: number; recipients: number };
+};
+
+function toCandidate(business: CandidateRow): ClaimCandidate {
+  return {
     id: business.id,
     tradeName: business.tradeName,
     displayName: business.displayName,
     slug: business.slug,
     licenceNumber: business.licenceNumber,
     licenceAuthority: business.licenceAuthority,
-    areaName: business.locations[0]?.area.name ?? null,
+    categoryName: business.primaryCategory?.name ?? null,
+    categoryCode: business.primaryCategory?.code ?? null,
+    areaName: business.locations[0]?.area?.name ?? null,
     emirate: business.locations[0]?.emirate ?? null,
     claimStatus: business.claimStatus,
     reviewCount: business._count.reviews,
     enquiryCount: business._count.recipients,
     verificationTier: business.verificationTier,
-  }));
+  };
+}
+
+/**
+ * Search the imported records by trade name, licence number or phone.
+ *
+ * All three in one box, because a supplier looking for their own listing does
+ * not know which of the three we hold — and because the three belong to three
+ * different people in the same company. The PRO holds the licence number, the
+ * owner remembers the trade name, and the office manager knows the landline.
+ *
+ * Licence and phone numbers are matched on their digits alone: an export writes
+ * `DED-441908`, a person types `441908`, and a search that misses on the
+ * punctuation sends them to "add from scratch" — which creates the duplicate
+ * this screen exists to prevent.
+ *
+ * Ranking is trigram similarity against the trade name, then the display name,
+ * with a number match ahead of both. `similarity()` and the `%` operator run on
+ * the GIN indexes added in `20260824100000_trigram_search`; the `ILIKE` arm
+ * catches the substring the similarity threshold rejects — "Gulf Cool" against
+ * "Gulf Cool Technical Services LLC" scores below 0.3 and is obviously the row
+ * somebody meant.
+ */
+export async function findClaimMatches(
+  query: string,
+  limit = MAX_MATCHES,
+): Promise<ClaimMatches> {
+  const text = query.trim();
+  if (text.length < MIN_QUERY) return { kind: "none", results: [], total: 0 };
+
+  const digits = text.replace(/\D/g, "");
+
+  /*
+   * A licence number first, and on its own.
+   *
+   * The one case where a single result is returned: a licence number
+   * identifies exactly one record, so a list of alternatives beside it would
+   * only invite somebody to pick a wrong one. Matched on digits so the
+   * authority prefix is optional, and anchored at the end so `441908` finds
+   * `DED-441908` without also finding `DED-9441908`.
+   *
+   * Every match is fetched rather than the first, and that is the point.
+   * `licence_number` carries no unique constraint — it cannot, because the
+   * licence importer stages near-duplicates on purpose and `MergeCandidate` is
+   * the queue that settles them — so a `findFirst` here would pick one of a
+   * duplicate pair arbitrarily and present it as the answer. Where the number
+   * matches more than one record it is not unambiguous, so the claim to be an
+   * exact match is withdrawn and all of them are listed. A supplier choosing
+   * between two rows they can read is better served than one handed a coin
+   * toss dressed as certainty, and "nothing matched" would be the worst of the
+   * three answers when we plainly hold the licence they typed.
+   */
+  if (digits.length >= MIN_DIGITS) {
+    const onLicence = await prisma.business.findMany({
+      where: {
+        mergedIntoId: null,
+        OR: [
+          { licenceNumber: text },
+          { licenceNumber: { endsWith: `-${digits}` } },
+          { licenceNumber: digits },
+        ],
+      },
+      orderBy: { tradeName: "asc" },
+      take: limit,
+      select: CANDIDATE_SELECT,
+    });
+
+    if (onLicence.length === 1) {
+      return { kind: "exact_licence", results: [toCandidate(onLicence[0]!)], total: 1 };
+    }
+    if (onLicence.length > 1) {
+      const results = onLicence.map(toCandidate);
+      return { kind: "similar", results, total: results.length };
+    }
+  }
+
+  const ranked = await rankByName(text, digits, limit);
+  if (ranked.length === 0) return { kind: "none", results: [], total: 0 };
+
+  return { kind: "similar", results: ranked, total: ranked.length };
+}
+
+/**
+ * Rank by name, in three tiers.
+ *
+ * Two queries rather than one join: the ordering is computed in SQL because the
+ * ranking lives there, and the rows are then read through Prisma so the counts
+ * and the relations come back typed. Ordering by ids in JavaScript afterwards
+ * is what keeps the second query a plain `findMany`.
+ *
+ * The tiers, and why there are three rather than one:
+ *
+ *   1. **A number the searcher typed.** Somebody who reaches for the landline
+ *      is identifying a company, not describing one.
+ *   2. **The typed text, verbatim, inside the name.** This tier exists because
+ *      trigram similarity alone gets this exact screen wrong. `similarity()`
+ *      divides by the longer string's trigram count, so a short name scores
+ *      higher than a long one containing the query outright: searching
+ *      `Al Wadi` scored `Al Waha FZE` above `Al Wadi Technical Services LLC`,
+ *      and with more than one near-namesake in the register the record somebody
+ *      is actually looking for falls off the first page entirely. UAE trade
+ *      names are long and the distinctive part is short, which is precisely the
+ *      shape that breaks. A supplier who types their own name and does not see
+ *      it goes to "add from scratch", which creates the duplicate this screen
+ *      exists to prevent.
+ *   3. **Trigram similarity**, for the misspellings and the transliterations
+ *      the substring cannot reach — which is what it is good at, and all it is
+ *      being asked to do now.
+ */
+async function rankByName(
+  text: string,
+  digits: string,
+  limit: number,
+): Promise<ClaimCandidate[]> {
+  const pattern = `%${text}%`;
+  const phone = digits.length >= MIN_DIGITS ? digits : null;
+
+  const ordered = await prisma.$queryRaw<{ id: string }[]>`
+    SELECT b."id"
+    FROM "business" b
+    WHERE b."merged_into_id" IS NULL
+      AND (
+        b."trade_name" % ${text}
+        OR b."display_name" % ${text}
+        OR b."trade_name" ILIKE ${pattern}
+        OR b."display_name" ILIKE ${pattern}
+        OR (
+          ${phone}::text IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM "location" l
+            WHERE l."business_id" = b."id"
+              AND regexp_replace(COALESCE(l."phone", ''), '[^0-9]', '', 'g') LIKE '%' || ${phone}::text
+          )
+        )
+      )
+    ORDER BY
+      -- 1. A number they typed.
+      (
+        ${phone}::text IS NOT NULL
+        AND EXISTS (
+          SELECT 1 FROM "location" l
+          WHERE l."business_id" = b."id"
+            AND regexp_replace(COALESCE(l."phone", ''), '[^0-9]', '', 'g') LIKE '%' || ${phone}::text
+        )
+      ) DESC,
+      -- 2. The name contains what they typed, exactly.
+      (b."trade_name" ILIKE ${pattern} OR b."display_name" ILIKE ${pattern}) DESC,
+      -- 3. Similarity, for the spellings a substring cannot reach.
+      GREATEST(
+        similarity(b."trade_name", ${text}),
+        similarity(b."display_name", ${text})
+      ) DESC,
+      b."trade_name" ASC
+    LIMIT ${limit}::int
+  `;
+
+  if (ordered.length === 0) return [];
+
+  const ids = ordered.map((row) => row.id);
+  const rows = await prisma.business.findMany({
+    where: { id: { in: ids } },
+    select: CANDIDATE_SELECT,
+  });
+
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return ids
+    .map((id) => byId.get(id))
+    .filter((row): row is (typeof rows)[number] => row !== undefined)
+    .map(toCandidate);
+}
+
+/**
+ * The old shape, kept for callers that only want the list.
+ *
+ * `findClaimMatches` is the one board 2a renders, because the screen changes
+ * shape depending on *how* the match was found.
+ */
+export async function findClaimCandidates(query: string, limit = 8): Promise<ClaimCandidate[]> {
+  return (await findClaimMatches(query, limit)).results;
 }
 
 export type ClaimRoute = "licence_upload" | "phone_callback";
@@ -121,6 +338,13 @@ export interface SubmitClaimInput {
  * reach a dashboard without staff involvement, and they can, because the
  * listing goes live on Free and the dashboard opens regardless. What waits for
  * staff is the *ownership*, and it should.
+ *
+ * `verificationTier` does not move either, and that is board 2a's own
+ * criterion 7 as much as it is CLAUDE.md's second non-negotiable. Claiming
+ * inherits history, not trust: the reviews, the enquiries and the slug carry
+ * over intact, and the tier is still a decision a person makes with the licence
+ * in front of them. The screen says exactly that rather than letting a supplier
+ * discover it on the storefront.
  */
 export async function submitClaim(
   actor: Actor,

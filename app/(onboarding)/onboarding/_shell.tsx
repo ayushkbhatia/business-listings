@@ -1,25 +1,22 @@
 import "server-only";
 import { redirect } from "next/navigation";
-import { StepHeader } from "@/components/structure";
 import { getActor } from "@/lib/auth/session";
-import { STEPS, type Step } from "@/lib/onboarding/service";
-import { t } from "@/lib/i18n";
+import type { Step } from "@/lib/onboarding/service";
+import { OnboardingColumn, OnboardingHeader } from "./_chrome";
 
 /**
  * The frame every onboarding step shares.
  *
- * A signed-in user is required and an anonymous one is sent to sign up with a
- * `next` back to where they were — the funnel starts *after* an account exists,
- * because a claim has to belong to somebody.
+ * `2b`–`2e` require a signed-in user, and an anonymous one is sent to sign up
+ * with a `next` back to where they were — a claim has to belong to somebody, and
+ * the evidence step is the first that writes a row.
+ *
+ * **`2a` is the exception, deliberately.** The search is unauthenticated (board
+ * 2a, acceptance criterion 12) because it reads the public licence register, and
+ * because a supplier who has to create an account to find out whether we hold
+ * their business is a supplier who does not find out. The account is asked for
+ * at the point it becomes necessary, which is choosing a listing.
  */
-
-const LABELS: Record<Step, string> = {
-  claim: t("onboarding.step.claim"),
-  verify: t("onboarding.step.verify"),
-  profile: t("onboarding.step.profile"),
-  locations: t("onboarding.step.locations"),
-  plan: t("onboarding.step.plan"),
-};
 
 export async function requireClaimant(step: Step) {
   const actor = await getActor();
@@ -31,11 +28,14 @@ export async function requireClaimant(step: Step) {
 
 export function OnboardingPage({
   step,
+  signedIn = true,
   title,
   intro,
   children,
 }: {
   step: Step;
+  /** Drives the sign-in offer in the header. `2b`–`2e` are always signed in. */
+  signedIn?: boolean;
   title: string;
   intro?: string;
   children: React.ReactNode;
@@ -46,28 +46,21 @@ export function OnboardingPage({
    * The dashboard gets one from DashboardShell and the public pages from
    * PublicShell; this layout was written bare and inherited neither, so every
    * step failed `landmark-one-main` and put all its content outside any
-   * landmark. A screen-reader user had nothing to jump to on the first screen
-   * a supplier ever sees.
+   * landmark. A screen-reader user had nothing to jump to on the first screen a
+   * supplier ever sees. `OnboardingColumn` is that `<main>`.
    */
   return (
-    <main className="mx-auto w-full max-w-[52rem] px-[var(--section-pad)] py-8">
-      <div className="overflow-hidden rounded-panel border border-line bg-card">
-        <StepHeader
-          steps={STEPS.map((key) => ({ key, label: LABELS[key] }))}
-          current={STEPS.indexOf(step)}
-          label={t("onboarding.sequence")}
-          progressLabel={(current, total) =>
-            t("rfq.step_of", { current: String(current), total: String(total) })
-          }
-        />
-        <div className="flex flex-col gap-4 p-5">
+    <>
+      <OnboardingHeader step={step} signedIn={signedIn} />
+      <OnboardingColumn>
+        <div className="flex flex-col gap-4">
           <div>
             <h1 className="text-h1 text-ink">{title}</h1>
             {intro && <p className="mt-1 max-w-prose text-body-sm text-muted">{intro}</p>}
           </div>
           {children}
         </div>
-      </div>
-    </main>
+      </OnboardingColumn>
+    </>
   );
 }

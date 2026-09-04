@@ -48,7 +48,7 @@ they 404 until their handoff.
 ## Tenant — /dashboard
 
 ```
-/onboarding/claim                       Find or add the business              [2a]
+/onboarding/claim                       Find or add the business              [2a]  built h6s1 · public
 /onboarding/verify                      Prove ownership                       [2b]
 /onboarding/profile                     Profile basics                        [2c]
 /onboarding/locations                   Locations & hours                     [2d]
@@ -162,6 +162,23 @@ enumeration oracle.
 is validated by `isSafeNext` and is never a destination for a signed-in session.
 Neither grants anything: roles are read from the profile row after the code is
 verified.
+
+**`/onboarding/claim` is the one funnel step with no seat.** `2b`–`2e` require a
+signed-in claimant, because they write rows and a claim has to belong to
+somebody; `2a` only searches the public licence register, and a supplier who has
+to create an account to find out whether we hold their business is a supplier
+who does not find out. The account is asked for at the point it becomes
+necessary — choosing a listing — and the chosen listing rides through the
+sign-up in `next`. Unauthenticated is not unmetered: the search is rate-limited
+per caller through `lib/rate-limit`, keyed on the actor where there is one and on
+the forwarded address where there is not. The page is `noindex, follow` and is
+deliberately *not* in `robots.ts`'s disallow list: a disallow would stop a
+crawler reading the `noindex` and stop it following the links out, which is the
+half of the directive we want.
+
+A signed-in seller already holding a claimed listing is redirected from `2a` to
+`/dashboard?notice=one_business`, which states the reason. Claiming a second
+business is not something this flow does.
 
 `/b/:slug/reviews` takes `?show=` (all · accepted · photos · critical), `?sort=` (recent ·
 highest · lowest · detailed) and `?page=`. Every narrowed view is `noindex, follow` and

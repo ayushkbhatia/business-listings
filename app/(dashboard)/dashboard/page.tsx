@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { buttonClassName } from "@/components/primitives";
-import { PlanBadge, StatCard, type PlanTier } from "@/components/display";
+import { Alert, PlanBadge, StatCard, type PlanTier } from "@/components/display";
 import { CompletenessMeter, ResponseTime } from "@/components/domain";
 import { Card, Panel } from "@/components/structure";
 import { getOverview, usageOf, type Overview, type MissedEnquiryRow } from "@/lib/db/queries/overview";
@@ -29,9 +29,14 @@ import { getNavBadges, requireSellerSeat, SellerPage } from "./_shell";
 export const metadata = { title: "Overview" };
 export const dynamic = "force-dynamic";
 
-export default async function OverviewPage() {
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ notice?: string }>;
+}) {
   const seat = await requireSellerSeat();
-  const [overview, badges] = await Promise.all([
+  const [{ notice }, overview, badges] = await Promise.all([
+    searchParams,
     getOverview(seat.businessId),
     getNavBadges(seat.businessId),
   ]);
@@ -50,6 +55,18 @@ export default async function OverviewPage() {
       meta={<PlanBadge plan={planTier} label={overview.plan.name} size="sm" />}
     >
       <div className="flex flex-col gap-5">
+        {/*
+          Board 2a sends a seller here when they open the claim flow while
+          already holding a claimed listing, and the redirect says why rather
+          than bouncing them silently. A person who lands somewhere they did not
+          ask for and is told nothing concludes the link was broken.
+        */}
+        {notice === "one_business" && (
+          <Alert tone="info" live="polite">
+            {t("claim.already_yours")}
+          </Alert>
+        )}
+
         <ReplyQueue overview={overview} />
 
         {/*
