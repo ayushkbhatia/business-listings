@@ -1,6 +1,17 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { formatAED, formatDate } from "@/lib/format";
+import { formatAED, formatCount, formatDate, UAE_LOCALE } from "@/lib/format";
+/*
+   Type-only, and written as `import type` rather than an inline `type` marker.
+
+   `scripts/check-audit-coverage.mts` follows value imports out of the admin
+   screens to find modules that mutate without an audit row, and it strips
+   `import type { … }` before it looks. An inline marker is not stripped, so the
+   shorter form would drag `lib/onboarding/service.ts` into that graph and fail
+   a check about staff decisions with a module that makes none.
+*/
+import type { Task } from "@/lib/onboarding/service";
+import { t } from "@/lib/i18n";
 import { notify, type NotifyOutcome } from "./service";
 import { route, type RoutingPreference } from "./routing";
 import { render } from "./render";
@@ -254,6 +265,69 @@ export async function onSubscriptionRenewed(input: {
       }),
     });
   });
+}
+
+/**
+ * The one setup nudge, 72 hours after a listing went live.
+ *
+ * Board 8a states the promise on the hub in so many words — one WhatsApp three
+ * days after go-live if anything is still open, then nothing — and a panel that
+ * makes a promise on a job's behalf is a panel the job has to honour. The
+ * once-ever guard therefore lives in `lib/setup/nudge-job.ts` rather than here:
+ * `notify()` reads no `NotificationDelivery` before it writes one, so nothing
+ * in this layer deduplicates anything.
+ *
+ * What this function owns is what the message says. The open tasks and their
+ * estimate arrive from the sweep, which read them out of the same
+ * `setupStateFor` the hub is built on, and the names come from the same
+ * `setup.task.*` strings the cards render — so the message and the screen it
+ * links to cannot name different work or a different number.
+ *
+ * Seller-side, so it routes through the business's own matrix on board 7e and
+ * respects quiet hours. A seller who has turned WhatsApp off for alerts gets no
+ * reminder, which is exactly what `setup.reminder.opted_out` tells them on the
+ * hub, and a seller with no `NotificationPreference` row at all gets the same
+ * graceful nothing every other emitter gets.
+ */
+export async function onSetupUnfinished(input: {
+  businessId: string;
+  /** Still open, and the seller's own to finish. Never empty. */
+  openTasks: readonly Task[];
+  /** What those tasks are estimated to take, added up. */
+  minutes: number;
+}): Promise<void> {
+  await safely("setup_nudge", async () => {
+    if (input.openTasks.length === 0) return;
+
+    const owner = await prisma.user.findFirst({
+      where: { businessId: input.businessId, roles: { has: "seller_owner" } },
+      select: { id: true },
+    });
+    if (!owner) return;
+
+    await notify({
+      event: "setup_nudge",
+      businessId: input.businessId,
+      recipientUserId: owner.id,
+      params: withParams("setup_nudge", {
+        taskList: taskList(input.openTasks),
+        minutes: formatCount(input.minutes),
+      }),
+    });
+  });
+}
+
+/**
+ * "Add photographs and Invite somebody".
+ *
+ * `Intl.ListFormat` rather than `join(", ")`, because the conjunction is a
+ * translation and the catalogue has no key for one. The task names are the
+ * hub's own, so a seller reads the same words in the message and on the screen
+ * it sends them to.
+ */
+function taskList(tasks: readonly Task[]): string {
+  const names = tasks.map((task) => t(`setup.task.${task}` as "setup.task.photos"));
+  return new Intl.ListFormat(UAE_LOCALE, { style: "long", type: "conjunction" }).format(names);
 }
 
 async function deliver(

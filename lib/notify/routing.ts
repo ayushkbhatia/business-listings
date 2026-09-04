@@ -34,6 +34,8 @@ export type NotificationEvent =
   | "product_alert_matched"
   /// A subscription charged for another period. The first event a cron sends.
   | "subscription_renewed"
+  /// Board 8a's one nudge, 72 hours after go-live. Exactly one, ever.
+  | "setup_nudge"
   | "weekly_digest";
 
 /** The channels quiet hours actually silence. */

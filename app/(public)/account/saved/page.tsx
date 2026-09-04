@@ -52,6 +52,30 @@ export default async function SavedSearchesPage() {
         <p className="mt-2 max-w-[var(--measure-prose)] text-body-sm text-muted">
           {t("saved.lede")}
         </p>
+
+        {/*
+           Across to the other half of "saved".
+
+           Two lists, two pages, and until now the pair was reachable in one
+           direction only: `/account/saved/shortlist` puts this page in its
+           breadcrumb, and nothing here pointed back. A buyer who pressed "Save
+           for later" on a storefront and then opened their saved things would
+           find searches, no suppliers, and conclude the save did nothing.
+
+           Labelled with the other page's own title rather than a phrase of its
+           own. A cross-link whose wording differs from the heading it lands on
+           makes a buyer stop and check they arrived where they meant to — and
+           there is no count on it, because a count here is a second query and
+           the page it leads to already states the true one.
+        */}
+        <p className="mt-3 text-body-sm">
+          <Link
+            href="/account/saved/shortlist"
+            className="rounded-tag font-medium text-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+          >
+            {t("shortlist.title")}
+          </Link>
+        </p>
       </header>
 
       {rows.length === 0 ? (

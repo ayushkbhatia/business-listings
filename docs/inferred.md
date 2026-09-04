@@ -2604,3 +2604,108 @@ that was considered and left out.
   `plan.id === "basic"` that board 1l had already replaced everywhere else.
 - **A card read "AED 899 a month" to a seller paying yearly.** The same defect
   the billing panel had, one screen along.
+
+---
+
+## Board 8a — the setup hub, and the surfaces it needed underneath it
+
+### The score is the shipped five components, not the handoff's seven
+
+The handoff draws profile strength as seven components summing to 100: profile 18,
+locations 14, verification 16, photos 12, products 18, team 8, site visit 14.
+`lib/metrics/profile-strength.ts` ships five — identity 35, photos 20, catalogue 20,
+filterable specs 15, team 10 — and they stay.
+
+Three reasons, and each is a property the handoff's table breaks. A **location is a
+publish gate**, not a lever: `goLive` refuses without one, so a listing that is live
+has already earned those 14 and a listing that is not cannot be looking at this page.
+The **verification tier is platform-owned** — CLAUDE.md non-negotiable 2 — so a seller
+who has submitted a licence and is waiting on staff would be 16 points short with
+nothing they can do about it. And the **site visit is plan-gated**, so on Free its 14
+points are unreachable, which makes the meter uncloseable for exactly the sellers the
+hub is trying to move.
+
+What the handoff actually asks for is in §2 and is stricter than its own table: the
+`+12%` / `+18%` chips "are per-task deltas in *this* seller's score, which is
+arithmetic and safe". That is what `lib/setup/tasks.ts` computes, from
+`strengthItems()` — so a seller with three photographs is offered fewer points than
+one with none, and the chip and the meter cannot disagree.
+
+The four cards cover about half the meter, which is why the hub also renders the five
+levers with what each has earned. Without that list a seller finishes everything on
+offer, sits short of a hundred, and finds nothing on the page naming the gap.
+
+### `pending_review` does not exist, so the precondition maps to `publishedAt`
+
+§1 says a business in `pending_review` is redirected to `/onboarding/verify`. There is
+no such state in this schema — not an enum value, not a column, not a string anywhere.
+`publishedAt` is the only fact about whether a listing is on the directory.
+
+So the hub redirects a not-yet-live seller to `/onboarding/locations`, not to the
+verification step: `goLive` refuses without a location, so locations is the step that
+actually unblocks publishing. Sending them to `/onboarding/verify` would be sending
+them somewhere that cannot move them on.
+
+### The 2.4× was already a query, and the uplift chips are now arithmetic
+
+§7's first open question asks for cohort data before the `2.4×` copy ships.
+`lib/metrics/enquiry-lift.ts` already answers it — median enquiries per listing-month
+above and below 80%, over ninety days, with a floor of forty listings a side — and
+returns null until the directory is big enough. The hub renders `setup.lift_measured`
+where there is a multiple and `setup.lift_mechanism` where there is not, never one as
+a placeholder for the other. That is the rule board 2c set.
+
+### The site-visit fee is a setting, because the handoff says it is unconfirmed
+
+§7's second open question: AED 750 is drawn on 8e and not confirmed against pricing. A
+platform setting is the right answer to an unconfirmed number — correcting it costs a
+row rather than a build, a deploy and a cold cache. `site_visit_fee_aed` and
+`catalogue_import_pricing` are both seeded, with compiled fallbacks so a missing or
+mangled row degrades rather than taking the panel down.
+
+### The nudge is suppressed when only the visit is left
+
+§7's fourth open question suggests it and this implements it. That task depends on our
+scheduling rather than the seller's, so nagging about it is nagging about ourselves.
+
+### Two counts had no source at all, and one still has no mobile control
+
+"Views since you went live" and "buyers who saved you" were both new tables. The
+tempting substitute for the second was a `DISTINCT` over `ContactReveal.actorId`,
+which is null for about three quarters of its rows by design — labelling that "buyers
+who saved you" is the padded number CLAUDE.md's interface-honesty section forbids.
+
+Views are counted from the browser, not the render: the storefront declares
+`revalidate = 300`, so one render serves many readers, and a crawler that does not run
+JavaScript is not a buyer.
+
+**Found in passing, not fixed:** `ContactCard`'s `saveAction` slot is row-layout only
+and `StorefrontHeader`'s actions are `hidden md:block`, so below `md` a storefront
+carries no way to save — which in this market is most buyers. Adding a fourth control
+to a three-button mobile bar is a layout decision that wants a board.
+
+### The hub has no nav row, and that is what made the figures agree
+
+A permanent sidebar entry would still be there a year later reading "nothing left".
+The two entry points — the overview banner and the sidebar footer figure — both stop
+rendering at a hundred per cent, and the route redirects. The handoff's own render
+note records the defect this created before: a footer reading `82% · 3 items left`
+over a body reading `62%` with four tasks open, because the footer came from a shared
+default. Both now recompute from the same facts through the same two functions, and an
+e2e test asserts the sidebar percentage equals the meter's `aria-valuenow`.
+
+### Found in passing
+
+- **The invite flow could not complete.** `TeamInvite` rows were created and
+  `acceptedAt` was written by nothing: no accept route, no email, and the token was
+  generated and discarded by the action. So the hub's "invite somebody" task was
+  uncompletable through the product, and its 10 points unreachable — a real seller was
+  capped at 90. Seeded data hid it, because the seed gives every third business a
+  second seat.
+- **`docs/permissions.md` promised a removal that did not exist.** Nothing cleared
+  `User.businessId` or stripped a colleague's roles. A wrongly-seated person was
+  permanent.
+- **`/dev/*` was public in production** — prerendered routes kept out of search results
+  by a robots directive and nothing else.
+- **`ProgressBar` had no target marker**, which `docs/component-inventory.md` row 41
+  had described for two handoffs.

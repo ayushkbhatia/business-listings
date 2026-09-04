@@ -69,7 +69,7 @@ which left the gallery reading 15 over a table holding 16 for a whole handoff.
 | 38 | `FilterChip` | pill (facet + count), square (applied, removable ×), dashed (mode) |
 | 39 | `Tag` | 4px radius, content label, no interaction |
 | 40 | `StatCard` | one number, one label, one comparison. Never two numbers |
-| 41 | `ProgressBar` | with optional target marker |
+| 41 | `ProgressBar` | the number always as text; optional `target` rule, refused without a `targetLabel` |
 | 42 | `StepProgress` | segment pills |
 | 43 | `StackedBar` | two series over time |
 | 44 | `FunnelBars` | drop-off with percentages |

@@ -46,14 +46,14 @@ describe("what an event supplies", () => {
 
   it("knows which events nothing emits yet", () => {
     /*
-     * Five of thirteen are emitted. The rest are declared in the enum, seeded
+     * Six of fourteen are emitted. The rest are declared in the enum, seeded
      * with templates, and sent by nothing — which is not a bug, but staff
      * should know before spending an afternoon on the copy.
      *
-     * `subscription_renewed` is the fifth and the odd one: every other emitted
-     * event is sent from a request, by the service that did the work. This one
-     * is sent by the daily cron when a subscription is charged for another
-     * period — the first notification any scheduled job in this codebase sends.
+     * `subscription_renewed` and `setup_nudge` are the two sent from a schedule
+     * rather than from a request. Every other emitted event is sent by the
+     * service that did the work; these two are sent by the daily cron, which is
+     * why both of them carry their own exactly-once guard.
      */
     const emitted = (Object.keys(EVENT_PARAMS) as (keyof typeof EVENT_PARAMS)[]).filter(isEmitted);
     expect([...emitted].sort()).toEqual([
@@ -61,6 +61,7 @@ describe("what an event supplies", () => {
       "quote_accepted",
       "quote_received",
       "quote_revised",
+      "setup_nudge",
       "subscription_renewed",
     ]);
   });
@@ -68,7 +69,7 @@ describe("what an event supplies", () => {
   it("covers every event in the enum, so none is missing a row", () => {
     // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
     // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(13);
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(14);
   });
 
   it("does not claim to emit the alert it only records", () => {

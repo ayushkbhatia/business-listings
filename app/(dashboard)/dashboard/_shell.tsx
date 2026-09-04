@@ -1,4 +1,5 @@
 import "server-only";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppSidebar, DashboardShell, PageHeader, resolveNav } from "@/components/structure";
 import { DASHBOARD_NAV } from "@/components/structure/nav-config";
@@ -7,6 +8,8 @@ import { actorFromDevSeller, devSellerRequest } from "@/lib/auth/dev-seller";
 import { getActor } from "@/lib/auth/session";
 import { currentSession, minutesLeft } from "@/lib/support/view-as";
 import { isStaff, type Actor } from "@/lib/auth/roles";
+import { setupChrome, type SetupChrome } from "@/lib/setup/service";
+import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
 /**
@@ -19,6 +22,16 @@ export interface SellerSeat {
   actor: Actor;
   businessId: string;
   businessName: string;
+  /**
+   * What the identity block under the wordmark says about the account.
+   *
+   * Two facts and no more: the plan, because it decides what half the screens
+   * render, and where the head office is, because a supplier with branches in
+   * three emirates needs to know which listing they are looking at. Both are
+   * read where the seat is, so no page loads them a second time.
+   */
+  planName: string;
+  place: string | null;
   /** True while the seat came from DEV_SELLER_SLUG rather than a session. */
   isDevSeat: boolean;
   /**
@@ -34,6 +47,38 @@ export interface SellerSeat {
    * fence.
    */
   viewingAs?: { sessionId: string; ticketRef: string; expiresAt: Date };
+}
+
+/**
+ * The two identity facts, selected once so the three seat branches agree.
+ *
+ * The location is the head office where there is one and any published branch
+ * otherwise — a supplier who has only ever added a warehouse should still see
+ * where they are rather than a blank.
+ */
+const IDENTITY_SELECT = {
+  displayName: true,
+  plan: { select: { name: true } },
+  locations: {
+    where: { published: true },
+    orderBy: { type: "asc" },
+    take: 1,
+    select: { area: { select: { name: true } } },
+  },
+} as const;
+
+interface IdentityRow {
+  plan: { name: string } | null;
+  locations: { area: { name: string } | null }[];
+}
+
+function identityOf(business: IdentityRow): { planName: string; place: string | null } {
+  return {
+    // Null means Free — `Business.planId` is nullable because an imported
+    // licence record never chose one.
+    planName: business.plan?.name ?? "Free",
+    place: business.locations[0]?.area?.name ?? null,
+  };
 }
 
 /**
@@ -57,6 +102,11 @@ export async function getSellerSeat(): Promise<SellerSeat | null> {
       actor,
       businessId: session.businessId,
       businessName: session.business.displayName,
+      // A staff member looking through a seller's eyes gets the seller's
+      // screens; the identity block is deliberately not one of them, because
+      // the loud banner above it is what says whose account this is.
+      planName: "",
+      place: null,
       isDevSeat: false,
       viewingAs: {
         sessionId: session.id,
@@ -69,13 +119,14 @@ export async function getSellerSeat(): Promise<SellerSeat | null> {
   if (actor?.businessId) {
     const business = await prisma.business.findUnique({
       where: { id: actor.businessId },
-      select: { displayName: true },
+      select: IDENTITY_SELECT,
     });
     if (business) {
       return {
         actor,
         businessId: actor.businessId,
         businessName: business.displayName,
+        ...identityOf(business),
         isDevSeat: false,
       };
     }
@@ -88,7 +139,7 @@ export async function getSellerSeat(): Promise<SellerSeat | null> {
     where: { slug: request.slug },
     select: {
       id: true,
-      displayName: true,
+      ...IDENTITY_SELECT,
       team: {
         where: { roles: { has: "seller_owner" } },
         select: { id: true, roles: true },
@@ -103,6 +154,7 @@ export async function getSellerSeat(): Promise<SellerSeat | null> {
     actor: actorFromDevSeller({ userId: owner.id, roles: owner.roles, businessId: business.id }),
     businessId: business.id,
     businessName: business.displayName,
+    ...identityOf(business),
     isDevSeat: true,
   };
 }
@@ -128,10 +180,93 @@ export async function getNavBadges(businessId: string): Promise<Record<string, n
   return { leads, quotes };
 }
 
+/**
+ * The one link to the setup hub that is on every dashboard screen.
+ *
+ * Board 8a gives the hub no nav row — it is temporary, and a permanent row for
+ * it would still be there a year later reading "nothing left". This figure and
+ * the banner on the overview are how it is reached, and both stop rendering at
+ * a hundred per cent.
+ *
+ * It reads the same recomputed score the hub's body reads, through the same two
+ * functions. The render this was drawn from had a sidebar saying `82% · 3 items
+ * left` over a body saying `62%` with four tasks open, because the footer came
+ * from a shared default; one figure, one source, is the correction.
+ */
+export async function getSetupProgress(businessId: string) {
+  return setupChrome(businessId);
+}
+
+function SidebarProgress({ strength, openCount }: { strength: number; openCount: number }) {
+  return (
+    <div>
+      <p className="text-caption text-muted">{t("shell.strength_label")}</p>
+      <Link
+        href="/dashboard/setup"
+        className="mt-0.5 block text-body-sm font-medium text-ink underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+      >
+        {openCount === 0
+          ? t("shell.strength_done", { strength: formatCount(strength) })
+          : t("shell.strength_value", {
+              count: openCount,
+              strength: formatCount(strength),
+              formatted: formatCount(openCount),
+            })}
+      </Link>
+    </div>
+  );
+}
+
+/**
+ * Whose account this is, under the wordmark.
+ *
+ * Board 8a's render opens with it, and the reason is not decoration: the seller
+ * dashboard had no statement of identity anywhere in its chrome, so a supplier
+ * with two listings — or a person who had been sent a link — had to read the
+ * page body to find out which one they were editing.
+ *
+ * Initials rather than a logo. `Media` with `kind: "logo"` is optional and most
+ * seeded listings have none, so a tile that was sometimes an image and
+ * sometimes a gap would be worse than one that is always the same shape.
+ */
+function SidebarIdentity({ seat }: { seat: SellerSeat }) {
+  const initials = seat.businessName
+    .split(/\s+/)
+    .filter((word) => /^[A-Za-z]/.test(word))
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return (
+    <div className="flex items-center gap-2.5">
+      <span
+        aria-hidden="true"
+        className="flex size-[30px] shrink-0 items-center justify-center rounded-ctl bg-moss font-mono text-eyebrow text-on-ink"
+      >
+        {initials}
+      </span>
+      <span className="min-w-0">
+        <span className="block truncate text-body-sm font-medium text-ink">
+          {seat.businessName}
+        </span>
+        <span className="mt-0.5 block truncate font-mono text-eyebrow uppercase text-muted">
+          {seat.place ? `${seat.planName} · ${seat.place}` : seat.planName}
+        </span>
+      </span>
+    </div>
+  );
+}
+
 export interface SellerPageProps {
   seat: SellerSeat;
   /** From getNavBadges. Omitted only where a screen has no reason to load them. */
   badges?: Readonly<Record<string, number>>;
+  /**
+   * The setup figure in the sidebar footer. Omitted where a screen has not
+   * loaded it — the footer then renders nothing, rather than a zero that would
+   * read as a finished profile.
+   */
+  setup?: SetupChrome | null;
   activeHref: string;
   title: string;
   eyebrow?: string;
@@ -144,6 +279,7 @@ export interface SellerPageProps {
 export function SellerPage({
   seat,
   badges,
+  setup,
   activeHref,
   title,
   eyebrow,
@@ -158,13 +294,27 @@ export function SellerPage({
         <AppSidebar
           label={t("nav.label.dashboard")}
           groups={resolveNav(DASHBOARD_NAV, (key) => t(key as never), badges)}
+          /*
+             The seller rail is light and carries the supplier's own name. The
+             staff console keeps the dark one — see AppSidebar for why the
+             difference is whose surface it is rather than a theme.
+          */
+          tone="paper"
+          {...(seat.planName ? { identity: <SidebarIdentity seat={seat} /> } : {})}
           activeHref={activeHref}
           actor={seat.actor}
           lockedLabel={t("nav.locked")}
           laterLabel={t("nav.later")}
           // The brand name is a proper noun, rendered as written on the public
           // chrome. It is not a string to translate.
-          mark={<span className="font-serif text-h2 text-on-ink">Business Listings</span>}
+          mark={<span className="font-serif text-h2 text-ink">Business Listings</span>}
+          {...(setup && setup.openCount > 0
+            ? {
+                footer: (
+                  <SidebarProgress strength={setup.strength} openCount={setup.openCount} />
+                ),
+              }
+            : {})}
         />
       }
       notice={

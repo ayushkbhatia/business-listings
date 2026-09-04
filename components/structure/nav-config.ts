@@ -78,17 +78,24 @@ export function resolveNav(
  */
 export const DASHBOARD_NAV: readonly NavGroup[] = [
   {
-    key: "overview",
-    labelKey: "nav.group.overview",
+    /*
+       Overview heads the storefront group rather than sitting in a group of
+       its own, which is how board 8a's render draws it — a one-item group is a
+       heading with nothing to organise, and it cost the rail a whole row of
+       vertical space to say "Overview" twice.
+
+       No `setup` row, deliberately. Board 8a: the hub is a temporary surface
+       and a permanent nav entry for it would still be there a year later
+       reading "nothing left". It is reached from the banner on the overview and
+       from the strength figure in the sidebar footer — both of which disappear
+       at a hundred per cent, as does the route itself, which redirects once the
+       last task lands. A nav row cannot disappear without the nav lying about
+       its own shape.
+    */
+    key: "storefront",
+    labelKey: "nav.group.storefront",
     items: [
       { key: "dashboard", labelKey: "nav.dashboard", href: "/dashboard" },
-      { key: "setup", labelKey: "nav.setup", href: "/dashboard/setup" },
-    ],
-  },
-  {
-    key: "listing",
-    labelKey: "nav.group.listing",
-    items: [
       { key: "listing", labelKey: "nav.listing", href: "/dashboard/listing", capability: "listing.edit" },
       { key: "locations", labelKey: "nav.locations", href: "/dashboard/locations", capability: "listing.edit" },
       { key: "hours", labelKey: "nav.hours", href: "/dashboard/hours", capability: "listing.edit" },
@@ -203,6 +210,23 @@ export const ADMIN_NAV: readonly NavGroup[] = [
       { key: "businesses", labelKey: "nav.businesses", href: "/admin/businesses" },
       { key: "ingest", labelKey: "nav.ingest", href: "/admin/ingest", capability: "queue.decide" },
       { key: "dedupe", labelKey: "nav.dedupe", href: "/admin/ingest/dedupe", capability: "business.merge" },
+      /*
+         Board 12i. `queue.decide` because that is what the screen and
+         `lib/catalogue-import/service.ts` both assert; gating the row any
+         narrower would show a moderator a link into their own `notFound()`,
+         which is the defect `/admin/dunning` produced for an ops lead.
+
+         In `supply` rather than `taxonomy`, where docs/routes.md lists the
+         route. What waits here is one seller's price list needing somebody to
+         key it in — the same intake job as the two rows above, not a decision
+         about the shape of the catalogue.
+      */
+      {
+        key: "catalogue-imports",
+        labelKey: "nav.catalogue_imports",
+        href: "/admin/catalogue-imports",
+        capability: "queue.decide",
+      },
       { key: "visits", labelKey: "nav.visits", href: "/admin/visits", capability: "visit.record" },
       { key: "crm", labelKey: "nav.crm", href: "/admin/crm" },
     ],

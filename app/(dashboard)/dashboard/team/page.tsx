@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db/client";
 import { ESCALATION_CHOICES, pendingInvites, teamFor } from "@/lib/team/service";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
-import { cancelInvite, saveLeadRouting, sendInvite } from "./actions";
+import { cancelInvite, removeTeamMember, saveLeadRouting, sendInvite } from "./actions";
 import { TeamForm } from "./TeamForm";
 
 /**
@@ -47,6 +47,13 @@ export default async function TeamPage() {
         <TeamForm
           seats={seats}
           invites={invites}
+          /*
+             The reader's own id, so their row offers no remove control. It is
+             the actor's rather than the seat's: a staff member looking through
+             board 12f keeps their own id and only the business changes, so this
+             stays the person holding the mouse.
+          */
+          currentUserId={seat.actor.id}
           routing={business.leadRouting}
           escalationMinutes={business.leadEscalationMinutes}
           escalationChoices={ESCALATION_CHOICES}
@@ -54,6 +61,7 @@ export default async function TeamPage() {
           seatCap={business.plan?.teamSeats ?? 1}
           inviteAction={sendInvite}
           revokeAction={cancelInvite}
+          removeAction={removeTeamMember}
           routingAction={saveLeadRouting}
         />
       </div>

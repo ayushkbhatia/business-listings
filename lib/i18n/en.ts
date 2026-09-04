@@ -162,6 +162,9 @@ export const en = {
 
   // ── Navigation. The sidebar is a config; these are the strings it resolves. ──
   "nav.group.overview": "Overview",
+  // The seller rail's first group. Board 8a's render heads it "Storefront" and
+  // puts Overview in it — the listing and the thing buyers see are one subject.
+  "nav.group.storefront": "Storefront",
   "nav.group.listing": "Listing",
   "nav.group.catalogue": "Catalogue",
   "nav.group.demand": "Demand",
@@ -173,7 +176,6 @@ export const en = {
   "nav.group.platform": "Platform",
 
   "nav.dashboard": "Overview",
-  "nav.setup": "Setup",
   "nav.listing": "Listing profile",
   "nav.locations": "Locations",
   "nav.hours": "Hours & Ramadan",
@@ -649,6 +651,7 @@ export const en = {
   "admin.conflict.evidence": "Evidence",
   "admin.conflict.number": "Number called",
 
+  "nav.catalogue_imports": "Catalogue loads",
   "nav.label.dashboard": "Seller navigation",
   "nav.label.admin": "Staff navigation",
   "nav.label.public": "Directory navigation",
@@ -2080,11 +2083,81 @@ export const en = {
   "alerts.whatsapp_pending": "WhatsApp alerts are built and waiting on Meta to approve the message templates. Until then these events fall back to the other channels you have on.",
 
   // ── The seat you are acting as, before sign-in exists. ──
-  "dev.acting_as": "Acting as {business}. Development only — sign-in arrives in the next step.",
+  "dev.acting_as": "Acting as {business}, from DEV_SELLER_SLUG. Take a real seat at /dev/seat.",
   "dev.no_seat_title": "No seller seat selected",
-  "dev.no_seat_body": "Set DEV_SELLER_SLUG in .env.local to a seeded business slug, then reload. Sign-in replaces this in step 2.",
+  "dev.no_seat_body": "Set DEV_SELLER_SLUG in .env.local to a seeded business slug, or take a seat at /dev/seat.",
+
+  // ── The developer surfaces. Gated to a loopback database; see lib/dev/guard.ts. ──
+  "dev.index.eyebrow": "Development",
+  "dev.index.title": "Every surface",
+  "dev.index.intro":
+    "Every route in the product, and which seat opens it. A route in grey is named in docs/routes.md and does not exist yet.",
+  "dev.index.signed_in": "Signed in as {roles}",
+  "dev.index.signed_out": "Not signed in",
+  "dev.index.no_seat_needed": "No session needed",
+  "dev.index.needs_seat": "Needs the {seat} seat",
+  "dev.index.planned": "not built",
+  "dev.seat.eyebrow": "Development",
+  "dev.seat.title": "Take a seat",
+  "dev.seat.intro":
+    "Signs you in for real: it provisions the account, generates a one-time code and posts it to the same verify service the public form uses. Nothing here mints a session or grants a role directly.",
+  "dev.seat.target": "Database {target}",
+  "dev.seat.holding": "Signed in as {roles}, for business {business}.",
+  "dev.seat.holding_none": "Not signed in.",
+  "dev.seat.no_business": "none",
+  "dev.seat.landing": "Sign-in lands on {href}",
+  "dev.seat.sign_out": "Sign out",
+  "dev.seat.signed_out": "Signed out. Take another seat below.",
+  "dev.seat.error_fix":
+    "Check that Supabase is running and that SUPABASE_SECRET_KEY is set in .env.local.",
+  "dev.seat.platform_title": "Platform seats",
+  "dev.seat.platform_body": "Staff and buyer seats belong to the platform rather than to a business.",
+  "dev.seat.seller_title": "Seller seats",
+  "dev.seat.seller_body":
+    "Pick the row whose state you want to look at, then the role. Plan, tier and the three counts are what change which panels a screen renders.",
+  "dev.seat.table_caption": "Claimed businesses, with the state that changes what a dashboard screen renders",
+  "dev.seat.col.business": "Business",
+  "dev.seat.col.plan": "Plan",
+  "dev.seat.col.strength": "Strength",
+  "dev.seat.col.products": "Products",
+  "dev.seat.col.photos": "Photos",
+  "dev.seat.col.seats": "Seats",
+  "dev.seat.col.state": "State",
+  "dev.seat.col.sign_in": "Sign in as",
+  "dev.seat.tier": "tier {tier}",
+  "dev.seat.state.live": "Live",
+  "dev.seat.state.draft": "Not live",
+  "dev.seat.state.suspended": "Suspended",
+  "dev.seat.kind.owner": "Owner",
+  "dev.seat.kind.manager": "Manager",
+  "dev.seat.kind.sales": "Sales",
+  "dev.seat.kind.finance": "Finance",
+  "dev.seat.kind.ops_lead": "Ops lead",
+  "dev.seat.kind.moderator": "Moderator",
+  "dev.seat.kind.field": "Field verifier",
+  "dev.seat.kind.staff_finance": "Platform finance",
+  "dev.seat.kind.buyer": "Buyer",
+  "dev.seat.kind.none": "none",
+  "dev.seat.script_note":
+    "The same seats are available from the command line with pnpm dev:seat. Back to",
 
   // ── Overview, boards 3a and 11a ───────────────────────────────────────────
+  // The banner and the sidebar figure are how the setup hub is reached. It has
+  // no nav row of its own: a permanent row would still be there a year later
+  // reading "nothing left", so both of these disappear at a hundred per cent.
+  "overview.setup_banner_title": "Finish setting up",
+  "overview.setup_banner": {
+    one: "One thing left, worth {points} points on your profile strength.",
+    other: "{formatted} things left, worth {points} points between them.",
+  },
+  "overview.setup_banner_action": "Pick one up",
+  "shell.strength_label": "Profile strength",
+  "shell.strength_value": {
+    one: "{strength}% · {formatted} item left",
+    other: "{strength}% · {formatted} items left",
+  },
+  "shell.strength_done": "{strength}% · nothing left",
+
   "overview.title": "Overview",
   "overview.eyebrow": "Your business",
   "overview.needs_reply": "Needs a reply",
@@ -3093,6 +3166,236 @@ export const en = {
   "setup.all_done": "All four are done",
   "setup.all_done_body": "Nothing else is waiting. Your dashboard opens on whatever needs a reply.",
   "setup.to_dashboard": "Go to my dashboard",
+  "setup.complete_flash": "Setup complete. Your listing is at {strength}%.",
+
+  // The hero counts what is actually left, so it cannot say "four" over three
+  // cards. `formatted` is the count already run through formatCount.
+  "setup.hero": {
+    one: "One thing left, about {minutes} minutes",
+    other: "{formatted} things left, about {minutes} minutes",
+  },
+  "setup.hero_body":
+    "Your listing is live and already being seen. These are what turn a view into an enquiry, and you can do them in any order.",
+  "setup.live_pill": "Listing already live",
+  "setup.leave_note": "You can leave and come back. Nothing is lost.",
+  "setup.now": "Now",
+  // Measured where the cohort is big enough, and the mechanism where it is not.
+  // Never one standing in for the other — the same rule board 2c set.
+  "setup.lift_measured": "{threshold}% — where listings get {multiple}× more enquiries",
+  "setup.lift_mechanism": "{threshold}% — where a listing stops looking thin to a buyer",
+  "setup.chip_points": "+{points}%",
+  "setup.chip_none": "no points",
+  "setup.chip_title": "Finishing this adds {points} points to your profile strength.",
+  "setup.estimate": "~{n} min",
+
+  // The tasks, as board 8a words them. Sharper than the list wording that came
+  // before, and the estimates are from the work rather than from optimism.
+  "setup.card.photos": "Upload photographs of your premises and team",
+  "setup.card.photos_body":
+    "The outside, the trade counter, the racking, whoever answers the phone. A phone camera is fine — buyers are checking you exist, not judging the photography.",
+  "setup.card.products": "Pick your spec template, then add products",
+  "setup.card.products_body":
+    "This is the big one. Products are what buyers search for, and a listing without them only turns up in searches for your company name.",
+  "setup.card.team": "Invite whoever answers the phone",
+  "setup.card.team_body":
+    "An enquiry that sits unanswered for a day is usually gone. A second person on the inbox halves how long a buyer waits.",
+  "setup.card.visit": "Ask for a site visit and the top badge",
+  "setup.card.visit_body":
+    "One of our team comes to the address, checks the licence against what is there, and photographs it. Tier 3 cannot be reached any other way.",
+  "setup.card.visit_included": "Included on {plan}.",
+  "setup.card.visit_priced": "AED {fee} on {plan}, once.",
+  "setup.cta.start": "Start",
+  "setup.cta.resume": "Carry on",
+  "setup.cta.invite": "Invite",
+  "setup.cta.book": "Book",
+  "setup.cta.pricing": "See pricing",
+  "setup.cta.review": "Review",
+  "setup.tag.speed": "SPEED",
+  "setup.tag.trust": "TRUST",
+
+  // Done work stays on the page. Sellers look for evidence that what they did
+  // was recorded, and a card that vanishes reads as work that was not.
+  "setup.done_summary": {
+    one: "{formatted} thing done",
+    other: "{formatted} things done",
+  },
+  "setup.done_list": "Done: {list}",
+
+  // The other half of the meter. Board 8a names four tasks worth fifty points
+  // between them out of a hundred, so without this a seller can finish
+  // everything on offer and still be short with nothing named to do about it.
+  "setup.levers_title": "What else the meter counts",
+  "setup.levers_body":
+    "Profile strength is the whole listing, not only these four. These are the parts you have already started.",
+  "setup.lever.identity": "Who you are — description, year founded, size, languages, categories",
+  "setup.lever.photos": "Photographs, including your logo and cover",
+  "setup.lever.catalogue": "Products on the listing",
+  "setup.lever.filterableSpecs": "Products with their filterable fields filled in",
+  "setup.lever.team": "Somebody other than you who can reply",
+  "setup.lever.earned": "{earned} of {total} points",
+
+  // The right rail. Three counts, and each one says so plainly when it is zero
+  // rather than being hidden — the panel's job is to make the tasks feel worth
+  // doing, and a hidden zero makes the whole panel unbelievable.
+  "setup.rail.eyebrow": "ALREADY HAPPENING",
+  // The label beside the numeral, not a sentence containing it. The figure is
+  // rendered once, above; a label that repeated it read "48 / 48 views since
+  // you went live" on the first listing that had any.
+  "setup.rail.views": {
+    one: "view since you went live",
+    other: "views since you went live",
+  },
+  "setup.rail.views_none": "No views yet. A new listing usually sees its first within 48 hours.",
+  "setup.rail.shortlists": {
+    one: "buyer saved you to a shortlist",
+    other: "buyers saved you to a shortlist",
+  },
+  "setup.rail.shortlists_none": "Nobody has saved you to a shortlist yet.",
+  "setup.rail.enquiries": {
+    one: "enquiry waiting for a reply",
+    other: "enquiries waiting for a reply",
+  },
+  "setup.rail.enquiries_none": "No enquiry is waiting on you.",
+  "setup.rail.open_enquiry": "Open the enquiry",
+  "setup.rail.open_enquiries": "Open the enquiries",
+  "setup.rail.measuring_from": "Counting from {date}, when your listing went up.",
+
+  // The one nudge, and the promise the panel makes on the job's behalf.
+  "setup.reminder.title": "We will remind you once",
+  "setup.reminder.body":
+    "One WhatsApp three days after you went live if anything is still open, then nothing. We do not chase.",
+  "setup.reminder.opted_out":
+    "You have WhatsApp turned off for alerts, so there will be no reminder. Nothing here expires.",
+  "setup.reminder.sent": "Sent on {date}. That was the only one.",
+
+  // Suspension. The hub does not help a seller improve a listing nobody can see.
+  "setup.suspended_title": "This listing is suspended",
+  "setup.suspended_body":
+    "It is off the directory while we look at it, so these tasks would not reach a buyer. The notice on your verification page says what happens next.",
+  "setup.suspended_link": "Read the notice",
+
+  // ── Concierge catalogue load. Board 8a's right rail, boards 8c and 12i. ───
+  "concierge.eyebrow": "NEED A HAND?",
+  "concierge.title": "Send us your catalogue",
+  "concierge.body":
+    "Send the catalogue or price list you already have as a PDF or a spreadsheet, and our team keys the first {limit} products in for you.",
+  "concierge.free_on": "Free on {plan}.",
+  "concierge.priced": "AED {fee} on {plan}.",
+  "concierge.sla": "Two working days from when it arrives.",
+  "concierge.send": "Send us a file",
+  "concierge.file_label": "Catalogue or price list",
+  "concierge.file_hint": "PDF, XLS, XLSX or CSV, up to {mb} MB.",
+  "concierge.note_label": "Anything we should know",
+  "concierge.note_hint": "Which pages to use, what to leave out, which brand names are yours.",
+  "concierge.submit": "Send it",
+  "concierge.sent": "Sent. We will come back within two working days.",
+  "concierge.pending": "Sent {when}. Due back by {due}.",
+  "concierge.in_progress": "Our team is keying it in now. Due back by {due}.",
+  "concierge.loaded": {
+    one: "{formatted} product loaded on {date}.",
+    other: "{formatted} products loaded on {date}.",
+  },
+  "concierge.cancel": "Cancel the request",
+  "concierge.cancelled": "Cancelled. Send another whenever you like.",
+  "concierge.error.no_file": "Attach the catalogue you want us to work from.",
+  "concierge.error.too_big": "That file is {size}. The limit is {limit}.",
+  "concierge.error.wrong_type": "We can read PDF, XLS, XLSX and CSV. That file is {type}.",
+  "concierge.error.already_open": "You already have a catalogue with us. Cancel that one first.",
+  "concierge.error.not_offered": "A catalogue load is not part of the Free plan.",
+  "concierge.error.upload_failed": "That file did not upload. Try again, or send a smaller one.",
+
+
+  // ── Shortlist. A buyer keeping a supplier for later. ─────────────────────
+  "shortlist.save": "Save for later",
+  "shortlist.saved": "Saved",
+  "shortlist.save_hint": "Keeps this supplier on your shortlist, on this account.",
+  "shortlist.remove": "Remove from shortlist",
+  "shortlist.sign_in": "Sign in to save",
+  "shortlist.sign_in_hint": "A shortlist follows your account, so it is there on your phone as well.",
+  "shortlist.title": "Saved suppliers",
+  "shortlist.intro": "Suppliers you kept for later. Removing one here does not tell them.",
+  "shortlist.empty": "You have not saved a supplier yet.",
+  "shortlist.empty_body": "The save control is on every supplier page and on every result.",
+  "shortlist.count": {
+    one: "{formatted} saved supplier",
+    other: "{formatted} saved suppliers",
+  },
+  "shortlist.saved_on": "Saved {when}",
+  "shortlist.error.signed_out": "Sign in first, and we will keep this one.",
+  "shortlist.error.not_found": "That supplier cannot be found.",
+
+  // ── Team invitations. Board 8d's backend, reached from board 7d. ──────────
+  "invite.subject": "{inviter} has asked you to join {business} on Business Listings",
+  "invite.email_body":
+    "{inviter} has given you a seat on {business}. The seat lets you {roles}. Open the link below and sign in with this address.",
+  "invite.email_cta": "Accept the invitation",
+  "invite.email_expiry": "The link works until {date}.",
+  "invite.title": "Join {business}",
+  "invite.intro": "{inviter} has given you a seat on this listing. Sign in with {email} to take it.",
+  "invite.roles": "The seat lets you {roles}.",
+  "invite.accept": "Accept and sign in",
+  "invite.accepted_title": "You are on the team",
+  "invite.accepted_body": "You now have a seat on {business}. Your dashboard is where the enquiries are.",
+  "invite.to_dashboard": "Open the dashboard",
+  "invite.wrong_account_title": "This invitation is for a different address",
+  "invite.wrong_account_body":
+    "It was sent to {email} and you are signed in as {current}. Sign out, then open the link again.",
+  "invite.expired_title": "This invitation has expired",
+  "invite.expired_body": "Ask {business} to send another. They expire after seven days.",
+  "invite.revoked_title": "This invitation was withdrawn",
+  "invite.revoked_body": "Ask {business} whether it was meant for you.",
+  "invite.used_title": "This invitation has already been used",
+  "invite.used_body": "If that was you, sign in and your seat is waiting.",
+  "invite.not_found_title": "That invitation link is not one of ours",
+  "invite.not_found_body": "Check you copied the whole link, or ask for another.",
+  "invite.sign_in": "Sign in to accept",
+  "invite.link_label": "Invitation link",
+  "invite.link_hint":
+    "Send this to them yourself if the email has not arrived. Anyone holding it can take the seat, so send it to them and nobody else.",
+  "invite.link_copied": "Copied",
+  "invite.copy": "Copy the link",
+  "invite.email_sent": "Invitation emailed to {email}.",
+  "invite.email_failed":
+    "The invitation was created but the email did not send. Copy the link below and send it yourself.",
+  "invite.remove_seat": "Remove the seat",
+  "invite.remove_confirm": "Remove {name} from the team?",
+  "invite.remove_body":
+    "They lose access to enquiries, quotes and everything else on this listing. Their replies stay on the threads they answered.",
+  "invite.removed": "{name} no longer has a seat.",
+  "invite.cannot_remove_owner": "The owner's seat cannot be removed here.",
+  "invite.cannot_remove_self": "You cannot remove your own seat.",
+
+  // ── The concierge catalogue queue, /admin/catalogue-imports ──────────────
+  "admin.catalogue_imports.title": "Catalogue loads",
+  "admin.catalogue_imports.eyebrow": "Supply",
+  "admin.catalogue_imports.intro":
+    "Catalogues suppliers have sent for our team to key in. Two working days from when one arrives, which is what the seller was told.",
+  "admin.catalogue_imports.note":
+    "Every move here writes an audit row with the reason you type. The seller sees the state, never the reason.",
+  "admin.catalogue_imports.empty": "Nothing waiting.",
+  "admin.catalogue_imports.empty_body": "A catalogue sent from a seller's setup hub arrives here.",
+  "admin.catalogue_imports.caption": "Catalogues waiting to be keyed in, oldest first",
+  "admin.catalogue_imports.col.business": "Supplier",
+  "admin.catalogue_imports.col.file": "File",
+  "admin.catalogue_imports.col.sent": "Sent",
+  "admin.catalogue_imports.col.due": "Due",
+  "admin.catalogue_imports.col.fee": "Fee",
+  "admin.catalogue_imports.col.state": "State",
+  "admin.catalogue_imports.col.action": "Decision",
+  "admin.catalogue_imports.late": "{days} days over",
+  "admin.catalogue_imports.start": "Start keying it in",
+  "admin.catalogue_imports.complete": "Mark it loaded",
+  "admin.catalogue_imports.reject": "Send it back",
+  "admin.catalogue_imports.products_label": "Products loaded",
+  "admin.catalogue_imports.reason_label": "Reason",
+  "admin.catalogue_imports.reason_hint": "What you did and why. It goes on the audit row and cannot be edited afterwards.",
+  "admin.catalogue_imports.started": "Marked as in progress.",
+  "admin.catalogue_imports.completed": "Marked loaded. The seller can see it.",
+  "admin.catalogue_imports.rejected": "Sent back to the seller.",
+  "admin.catalogue_imports.no_file": "No file",
+
+  // ── Team, board 7d ───────────────────────────────────────────────────────
+  "team.revoked": "The invitation to {email} was withdrawn.",
 
   "visit.title": "Book a verification visit",
   "visit.intro": "One of our team comes to your premises, checks the licence against what is there, and photographs it. It is what tier 3 on the ladder means, and it is the only way to reach it.",

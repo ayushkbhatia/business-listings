@@ -333,3 +333,86 @@ The oldest products are the ones kept — they are the catalogue the listing was
 
 Photographs are not hidden. The rail's sentence says products and photos stay *saved*, which
 is true of both; it does not promise both are hidden, and neither does the code.
+
+## After go-live — the setup hub, board 8a
+
+Four tables, and the argument for each one is that the alternative was a number that
+was not true.
+
+```prisma
+model Shortlist {
+  id         String   @id @default(cuid())
+  userId     String   @db.Uuid
+  businessId String
+  createdAt  DateTime @default(now())
+  @@unique([userId, businessId])   // saving twice is saving once
+}
+
+model ListingViewDay {
+  businessId String
+  day        DateTime @db.Date     // Asia/Dubai, so a day is the day the supplier had
+  views      Int      @default(0)
+  @@id([businessId, day])
+}
+
+model ProductEvent {
+  id         String   @id @default(cuid())
+  name       String                // closed set — lib/telemetry/events.ts
+  businessId String?
+  actorId    String?  @db.Uuid     // null for anonymous traffic, and no fallback id
+  sessionId  String?               // per tab, never persisted, only where actorId is
+  props      Json     @default("{}")
+  createdAt  DateTime @default(now())
+}
+
+model CatalogueImportRequest {
+  id             String  @id @default(cuid())
+  businessId     String
+  requestedById  String  @db.Uuid  // Restrict: a record of somebody having asked
+  documentId     String?           // a Document, kind: catalogue, private bucket
+  status         CatalogueImportStatus  // requested | in_progress | loaded | cancelled
+  feeAed         Int     @default(0)    // frozen at the moment of asking
+  dueAt          DateTime?              // two working days, Friday and Saturday skipped
+  productsLoaded Int?
+}
+```
+
+**`Shortlist` exists because the rail needed a buyer count and there was none.** The
+nearest thing on offer was a `DISTINCT` over `ContactReveal.actorId`, which is null for
+roughly three quarters of its rows by design — most reveals happen before signup. Counting
+that and labelling it "buyers who saved you" is exactly the padded number CLAUDE.md's
+interface-honesty section forbids. There is no anonymous shortlist and no cookie behind
+one: a list that lives in a browser is lost on the next device.
+
+**`ListingViewDay` is a rollup and not a row per view.** This product is built to be
+crawled; 41,000 listings and a search engine revisiting them is a table nobody reads and
+everybody pays for. The day is the smallest grain any surface asks a question at. It is
+written from the browser rather than from the render, for two reasons: the storefront is a
+public page the framework may serve from a cache, so a render is not a visit; and a crawler
+that does not run JavaScript is not a buyer.
+
+**`ProductEvent` is the first event table in the product**, and deliberately not
+`AuditEvent` — that log records staff decisions, its `actorId` and `reason` are both NOT
+NULL for that reason, and a product event has no reason at all. `props` is loose because
+the alternative is a column per question and a migration per screen, and nothing renders
+from this table. The retention rule and the consent argument are in
+[telemetry.md](telemetry.md).
+
+**`CatalogueImportRequest` is a queue, not a parser.** `lib/import/service.ts` is the
+parser and it needs a spreadsheet with columns; this is for the PDF a supplier has had
+since 2019, and the work at the other end is a person reading it. It is modelled on
+`SiteVisitRequest`, which is the same shape of promise. Every staff move on the row writes
+an audit row with a written reason; the seller's own create and cancel do not, because the
+subject acting on their own data is what the audit log exists to distinguish itself from.
+
+### The score these tables do not change
+
+`Business.profileStrength` keeps the five components in `lib/metrics/profile-strength.ts`
+— identity 35, photos 20, catalogue 20, filterable specs 15, team 10. Board 8a's handoff
+drew a seven-component table including locations, the verification tier and the site visit.
+It is not adopted: a location is a **publish gate**, not a lever, and `goLive` refuses
+without one; the verification tier is platform-owned and not a seller's to earn; and the
+site visit is plan-gated, so putting it in the denominator makes a Free seller's meter
+uncloseable. What the handoff actually requires — that the per-task percentage chips are
+arithmetic on *this* seller's score rather than constants — is what `lib/setup/tasks.ts`
+computes, from `strengthItems()`.

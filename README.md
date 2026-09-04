@@ -51,15 +51,65 @@ inherited. Never a size prop on an individual component.
 
 ## Getting started
 
+Against a **local** database, which is what you want. `.env.example` points at the hosted
+Supabase, and every destructive command in this repo refuses a database that is not
+loopback — see [lib/db/target.ts](lib/db/target.ts), which exists because `pnpm db:seed`
+truncates 46 tables against whatever the environment happened to name.
+
 ```bash
 pnpm install
-cp .env.example .env.local   # then fill in the four blanks
+supabase start                 # Postgres on 54322, GoTrue on 54321, Storage
+```
+
+`supabase start` prints the keys it generated. Put them in `.env.local` with the loopback
+connection strings:
+
+```
+DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+DIRECT_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=<from supabase start>
+SUPABASE_SECRET_KEY=<from supabase start>
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+```
+
+Then bring the schema and the fixtures up:
+
+```bash
+pnpm db:deploy      # apply migrations
+pnpm db:seed        # UAE-shaped fixture data
+pnpm storage:setup  # the two storage buckets, which are not a migration
 pnpm dev
 ```
 
-`.env.local` needs `SUPABASE_SECRET_KEY`, `DATABASE_URL` and `DIRECT_URL`. Copy the two
-connection strings verbatim from the Supabase dashboard → Connect; the pooler hostname
-is not the same on every project.
+### Signing in
+
+No seeded account can sign in. `prisma/seed.mts` mints its own user ids, and
+`adoptProfile` matches a profile to a Supabase session **by id**, so a seeded row can
+never be adopted. Two ways round it, both of which sign you in for real rather than
+bypassing anything:
+
+- **[localhost:3000/dev/seat](http://localhost:3000/dev/seat)** — pick a business and a
+  role, click once, land in the dashboard. Also lists every route in the product at
+  [/dev](http://localhost:3000/dev).
+- **`pnpm dev:seat seller --slug al-marwan-industrial-supplies-llc`** — prints a one-time
+  code you type into the real `/verify` form. Use this when there is no browser in front
+  of you. `pnpm dev:seat` with no argument lists the seats.
+
+Both provision the account with the service-role key and then go through
+`verifyOtp` → `adoptProfile` → `syncClaims` exactly as a member of the public does. The
+only substitution is delivery: the project's phone provider is off and the built-in SMTP
+sends two messages an hour.
+
+The `/dev` surfaces render only when the database is loopback. That is the fence, not
+`NODE_ENV` — see [lib/dev/guard.ts](lib/dev/guard.ts).
+
+### Against the hosted database
+
+`cp .env.example .env.local`, then fill in `SUPABASE_SECRET_KEY`, `DATABASE_URL` and
+`DIRECT_URL`. Copy the two connection strings verbatim from the Supabase dashboard →
+Connect; the pooler hostname is not the same on every project. Every destructive command
+and every `/dev` route will refuse, which is the point.
 
 ## Scripts
 
@@ -73,7 +123,6 @@ is not the same on every project.
 | `pnpm test:e2e` | Playwright |
 | `pnpm check:tokens` | Acceptance criteria 3 and 4 — raw hex, untranslated strings |
 | `pnpm check:schema` | Acceptance criterion 9 — no price on Product, no order table, no payout |
-| `pnpm test:e2e` | Playwright + axe on the gallery |
 | `pnpm acceptance` | The ten handoff-0 criteria, walked in order |
 | `pnpm acceptance:1` | The twelve handoff-1 criteria, walked in order |
 | `pnpm lighthouse` | SEO, accessibility and best-practices on the three routes criterion 10 names |
@@ -81,7 +130,10 @@ is not the same on every project.
 | `pnpm report:contrast` | What axe finds on the running gallery, grouped by colour pair |
 | `pnpm check:formatters` | Every formatter has a test |
 | `pnpm matrix` | The permission matrix, for diffing against §07 |
-| `pnpm verify` | Typecheck, lint, both greps, schema, unit tests, build |
+| `pnpm verify` | Typecheck, lint, `check:tokens`, `check:vocabulary`, `check:markup`, `check:schema`, `check:migrations`, `check:audit`, `check:formatters`, unit tests, integration tests, build |
+| `pnpm test:integration` | Vitest against a real database |
+| `pnpm dev:seat <kind>` | Provision a seat and print a sign-in code |
+| `pnpm storage:setup` | Create the two storage buckets |
 | `pnpm db:migrate` | `prisma migrate dev` |
 | `pnpm db:seed` | Seed UAE-shaped fixture data |
 | `pnpm db:studio` | Prisma Studio |

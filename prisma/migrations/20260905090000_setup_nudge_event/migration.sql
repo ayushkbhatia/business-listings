@@ -1,0 +1,12 @@
+-- Board 8a: the one nudge the setup hub promises.
+--
+-- Alone in its own migration, and it has to be. Postgres cannot add a value to
+-- an enum and use it in the same transaction, and Prisma runs each migration as
+-- one transaction — so a file that both adds `setup_nudge` and inserts a
+-- template row referencing it fails on the insert. `subscription_renewed` was
+-- added the same way, for the same reason.
+--
+-- `BEFORE 'weekly_digest'` keeps the declaration order matching the enum in
+-- prisma/schema.prisma. Order is cosmetic to Postgres and is not cosmetic to
+-- the next person diffing the two.
+ALTER TYPE "notification_event" ADD VALUE IF NOT EXISTS 'setup_nudge' BEFORE 'weekly_digest';
