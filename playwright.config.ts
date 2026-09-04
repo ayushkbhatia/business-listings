@@ -1,9 +1,21 @@
 import { config as loadEnv } from "dotenv";
 import { defineConfig, devices } from "@playwright/test";
+import { assertLocalTarget } from "./lib/db/target";
 
 // The config decides which projects exist from the environment, so it has to
 // read .env.local before it does. CI supplies the same names as secrets.
 loadEnv({ path: [".env.local", ".env"], quiet: true });
+
+/*
+   The suite writes, so it has to be told which database it is writing to.
+
+   Sign-in provisions users and deletes them by email; the console specs suspend
+   listings, move verification tiers and remove a review, which is irreversible
+   by design. Against the hosted database that is real moderation history
+   written by a test run. Relative import, not `@/` — Playwright loads this
+   config before any tsconfig path mapping applies. See lib/db/target.ts.
+*/
+assertLocalTarget("run the end-to-end suite, which writes and deletes rows");
 
 const PORT = 3000;
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? `http://localhost:${PORT}`;
