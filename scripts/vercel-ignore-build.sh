@@ -29,6 +29,14 @@ set -uo pipefail
 vercel_env="${VERCEL_ENV-}"
 ref="${VERCEL_GIT_COMMIT_REF-}"
 message="${VERCEL_GIT_COMMIT_MESSAGE-}"
+# Only the subject line. The marker is a substring test with no word boundary,
+# so a commit that merely *writes about* `[preview]` used to opt itself in — the
+# PR that introduced this file built its own preview for exactly that reason,
+# because its body documented the marker. Squash merges inherit the PR body,
+# which made it worse: any PR whose description mentioned the marker deployed.
+# A subject line is short, deliberate and written by whoever is pushing, so it
+# is the half of the message that can carry an instruction.
+subject="${message%%$'\n'*}"
 
 # Production always builds. `VERCEL_ENV` is the real test; the branch name is a
 # second one, so that a missing or renamed environment variable fails towards
@@ -40,9 +48,9 @@ fi
 
 # A preview is built when the commit that triggered it asks for one. The quotes
 # make the brackets literal rather than a character class.
-case "$message" in
+case "$subject" in
   *"[preview]"*)
-    echo "vercel-ignore-build: [preview] in commit message — building"
+    echo "vercel-ignore-build: [preview] in commit subject — building"
     exit 1
     ;;
 esac

@@ -273,7 +273,7 @@ a push builds only when one of these is true:
 |---|---|
 | `VERCEL_ENV` is `production` | builds |
 | The branch is `main` | builds |
-| `[preview]` appears anywhere in the triggering commit message | builds |
+| `[preview]` appears in the triggering commit's **subject line** | builds |
 | Anything else | skipped, deployment marked `CANCELED` |
 
 Production is not gated. A squash merge to `main` deploys exactly as it always
@@ -283,11 +283,19 @@ merge that silently never ships.
 
 ### Getting a preview when you want one
 
-Put the marker in the commit you are about to push:
+Put the marker in the subject line of the commit you are about to push:
 
 ```bash
 git commit -m "fix(enquiry): drop the duplicate pin [preview]"
 ```
+
+**The subject line only** — the first line of the message, not the body. The test
+is a substring with no word boundary, so reading the body too meant a commit that
+merely wrote *about* the marker opted itself in. The PR that introduced this file
+built its own preview for exactly that reason, and squash merges made it worse by
+inheriting the PR body: any PR whose description mentioned `[preview]` deployed.
+A subject line is short and deliberate, so it is the half of the message that can
+carry an instruction. Write about the marker freely in a body or a PR description.
 
 For a branch that is already pushed, an empty commit is enough:
 
@@ -313,7 +321,13 @@ So **exit 0 skips the build** and **exit 1 runs it**. The script says so at both
 deployment reaches `BUILDING`, and can read every
 [System Environment Variable](https://vercel.com/docs/environment-variables/system-environment-variables) —
 `VERCEL_ENV`, `VERCEL_GIT_COMMIT_REF` and `VERCEL_GIT_COMMIT_MESSAGE` are the
-three it uses.
+three it uses — the last trimmed to its first line before the marker is looked
+for.
+
+The log says which rule fired. `vercel inspect --logs <deployment-url>` prints the
+build log, and the script echoes one `vercel-ignore-build:` line naming the branch
+it took, which is the quickest way to tell a skip from a build without reading
+timings or deployment states.
 
 Test it the way CI would, without pushing anything:
 

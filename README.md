@@ -97,7 +97,8 @@ author behind each — and asks before applying them. `prisma migrate deploy`
 applies every pending migration rather than yours, so that list is the review.
 
 **Preview builds are opt-in**: a push to a branch does not build unless the
-commit message contains `[preview]`.
+commit's **subject line** contains `[preview]`. The subject only, so writing
+about the marker in a body or a PR description does not trigger a build.
 
 ```bash
 git commit --allow-empty -m "chore: preview build [preview]"
