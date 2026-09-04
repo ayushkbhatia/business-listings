@@ -86,6 +86,16 @@ export function PlanCard({
   return (
     <section
       aria-label={name}
+      /*
+         The promoted state, as an attribute rather than only a shadow.
+
+         §01 allows one promoted card on a page and `--e-promoted` appears here
+         and on `1l` and nowhere else. That is a rule about the page, not about
+         this component, so the only way to hold it is to be able to count them
+         — and counting a Tailwind class is a test that breaks when somebody
+         renames a utility rather than when the rule does.
+      */
+      data-promoted={recommended || undefined}
       className={cn(
         "flex flex-col rounded-card border bg-card p-4",
         // The tinted shadow, and a moss border. Not the ok/verified palette:

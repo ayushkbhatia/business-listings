@@ -299,3 +299,37 @@ Two rules, both load-bearing:
 - **A staff write is a staff state change and owes an audit row with a reason.** There is
   deliberately no writer in this codebase yet; board `12h` owns it, and it goes through the
   audit service rather than around it.
+
+## The Pro trial, and what a plan drop does to a catalogue
+
+```prisma
+model Subscription {
+  trialStartedAt DateTime?   // set once, never cleared
+  trialEndsAt    DateTime?   // what the daily sweep reads
+  hiddenByPlan   Json?       // product ids a drop hid, so an upgrade restores them
+}
+```
+
+**The trial takes no card**, which is what makes it small. Board 2e criterion 12, and `1l`'s
+own words: *"a trial that captures a card is a subscription with a delay."* There is nothing
+to charge at the end of one, so `runRenewals` and `runDunning` are untouched — the account
+drops to Free, which is criterion 13.
+
+`trialStartedAt` is set once and nothing clears it. Criterion 11 asks that a seller who has
+used the trial never sees trial language again, and that is a fact about the account rather
+than about the plan it is on today. `expireTrials` runs first in the daily job, before
+renewals, so a fortnight that ran out today is off Pro before anything reads the row looking
+for something to charge.
+
+**"Hidden, not deleted" is now a behaviour.** It had been a claim: `cancelSubscription`
+returned `kept: ["products", ...]` and the cancel screen said *"Your products are hidden, not
+deleted. They come back if you return"* while nothing anywhere hid one — so a Pro seller who
+cancelled carried a hundred and fifty live products onto Free.
+
+Hiding is `ProductStatus.draft`, which every public surface already excludes, so no read path
+had to learn a new rule and none can forget one. `hiddenByPlan` records which ones the
+platform hid, so an upgrade restores exactly those and leaves the seller's own drafts alone.
+The oldest products are the ones kept — they are the catalogue the listing was built on.
+
+Photographs are not hidden. The rail's sentence says products and photos stay *saved*, which
+is true of both; it does not promise both are hidden, and neither does the code.

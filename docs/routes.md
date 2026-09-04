@@ -52,7 +52,7 @@ they 404 until their handoff.
 /onboarding/verify                      Prove ownership                       [2b]  built h6s2
 /onboarding/profile                     Profile basics                        [2c]  built h6s3
 /onboarding/locations                   Locations & hours                     [2d]  built h6s4
-/onboarding/plan                        Pick a plan                           [2e]
+/onboarding/plan                        Pick a plan                           [2e]  built h6s5
 /dashboard                              Overview                              [3a]
 /dashboard (free variant)               Free-plan overview                   [11a]
 /dashboard/setup                        Setup hub                             [8a]

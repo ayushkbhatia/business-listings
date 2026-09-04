@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { expireTrials } from "@/lib/billing/trial";
 import { runRenewals } from "@/lib/billing/renewal-job";
 import { runDunning } from "@/lib/billing/dunning-job";
 import { applyEndedCancellations } from "@/lib/billing/service";
@@ -63,6 +64,14 @@ export async function GET(request: NextRequest) {
   const olderThan = new Date(Date.now() - KEEP_ATTEMPTS_MS);
 
   const outcome = await runSteps({
+    /*
+       Trials first. A fortnight that ran out today has to be off Pro before
+       anything else reads the row: a trial carries a `renewsAt` equal to its own
+       end, and renewals running first would find a period that looks due. It
+       takes no card, so there is nothing to charge — it drops to Free and hides
+       what the Free cap has no room for.
+    */
+    expiredTrials: () => expireTrials(),
     renewals: () => runRenewals(),
     dunning: () => runDunning(),
     endedCancellations: () => applyEndedCancellations(),
