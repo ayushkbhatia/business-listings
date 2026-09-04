@@ -1,4 +1,6 @@
 import "server-only";
+import { unstable_cache } from "next/cache";
+import { cache } from "react";
 import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { isCode, matchNeedle } from "@/lib/search/index-text";
@@ -18,6 +20,7 @@ import {
 } from "@/lib/search/ranking";
 import {
   appliedKeys,
+  countable,
   withoutFacet,
   type SearchQuery,
   type SearchSort,
@@ -550,6 +553,100 @@ async function optionCounts(
   return Promise.all(values.map((value) => countResults(build(cleared, value), categoryIds)));
 }
 
+/**
+ * The options each fixed facet offers, in the order the rail draws them.
+ *
+ * Module level rather than inside `getFixedFacets`, because the cacheable
+ * counting function below needs the same lists and the two must not drift.
+ */
+const TIERS = ["4", "3", "2", "1"] as const;
+const EMIRATES = ["dubai", "abu_dhabi", "sharjah", "ajman"] as const;
+const AVAILABILITY = ["in_stock", "made_to_order", "indent", "out_of_stock"] as const;
+const FREE_ZONE = ["1"] as const;
+const REPLY = ["4", "24", "72"] as const;
+const YEARS = ["5", "10", "20"] as const;
+
+/**
+ * The nineteen numbers behind the fixed facet rail, with no words in them.
+ *
+ * ## Why the counts are split from the labels
+ *
+ * Two reasons, and the second is the one that made this a separate function.
+ *
+ * `getFixedFacets` takes a `labels` object holding FUNCTIONS — `tierOption`,
+ * `emirateOption` and friends, each closing over `t()`. A function cannot be
+ * serialised into a cache key and must not cross a cache boundary at all; this
+ * repo's most repeated defect is a function passed where an element or a string
+ * belonged. So the cacheable half takes a query and returns numbers, and the
+ * labelling stays outside it.
+ *
+ * And it is worth caching. Nineteen of the forty-five database round trips on
+ * one unfiltered category render are these counts, each a `SELECT COUNT(*)`
+ * differing from its neighbour in a single predicate. Every visitor to the same
+ * shelf gets the same nineteen answers.
+ *
+ * ## Why not one query with FILTER clauses
+ *
+ * That was the first plan and it is the wrong one here. `businessWhere` exists
+ * so the header, the chip counts and the results are the same predicate rather
+ * than two that drift — its own comment says so — and hand-writing that
+ * predicate again in SQL is exactly the second one. Measured alternatives that
+ * do not duplicate it: `$transaction([...])` batching does not help, it adds a
+ * round trip for BEGIN and COMMIT; and bucketing in JavaScript trades nineteen
+ * O(1) counts for one unbounded fetch of every matching business with its
+ * locations and products, which is cheaper today at 203 listings and worse at
+ * the 30,000 the sitemap is sized for.
+ *
+ * Caching leaves the predicate alone and removes the round trips outright.
+ */
+const FACET_CACHE_REVALIDATE_S = 60;
+
+/** The nineteen counts, in the order `getFixedFacets` lays them out. */
+export interface FixedFacetCounts {
+  tiers: number[];
+  emirates: number[];
+  availability: number[];
+  freeZone: number[];
+  reply: number[];
+  years: number[];
+}
+
+/**
+ * Exported uncached, the way `readHomePlans` and `readPricingPlans` are.
+ *
+ * `unstable_cache` needs Next's incremental cache context and throws outside a
+ * request, so the integration test that proves these nineteen numbers did not
+ * change when they were cached calls this rather than the wrapper.
+ */
+export async function readFixedFacetCounts(
+  query: SearchQuery,
+  categoryIds: string[] | undefined,
+): Promise<FixedFacetCounts> {
+  const [tiers, emirates, availability, freeZone, reply, years] = await Promise.all([
+    optionCounts(query, "tier", TIERS, (base, v) => ({ ...base, tier: Number(v) }), categoryIds),
+    optionCounts(query, "emirate", EMIRATES, (base, v) => ({ ...base, emirate: v }), categoryIds),
+    optionCounts(query, "availability", AVAILABILITY, (base, v) => ({ ...base, availability: [v] }), categoryIds),
+    optionCounts(query, "freeZone", FREE_ZONE, (base) => ({ ...base, freeZone: true }), categoryIds),
+    optionCounts(query, "replyWithinHours", REPLY, (base, v) => ({ ...base, replyWithinHours: Number(v) }), categoryIds),
+    optionCounts(query, "yearsTrading", YEARS, (base, v) => ({ ...base, yearsTrading: Number(v) }), categoryIds),
+  ]);
+  return { tiers, emirates, availability, freeZone, reply, years };
+}
+
+/**
+ * Sixty seconds, which is tighter than anything else cached in this repo — the
+ * home page's product band is five minutes and its plan band is an hour.
+ *
+ * CLAUDE.md says every number is a query rather than a constant, and a cached
+ * count is a constant for the length of its lifetime. The rule is aimed at a
+ * number nobody ever recomputes; this one is recomputed every minute, and a
+ * newly published supplier appears in the rail within that minute. The trade is
+ * named here rather than left for a reader to infer.
+ */
+const getFixedFacetCounts = unstable_cache(readFixedFacetCounts, ["browse-fixed-facets"], {
+  revalidate: FACET_CACHE_REVALIDATE_S,
+});
+
 export async function getFixedFacets(
   query: SearchQuery,
   categoryIds: string[] | undefined,
@@ -568,20 +665,10 @@ export async function getFixedFacets(
     yearsOption: (years: number) => string;
   },
 ): Promise<FacetGroup[]> {
-  const TIERS = ["4", "3", "2", "1"];
-  const EMIRATES = ["dubai", "abu_dhabi", "sharjah", "ajman"];
-  const AVAILABILITY = ["in_stock", "made_to_order", "indent", "out_of_stock"];
-  const REPLY = ["4", "24", "72"];
-  const YEARS = ["5", "10", "20"];
-
-  const [tiers, emirates, availability, freeZone, reply, years] = await Promise.all([
-    optionCounts(query, "tier", TIERS, (base, v) => ({ ...base, tier: Number(v) }), categoryIds),
-    optionCounts(query, "emirate", EMIRATES, (base, v) => ({ ...base, emirate: v }), categoryIds),
-    optionCounts(query, "availability", AVAILABILITY, (base, v) => ({ ...base, availability: [v] }), categoryIds),
-    optionCounts(query, "freeZone", ["1"], (base) => ({ ...base, freeZone: true }), categoryIds),
-    optionCounts(query, "replyWithinHours", REPLY, (base, v) => ({ ...base, replyWithinHours: Number(v) }), categoryIds),
-    optionCounts(query, "yearsTrading", YEARS, (base, v) => ({ ...base, yearsTrading: Number(v) }), categoryIds),
-  ]);
+  const { tiers, emirates, availability, freeZone, reply, years } = await getFixedFacetCounts(
+    countable(query),
+    categoryIds,
+  );
 
   const groups: FacetGroup[] = [
     {
@@ -821,12 +908,25 @@ export async function getSponsoredBusinessId(
 // Category
 // ─────────────────────────────────────────────────────────────────────────────
 
-export async function getCategoryBySlug(slug: string) {
+/**
+ * Memoised per request.
+ *
+ * `generateMetadata` and the page component each resolve the category
+ * independently, and on `/c/[category]` the same row was fetched four times in
+ * one render. React's `cache` deduplicates within a request and nothing else —
+ * no cross-request staleness, so none of the "every number is a query" tension
+ * that a real cache would carry.
+ *
+ * It keys on argument identity, which is why this wraps a function taking a
+ * slug and not one taking a query object: two structurally equal objects are
+ * two keys.
+ */
+export const getCategoryBySlug = cache(async (slug: string) => {
   return prisma.category.findUnique({
     where: { slug },
     include: { parent: true, children: { orderBy: { sortOrder: "asc" } } },
   });
-}
+});
 
 export type PublicCategory = NonNullable<Awaited<ReturnType<typeof getCategoryBySlug>>>;
 

@@ -275,6 +275,23 @@ export function withoutFacet(query: SearchQuery, key: string): SearchQuery {
   return next;
 }
 
+/**
+ * The query with everything that cannot change a count stripped out.
+ *
+ * `unstable_cache` builds its key from the arguments it is handed, so passing a
+ * whole `SearchQuery` would fragment the cache by `page`, `sort` and `view` —
+ * three fields that cannot move a single one of these numbers. Normalising them
+ * away means page four of a shelf sorted by rating shares its facet counts with
+ * page one sorted by relevance, which on a paginated shelf is most of the
+ * benefit.
+ *
+ * `spec` stays. `businessWhere` ignores it, but `productWhere` does not, and the
+ * products tab counts products.
+ */
+export function countable(query: SearchQuery): SearchQuery {
+  return { ...query, page: 1, sort: "best", view: "list" };
+}
+
 /** Every facet currently applied, as query-string keys. */
 export function appliedKeys(query: SearchQuery): string[] {
   const keys: string[] = [];
