@@ -315,9 +315,22 @@ its own docblock rather than letting the cron entry imply otherwise.
 
 ### Vercel's cron allowance
 
-Three entries now (`measure`, `sweep`, `daily`). Hobby caps at two and allows
-daily granularity only. If the project is on Hobby, fold `sweep` into `measure`
-and lose the independent failure isolation.
+**Two** entries, not the three this section used to claim: `/api/jobs/sweep` on
+`42 * * * *` and `/api/jobs/daily` on `23 20 * * *`. `measure` has no entry —
+the advice that used to sit here, to fold `sweep` into `measure`, named a cron
+that does not exist.
+
+The count is now inside the Hobby cap of two. The **schedule** is the open
+question: Hobby allows daily granularity only, and `sweep` asks for hourly. Which
+plan the project is on is not inferable from the repo, and a deploy carrying an
+hourly schedule succeeds either way, so a green deployment is not evidence that
+`sweep` runs hourly.
+
+Settle it in the dashboard — Settings → Cron Jobs lists each job with the
+schedule Vercel actually registered, which is the only place the two can be seen
+to disagree. If the project is on Hobby, `sweep` runs once a day whatever the
+expression says, and the hourly sweep that `docs/deployments.md` documents is not
+happening.
 
 ## How to test what you have
 
