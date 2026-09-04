@@ -80,19 +80,30 @@ export async function hideOverPlanCap(
   });
   if (live.length <= cap) return { hidden: 0, restored: 0 };
 
+  /*
+     The record has to exist before anything is hidden.
+
+     Without a subscription row there is nowhere to note what was hidden, and a
+     product hidden with no record is one the seller has to find and republish
+     by hand — which is the half of "hidden, not deleted" that makes the other
+     half worth saying. Every caller has a row by the time it gets here; this
+     refuses rather than trusting that.
+  */
+  const subscription = await tx.subscription.findUnique({
+    where: { businessId },
+    select: { hiddenByPlan: true },
+  });
+  if (!subscription) return { hidden: 0, restored: 0 };
+
   const over = live.slice(cap).map((product) => product.id);
   await tx.product.updateMany({
     where: { id: { in: over } },
     data: { status: "draft" },
   });
 
-  const subscription = await tx.subscription.findUnique({
-    where: { businessId },
-    select: { hiddenByPlan: true },
-  });
-  const already = readHidden(subscription?.hiddenByPlan);
+  const already = readHidden(subscription.hiddenByPlan);
 
-  await tx.subscription.updateMany({
+  await tx.subscription.update({
     where: { businessId },
     data: { hiddenByPlan: [...new Set([...already, ...over])] as unknown as Prisma.InputJsonValue },
   });

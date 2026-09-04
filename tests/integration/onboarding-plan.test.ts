@@ -113,7 +113,13 @@ describe("criterion 13 — the trial ends by dropping, never by suspending", () 
       prisma.business.findUniqueOrThrow({ where: { id: seller.id }, select: { planId: true } }),
       prisma.subscription.findUniqueOrThrow({
         where: { businessId: seller.id },
-        select: { planId: true, status: true, cancelledAt: true, trialStartedAt: true },
+        select: {
+          planId: true,
+          status: true,
+          cancelledAt: true,
+          trialStartedAt: true,
+          entitlementSnapshot: true,
+        },
       }),
     ]);
     expect(business.planId).toBe("free");
@@ -126,6 +132,13 @@ describe("criterion 13 — the trial ends by dropping, never by suspending", () 
     */
     expect(subscription.cancelledAt).toBeNull();
     expect(subscription.trialStartedAt).not.toBeNull();
+    /*
+       And the Pro caps go with it. `effectiveCaps` only prefers a snapshot whose
+       own `planId` matches the plan the account is on, so a stale one is
+       harmless — but that guard should not be the only thing standing between a
+       dropped trial and Pro entitlements.
+    */
+    expect(subscription.entitlementSnapshot).toBeNull();
   });
 
   it("leaves a trial that has not run out alone", async () => {
@@ -266,6 +279,22 @@ describe("criterion 20 — hidden, not deleted", () => {
       hidden: 0,
       restored: 0,
     });
+  });
+
+  it("hides nothing when there is nowhere to record what it hid", async () => {
+    /*
+       No subscription row means no `hiddenByPlan`, and a product hidden with no
+       record is one the seller has to find and republish by hand. That is the
+       half of "hidden, not deleted" that makes the other half worth saying, so
+       the absence of a record refuses the hide rather than doing it blind.
+    */
+    await prisma.subscription.deleteMany({ where: { businessId: seller.id } });
+    await stockUp(3);
+    expect(await hideOverPlanCap(seller.id, { productLimit: 1 })).toEqual({
+      hidden: 0,
+      restored: 0,
+    });
+    expect(await prisma.product.count({ where: { businessId: seller.id, status: "live" } })).toBe(3);
   });
 });
 

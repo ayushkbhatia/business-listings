@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { assertCanChangePlan } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
@@ -230,7 +231,7 @@ export async function expireTrials(now = new Date()): Promise<TrialSweep> {
           */
           status: "expired",
           trialEndsAt: null,
-          entitlementSnapshot: undefined,
+          entitlementSnapshot: Prisma.DbNull,
         },
       });
       // `trialStartedAt` is deliberately left. It is the record that stops a
