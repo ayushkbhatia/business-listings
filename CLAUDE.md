@@ -125,11 +125,35 @@ cadence as the other projects in this workspace.
   changed, in a sentence`. Squash merge puts it in the log with its `(#N)`.
 - The PR body is the commit body. Say what moved, what it cost, and anything
   found on the way that was fixed in passing.
-- `pnpm verify` and `pnpm test:e2e` pass before the PR opens, not after. CI has
-  caught what local runs did not more than once; running both is cheaper than
-  a red `main`.
-- Claude opens the PR. A person merges it. The handoff checkpoints are the
-  review, and a PR is where that review has somewhere to sit.
+- Two gates, and they run at different moments. `pnpm verify:fast` is the inner
+  loop — typecheck, lint, the seven `check:*` scans and the unit project. No
+  database, no build, so run it as often as you like while the work is moving.
+  It regenerates the Prisma client first, because `lib/db/generated` is not
+  committed and typecheck reads it: without that step a fresh worktree fails on
+  thirty missing-field errors that are the client being absent, not the code
+  being wrong.
+- `pnpm verify` passes before the PR opens, not after — it is `verify:fast` plus
+  the integration project and a full `next build`, which is where its minutes go.
+  Running it on every save is not the idea; that is what `verify:fast` is for.
+- Do **not** run `pnpm test:e2e` locally as a matter of course. CI's `acceptance`
+  job already runs it sharded against its own `supabase start`, so a local run is
+  the same work twice — and it fights the sibling worktrees for port 3000 and eats
+  seed rows they share. Run it locally only to debug a shard CI has already failed.
+- Claude opens the PR and merges it once CI is green, except where the next bullet
+  says otherwise. This changed on 2026-09-04. The reason a person held the button
+  was that code deploys on merge while schema waits for a human; #88's
+  `check:schema-deployed` now fails the build instead, so a production build with
+  migrations pending is marked ERROR and Vercel keeps serving the previous
+  deployment. The button is no longer what stands between us and that failure.
+- **The exception: a diff that touches `prisma/migrations/` stops for a person.**
+  Additive migrations apply *before* the merge (`docs/deployments.md` § Ordering),
+  `pnpm db:deploy` needs a TTY Claude does not have, and getting that order wrong
+  is what took production down for about six hours on 2026-09-04. Open the PR,
+  name every pending migration, hand over the command, and stop.
+- Merging is deploying, so merge in batches. Hold green PRs and land them together
+  rather than one at a time: every production deploy is billed build time and
+  starts every page cold again. "Green, holding for the batch" is a thing to say
+  out loud, not a silence.
 
 ## Before you say a screen is done
 
@@ -138,7 +162,8 @@ Not "it looks right". Each of these caught a real defect.
 1. Renders in the gallery at `/dev/gallery` in all documented states, story covering the
    empty and loading ones.
 2. `pnpm verify` clean — that carries `check:tokens` for raw hex and untranslated strings,
-   `check:vocabulary` for the pivot words and seller identity, and `check:contrast`.
+   and `check:vocabulary` for the pivot words and seller identity. `check:contrast` is not
+   in either gate; run it by hand when a screen moves a colour.
 3. Read the context of every hit a scan prints, and fix every one, not the first. A count
    alone tells you nothing: `Price × 10` on one page was eight correct and two defects, and a
    page once shipped claiming one correction when the scan had printed two.
