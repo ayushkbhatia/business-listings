@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import {
   currentSession,
@@ -28,6 +28,10 @@ import type { Actor, Role } from "@/lib/auth/roles";
  * actor a view-as session carries, and assert each one refuses.
  */
 
+const PREFIX = "crm-";
+const ENQUIRY_PREFIX = "ENQ-CRM";
+const BUYER_NAME = "CRM Buyer";
+
 const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 
 let opsLeadId: string;
@@ -35,6 +39,38 @@ let moderatorId: string;
 let categoryId: string;
 let areaId: string;
 let seq = 0;
+
+/**
+ * Every row this suite writes.
+ *
+ * The listings are published, so a leaked one is not inert — it shows on the
+ * home page and in `/dev/seat`. CI never saw the accumulation because each job
+ * gets its own `supabase start`; a local database is shared with every sibling
+ * worktree and keeps what it is given.
+ *
+ * The business goes first and takes the missed enquiries, view-as sessions,
+ * call outcomes, change requests, invitations and subscription rows with it —
+ * all of those cascade. The buyers go last, because until the business is gone
+ * they still hold rows the foreign keys will not let go of.
+ */
+async function removeFixtures() {
+  const ours = await prisma.business.findMany({
+    where: { slug: { startsWith: PREFIX } },
+    select: { id: true },
+  });
+  const ids = ours.map((row) => row.id);
+
+  if (ids.length > 0) {
+    // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
+    await prisma.auditEvent.deleteMany({
+      where: { subject: { in: ids.map((id) => `Business:${id}`) } },
+    });
+    await prisma.business.deleteMany({ where: { slug: { startsWith: PREFIX } } });
+  }
+
+  await prisma.enquiry.deleteMany({ where: { ref: { startsWith: ENQUIRY_PREFIX } } });
+  await prisma.user.deleteMany({ where: { fullName: { startsWith: BUYER_NAME } } });
+}
 
 beforeAll(async () => {
   opsLeadId = (
@@ -53,6 +89,12 @@ beforeAll(async () => {
     await prisma.category.findFirstOrThrow({ where: { parentId: null }, select: { id: true } })
   ).id;
   areaId = (await prisma.area.findFirstOrThrow({ select: { id: true } })).id;
+
+  await removeFixtures();
+});
+
+afterAll(async () => {
+  await removeFixtures();
 });
 
 async function listing(name: string) {
@@ -62,7 +104,7 @@ async function listing(name: string) {
     data: {
       tradeName: `${name} ${stamp}`,
       displayName: `${name} ${stamp}`,
-      slug: `crm-${name.toLowerCase().replace(/\s+/g, "-")}-${stamp}`,
+      slug: `${PREFIX}${name.toLowerCase().replace(/\s+/g, "-")}-${stamp}`,
       licenceNumber: `DED-${stamp.slice(-6)}`,
       licenceAuthority: "DED",
       licenceExpiry: new Date(Date.now() + 300 * 86_400_000),
@@ -302,14 +344,14 @@ describe("the call list builds itself", () => {
   it("puts a capped free seller on the list, with the number the call opens with", async () => {
     const business = await listing("Capped Seller");
     const buyer = await prisma.user.create({
-      data: { id: crypto.randomUUID(), fullName: "CRM Buyer", roles: ["buyer"] },
+      data: { id: crypto.randomUUID(), fullName: BUYER_NAME, roles: ["buyer"] },
       select: { id: true },
     });
 
     for (let i = 0; i < 3; i += 1) {
       const enquiry = await prisma.enquiry.create({
         data: {
-          ref: `ENQ-CRM-${Date.now()}${seq}${i}`,
+          ref: `${ENQUIRY_PREFIX}-${Date.now()}${seq}${i}`,
           buyerId: buyer.id,
           requirement: "Gate valves, DN100.",
           closesAt: new Date(Date.now() + 7 * 86_400_000),
@@ -332,12 +374,12 @@ describe("the call list builds itself", () => {
   it("drops somebody who was called this week", async () => {
     const business = await listing("Called Already");
     const buyer = await prisma.user.create({
-      data: { id: crypto.randomUUID(), fullName: "CRM Buyer 2", roles: ["buyer"] },
+      data: { id: crypto.randomUUID(), fullName: `${BUYER_NAME} 2`, roles: ["buyer"] },
       select: { id: true },
     });
     const enquiry = await prisma.enquiry.create({
       data: {
-        ref: `ENQ-CRM2-${Date.now()}${seq}`,
+        ref: `${ENQUIRY_PREFIX}2-${Date.now()}${seq}`,
         buyerId: buyer.id,
         requirement: "Butterfly valves.",
         closesAt: new Date(Date.now() + 7 * 86_400_000),
@@ -404,12 +446,12 @@ describe("the call list builds itself", () => {
   it("never offers a suspended or merged listing", async () => {
     const business = await listing("Suspended Prospect");
     const buyer = await prisma.user.create({
-      data: { id: crypto.randomUUID(), fullName: "CRM Buyer 3", roles: ["buyer"] },
+      data: { id: crypto.randomUUID(), fullName: `${BUYER_NAME} 3`, roles: ["buyer"] },
       select: { id: true },
     });
     const enquiry = await prisma.enquiry.create({
       data: {
-        ref: `ENQ-CRM3-${Date.now()}${seq}`,
+        ref: `${ENQUIRY_PREFIX}3-${Date.now()}${seq}`,
         buyerId: buyer.id,
         requirement: "Pipes.",
         closesAt: new Date(Date.now() + 7 * 86_400_000),

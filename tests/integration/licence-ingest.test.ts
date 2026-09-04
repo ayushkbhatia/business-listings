@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { approveRun, runSummary, stageRun, parseLicenceDate } from "@/lib/ingest/service";
 import { PermissionError } from "@/lib/auth/errors";
@@ -21,6 +21,12 @@ import type { Actor, Role } from "@/lib/auth/roles";
  * is deterministic, so the counts below are stable.
  */
 
+/**
+ * Every filename this file stages under — the handle `removeFixtures` collects
+ * its runs by. Stage under a new one and add it here, or the run stays.
+ */
+const FIXTURE_FILES = ["it-8000.csv", "it-60.csv", "wrong.csv"];
+
 const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 
 let opsLeadId: string;
@@ -39,6 +45,40 @@ beforeAll(() => {
   smallCsv = readFileSync("tmp/it-60.csv", "utf8");
 });
 
+/**
+ * Every row this suite writes, found by the filename it staged under.
+ *
+ * A full run of this file leaves eleven import runs, 8,600 staged rows and
+ * about 205 businesses behind, and unlike the published fixtures elsewhere they
+ * are invisible: `approveRun` publishes nothing, so they never reach the home
+ * page and nothing ever complained. They still accumulate on a local database
+ * that every sibling worktree shares, and they fill the staging queue the admin
+ * screens read.
+ *
+ * Three steps, and the order is forced. `staged_listing_published_has_a_business`
+ * is a CHECK: a row with `disposition = 'published'` must hold a `businessId`.
+ * `StagedListing.business` is `SetNull`, so deleting a listing first tries to
+ * null that column and the check refuses — the staged rows go first. Then the
+ * listings, which `Business.licenceImportRun` being `SetNull` would otherwise
+ * orphan when the run went. Then the run.
+ */
+async function removeFixtures() {
+  const runs = await prisma.licenceImportRun.findMany({
+    where: { filename: { in: FIXTURE_FILES } },
+    select: { id: true },
+  });
+  if (runs.length === 0) return;
+  const runIds = runs.map((row) => row.id);
+
+  // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
+  await prisma.auditEvent.deleteMany({
+    where: { subject: { in: runIds.map((id) => `LicenceImportRun:${id}`) } },
+  });
+  await prisma.stagedListing.deleteMany({ where: { runId: { in: runIds } } });
+  await prisma.business.deleteMany({ where: { licenceImportRunId: { in: runIds } } });
+  await prisma.licenceImportRun.deleteMany({ where: { id: { in: runIds } } });
+}
+
 beforeAll(async () => {
   opsLeadId = (
     await prisma.user.findFirstOrThrow({
@@ -52,6 +92,12 @@ beforeAll(async () => {
       select: { id: true },
     })
   ).id;
+
+  await removeFixtures();
+});
+
+afterAll(async () => {
+  await removeFixtures();
 });
 
 const REASON = "Monthly DED export, checked against last month's run before approving.";

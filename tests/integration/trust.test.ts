@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { auditLog, openReports, priorsFor, resolveReport } from "@/lib/reports/service";
 import { recordVisit, openVisitRequests, visitHistory, MIN_PHOTOS } from "@/lib/visits/service";
@@ -18,6 +18,8 @@ import type { Actor, Role } from "@/lib/auth/roles";
  * reading a column no code path filled in.
  */
 
+const PREFIX = "trust-";
+
 const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 
 let opsLeadId: string;
@@ -27,6 +29,59 @@ let financeId: string;
 let categoryId: string;
 let areaId: string;
 let seq = 0;
+
+/**
+ * Every row this suite writes, in the order the foreign keys allow.
+ *
+ * The listings are published, so a leaked one is not inert: it shows on the
+ * home page and in `/dev/seat`, and the e2e dead-link check follows a cached
+ * `trust-*` href into a 404 once the next reseed takes the row away. CI never
+ * saw it because each job gets its own `supabase start`; a local database is
+ * shared with every other worktree and keeps what it is given.
+ *
+ * Order matters twice. `SiteVisitPhoto.media` is `Restrict`, so deleting the
+ * business would try to cascade the photographs' `Media` out from under them —
+ * the reports go first. And `SiteVisitRequest.requestedBy` is `Restrict` on
+ * `User`, so the request goes before the seller who asked for it.
+ */
+async function removeFixtures() {
+  const ours = await prisma.business.findMany({
+    where: { slug: { startsWith: PREFIX } },
+    select: { id: true },
+  });
+  const ids = ours.map((row) => row.id);
+  if (ids.length === 0) return;
+
+  const reports = await prisma.supplierReport.findMany({
+    where: { subjectBusinessId: { in: ids } },
+    select: { id: true },
+  });
+
+  // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
+  await prisma.auditEvent.deleteMany({
+    where: {
+      subject: {
+        in: [
+          ...ids.map((id) => `Business:${id}`),
+          ...reports.map((report) => `SupplierReport:${report.id}`),
+        ],
+      },
+    },
+  });
+
+  await prisma.siteVisitPhoto.deleteMany({
+    where: { report: { businessId: { in: ids } } },
+  });
+  await prisma.siteVisitReport.deleteMany({ where: { businessId: { in: ids } } });
+  await prisma.siteVisitRequest.deleteMany({ where: { businessId: { in: ids } } });
+  await prisma.supplierReport.deleteMany({ where: { subjectBusinessId: { in: ids } } });
+  // By business rather than by address: the seller this suite creates has no
+  // email, and after the business goes its `businessId` is set null and the row
+  // is unreachable. Catches the ones earlier runs already left behind.
+  await prisma.user.deleteMany({ where: { businessId: { in: ids } } });
+  await prisma.media.deleteMany({ where: { businessId: { in: ids } } });
+  await prisma.business.deleteMany({ where: { slug: { startsWith: PREFIX } } });
+}
 
 beforeAll(async () => {
   const staff = await prisma.user.findMany({
@@ -45,6 +100,12 @@ beforeAll(async () => {
     await prisma.category.findFirstOrThrow({ where: { parentId: null }, select: { id: true } })
   ).id;
   areaId = (await prisma.area.findFirstOrThrow({ select: { id: true } })).id;
+
+  await removeFixtures();
+});
+
+afterAll(async () => {
+  await removeFixtures();
 });
 
 async function listing(name: string) {
@@ -54,7 +115,7 @@ async function listing(name: string) {
     data: {
       tradeName: `${name} ${stamp}`,
       displayName: `${name} ${stamp}`,
-      slug: `trust-${name.toLowerCase().replace(/\s+/g, "-")}-${stamp}`,
+      slug: `${PREFIX}${name.toLowerCase().replace(/\s+/g, "-")}-${stamp}`,
       licenceNumber: `DED-${stamp.slice(-6)}`,
       licenceAuthority: "DED",
       licenceExpiry: new Date(Date.now() + 300 * 86_400_000),
