@@ -391,6 +391,13 @@ test.describe("boards 4f, 12d and 12f — accounts", () => {
   });
 });
 
+/**
+ * The suspended listing `seedModerationQueue` keeps stocked with reviews whose
+ * only purpose is to be removed. Nothing counts them, so taking one costs no
+ * other spec anything.
+ */
+const EXPENDABLE = "Jebel Rock Trading";
+
 test.describe("criterion 9 — removing a review", () => {
   /*
      `removeReview` was written, audited and capability-checked from the start
@@ -426,10 +433,35 @@ test.describe("criterion 9 — removing a review", () => {
   });
 
   test("removes one, and the audit log carries the reason", async ({ page }) => {
+    /*
+       Scoped to the expendable host, never to the first row.
+
+       This used to click the first Remove button on the page, and the queue is
+       ordered `removedAt` then `createdAt` descending — so on a fresh seed the
+       first row is one of the five `ENQ-BEST-*-0` reviews, which is the curated
+       list's fixture sitting at exactly `MIN_REVIEWS`. Passing this test took a
+       supplier off `/best/hvac-suppliers-al-quoz` and failed four assertions in
+       `curated.spec.ts`, permanently: a removal has no undo and `pnpm test:e2e`
+       does not reseed. CI hid it, because one worker runs `chromium` before
+       `staff`.
+
+       `seedModerationQueue` exists for this. Its host is suspended, so its
+       reviews are counted by nothing, and `pnpm db:seed` rebuilds the pool.
+    */
     const reason = `Names the buyer's own staff. Removed on request. ${Date.now()}`;
 
     await page.goto("/admin/reviews");
-    await page.getByRole("main").getByRole("button", { name: "Remove" }).first().click();
+    const row = page
+      .getByRole("main")
+      .getByRole("listitem")
+      .filter({ hasText: EXPENDABLE })
+      .filter({ has: page.getByRole("button", { name: "Remove" }) })
+      .first();
+    await expect(
+      row,
+      `no unremoved review left on ${EXPENDABLE} — run pnpm db:seed`,
+    ).toBeVisible();
+    await row.getByRole("button", { name: "Remove" }).click();
     await page.getByRole("radio", { name: "Private information" }).check();
     await page.getByRole("textbox", { name: "Reason" }).fill(reason);
     await page.getByRole("button", { name: "Remove", exact: true }).last().click();

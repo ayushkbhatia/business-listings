@@ -660,6 +660,7 @@ async function main() {
      `main` gave them means this branch changes no slug either of them pins.
   */
   await seedReviewDepth(prisma);
+  await seedModerationQueue(prisma);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
@@ -3695,6 +3696,157 @@ async function seedReviewDepth(db: Db) {
     `   ${created} on ${seller.slug} — ${published} published, ${accepted} from accepted quotes, ` +
       `${photos} photos`,
   );
+}
+
+/**
+ * Reviews that exist to be removed.
+ *
+ * `/admin/reviews` sorts by `removedAt` and then `createdAt` descending, and
+ * the e2e test for criterion 9 removed whatever that put first. On a fresh seed
+ * that is one of the five `ENQ-BEST-*-0` rows: `seedCurated` gives each of its
+ * listings exactly `MIN_REVIEWS` reviews and dates the first of each two days
+ * ago, so the top of the moderation queue is always the curated fixture. The
+ * listing it belongs to drops to fourteen countable reviews and off
+ * `/best/hvac-suppliers-al-quoz` the moment the moderation test passes, and
+ * four assertions fail in `curated.spec.ts` — a file that never mentions the
+ * admin console.
+ *
+ * CI never saw it. One worker, and the `staff` project runs after `chromium`
+ * and `mobile`, so the curated page was always read before the review was
+ * taken. It only appears locally, where `pnpm test:e2e` does not reseed and a
+ * removal is irreversible by design, so the first run to draw `al-hvac-001`
+ * breaks the list until somebody reseeds.
+ *
+ * The other destructive console tests hand back what they take: the suspension
+ * test lifts, the tier test moves the row to the tier it is not on. Removal has
+ * no undo, so it is given something expendable rather than the first row it can
+ * reach.
+ *
+ * The host is suspended, which keeps it off every public surface — search, the
+ * category and area counts, the curated lists, its own storefront — so nothing
+ * it carries is a number another test asserts. `main` truncates before it
+ * writes, so the pool comes back whole on every `pnpm db:seed`; the eight are
+ * the headroom between one reseed and the next, since `pnpm test:e2e` does not
+ * reseed and each run takes one.
+ */
+async function seedModerationQueue(db: Db) {
+  console.log("→ reviews that exist to be removed, for the console's criterion 9");
+
+  const category = await db.category.findFirst({
+    where: { slug: "valves-and-fittings" },
+    select: { id: true },
+  });
+  if (!category) {
+    console.log("   skipped — the taxonomy this host sits in is not in this seed");
+    return;
+  }
+
+  /*
+     A fixed slug and a prefix that is not in `NAME_PREFIX`, so the generated
+     businesses can never collide with it and the test can scope to the name
+     without matching a second row.
+  */
+  const host = await db.business.upsert({
+    where: { slug: "jebel-rock-trading" },
+    update: {},
+    create: {
+      tradeName: "Jebel Rock Trading LLC",
+      displayName: "Jebel Rock Trading",
+      slug: "jebel-rock-trading",
+      licenceNumber: "DED-771904",
+      licenceAuthority: "DED",
+      licenceExpiry: days(180),
+      establishedYear: 2016,
+      description:
+        "Valve and fitting stockist. Suspended while the licence holder is contacted, and kept in the seed because a moderator still has to be able to act on what was written about it.",
+      verificationTier: 1,
+      claimStatus: "claimed",
+      primaryCategoryId: category.id,
+      source: "self_added",
+      publishedAt: days(-300),
+      /*
+         Suspended, and that is the point rather than colour. A suspended
+         listing is on no public surface, so the reviews below are counted by
+         nothing: not a rating, not a curated list, not an area tally. They are
+         only ever read by the moderation queue, which does not filter on
+         publication because a removal decision does not wait for one.
+      */
+      suspendedAt: days(-9),
+    },
+    select: { id: true, slug: true },
+  });
+
+  /*
+     Eight, so a local run has headroom before it has to reseed, and each with
+     its own words: `ModerationRow` quotes the body in full and a queue of eight
+     identical sentences would not show that it does.
+  */
+  const BODIES = [
+    "Quoted quickly but the sizes on the quote were not the sizes on my enquiry.",
+    "Two of the four valves arrived with the wrong end connection and the swap took a fortnight.",
+    "Counter staff were helpful. Delivery was a day later than the date on the quote.",
+    "Priced well above the others and would not put the lead time in writing.",
+    "Stock said available and it was not. Told after I had paid a deposit elsewhere.",
+    "Fine on the small order, no answer at all on the second one.",
+    "The gaskets were not the grade written on the quote and nobody would say why.",
+    "Answered the enquiry the same day and then went quiet for three weeks.",
+  ];
+
+  let written = 0;
+  for (const [index, body] of BODIES.entries()) {
+    const ref = `ENQ-MOD-${index}`;
+    const existing = await db.enquiry.findUnique({ where: { ref }, select: { id: true } });
+    if (existing) continue;
+
+    const buyer = await db.user.create({
+      data: { id: uuid(700 + index), fullName: `Moderation Queue Buyer ${index}`, roles: ["buyer"] },
+      select: { id: true },
+    });
+    const createdAt = days(-(30 + index));
+    const enquiry = await db.enquiry.create({
+      data: {
+        ref,
+        buyerId: buyer.id,
+        requirement: "Gate valves and flanged fittings for a pump room, sizes on the drawing.",
+        closesAt: new Date(createdAt.getTime() + 14 * 86_400_000),
+        createdAt,
+      },
+      select: { id: true },
+    });
+    /*
+       The recipient row, because a review without one describes a buyer
+       reviewing a supplier who never received the enquiry. `canReview` reads
+       exactly this column and the seed does not get to skip the rung it makes
+       every other fixture carry.
+    */
+    await db.enquiryRecipient.create({
+      data: {
+        enquiryId: enquiry.id,
+        businessId: host.id,
+        state: "quoted",
+        createdAt,
+        firstReplyAt: new Date(createdAt.getTime() + 5 * 3_600_000),
+      },
+    });
+    await db.review.create({
+      data: {
+        businessId: host.id,
+        buyerId: buyer.id,
+        enquiryId: enquiry.id,
+        overall: 1 + (index % 3),
+        quotedAccurate: 1 + (index % 3),
+        onTime: 1 + ((index + 1) % 3),
+        asDescribed: 1 + ((index + 2) % 3),
+        responsiveness: 1 + (index % 2),
+        body,
+        editableUntil: new Date(createdAt.getTime() + 14 * 86_400_000),
+        createdAt: new Date(createdAt.getTime() + 2 * 86_400_000),
+      },
+    });
+    written += 1;
+  }
+
+  console.log(`   ${written} on ${host.slug}, which is suspended`);
 }
 
 main()
