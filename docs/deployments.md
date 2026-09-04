@@ -228,6 +228,41 @@ it is pending while its own build runs. It is deliberately not a boolean — it
 must name every pending migration, so that a value set for one deploy cannot
 silently cover the next. Set it on the deployment, never on the project.
 
+## The functions run next to the database
+
+`vercel.json` pins `regions: ["bom1"]` — Mumbai, alongside the `ap-south-1`
+Postgres that `docs/database.md` names.
+
+It used to be `iad1`, set on the project rather than in the file, and every
+request looked like this:
+
+```
+x-vercel-id: bom1::iad1::…
+```
+
+The edge in Mumbai, the function in Virginia, the database back in Mumbai. One
+`select 1` costs 0.4 ms on the same machine as Postgres and 39 ms from Dubai to
+the pooler; Virginia is farther again. An unfiltered category shelf makes 27
+round trips after the facet-count cache and 45 before it, and it answered in
+3.2 s from Virginia.
+
+Mumbai is also nearer to a UAE buyer than Virginia is, so the same line shortens
+the hop for the person and for the query.
+
+**Confirm after the first deploy**, because a region is the kind of setting that
+looks applied and is not:
+
+```bash
+curl -sI https://businesslistings.me/c/valves-and-fittings | grep -i x-vercel-id
+```
+
+The second segment is the execution region and it should read `bom1`. The
+project-level `serverlessFunctionRegion` still says `iad1`; `vercel.json` is
+meant to win, and this header is how you know it did.
+
+One region has no failover. `functionFailoverRegions` is the key if that ever
+matters.
+
 ## Preview builds are opt-in
 
 Every push to every branch used to trigger a preview build. Since
