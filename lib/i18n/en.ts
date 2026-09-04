@@ -702,7 +702,10 @@ export const en = {
   "display.unclaimed": "Unclaimed",
   "display.in_review": "In review",
   "display.no_image": "No photo yet",
-  "display.branch_map_label": "A branch pin, on a map",
+  // Two, because the gallery renders both specimens at once and a map's canvas
+  // is a landmark: the same name twice is `landmark-unique`.
+  "display.branch_map_label": "A pinned branch, on a map",
+  "display.branch_map_label_unpinned": "An unpinned branch, on a map",
   "display.map_empty": "No pinned locations to show",
   "display.map_excluded": { one: "{count} branch has no map pin", other: "{count} branches have no map pin" },
   "display.map_label": "Supplier locations",

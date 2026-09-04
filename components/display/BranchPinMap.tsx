@@ -152,6 +152,14 @@ export function BranchPinMap(props: BranchPinMapProps) {
          top-right corner where the seller's eye is. A control behind a label is
          a control that is not there.
       */
+      /*
+         MapLibre names its own canvas `region "Map"`. One map on a page is fine;
+         two are two landmarks with the same name — `landmark-unique`, and a
+         screen-reader user given a list of identical destinations. The canvas
+         stays a region because it is keyboard-pannable and wants a name; the
+         name becomes this map's own.
+      */
+      map.getCanvas().setAttribute("aria-label", props.mapLabel);
       map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-left");
       map.addControl(new maplibre.ScaleControl({ unit: "metric" }), "bottom-left");
 
@@ -273,7 +281,7 @@ export function BranchPinMap(props: BranchPinMapProps) {
       <div ref={containerRef} id={id} className="size-full" />
 
       {failed && (
-        <p className="absolute inset-x-4 top-4 z-10 rounded-ctl border border-line bg-card/95 px-3 py-2 text-caption text-muted">
+        <p className="absolute inset-x-4 top-4 z-10 rounded-ctl border border-line bg-card px-3 py-2 text-caption text-body">
           {props.unavailableLabel}
         </p>
       )}
@@ -281,7 +289,7 @@ export function BranchPinMap(props: BranchPinMapProps) {
       {/* The instruction, where the seller's eye already is. Mono, uppercase —
           one of the two places §08 allows it. */}
       {!editing && !failed && (
-        <p className="pointer-events-none absolute end-3 top-3 z-10 max-w-[16rem] rounded-tag bg-card/92 px-2 py-1.5 font-mono text-eyebrow uppercase tracking-wide text-muted shadow-raised">
+        <p className="pointer-events-none absolute end-3 top-3 z-10 max-w-[16rem] rounded-tag bg-card px-2 py-1.5 font-mono text-eyebrow uppercase tracking-wide text-body shadow-raised">
           {props.lat === null ? props.unpinnedHint : props.dragHint}
         </p>
       )}
@@ -293,7 +301,7 @@ export function BranchPinMap(props: BranchPinMapProps) {
         condition is not a credit, and a panel over it is a licence breach with a
         layout reason.
       */}
-      <div className="absolute inset-x-3 bottom-9 z-10 rounded-card border border-line bg-card/95 p-3 shadow-raised">
+      <div className="absolute inset-x-3 bottom-9 z-10 rounded-card border border-line bg-card p-3 shadow-raised">
         {editing ? (
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -325,7 +333,7 @@ export function BranchPinMap(props: BranchPinMapProps) {
               )}
             />
             <div className="flex items-center justify-between gap-2">
-              <span className="text-caption text-muted">{props.radiusNote}</span>
+              <span className="text-caption text-body">{props.radiusNote}</span>
               <button
                 type="button"
                 onClick={commit}
@@ -347,7 +355,7 @@ export function BranchPinMap(props: BranchPinMapProps) {
                   ? props.radiusNone
                   : `${props.radiusTitle} — ${props.formatRadius(props.radiusKm)}`}
               </p>
-              <p className="mt-0.5 text-caption text-muted">{props.radiusNote}</p>
+              <p className="mt-0.5 text-caption text-body">{props.radiusNote}</p>
             </div>
             <button
               type="button"

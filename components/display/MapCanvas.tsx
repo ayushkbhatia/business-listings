@@ -167,6 +167,14 @@ export function MapCanvas({
       mapRef.current = map;
 
       map.on("error", () => setFailed(true));
+      /*
+         MapLibre names its own canvas `region "Map"`. One map on a page is fine;
+         two are two landmarks with the same name — `landmark-unique`, and a
+         screen-reader user given a list of identical destinations. The canvas
+         stays a region because it is keyboard-pannable and wants a name; the
+         name becomes this map's own.
+      */
+      map.getCanvas().setAttribute("aria-label", label);
       map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
 
       map.on("load", () => {

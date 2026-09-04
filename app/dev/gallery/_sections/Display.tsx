@@ -574,7 +574,7 @@ export function Display() {
               radiusMin={RADIUS_MIN}
               radiusMax={RADIUS_MAX}
               radiusDefault={RADIUS_DEFAULT}
-              mapLabel={t("display.branch_map_label")}
+              mapLabel={t("display.branch_map_label_unpinned")}
               dragHint={t("locations_step.drag_hint")}
               unpinnedHint={t("locations_step.unpinned_hint")}
               radiusTitle={t("locations_step.radius")}
