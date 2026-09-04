@@ -4,6 +4,7 @@ import { Card, Panel, PublicShell } from "@/components/structure";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { prisma } from "@/lib/db/client";
 import { canReview, EDITABLE_DAYS } from "@/lib/reviews/eligibility";
+import { enquiryForReview } from "@/lib/reviews/service";
 import { t } from "@/lib/i18n";
 import { resolveBuyerId, trackingTokenFor } from "@/app/(public)/enquiry/_buyer";
 import { ReviewForm } from "./ReviewForm";
@@ -34,25 +35,20 @@ export default async function WriteReviewPage({
   const buyerId = await resolveBuyerId(one("t"));
   if (!buyerId) notFound();
 
-  const enquiry = await prisma.enquiry.findUnique({
-    where: { id: enquiryId },
-    select: {
-      id: true,
-      ref: true,
-      buyerId: true,
-      contactReleasedToBusinessId: true,
-      contactReleasedAt: true,
-      review: { select: { id: true } },
-    },
-  });
+  /*
+     Two reads of one enquiry: the gate's view, and the reference the page
+     prints. `enquiryForReview` is the same function the service re-checks with,
+     so the form is never offered on a rule the write would then refuse.
+  */
+  const [gate, enquiry] = await Promise.all([
+    enquiryForReview(enquiryId),
+    prisma.enquiry.findUnique({
+      where: { id: enquiryId },
+      select: { ref: true, review: { select: { businessId: true } } },
+    }),
+  ]);
 
-  const verdict = canReview(buyerId, enquiry && {
-    id: enquiry.id,
-    buyerId: enquiry.buyerId,
-    contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
-    contactReleasedAt: enquiry.contactReleasedAt,
-    alreadyReviewed: enquiry.review !== null,
-  });
+  const verdict = canReview(buyerId, gate, one("about"));
 
   /*
    * From the enquiry, not from the verdict. Once a review is posted the verdict
@@ -60,9 +56,13 @@ export default async function WriteReviewPage({
    * confirmation screen fell through to the gated one — the buyer wrote a
    * review and was told they were not allowed to.
    */
-  const supplier = enquiry?.contactReleasedToBusinessId
+  const subjectId = verdict.ok
+    ? verdict.businessId
+    : (enquiry?.review?.businessId ?? gate?.contactReleasedToBusinessId ?? null);
+
+  const supplier = subjectId
     ? await prisma.business.findUnique({
-        where: { id: enquiry.contactReleasedToBusinessId },
+        where: { id: subjectId },
         select: { displayName: true, slug: true },
       })
     : null;
@@ -97,7 +97,7 @@ export default async function WriteReviewPage({
             <div className="mt-4">
               <Card padded>
                 <p className="max-w-[var(--measure-prose)] text-body-sm text-prose">
-                  {t(`review.error.${verdict.reason}` as "review.error.no_accepted_quote")}
+                  {t(`review.error.${verdict.reason}` as "review.error.no_confirmed_enquiry")}
                 </p>
                 {/* The gate said out loud, because it is the product. */}
                 <p className="mt-2 max-w-[var(--measure-prose)] text-caption text-muted">
@@ -117,7 +117,12 @@ export default async function WriteReviewPage({
             </p>
             <div className="mt-6">
               <Panel title={t("review.title")}>
-                <ReviewForm enquiryId={enquiryId} token={token} editableDays={EDITABLE_DAYS} />
+                <ReviewForm
+                enquiryId={enquiryId}
+                businessId={verdict.ok ? verdict.businessId : undefined}
+                token={token}
+                editableDays={EDITABLE_DAYS}
+              />
               </Panel>
             </div>
           </>

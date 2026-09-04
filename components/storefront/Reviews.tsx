@@ -38,7 +38,13 @@ export function Reviews({ data }: SectionProps) {
             <ReviewCard
               key={review.id}
               as="li"
-              author={review.author}
+              /*
+                 An empty author is a buyer who withheld their name, which is a
+                 label rather than a blank line. The loader hands over the
+                 company or nothing, because a data loader has no business
+                 calling `t()`; the fallback belongs here.
+              */
+              author={review.author || t("storefront.review_anonymous")}
               rating={formatDecimal(review.overall)}
               date={formatDate(review.createdAt)}
               body={review.body}

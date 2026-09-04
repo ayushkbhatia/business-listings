@@ -3,8 +3,10 @@ import { CAPABILITIES } from "@/lib/auth/capabilities";
 import type { Actor } from "@/lib/auth/roles";
 import {
   ACTION_FOR_CAPABILITY,
+  PAIRED_ACTIONS,
   type AuditTransaction,
   type AuditedCapability,
+  type PairedAction,
   type SubjectRef,
 } from "./types";
 import { assertReason, writeAudit } from "./write-audit";
@@ -41,6 +43,21 @@ export interface StaffMutationInput {
    */
   tx?: AuditTransaction;
   /**
+   * The action to log, where one capability covers a reversible pair.
+   *
+   * `review.hold` is the only one: holding a review and releasing it are the
+   * same decision to make and the same rung to make it from, and splitting them
+   * into two capabilities would put "may pause" and "may un-pause" on separate
+   * rows of a matrix that has no way to disagree about them. The audit log
+   * still has to say which happened — the note above `ACTION_FOR_CAPABILITY`
+   * is that a mutation must not be logged under a label that hides what it was
+   * — so the pair is named here rather than merged.
+   *
+   * Constrained to the actions the capability itself declares, so this cannot
+   * be used to file a tier change under a review removal.
+   */
+  action?: PairedAction<AuditedCapability>;
+  /**
    * Required for the capabilities `docs/permissions.md` marks subject-dependent,
    * and refused for the ones it does not.
    *
@@ -76,7 +93,16 @@ export async function staffMutation<T>(
   input: StaffMutationInput,
   run: () => Promise<StaffMutationResult<T>>,
 ): Promise<T> {
-  const action = ACTION_FOR_CAPABILITY[input.capability];
+  const paired = PAIRED_ACTIONS[input.capability as keyof typeof PAIRED_ACTIONS] as
+    | readonly string[]
+    | undefined;
+  if (input.action && !paired?.includes(input.action)) {
+    throw new Error(
+      `${input.capability} does not cover the action "${input.action}". ` +
+        "An audited capability logs the action ACTION_FOR_CAPABILITY names for it.",
+    );
+  }
+  const action = input.action ?? ACTION_FOR_CAPABILITY[input.capability];
   const isSubjectDependent = "subject" in CAPABILITIES[input.capability];
 
   if (isSubjectDependent && !input.subjectChecked) {

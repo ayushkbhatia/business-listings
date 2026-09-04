@@ -898,7 +898,7 @@ export async function getBusinessesForCompare(slugs: readonly string[]) {
       _count: {
         select: {
           products: { where: { status: { not: "draft" } } },
-          reviews: { where: { removedAt: null } },
+          reviews: { where: { removedAt: null, heldAt: null } },
         },
       },
     },

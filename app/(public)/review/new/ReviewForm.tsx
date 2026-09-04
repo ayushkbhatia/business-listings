@@ -19,10 +19,20 @@ const SCORES = [1, 2, 3, 4, 5] as const;
 
 export function ReviewForm({
   enquiryId,
+  businessId,
   token,
   editableDays,
 }: {
   enquiryId: string;
+  /**
+   * The supplier being reviewed, as the gate resolved it.
+   *
+   * Carried through so a fan-out that drew replies from several suppliers
+   * writes the review against the one the page said it was about. The server
+   * re-checks it: an id the enquiry cannot account for is refused there, not
+   * here.
+   */
+  businessId?: string;
   token: string | null;
   editableDays: number;
 }) {
@@ -41,6 +51,7 @@ export function ReviewForm({
       className="space-y-5"
     >
       <input type="hidden" name="enquiryId" value={enquiryId} />
+      {businessId ? <input type="hidden" name="businessId" value={businessId} /> : null}
       {token ? <input type="hidden" name="t" value={token} /> : null}
 
       <Scale name="overall" label={t("review.overall")} />

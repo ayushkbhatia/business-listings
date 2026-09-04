@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCount, formatDecimal, formatPercent } from "./count";
+import { formatCount, formatDecimal, formatPercent, formatRating } from "./count";
 
 describe("formatCount", () => {
   it("groups thousands and never abbreviates", () => {
@@ -36,5 +36,25 @@ describe("formatPercent", () => {
     expect(formatPercent(0.3)).toBe("30%");
     expect(formatPercent(0.304)).toBe("30%");
     expect(formatPercent(1)).toBe("100%");
+  });
+});
+
+describe("formatRating", () => {
+  it("always carries one decimal, so 4 and 4.2 read as the same kind of number", () => {
+    // formatDecimal drops the trailing zero, which put "4" in the rating card
+    // and "4.0" in the storefront header on the same page.
+    expect(formatRating(4)).toBe("4.0");
+    expect(formatRating(4.216)).toBe("4.2");
+    expect(formatRating(5)).toBe("5.0");
+  });
+
+  it("rounds to one decimal rather than truncating", () => {
+    expect(formatRating(4.25)).toBe("4.3");
+    expect(formatRating(3.94)).toBe("3.9");
+  });
+
+  it("refuses a value that is not a finite number", () => {
+    expect(() => formatRating(Number.NaN)).toThrow(TypeError);
+    expect(() => formatRating(Number.POSITIVE_INFINITY)).toThrow(TypeError);
   });
 });

@@ -1055,13 +1055,71 @@ export const en = {
   "storefront.no_reviews_title": "No reviews yet",
   "storefront.no_reviews_body": "A review can only be written by a buyer who sent an enquiry through us and had it answered. That is why there are fewer of them here than on other directories, and why the ones there are mean something.",
   "storefront.review_of": "Review of {name}",
-  "storefront.review_anonymous": "Verified buyer",
+  "storefront.review_anonymous": "Buyer, name withheld",
   "storefront.seller_reply": "Reply from the supplier",
   "storefront.rating_overall": "Overall",
   "storefront.rating_quoted": "Quote was accurate",
   "storefront.rating_on_time": "Delivered on time",
   "storefront.rating_described": "As described",
   "storefront.rating_responsive": "Responsiveness",
+
+  // ── Public: reviews & ratings [1m] ──
+  //
+  // The provenance ladder inverted at the pivot. The board treated a completed
+  // transaction as the strongest signal and an accepted quote as the weaker
+  // one; nothing is transacted here, so an accepted quote is the strongest
+  // thing the platform can prove and the tones swap — ok for the accepted rung,
+  // neutral for the enquiry rung it displaced.
+  //
+  // The four labels a competitor would reach for on the vacated top rung name
+  // things that do not exist on this platform and appear nowhere in this file.
+  // `check:vocabulary` fails the build on them.
+  "reviewpage.title": "Reviews",
+  "reviewpage.subline": {
+    one: "{formatted} review · {accepted} from accepted quotes",
+    other: "{formatted} reviews · {accepted} from accepted quotes",
+  },
+  "reviewpage.subline_none_accepted": {
+    one: "{formatted} review, every one from a confirmed enquiry",
+    other: "{formatted} reviews, every one from a confirmed enquiry",
+  },
+  "reviewpage.write": "Write a review",
+  "reviewpage.provenance.accepted_quote": "Accepted quote",
+  "reviewpage.provenance.verified_enquiry": "Verified enquiry",
+  "reviewpage.rating_label": "Rated {rating} out of 5",
+  "reviewpage.overall_heading": "Rating",
+  "reviewpage.count": { one: "{formatted} review", other: "{formatted} reviews" },
+  "reviewpage.from_count": { one: "FROM {formatted} REVIEW", other: "FROM {formatted} REVIEWS" },
+  "reviewpage.distribution_heading": "Rating breakdown",
+  "reviewpage.distribution_row": "{rating} out of 5",
+  "reviewpage.distribution_count": "{formatted} of {total} reviews rated {rating} out of 5",
+  "reviewpage.see_breakdown": "See breakdown",
+  "reviewpage.rated_on": "Rated on",
+  "reviewpage.provenance_title": "Who can review",
+  "reviewpage.provenance_body": "Only buyers can review. Reviews require a confirmed enquiry or an accepted quote on the platform. Sellers can reply once, publicly.",
+  "reviewpage.provenance_removal": "A review comes down only when staff remove it, with a written reason recorded in the audit log. A supplier cannot remove one.",
+  "reviewpage.filter_label": "Show",
+  "reviewpage.filter.all": "All",
+  "reviewpage.filter.accepted": "Accepted quote",
+  "reviewpage.filter.photos": "With photos",
+  "reviewpage.filter.critical": "Critical",
+  "reviewpage.sort_label": "Sort",
+  "reviewpage.sort.recent": "Most recent",
+  "reviewpage.sort.highest": "Highest rated",
+  "reviewpage.sort.lowest": "Lowest rated",
+  "reviewpage.sort.detailed": "Most detailed",
+  "reviewpage.sort_apply": "Apply",
+  "reviewpage.load_more": { one: "Load {count} more review", other: "Load {count} more reviews" },
+  "reviewpage.seller_reply": "Reply from {name}",
+  "reviewpage.photo_alt": "Photo from a review of {name}",
+  "reviewpage.held": {
+    one: "One review is being reviewed by our team.",
+    other: "{formatted} reviews are being reviewed by our team.",
+  },
+  "reviewpage.filtered_zero_title": "No reviews match that filter",
+  "reviewpage.filtered_zero_body": "Nothing has been hidden. The other {formatted} are one click away.",
+  "reviewpage.filtered_zero_cta": "Show all reviews",
+  "seo.reviews_title": "{name} reviews — {rating} from {formatted} reviews",
   "storefront.team_band.b1_10": "1–10",
   "storefront.team_band.b11_50": "11–50",
   "storefront.team_band.b51_200": "51–200",
@@ -1875,8 +1933,8 @@ export const en = {
 
   // ── Buyer: writing a review [10f] ──
   "review.title": "How did it go?",
-  "review.lede": "You accepted {supplier}'s quote on {ref}. A few minutes here is what makes the next buyer's search worth anything.",
-  "review.gated": "Reviews come from buyers who accepted a quote. That is the whole reason anybody trusts them.",
+  "review.lede": "You dealt with {supplier} on {ref}. A few minutes here is what makes the next buyer's search worth anything.",
+  "review.gated": "Reviews come from buyers who sent an enquiry here and heard back, or who accepted a quote. That is the whole reason anybody trusts them.",
   "review.overall": "Overall",
   "review.dimension.quotedAccurate": "The price was what they quoted",
   "review.dimension.onTime": "It arrived when they said",
@@ -1887,7 +1945,7 @@ export const en = {
   "review.body_hint": "What a buyer in your position would want to know. Twenty characters at least — a number with no words tells nobody anything.",
   "review.body_placeholder": "Quoted the same day, delivered on the date they gave, and the paperwork was right first time.",
   "review.show_company": "Show my company name on the review",
-  "review.show_company_hint": "Off, and it appears from a verified buyer with no name.",
+  "review.show_company_hint": "Off, and it appears from a buyer with no name shown. The provenance badge is unaffected.",
   "review.submit": "Post the review",
   "review.submitting": "Posting",
   "review.editable": "You can change this for {days} days.",
@@ -1896,7 +1954,8 @@ export const en = {
   "review.back_to_enquiry": "Back to the enquiry",
 
   "review.error.not_your_enquiry": "This enquiry is not yours to review.",
-  "review.error.no_accepted_quote": "A review needs an accepted quote. Accept one on the enquiry first.",
+  "review.error.no_confirmed_enquiry": "A review needs a supplier who answered this enquiry, or a quote you accepted. Neither has happened on this one yet.",
+  "review.error.ambiguous_subject": "Several suppliers answered this enquiry. Open the one you want to review from the enquiry and start from there.",
   "review.error.already_reviewed": "You have already reviewed this enquiry. You can change that review instead.",
   "review.error.invalid_ratings": "Rate every line from one to five. A blank line is not a low score.",
   "review.error.empty_body": "Add a sentence or two. Twenty characters at least — a number with no words tells nobody anything.",

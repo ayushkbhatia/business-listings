@@ -1,11 +1,17 @@
 # Component inventory — design system §09.3
 
-The authoritative list. 64 components in four tiers. **Variants are props on one component,
-never separate components** — one `Button` with a `variant` prop, not five.
+The authoritative list. 64 components in four tiers, plus the four approved additions below,
+so **68 today**. **Variants are props on one component, never separate components** — one
+`Button` with a `variant` prop, not five.
 
 The 64 count treats `ListingCard` as one component with a `context` prop (four contexts) and
-`Button` as one component with five variants. If you have built more files than 64, check
-whether you split a variant into its own component.
+`Button` as one component with five variants. If you have built more files than the running
+total, check whether you split a variant into its own component.
+
+`/dev/gallery` asserts the same figures — 18 · 17 · 17 · 16 — and the tier headings below are
+the tables alone, so an addition has to move three numbers rather than one. That is
+deliberate: `ReviewCard` was written into the tier 4 table and never added to the gallery,
+which left the gallery reading 15 over a table holding 16 for a whole handoff.
 
 ---
 
@@ -54,7 +60,7 @@ whether you split a variant into its own component.
 | 34 | `Drawer` | right-side, overlay elevation |
 | 35 | `Modal` | 420px confirm, and larger content variant |
 
-## Tier 3 — display (15) · handoff 1
+## Tier 3 — display (15, plus 65 and 68 below) · handoff 1
 
 | # | Component | Notes |
 |---|---|---|
@@ -74,7 +80,7 @@ whether you split a variant into its own component.
 | 49 | `CategoryMark` | moss tile, two-letter mono code |
 | 50 | `MapCanvas` | 4-level pin hierarchy + cluster count |
 
-## Tier 4 — domain (15)
+## Tier 4 — domain (14, plus 66 and 67 below)
 
 | # | Component | Lands in |
 |---|---|---|
@@ -122,6 +128,21 @@ renderings of one record, which is the failure the `Thread` note above describes
 
 It takes resolved strings rather than a Prisma row, because the reviews page and the section
 reach the data by different queries and a component typed to one breaks when the other changes.
+
+**68 · `RatingMarks`** — a rating as five squares, added to tier 3 for board 1m. Squares
+rather than stars, and not decoration: a star is the shape every directory in this market
+prints over ratings nobody trusts, and the argument of `/b/:slug/reviews` is that these were
+earned through a gate. Borrowing the visual language of the pages that were not is the wrong
+first impression.
+
+**No partial mark, ever.** The numeral carries the decimal. A half square is a rendering of
+4.6 that a reader has to decode, and it is a lie at any width narrower than the difference
+between 4.6 and 4.7. The marks are `aria-hidden` behind one `role="img"` label, because five
+filled squares announced one at a time is five announcements of nothing.
+
+It pairs with `formatRating`, which is the reason that formatter exists: `formatDecimal` drops
+a trailing zero, so a 4.0 printed "4" in the rating card and "4.0" in the storefront header —
+one figure with two renderings on one page.
 
 **The fourteen storefront sections are not in this list, deliberately.** Their catalogue is
 `lib/storefront/section-types.ts`, which declares each type's data source, its seller-fillable

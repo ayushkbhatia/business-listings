@@ -1,7 +1,7 @@
 import { Tabs } from "@/components/structure";
 import { ImagePlaceholder, LogoTile, StatusBadge } from "@/components/display";
 import { ResponseTime, VerificationBadge, tierSpec } from "@/components/domain";
-import { formatCount, formatDate, formatDuration } from "@/lib/format";
+import { formatCount, formatDate, formatDuration, formatRating } from "@/lib/format";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { cn } from "@/lib/cn";
 import { licenceExpired as hasLapsed } from "@/lib/verification";
@@ -232,12 +232,24 @@ export function StorefrontHeader({
                     </span>
                   </>
                 )}
-                {business.ratingOverall !== null && business.reviewCount > 0 && (
+                {business.ratingOverall !== null && business._count.reviews > 0 && (
                   <>
                     <span aria-hidden>·</span>
+                    {/*
+                       `formatRating`, not `toFixed(1)`. The locale owns the
+                       decimal separator, and board 1m's rating card prints the
+                       same average one section down — a page where the header
+                       says 4.2 and the card says 4 is one figure with two
+                       renderings.
+
+                       The count is `_count.reviews`, which excludes removed and
+                       held rows in this request. `reviewCount` is a
+                       denormalised column a job writes, and it was the number
+                       here until the reviews page could disagree with it.
+                    */}
                     <span className="tabular-nums">
-                      {business.ratingOverall.toFixed(1)}{" "}
-                      {t("listing.reviews", { count: business.reviewCount })}
+                      {formatRating(business.ratingOverall)}{" "}
+                      {t("listing.reviews", { count: business._count.reviews })}
                     </span>
                   </>
                 )}
