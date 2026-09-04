@@ -49,7 +49,7 @@ they 404 until their handoff.
 
 ```
 /onboarding/claim                       Find or add the business              [2a]  built h6s1 · public
-/onboarding/verify                      Prove ownership                       [2b]
+/onboarding/verify                      Prove ownership                       [2b]  built h6s2
 /onboarding/profile                     Profile basics                        [2c]
 /onboarding/locations                   Locations & hours                     [2d]
 /onboarding/plan                        Pick a plan                           [2e]
@@ -179,6 +179,16 @@ half of the directive we want.
 A signed-in seller already holding a claimed listing is redirected from `2a` to
 `/dashboard?notice=one_business`, which states the reason. Claiming a second
 business is not something this flow does.
+
+`/onboarding/verify` takes `?business=` as either an id or a slug. Board 2a hands
+over an id, which is what a link built by a screen carries; a link built by a
+*person* — the recruitment mail board 12d sends — carries a slug, because
+`?business=al-bariq-trading-llc` is a URL somebody can write and check and
+`?business=cmtmb7ac700di26itwegmpf56` is one they can only paste and hope. Both
+resolve to the same row and neither grants anything: the route requires a seat,
+and submitting queues a review rather than granting a tier. A business already at
+`VERIFIED_TIER` redirects to `/onboarding/profile` — there is nothing left for
+that screen to guard.
 
 `/b/:slug/reviews` takes `?show=` (all · accepted · photos · critical), `?sort=` (recent ·
 highest · lowest · detailed) and `?page=`. Every narrowed view is `noindex, follow` and

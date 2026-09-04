@@ -80,6 +80,7 @@ model User {
   changesDecided      ListingChangeRequest[] @relation("ChangeRequestDecider")
   invitesSent         TeamInvite[]           @relation("InviteSender")
   claimsMade          ClaimSubmission[]      @relation("ClaimClaimant")
+  onboardingDrafts    OnboardingDraft[]      @relation("OnboardingDraftUser")
   visitsRequested     SiteVisitRequest[]     @relation("VisitRequester")
   conflictsResolved   ClaimConflict[]        @relation("ConflictResolvedBy")
   licenceImports      LicenceImportRun[]     @relation("IngestActor")
@@ -591,6 +592,7 @@ model Business {
   viewAsSessions         ViewAsSession[]
   callOutcomes           CallOutcome[]
   claimConflicts         ClaimConflict[]         @relation("ConflictBusiness")
+  onboardingDrafts       OnboardingDraft[]       @relation("OnboardingDraftBusiness")
   producedByConflicts    ClaimConflict[]         @relation("ConflictProduced")
   placementWaitlist      PlacementWaitlist[]
   quotes                 Quote[]
@@ -1266,6 +1268,23 @@ model PlacementWaitlist {
 /// decides; handoff 3 fills it, and criterion 1 is about the seller getting all
 /// the way to a dashboard without staff involvement — not about the claim being
 /// approved without one.
+/// Who the claimant says they are to the licensed entity.
+///
+/// Board 2b: "a claim from a `manager` with no power of attorney attached is a
+/// different review path from a claim from the named owner." The value is not a
+/// permission and grants nothing — it routes the review, and it is the first
+/// thing a reviewer reads next to the name on the document.
+enum ClaimantRole {
+  owner
+  partner
+  manager
+  /// The public relations officer, who in UAE practice holds the licence.
+  pro
+  authorised_signatory
+
+  @@map("claimant_role")
+}
+
 model ClaimSubmission {
   id             String      @id @default(cuid())
   businessId     String      @map("business_id")
@@ -1284,6 +1303,37 @@ model ClaimSubmission {
   decisionReason String?     @map("decision_reason")
   createdAt      DateTime    @default(now()) @map("created_at")
 
+  // ── Board 2b: who is claiming, and what the document says ────────────────
+  /// The claimant's name as printed on the licence or the power of attorney.
+  /// Not `User.fullName`: the account holder and the person named on the
+  /// document are frequently different people, and the reviewer is matching the
+  /// second one.
+  claimantName     String?       @map("claimant_name")
+  claimantRole     ClaimantRole? @map("claimant_role")
+
+  /// What the claimant submitted, after any correction.
+  ///
+  /// Deliberately not written onto `Business`. `licenceNumber` and
+  /// `licenceExpiry` there come from the licence register and are the record
+  /// this claim is measured against; a claimant's assertion overwriting them
+  /// before anybody has checked would let a claim edit the evidence it is being
+  /// judged on.
+  statedLicenceNumber String?   @map("stated_licence_number")
+  statedLicenceExpiry DateTime? @map("stated_licence_expiry")
+
+  /// What OCR read off the uploaded document, before the claimant touched it.
+  ///
+  /// Kept beside the stated values rather than replaced by a `corrected`
+  /// boolean, because the pair is what a reviewer actually needs: a flag says
+  /// somebody changed something, and these two say from what, to what. OCR on a
+  /// licence photographed on a wall is unreliable, so a correction is normal —
+  /// what matters is being able to see it. Null where OCR did not run or could
+  /// not read the document.
+  ocrLicenceNumber String?   @map("ocr_licence_number")
+  ocrLicenceExpiry DateTime? @map("ocr_licence_expiry")
+  /// 0..1, from the extractor. Null where nothing was extracted.
+  ocrConfidence    Float?    @map("ocr_confidence")
+
   business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   claimant     User            @relation("ClaimClaimant", fields: [claimantId], references: [id], onDelete: Cascade)
   document     Document?       @relation(fields: [documentId], references: [id], onDelete: Restrict)
@@ -1300,6 +1350,45 @@ enum ClaimRoute {
   phone_callback
 
   @@map("claim_route")
+}
+
+/// A half-finished onboarding step, so "Save & exit" is real.
+///
+/// Board 2b: "onboarding takes six minutes with the licence to hand and a
+/// fortnight without it." The fortnight is the case this table exists for — a
+/// supplier who starts on a phone in a warehouse, discovers the licence is with
+/// the PRO, and comes back on Thursday. Losing what they typed is how that
+/// supplier becomes a supplier who never finishes.
+///
+/// One row per person per listing, replaced wholesale on each save. It holds
+/// only what the step's own form holds, never a decision: a draft is not a
+/// claim, grants nothing, and is deleted the moment the step is submitted. The
+/// step's own tables stay the record.
+model OnboardingDraft {
+  id         String @id @default(cuid())
+  userId     String @map("user_id") @db.Uuid
+  businessId String @map("business_id")
+  /// Which step this belongs to — `claim`, `verify`, `profile`, `locations`,
+  /// `plan`. A string rather than an enum: the funnel's shape is
+  /// `lib/onboarding/service.ts`'s to change, and a migration per reordering
+  /// would be a schema that fights the product.
+  step       String
+
+  /// The form, as typed. Never trusted on the way back in — every value is
+  /// revalidated by the step's own service before it becomes a row.
+  data Json @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation("OnboardingDraftUser", fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation("OnboardingDraftBusiness", fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// One draft per person, per listing, per step.
+  @@unique([userId, businessId, step])
+  /// The resume read, and the prune.
+  @@index([updatedAt])
+  @@map("onboarding_draft")
 }
 
 /// The four ways board 4c lets staff settle two licences on one premises.

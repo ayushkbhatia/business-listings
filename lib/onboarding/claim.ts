@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import type { Actor } from "@/lib/auth/roles";
+import { sameLicenceNumber } from "@/lib/verification/licence/number";
 import { openConflictIfContested } from "./conflict";
 
 /**
@@ -328,6 +329,56 @@ export interface SubmitClaimInput {
   documentId?: string;
   /** Required on the phone route, and taken from the licence record. */
   phone?: string;
+
+  // ── Board 2b's evidence ───────────────────────────────────────────────────
+  /** As printed on the licence or the power of attorney, not the account name. */
+  claimantName?: string;
+  claimantRole?: ClaimantRole;
+  /** What the claimant submitted, after any correction to what OCR read. */
+  statedLicenceNumber?: string;
+  statedLicenceExpiry?: Date;
+  /** What OCR read before the claimant touched it, so a correction is visible. */
+  ocrLicenceNumber?: string;
+  ocrLicenceExpiry?: Date;
+  ocrConfidence?: number;
+}
+
+/** The five board 2b names. A review path, never a permission. */
+export type ClaimantRole = "owner" | "partner" | "manager" | "pro" | "authorised_signatory";
+
+/**
+ * Did the claimant correct what the reader produced? Criterion 3.
+ *
+ * Derived from the pair rather than stored as a boolean, because a flag says
+ * somebody changed something and the pair says from what, to what — which is
+ * what a reviewer opening the row actually needs. Nothing read means nothing
+ * corrected: an empty extraction that the claimant then filled in by hand is the
+ * expected path on every deployment with no OCR provider, and calling that a
+ * correction would flag every claim.
+ *
+ * The number is compared as a licence number, not as a string, so a claimant who
+ * typed `618402` over a read `DED-618402` has corrected nothing.
+ */
+export function claimCorrections(
+  submission: {
+    statedLicenceNumber: string | null;
+    statedLicenceExpiry: Date | null;
+    ocrLicenceNumber: string | null;
+    ocrLicenceExpiry: Date | null;
+  },
+  authority: string,
+): { number: boolean; expiry: boolean; any: boolean } {
+  const number =
+    submission.ocrLicenceNumber !== null &&
+    submission.statedLicenceNumber !== null &&
+    !sameLicenceNumber(submission.ocrLicenceNumber, submission.statedLicenceNumber, authority);
+
+  const expiry =
+    submission.ocrLicenceExpiry !== null &&
+    submission.statedLicenceExpiry !== null &&
+    submission.ocrLicenceExpiry.getTime() !== submission.statedLicenceExpiry.getTime();
+
+  return { number, expiry, any: number || expiry };
 }
 
 /**
@@ -381,6 +432,13 @@ export async function submitClaim(
       documentId: input.documentId ?? null,
       phone: input.phone ?? null,
       contested,
+      claimantName: input.claimantName?.trim() || null,
+      claimantRole: input.claimantRole ?? null,
+      statedLicenceNumber: input.statedLicenceNumber?.trim() || null,
+      statedLicenceExpiry: input.statedLicenceExpiry ?? null,
+      ocrLicenceNumber: input.ocrLicenceNumber?.trim() || null,
+      ocrLicenceExpiry: input.ocrLicenceExpiry ?? null,
+      ocrConfidence: input.ocrConfidence ?? null,
     },
     select: { id: true },
   });
