@@ -11,50 +11,20 @@ import AxeBuilder from "@axe-core/playwright";
  * is a paywall.
  */
 
-test.describe("board 2a — find your business", () => {
-  test.beforeEach(async ({ page }) => {
+test.describe("board 2a — a seller who already has a listing", () => {
+  test("is sent to the dashboard, and told why", async ({ page }) => {
+    /*
+     * Criterion 11. A supplier cannot claim a second business from this flow,
+     * and the redirect states so rather than bouncing them silently — a person
+     * who lands somewhere they did not ask for and is told nothing concludes
+     * the link was broken.
+     *
+     * The rest of board 2a is `tests/e2e/claim.spec.ts`, signed out, which is
+     * how that screen is normally met.
+     */
     await page.goto("/onboarding/claim");
-  });
-
-  test("searches by trade name, licence or phone in one box", async ({ page }) => {
-    // A supplier looking for their own listing does not know which of the
-    // three we hold.
-    await expect(page.getByLabel("Trade name, licence number or phone")).toBeVisible();
-  });
-
-  test("answers the fear before it is asked", async ({ page }) => {
-    await page.getByLabel("Trade name, licence number or phone").fill("Al Marwan");
-    await page.getByRole("button", { name: "Search", exact: true }).click();
-
-    // A number, not a promise. "Your data is safe" is what a product says
-    // whether or not it is true.
-    await expect(page.getByText(/reviews and \d+ enquiries stay exactly as they are/)).toBeVisible();
-  });
-
-  test("offers a dispute route rather than a closed door", async ({ page }) => {
-    // The second person may well be the real owner of a listing an ex-employee
-    // claimed.
-    await page.getByLabel("Trade name, licence number or phone").fill("Al Marwan");
-    await page.getByRole("button", { name: "Search", exact: true }).click();
-    await expect(page.getByRole("button", { name: /somebody else claimed it/ })).toBeVisible();
-  });
-
-  test("offers adding from scratch when nothing matches", async ({ page }) => {
-    await page.getByLabel("Trade name, licence number or phone").fill("Zzzz Nonexistent Trading");
-    await page.getByRole("button", { name: "Search", exact: true }).click();
-    await expect(page.getByRole("link", { name: /Add my business from scratch/ })).toBeVisible();
-  });
-
-  test("names all five steps up front", async ({ page }) => {
-    const nav = page.getByRole("navigation", { name: "Set up your listing" });
-    for (const step of ["Find your business", "Prove it is yours", "Your profile", "Where you are", "Pick a plan"]) {
-      await expect(nav.getByText(step)).toBeVisible();
-    }
-  });
-
-  test("is axe clean", async ({ page }) => {
-    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
-    expect(results.violations).toEqual([]);
+    await expect(page).toHaveURL(/\/dashboard/);
+    await expect(page.getByText(/Claiming a second business is not something this flow can do/)).toBeVisible();
   });
 });
 

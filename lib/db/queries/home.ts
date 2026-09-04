@@ -99,11 +99,25 @@ export async function readHomeStats() {
  * Returns an empty array when there is no history. The caller falls back to the
  * seeded five — a fresh install has no search log and the row should still have
  * something in it.
+ *
+ * Buyer tabs only. `SearchQueryLog` also carries board 2a's claim searches,
+ * which are suppliers typing their own trade name to find their licence record;
+ * they belong in the log — that is the volume record — and they are not things
+ * buyers search for. Without the filter, "Al Marwan Industrial Supplies" would
+ * become a chip on the directory home the first week suppliers started
+ * arriving, which is both a wrong recommendation and a small leak of who has
+ * been looking for themselves.
  */
+const BUYER_TABS = ["businesses", "products"] as const;
+
 export async function readPopularQueries(take = 5): Promise<string[]> {
   const grouped = await prisma.searchQueryLog.groupBy({
     by: ["normalised"],
-    where: { createdAt: { gte: ago(30) }, resultCount: { gt: 0 } },
+    where: {
+      createdAt: { gte: ago(30) },
+      resultCount: { gt: 0 },
+      tab: { in: [...BUYER_TABS] },
+    },
     _count: { normalised: true },
     orderBy: { _count: { normalised: "desc" } },
     take,
@@ -113,7 +127,10 @@ export async function readPopularQueries(take = 5): Promise<string[]> {
   // One more read to recover the spelling. Grouping on the raw text instead
   // would split a term across its capitalisations and none of them would rank.
   const spellings = await prisma.searchQueryLog.findMany({
-    where: { normalised: { in: grouped.map((row) => row.normalised) } },
+    where: {
+      normalised: { in: grouped.map((row) => row.normalised) },
+      tab: { in: [...BUYER_TABS] },
+    },
     distinct: ["normalised"],
     orderBy: { createdAt: "desc" },
     select: { normalised: true, query: true },

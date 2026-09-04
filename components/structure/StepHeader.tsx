@@ -8,12 +8,26 @@ import { Check } from "@/components/primitives/icons";
  * Steps are numbered and named, never dots. A dot row tells somebody there are
  * five things left and nothing about what they are, which is exactly the
  * information a seller deciding whether to continue actually needs.
+ *
+ * ## Two variants, one chain
+ *
+ * `banner` is the component's original shape: its own bar, with the "Step 2 of
+ * 5" line above the list. It sits at the top of a panel.
+ *
+ * `inline` is board 2a's onboarding header — the chain sitting in a 60px bar
+ * beside the wordmark, drawing none of its own. Below `md` it collapses to the
+ * progress line and the current step's name alone, because five labelled steps
+ * do not fit on a phone and a squeezed chain is less use than a sentence. The
+ * chain is the same component and the same labels on every step of the funnel;
+ * state is carried by the tick, the colour and the weight, and by nothing else.
  */
 export interface Step {
   key: string;
   label: string;
   href?: string;
 }
+
+export type StepHeaderVariant = "banner" | "inline";
 
 export interface StepHeaderProps {
   steps: readonly Step[];
@@ -23,17 +37,55 @@ export interface StepHeaderProps {
   label: string;
   /** "Step 2 of 5", already localised. */
   progressLabel?: (current: number, total: number) => string;
+  variant?: StepHeaderVariant;
 }
 
-export function StepHeader({ steps, current, label, progressLabel }: StepHeaderProps) {
+export function StepHeader({
+  steps,
+  current,
+  label,
+  progressLabel,
+  variant = "banner",
+}: StepHeaderProps) {
+  const inline = variant === "inline";
+  const activeStep = steps[current];
+
   return (
-    <nav aria-label={label} className="border-b border-line bg-card px-5 py-3">
+    <nav
+      aria-label={label}
+      className={cn(
+        inline
+          ? "flex min-w-0 items-center"
+          : "border-b border-line bg-card px-5 py-3",
+      )}
+    >
       {progressLabel && (
-        <p className="mb-2 font-mono text-eyebrow uppercase text-faint">
-          {progressLabel(current + 1, steps.length)}
+        <p
+          className={cn(
+            "font-mono text-eyebrow uppercase text-muted",
+            inline
+              ? // The whole chain on a phone, in one line. Hidden from the
+                // desktop reading order rather than duplicated, so a screen
+                // reader is not told the position twice.
+                "flex items-baseline gap-2 md:hidden"
+              : "mb-2",
+          )}
+        >
+          <span className="tabular-nums">{progressLabel(current + 1, steps.length)}</span>
+          {inline && activeStep && (
+            <span className="truncate font-sans text-caption normal-case text-ink">
+              {activeStep.label}
+            </span>
+          )}
         </p>
       )}
-      <ol className="flex flex-wrap items-center gap-x-1 gap-y-2">
+
+      <ol
+        className={cn(
+          "flex items-center gap-x-1 gap-y-2",
+          inline ? "hidden md:flex" : "flex-wrap",
+        )}
+      >
         {steps.map((step, i) => {
           const done = i < current;
           const active = i === current;

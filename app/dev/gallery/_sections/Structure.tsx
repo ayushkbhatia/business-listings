@@ -40,6 +40,18 @@ const ROWS: Row[] = [
   { id: "6", name: "Al Wadi Building Materials", ref: "SAIF-330914", emirate: "Sharjah", tier: 2, enquiries: 27, quoted: 141_050, responseMs: 5_400_000, tone: "default" },
 ];
 
+/**
+ * One set of steps for both variants, so the difference on screen is the
+ * variant and nothing else.
+ */
+const GALLERY_STEPS = [
+  { key: "claim", label: "Find the business", href: "#" },
+  { key: "verify", label: "Prove ownership", href: "#" },
+  { key: "profile", label: "Profile basics" },
+  { key: "locations", label: "Locations & hours" },
+  { key: "plan", label: "Pick a plan" },
+];
+
 export function Structure() {
   const [selected, setSelected] = useState<string[]>([]);
   const [sort, setSort] = useState<{ key: string; direction: "asc" | "desc" }>({
@@ -443,19 +455,41 @@ export function Structure() {
       </Section>
 
       <Section id="step-header" title="StepHeader" note="numbered and named, never dots">
-        <States label="states" stack>
+        <States label="banner" stack>
           <div className="w-full max-w-3xl overflow-hidden rounded-card border border-line">
             <StepHeader
               label={t("shell.onboarding")}
               current={2}
               progressLabel={(current, total) => t("shell.step_progress", { current, total })}
-              steps={[
-                { key: "claim", label: "Find the business", href: "#" },
-                { key: "verify", label: "Prove ownership", href: "#" },
-                { key: "profile", label: "Profile basics" },
-                { key: "locations", label: "Locations & hours" },
-                { key: "plan", label: "Pick a plan" },
-              ]}
+              steps={GALLERY_STEPS}
+            />
+          </div>
+        </States>
+
+        {/*
+          Board 2a's onboarding bar: the chain sitting beside the wordmark and
+          drawing none of its own chrome. Below `md` it collapses to the
+          progress line and the current step's name — narrow the window to see
+          it, which is the point of showing it here rather than describing it.
+        */}
+        <States label="inline" stack>
+          <div className="flex w-full max-w-3xl items-center gap-5 rounded-card border border-line bg-card px-4 py-2.5">
+            <span className="font-serif text-h2 text-ink">{t("site.name")}</span>
+            <StepHeader
+              variant="inline"
+              /*
+                 A different name from the banner above it, because two
+                 landmarks with one name is an axe failure and, more to the
+                 point, an unusable landmark list. Both strings are real: the
+                 dashboard's import wizard says "Claim your listing" and the
+                 onboarding funnel says "Set up your listing".
+              */
+              label={t("onboarding.sequence")}
+              current={0}
+              progressLabel={(current, total) =>
+                t("onboarding.step_of", { current: String(current), total: String(total) })
+              }
+              steps={GALLERY_STEPS}
             />
           </div>
         </States>

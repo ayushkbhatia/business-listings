@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { runDunning } from "@/lib/billing/dunning-job";
 import { applyEndedCancellations } from "@/lib/billing/service";
 import { pruneAttempts } from "@/lib/auth/attempts";
+import { LONGEST_RATE_WINDOW_MS, pruneRateLimitHits } from "@/lib/rate-limit";
 import { measureResponseTimes } from "@/lib/metrics/job";
 import { measureProfileStrength } from "@/lib/metrics/strength-job";
 import { sweepAreaPages } from "@/lib/seo/area";
@@ -42,6 +43,9 @@ export const dynamic = "force-dynamic";
  */
 const KEEP_ATTEMPTS_MS = 24 * 60 * 60 * 1000;
 
+/** How many of the longest rate-limit window to keep. Margin, not tidiness. */
+const RATE_HIT_MARGIN = 12;
+
 export async function GET(request: NextRequest) {
   const refusal = authorizeJob(request, "daily");
   if (refusal) return refusal;
@@ -54,6 +58,21 @@ export async function GET(request: NextRequest) {
     async prunedAuthAttempts() {
       const pruned = await pruneAttempts(olderThan);
       return { pruned, olderThan };
+    },
+    /*
+       The same argument as the line above, one table over.
+
+       `rate_limit_hit` counts board 2a's unauthenticated search, so it grows
+       with traffic rather than with sign-ins, and nothing else would ever
+       delete from it. The cutoff is a security parameter for the same reason:
+       pruning inside the longest window in `RATE_POLICIES` hands back an
+       allowance somebody has already spent. A generous multiple of that window
+       leaves margin and still keeps the table bounded.
+    */
+    async prunedRateLimitHits() {
+      const cutoff = new Date(Date.now() - RATE_HIT_MARGIN * LONGEST_RATE_WINDOW_MS);
+      const pruned = await pruneRateLimitHits(cutoff);
+      return { pruned, olderThan: cutoff };
     },
     /*
        The two measurements, moved here off an hourly schedule.

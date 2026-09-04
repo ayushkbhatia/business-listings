@@ -2335,6 +2335,39 @@ model SearchQueryLog {
   @@map("search_query_log")
 }
 
+/// One row per rate-limited request. The generic sibling of `AuthAttempt`.
+///
+/// Board 2a's search is unauthenticated by design — a supplier looking for
+/// their own licence record has no account yet, and making them sign up to find
+/// out whether we hold them is the fastest way to lose them. Unauthenticated
+/// and unmetered is a different thing, so the search is metered here.
+///
+/// A separate table from `AuthAttempt` rather than a new value on its enum:
+/// that one is the audit trail a locked-out person is entitled to see, it
+/// carries a raw phone number or email as its identifier, and its retention is
+/// a security parameter tied to the OTP windows. This one holds a salted digest
+/// of whatever identified the caller and nothing a person could be recognised
+/// from, and it is pruned on a much shorter clock.
+model RateLimitHit {
+  id String @id @default(cuid())
+
+  /// Which limit this counts against — `claim_search`. Never a user-facing
+  /// string; the policy for a bucket lives in `lib/rate-limit/policy.ts`.
+  bucket String
+  /// A salted SHA-256 digest of the caller — the session's actor id where there
+  /// is one, otherwise the forwarded IP. Never the address itself: this table
+  /// exists to count, and an address kept in order to count is an address kept
+  /// for no reason once the window has passed.
+  identifier String
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  /// The window read, in the order it is filtered.
+  @@index([bucket, identifier, createdAt])
+  /// The prune.
+  @@index([createdAt])
+  @@map("rate_limit_hit")
+}
+
 /// A saved search plus its alert cadence. /account/saved.
 model SavedSearch {
   id        String   @id @default(cuid())
