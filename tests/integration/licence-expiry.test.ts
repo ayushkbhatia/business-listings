@@ -59,7 +59,6 @@ async function addBusiness(fields: {
       publishedAt: new Date(),
       verificationTier: fields.tier,
       verifiedAt: fields.tier > 0 ? new Date("2025-01-10T00:00:00.000Z") : null,
-      visitedAt: fields.tier >= 3 ? new Date("2025-02-20T00:00:00.000Z") : null,
       suspendedAt: fields.suspendedAt ?? null,
     },
   });
@@ -69,7 +68,7 @@ async function addBusiness(fields: {
 async function tierOf(slug: string) {
   const row = await prisma.business.findUniqueOrThrow({
     where: { slug },
-    select: { verificationTier: true, verifiedAt: true, visitedAt: true },
+    select: { verificationTier: true, verifiedAt: true },
   });
   return row;
 }
@@ -96,14 +95,14 @@ afterAll(async () => {
 });
 
 describe("the drop lands where the ladder stays true", () => {
-  it("takes an expired tier 4 down to 1, not to 2", async () => {
+  it("takes an expired top tier down to 1, not to 2", async () => {
     /*
        The whole reason this file exists. The schema said "drops to 2" and 2 is
        `VERIFIED_TIER` — the badge threshold — while tier 2's own published
        requirement is "we check the licence with the issuing authority and
        confirm it is current". An expired licence falsifies exactly that.
     */
-    const slug = await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 4 });
+    const slug = await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 3 });
 
     await sweepExpiredLicences(NOW);
 
@@ -114,7 +113,7 @@ describe("the drop lands where the ladder stays true", () => {
     expect(isVerified(row.verificationTier)).toBe(false);
   });
 
-  it("drops tier 3 and tier 2 to the same floor", async () => {
+  it("drops every tier above the floor to the same floor", async () => {
     const three = await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 3 });
     const two = await addBusiness({ expiry: new Date(NOW.getTime() - 400 * DAY), tier: 2 });
 
@@ -124,29 +123,28 @@ describe("the drop lands where the ladder stays true", () => {
     expect((await tierOf(two)).verificationTier).toBe(1);
   });
 
-  it("leaves verifiedAt and visitedAt alone", async () => {
+  it("leaves verifiedAt alone", async () => {
     /*
        Those columns say something happened on a date, and it did. Blanking them
        would erase the history that tells an ops lead what to re-check when the
        supplier comes back with a renewal.
     */
-    const slug = await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 4 });
+    const slug = await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 3 });
 
     await sweepExpiredLicences(NOW);
 
     const row = await tierOf(slug);
     expect(row.verifiedAt).toEqual(new Date("2025-01-10T00:00:00.000Z"));
-    expect(row.visitedAt).toEqual(new Date("2025-02-20T00:00:00.000Z"));
   });
 });
 
 describe("what it must not touch", () => {
   it("leaves a licence expiring tomorrow at its tier", async () => {
-    const slug = await addBusiness({ expiry: new Date(NOW.getTime() + DAY), tier: 4 });
+    const slug = await addBusiness({ expiry: new Date(NOW.getTime() + DAY), tier: 3 });
 
     await sweepExpiredLicences(NOW);
 
-    expect((await tierOf(slug)).verificationTier).toBe(4);
+    expect((await tierOf(slug)).verificationTier).toBe(3);
   });
 
   it("has no grace period — expired by a second is expired", async () => {
@@ -185,13 +183,13 @@ describe("what it must not touch", () => {
     */
     const slug = await addBusiness({
       expiry: new Date(NOW.getTime() - DAY),
-      tier: 4,
+      tier: 3,
       suspendedAt: new Date("2026-05-01T00:00:00.000Z"),
     });
 
     await sweepExpiredLicences(NOW);
 
-    expect((await tierOf(slug)).verificationTier).toBe(4);
+    expect((await tierOf(slug)).verificationTier).toBe(3);
   });
 });
 
@@ -211,7 +209,7 @@ describe("the report it returns", () => {
   });
 
   it("is idempotent — a second run in the same day changes nothing", async () => {
-    await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 4 });
+    await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 3 });
 
     await sweepExpiredLicences(NOW);
     const second = await sweepExpiredLicences(NOW);
@@ -244,7 +242,7 @@ describe("the daily run actually performs it", () => {
   let original: string | undefined;
 
   it("drops a lapsed listing through GET /api/jobs/daily", async () => {
-    const slug = await addBusiness({ expiry: new Date(Date.now() - DAY), tier: 4 });
+    const slug = await addBusiness({ expiry: new Date(Date.now() - DAY), tier: 3 });
 
     original = process.env["CRON_SECRET"];
     process.env["CRON_SECRET"] = SECRET;
@@ -288,7 +286,7 @@ describe("the daily run actually performs it", () => {
 describe("staff cannot raise a tier the sweep would take back", () => {
   /*
      Two writers to one column. Without a floor both know about, an ops lead
-     sets tier 4 on a lapsed licence, the nightly sweep undoes it before
+     sets the top tier on a lapsed licence, the nightly sweep undoes it before
      morning, and the console shows a tier that keeps reverting with nothing on
      screen saying why. This is the other half of the fix, not a bonus.
   */

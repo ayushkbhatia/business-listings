@@ -26,10 +26,6 @@ import { DN_SYNONYMS } from "../lib/trade/nominal-size.js";
 // The key and the estimates from the module that owns both — a typo here would
 // be a row nothing reads.
 import { FALLBACK_RAMADAN, RAMADAN_SETTING_KEY } from "../lib/trade/hours.js";
-// Board 8a's site-visit fee, on the same terms. `lib/setup/tasks.ts` is pure —
-// no `server-only`, no database client — which is what lets a seed run by plain
-// tsx read the figure the card draws instead of keeping a second copy of it.
-import { FALLBACK_SITE_VISIT_FEE_AED, SITE_VISIT_FEE_SETTING_KEY } from "../lib/setup/tasks.js";
 import {
   CATALOGUE_IMPORT_PRICING_KEY,
   FALLBACK_CATALOGUE_PRICING,
@@ -225,7 +221,7 @@ async function main() {
       "notification_delivery","notification_template","notification_preference","review_request",
       "invoice_line","invoice","placement_slot","subscription",
       "supplier_report","review","message","quote_line","quote",
-      "listing_change_request","claim_submission","site_visit_request","team_invite",
+      "listing_change_request","claim_submission","team_invite",
       "missed_enquiry","enquiry_recipient","enquiry_line","enquiry",
       "document","media","product","seller_template","location",
       "business_category","business","spec_field","spec_template",
@@ -266,45 +262,6 @@ async function main() {
     where: { key: RAMADAN_SETTING_KEY },
     update: {},
     create: { key: RAMADAN_SETTING_KEY, value: FALLBACK_RAMADAN },
-  });
-
-  /*
-   * The site-visit fee, as a platform setting.
-   *
-   * Board 8a draws AED 750 on the site-visit card and its own open question 2
-   * says the figure is unconfirmed against the pricing page. A setting is the
-   * right answer to an unconfirmed number: correcting it costs a row rather
-   * than a build, a deploy and a cold cache. That is CLAUDE.md's rule that
-   * content belongs in the database and its rule that every number is a query,
-   * landing on the same figure.
-   *
-   * The value is `FALLBACK_SITE_VISIT_FEE_AED` rather than 750 typed out again.
-   * Two copies of a price drift the first time either moves, and the copy that
-   * loses is the one nobody is looking at — the card would go on saying 750
-   * while the row said something else, and it is the row the hub charges from.
-   *
-   * `updatedById` is left unset, which the schema allows on purpose: the column
-   * is nullable so that a migration or a seed can write a settings row before
-   * any user exists to attribute it to. A **staff** write to this table is a
-   * different act — a state change, owing an audit row with a written reason
-   * under CLAUDE.md non-negotiable 3 — and that writer is board 12h's, not the
-   * seed's. Nothing here is a precedent for an unattributed write from a screen.
-   *
-   * Unlike the Ramadan row above, no migration writes this one, so it exists
-   * where the seed has run and nowhere else. Production reads the compiled
-   * figure until 12h's settings screen writes the confirmed one, which is the
-   * fallback doing its job rather than a gap.
-   *
-   * An upsert for the reason given above the Ramadan row — `truncate ...
-   * cascade` over `user` reaches `platform_setting` through this same nullable
-   * key, so a reseed drops the row and this is what puts it back — and because
-   * an upsert that updates nothing leaves a confirmed fee alone rather than
-   * overwriting somebody's correction with the drawn estimate.
-   */
-  await prisma.platformSetting.upsert({
-    where: { key: SITE_VISIT_FEE_SETTING_KEY },
-    update: {},
-    create: { key: SITE_VISIT_FEE_SETTING_KEY, value: FALLBACK_SITE_VISIT_FEE_AED },
   });
 
   /*
@@ -373,7 +330,7 @@ async function main() {
       "the medium, because a brass body in a chilled-water line is a warranty claim waiting " +
       "to happen.\n\n" +
       "Suppliers on this page are listed with what we have checked about them: the trade " +
-      "licence, and for some, a visit to the address on it. Verification says nothing about " +
+      "licence, and for some, an audit of the trading history behind it. Verification says nothing about " +
       "the quality of the goods, and it is not meant to. It says the business exists, at the " +
       "address it claims, under the licence it gave us. Everything else — price, terms, " +
       "delivery — is between you and them, and always was.",
@@ -393,7 +350,7 @@ async function main() {
       "Delivery matters more here than in most trades. Six-metre lengths need a vehicle that " +
       "can carry them and a site that can receive them, and a supplier who has done the " +
       "route before will ask about access before they quote. Suppliers on this page are " +
-      "listed with what we have checked: the trade licence, and for some, a visit to the " +
+      "listed with what we have checked: the trade licence, and for some, an audit of the " +
       "address on it. What you agree on price and terms is between the two of you.",
   };
 
@@ -605,9 +562,31 @@ async function main() {
 
     // Unclaimed listings are tier 0 by definition — nothing has been checked.
     // Claimed ones walk the ladder so every badge state appears at least twice.
-    const TIER_LADDER = [3, 1, 4, 2, 2, 3, 1, 2, 4, 1, 2, 3, 2, 1] as const;
+    /*
+       Nought to three since site visits were withdrawn. The two 4s became 3s
+       rather than being dropped, so the top rung still has suppliers on it —
+       a ladder whose highest rung is empty on every seeded database is a rung
+       nobody ever sees rendered.
+    */
+    const TIER_LADDER = [3, 1, 3, 2, 2, 3, 1, 2, 3, 1, 2, 3, 2, 1] as const;
     const tier = claimed ? TIER_LADDER[Math.floor(i / 3) % TIER_LADDER.length]! : 0;
-    const visitedAt = tier >= 3 ? days(-int(20, 200)) : null;
+
+    /*
+       Drawn and discarded, on purpose.
+
+       This used to be `visitedAt`. The generator is a seeded PRNG, so the
+       *number of draws* is part of the output: removing this one shifted every
+       subsequent slug, and the seed died three hundred lines later looking for
+       a business whose name had changed. Keeping the draw keeps every fixture
+       slug in this file stable against a change that had nothing to do with
+       them. The condition matters as much as the call: the original only drew
+       when the tier was 3 or above, so an unconditional draw shifts the
+       sequence just as surely as no draw at all.
+
+       Delete it only alongside a deliberate reseed of everything that names a
+       slug.
+    */
+    if (tier >= 3) void int(20, 200);
 
     const licenceExpiry = days(int(-40, 500));
     // Expiry already past means the scheduled job has dropped the tier to 2.
@@ -634,8 +613,6 @@ async function main() {
           : null,
         verificationTier: effectiveTier,
         verifiedAt: effectiveTier > 0 ? days(-int(30, 300)) : null,
-        visitedAt,
-        visitedByStaffId: visitedAt ? uuid(3) : null,
         claimStatus,
         planId,
         primaryCategoryId: catBySlug.get(categorySlug)!,
@@ -1074,8 +1051,6 @@ async function seedPumps(db: Db, catBySlug: Map<string, string>) {
             : null,
         verificationTier: tier,
         verifiedAt: tier > 0 ? days(-int(20, 200)) : null,
-        visitedAt: tier >= 3 ? days(-int(20, 90)) : null,
-        visitedByStaffId: tier >= 3 ? uuid(3) : null,
         claimStatus: tier > 0 ? "claimed" : "unclaimed",
         primaryCategoryId: categoryId,
         source: "licence_import",
@@ -1177,7 +1152,7 @@ async function seedHomeSignals(db: Db, businesses: Biz[], opsLeadId: string) {
         subject: `Business:${business.id}`,
         reason:
           business.tier >= 3
-            ? "Site visit completed. Trade counter, stock and licence board all confirmed on site."
+            ? "Trading history audited. Enquiries answered, quotes sent and reply times all match the listing."
             : "Trade licence checked against the issuing authority and the contact number answered.",
         before: { verificationTier: business.tier - 1 },
         after: { verificationTier: business.tier },
@@ -1189,7 +1164,7 @@ async function seedHomeSignals(db: Db, businesses: Biz[], opsLeadId: string) {
     // small contradiction that costs the whole trust ladder its credit.
     await db.business.update({
       where: { id: business.id },
-      data: business.tier >= 3 ? { verifiedAt: when, visitedAt: when } : { verifiedAt: when },
+      data: { verifiedAt: when },
     });
   }
   console.log(`   ${recentlyVerified.length} tier increases inside 7 days`);
@@ -2903,7 +2878,6 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
             teamSeats: plan.teamSeats,
             rankingMultiplier: Number(plan.rankingMultiplier),
             customDomain: plan.customDomain,
-            siteVisitIncluded: plan.siteVisitIncluded,
             sortOrder: plan.sortOrder,
           },
           NOW,
@@ -3193,7 +3167,7 @@ async function seedTrust(db: Db, businesses: Biz[], opsLeadId: string, moderator
         actorId: opsLeadId,
         action: "tier_change",
         subject: `Business:${claimed[0]!.id}`,
-        reason: "Site visit completed on 2 Aug. Stock and trade counter confirmed, promoted to tier 3.",
+        reason: "Trading history audited to 2 Aug. Reply times and quote volume both match the listing, promoted to tier 3.",
         before: { verificationTier: 2 },
         after: { verificationTier: 3 },
         createdAt: days(-12),
@@ -3693,7 +3667,6 @@ async function seedReviewDepth(db: Db) {
         "Valve and fitting stockist supplying MEP contractors across Dubai and the Northern Emirates. Counter sales, scheduled site delivery and an indent desk for sizes held off the shelf.",
       verificationTier: 3,
       verifiedAt: days(-64),
-      visitedAt: days(-64),
       claimStatus: "claimed",
       planId: "pro",
       primaryCategoryId: category.id,
@@ -4077,7 +4050,6 @@ main()
       claims: await prisma.claimSubmission.count(),
       claimConflicts: await prisma.claimConflict.count(),
       undecidedClaims: await prisma.claimSubmission.count({ where: { decidedAt: null } }),
-      visitRequests: await prisma.siteVisitRequest.count(),
       auditEvents: await prisma.auditEvent.count(),
       contactReveals: await prisma.contactReveal.count(),
       zeroResults: await prisma.zeroResultQuery.count(),
@@ -4450,7 +4422,7 @@ async function seedNotificationTemplates(db: Db) {
 // Every status the enums allow appears at least once, and every decided row
 // carries the audit event CLAUDE.md non-negotiable 3 requires — written by a
 // role that actually holds the capability. `queue.decide` is moderator or ops
-// lead, `claim.resolve` is ops lead alone, `visit.record` is ops lead or field
+// lead and `claim.resolve` is ops lead alone.
 // officer. A fixture decided by the wrong role is a row the permission matrix
 // forbids, sitting in the database as if it were normal.
 //
@@ -4466,7 +4438,7 @@ async function seedQueues(
   opsLeadId: string,
   moderatorId: string,
 ) {
-  console.log("→ admin queues: listing changes, claims, visit requests");
+  console.log("→ admin queues: listing changes, claims");
 
   const claimed = businesses.filter((b) => b.claim === "claimed");
   const disputed = businesses.filter((b) => b.claim === "disputed");
@@ -4789,61 +4761,10 @@ async function seedQueues(
     },
   });
 
-  // ── Site visit requests ───────────────────────────────────────────────────
-  // Board 8e task 4. The seller asks; the tier only moves once somebody has
-  // actually been, which is why the request and `Business.visitedAt` are
-  // different columns.
-
-  const visitAsked = claimed[2]!;
-  const visitScheduled = claimed[4]!;
-  const visitDone = claimed[5]!;
-  const visitCancelled = claimed[7]!;
-
-  const [v2, v4, v5, v7] = await Promise.all([
-    ownerOf(visitAsked.id),
-    ownerOf(visitScheduled.id),
-    ownerOf(visitDone.id),
-    ownerOf(visitCancelled.id),
-  ]);
-
-  await db.siteVisitRequest.createMany({
-    data: [
-      {
-        businessId: visitAsked.id,
-        requestedById: v2,
-        preferredNote: "Any morning except Friday. Warehouse is open from 08:00.",
-        createdAt: days(-2),
-      },
-      {
-        businessId: visitScheduled.id,
-        requestedById: v4,
-        preferredNote: "Ramadan hours this month, so before 14:00 if possible.",
-        scheduledFor: days(6),
-        createdAt: days(-9),
-      },
-      {
-        businessId: visitDone.id,
-        requestedById: v5,
-        preferredNote: "Trade counter and the yard behind it.",
-        scheduledFor: days(-21),
-        completedAt: days(-21),
-        createdAt: days(-30),
-      },
-      {
-        businessId: visitCancelled.id,
-        requestedById: v7,
-        preferredNote: "Second week of the month.",
-        scheduledFor: days(-12),
-        cancelledAt: days(-13),
-        createdAt: days(-25),
-      },
-    ],
-  });
-
   // ── The audit rows those decisions owe ────────────────────────────────────
   // Non-negotiable 3. Each action is written by a role that holds the
   // capability: queue.decide is moderator or ops lead, claim.resolve is ops
-  // lead alone, visit.record is ops lead or field officer.
+  // lead alone.
 
   await db.auditEvent.createMany({
     data: [
@@ -4887,26 +4808,9 @@ async function seedQueues(
         after: { claimStatus: "disputed" },
         createdAt: days(-15),
       },
-      {
-        // The field officer's own row. lib/auth/subject.ts reads exactly this
-        // to decide whether they may then move the tier — a verifier can set a
-        // tier only for a visit they recorded, so a visit with no recorder is
-        // a tier nobody can move.
-        actorId: uuid(3),
-        action: "visit_recorded",
-        subject: `Business:${visitDone.id}`,
-        reason:
-          "Attended the trade counter and the yard. Stock on the shelves matches the catalogue; counter staff present and selling.",
-        after: { completedAt: days(-21).toISOString() },
-        createdAt: days(-21),
-      },
     ],
   });
 
-  await db.business.update({
-    where: { id: visitDone.id },
-    data: { visitedAt: days(-21), visitedByStaffId: uuid(3) },
-  });
 }
 
 /**

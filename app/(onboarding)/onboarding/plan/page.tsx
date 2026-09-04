@@ -45,7 +45,6 @@ const TASK_HREF: Record<Task, string> = {
   photos: "/dashboard/media",
   products: "/dashboard/products",
   team: "/dashboard/team",
-  visit: "/dashboard/setup/visit",
 };
 
 export default async function PlanStepPage() {

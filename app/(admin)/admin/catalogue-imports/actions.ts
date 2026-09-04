@@ -41,7 +41,7 @@ function settled(result: StaffMoveResult): ActionResult {
   }
   switch (result.error) {
     case "not_found":
-      return { ok: false, error: t("admin.visit.not_found") };
+      return { ok: false, error: t("admin.record.not_found") };
     case "out_of_range":
       return {
         ok: false,

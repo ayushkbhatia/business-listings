@@ -180,7 +180,6 @@ export function BusinessTable({ rows, setTier, suspend, lift }: BusinessTablePro
             <RadioGroup
               legend={t("admin.businesses.tier_legend")}
               orientation="horizontal"
-              hint={t("admin.businesses.tier_visit_note")}
             >
               {TIERS.map((value) => (
                 <Radio

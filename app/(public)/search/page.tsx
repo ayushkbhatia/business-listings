@@ -251,7 +251,7 @@ export default async function SearchPage({ searchParams }: Props) {
             searchArea: t("map.search_area"),
             freeZones: t("map.free_zones"),
             legend: t("map.legend"),
-            legendVisited: t("map.legend_visited"),
+            legendHeadOffice: t("map.legend_head_office"),
             legendVerified: t("map.legend_verified"),
             legendUnverified: t("map.legend_unverified"),
             empty: t("map.empty"),
@@ -339,7 +339,6 @@ export default async function SearchPage({ searchParams }: Props) {
                       : "",
                     verificationTier: business.verificationTier,
                     verifiedAt: business.verifiedAt,
-                    visitedAt: business.visitedAt,
                     coverImageUrl: business.media[0]
                       ? publicUrl(MEDIA_BUCKET, business.media[0].storagePath)
                       : null,

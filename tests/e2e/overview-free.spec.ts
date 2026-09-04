@@ -73,7 +73,7 @@ test.describe("board 11a — the Free overview", () => {
 
   test("dims each locked feature and names what unlocks it", async ({ page }) => {
     // Never hidden: a seller cannot want what they cannot see.
-    for (const feature of ["Your own web address", "A verification site visit"]) {
+    for (const feature of ["Your own web address"]) {
       const panel = page.getByRole("region", { name: feature });
       await expect(panel).toBeVisible();
       await expect(panel).toContainText(`${feature} is on Pro, AED 899 a month`);

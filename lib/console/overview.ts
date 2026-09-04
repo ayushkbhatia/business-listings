@@ -42,8 +42,6 @@ export const SLA_DAYS = {
   claim: 3,
   /** Somebody reported a supplier. Conduct queues age badly. */
   report: 5,
-  /** A seller asked for the visit that unlocks tier 3. */
-  visit: 14,
   /** A payment failed. D14 is when the plan drops, so 14 is the deadline. */
   dunning: 14,
 } as const;
@@ -110,8 +108,6 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
     reportsOpen,
     reportsLate,
     reportsOldest,
-    visitsOpen,
-    visitsLate,
     pastDue,
     unpaidInvoices,
     expiringLicences,
@@ -160,15 +156,6 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
       where: { outcome: null },
       orderBy: { createdAt: "asc" },
       select: { createdAt: true },
-    }),
-
-    prisma.siteVisitRequest.count({ where: { completedAt: null, cancelledAt: null } }),
-    prisma.siteVisitRequest.count({
-      where: {
-        completedAt: null,
-        cancelledAt: null,
-        createdAt: { lt: cutoff(now, SLA_DAYS.visit) },
-      },
     }),
 
     prisma.subscription.count({ where: { status: "past_due" } }),
@@ -261,7 +248,6 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
       labelKey: "console.job.trust",
       metrics: [
         metric("reports", "console.metric.reports", "reports", "/admin/reports", reportsOpen, reportsLate, reportsOldest?.createdAt ?? null),
-        metric("visits", "console.metric.visits", "visits", "/admin/visits", visitsOpen, visitsLate),
         metric("expiring", "console.metric.expiring", "businesses", "/admin/businesses", expiringLicences),
       ],
     },

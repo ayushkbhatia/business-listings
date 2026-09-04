@@ -50,7 +50,6 @@ describe("criterion 1 — every figure the page prints exists on the row", () =>
           "photoLimit",
           "productLimit",
           "rankingMultiplier",
-          "siteVisitIncluded",
           "sortOrder",
           "teamSeats",
           "withdrawnAt",

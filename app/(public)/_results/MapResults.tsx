@@ -42,7 +42,7 @@ export interface MapResultsProps {
     searchArea: string;
     freeZones: string;
     legend: string;
-    legendVisited: string;
+    legendHeadOffice: string;
     legendVerified: string;
     legendUnverified: string;
     empty: string;
@@ -172,7 +172,7 @@ export function MapResults({
               searchArea: labels.searchArea,
               freeZones: labels.freeZones,
               legend: labels.legend,
-              legendVisited: labels.legendVisited,
+              legendHeadOffice: labels.legendHeadOffice,
               legendVerified: labels.legendVerified,
               legendUnverified: labels.legendUnverified,
               empty: labels.empty,

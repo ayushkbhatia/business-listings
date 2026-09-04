@@ -69,25 +69,23 @@ const HREF: Record<SetupTaskId, string> = {
   photos: "/dashboard/setup/photos",
   products: "/dashboard/products",
   team: "/dashboard/team",
-  visit: "/dashboard/setup/visit",
 };
 
 /**
  * The two that carry a filled control.
  *
- * Board 8a orders the four by weight times impact rather than by score:
- * photographs and a catalogue move enquiry volume, and the two trust tasks
- * follow. Four identical primary buttons would say the four are
- * interchangeable, which is what the ordering exists to deny.
+ * Board 8a orders the tasks by weight times impact rather than by score:
+ * photographs and a catalogue move enquiry volume, and the trust task follows.
+ * Identical primary buttons on every card would say they are interchangeable,
+ * which is what the ordering exists to deny.
  */
 const LEADS: readonly SetupTaskId[] = ["photos", "products"];
 
-/** Which button verb each task takes. Board 8a words all four differently. */
+/** Which button verb each task takes. Board 8a words each one differently. */
 const CTA: Record<SetupTaskId, MessageKey> = {
   photos: "setup.cta.start",
   products: "setup.cta.start",
   team: "setup.cta.invite",
-  visit: "setup.cta.book",
 };
 
 /**
@@ -288,7 +286,7 @@ function cardProps(task: SetupTaskRow, state: SetupHubState) {
 
   return {
     title: t(`setup.card.${task.id}` as never),
-    body: taskBody(task, state),
+    body: t(`setup.card.${task.id}_body` as never),
     chip: chipIsPoints
       ? t("setup.chip_points", { points: formatCount(task.points) })
       : task.id === "team"
@@ -312,25 +310,6 @@ function cardProps(task: SetupTaskRow, state: SetupHubState) {
     href: HREF[task.id],
     disabled: state.suspended,
   };
-}
-
-/**
- * The visit card's body carries its own price line; the other three do not.
- *
- * Board 8a is explicit that the card is never hidden on a plan that does not
- * include a visit — it is the strongest upgrade argument in the product — so
- * the difference is a sentence and a destination rather than a missing row.
- */
-function taskBody(task: SetupTaskRow, state: SetupHubState): string {
-  const body = t(`setup.card.${task.id}_body` as never);
-  if (task.id !== "visit" || !state.plan) return body;
-
-  return state.plan.siteVisitIncluded
-    ? `${body} ${t("setup.card.visit_included", { plan: state.plan.name })}`
-    : `${body} ${t("setup.card.visit_priced", {
-        fee: formatCount(state.siteVisitFeeAed),
-        plan: state.plan.name,
-      })}`;
 }
 
 /* ── What is already finished stays on the page ──────────────────────────── */

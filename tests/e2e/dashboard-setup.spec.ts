@@ -108,17 +108,6 @@ test.describe("board 8a — the setup hub", () => {
     await expect(table.getByText(/\d+ of \d+ points/).first()).toBeVisible();
   });
 
-  test("prices the site visit against the plan rather than hiding the card", async ({ page }) => {
-    /*
-       Never hidden on a plan that does not include it — it is the strongest
-       upgrade argument in the product, so the difference is a sentence and a
-       destination rather than a missing row. This seat is on Pro, so it reads
-       as included.
-    */
-    await expect(page.getByText(/Ask for a site visit/)).toBeVisible();
-    await expect(page.getByText(/(Included on Pro|AED [\d,]+ on)/)).toBeVisible();
-  });
-
   test("states the one-nudge promise the job has to keep", async ({ page }) => {
     await expect(page.getByText(/We will remind you once/)).toBeVisible();
     await expect(page.getByText(/then nothing\. We do not chase\./)).toBeVisible();

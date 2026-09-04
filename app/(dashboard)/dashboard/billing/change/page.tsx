@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
   locationLimit: true, photoLimit: true, teamSeats: true, rankingMultiplier: true,
-  customDomain: true, siteVisitIncluded: true, sortOrder: true,
+  customDomain: true, sortOrder: true,
   // What a year costs, so a card can state the term the seller is actually on.
   annualMonthsCharged: true,
 } as const;

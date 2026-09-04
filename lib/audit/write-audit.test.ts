@@ -122,11 +122,17 @@ describe("staffMutation", () => {
 
   it("refuses a subject-dependent capability with no subject check", async () => {
     /*
-     * The failure this prevents was silent. `assertCan` is role membership, and
-     * for this row a role test passes for every field verifier — including one
-     * tiering a business they have never visited, which is the single thing
-     * CLAUDE.md's second non-negotiable exists to stop. The old contract let
-     * that call run and write a tidy audit row saying it was fine.
+     * The failure this prevents is silent. `assertCan` is role membership, so
+     * for a subject-dependent row a role test passes for everybody who holds
+     * it at all, and the old contract let that call run and write a tidy audit
+     * row saying it was fine.
+     *
+     * The example used to be `business.verification_tier.write`, where the
+     * role test passed for every field verifier including one tiering a
+     * business they had never visited — the single thing CLAUDE.md's second
+     * non-negotiable exists to stop. Site visits were withdrawn and that row
+     * became a plain ops-lead check, so this uses the audited row that is
+     * still subject-dependent: reading another business's enquiries.
      */
     const run = vi.fn(async () => ({ result: "ok" }));
 
@@ -134,7 +140,7 @@ describe("staffMutation", () => {
       staffMutation(
         {
           actor: opsLead,
-          capability: "business.verification_tier.write",
+          capability: "enquiry.read_other_business",
           subject: "Business:clx1",
           reason: REASON,
         },
@@ -175,9 +181,6 @@ describe("staffMutation", () => {
         capability: "business.verification_tier.write",
         subject: "Business:clx1",
         reason: REASON,
-        // Subject-dependent, so the caller has to say it ran the narrower
-        // check — see lib/verification/service.ts, which does.
-        subjectChecked: true,
       },
       run,
     );
@@ -198,7 +201,6 @@ describe("staffMutation", () => {
           capability: "business.verification_tier.write",
           subject: "Business:clx1",
           reason: REASON,
-          subjectChecked: true,
         },
         run,
       ),

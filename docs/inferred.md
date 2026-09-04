@@ -2943,3 +2943,64 @@ must agree.
   `invite.intro` both named `{email}`; the first now has a phone variant and the second's
   placeholder is `{contact}`, which is what it has always actually carried since the
   channel split.
+
+## Site visits, withdrawn
+
+Board 8e shipped in handoff 3 and is gone. Not deferred — removed, at the user's
+instruction, because the task could never close by a seller's own effort and so the setup
+hub could never be finished: `openCount` never reached zero, the completion redirect never
+fired, and the sidebar told every supplier they had something left to do for ever.
+
+What went: `/dashboard/setup/visit` and its request form, `/admin/visits` and board 4h's
+report filing, `lib/visits/service.ts`, the `SiteVisitRequest`, `SiteVisitReport` and
+`SiteVisitPhoto` tables, `Business.visitedAt` and `visitedByStaffId`,
+`Plan.siteVisitIncluded`, the `visit.request` and `visit.record` capabilities, the
+`visit_recorded` audit action, the site-visit fee platform setting, and sixty-six catalogue
+keys.
+
+### The ladder had to shorten with it
+
+Tiers 3 and 4 were "site visited" and "premises visited **and** trading history audited".
+Both rested on somebody standing in the warehouse, and a rung whose requirement nobody
+performs is a badge that means whatever staff decide on the day.
+
+So the visited rung is gone and `audited` moved down to 3, resting on trading history and
+buyer outcomes — enquiries answered, quotes sent, reply times — which this platform
+already measures. The migration demotes the eight visited-only suppliers to 2 and moves
+the one audited supplier from 4 to 3, **in that order**: every tier-4 row was also visited,
+so promoting first and demoting second catches the row just promoted and drops it to 2.
+Written the wrong way round the first time; the local run put nobody on the top rung, which
+is how it was found.
+
+`MAX_TIER` is 3 in `lib/verification/service.ts` and the
+`business_verification_tier_range` CHECK is rewritten to match, so the ceiling is enforced
+under the code rather than only asserted by it.
+
+### The tier grant was narrowed, not widened
+
+`business.verification_tier.write` was held by an ops lead unconditionally and by a field
+verifier **for a visit they recorded** — a subject check reading `visitedByStaffId`, which
+permissions.md §07 is explicit is "not a general grant".
+
+With no visit to read, that half had two possible resolutions: drop the condition and let
+any field verifier tier any business, or drop the role. The second is the safe direction
+and is what shipped. The capability is `staff_ops_lead` only, marked `source: "inferred"`
+because it now departs from §07, and `canSetVerificationTier` is deleted — the row is no
+longer subject-dependent, so `staffMutation` refuses `subjectChecked` on it.
+
+`enquiry.read_other_business` is now the only audited capability that is subject-dependent,
+and the tests that used the tier row to exercise that guard use it instead.
+
+### Found in passing
+
+- **The map legend has been lying since board 1c.** `map.legend_visited` read "Verified by
+  site visit" against a moss pin that the layer paints for a **head office** — see the
+  `head_office` case in `ResultsMap.tsx`. Wrong before visits were withdrawn and wrong
+  twice after. Renamed to `map.legend_head_office` and reworded to what the map draws.
+- **The seed's PRNG is positional.** Removing one `int()` draw shifted every subsequent
+  slug and the seed died three hundred lines later looking for a business whose name had
+  changed. The draw is kept, discarded, and commented — including its condition, since an
+  unconditional draw shifts the sequence just as surely as none.
+- **Curated lists lost their only weighted criterion** and nothing replaced it. Inventing a
+  new weight to fill the slot would change who leads a published list for a reason no
+  reader was told about; the tier absorbs it, which is what the visited rung fed anyway.

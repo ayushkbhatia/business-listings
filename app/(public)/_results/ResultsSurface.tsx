@@ -283,7 +283,6 @@ export function ResultsList({
                     : "",
                   verificationTier: business.verificationTier,
                   verifiedAt: business.verifiedAt,
-                  visitedAt: business.visitedAt,
                   productCount: business._count.products,
                   reviewCount: business.reviewCount,
                   responseTimeMedianMs: business.responseTimeMedianMs,

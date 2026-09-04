@@ -39,7 +39,6 @@ export interface ListingCardBusiness {
   emirateName: string;
   verificationTier: number;
   verifiedAt?: Date | string | null;
-  visitedAt?: Date | string | null;
   logoUrl?: string | null;
   /** The 214px photo on a search row. Placeholder where a seller has none. */
   coverImageUrl?: string | null;
@@ -120,10 +119,11 @@ export interface ListingCardProps {
 }
 
 function badgeDate(business: ListingCardBusiness): string | undefined {
+  // Every dated rung dates from `verifiedAt` now. The visited rung was the only
+  // one that did not, and it went with site visits.
   const spec = tierSpec(business.verificationTier);
-  const value = spec.dateField === "visitedAt" ? business.visitedAt : business.verifiedAt;
-  if (spec.dateField === "none" || !value) return undefined;
-  return formatDate(value);
+  if (spec.dateField === "none" || !business.verifiedAt) return undefined;
+  return formatDate(business.verifiedAt);
 }
 
 export function ListingCard({

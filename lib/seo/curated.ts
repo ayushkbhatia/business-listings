@@ -33,7 +33,7 @@ export const MAX_REPLY_MS = 4 * 3_600_000;
 /** Reviews from real enquiries. Not testimonials, not imports. */
 export const MIN_REVIEWS = 15;
 
-export type CriterionKey = "verified" | "reply" | "reviews" | "visit" | "placement";
+export type CriterionKey = "verified" | "reply" | "reviews" | "placement";
 
 export interface Criterion {
   key: CriterionKey;
@@ -52,7 +52,6 @@ export const CRITERIA: readonly Criterion[] = [
   { key: "verified", kind: "required" },
   { key: "reply", kind: "required" },
   { key: "reviews", kind: "required" },
-  { key: "visit", kind: "weighted" },
   { key: "placement", kind: "never" },
 ];
 
@@ -64,7 +63,6 @@ export interface ListMember {
   responseTimeMedianMs: number;
   reviews: number;
   averageOverall: number;
-  visited: boolean;
   /** For the badge. Criterion 8: it says what was checked and when. */
   verifiedAt: Date | null;
   areaName: string | null;
@@ -97,8 +95,15 @@ const PUBLIC_BUSINESS = {
  *
  * The three required rules are applied in the query where they can be, and the
  * review count in memory because it is a filtered count over a relation. The
- * ordering is site visit first — the only weighted criterion — then the two
- * platform-owned trust signals, then how much evidence there is.
+ * ordering leads on verification tier, then reply speed, then how much evidence
+ * there is.
+ *
+ * It used to lead on the site visit, which was the only weighted criterion and
+ * is now not a thing this directory does. Nothing replaced it: inventing a new
+ * weight to fill the slot would change who appears at the top of a published
+ * list for a reason no reader was told about. The tier absorbs it — a visit was
+ * what tier 3 meant, so the businesses it used to lift are the ones the tier
+ * already ranks.
  */
 export async function membersOf(scope: {
   categoryId: string;
@@ -117,7 +122,6 @@ export async function membersOf(scope: {
       verificationTier: true,
       responseTimeMedianMs: true,
       verifiedAt: true,
-      visitedAt: true,
       locations: {
         where: { published: true },
         take: 1,
@@ -156,7 +160,6 @@ export async function membersOf(scope: {
       averageOverall:
         business.reviews.reduce((total, review) => total + review.overall, 0) /
         business.reviews.length,
-      visited: business.visitedAt !== null,
       verifiedAt: business.verifiedAt,
       areaName: business.locations[0]?.area?.name ?? null,
     });
@@ -173,7 +176,6 @@ export async function membersOf(scope: {
   */
   members.sort(
     (a, b) =>
-      Number(b.visited) - Number(a.visited) ||
       b.verificationTier - a.verificationTier ||
       a.responseTimeMedianMs - b.responseTimeMedianMs ||
       b.reviews - a.reviews ||

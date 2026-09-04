@@ -7,7 +7,7 @@ import { CAPABILITIES } from "@/lib/auth/capabilities";
  * The three queues handoff 4 drains, checked against a real seeded database.
  *
  * Handoff 3 fills `ListingChangeRequest`, `ClaimSubmission` and
- * `SiteVisitRequest` at runtime, and for three merges the seed did not — so
+ * the queue tables at runtime, and for three merges the seed did not — so
  * `pnpm db:seed` produced a database where `/admin/queue` had nothing to open
  * on. That is not a visible failure: an empty queue and a broken query look
  * identical on screen, and the screens that would have shown the difference
@@ -140,43 +140,6 @@ describe("claim submissions", () => {
     for (const row of rows) {
       if (row.decidedAt === null) expect(row.decisionReason).toBeNull();
       else expect(row.decisionReason?.trim().length ?? 0).toBeGreaterThan(0);
-    }
-  });
-});
-
-describe("site visit requests", () => {
-  it("cover asked, scheduled, completed and cancelled", async () => {
-    const rows = await prisma.siteVisitRequest.findMany({
-      select: { scheduledFor: true, completedAt: true, cancelledAt: true },
-    });
-
-    const asked = rows.filter((r) => !r.scheduledFor && !r.completedAt && !r.cancelledAt);
-    const scheduled = rows.filter((r) => r.scheduledFor && !r.completedAt && !r.cancelledAt);
-    const completed = rows.filter((r) => r.completedAt !== null);
-    const cancelled = rows.filter((r) => r.cancelledAt !== null);
-
-    expect(asked.length).toBeGreaterThan(0);
-    expect(scheduled.length).toBeGreaterThan(0);
-    expect(completed.length).toBeGreaterThan(0);
-    expect(cancelled.length).toBeGreaterThan(0);
-  });
-
-  it("leave a completed visit attributable to the staff member who made it", async () => {
-    /*
-     * lib/auth/subject.ts reads exactly this: a field verifier may set a tier
-     * only for a visit they recorded. A completed visit whose business has no
-     * `visitedByStaffId` is a tier nobody but ops lead can ever move, which is
-     * a permission bug that only shows up as a missing button.
-     */
-    const completed = await prisma.siteVisitRequest.findMany({
-      where: { completedAt: { not: null } },
-      select: { business: { select: { visitedAt: true, visitedByStaffId: true } } },
-    });
-
-    expect(completed.length).toBeGreaterThan(0);
-    for (const row of completed) {
-      expect(row.business.visitedAt).not.toBeNull();
-      expect(row.business.visitedByStaffId).not.toBeNull();
     }
   });
 });

@@ -211,7 +211,7 @@ describe("criterion 5 — every locked panel names what unlocks it", () => {
 
     // Two features that are genuinely a column, so the sentence is checkable.
     expect(cheapestPlanWith(overview!.allPlans, "customDomain", "free")?.id).toBe("pro");
-    expect(cheapestPlanWith(overview!.allPlans, "siteVisitIncluded", "free")?.id).toBe("pro");
+    expect(cheapestPlanWith(overview!.allPlans, "customDomain", "free")?.id).toBe("pro");
   });
 
   it("offers nothing to a seller already on the best plan for it", async () => {

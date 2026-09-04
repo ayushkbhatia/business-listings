@@ -44,8 +44,6 @@ function criterionLabel(key: (typeof CRITERIA)[number]["key"]): string {
       return t("best.criterion.reply", { hours: MAX_REPLY_MS / 3_600_000 });
     case "reviews":
       return t("best.criterion.reviews", { count: MIN_REVIEWS });
-    case "visit":
-      return t("best.criterion.visit");
     case "placement":
       return t("best.criterion.placement");
   }
@@ -181,7 +179,6 @@ export default async function CuratedListPage({ params }: Props) {
                     tierLabel={t("verify.tier", { tier: member.verificationTier })}
                     compact
                   />
-                  {member.visited && <Tag>{t("best.visited")}</Tag>}
                 </div>
               </div>
             </li>

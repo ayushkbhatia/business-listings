@@ -100,7 +100,6 @@ const PLAN_SELECT = {
   teamSeats: true,
   rankingMultiplier: true,
   customDomain: true,
-  siteVisitIncluded: true,
   sortOrder: true,
 } as const;
 

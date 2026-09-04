@@ -47,7 +47,6 @@ const PRICING_PLAN_SELECT = {
   teamSeats: true,
   rankingMultiplier: true,
   customDomain: true,
-  siteVisitIncluded: true,
   sortOrder: true,
   withdrawnAt: true,
   // What a year costs, in months. Null where the plan is monthly-only.

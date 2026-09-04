@@ -31,7 +31,6 @@ export default async function VerificationPage() {
       select: {
         verificationTier: true,
         verifiedAt: true,
-        visitedAt: true,
         licenceExpiry: true,
       },
     }),
@@ -80,12 +79,9 @@ export default async function VerificationPage() {
             label={t("verify_listing.current", { tier: String(business.verificationTier) })}
             reachedLabel={t("verify_listing.reached")}
             rungs={TIERS.map((spec) => {
-              const at =
-                spec.dateField === "verifiedAt"
-                  ? business.verifiedAt
-                  : spec.dateField === "visitedAt"
-                    ? business.visitedAt
-                    : null;
+              // Every dated rung dates from `verifiedAt` now — the visited
+              // rung was the one exception and it went with site visits.
+              const at = spec.dateField === "verifiedAt" ? business.verifiedAt : null;
               return {
                 tier: spec.tier,
                 label: t(spec.labelKey as never),

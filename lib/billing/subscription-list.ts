@@ -66,7 +66,7 @@ export async function subscriptionList(limit = 500): Promise<SubscriptionRow[]> 
         select: {
           id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true,
           productLimit: true, locationLimit: true, photoLimit: true, teamSeats: true,
-          rankingMultiplier: true, customDomain: true, siteVisitIncluded: true, sortOrder: true,
+          rankingMultiplier: true, customDomain: true, sortOrder: true,
           annualMonthsCharged: true,
         },
       },

@@ -22,7 +22,7 @@ import { measureProfileStrength } from "@/lib/metrics/strength-job";
 export const STEPS = ["claim", "verify", "profile", "locations", "plan"] as const;
 export type Step = (typeof STEPS)[number];
 
-export const TASKS = ["photos", "products", "team", "visit"] as const;
+export const TASKS = ["photos", "products", "team"] as const;
 export type Task = (typeof TASKS)[number];
 
 /**
@@ -36,9 +36,6 @@ export const TASK_POINTS: Record<Task, number> = {
   photos: WEIGHTS.photos,
   products: WEIGHTS.catalogue,
   team: WEIGHTS.team,
-  // A visit is what tier 3 needs; it moves trust rather than strength, so it
-  // is worth nothing on this meter and the hub says so instead of implying it.
-  visit: 0,
 };
 
 export interface TaskState {
@@ -64,14 +61,12 @@ const MINUTES: Record<Task, number> = {
   photos: 10,
   products: 25,
   team: 3,
-  visit: 2,
 };
 
 const TARGETS: Record<Task, number> = {
   photos: 6,
   products: 10,
   team: 2,
-  visit: 1,
 };
 
 /**
@@ -81,7 +76,7 @@ const TARGETS: Record<Task, number> = {
  * would go stale the moment a seller deleted the photographs afterwards.
  */
 export async function setupStateFor(businessId: string): Promise<SetupState> {
-  const [business, photos, products, seats, visit] = await Promise.all([
+  const [business, photos, products, seats] = await Promise.all([
     prisma.business.findUniqueOrThrow({
       where: { id: businessId },
       select: { profileStrength: true, publishedAt: true, planId: true },
@@ -91,10 +86,9 @@ export async function setupStateFor(businessId: string): Promise<SetupState> {
     }),
     prisma.product.count({ where: { businessId } }),
     prisma.user.count({ where: { businessId } }),
-    prisma.siteVisitRequest.count({ where: { businessId, cancelledAt: null } }),
   ]);
 
-  const got: Record<Task, number> = { photos, products, team: seats, visit };
+  const got: Record<Task, number> = { photos, products, team: seats };
 
   return {
     tasks: TASKS.map((task) => ({

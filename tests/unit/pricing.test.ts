@@ -44,7 +44,6 @@ function plan(over: Partial<PricingPlan> = {}): PricingPlan {
     teamSeats: 3,
     rankingMultiplier: 1.15,
     customDomain: false,
-    siteVisitIncluded: false,
     sortOrder: 1,
     withdrawnAt: null,
     annualMonthsCharged: 10,
@@ -70,7 +69,6 @@ const PRO = plan({
   productLimit: null,
   rankingMultiplier: 1.35,
   customDomain: true,
-  siteVisitIncluded: true,
   sortOrder: 2,
 });
 const PLANS = [FREE, BASIC, PRO];
@@ -353,7 +351,6 @@ describe("criteria 9 and 11 — free is a product, and nothing offers a trial", 
     expect(absent.map((feature) => feature.label)).toEqual([
       "A lift in search ranking",
       "Your own web address",
-      "A verification site visit",
     ]);
   });
 });

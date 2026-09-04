@@ -34,19 +34,23 @@ import { PHOTO_MINUTES, PHOTO_TARGET } from "@/lib/photos/targets";
  * be invisible; every lever is returned, flagged with whether a card offers it.
  */
 
-export const SETUP_TASKS = ["photos", "products", "team", "visit"] as const;
+export const SETUP_TASKS = ["photos", "products", "team"] as const;
 export type SetupTaskId = (typeof SETUP_TASKS)[number];
 
 /**
- * Which lever a card pays into. The visit pays into none — it moves
- * verification tier, which is platform-owned and not on this meter — so its
- * chip reads "no points" rather than implying a number it will not deliver.
+ * Which lever a card pays into.
+ *
+ * Every task pays into one, which is new. The site visit was the exception —
+ * it moved verification tier rather than profile strength, so its chip read
+ * "no points" — and it was also why this hub could never be finished: that task
+ * closed on our scheduling rather than on the seller's own work, so `openCount`
+ * never reached zero and the completion redirect never fired. It was withdrawn
+ * as a product, and the nullable half of this type went with it.
  */
-const LEVER_OF: Record<SetupTaskId, WeightKey | null> = {
+const LEVER_OF: Record<SetupTaskId, WeightKey> = {
   photos: "photos",
   products: "catalogue",
   team: "team",
-  visit: null,
 };
 
 /** The levers no card offers. Named so the page can say what else counts. */
@@ -69,14 +73,12 @@ const TARGETS: Record<SetupTaskId, number> = {
   photos: PHOTO_TARGET,
   products: 10,
   team: 2,
-  visit: 1,
 };
 
 const MINUTES: Record<SetupTaskId, number> = {
   photos: PHOTO_MINUTES,
   products: 25,
   team: 3,
-  visit: 2,
 };
 
 export interface SetupTaskFacts {
@@ -96,8 +98,6 @@ export interface SetupTaskFacts {
    * rather than letting the seller discover it.
    */
   invitesSent: number;
-  /** Site visits asked for and not withdrawn. */
-  visitRequests: number;
   /** From `strengthItems`, so the chips and the meter cannot drift apart. */
   items: readonly StrengthItem[];
 }
@@ -145,14 +145,12 @@ export function setupBoard(facts: SetupTaskFacts): SetupBoard {
     photos: facts.photos,
     products: facts.products,
     team: facts.seats + facts.invitesSent,
-    visit: facts.visitRequests,
   };
 
   const tasks: SetupTaskRow[] = SETUP_TASKS.map((id) => {
     const done = got[id] >= TARGETS[id];
 
-    const lever = LEVER_OF[id];
-    const item = lever === null ? undefined : byLever.get(lever);
+    const item = byLever.get(LEVER_OF[id]);
 
     return {
       id,
@@ -180,48 +178,6 @@ export function setupBoard(facts: SetupTaskFacts): SetupBoard {
     openMinutes: open.reduce((total, task) => total + task.minutes, 0),
     doneCount: tasks.length - open.length,
   };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// The site-visit fee
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * `AED 750` is drawn on board 8a and its own open question 2 says the figure is
- * unconfirmed against the pricing page. A setting is the right answer to an
- * unconfirmed number: correcting it costs a row rather than a deploy, and
- * CLAUDE.md is explicit that content belongs in the database.
- *
- * The key and the fallback live in this pure module, not beside the read, so a
- * seed can write the row without importing a `server-only` file — the same
- * split `lib/trade/hours.ts` and `lib/trade/ramadan-calendar.ts` make.
- */
-export const SITE_VISIT_FEE_SETTING_KEY = "site_visit_fee_aed";
-
-/** What board 8a draws, until somebody confirms it against pricing. */
-export const FALLBACK_SITE_VISIT_FEE_AED = 750;
-
-/** Whole dirhams, no higher than a plan costs in a year. */
-const FEE_CEILING_AED = 100_000;
-
-/**
- * `750` → 750. Anything else → null, and the caller uses the compiled figure.
- *
- * A string is accepted because the admin settings screen posts a form field and
- * `"750"` in a Json column is the likeliest way this row gets written. A
- * fraction is not: the fee is quoted in whole dirhams on the card and frozen in
- * whole dirhams on the request row.
- */
-export function parseSiteVisitFeeAed(value: unknown): number | null {
-  // `Number("")` is zero, and an empty settings field read as a free site visit
-  // is the wrong direction to be wrong in: a Free seller would be told the top
-  // badge costs nothing.
-  if (typeof value === "string" && value.trim() === "") return null;
-
-  const parsed = typeof value === "string" ? Number(value.trim()) : value;
-  if (typeof parsed !== "number" || !Number.isInteger(parsed)) return null;
-  if (parsed < 0 || parsed > FEE_CEILING_AED) return null;
-  return parsed;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -46,18 +46,6 @@ test.describe("what a moderator is not offered", () => {
     }
   });
 
-  test("gets no badge for a queue that is not theirs", async ({ page }) => {
-    /*
-     * A moderator has no `revenue.read` and no `visit.record`. A count on those
-     * rows would be telling them how much work is waiting on somebody else,
-     * which is noise on the one screen whose job is saying what *they* are
-     * behind on.
-     */
-    const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
-    const visits = sidebar.locator("li").filter({ hasText: "Field visits" });
-    await expect(visits).not.toContainText(/\d/);
-  });
-
   test("has no control anywhere that sets a verification tier", async ({ page }) => {
     await expect(page.getByRole("button", { name: /tier/i })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /set.*tier/i })).toHaveCount(0);
@@ -109,21 +97,6 @@ test.describe("the audit log a moderator sees", () => {
     await expect(page.getByText(/every actor/)).toHaveCount(0);
   });
 
-  test("cannot reach the visits queue", async ({ page }) => {
-    // visit.record is ops lead or field verifier.
-    const response = await page.goto("/admin/visits");
-    expect(response?.status()).toBe(404);
-  });
-
-  test("cannot reach a visit report either", async ({ page }) => {
-    /*
-       The queue 404s and so does the report behind it. A gate on the list that
-       is not also on the page it links to is not a gate — and this one carries
-       an upload path into a business's private folder.
-    */
-    const response = await page.goto("/admin/visits/any-id-at-all");
-    expect(response?.status()).toBe(404);
-  });
 });
 
 test.describe("the commercial screens a moderator cannot reach", () => {

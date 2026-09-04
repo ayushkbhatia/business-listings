@@ -19,10 +19,8 @@ model Business {
   teamSize           TeamSizeBand?
   languages          String[]
   description        String?
-  verificationTier   Int      @default(0) // 0..4 — STAFF WRITE ONLY, ops_lead role
+  verificationTier   Int      @default(0) // 0..3 — STAFF WRITE ONLY, ops_lead role
   verifiedAt         DateTime?
-  visitedAt          DateTime?
-  visitedByStaffId   String?
   claimStatus        ClaimStatus         // unclaimed | claimed | disputed
   planId             String?
   primaryCategoryId  String
@@ -36,8 +34,15 @@ enum ClaimStatus { unclaimed claimed disputed }
 enum ListingSource { licence_import self_added }
 ```
 
-`verificationTier` drops to 2 automatically the day `licenceExpiry` passes — a scheduled job,
-not a manual step. No grace period. Tier 3 additionally requires `visitedAt`.
+`verificationTier` drops to 1 automatically the day `licenceExpiry` passes — a scheduled job,
+not a manual step. No grace period.
+
+The ladder ran to 4 and stops at 3. Tiers 3 and 4 were "site visited" and "premises visited
+and trading history audited", and both rested on somebody standing in the warehouse. Site
+visits were withdrawn, so `audited` moved down to 3 and now rests on the trading history
+this platform already measures — enquiries answered, quotes sent, reply times. `visitedAt`
+and `visitedByStaffId` are gone, as are `SiteVisitRequest`, `SiteVisitReport` and
+`SiteVisitPhoto`. A `business_verification_tier_range` CHECK holds the ceiling at 3.
 
 ```prisma
 model Location {
@@ -238,7 +243,6 @@ model Plan {
   teamSeats         Int
   rankingMultiplier Float
   customDomain      Boolean
-  siteVisitIncluded Boolean
   // NO commissionRate. NO transactionFee.
 }
 
@@ -400,8 +404,9 @@ from this table. The retention rule and the consent argument are in
 
 **`CatalogueImportRequest` is a queue, not a parser.** `lib/import/service.ts` is the
 parser and it needs a spreadsheet with columns; this is for the PDF a supplier has had
-since 2019, and the work at the other end is a person reading it. It is modelled on
-`SiteVisitRequest`, which is the same shape of promise. Every staff move on the row writes
+since 2019, and the work at the other end is a person reading it. It is a promise of a
+shape this schema no longer has anywhere else — the seller asks, we do something by hand,
+and the row is what either side points at. Every staff move on the row writes
 an audit row with a written reason; the seller's own create and cancel do not, because the
 subject acting on their own data is what the audit log exists to distinguish itself from.
 
@@ -412,8 +417,7 @@ subject acting on their own data is what the audit log exists to distinguish its
 drew a seven-component table including locations, the verification tier and the site visit.
 It is not adopted: a location is a **publish gate**, not a lever, and `goLive` refuses
 without one; the verification tier is platform-owned and not a seller's to earn; and the
-site visit is plan-gated, so putting it in the denominator makes a Free seller's meter
-uncloseable. What the handoff actually requires — that the per-task percentage chips are
+site visit no longer exists at all. What the handoff actually requires — that the per-task percentage chips are
 arithmetic on *this* seller's score rather than constants — is what `lib/setup/tasks.ts`
 computes, from `strengthItems()`.
 

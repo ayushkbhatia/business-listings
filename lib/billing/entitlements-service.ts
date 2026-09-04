@@ -28,7 +28,7 @@ import { effectiveCaps, snapshotOf, type PlanCaps } from "@/lib/plan/entitlement
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
   locationLimit: true, photoLimit: true, teamSeats: true, rankingMultiplier: true,
-  customDomain: true, siteVisitIncluded: true, sortOrder: true,
+  customDomain: true, sortOrder: true,
 } as const;
 
 function toCaps(row: {
@@ -42,7 +42,6 @@ function toCaps(row: {
   teamSeats: number;
   rankingMultiplier: unknown;
   customDomain: boolean;
-  siteVisitIncluded: boolean;
   sortOrder: number;
 }): PlanCaps {
   return {
@@ -90,8 +89,7 @@ export async function planLibrary(): Promise<PlanRow[]> {
         effective.locationLimit !== caps.locationLimit ||
         effective.photoLimit !== caps.photoLimit ||
         effective.teamSeats !== caps.teamSeats ||
-        effective.customDomain !== caps.customDomain ||
-        effective.siteVisitIncluded !== caps.siteVisitIncluded
+        effective.customDomain !== caps.customDomain
       ) {
         grandfathered += 1;
       }
@@ -114,8 +112,7 @@ export interface EditPlanInput {
     photoLimit: number | null;
     teamSeats: number;
     customDomain: boolean;
-    siteVisitIncluded: boolean;
-  }>;
+    }>;
   /**
    * Rewrite the snapshots of everybody already on this plan.
    *

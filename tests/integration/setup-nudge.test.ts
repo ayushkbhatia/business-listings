@@ -96,8 +96,8 @@ async function addBusiness(fields: {
   return { id: business.id, ownerId: owner.id };
 }
 
-/** Photographs, catalogue and a second seat done, so only the visit is left. */
-async function finishEverythingButTheVisit(businessId: string): Promise<void> {
+/** Photographs, catalogue and a second seat done — every task finished. */
+async function finishEverything(businessId: string): Promise<void> {
   await prisma.media.createMany({
     data: Array.from({ length: 6 }, (_, i) => ({
       kind: "gallery" as const,
@@ -281,19 +281,21 @@ describe("exactly once, ever", () => {
 });
 
 describe("what it must not chase", () => {
-  it("skips a listing whose only open task is the site visit", async () => {
+  it("skips a listing with nothing left open", async () => {
     /*
-       Board 8a's open question 4, answered in the board: suppress it. The visit
-       waits on our scheduling, and a reminder about our own backlog is how a
-       channel gets muted.
+       This was board 8a's open question 4 — whether to nudge when only the site
+       visit was left — answered no, because that task waited on our scheduling
+       and chasing somebody for our own backlog is how a channel gets muted.
+       Visits were withdrawn, so the case collapsed into the plain one: every
+       task done, nothing to say.
     */
-    const visitOnly = await addBusiness({ publishedHoursAgo: NUDGE_AFTER_HOURS + 3 });
-    await finishEverythingButTheVisit(visitOnly.id);
+    const finished = await addBusiness({ publishedHoursAgo: NUDGE_AFTER_HOURS + 3 });
+    await finishEverything(finished.id);
 
     const result = await sweepSetupNudges(NOW);
 
-    expect(await deliveries(visitOnly.id)).toEqual([]);
-    expect(result.visitOnly).toBeGreaterThanOrEqual(1);
+    expect(await deliveries(finished.id)).toEqual([]);
+    expect(result.nothingOpen).toBeGreaterThanOrEqual(1);
   });
 
   it("skips a suspended listing", async () => {

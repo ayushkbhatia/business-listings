@@ -28,7 +28,6 @@ export interface PlanCaps {
   teamSeats: number;
   rankingMultiplier: number;
   customDomain: boolean;
-  siteVisitIncluded: boolean;
   sortOrder: number;
 }
 
@@ -54,7 +53,6 @@ export interface EntitlementSnapshot {
   photoLimit: number | null;
   teamSeats: number;
   customDomain: boolean;
-  siteVisitIncluded: boolean;
 }
 
 /** Everything a snapshot needs to freeze, taken from the live plan. */
@@ -68,7 +66,6 @@ export function snapshotOf(plan: PlanCaps, capturedAt: Date): EntitlementSnapsho
     photoLimit: plan.photoLimit,
     teamSeats: plan.teamSeats,
     customDomain: plan.customDomain,
-    siteVisitIncluded: plan.siteVisitIncluded,
   };
 }
 
@@ -107,7 +104,6 @@ export function effectiveCaps(plan: PlanCaps, snapshot: unknown): PlanCaps {
     photoLimit: frozen.photoLimit,
     teamSeats: frozen.teamSeats,
     customDomain: frozen.customDomain,
-    siteVisitIncluded: frozen.siteVisitIncluded,
   };
 }
 
@@ -184,7 +180,9 @@ export function cheapestPlanUnlocking(
  */
 export function cheapestPlanWith(
   plans: readonly PlanCaps[],
-  feature: "customDomain" | "siteVisitIncluded",
+  // One feature left since site visits were withdrawn. Kept as a union rather
+  // than inlined, because the next boolean entitlement wants this shape back.
+  feature: "customDomain",
   currentPlanId: string,
 ): PlanCaps | null {
   const current = plans.find((p) => p.id === currentPlanId);

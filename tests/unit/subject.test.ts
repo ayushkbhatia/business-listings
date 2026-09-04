@@ -4,9 +4,10 @@ import {
   auditScopeFor,
   canReadOtherBusinessEnquiries,
   canRespondToEnquiry,
-  canSetVerificationTier,
   withinScope,
 } from "@/lib/auth/subject";
+import { can } from "@/lib/auth/can";
+import { SUBJECT_DEPENDENT } from "@/lib/auth/capabilities";
 import type { Actor } from "@/lib/auth/roles";
 
 /**
@@ -21,40 +22,31 @@ import type { Actor } from "@/lib/auth/roles";
 const verifier: Actor = { id: "field_1", roles: ["staff_field"] };
 const opsLead: Actor = { id: "ops_1", roles: ["staff_ops_lead"] };
 
-describe("a field verifier sets a tier only for a visit they recorded", () => {
-  it("allows their own visit", () => {
-    expect(
-      canSetVerificationTier(verifier, { businessId: "b1", recordedByStaffId: "field_1" }),
-    ).toBe(true);
-  });
+describe("setting a verification tier is a plain role check again", () => {
+  /*
+     It was subject-dependent, and this suite existed because of that: a field
+     verifier held `business.verification_tier.write` only for a business they
+     had recorded a visit to, and a role-only check would have let any verifier
+     tier any business — the one row CLAUDE.md calls a non-negotiable.
 
-  it("refuses somebody else's visit", () => {
-    // Under a role-only check this is a field verifier who may set any tier on
-    // any business — the one row CLAUDE.md calls a non-negotiable.
-    expect(
-      canSetVerificationTier(verifier, { businessId: "b1", recordedByStaffId: "field_2" }),
-    ).toBe(false);
-  });
-
-  it("refuses when no visit was recorded", () => {
-    expect(canSetVerificationTier(verifier, null)).toBe(false);
-    expect(canSetVerificationTier(verifier, { businessId: "b1", recordedByStaffId: null })).toBe(
+     Site visits were withdrawn and `Business.visitedByStaffId` with them, so
+     the conditional half had no evidence left to read. The grant was narrowed
+     to the ops lead rather than widened to an unconditional one, which is the
+     safe direction: the failure this suite guarded against is now impossible
+     because the role that could commit it no longer holds the row.
+  */
+  it("is held by the ops lead and nobody else", () => {
+    expect(can(opsLead, "business.verification_tier.write")).toBe(true);
+    expect(can(verifier, "business.verification_tier.write")).toBe(false);
+    expect(can({ id: "mod_1", roles: ["staff_moderator"] }, "business.verification_tier.write")).toBe(
       false,
     );
   });
 
-  it("does not narrow the ops lead, who holds it unconditionally", () => {
-    expect(canSetVerificationTier(opsLead, null)).toBe(true);
-    expect(
-      canSetVerificationTier(opsLead, { businessId: "b1", recordedByStaffId: "field_2" }),
-    ).toBe(true);
-  });
-
-  it("refuses a role that does not hold the row at all, visit or no visit", () => {
-    const moderator: Actor = { id: "mod_1", roles: ["staff_moderator"] };
-    expect(
-      canSetVerificationTier(moderator, { businessId: "b1", recordedByStaffId: "mod_1" }),
-    ).toBe(false);
+  it("is no longer declared subject-dependent", () => {
+    // A leftover `subject` on the row would send call sites back through a
+    // check that has no row to read, which throws rather than refusing.
+    expect(SUBJECT_DEPENDENT).not.toContain("business.verification_tier.write");
   });
 });
 

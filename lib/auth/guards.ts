@@ -17,13 +17,15 @@ import type { Actor } from "./roles";
 /*
  * ── Trust ───────────────────────────────────────────────────────────────────
  *
- * `business.verification_tier.write` has no bare guard here on purpose. A field
- * verifier holds it only for a visit they recorded, so the role grant is not
- * the check — see `assertCanSetVerificationTier` in lib/auth/subject.ts, which
- * takes the visit. A guard named the obvious thing and taking only an actor is
- * exactly the mistake that row exists to prevent, so it is not offered.
+ * `business.verification_tier.write` has no bare guard here either, though it is
+ * now a plain role check: ops lead and nobody else. It was subject-dependent —
+ * a field verifier held it only for a business they had been to — until site
+ * visits were withdrawn took the evidence away. `lib/verification/service.ts`
+ * asserts it inline beside the reason it writes, which keeps the capability and
+ * the audit row in one place.
  *
- * The same applies to `enquiry.respond`, `quote.send`, `analytics.read` and
+ * The rule below still applies to `enquiry.respond`, `quote.send`,
+ * `analytics.read` and
  * `enquiry.read_other_business`. Every subject-dependent capability is listed
  * in `SUBJECT_DEPENDENT`.
  */
@@ -45,8 +47,6 @@ export const assertCanDecideQueueItem = (a: Actor) => assertCan(a, "queue.decide
 export const mayDecideQueueItem = (a: Actor) => can(a, "queue.decide");
 
 // ── Field ───────────────────────────────────────────────────────────────────
-export const assertCanRecordVisit = (a: Actor) => assertCan(a, "visit.record");
-export const mayRecordVisit = (a: Actor) => can(a, "visit.record");
 
 export const assertCanResolveClaim = (a: Actor) => assertCan(a, "claim.resolve");
 export const mayResolveClaim = (a: Actor) => can(a, "claim.resolve");
@@ -67,8 +67,6 @@ export const mayReplyToReview = (a: Actor) => can(a, "review.reply");
 export const assertCanRequestReview = (a: Actor) => assertCan(a, "review.request");
 export const mayRequestReview = (a: Actor) => can(a, "review.request");
 
-export const assertCanRequestVisit = (a: Actor) => assertCan(a, "visit.request");
-export const mayRequestVisit = (a: Actor) => can(a, "visit.request");
 
 export const assertCanManageRouting = (a: Actor) => assertCan(a, "routing.manage");
 export const mayManageRouting = (a: Actor) => can(a, "routing.manage");

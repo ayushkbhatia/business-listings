@@ -76,8 +76,6 @@ export async function seedCurated(db: PrismaClient, now: Date) {
       where: { id: business.id },
       data: {
         claimStatus: "claimed",
-        visitedAt: qualifier.visited ? new Date(Date.UTC(2026, 4, 12)) : null,
-        visitedByStaffId: qualifier.visited ? uuid(3) : null,
         planId: qualifier.plan,
       },
     });

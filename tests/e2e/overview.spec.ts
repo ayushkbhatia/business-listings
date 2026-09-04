@@ -44,7 +44,6 @@ test.describe("board 3a — the Pro overview", () => {
   test("does not sell a feature the plan already includes", async ({ page }) => {
     // Rendering a lock here would be an advert for something already bought.
     await expect(page.getByText(/Your own web address is on/)).toHaveCount(0);
-    await expect(page.getByText(/A verification site visit is on/)).toHaveCount(0);
   });
 
   test("reports response time as measured, with no field to claim one", async ({ page }) => {

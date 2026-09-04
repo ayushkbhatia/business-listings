@@ -115,7 +115,7 @@ export async function startTrial(
       select: {
         id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true,
         productLimit: true, locationLimit: true, photoLimit: true, teamSeats: true,
-        rankingMultiplier: true, customDomain: true, siteVisitIncluded: true,
+        rankingMultiplier: true, customDomain: true,
         sortOrder: true, withdrawnAt: true,
       },
     }),

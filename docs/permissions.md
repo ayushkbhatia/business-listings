@@ -40,7 +40,6 @@ from the pre-pivot board is **deleted**, not renamed — there is no order entit
 | Edit listing profile, locations, hours | ✓ | ✓ | — | — |
 | Pick a theme preset | ✓ | ✓ | — | — |
 | Upload verification documents | ✓ | ✓ | — | — |
-| Request a site visit | ✓ | — | — | — |
 | Reply to a review | ✓ | ✓ | — | — |
 | Request reviews from buyers | ✓ | ✓ | ✓ | — |
 | See analytics | ✓ | ✓ | own leads only | — |
@@ -70,8 +69,7 @@ reading `Business.leadEscalationMinutes` and sending once per enquiry.
 | Approve listings & edits | ✓ | ✓ | — | — |
 | Reject with reason | ✓ | ✓ | — | — |
 | Resolve claim conflicts | ✓ | — | — | — |
-| Set verification tier | ✓ | — | ✓ | — |
-| Record a site visit | ✓ | — | ✓ | — |
+| Set verification tier | ✓ | — | — | — |
 | Edit taxonomy & spec templates | ✓ | — | — | — |
 | Edit storefront templates | ✓ | — | — | — |
 | Remove a review | ✓ | — | — | — |
@@ -85,8 +83,13 @@ reading `Business.leadEscalationMinutes` and sending once per enquiry.
 | View-as a business | ✓ | ✓ | — | — |
 | Read the audit log | ✓ | own actions | own actions | own actions |
 
-`field verifier` can set a tier only as the result of a visit they recorded — it is not a
-general grant. Enforce with a subject check, not just a role check.
+Site visits were withdrawn as a product, and the two rows this table carried for them —
+"Request a site visit" and "Record a site visit" — went with them. So did the qualifier
+under this table: a `field verifier` could set a tier only as the result of a visit they
+recorded, enforced with a subject check rather than a role check. With no visit to read,
+that grant was **narrowed to the ops lead** rather than widened into an unconditional one,
+and `business.verification_tier.write` is a plain role check again. `staff_field` now holds
+nothing on this table beyond reading its own audit rows.
 
 **Every ✓ in this table that changes state writes an `AuditEvent` with a non-null reason.**
 Ops lead has no exemption.

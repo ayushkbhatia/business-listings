@@ -47,17 +47,10 @@ const OPS_LEAD_ONLY = ["staff_ops_lead"] as const satisfies readonly Role[];
 export const CAPABILITIES = {
   // ── Trust. The one row nothing may soften. ────────────────────────────────
   "business.verification_tier.write": {
-    roles: ["staff_ops_lead", "staff_field"],
+    roles: ["staff_ops_lead"],
     audited: true,
-    source: "stated",
-    why: "§07 staff table. Ops lead unconditionally; a field verifier only as the result of a visit they recorded — permissions.md: \"it is not a general grant. Enforce with a subject check, not just a role check.\" CLAUDE.md non-negotiable 2 still holds: no seller, no API path, no self-service.",
-    subject: "own_visit",
-  },
-  "visit.record": {
-    roles: ["staff_ops_lead", "staff_field"],
-    audited: true,
-    source: "stated",
-    why: "§07 staff table. Recording a visit is what later licenses the tier change above, so the same two roles hold it and the tier check reads the visit this one wrote.",
+    source: "inferred",
+    why: "§07 staff table gave this to the ops lead unconditionally and to a field verifier as the result of a visit they recorded — a subject check rather than a role check. Site visits were withdrawn, and with them the only thing that ever licensed the field verifier's half: `canSetVerificationTier` read `Business.visitedByStaffId`, which no longer exists. Rather than widen it to an unconditional grant, the narrower half is gone and the capability is ops-lead only. CLAUDE.md non-negotiable 2 is unchanged and this tightens it: no seller, no API path, no self-service, and now no second staff role.",
   },
   "business.suspend": {
     roles: OPS_LEAD_ONLY,
@@ -220,12 +213,6 @@ export const CAPABILITIES = {
     audited: false,
     source: "stated",
     why: "Board 7d, \"Request reviews from buyers\". The sales seat has it, because the person who handled the enquiry is the person who knows it went well.",
-  },
-  "visit.request": {
-    roles: ["seller_owner"],
-    audited: false,
-    source: "stated",
-    why: "Board 7d, \"Request a site visit\": owner only. Was inferred as listing.edit, which handed it to a manager. Somebody from this platform coming to the premises is the owner's decision.",
   },
   "analytics.read": {
     roles: ["seller_owner", "seller_manager", "seller_sales"],
