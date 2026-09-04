@@ -2709,3 +2709,71 @@ e2e test asserts the sidebar percentage equals the meter's `aria-valuenow`.
   by a robots directive and nothing else.
 - **`ProgressBar` had no target marker**, which `docs/component-inventory.md` row 41
   had described for two handoffs.
+
+---
+
+## Board 8b — photographs, and the two things cut from its render
+
+### The header follows the handoff's correction, not the exported screenshot
+
+The screenshot circulated with this board reads `Task 1 of 4` over a four-segment rail
+with the first segment solid, and a primary button saying `Save & continue`. The
+handoff's own correction note supersedes both, and the reasoning is 8a's: the four tasks
+are independent, free-order and abandoned at different rates, so a rail that counts steps
+re-imposes the sequence the hub exists to remove, and "continue" promises a next step
+that does not exist — every task exits to the hub.
+
+So the rail shows **completion**: the task in hand fills pro-rata as work lands, the
+other three fill only when their own done-condition is met, and the label reads
+"Photos · n of 4 tasks still open".
+
+### Two things in the render do not ship, both on the handoff's own instruction
+
+**The WhatsApp intake strip.** §5 requires an inbound media webhook, a per-business
+intake token and a sender-number match, and says plainly that if the webhook is not in
+this phase the strip must be cut — "they'll appear here" is a specific claim about this
+screen and cannot ship as a promise that quietly does nothing. Nothing inbound exists:
+Bird is outbound-only here, and the single inbound webhook in the product is Supabase's
+Send-SMS hook, whose Standard-Webhooks signature scheme is not Bird's. Building it needs
+a route, a new verifier, a secret, Bird-side configuration, a phone-number-to-business
+resolver, a media fetch, a seatless Storage write path, a rate limit and an abuse story.
+
+**The amber quality tile** — "Blurry and dark — replace it?" — and §4's four measurements
+with it. §8 says the blur threshold needs calibrating against real UAE warehouse
+photographs, because a dim unit lit by one fluorescent strip is normal and must not be
+flagged as dark. An uncalibrated threshold nags a seller about a photograph they chose,
+which §4 itself names as how the task gets abandoned. Duplicate detection (a perceptual
+hash) goes with it.
+
+What survives is the honest half: the green line is the **slot's** static copy, and a
+photograph filed outside a slot keeps its filename and gets no line at all. `IMG_4471.jpg`
+in the render is exactly that case.
+
+The derivative ladder (1600/800/400 WebP) is also cut. A single resized image is stored
+instead — see docs/data-model.md.
+
+### `+12%` where the render says `+7%`
+
+Both are `count / 5 × the photographs lever`, floored. The handoff's model weights
+photographs at 12 points; this repo's `WEIGHTS.photos` is 20, for the reasons recorded
+under board 8a. The figure is read from `WEIGHTS` rather than typed, so the chip on this
+screen and the meter on the hub cannot drift apart.
+
+### The hub and the task had already disagreed about the target
+
+`lib/setup/tasks.ts` asked for 6 photographs over 10 minutes; board 8b asks for 5 over 6.
+Two screens state that to the same seller minutes apart. Both now read
+`lib/photos/targets.ts`, and `lib/setup/tasks.test.ts` asserts the total from the constant
+rather than restating it.
+
+### Found in passing
+
+- **The photograph cap ignored grandfathering.** `planFor` in the media board read the
+  raw `Plan` row and never applied `entitlementSnapshot`, so a grandfathered seller was
+  capped at today's number rather than the one they signed up on. It now calls
+  `effectiveFor`, like every other cap in the product.
+- **The media library would have refused every phone photograph** the moment the stored
+  ceiling dropped to 1 MB. It now resizes through the same module as the task screen.
+- **A hidden `sr-only` file input was focusable and unnamed** — a control a screen-reader
+  user meets, cannot name, and did not ask for. It is out of the tab order and out of the
+  accessibility tree; the visible buttons drive it.

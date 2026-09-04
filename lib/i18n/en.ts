@@ -3169,6 +3169,92 @@ export const en = {
   "setup.to_dashboard": "Go to my dashboard",
   "setup.complete_flash": "Setup complete. Your listing is at {strength}%.",
 
+  // ── The task chrome, shared by boards 8b to 8e ───────────────────────────
+  //
+  // The rail shows COMPLETION, not position. 8a's premise is that the four
+  // tasks are independent and order-free, and a rail that counted steps would
+  // re-impose the sequence the hub removed — which is the correction the 8b
+  // render carries. So the label says what is still open, not which one this is.
+  "task.back": "Setup",
+  "task.open_count": {
+    one: "{name} · {formatted} of {total} tasks still open",
+    other: "{name} · {formatted} of {total} tasks still open",
+  },
+  "task.all_done": "{name} · nothing left to do",
+  "task.skip": "Skip for now",
+  "task.save": "Save & back to setup",
+  "task.done": "Done — back to setup",
+  "task.rail_label": "Setup progress",
+
+  // ── Board 8b — photographs ───────────────────────────────────────────────
+  "photos.eyebrow": "Photos",
+  "photos.title": "Show buyers the actual place",
+  "photos.intro":
+    "Five photos is enough. A phone camera is fine — buyers are checking you exist and have stock, not judging photography.",
+  "photos.progress": {
+    one: "{formatted} of {target} uploaded",
+    other: "{formatted} of {target} uploaded",
+  },
+  "photos.points_so_far": "+{points}% SO FAR",
+  "photos.complete": "5 of 5 — that is the set",
+  "photos.add": "Add photos",
+  "photos.adding": "Adding {formatted}…",
+  "photos.cover": "COVER",
+  "photos.make_cover": "Make this the cover",
+  "photos.remove": "Remove",
+  "photos.retry": "Try again",
+  "photos.reorder_hint": "Drag a photo to change the order buyers scroll through.",
+  "photos.move_up": "Move earlier",
+  "photos.move_down": "Move later",
+  "photos.logo_tag": "LOGO",
+  "photos.suggested": "Suggested",
+  "photos.empty_hint": "Nothing here yet. Five photos, and a phone camera is fine.",
+
+  // The gate, explained where it blocks rather than before it.
+  "photos.non_logo_short": {
+    one: "{formatted} more photo that is not your logo",
+    other: "{formatted} more photos that are not your logo",
+  },
+  "photos.non_logo_why":
+    "Five copies of a logo tell a buyer nothing about whether the company is there.",
+
+  // The cap. A ceiling that is stated, never an upgrade wall.
+  "photos.at_cap": {
+    one: "{formatted} photo is the limit on {plan}.",
+    other: "{formatted} photos are the limit on {plan}.",
+  },
+  "photos.cap_left": {
+    one: "{formatted} more will fit on {plan}.",
+    other: "{formatted} more will fit on {plan}.",
+  },
+
+  "photos.slot.warehouse": "Warehouse floor",
+  "photos.slot.warehouse_hint": "Good — shows racking and stock",
+  "photos.slot.shopfront": "Shopfront & signage",
+  "photos.slot.shopfront_hint": "Good — helps buyers find you",
+  "photos.slot.team": "Your team at work",
+  "photos.slot.team_hint": "Good — a face makes a listing answerable",
+  "photos.slot.vehicle": "Delivery vehicle",
+  "photos.slot.vehicle_hint": "Good — shows you deliver yourselves",
+  "photos.slot.other": "Anything else",
+
+  "photos.error.unreadable":
+    "That file could not be opened as a photo. JPEG, PNG or WebP work everywhere.",
+  "photos.error.too_small": "That image is {edge}px on its long edge. Photos need at least {min}px.",
+  "photos.error.too_large": "That photo could not be brought under {mb} MB. Try a different one.",
+  "photos.error.upload_failed": "That photo did not upload. It is still on your phone — try again.",
+  "photos.error.at_cap": "You have reached the photo limit on {plan}.",
+
+  "photos.works_eyebrow": "WHAT WORKS",
+  "photos.works.stock": "Stock on shelves — proves you hold inventory",
+  "photos.works.signage": "Your signage — buyers use it to find the unit",
+  "photos.works.people": "People working, faces optional",
+  "photos.works.no_stock_photos": "Stock photos or renders — we remove these",
+  "photos.works.no_screenshots": "Screenshots of your old website",
+  "photos.where_title": "Where these appear",
+  "photos.where_body":
+    "Your cover sits behind the logo on the storefront, and the first image shows in every search result. Both are replaceable later.",
+
   // The hero counts what is actually left, so it cannot say "four" over three
   // cards. `formatted` is the count already run through formatCount.
   "setup.hero": {

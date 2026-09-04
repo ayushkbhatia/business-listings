@@ -60,14 +60,13 @@ export const dynamic = "force-dynamic";
 /**
  * Where each task goes.
  *
- * Three of the four point at the general-purpose screen rather than at a
- * guided one, because boards 8b, 8c and 8d have not been built. That is the
- * honest link: `/dashboard/setup/photos` is in docs/routes.md and 404s, and a
- * hub whose first card is a dead link is worse than one that sends a seller to
- * the media library. The guided routes replace these entries when they land.
+ * Photographs now go to their own guided screen — board 8b. The other two
+ * point at the general-purpose board, because 8c and 8d are not built: that is
+ * the honest link, since a hub whose card is a dead link is worse than one that
+ * sends a seller to the catalogue. Each entry moves as its board lands.
  */
 const HREF: Record<SetupTaskId, string> = {
-  photos: "/dashboard/media",
+  photos: "/dashboard/setup/photos",
   products: "/dashboard/products",
   team: "/dashboard/team",
   visit: "/dashboard/setup/visit",

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
 import { assertCanEditListing } from "@/lib/auth/guards";
 import { allowance, type PlanCaps } from "@/lib/plan/entitlements";
+import { effectiveFor } from "@/lib/billing/entitlements-service";
 import { checkImage, MEDIA_BUCKET, mediaPath, removeObject, signUpload } from "@/lib/storage";
 import { t } from "@/lib/i18n";
 import { getSellerSeat } from "../_shell";
@@ -25,28 +26,17 @@ export type SignResult =
   | { ok: true; path: string; token: string; url: string }
   | { ok: false; error: string };
 
+/**
+ * The caps that actually apply to this seller.
+ *
+ * This read the raw `Plan` row and never applied `entitlementSnapshot`, so a
+ * grandfathered account was capped at today's number rather than the one it
+ * signed up on — which is the promise `lib/plan/entitlements.ts` says "was
+ * written down as a fact and was not one" until it was fixed everywhere else.
+ * The photograph gate was the path it had not reached.
+ */
 async function planFor(businessId: string): Promise<PlanCaps | null> {
-  const business = await prisma.business.findUnique({
-    where: { id: businessId },
-    select: {
-      plan: {
-        select: {
-          id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true,
-          productLimit: true, locationLimit: true, photoLimit: true, teamSeats: true,
-          rankingMultiplier: true, customDomain: true, siteVisitIncluded: true, sortOrder: true,
-        },
-      },
-    },
-  });
-  if (business?.plan) return business.plan;
-  return prisma.plan.findUnique({
-    where: { id: "free" },
-    select: {
-      id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true,
-      productLimit: true, locationLimit: true, photoLimit: true, teamSeats: true,
-      rankingMultiplier: true, customDomain: true, siteVisitIncluded: true, sortOrder: true,
-    },
-  });
+  return effectiveFor(businessId);
 }
 
 async function photoCount(businessId: string): Promise<number> {
@@ -107,6 +97,16 @@ export async function recordMedia(formData: FormData): Promise<RecordResult> {
 
   const path = String(formData.get("path") ?? "");
   const kind = String(formData.get("kind") ?? "gallery");
+  /*
+     Measured by the canvas that resized the file, in the browser.
+
+     `Media.width` and `Media.height` have existed since handoff 0 and nothing
+     has ever written them, so no surface could reserve space for an image or
+     refuse one too small to render. The decode had already happened; the
+     numbers were free and were being thrown away.
+  */
+  const width = Number(formData.get("width") ?? 0);
+  const height = Number(formData.get("height") ?? 0);
 
   // A path outside this seller's folder is not theirs to record, whatever the
   // signature said. Cheap, and it is the only check that survives a bug above.
@@ -121,6 +121,7 @@ export async function recordMedia(formData: FormData): Promise<RecordResult> {
       storagePath: path,
       alt: String(formData.get("alt") ?? "").trim() || null,
       bytes: Number(formData.get("bytes") ?? 0) || null,
+      ...(width > 0 && height > 0 ? { width, height } : {}),
     },
     select: { id: true },
   });
