@@ -37,10 +37,31 @@ export function SegmentedControl<T extends string>({
 }: SegmentedControlProps<T>) {
   const enabled = options.filter((o) => !o.disabled);
 
-  function move(direction: 1 | -1) {
+  /**
+   * Move the selection **and the focus**.
+   *
+   * In a radiogroup the two travel together: WAI's pattern is that an arrow key
+   * checks the next radio and focuses it, and the roving `tabIndex` below is
+   * only half of that. Without the focus call the selection moved while the
+   * ring stayed on the segment the reader had left — so the visible focus was
+   * on one option and the checked one was another, and the next Tab left the
+   * group from the wrong place. Found by the keyboard pass on board 1l's
+   * monthly/annual toggle; it was wrong on every SegmentedControl in the
+   * product.
+   *
+   * The buttons are read off the group element rather than held in refs. The
+   * DOM query filters disabled exactly as `enabled` does, in the same order, so
+   * one index addresses both.
+   */
+  function move(direction: 1 | -1, group: HTMLElement) {
     const index = enabled.findIndex((o) => o.value === value);
-    const next = enabled[(index + direction + enabled.length) % enabled.length];
-    if (next) onChange(next.value);
+    const nextIndex = (index + direction + enabled.length) % enabled.length;
+    const next = enabled[nextIndex];
+    if (!next) return;
+    onChange(next.value);
+    group
+      .querySelectorAll<HTMLButtonElement>('[role="radio"]:not(:disabled)')
+      [nextIndex]?.focus();
   }
 
   return (
@@ -54,11 +75,11 @@ export function SegmentedControl<T extends string>({
       onKeyDown={(event) => {
         if (event.key === "ArrowRight" || event.key === "ArrowDown") {
           event.preventDefault();
-          move(1);
+          move(1, event.currentTarget);
         }
         if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
           event.preventDefault();
-          move(-1);
+          move(-1, event.currentTarget);
         }
       }}
     >

@@ -144,6 +144,21 @@ It pairs with `formatRating`, which is the reason that formatter exists: `format
 a trailing zero, so a 4.0 printed "4" in the rating card and "4.0" in the storefront header —
 one figure with two renderings on one page.
 
+## Built, and not yet given a number
+
+**`PlanComparison`** — the plans side by side, from board 1l. A real `<table>` above 768px and
+one block per plan below it, because a four-column table on a phone puts the column being sold
+off the right edge.
+
+It is not claiming a row here. The design canvas has no component for it, so which tier it
+belongs to is the design owner's call rather than the build's — `Alert` and `Thread` were each
+approved into a tier by somebody, and inventing a number to make a total come out right is the
+failure the `Thread` note above describes from the other direction. It renders in the gallery's
+`UNLISTED` group, which exists for exactly this.
+
+Why it is a component at all rather than page-local JSX: `2e` and `11f` compare the same plans,
+and a second copy of this markup is how two screens start disagreeing about one record.
+
 **The fourteen storefront sections are not in this list, deliberately.** Their catalogue is
 `lib/storefront/section-types.ts`, which declares each type's data source, its seller-fillable
 fields and whether it is a singleton — things a component inventory has no column for. Two

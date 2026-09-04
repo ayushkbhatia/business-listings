@@ -6,3 +6,4 @@ export * from "./map";
 export * from "./reviews";
 export * from "./search";
 export * from "./storefront-catalogue";
+export * from "./pricing";

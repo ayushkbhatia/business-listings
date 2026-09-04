@@ -2439,11 +2439,74 @@ export const en = {
   "plan.seats": "{n} team seats",
   "plan.seat_one": "1 seat",
   "plan.ranking": "Ranked {multiplier}× in search",
+  "plan.ranking_none": "A lift in search ranking",
   "plan.custom_domain": "Your own web address",
   "plan.site_visit": "A verification site visit",
   "plan.summary.free": "Be listed, and answer three enquiries a month.",
   "plan.summary.basic": "For a supplier answering enquiries most weeks.",
   "plan.summary.pro": "For a supplier whose catalogue is how they get found.",
+
+  // ── Pricing, board 1l. The public page; the plan words above are shared. ──
+  "pricing.seo_title": "Pricing — list free, or from AED {from} a month",
+  "pricing.seo_description":
+    "A free listing that does not expire, and paid plans from AED {from} a month. No setup fee, no commission, no pay-per-lead.",
+  // What the title says when nothing paid is on sale. Not a state anybody plans
+  // for, and "from AED 0 a month" is what the other one would have said.
+  "pricing.seo_title_free": "Pricing — list your UAE business free",
+  "pricing.seo_description_free":
+    "A free listing that does not expire. No setup fee, no commission, no pay-per-lead.",
+  "pricing.eyebrow": "Plans",
+  "pricing.title": "Listing is free. Being found first is the paid part.",
+  "pricing.lede":
+    "No setup fee, no commission, no pay-per-lead. A flat monthly fee, and every enquiry that comes in is yours.",
+  "pricing.breadcrumb": "Pricing",
+
+  "pricing.period_label": "How you pay",
+  "pricing.period_monthly": "Monthly",
+  "pricing.period_annual": "Annual",
+  "pricing.period_saving": "−{months} months",
+  "pricing.per_month": "a month",
+  "pricing.per_year": "a year",
+  "pricing.annual_explained": "{months} months, charged as {charged}.",
+  "pricing.annual_not_live":
+    "Annual is not switched on yet. Every plan is charged monthly today, at the monthly price.",
+
+  "pricing.plans_heading": "The three plans",
+  "pricing.free_is_permanent":
+    "Free is a plan, not a trial. It does not expire, there is nothing to renew, and nothing on it stops working.",
+
+  "pricing.cta.claim": "Claim your listing",
+  "pricing.cta.start": "Start on {plan}",
+  "pricing.cta.current": "Your plan",
+  "pricing.cta.upgrade": "Upgrade to {plan}",
+  "pricing.cta.downgrade": "Downgrade to {plan}",
+
+  "pricing.table.heading": "What else is different",
+  "pricing.table.caption":
+    "What each plan changes beyond its limits, with the plans as columns",
+  "pricing.table.feature": "What a plan changes",
+  "pricing.row.ranking": "Search ranking weight",
+  "pricing.row.ranking_note":
+    "On the plan-tier component of the ranking only, which is {points} of {total} points. The other {others} are relevance, verification tier, response time, spec completeness and distance, and no plan changes any of them.",
+  "pricing.row.custom_domain": "Your own web address",
+  "pricing.row.custom_domain_note":
+    "Your storefront on an address you own, with the platform one still working.",
+  "pricing.row.site_visit": "Verified by a site visit",
+  "pricing.row.site_visit_note":
+    "Our team goes to the address and photographs it. The tier that follows is set by us and by nobody else, on this plan or any other.",
+  "pricing.cell.multiplier": "{multiplier}×",
+  "pricing.cell.included": "Included",
+  "pricing.cell.absent": "Not included",
+  "pricing.cell.absent_label": "Not included on {plan}",
+
+  "pricing.same_heading": "The same on every plan",
+  "pricing.same.response_time":
+    "How fast you reply is measured from your own enquiry timestamps. There is no field to fill in and no plan that changes it.",
+  "pricing.same.import": "Bulk product import reads up to {rows} rows from a CSV or an Excel file.",
+  "pricing.same.placement":
+    "A sponsored slot is one per subcategory and emirate, taken at its own monthly price. No plan includes one, and it never goes above a verified supplier on a filter the buyer set.",
+  "pricing.same.commission":
+    "Nothing is taken from what a buyer pays you. There is no commission, no per-lead charge and no take rate, because there is no mechanism for one — buyers pay suppliers directly and the platform is never party to it.",
 
   // ── Billing, boards 3m and 11f ────────────────────────────────────────────
   "billing.title": "Subscription",

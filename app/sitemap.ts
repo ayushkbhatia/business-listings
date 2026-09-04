@@ -121,6 +121,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   entries.push({ url: absoluteUrl("/categories"), changeFrequency: "weekly", priority: 0.7 });
 
   /*
+     Board 1l. Indexable on purpose — "business listing UAE price" is a real
+     query and this is the page that answers it, with the free tier and the
+     entry price in the title. Weekly rather than daily: the figures come from
+     the `Plan` table and a plan price moves about once a year.
+  */
+  entries.push({ url: absoluteUrl("/pricing"), changeFrequency: "weekly", priority: 0.7 });
+
+  /*
      The emirate × sector pages board 6c's matrix links to.
 
      Read from `liveEmiratePages`, which is `emirateMatrix` filtered to the

@@ -2047,6 +2047,17 @@ model Plan {
   customDomain      Boolean @default(false) @map("custom_domain")
   siteVisitIncluded Boolean @default(false) @map("site_visit_included")
   sortOrder         Int     @default(0) @map("sort_order")
+  /// When this plan stopped being sold.
+  ///
+  /// Board 1l, criterion 12: a withdrawn plan does not appear on `/pricing`,
+  /// and everybody already on it keeps it. Both halves are this one column —
+  /// the row is never deleted, so `Business.planId` and `Subscription.planId`
+  /// still resolve and `entitlementSnapshot` still grandfathers the numbers;
+  /// only the surfaces that sell a plan filter on it.
+  ///
+  /// A date rather than a boolean because "since when" is the question asked
+  /// of a plan nobody can buy any more, and a flag cannot answer it.
+  withdrawnAt       DateTime? @map("withdrawn_at")
 
   // NO commissionRate. NO transactionFee.
 

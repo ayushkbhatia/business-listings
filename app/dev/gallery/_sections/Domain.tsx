@@ -7,6 +7,7 @@ import {
   EmirateAreaPicker,
   HoursEditor,
   PlanCard,
+  PlanComparison,
   EnquiryComposer,
   ModerationRow,
   ReviewCard,
@@ -1173,9 +1174,108 @@ export function ModerationSpecimens() {
           </Frame>
         </States>
       </Section>
+
+      <Section
+        id="plan-comparison"
+        title="PlanComparison"
+        note="not in the inventory · a real table above 768, per-plan blocks below it"
+      >
+        <States label="three plans, three rows that differ" stack>
+          <Frame>
+            <PlanComparison
+              caption="What each plan changes beyond its limits, with the plans as columns"
+              featureHeader="What a plan changes"
+              columns={[
+                { id: "free", name: "Free" },
+                { id: "basic", name: "Basic", highlighted: true },
+                { id: "pro", name: "Pro" },
+              ]}
+              rows={COMPARISON_ROWS}
+            />
+          </Frame>
+        </States>
+
+        <States label="one row, because the others were levelled" stack>
+          <Frame>
+            <PlanComparison
+              caption="What each plan changes beyond its limits, with the plans as columns"
+              featureHeader="What a plan changes"
+              columns={[
+                { id: "free", name: "Free" },
+                { id: "basic", name: "Basic", highlighted: true },
+                { id: "pro", name: "Pro" },
+              ]}
+              rows={COMPARISON_ROWS.slice(0, 1)}
+            />
+          </Frame>
+        </States>
+
+        {/*
+           The empty state, and it is a deliberate one: the rows are built by
+           dropping every dimension the plans answer the same way, so levelling
+           the tiers empties the table. It renders nothing rather than a head
+           with no body, and the page drops its heading on the same condition.
+        */}
+        <States label="nothing differs — renders nothing" stack>
+          <Frame>
+            <PlanComparison
+              caption="What each plan changes beyond its limits, with the plans as columns"
+              featureHeader="What a plan changes"
+              columns={[
+                { id: "free", name: "Free" },
+                { id: "basic", name: "Basic" },
+              ]}
+              rows={[]}
+            />
+            <p className="font-mono text-eyebrow uppercase text-faint">renders nothing</p>
+          </Frame>
+        </States>
+      </Section>
     </>
   );
 }
+
+/**
+ * Three rows shaped exactly as `comparisonRowsOf` builds them: the qualified
+ * ranking row, and two the cards state as a tick.
+ */
+const COMPARISON_ROWS = [
+  {
+    key: "ranking",
+    header: "Search ranking weight",
+    note:
+      "On the plan-tier component of the ranking only, which is 6 of 100 points. The other 94 " +
+      "are relevance, verification tier, response time, spec completeness and distance, and no " +
+      "plan changes any of them.",
+    cells: [
+      { planId: "free", label: "1×", state: "value" as const },
+      { planId: "basic", label: "1.15×", state: "value" as const },
+      { planId: "pro", label: "1.35×", state: "value" as const },
+    ],
+  },
+  {
+    key: "custom_domain",
+    header: "Your own web address",
+    note: "Your storefront on an address you own, with the platform one still working.",
+    cells: [
+      { planId: "free", label: "Not included", state: "absent" as const },
+      { planId: "basic", label: "Not included", state: "absent" as const },
+      { planId: "pro", label: "Included", state: "included" as const },
+    ],
+  },
+  {
+    key: "site_visit",
+    header: "Verified by a site visit",
+    note:
+      "Our team goes to the address and photographs it. The tier that follows is set by us and " +
+      "by nobody else, on this plan or any other.",
+    cells: [
+      { planId: "free", label: "Not included", state: "absent" as const },
+      { planId: "basic", label: "Not included", state: "absent" as const },
+      { planId: "pro", label: "Included", state: "included" as const },
+    ],
+  },
+];
 
 /** Stateful, because an editor rendered with no state shows one frame of itself. */
 function HoursEditorSpecimen() {

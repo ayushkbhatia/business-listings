@@ -2348,3 +2348,130 @@ timestamps, profile strength and spec completeness from pure functions the
 hourly job calls. All three were fabricated in the seed at some point in this
 project's life and all three were caught. A dash means not enough to say, which
 is not the same as zero.
+
+## Board 1l — pricing and plans
+
+### Three of the page's claims were not true of the product, and are not rendered
+
+Board 1l's own argument is that this page has to be literally true, because a
+supplier checks every word of it against the product inside a week of signing
+up. Three things the board draws had nothing behind them:
+
+**The `3× + top slot` ranking row.** `Plan.rankingMultiplier` runs 1 → 1.15 →
+1.35 and scales one of six components. Plan tier is deliberately the smallest of
+the six and `PLAN_TIER_CEILING` caps it at 10, with the reason written beside it
+in `lib/search/ranking.ts`. The row renders the live multiplier and carries the
+sentence that bounds it — *"on the plan-tier component of the ranking only,
+which is 6 of 100 points"* — next to the number rather than in a footnote,
+because a footnote is a bet that the reader will scroll and on this row they
+will not. The share is computed from `liveWeights()`, so moving the weight in
+`/admin/search` moves the claim, which is criterion 6.
+
+**"Top placement in your subcategory" as a Pro entitlement.** It is not one. A
+sponsored slot is a `PlacementSlot`, taken per subcategory and emirate at its own
+monthly price by a seller on any plan, always labelled, and never above a
+verified supplier on a filter the buyer set. `lib/placement/service.ts` gates it
+on nothing. It is listed under what is the same on every plan, which is what it
+is — and a Pro seller who did not appear first would have checked, and would have
+been right.
+
+**The 14-day trial.** There is none. `SubStatus` has a `trialing` value and
+nothing in the product ever writes it: no trial length on `Plan`, no start, no
+end, no code path in `lib/billing/`. The Pro card reads "Start on Pro".
+Criterion 11 — a seller who has used the trial sees no trial language — holds
+because nobody has one to use, rather than through a branch that can never run.
+
+### The annual toggle is real arithmetic in front of monthly billing
+
+Criterion 4 asks for annual at ten times monthly with the discount stated in
+months, and the arithmetic is honest: `annualPriceAed` is the one price column
+multiplied by `ANNUAL_MONTHS_CHARGED`, and there is no second price column to
+drift from it.
+
+What is not there is a way to charge it. `prorate()` divides by a thirty-day
+period, `Subscription.renewsAt` is one date the change screen never moves, and
+`InvoiceLineKind` has no annual line. So the annual view says so, in one line,
+gated on `ANNUAL_BILLING_LIVE` — the same shape as `paymentProvider().live`,
+which the billing screens already use to say "no card has been charged" rather
+than showing a receipt for a payment that did not happen. The constant and the
+sentence are asserted together in `tests/unit/pricing.test.ts`, so the note
+cannot disappear without the billing arriving.
+
+**Annual billing itself is not built here.** It is boards `3m` and `11f`, which
+board 1l puts out of scope, and it is a period on a subscription rather than a
+label on a card.
+
+### The promoted card is the cheapest paid plan, not Pro
+
+The board promotes Pro with a `Most popular` pill. Two problems: "most popular"
+is a claim about behaviour nothing measures, and board 11f had already decided
+the opposite in words — *"the recommended plan is the middle one, and it is
+recommended because it is the one most suppliers want rather than the one that
+earns most; a directory whose recommendation is always its dearest tier is a
+directory a supplier learns to read past."*
+
+So `recommendedPlanId` returns the cheapest paid plan, from price rather than
+from an id, and `1l`, `2e` and `11f` all read it. The label is "Recommended",
+which the catalogue already had. Adding a fourth tier below Basic moves the
+promotion without anybody editing `plan.id === "basic"` in three files.
+
+Criterion 8 is "exactly one card is promoted" and that holds signed out. A seller
+already on the recommended plan sees none promoted, because recommending
+somebody what they already have is the page not reading its own session.
+
+### `Plan.withdrawnAt` — withdrawal is about what can be started
+
+Criterion 12 needs a plan that cannot be started and is not taken away, and there
+was no column for it. `withdrawnAt` is a nullable date rather than a boolean,
+because "since when" is the question asked of a plan nobody can buy any more.
+
+The row is never deleted, so `Business.planId`, `Subscription.planId` and
+`entitlementSnapshot` all still resolve and every subscriber keeps their plan,
+their price and their grandfathered caps. Only the surfaces that *sell* a plan
+filter on it — which is why `readPricingPlans` returns withdrawn rows and the
+page filters, rather than the query hiding them from the billing screens that
+have to name them.
+
+Nothing writes it yet. Setting it belongs to board 12e, the admin plan editor,
+which board 1l puts out of scope.
+
+### The comparison table holds three rows, and drops any that stop comparing
+
+The board draws five rows: search ranking weight, lead response SLA badge, bulk
+product import, custom domain, verified-by-visit eligibility. Two of them are not
+per-plan facts. There is no SLA-badge entitlement — response time is measured
+from enquiry-to-first-reply timestamps and shown on every listing regardless of
+plan — and `MAX_ROWS` in `lib/import/csv.ts` is a parser guard that applies to
+everybody, not a tier.
+
+A row identical in all three columns compares nothing, so `rowsThatDiffer` drops
+it and the three that are genuinely per-plan remain. The things a reader most
+expects to be tiered and is not — reply speed, bulk import, sponsored placement,
+and the absence of any commission — are said below the table as prose, because
+that is information rather than padding. When the table empties, its heading goes
+with it.
+
+### `planSummary` moved out of the home page, and had already drifted
+
+`app/(public)/page.tsx` built its own sentence about a plan, which made the home
+CTA band the one surface of four not sharing `lib/billing/plan-features.ts`. It
+interpolated the raw integers where `featuresOf` runs them through
+`formatCount`, so a cap of 1,500 would have read "1,500 products" on `/pricing`
+and "1500 products" on `/`. Three-digit seed data hid it. It is `homeSummaryOf`
+now, and criterion 2 is asserted from one fixture in `tests/unit/pricing.test.ts`.
+
+### Two shared defects the build surfaced
+
+**`SegmentedControl` moved selection without moving focus.** The roving
+`tabIndex` was there and the `.focus()` was not, so an arrow key checked the next
+segment while the ring stayed on the one the reader had left — and the next Tab
+left the group from the wrong place. Wrong on every SegmentedControl in the
+product; found by the keyboard pass on the monthly/annual toggle.
+
+**A free plan's ranking line read "Ranked 1× in search", struck through.** Every
+other absent line names something the seller does not get; `1×` is the baseline
+every listing already has, so struck through it read as a feature being withheld.
+Naming the absence — "No ranking lift in search" — was worse again, because
+struck through that is a double negative. It reads "A lift in search ranking"
+now, the same shape as "Your own web address" beside it, with the strike doing
+the negating. Fixed on `1l`, `2e` and `11f` alike.

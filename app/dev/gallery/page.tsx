@@ -124,12 +124,18 @@ const TIER_4 = [
 /**
  * Built, and not in docs/component-inventory.md.
  *
- * Empty, and worth keeping. `Thread` sat here until it was given row 66 — a
- * component the design system has not described is worth surfacing rather than
- * folding into a tier to make a total come out right, and the next one wants
- * somewhere to go that is not a guess about which tier it belongs to.
+ * `Thread` sat here until it was given row 66 — a component the design system
+ * has not described is worth surfacing rather than folding into a tier to make
+ * a total come out right, and the next one wants somewhere to go that is not a
+ * guess about which tier it belongs to.
+ *
+ * `PlanComparison` is that next one. Board 1l draws the plans side by side and
+ * the canvas has no component for it; it was extracted while building the page
+ * rather than left as page-local JSX, because `2e` and `11f` compare the same
+ * plans and copying the markup is how two screens start disagreeing about one
+ * record. Which tier it belongs to is the design owner's call, not this file's.
  */
-const UNLISTED = [] as const;
+const UNLISTED = ["plan-comparison"] as const;
 
 export default function Gallery() {
   return (

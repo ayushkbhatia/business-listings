@@ -77,9 +77,7 @@ export function DirectoryNav({
         { key: "categories", label: t("chrome.categories"), href: "/categories" },
         { key: "products", label: t("chrome.products"), href: "/search?tab=products" },
         { key: "suppliers", label: t("chrome.suppliers"), href: "/search" },
-        // docs/routes.md marks /pricing as board 1l, not yet built. A greyed
-        // span is worse than a link and better than a 404.
-        { key: "pricing", label: t("chrome.pricing"), href: "/pricing", later: true },
+        { key: "pricing", label: t("chrome.pricing"), href: "/pricing" },
       ]}
       actions={
         <>
@@ -132,6 +130,9 @@ export function DirectoryFooter() {
       links: [
         { key: "list", label: t("home.link_list_business"), href: "/onboarding/claim" },
         { key: "claim", label: t("home.link_claim"), href: "/onboarding/claim" },
+        // Board 1l. `home.link_pricing` has been in the catalogue since handoff
+        // 1 with nothing rendering it, because the page it names did not exist.
+        { key: "pricing", label: t("home.link_pricing"), href: "/pricing" },
         { key: "verification", label: t("chrome.verification_policy"), href: "/verification-policy" },
         { key: "reviews", label: t("chrome.review_policy"), href: "/review-policy" },
       ],
