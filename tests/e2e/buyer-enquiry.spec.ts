@@ -83,15 +83,33 @@ test.describe("the fan-out, in one route", () => {
 
 test.describe("tracking an enquiry", () => {
   test("a buyer with no account reaches theirs by the link they were given", async ({ page }) => {
+    /*
+       Board 1i rebuilt this page and the headings went with it. "Track this
+       enquiry" was a label for the page; the `h1` now states what has actually
+       happened — "Two suppliers have quoted." — and the reference moved to the
+       sidebar card where a buyer reads it back to somebody.
+    */
     await page.goto(enquiryPath());
     await expect(page.getByText(ENQUIRY_REF)).toBeVisible();
-    await expect(page.getByRole("heading", { name: /Track this enquiry/ })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(/supplier/i);
   });
 
   test("shows who has it, and every quote that came back", async ({ page }) => {
+    /*
+       "Who has it" became the live status card, and the quote count moved into
+       the badge — which is now derived from the rows rather than counted
+       separately, so the two cannot disagree.
+    */
     await page.goto(enquiryPath());
-    await expect(page.getByRole("heading", { name: "Who has it" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /\d+ quotes?/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Live status" })).toBeVisible();
+
+    const rows = page.locator("ul[aria-label] > li");
+    const quoted = (await rows.evaluateAll((els) =>
+      els.filter((el) => (el.textContent ?? "").includes("QUOTED")).length,
+    ));
+    expect(quoted).toBeGreaterThan(0);
+    await expect(page.getByText(`${quoted} quotes received`)).toBeVisible();
   });
 
   test("is not reachable without the token", async ({ page }) => {
