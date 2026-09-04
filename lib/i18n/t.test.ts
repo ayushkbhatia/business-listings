@@ -60,10 +60,35 @@ describe("the catalogue itself", () => {
   it("uses none of the banned vocabulary from the CLAUDE.md table", () => {
     // "order" is allowed inside "made to order" and "indent order" — those
     // describe the seller's own process, not a platform order entity.
-    const banned = /\b(cart|checkout|payout|commission|GMV|refund)\b/i;
+    const banned = /\b(cart|checkout|payout|GMV|refund)\b/i;
     for (const [key, value] of Object.entries(en)) {
       const strings = typeof value === "string" ? [value] : Object.values(value);
       for (const s of strings) expect(s, key).not.toMatch(banned);
+    }
+  });
+
+  /*
+     "Commission" is banned as a claim, not as a word.
+
+     The list above carried a bare `commission` for four handoffs, which was
+     wider than the rule it was standing in for: CLAUDE.md's banned list is
+     cart, basket, checkout, buy, purchase, payout, refund, dispatch, POD and
+     GMV, and `pnpm check:vocabulary` — the version CI runs — has never banned
+     it. The word only became reachable when board 1l shipped, because the
+     load-bearing commercial claim on the pricing page is the *absence* of one:
+     "no setup fee, no commission, no pay-per-lead", which is literally true and
+     is the sharpest line the product has against every incumbent directory.
+
+     So the negated form is allowed and the bare noun is not. A string that
+     names a commission as something that exists still fails here, and the
+     schema half of the same rule is `pnpm check:schema`, which refuses a
+     `commissionRate` or `transactionFee` column outright.
+  */
+  it("never names a commission as something that exists", () => {
+    const claimed = /(?<!\bno )\bcommissions?\b/i;
+    for (const [key, value] of Object.entries(en)) {
+      const strings = typeof value === "string" ? [value] : Object.values(value);
+      for (const s of strings) expect(s, key).not.toMatch(claimed);
     }
   });
 

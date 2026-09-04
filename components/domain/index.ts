@@ -45,6 +45,14 @@ export {
 } from "./EmirateAreaPicker";
 
 export { PlanCard, type PlanCardProps, type PlanFeature } from "./PlanCard";
+export {
+  PlanComparison,
+  type PlanComparisonProps,
+  type PlanComparisonColumn,
+  type PlanComparisonRow,
+  type PlanComparisonCell,
+  type PlanComparisonState,
+} from "./PlanComparison";
 export { ReviewCard, type ReviewCardProps } from "./ReviewCard";
 
 // Board 1a. The directory home's two compositions.

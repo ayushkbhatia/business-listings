@@ -5,3 +5,4 @@ export * from "./home";
 export * from "./map";
 export * from "./search";
 export * from "./storefront-catalogue";
+export * from "./pricing";

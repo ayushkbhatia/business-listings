@@ -1,9 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import { requireStaff } from "@/lib/auth/staff";
 import { editPlanEntitlements } from "@/lib/billing/entitlements-service";
+import { PLAN_CACHE_TAG } from "@/lib/db/queries/pricing";
+import { HOME_CACHE_TAG } from "@/lib/db/queries/home";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
@@ -54,6 +56,17 @@ export async function saveEntitlements(formData: FormData): Promise<ActionResult
 
     revalidatePath("/admin/plans");
     revalidatePath("/admin/revenue");
+    /*
+       The two public surfaces that quote these numbers.
+
+       Both are dynamic routes with cached data, so `revalidatePath` on them
+       would clear a route cache neither has. The tags are what actually holds
+       criterion 2 of board 1l — the figures on `/` and on `/pricing` are
+       identical for the same plan — because until this line existed an edit
+       reached `/admin/plans` immediately and the home band up to an hour later.
+    */
+    revalidateTag(PLAN_CACHE_TAG, { expire: 0 });
+    revalidateTag(HOME_CACHE_TAG, { expire: 0 });
     return {
       ok: true,
       message:

@@ -209,22 +209,24 @@ test.describe("home", () => {
 
   test("names unbuilt routes without linking to them", async ({ page }) => {
     await page.goto("/");
-    // docs/routes.md says a later route is named so the nav is shaped right.
-    // Named, not linked — a dead link is worse than an honest greyed one.
-    //
-    // The footer names its four on every width. The nav's own three live in a
-    // `hidden lg:flex` list, so below 1024 they are not shown at all — which is
-    // the design, not a regression. Asserting visibility on both projects made
-    // this test fail on mobile for doing exactly what it should.
-    // "Guides" left this list in handoff 5 step 1 — it is a built route now,
-    // and the assertion below is that a `later` one is never a link.
-    //
-    // The footer's four left it here, for the same reason: the policy pages
-    // have been live since handoff 5 and the footer was still greying them
-    // out, so nothing on the site linked to the terms. `Pricing` is the only
-    // genuinely unbuilt route left.
+    /*
+       docs/routes.md says a later route is named so the nav is shaped right.
+       Named, not linked — a dead link is worse than an honest greyed one.
+
+       The list is empty, and that is the point of keeping the test. "Guides"
+       left it in handoff 5 step 1, the footer's four policies left it when the
+       footer stopped greying out pages that had been live for a handoff, and
+       "Pricing" left it with board 1l. Each of those was a route the nav went
+       on greying out after it was built, which is the failure this guards
+       against in the other direction — so the list stays here, empty, for the
+       next route that is shaped before it is built.
+
+       The nav's own links live in a `hidden lg:flex` list and are not shown
+       below 1024, which is the design; the loop below is width-aware for that
+       reason.
+    */
     const footer: string[] = [];
-    const nav = ["Pricing"];
+    const nav: string[] = [];
     const width = page.viewportSize()?.width ?? 0;
     const shown = width >= 1024 ? [...footer, ...nav] : footer;
 
@@ -234,6 +236,14 @@ test.describe("home", () => {
     // Never a link, at any width — that part does not depend on the viewport.
     for (const label of [...footer, ...nav]) {
       await expect(page.getByRole("link", { name: label, exact: true })).toHaveCount(0);
+    }
+
+    // And the one that just left: Pricing is a route now, so the nav links it
+    // rather than greying it out.
+    if (width >= 1024) {
+      await expect(
+        page.getByRole("navigation").getByRole("link", { name: "Pricing", exact: true }),
+      ).toHaveCount(1);
     }
   });
 

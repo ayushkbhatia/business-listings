@@ -208,6 +208,41 @@ describe("SegmentedControl", () => {
     expect(screen.getByRole("radio", { name: "Products" })).toBeChecked();
   });
 
+  /*
+     Selection and focus travel together, which is the half of the radiogroup
+     pattern this had missing. `tabIndex` moved to the newly checked segment and
+     nothing focused it, so the ring stayed on the one the reader had left and
+     the next Tab left the group from the wrong place. Board 1l's
+     monthly/annual toggle is where it was noticed; every SegmentedControl in
+     the product had it.
+  */
+  it("takes the focus with the selection", async () => {
+    function Harness() {
+      const [value, setValue] = useState("monthly");
+      return (
+        <SegmentedControl
+          label="How you pay"
+          value={value}
+          onChange={setValue}
+          options={[
+            { value: "monthly", label: "Monthly" },
+            { value: "annual", label: "Annual" },
+          ]}
+        />
+      );
+    }
+    render(<Harness />);
+
+    await userEvent.tab();
+    await userEvent.keyboard("{ArrowRight}");
+    expect(screen.getByRole("radio", { name: "Annual" })).toHaveFocus();
+    expect(screen.getByRole("radio", { name: "Annual" })).toHaveAttribute("tabindex", "0");
+
+    await userEvent.keyboard("{ArrowLeft}");
+    expect(screen.getByRole("radio", { name: "Monthly" })).toHaveFocus();
+    expect(screen.getByRole("radio", { name: "Monthly" })).toBeChecked();
+  });
+
   it("skips a disabled option when arrowing", async () => {
     function Harness() {
       const [value, setValue] = useState("a");
@@ -228,6 +263,9 @@ describe("SegmentedControl", () => {
     await userEvent.tab();
     await userEvent.keyboard("{ArrowRight}");
     expect(screen.getByRole("radio", { name: "Letter of credit" })).toBeChecked();
+    // The focus lands on the same one it checked, not on the disabled segment
+    // in between.
+    expect(screen.getByRole("radio", { name: "Letter of credit" })).toHaveFocus();
   });
 });
 

@@ -24,7 +24,7 @@ they 404 until their handoff.
 /enquiry/:id/compare                    Compare quotes                        [1n]  built h2s3
 /enquiry/:id/accepted                   Accepted quote record                 [7c]  built h2s3
 /enquiry/:id/thread/:seller             Negotiation thread                   [10h]  built h2s4
-/pricing                                Plans                                 [1l]
+/pricing                                Plans                                 [1l]  built h1s1l
 /guides                                 Guide index                          [10b]  built h5s1
 /guides/:slug                           Guide article                         [6d]  built h5s1
 /best/:slug                             Curated list                          [6b]  built h5s4
