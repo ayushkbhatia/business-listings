@@ -29,6 +29,7 @@ import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 
 import { print, report, risky } from "./pending-migrations.mjs";
+import { assertLocalTarget } from "../lib/db/target.js";
 
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has("--dry-run");
@@ -41,6 +42,24 @@ async function ask(question: string): Promise<string> {
   } finally {
     rl.close();
   }
+}
+
+/*
+   Deliberately not an unconditional host check.
+
+   This is the one destructive command whose *purpose* is to reach production —
+   docs/deployments.md § Schema does not deploy with the code — and the prompt
+   below is already a real guard: it names the target, lists the migrations, and
+   asks for "apply destructive" when data is at stake. Refusing a remote here
+   outright would put friction on the intended path, which is how a guard gets
+   deleted rather than obeyed.
+
+   The hole is `--yes`, which skips all of that and is exactly what a script
+   reaches for. So the host is asserted only when nobody is going to be asked.
+   See lib/db/target.ts.
+*/
+if (assumeYes) {
+  assertLocalTarget("apply migrations unattended (--yes)");
 }
 
 const result = await report();

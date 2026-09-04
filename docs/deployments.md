@@ -1,8 +1,69 @@
 # Deployments
 
-Vercel, one project, production tracking `main`. Three things are worth knowing
-before you push: that the database is not part of a deploy, what a deploy costs,
-and why a push to a branch no longer builds by itself.
+Vercel, one project, production tracking `main`. Four things are worth knowing
+before you push: which database your commands are pointed at, that the database
+is not part of a deploy, what a deploy costs, and why a push to a branch no
+longer builds by itself.
+
+## Which database am I about to hit
+
+Every destructive command in this repo finds its database the same way — read
+`DIRECT_URL`, fall back to `DATABASE_URL`, connect — and until recently none of
+them asked which host that turned out to be.
+
+That matters here more than on most projects, because the answer depends on
+which directory you are standing in. `.env.local` in the repo root points at the
+hosted Supabase. `.env.local` inside a worktree points at a throwaway on your
+laptop. The same `pnpm db:seed` is a no-op in one and total data loss in the
+other, and `prisma/seed.mts` opens with
+
+```sql
+truncate table "audit_event", "business", "review", … restart identity cascade;
+```
+
+across 46 tables, with no prompt and no undo. The code is in git and can be
+rebuilt in minutes; the reviews buyers wrote, the enquiry and quote threads, the
+verification history and the subscriptions cannot be. They exist once.
+
+So these commands assert the target first and refuse anything that is not
+loopback:
+
+| Command | What it would have done |
+|---|---|
+| `pnpm db:seed` | truncate 46 tables, then reseed |
+| `pnpm db:push` | drop any column the schema no longer has |
+| `pnpm db:migrate` | offer to reset the database on drift |
+| `pnpm test:integration` | delete rows by prefix, and rewrite one supplier's plan, tier and MRR ledger |
+| `pnpm test:e2e` | provision and delete users, suspend listings, remove a review |
+| `pnpm dev:seat` | delete and recreate a user row |
+| `pnpm db:deploy --yes` | apply migrations with nobody watching |
+
+`pnpm verify` runs the integration suite, so it is covered too — and it is the
+likeliest of all of them to be typed in the wrong directory, because it is the
+command every PR is supposed to run.
+
+`pnpm db:deploy` **without** `--yes` is deliberately not on that list. Reaching
+production is its job, and it already names the target and asks for `apply` or
+`apply destructive` back. Only the unattended path is refused.
+
+CI needs nothing: `.github/workflows/ci.yml` points at the `supabase start`
+container on `127.0.0.1:54322`.
+
+### When you really do mean a remote
+
+Name the host on the command line:
+
+```bash
+DB_DESTRUCTIVE_ALLOW_HOST=aws-0-eu-central-1.pooler.supabase.com pnpm db:deploy --yes
+```
+
+Two things about it are deliberate. It names **one** host, so unlocking staging
+cannot quietly unlock production. And it is refused outright if it appears in
+`.env.local` or `.env` — those are the files that point at production, and an
+override living in one is a guard that has been deleted rather than passed. It
+has to be typed next to the thing it permits, every time.
+
+The logic and its tests: `lib/db/target.ts`, `tests/unit/db-target.test.ts`.
 
 ## Schema does not deploy with the code
 

@@ -11,6 +11,7 @@ loadEnv({ path: [".env.local", ".env"], quiet: true });
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/db/generated/client.js";
+import { assertLocalTarget, NonLocalTargetError } from "../lib/db/target.js";
 import {
   AREAS,
   AUTHORITY_BY_EMIRATE,
@@ -167,6 +168,18 @@ function buildSearchText(parts: {
 }
 
 async function main() {
+  /*
+     Before anything else, and before the truncate below in particular.
+
+     This file's first statement destroys 46 tables. It finds the database from
+     `DIRECT_URL`/`DATABASE_URL` and has never asked which host that named — and
+     the repo root's `.env.local` points at the hosted Supabase while a
+     worktree's points at a throwaway, so the same `pnpm db:seed` is harmless in
+     one directory and unrecoverable one level up. See lib/db/target.ts.
+  */
+  const target = assertLocalTarget("truncate every table and reseed");
+  console.log(`→ target ${target.description}`);
+
   console.log("→ clearing");
   /*
      Order matters only where a FK is Restrict rather than Cascade.
@@ -3975,7 +3988,14 @@ main()
     await prisma.$disconnect();
   })
   .catch(async (e) => {
-    console.error(e);
+    /*
+       A refusal is an answer, not a crash. Printing the error object dumps a
+       stack nobody needs above the sentence that matters — and the object used
+       to carry the connection string, so the first version of this guard
+       printed the password it was protecting. The message alone, for this one.
+    */
+    if (e instanceof NonLocalTargetError) console.error(`\n${e.message}`);
+    else console.error(e);
     await prisma.$disconnect();
     process.exit(1);
   });
