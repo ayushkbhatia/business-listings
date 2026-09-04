@@ -7,6 +7,7 @@ import { measureResponseTimes } from "@/lib/metrics/job";
 import { measureProfileStrength } from "@/lib/metrics/strength-job";
 import { sweepAreaPages } from "@/lib/seo/area";
 import { sweepExpiredLicences } from "@/lib/verification/expiry-job";
+import { sweepZeroQuoteEnquiries } from "@/lib/enquiry/zero-quote";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
 
 /**
@@ -108,6 +109,14 @@ export async function GET(request: NextRequest) {
        neither reads the tier.
     */
     expiredLicences: () => sweepExpiredLicences(),
+    /*
+       Board 1i criterion 14. An enquiry that closed with nothing back is a
+       supply signal, and it is written here rather than when a buyer opens the
+       page — a render is the wrong place to write a business record, because
+       an enquiry nobody revisits would never be counted and one somebody
+       refreshes would be counted every time they looked.
+    */
+    zeroQuoteEnquiries: () => sweepZeroQuoteEnquiries(),
     /*
        Bookkeeping, not enforcement, which is why it can wait a day:
        `areaPageState.live` recomputes the publish floors at read time, so a

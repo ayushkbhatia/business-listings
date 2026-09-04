@@ -15,6 +15,7 @@ import {
   getPopularQueries,
   getRecentlyVerified,
 } from "@/lib/db/queries";
+import { homeSummaryOf } from "@/lib/billing/plan-features";
 import { formatCount, formatDuration, formatRelative } from "@/lib/format";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
@@ -486,7 +487,7 @@ export default async function HomePage() {
                       )}
                     </p>
                     <p className="mt-1.5 text-caption leading-[1.45] text-on-ink-muted">
-                      {planSummary(plan)}
+                      {homeSummaryOf(plan)}
                     </p>
                   </div>
                 );
@@ -497,39 +498,4 @@ export default async function HomePage() {
       )}
     </PublicShell>
   );
-}
-
-/**
- * One line of what a plan includes, from its own entitlement columns.
- *
- * Written from the row rather than from a table of copy, so raising a limit in
- * `/admin/plans` changes this band without a deploy — which is the whole reason
- * the entitlements are columns and not a constant.
- */
-function planSummary(plan: {
-  locationLimit: number | null;
-  productLimit: number | null;
-  photoLimit: number | null;
-  enquiriesPerMonth: number | null;
-  customDomain: boolean;
-}): string {
-  const parts: string[] = [];
-  parts.push(
-    plan.locationLimit === null
-      ? t("plan.locations_unlimited")
-      : plan.locationLimit === 1
-        ? t("plan.location_one")
-        : t("plan.locations", { n: plan.locationLimit }),
-  );
-  parts.push(
-    plan.productLimit === null
-      ? t("plan.products_unlimited")
-      : t("plan.products", { n: plan.productLimit }),
-  );
-  parts.push(
-    plan.enquiriesPerMonth === null
-      ? t("plan.enquiries_unlimited")
-      : t("plan.enquiries", { n: plan.enquiriesPerMonth }),
-  );
-  return parts.join(" · ");
 }

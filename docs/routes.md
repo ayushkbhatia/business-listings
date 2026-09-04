@@ -16,7 +16,7 @@ they 404 until their handoff.
 /b/:slug                                Storefront overview                   [1d]
 /b/:slug/products                       Catalogue                             [1e]
 /b/:slug/branches                       Branches & hours                      [1f]
-/b/:slug/reviews                        Reviews                               [1m]
+/b/:slug/reviews                        Reviews & ratings                     [1m]  built h4s6
 /b/:slug/p/:product                     Product + spec table                  [1g]
 /b/:slug (unclaimed variant)            Unclaimed listing                    [10g]
 /rfq/new                                RFQ fan-out                           [1h]  built h2s3
@@ -24,7 +24,7 @@ they 404 until their handoff.
 /enquiry/:id/compare                    Compare quotes                        [1n]  built h2s3
 /enquiry/:id/accepted                   Accepted quote record                 [7c]  built h2s3
 /enquiry/:id/thread/:seller             Negotiation thread                   [10h]  built h2s4
-/pricing                                Plans                                 [1l]
+/pricing                                Plans                                 [1l]  built h1s1l
 /guides                                 Guide index                          [10b]  built h5s1
 /guides/:slug                           Guide article                         [6d]  built h5s1
 /best/:slug                             Curated list                          [6b]  built h5s4
@@ -179,6 +179,15 @@ half of the directive we want.
 A signed-in seller already holding a claimed listing is redirected from `2a` to
 `/dashboard?notice=one_business`, which states the reason. Claiming a second
 business is not something this flow does.
+
+`/b/:slug/reviews` takes `?show=` (all · accepted · photos · critical), `?sort=` (recent ·
+highest · lowest · detailed) and `?page=`. Every narrowed view is `noindex, follow` and
+canonicalises to the bare path — sixteen filter-and-sort permutations of one list is the
+doorway-page shape `/b/:slug/products` already rules out, and the review text is the thing
+worth ranking. `?page=` is cumulative: page 3 renders thirty rows, so "Load more" is an anchor
+a buyer can go back through rather than an endless list. The route 404s where the business has
+no published review, because `StorefrontHeader` hides a tab with a zero count and a tab that
+does not exist should not have a URL that renders.
 
 Slugs are immutable once published. Renaming a category or merging two listings creates a
 301 automatically; deleting a page without one is blocked at the service layer.

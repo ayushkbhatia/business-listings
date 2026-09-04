@@ -7,8 +7,11 @@ import {
   EmirateAreaPicker,
   HoursEditor,
   PlanCard,
+  PlanComparison,
   EnquiryComposer,
   ModerationRow,
+  ReviewCard,
+  ReviewHeldRow,
   Thread,
   QuoteLineEditor,
   ListingCard,
@@ -354,6 +357,8 @@ export function Domain() {
       <EnquiryComposerSpecimens />
 
       <ThreadSpecimens />
+
+      <ReviewCardSpecimens />
 
       <ModerationSpecimens />
 
@@ -815,6 +820,116 @@ const THREAD_MESSAGES: ThreadMessageView[] = [
   },
 ];
 
+/**
+ * 67 · `ReviewCard`, in the states board 1m documents.
+ *
+ * Both variants, because the reason this is one component and not two is that
+ * the storefront section and the reviews page must render one record one way. A
+ * gallery that showed only the card would let the row drift.
+ */
+function ReviewCardSpecimens() {
+  const body =
+    "Forty DN100 gate valves for a chilled water riser, quoted the same afternoon and on site in three days. The price held to the quote and the certificates came with the delivery.";
+
+  return (
+    <Section
+      id="review-card"
+      title="ReviewCard"
+      note="67 · board 1m · one review, on the reviews page and in the storefront section"
+    >
+      {/*
+         The two rungs. `ok` is an accepted quote, which is the strongest thing
+         a platform holding no transactions can prove; `neutral` is an enquiry
+         this seller answered. There is no third rung and no purchase.
+      */}
+      <States label="provenance" stack>
+        <Frame width="40rem">
+          <ul>
+            <ReviewCard
+              as="li"
+              variant="row"
+              author="Harbour Contracting LLC"
+              rating="5"
+              ratingValue={5}
+              ratingLabel={t("reviewpage.rating_label", { rating: "5" })}
+              date={formatDate(new Date("2026-08-31T09:00:00+04:00"))}
+              provenance={{ label: t("reviewpage.provenance.accepted_quote"), tone: "ok" }}
+              body={body}
+              replyLabel={t("reviewpage.seller_reply", { name: "Al Waha Industrial Supplies" })}
+            />
+            <ReviewCard
+              as="li"
+              variant="row"
+              author={t("storefront.review_anonymous")}
+              rating="3"
+              ratingValue={3}
+              ratingLabel={t("reviewpage.rating_label", { rating: "3" })}
+              date={formatDate(new Date("2026-08-04T09:00:00+04:00"))}
+              provenance={{ label: t("reviewpage.provenance.verified_enquiry"), tone: "neutral" }}
+              body="Answered within the hour with stock and a lead time. We went elsewhere on price."
+              replyLabel={t("reviewpage.seller_reply", { name: "Al Waha Industrial Supplies" })}
+            />
+          </ul>
+        </Frame>
+      </States>
+
+      <States label="with a reply, and with photos" stack>
+        <Frame width="40rem">
+          <ul>
+            <ReviewCard
+              as="li"
+              variant="row"
+              author="Marina Facilities LLC"
+              rating="4"
+              ratingValue={4}
+              ratingLabel={t("reviewpage.rating_label", { rating: "4" })}
+              date={formatDate(new Date("2026-07-17T09:00:00+04:00"))}
+              provenance={{ label: t("reviewpage.provenance.accepted_quote"), tone: "ok" }}
+              body="The valves were right. The delivery was not — quoted three days, arrived on the ninth."
+              photos={[
+                { id: "a", url: "/window.svg", alt: "Valves on the pallet as delivered" },
+                { id: "b", url: "/file.svg", alt: "The delivery note" },
+              ]}
+              sellerReply="That was our transport contractor and we have changed it since."
+              replyLabel={t("reviewpage.seller_reply", { name: "Al Waha Industrial Supplies" })}
+            />
+          </ul>
+        </Frame>
+      </States>
+
+      {/*
+         Held: one neutral line, no body, no rating, no reviewer. Leaving the
+         review visible with a warning attached would publish the complaint and
+         the doubt at once, which board 1m rules out.
+      */}
+      <States label="held for moderation" stack>
+        <Frame width="40rem">
+          <ul>
+            <ReviewHeldRow label={t("reviewpage.held", { count: 1, formatted: "1" })} />
+          </ul>
+        </Frame>
+      </States>
+
+      {/*
+         The card variant, which is what the storefront section renders. No
+         marks, so the numeral beside the date carries the rating.
+      */}
+      <States label="card variant · storefront section" stack>
+        <Frame width="40rem">
+          <ReviewCard
+            author="Cornerstone MEP Contracting LLC"
+            rating="5"
+            date={formatDate(new Date("2026-06-20T09:00:00+04:00"))}
+            body={body}
+            sellerReply="Thank you. Staged delivery is worth asking for on anything over twenty items."
+            replyLabel={t("storefront.seller_reply")}
+          />
+        </Frame>
+      </States>
+    </Section>
+  );
+}
+
 export function ThreadSpecimens() {
   return (
     <Section id="thread" title="Thread" note="66 · boards 10h and 11b · one component, two sides">
@@ -1059,9 +1174,108 @@ export function ModerationSpecimens() {
           </Frame>
         </States>
       </Section>
+
+      <Section
+        id="plan-comparison"
+        title="PlanComparison"
+        note="not in the inventory · a real table above 768, per-plan blocks below it"
+      >
+        <States label="three plans, three rows that differ" stack>
+          <Frame>
+            <PlanComparison
+              caption="What each plan changes beyond its limits, with the plans as columns"
+              featureHeader="What a plan changes"
+              columns={[
+                { id: "free", name: "Free" },
+                { id: "basic", name: "Basic", highlighted: true },
+                { id: "pro", name: "Pro" },
+              ]}
+              rows={COMPARISON_ROWS}
+            />
+          </Frame>
+        </States>
+
+        <States label="one row, because the others were levelled" stack>
+          <Frame>
+            <PlanComparison
+              caption="What each plan changes beyond its limits, with the plans as columns"
+              featureHeader="What a plan changes"
+              columns={[
+                { id: "free", name: "Free" },
+                { id: "basic", name: "Basic", highlighted: true },
+                { id: "pro", name: "Pro" },
+              ]}
+              rows={COMPARISON_ROWS.slice(0, 1)}
+            />
+          </Frame>
+        </States>
+
+        {/*
+           The empty state, and it is a deliberate one: the rows are built by
+           dropping every dimension the plans answer the same way, so levelling
+           the tiers empties the table. It renders nothing rather than a head
+           with no body, and the page drops its heading on the same condition.
+        */}
+        <States label="nothing differs — renders nothing" stack>
+          <Frame>
+            <PlanComparison
+              caption="What each plan changes beyond its limits, with the plans as columns"
+              featureHeader="What a plan changes"
+              columns={[
+                { id: "free", name: "Free" },
+                { id: "basic", name: "Basic" },
+              ]}
+              rows={[]}
+            />
+            <p className="font-mono text-eyebrow uppercase text-faint">renders nothing</p>
+          </Frame>
+        </States>
+      </Section>
     </>
   );
 }
+
+/**
+ * Three rows shaped exactly as `comparisonRowsOf` builds them: the qualified
+ * ranking row, and two the cards state as a tick.
+ */
+const COMPARISON_ROWS = [
+  {
+    key: "ranking",
+    header: "Search ranking weight",
+    note:
+      "On the plan-tier component of the ranking only, which is 6 of 100 points. The other 94 " +
+      "are relevance, verification tier, response time, spec completeness and distance, and no " +
+      "plan changes any of them.",
+    cells: [
+      { planId: "free", label: "1×", state: "value" as const },
+      { planId: "basic", label: "1.15×", state: "value" as const },
+      { planId: "pro", label: "1.35×", state: "value" as const },
+    ],
+  },
+  {
+    key: "custom_domain",
+    header: "Your own web address",
+    note: "Your storefront on an address you own, with the platform one still working.",
+    cells: [
+      { planId: "free", label: "Not included", state: "absent" as const },
+      { planId: "basic", label: "Not included", state: "absent" as const },
+      { planId: "pro", label: "Included", state: "included" as const },
+    ],
+  },
+  {
+    key: "site_visit",
+    header: "Verified by a site visit",
+    note:
+      "Our team goes to the address and photographs it. The tier that follows is set by us and " +
+      "by nobody else, on this plan or any other.",
+    cells: [
+      { planId: "free", label: "Not included", state: "absent" as const },
+      { planId: "basic", label: "Not included", state: "absent" as const },
+      { planId: "pro", label: "Included", state: "included" as const },
+    ],
+  },
+];
 
 /** Stateful, because an editor rendered with no state shows one frame of itself. */
 function HoursEditorSpecimen() {

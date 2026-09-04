@@ -1,6 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/client";
+import { PLAN_CACHE_TAG } from "./pricing";
 import { VERIFIED_TIER } from "@/lib/verification";
 import { detectIdentityLeak } from "@/lib/enquiry/redaction";
 import type { Emirate } from "@/lib/db/generated/client";
@@ -657,8 +658,18 @@ export const getNewCatalogueProducts = unstable_cache(readNewCatalogueProducts, 
   tags: [HOME_CACHE_TAG],
 });
 
+/*
+   Two tags, because two different people change this band.
+
+   `HOME_CACHE_TAG` is the content editor putting a trade on the front page.
+   `PLAN_CACHE_TAG` is somebody editing a plan in `/admin/plans`, which used to
+   reach the admin screens immediately and this band up to an hour later —
+   board 1l criterion 2 says the figures here and on `/pricing` are identical
+   for the same plan, and one invalidator over two caches is how that stopped
+   being true.
+*/
 export const getHomePlans = unstable_cache(readHomePlans, ["home-plans"], {
   revalidate: HOUR_S,
-  tags: [HOME_CACHE_TAG],
+  tags: [HOME_CACHE_TAG, PLAN_CACHE_TAG],
 });
 

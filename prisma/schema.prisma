@@ -982,6 +982,18 @@ model Enquiry {
   neededBy                    DateTime?     @map("needed_by")
   termsWanted                 PaymentTerms? @map("terms_wanted")
   closesAt                    DateTime      @map("closes_at")
+
+  /// Board 1i: editing a requirement creates a revision, never a silent edit.
+  ///
+  /// A seller who has already priced 40 valves must not find the quantity
+  /// changed underneath their quote. So the number goes up, recipients who have
+  /// not quoted receive the new text, and the ones who have are told and their
+  /// quote is marked superseded — they may re-quote against R2.
+  ///
+  /// The buyer sees `REVISED 2 SEP · R2` under the header. `revisedAt` is null
+  /// on R1, which is every enquiry that was sent once and left alone.
+  revision                    Int           @default(1)
+  revisedAt                   DateTime?     @map("revised_at")
   /// Set only on acceptance. Releases contact to exactly one business.
   contactReleasedToBusinessId String?       @map("contact_released_to_business_id")
   contactReleasedAt           DateTime?     @map("contact_released_at")
@@ -1802,6 +1814,15 @@ model Quote {
   /// sentAt + validityDays, materialised so the expiry job and the buyer's
   /// countdown read the same number.
   expiresAt    DateTime?   @map("expires_at")
+  /// Set when the buyer revised the requirement after this quote was sent.
+  ///
+  /// Not a status, because the quote is still live and still acceptable — the
+  /// buyer may prefer it to anything the revision brings back. It records that
+  /// the thing quoted has changed since, which board 1i renders as
+  /// `QUOTED R1 · REQUIREMENT CHANGED SINCE`.
+  supersededAt DateTime?   @map("superseded_at")
+  /// The enquiry revision this quote was priced against.
+  againstRevision Int      @default(1) @map("against_revision")
   createdAt    DateTime    @default(now()) @map("created_at")
 
   enquiry  Enquiry     @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
@@ -1878,6 +1899,17 @@ model Review {
   /// One only, not editable after posting. Never seller-deletable.
   sellerReply     String?   @map("seller_reply")
   sellerRepliedAt DateTime? @map("seller_replied_at")
+  /// Held pending a moderation decision. Board 1m: the row is replaced by a
+  /// neutral line naming the hold, with no content and no rating, and the
+  /// review is excluded from every average and from `AggregateRating` while it
+  /// is set. A hold is reversible and a removal is not, which is why they are
+  /// two columns rather than one state machine — releasing a hold restores the
+  /// row exactly, and un-removing is not a thing this platform does.
+  heldAt          DateTime? @map("held_at")
+  /// Required when heldAt is set, by a check constraint. A hold takes a
+  /// buyer's published words off a public page, so it is a staff state change
+  /// and carries a written reason like every other one.
+  heldReason      String?   @map("held_reason")
   removedAt       DateTime? @map("removed_at")
   /// Required when removedAt is set. Enforced by a check constraint in the
   /// migration, not only by the service layer.
@@ -1889,7 +1921,13 @@ model Review {
   enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   media    Media[]
 
-  @@index([businessId, removedAt])
+  /// The public read: one business, published, newest first.
+  ///
+  /// Replaces `(businessId, removedAt)`, which this has as a prefix and which
+  /// Postgres would therefore never choose over it. `heldAt` joins the key
+  /// because every figure on board 1m's page excludes a held row, so that
+  /// filter is on all six of those queries rather than on some of them.
+  @@index([businessId, removedAt, heldAt, createdAt])
   @@map("review")
 }
 
@@ -2009,6 +2047,17 @@ model Plan {
   customDomain      Boolean @default(false) @map("custom_domain")
   siteVisitIncluded Boolean @default(false) @map("site_visit_included")
   sortOrder         Int     @default(0) @map("sort_order")
+  /// When this plan stopped being sold.
+  ///
+  /// Board 1l, criterion 12: a withdrawn plan does not appear on `/pricing`,
+  /// and everybody already on it keeps it. Both halves are this one column —
+  /// the row is never deleted, so `Business.planId` and `Subscription.planId`
+  /// still resolve and `entitlementSnapshot` still grandfathers the numbers;
+  /// only the surfaces that sell a plan filter on it.
+  ///
+  /// A date rather than a boolean because "since when" is the question asked
+  /// of a plan nobody can buy any more, and a flag cannot answer it.
+  withdrawnAt       DateTime? @map("withdrawn_at")
 
   // NO commissionRate. NO transactionFee.
 

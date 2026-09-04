@@ -124,7 +124,7 @@ export async function membersOf(scope: {
         select: { area: { select: { name: true } } },
       },
       reviews: {
-        where: { removedAt: null },
+        where: { removedAt: null, heldAt: null },
         select: { overall: true },
       },
     },

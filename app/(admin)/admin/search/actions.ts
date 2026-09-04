@@ -1,9 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import { requireStaff } from "@/lib/auth/staff";
 import { boostListing, setWeights } from "@/lib/search/settings";
+import { RANKING_CACHE_TAG } from "@/lib/db/queries/pricing";
 import { WEIGHT_KEYS } from "@/lib/search/ranking";
 import type { RankingWeights } from "@/lib/search/ranking";
 import { t } from "@/lib/i18n";
@@ -35,6 +36,14 @@ export async function saveWeights(formData: FormData): Promise<ActionResult> {
     revalidatePath("/admin/search");
     // Search is cached. Without this the weights change and the results do not.
     revalidatePath("/search");
+    /*
+       Board 1l criterion 6: moving the plan-tier weight changes what `/pricing`
+       claims a paid plan does to a supplier's ranking. That page reads the live
+       weights through a tagged cache, so the claim only moves if this line
+       clears it — otherwise the results reorder and the page keeps quoting the
+       share the weights used to have.
+    */
+    revalidateTag(RANKING_CACHE_TAG, { expire: 0 });
     return { ok: true, message: t("ranking.saved") };
   } catch (error) {
     return refused(error);

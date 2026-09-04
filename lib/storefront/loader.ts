@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { PUBLISHED } from "@/lib/db/queries/reviews";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { PUBLISHABLE_DOCUMENT_KINDS, sectionType } from "./section-types";
 import { resolveSections, type ResolvedSection, type SectionRow } from "./sections";
@@ -165,7 +166,9 @@ async function sectionData(businessId: string, slug: string): Promise<SectionDat
     }),
     prisma.product.count({ where: { businessId, status: { not: "draft" } } }),
     prisma.review.findMany({
-      where: { businessId, removedAt: null },
+      // Published only: a held review is off every public surface while the
+      // hold stands, exactly as a removed one is off it for good.
+      where: { businessId, ...PUBLISHED },
       orderBy: { createdAt: "desc" },
       take: 6,
       select: {
@@ -254,9 +257,16 @@ async function sectionData(businessId: string, slug: string): Promise<SectionDat
     categories: [],
     reviews: reviews.map((review) => ({
       id: review.id,
-      author: review.showCompanyName
-        ? (review.buyer.buyerCompany?.name ?? review.buyer.fullName ?? "")
-        : "",
+      /*
+         The buyer's company, or nothing.
+
+         Never the person. "Show my company name" is consent to publish a
+         company; a buyer with none on file did not thereby agree to have their
+         own name on a supplier's shop window. The storefront section and
+         `/b/:slug/reviews` resolve this identically — the same record must not
+         read two ways on two tabs of one storefront.
+      */
+      author: review.showCompanyName ? (review.buyer.buyerCompany?.name ?? "") : "",
       overall: review.overall,
       body: review.body,
       sellerReply: review.sellerReply,

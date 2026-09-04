@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   EDITABLE_DAYS,
+  PROVENANCE,
+  provenanceOf,
   REMOVAL_GROUNDS,
   REQUEST_WINDOW_DAYS,
   canRequestReview,
@@ -14,6 +16,8 @@ import {
 
 const BUYER = "user_buyer";
 const BUSINESS = "biz_accepted";
+const REPLIED = "biz_replied";
+const SILENT = "biz_never_answered";
 const NOW = new Date("2026-08-24T12:00:00+04:00");
 
 function enquiry(over: Partial<EnquiryForReview> = {}): EnquiryForReview {
@@ -22,22 +26,74 @@ function enquiry(over: Partial<EnquiryForReview> = {}): EnquiryForReview {
     buyerId: BUYER,
     contactReleasedToBusinessId: BUSINESS,
     contactReleasedAt: new Date("2026-08-20T10:00:00+04:00"),
+    repliedBusinessIds: [BUSINESS],
     alreadyReviewed: false,
     ...over,
   };
 }
 
-describe("criterion 9 — the gate", () => {
+describe("board 1m criterion 3 — the gate, and the two rungs it admits", () => {
   it("lets a buyer review the supplier whose quote they accepted", () => {
-    expect(canReview(BUYER, enquiry())).toEqual({ ok: true, businessId: BUSINESS });
+    expect(canReview(BUYER, enquiry())).toEqual({
+      ok: true,
+      businessId: BUSINESS,
+      provenance: "accepted_quote",
+    });
   });
 
-  it("refuses when no quote was ever accepted", () => {
-    // An accepted quote is the only confirmation this platform has: it holds no
-    // delivery record and no payment.
-    expect(canReview(BUYER, enquiry({ contactReleasedToBusinessId: null }))).toEqual({
+  it("lets a buyer review a supplier who answered, with no quote accepted", () => {
+    /*
+     * The second rung. Board 1m: "a review requires a confirmed enquiry or an
+     * accepted quote", and the grey `Verified enquiry` badge on the page is a
+     * label nothing could carry while this returned no.
+     */
+    const replied = enquiry({
+      contactReleasedToBusinessId: null,
+      repliedBusinessIds: [REPLIED],
+    });
+    expect(canReview(BUYER, replied)).toEqual({
+      ok: true,
+      businessId: REPLIED,
+      provenance: "verified_enquiry",
+    });
+  });
+
+  it("refuses a supplier who received the enquiry and never replied", () => {
+    // Delivery is not confirmation of anything. Eight suppliers get a fan-out;
+    // a buyer who heard from two of them has met two suppliers.
+    const replied = enquiry({ contactReleasedToBusinessId: null, repliedBusinessIds: [REPLIED] });
+    expect(canReview(BUYER, replied, SILENT)).toEqual({
       ok: false,
-      reason: "no_accepted_quote",
+      reason: "no_confirmed_enquiry",
+    });
+  });
+
+  it("refuses when nobody accepted and nobody replied", () => {
+    expect(
+      canReview(BUYER, enquiry({ contactReleasedToBusinessId: null, repliedBusinessIds: [] })),
+    ).toEqual({ ok: false, reason: "no_confirmed_enquiry" });
+  });
+
+  it("asks which supplier when several replied and none was accepted", () => {
+    // One review per enquiry, so the subject has to be named rather than
+    // guessed. Guessing would file a review against the wrong storefront.
+    const fanout = enquiry({
+      contactReleasedToBusinessId: null,
+      repliedBusinessIds: [REPLIED, "biz_other"],
+    });
+    expect(canReview(BUYER, fanout)).toEqual({ ok: false, reason: "ambiguous_subject" });
+    expect(canReview(BUYER, fanout, REPLIED)).toEqual({
+      ok: true,
+      businessId: REPLIED,
+      provenance: "verified_enquiry",
+    });
+  });
+
+  it("keeps the accepted rung when the accepted supplier is also named", () => {
+    expect(canReview(BUYER, enquiry(), BUSINESS)).toEqual({
+      ok: true,
+      businessId: BUSINESS,
+      provenance: "accepted_quote",
     });
   });
 
@@ -51,6 +107,27 @@ describe("criterion 9 — the gate", () => {
       ok: false,
       reason: "already_reviewed",
     });
+  });
+});
+
+describe("board 1m criterion 1 — the provenance ladder", () => {
+  it("names the accepted rung when the enquiry released contact to this seller", () => {
+    expect(
+      provenanceOf({ businessId: BUSINESS, enquiry: { contactReleasedToBusinessId: BUSINESS } }),
+    ).toBe("accepted_quote");
+  });
+
+  it("names the enquiry rung otherwise, including a quote accepted elsewhere", () => {
+    expect(
+      provenanceOf({ businessId: REPLIED, enquiry: { contactReleasedToBusinessId: null } }),
+    ).toBe("verified_enquiry");
+    expect(
+      provenanceOf({ businessId: REPLIED, enquiry: { contactReleasedToBusinessId: BUSINESS } }),
+    ).toBe("verified_enquiry");
+  });
+
+  it("has exactly two rungs — there is no unverified review", () => {
+    expect(PROVENANCE).toEqual(["accepted_quote", "verified_enquiry"]);
   });
 });
 

@@ -81,20 +81,26 @@ const TIER_3 = [
   "logo-tile",
   "category-mark",
   "map-canvas",
+  "rating-marks",
 ] as const;
 
 /*
- * Fifteen, verbatim from docs/component-inventory.md rows 51–64 plus 66.
+ * Sixteen, verbatim from docs/component-inventory.md rows 51–64 plus 66 and 67.
  *
  * The count that did not reconcile is settled: the inventory counts
  * `ListingCard` as one component with a `context` prop and `Button` as one
  * with five variants, so a file count runs higher than an inventory count and
  * always will.
  *
- * Two components were approved after the original list — `Alert` (65) into
- * tier 3 and `Thread` (66) into this one — so the four tiers make
- * 18 + 17 + 16 + 15 = 66. `Thread` was built in handoff 2 against boards 10h
- * and 11b and rendered here uncounted until it was given a row.
+ * Four components were approved after the original list — `Alert` (65) and
+ * `RatingMarks` (68) into tier 3, `Thread` (66) and `ReviewCard` (67) into this
+ * one — so the four tiers make 18 + 17 + 17 + 16 = 68.
+ *
+ * `Thread` was built in handoff 2 and rendered here uncounted until it was
+ * given a row. `ReviewCard` repeated that exactly: extracted in handoff 4,
+ * written into the inventory as 67, and never added to this list or to the
+ * gallery, so the tier-4 total read 15 over an inventory table holding 16.
+ * Both are here now.
  */
 const TIER_4 = [
   "verification-badge",
@@ -112,17 +118,24 @@ const TIER_4 = [
   "emirate-area-picker",
   "plan-card",
   "thread",
+  "review-card",
 ] as const;
 
 /**
  * Built, and not in docs/component-inventory.md.
  *
- * Empty, and worth keeping. `Thread` sat here until it was given row 66 — a
- * component the design system has not described is worth surfacing rather than
- * folding into a tier to make a total come out right, and the next one wants
- * somewhere to go that is not a guess about which tier it belongs to.
+ * `Thread` sat here until it was given row 66 — a component the design system
+ * has not described is worth surfacing rather than folding into a tier to make
+ * a total come out right, and the next one wants somewhere to go that is not a
+ * guess about which tier it belongs to.
+ *
+ * `PlanComparison` is that next one. Board 1l draws the plans side by side and
+ * the canvas has no component for it; it was extracted while building the page
+ * rather than left as page-local JSX, because `2e` and `11f` compare the same
+ * plans and copying the markup is how two screens start disagreeing about one
+ * record. Which tier it belongs to is the design owner's call, not this file's.
  */
-const UNLISTED = [] as const;
+const UNLISTED = ["plan-comparison"] as const;
 
 export default function Gallery() {
   return (
@@ -159,13 +172,13 @@ export default function Gallery() {
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono text-body-sm text-body">tier-3-display</td>
               <td className="px-3 py-1.5 text-right font-mono text-body-sm text-ok-ink">
-                {TIER_3.length}/16
+                {TIER_3.length}/17
               </td>
             </tr>
             <tr className="border-t border-line">
               <td className="px-3 py-1.5 font-mono text-body-sm text-body">tier-4-domain</td>
               <td className="px-3 py-1.5 text-right font-mono text-body-sm text-ok-ink">
-                {TIER_4.length}/15
+                {TIER_4.length}/16
               </td>
             </tr>
             <tr className="border-t border-line">
