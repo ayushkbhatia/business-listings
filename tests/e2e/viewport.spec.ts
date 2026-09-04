@@ -23,7 +23,17 @@ const ROUTES = [
   "/compare?p=al-marwan-industrial-supplies-llc",
   "/b/al-marwan-industrial-supplies-llc",
   "/b/al-marwan-industrial-supplies-llc/products",
-  "/b/al-marwan-industrial-supplies-llc/reviews",
+  /*
+     The reviews page, on the one seller that has one.
+
+     This route pointed at `al-marwan`, which has no published review and
+     therefore 404s — so the check has been measuring the width of an error page
+     since the zero-count rule landed. Board 1m's page is the one with a filter
+     row that scrolls horizontally inside a negative margin, which is exactly
+     the shape this file exists to catch.
+  */
+  "/b/al-waha-industrial-supplies/reviews",
+  "/b/al-waha-industrial-supplies/reviews?show=critical",
   "/rfq/new?category=valves-and-fittings",
   "/signin",
   "/signup",

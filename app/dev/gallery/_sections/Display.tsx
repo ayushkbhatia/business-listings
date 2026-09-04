@@ -8,6 +8,7 @@ import {
   ChipLink,
   Eyebrow,
   FilterChip,
+  RatingMarks,
   FunnelBars,
   ImagePlaceholder,
   LogoTile,
@@ -24,7 +25,7 @@ import {
   Waterfall,
   type StatusTone,
 } from "@/components/display";
-import { formatAED, formatCount, formatDuration, formatPercent } from "@/lib/format";
+import { formatAED, formatCount, formatDecimal, formatDuration, formatPercent, formatRating } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { Frame, Section, Specimen, States } from "../_kit";
 
@@ -352,6 +353,55 @@ export function Display() {
           <div className="w-80">
             <ProgressBar label={t("display.profile_strength")} value={100} tone="ok" valueLabel="100%" />
           </div>
+        </States>
+      </Section>
+
+      <Section
+        id="rating-marks"
+        title="RatingMarks"
+        note="68 · board 1m · squares, never stars, and never a partial mark"
+      >
+        <States label="whole" stack>
+          {[5, 4, 3, 2, 1].map((value) => (
+            <div key={value} className="flex items-center gap-3">
+              <RatingMarks
+                value={value}
+                label={t("reviewpage.rating_label", { rating: formatDecimal(value) })}
+              />
+              <span className="font-mono text-eyebrow tabular-nums text-muted">
+                {formatDecimal(value)}
+              </span>
+            </div>
+          ))}
+        </States>
+
+        {/*
+           4.6 draws four marks and prints 4.6. The decimal lives in the
+           numeral, never in a half-filled square: a partial mark is a figure a
+           reader has to decode, and it is wrong at any width narrower than the
+           difference between 4.6 and 4.7.
+        */}
+        <States label="decimals" stack>
+          {[4.6, 4.2, 3.5].map((value) => (
+            <div key={value} className="flex items-center gap-3">
+              <RatingMarks
+                value={value}
+                label={t("reviewpage.rating_label", { rating: formatRating(value) })}
+              />
+              <span className="font-mono text-eyebrow tabular-nums text-muted">
+                {formatRating(value)}
+              </span>
+            </div>
+          ))}
+        </States>
+
+        <States label="sizes">
+          <Specimen caption="MD · SUMMARY CARD">
+            <RatingMarks value={4} label={t("reviewpage.rating_label", { rating: "4" })} />
+          </Specimen>
+          <Specimen caption="SM · REVIEW ROW">
+            <RatingMarks size="sm" value={4} label={t("reviewpage.rating_label", { rating: "4" })} />
+          </Specimen>
         </States>
       </Section>
 

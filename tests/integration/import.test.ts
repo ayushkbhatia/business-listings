@@ -108,12 +108,23 @@ describe("criterion 7 — the price column cannot get through", () => {
     expect(products).toHaveLength(3);
 
     for (const product of products) {
-      // The number in the file was 1240.00, 1980.00 or 860.00. None of them is
-      // anywhere on the row, under any name.
-      const serialised = JSON.stringify(product);
-      expect(serialised).not.toContain("1240");
-      expect(serialised).not.toContain("1980");
-      expect(serialised).not.toContain("860");
+      /*
+         The number in the file was 1240.00, 1980.00 or 860.00. None of them is
+         anywhere on the row, under any name.
+
+         Checked against the row's *values*, not its serialised form. Searching
+         the JSON matched the id as well, and a cuid holding those three digits
+         is a matter of luck — `cmtm6gz86000y3oits6wbhrxa` contains "860" and
+         failed this on a run that had nothing to do with prices. The values are
+         what the claim is about; the id is not a price under any name.
+      */
+      const values = Object.entries(product)
+        .filter(([key]) => key !== "id" && !key.endsWith("Id"))
+        .map(([, value]) => String(value))
+        .join(" ");
+      expect(values).not.toContain("1240");
+      expect(values).not.toContain("1980");
+      expect(values).not.toContain("860");
     }
 
     // And the schema still has nowhere to put one.

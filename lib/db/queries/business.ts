@@ -19,8 +19,23 @@ const PUBLIC_BUSINESS = {
   publishedAt: { not: null },
 } as const;
 
+/**
+ * One storefront, with its rating measured rather than read off a column.
+ *
+ * `Business.ratingOverall` and `Business.reviewCount` are denormalised columns
+ * a nightly job writes. They are correct most of the time, and "most of the
+ * time" is not what a directory sells: the moment a review is removed or held,
+ * the header on `/b/:slug/reviews` would print an average the list below it
+ * disagrees with, in the same request. Criterion 6 of board 1m says the two
+ * cannot differ, so the figure the header renders is computed here from the
+ * published rows and the stored column is not read on a public surface at all.
+ *
+ * One aggregate on an indexed column, against a route that already runs five
+ * queries. The alternative — a job, and a window in which the page lies — is
+ * the thing CLAUDE.md means by "every number is a query, not a constant".
+ */
 export async function getBusinessBySlug(slug: string) {
-  return prisma.business.findFirst({
+  const business = await prisma.business.findFirst({
     where: { slug, ...PUBLIC_BUSINESS },
     include: {
       primaryCategory: true,
@@ -35,11 +50,22 @@ export async function getBusinessBySlug(slug: string) {
       _count: {
         select: {
           products: { where: { status: { not: "draft" } } },
-          reviews: { where: { removedAt: null } },
+          reviews: { where: { removedAt: null, heldAt: null } },
         },
       },
     },
   });
+  if (!business) return null;
+
+  const { _avg } = await prisma.review.aggregate({
+    where: { businessId: business.id, removedAt: null, heldAt: null },
+    _avg: { overall: true },
+  });
+
+  // The stored columns are shadowed, not deleted: the search index and the
+  // seller's own dashboard still rank on them, and a public read should not be
+  // the thing that decides when a job runs.
+  return { ...business, ratingOverall: _avg.overall, reviewCount: business._count.reviews };
 }
 
 export type PublicBusiness = NonNullable<Awaited<ReturnType<typeof getBusinessBySlug>>>;
@@ -135,7 +161,7 @@ export async function getBusinessReviews(businessId: string) {
   return prisma.review.findMany({
     // A removed review is gone from every public surface. It is not shown
     // struck through and it is not counted.
-    where: { businessId, removedAt: null },
+    where: { businessId, removedAt: null, heldAt: null },
     include: {
       buyer: { select: { fullName: true, buyerCompany: { select: { name: true } } } },
       media: true,
@@ -234,7 +260,7 @@ export type SimilarBusiness =
 export async function getReviewSummary(businessId: string) {
   const [aggregate, count] = await Promise.all([
     prisma.review.aggregate({
-      where: { businessId, removedAt: null },
+      where: { businessId, removedAt: null, heldAt: null },
       _avg: {
         overall: true,
         quotedAccurate: true,
@@ -243,7 +269,7 @@ export async function getReviewSummary(businessId: string) {
         responsiveness: true,
       },
     }),
-    prisma.review.count({ where: { businessId, removedAt: null } }),
+    prisma.review.count({ where: { businessId, removedAt: null, heldAt: null } }),
   ]);
 
   return { averages: aggregate._avg, count };

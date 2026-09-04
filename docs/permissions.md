@@ -86,6 +86,20 @@ general grant. Enforce with a subject check, not just a role check.
 **Every ✓ in this table that changes state writes an `AuditEvent` with a non-null reason.**
 Ops lead has no exemption.
 
+### Rows this document does not contain
+
+Three capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
+row for them. `tests/unit/permission-matrix.test.ts` names all of them, so adding a fourth is
+a deliberate edit rather than a quiet default.
+
+| Capability | Held at | Why, and which way it errs |
+|---|---|---|
+| `business.merge` | ops lead | A merge rewrites slugs and creates 301s, so it is not reversible the way a removal is. |
+| `question.remove` | ops lead | A product question carries a buyer's published words. Same decision as removing a review, so the same rung — erring **higher**. |
+| `review.hold` | ops lead · moderator | Board 1m's held state, and the only one that errs **lower**. A hold is reversible and a removal is not; putting the reversible pause out of a moderator's reach would push them towards the irreversible control. It writes `review_held` and `review_released` — two actions, because a release logged as a hold hides what happened. |
+
+If §07 gains a row for any of these, the row wins and the `source` becomes `stated`.
+
 ---
 
 ## Implementation notes

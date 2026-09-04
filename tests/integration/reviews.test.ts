@@ -6,10 +6,13 @@ import type { Actor } from "@/lib/auth/roles";
 import {
   createReview,
   editReview,
+  holdReview,
+  releaseReview,
   removeReview,
   replyToReview,
   requestReview,
 } from "@/lib/reviews/service";
+import { getReviewBoard, getReviewSummary } from "@/lib/db/queries";
 
 /**
  * Acceptance criterion 9:
@@ -28,6 +31,7 @@ let moderator: Actor;
 let fieldStaff: Actor;
 
 const createdReviewIds: string[] = [];
+const spareEnquiryIds: string[] = [];
 const createdRequestIds: string[] = [];
 
 const RATINGS = { overall: 4, quotedAccurate: 5, onTime: 3, asDescribed: 4, responsiveness: 5 };
@@ -57,6 +61,51 @@ beforeAll(async () => {
   fieldStaff = { id: staff?.id ?? buyerId, roles: ["staff_field"] };
 });
 
+/**
+ * A fresh enquiry nobody answered.
+ *
+ * The gate admits two rungs now — an accepted quote, or a supplier who received
+ * the enquiry and replied — so "not eligible" can no longer be read off the
+ * seed by finding an enquiry with no accepted quote. Half of those have a
+ * recipient with a `firstReplyAt`, which is the second rung. The refusal case
+ * has to be built rather than found.
+ */
+async function silentEnquiry(): Promise<string> {
+  const enquiry = await prisma.enquiry.create({
+    data: {
+      ref: `ENQ-S${Math.floor(Math.random() * 1_000_000)}`,
+      buyerId,
+      requirement: "A fixture enquiry nobody replied to.",
+      closesAt: new Date(Date.now() + 86_400_000),
+      lines: { create: [{ description: "Gate valve", qty: 1, sortOrder: 0 }] },
+      // Delivered and never answered. Delivery is not confirmation of anything.
+      recipients: { create: [{ businessId, state: "delivered" }] },
+    },
+    select: { id: true },
+  });
+  spareEnquiryIds.push(enquiry.id);
+  return enquiry.id;
+}
+
+/** A fresh enquiry this supplier answered and did not win. The second rung. */
+async function answeredEnquiry(): Promise<string> {
+  const enquiry = await prisma.enquiry.create({
+    data: {
+      ref: `ENQ-A${Math.floor(Math.random() * 1_000_000)}`,
+      buyerId,
+      requirement: "A fixture enquiry this supplier answered.",
+      closesAt: new Date(Date.now() + 86_400_000),
+      lines: { create: [{ description: "Gate valve", qty: 1, sortOrder: 0 }] },
+      recipients: {
+        create: [{ businessId, state: "quoted", firstReplyAt: new Date() }],
+      },
+    },
+    select: { id: true },
+  });
+  spareEnquiryIds.push(enquiry.id);
+  return enquiry.id;
+}
+
 /** A fresh accepted enquiry, so each test starts from the same place. */
 async function acceptedEnquiry(): Promise<string> {
   const enquiry = await prisma.enquiry.create({
@@ -79,7 +128,13 @@ async function acceptedEnquiry(): Promise<string> {
 afterEach(async () => {
   await prisma.reviewRequest.deleteMany({ where: { id: { in: createdRequestIds.splice(0) } } });
   await prisma.review.deleteMany({ where: { id: { in: createdReviewIds.splice(0) } } });
-  await prisma.auditEvent.deleteMany({ where: { action: "review_removed", reason: { contains: "integration test" } } });
+  await prisma.auditEvent.deleteMany({
+    where: {
+      action: { in: ["review_removed", "review_held", "review_released"] },
+      reason: { contains: "integration test" },
+    },
+  });
+  await prisma.enquiry.deleteMany({ where: { id: { in: spareEnquiryIds.splice(0) } } });
   if (acceptedEnquiryId) {
     await prisma.enquiry.deleteMany({ where: { id: acceptedEnquiryId } });
     acceptedEnquiryId = "";
@@ -90,8 +145,14 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-async function write(enquiryId: string) {
-  const result = await createReview({ buyerId, enquiryId, ratings: RATINGS, body: BODY });
+async function write(enquiryId: string, about?: string) {
+  const result = await createReview({
+    buyerId,
+    enquiryId,
+    ...(about ? { businessId: about } : {}),
+    ratings: RATINGS,
+    body: BODY,
+  });
   if (result.ok) createdReviewIds.push(result.reviewId);
   return result;
 }
@@ -102,11 +163,29 @@ describe("criterion 9 — the gate", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("unreachable");
     expect(result.businessId).toBe(businessId);
+    expect(result.provenance).toBe("accepted_quote");
   });
 
-  it("refuses one with no accepted quote", async () => {
+  it("accepts one from a confirmed enquiry the supplier answered and did not win", async () => {
+    /*
+     * Board 1m criterion 3: "a confirmed enquiry **or** an accepted quote".
+     * This function admitted only the second until the reviews page was built,
+     * which made the grey `Verified enquiry` badge a label nothing could carry.
+     */
+    const result = await write(await answeredEnquiry());
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.businessId).toBe(businessId);
+    expect(result.provenance).toBe("verified_enquiry");
+  });
+
+  it("refuses one where the supplier never replied", async () => {
     // The gate is the product: a rating nobody had to earn is one nobody reads.
-    expect(await write(openEnquiryId)).toEqual({ ok: false, error: "no_accepted_quote" });
+    // Delivery on its own earns nothing — eight suppliers receive a fan-out.
+    expect(await write(await silentEnquiry())).toEqual({
+      ok: false,
+      error: "no_confirmed_enquiry",
+    });
   });
 
   it("refuses one from somebody who is not the buyer", async () => {
@@ -368,5 +447,150 @@ describe("asking for a review", () => {
       data: { contactReleasedAt: new Date(Date.now() - 91 * 86_400_000) },
     });
     expect(await requestReview({ businessId, enquiryId: id })).toEqual({ ok: false, error: "too_old" });
+  });
+});
+
+describe("board 1m — holding a review while a decision is made", () => {
+  /**
+   * A hold is not a removal. It is reversible, it is why `heldAt` is its own
+   * column, and the audit log has to say which of the two happened.
+   */
+  async function held(): Promise<string> {
+    const result = await write(await acceptedEnquiry());
+    if (!result.ok) throw new Error("could not write the fixture review");
+    return result.reviewId;
+  }
+
+  it("throws without a reason, exactly as a removal does", async () => {
+    const reviewId = await held();
+    await expect(
+      holdReview({ actor: moderator, reviewId, reason: "   " }),
+    ).rejects.toBeInstanceOf(AuditReasonError);
+
+    const after = await prisma.review.findUniqueOrThrow({
+      where: { id: reviewId },
+      select: { heldAt: true },
+    });
+    expect(after.heldAt).toBeNull();
+  });
+
+  it("throws for staff without the capability", async () => {
+    const reviewId = await held();
+    await expect(
+      holdReview({ actor: fieldStaff, reviewId, reason: "integration test — field staff" }),
+    ).rejects.toBeInstanceOf(PermissionError);
+  });
+
+  it("is held by a moderator, one rung below removal", async () => {
+    // A reversible pause at ops lead alone would push a moderator towards the
+    // irreversible control, which is the wrong direction to err in.
+    const reviewId = await held();
+    expect(
+      await holdReview({
+        actor: { id: moderator.id, roles: ["staff_moderator"] },
+        reviewId,
+        reason: "integration test — reported for a third party's number",
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("writes its own action, and the release writes another", async () => {
+    const reviewId = await held();
+    await holdReview({
+      actor: moderator,
+      reviewId,
+      reason: "integration test — reported for a third party's number",
+    });
+    await releaseReview({
+      actor: moderator,
+      reviewId,
+      reason: "integration test — the report was withdrawn",
+    });
+
+    const rows = await prisma.auditEvent.findMany({
+      where: { subject: `Review:${reviewId}` },
+      orderBy: { createdAt: "asc" },
+      select: { action: true, reason: true },
+    });
+    // Two moves, two rows. A release logged as a hold hides what happened.
+    expect(rows.map((row) => row.action)).toEqual(["review_held", "review_released"]);
+    expect(rows[1]?.reason).toContain("withdrawn");
+
+    const after = await prisma.review.findUniqueOrThrow({
+      where: { id: reviewId },
+      select: { heldAt: true, heldReason: true },
+    });
+    expect(after.heldAt).toBeNull();
+    expect(after.heldReason).toBeNull();
+  });
+
+  it("takes the review out of every average in the same request", async () => {
+    const reviewId = await held();
+    const before = await getReviewSummary(businessId);
+
+    await holdReview({
+      actor: moderator,
+      reviewId,
+      reason: "integration test — held while the report is checked",
+    });
+
+    const after = await getReviewSummary(businessId);
+    expect(after.count).toBe(before.count - 1);
+
+    const board = await getReviewBoard(businessId, {
+      filter: "all",
+      sort: "recent",
+      page: 1,
+    });
+    expect(board.summary.count).toBe(after.count);
+    expect(board.reviews.map((row) => row.id)).not.toContain(reviewId);
+    expect(board.heldCount).toBeGreaterThan(0);
+  });
+
+  it("refuses a seller reply while it is held", async () => {
+    const reviewId = await held();
+    await holdReview({
+      actor: moderator,
+      reviewId,
+      reason: "integration test — held while the report is checked",
+    });
+    expect(
+      await replyToReview({ businessId, reviewId, body: "A reply written against a paused row." }),
+    ).toEqual({ ok: false, error: "removed" });
+  });
+
+  it("cannot be held twice, and cannot be released when it is not held", async () => {
+    const reviewId = await held();
+    const reason = "integration test — held while the report is checked";
+    expect(await holdReview({ actor: moderator, reviewId, reason })).toEqual({ ok: true });
+    expect(await holdReview({ actor: moderator, reviewId, reason })).toEqual({
+      ok: false,
+      error: "already_held",
+    });
+    await releaseReview({ actor: moderator, reviewId, reason: "integration test — released" });
+    expect(
+      await releaseReview({ actor: moderator, reviewId, reason: "integration test — released" }),
+    ).toEqual({ ok: false, error: "not_held" });
+  });
+
+  it("refuses a hold on a review that has already been removed", async () => {
+    const reviewId = await held();
+    await removeReview({
+      actor: moderator,
+      reviewId,
+      ground: "abuse",
+      reason: "integration test — removed before the hold",
+    });
+    expect(
+      await holdReview({ actor: moderator, reviewId, reason: "integration test — too late" }),
+    ).toEqual({ ok: false, error: "removed" });
+  });
+
+  it("the database refuses a hold with no reason, not only the service", async () => {
+    // `review_hold_reason_required`, the pairing constraint the migration adds.
+    const reviewId = await held();
+    await expect(
+      prisma.review.update({ where: { id: reviewId }, data: { heldAt: new Date() } }),
+    ).rejects.toThrow();
   });
 });

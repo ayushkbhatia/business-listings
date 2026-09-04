@@ -84,4 +84,36 @@ else
   echo "   pass"
 fi
 
+echo "→ 5. provenance labels for things that were never bought"
+# Board 1m criterion 1. The ladder inverted at the pivot: an accepted quote is
+# the strongest rung a platform holding no transactions can prove, "Verified
+# enquiry" is the one below it, and there is no third. The four labels banned
+# here all imply a purchase — and one of them, "Verified buyer", shipped in this
+# catalogue as the anonymous reviewer's name until the reviews page was built
+# against the board.
+#
+# Scanned across app/ and components/ as well as the catalogue, because a badge
+# label written straight into JSX would pass a check that only reads en.ts, and
+# a two-word label is exactly the kind of string that gets written there.
+#
+# Comments are stripped from the JSX scan for the same reason `raw` strips them
+# from the catalogue: prose explaining why a word is banned has to be allowed to
+# write the word down.
+PROVENANCE='verified (purchase|buyer|customer|order)'
+jsx_copy() {
+  find app components -name '*.tsx' -not -path '*/node_modules/*' -print0 \
+    | xargs -0 perl -0777 -ne '
+        s{(/\*.*?\*/)}{ $1 =~ s/[^\n]//gr }gse;
+        s{^(\s*)//.*$}{$1}gm;
+        my @lines = split /\n/, $_, -1;
+        for my $i (0 .. $#lines) { printf "%s:%d:%s\n", $ARGV, $i + 1, $lines[$i]; }
+      '
+}
+if { values; jsx_copy; } | grep -iE "$PROVENANCE"; then
+  echo "   FAIL — nothing is purchased here. Accepted quote (ok) · Verified enquiry (neutral)."
+  fail=1
+else
+  echo "   pass"
+fi
+
 exit $fail

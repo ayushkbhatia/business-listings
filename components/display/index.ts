@@ -8,6 +8,9 @@ export { ChipLink, type ChipLinkProps } from "./ChipLink";
 export { Tag, type TagProps } from "./Tag";
 export { StatCard, type StatCardProps } from "./StatCard";
 export { ProgressBar, type ProgressBarProps } from "./ProgressBar";
+// Board 1m's rating marks. Squares, never stars, and never a partial mark —
+// the numeral beside them carries the decimal.
+export { RatingMarks, type RatingMarksProps } from "./RatingMarks";
 export { StepProgress, type StepProgressProps } from "./StepProgress";
 export { StackedBar, type StackedBarProps, type StackedSegment } from "./StackedBar";
 export { FunnelBars, type FunnelBarsProps, type FunnelStage } from "./FunnelBars";

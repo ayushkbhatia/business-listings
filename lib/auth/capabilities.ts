@@ -85,6 +85,12 @@ export const CAPABILITIES = {
     source: "stated",
     why: "§07, both tables. A moderator may reject a submission and resolve a report but may not remove a review — this was inferred as moderator + ops lead and the matrix says ops lead alone. Removing a buyer's published words is held one rung higher than moderating a queue.",
   },
+  "review.hold": {
+    roles: ["staff_moderator", "staff_ops_lead"],
+    audited: true,
+    source: "inferred",
+    why: "Board 1m states the held state — \"one review is being reviewed by our team\", excluded from every average while it stands — without saying who may set it. Not a row in \u00a707. Held one rung below `review.remove` deliberately: a hold is reversible and a removal is not, and putting a reversible pause at ops lead alone would push a moderator towards the irreversible control. Flag it if \u00a707 gains a row.",
+  },
   "question.remove": {
     roles: OPS_LEAD_ONLY,
     audited: true,

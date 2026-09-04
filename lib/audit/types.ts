@@ -9,6 +9,8 @@ import type { Actor } from "@/lib/auth/roles";
 export type AuditAction =
   | "tier_change"
   | "review_removed"
+  | "review_held"
+  | "review_released"
   | "question_removed"
   | "credit_issued"
   | "suspend"
@@ -35,6 +37,7 @@ export const ACTION_FOR_CAPABILITY = {
   "business.suspend": "suspend",
   "business.merge": "merge",
   "review.remove": "review_removed",
+  "review.hold": "review_held",
   "question.remove": "question_removed",
   "report.resolve": "report_resolved",
   "queue.decide": "queue_decided",
@@ -64,6 +67,23 @@ export const ACTION_FOR_CAPABILITY = {
 } as const satisfies Partial<Record<Capability, AuditAction>>;
 
 export type AuditedCapability = keyof typeof ACTION_FOR_CAPABILITY;
+
+/**
+ * The capabilities that cover a reversible pair, and the two actions each may
+ * log. Everything absent from here logs exactly the action
+ * `ACTION_FOR_CAPABILITY` names for it and nothing else.
+ *
+ * One entry, deliberately. Board 1m's held state is a pause a moderator can
+ * undo, and the log has to distinguish the pause from the release; every other
+ * audited capability makes a change that is not un-made by the same control.
+ */
+export const PAIRED_ACTIONS = {
+  "review.hold": ["review_held", "review_released"],
+} as const satisfies Partial<Record<AuditedCapability, readonly AuditAction[]>>;
+
+export type PairedAction<C extends AuditedCapability> = C extends keyof typeof PAIRED_ACTIONS
+  ? (typeof PAIRED_ACTIONS)[C][number]
+  : never;
 
 /** `Business:clx123`. Entity type and id, so the log is greppable. */
 export type SubjectRef = `${string}:${string}`;
