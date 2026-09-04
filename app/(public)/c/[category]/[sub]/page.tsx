@@ -4,8 +4,8 @@ import { Breadcrumb, PublicShell } from "@/components/structure";
 import { countResults, getCategoryBySlug, getSpecFacets } from "@/lib/db/queries";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { canonicalFor } from "@/lib/seo/canonical";
-import { parseSearchQuery } from "@/lib/search/query";
+import { canonicalFor, isFiltered } from "@/lib/seo/canonical";
+import { parseSearchQuery, trayParams } from "@/lib/search/query";
 import { landingFacts } from "@/lib/seo/facts";
 import { faqJsonLd, landingFaq } from "@/lib/seo/faq";
 import { isCategoryPublishable } from "@/lib/seo/taxonomy";
@@ -40,6 +40,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const category = await getCategoryBySlug(sub);
   if (!category) return {};
 
+  const sp = await searchParams;
   const [count, publishable] = await Promise.all([
     countResults(parseSearchQuery({}), [category.id]),
     isCategoryPublishable(category.id),
@@ -60,7 +61,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
       canonical: await canonicalFor({
         basePath: `/c/${parentSlug}/${sub}`,
         categoryId: category.id,
-        searchParams: await searchParams,
+        searchParams: sp,
       }),
     },
     /*
@@ -71,8 +72,14 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
        `app/sitemap.ts` leaves the same page out, computed by the same function,
        which is what criterion 12 asks for.
+
+       The second condition is the crawl fix, and it is a different argument
+       from the first: a filtered view of this subcategory is `noindex` even
+       when the subcategory itself is publishable. This route renders the same
+       filter rail as `/c/:category`, so it addresses the same combinatorial
+       URL space and needs the same answer.
     */
-    ...(publishable ? {} : { robots: { index: false, follow: true } }),
+    ...(publishable && !isFiltered(sp) ? {} : { robots: { index: false, follow: true } }),
   };
 }
 
@@ -95,11 +102,10 @@ export default async function SubcategoryPage({ params, searchParams }: Props) {
     .split(",")
     .filter(Boolean)
     .slice(0, 4);
-  const search = new URLSearchParams(
-    Object.entries(sp).flatMap(([k, v]) =>
-      v === undefined ? [] : [[k, Array.isArray(v) ? v.join(",") : v] as [string, string]],
-    ),
-  ).toString();
+  // Rebuilt from the parsed query rather than from the raw search params. The
+  // raw form carried anything a caller invented straight back into every tray
+  // link — see `trayParams`.
+  const search = trayParams(query, tray);
 
   const basePath = `/c/${parent.slug}/${category.slug}`;
 

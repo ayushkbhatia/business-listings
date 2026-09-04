@@ -12,7 +12,8 @@ import {
   type FacetGroup,
   type ProductResult,
 } from "@/lib/db/queries";
-import { toSearchParams, withoutFacet, type SearchQuery } from "@/lib/search/query";
+import { toSearchParams, withoutFacet, type SearchQuery, pathWithQuery } from "@/lib/search/query";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 
 /**
  * The results list, shared by the category pages and search.
@@ -58,6 +59,8 @@ export function AppliedChips({
 
   if (chips.length === 0) return null;
 
+  const clearAllHref = `${basePath}?${toSearchParams({ ...query, tab: query.tab, q: query.q, spec: {}, availability: [], page: 1, emirate: undefined, area: undefined, tier: undefined, freeZone: false, replyWithinHours: undefined, yearsTrading: undefined })}`;
+
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {chips.map((chip) => (
@@ -71,7 +74,11 @@ export function AppliedChips({
         </FilterChip>
       ))}
       <a
-        href={`${basePath}?${toSearchParams({ ...query, tab: query.tab, q: query.q, spec: {}, availability: [], page: 1, emirate: undefined, area: undefined, tier: undefined, freeZone: false, replyWithinHours: undefined, yearsTrading: undefined })}`}
+        href={clearAllHref}
+        // Usually clean, and then it needs no rel. Not always: a search keeps
+        // its `q` and the products tab keeps its `tab`, and either leaves a
+        // query string behind after every facet is dropped.
+        rel={crawlRel(clearAllHref)}
         className="rounded-tag px-1 text-caption text-moss underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
       >
         {t("results.clear_all")}
@@ -91,6 +98,9 @@ export function ResultsTabs({
   businessTotal: number;
   productTotal: number;
 }) {
+  const businessesHref = pathWithQuery(basePath, query, { tab: "businesses", page: 1 });
+  const productsHref = pathWithQuery(basePath, query, { tab: "products", page: 1 });
+
   return (
     <Tabs
       as="a"
@@ -102,13 +112,17 @@ export function ResultsTabs({
           key: "businesses",
           label: t("results.businesses_tab"),
           badge: businessTotal,
-          href: `${basePath}?${toSearchParams({ ...query, tab: "businesses", page: 1 })}`,
+          href: businessesHref,
         },
         {
           key: "products",
           label: t("results.products_tab"),
           badge: productTotal,
-          href: `${basePath}?${toSearchParams({ ...query, tab: "products", page: 1 })}`,
+          // The products tab is not the only path to a product: every one has
+          // its own `/b/:seller/p/:product` page and the sitemap lists it. So
+          // taking the tab out of the graph costs no reachability, and leaving
+          // it in would double the whole facet space against itself.
+          href: productsHref,
         },
       ]}
     />
@@ -142,12 +156,17 @@ export function CompareTray({
       </span>
       <a
         href={`/compare?p=${tray.join(",")}`}
+        // /compare is disallowed in robots.txt and noindex besides — a tray of
+        // whichever suppliers one buyer happened to pick means nothing to
+        // anyone else. This is the anchor that told a crawler it existed.
+        rel="nofollow"
         className="rounded-ctl border border-moss bg-moss px-3 py-1 text-caption font-medium text-on-ink transition-colors duration-120 ease-out hover:bg-moss-hover focus-visible:outline-none focus-visible:shadow-focus"
       >
         {t("compare.open")}
       </a>
       <a
         href={cleared ? `${basePath}?${cleared}` : basePath}
+        rel={crawlRel(cleared ? `${basePath}?${cleared}` : basePath)}
         className="rounded-tag text-caption text-moss-deep underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
       >
         {t("compare.clear")}
@@ -337,6 +356,8 @@ function ResultsPagination({
   const pages = Math.ceil(total / PAGE_SIZE);
   const from = (query.page - 1) * PAGE_SIZE + 1;
   const to = Math.min(total, query.page * PAGE_SIZE);
+  const previousHref = `${basePath}?${toSearchParams({ ...query, page: query.page - 1 })}`;
+  const nextHref = `${basePath}?${toSearchParams({ ...query, page: query.page + 1 })}`;
 
   // Server-rendered, so the pager is links. Pagination is a client component
   // driven by a callback, which is right for a dashboard table and wrong here.
@@ -355,7 +376,18 @@ function ResultsPagination({
       <div className="flex items-center gap-1">
         {query.page > 1 && (
           <a
-            href={`${basePath}?${toSearchParams({ ...query, page: query.page - 1 })}`}
+            href={previousHref}
+            /*
+               Pagination is the one query parameter that stays in the crawl
+               graph, and it is load-bearing: PAGE_SIZE is 20, the pager is
+               prev/next only, and this is the sole internal-link path to every
+               supplier past the twentieth in a trade.
+
+               It stays followable only while the URL carries nothing else.
+               Paginating a FILTERED shelf is a node inside the combinatorial
+               space, and `crawlRel` reads that off the href.
+            */
+            rel={crawlRel(previousHref)}
             className="rounded-ctl border border-line bg-card px-3 py-1 text-caption text-body hover:border-line-strong focus-visible:outline-none focus-visible:shadow-focus"
           >
             {t("table.previous")}
@@ -363,7 +395,8 @@ function ResultsPagination({
         )}
         {query.page < pages && (
           <a
-            href={`${basePath}?${toSearchParams({ ...query, page: query.page + 1 })}`}
+            href={nextHref}
+            rel={crawlRel(nextHref)}
             className="rounded-ctl border border-line bg-card px-3 py-1 text-caption text-body hover:border-line-strong focus-visible:outline-none focus-visible:shadow-focus"
           >
             {t("table.next")}

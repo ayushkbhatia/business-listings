@@ -2,6 +2,7 @@ import { cn } from "@/lib/cn";
 import { Check } from "@/components/primitives/icons";
 import { formatCount } from "@/lib/format";
 import { toSearchParams, withoutFacet, type SearchQuery } from "@/lib/search/query";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 import type { FacetGroup } from "@/lib/db/queries";
 
 /**
@@ -59,10 +60,27 @@ export function FacetLinks({
 
   return (
     <>
-      {group.options.map((option) => (
+      {group.options.map((option) => {
+        const href = toggled(option.value);
+        return (
         <a
           key={option.value}
-          href={toggled(option.value)}
+          href={href}
+          /*
+             The link that made this the most expensive surface on the site.
+
+             Every facet anchor ADDS its value to whatever is already active, so
+             the rail on a two-facet page links to three-facet pages and those
+             link to four. On one shelf that is ~10^45 URLs, and on 2026-09-04 a
+             training crawler walked 794 of them in 75 minutes — each an uncached
+             function invocation ~16 Postgres round trips deep.
+
+             `crawlRel` reads the href rather than taking a hardcoded attribute,
+             which gets the case that matters at the boundary: toggling the last
+             active facet OFF yields a clean URL, and that one link should stay
+             followable. See lib/seo/crawl-policy.ts.
+          */
+          rel={crawlRel(href)}
           // aria-pressed belongs to a button. These are links: applying a
           // filter is a navigation, and aria-current is the attribute that
           // says "this one is on" for an item in a set.
@@ -96,7 +114,8 @@ export function FacetLinks({
             {formatCount(option.count)}
           </span>
         </a>
-      ))}
+        );
+      })}
     </>
   );
 }

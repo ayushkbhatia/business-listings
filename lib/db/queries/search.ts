@@ -157,7 +157,21 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
 
 const BUSINESS_INCLUDE = {
   primaryCategory: true,
-  plan: true,
+  /*
+     One column, named.
+
+     `plan: true` pulled every column on Plan onto a public browse path that
+     reads exactly one of them — `rankingMultiplier`, in `searchBusinesses`
+     below. On 2026-09-04 that turned a billing migration nobody had applied to
+     production into a 500 on the busiest public route on the site: the code
+     asked for `plan.annual_months_charged`, the database did not have it, and
+     `prisma.business.findMany()` threw for every visitor and every crawler.
+
+     Naming the column is the fix and also the guard. A billing column added
+     tomorrow cannot reach this query, so a schema that lags the code can no
+     longer take the directory down over a field the directory never reads.
+  */
+  plan: { select: { rankingMultiplier: true } },
   /*
      Up to five branches, not one.
 
@@ -434,7 +448,9 @@ const PRODUCT_INCLUDE = {
   business: {
     include: {
       primaryCategory: true,
-      plan: true,
+      // Same reasoning as BUSINESS_INCLUDE above: the products tab ranks with
+      // `rankingMultiplier` and reads nothing else off the plan.
+      plan: { select: { rankingMultiplier: true } },
       // Five, for the same reason as the business include: distance is to the
       // nearest branch, not to whichever one came back first.
       locations: { where: { published: true }, include: { area: true }, take: 5 },

@@ -6,7 +6,8 @@ import { prisma } from "@/lib/db/client";
 import { getCategoryBySlug } from "@/lib/db/queries";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { parseSearchQuery } from "@/lib/search/query";
+import { parseSearchQuery, trayParams } from "@/lib/search/query";
+import { isFiltered } from "@/lib/seo/canonical";
 import {
   areaPageState,
   otherTradesHere,
@@ -82,9 +83,10 @@ async function resolve(params: { emirate: string; area: string; category: string
   };
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const resolved = await resolve(await params);
   if (!resolved) return {};
+  const sp = await searchParams;
   const { area, category, state } = resolved;
 
   return {
@@ -102,7 +104,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
        suppliers there are, and a stranger who searched deserves not to land on
        four of them. `follow` stays on: each listing is worth indexing itself.
     */
-    ...(state.live ? {} : { robots: { index: false, follow: true } }),
+    /*
+       And `noindex` whenever anything is filtering, whatever the floors say.
+       This route renders the same filter rail as `/c/:category`, so it
+       addresses the same combinatorial URL space — see lib/seo/crawl-policy.ts.
+    */
+    ...(state.live && !isFiltered(sp)
+      ? {}
+      : { robots: { index: false, follow: true } }),
   };
 }
 
@@ -116,11 +125,10 @@ export default async function AreaLandingPage({ params, searchParams }: Props) {
   const query = { ...parseSearchQuery(sp), area: area.slug };
   const trayRaw = Array.isArray(sp.compare) ? (sp.compare[0] ?? "") : (sp.compare ?? "");
   const tray = trayRaw.split(",").filter(Boolean).slice(0, 4);
-  const search = new URLSearchParams(
-    Object.entries(sp).flatMap(([k, v]) =>
-      v === undefined ? [] : [[k, Array.isArray(v) ? v.join(",") : v] as [string, string]],
-    ),
-  ).toString();
+  // Rebuilt from the parsed query rather than from the raw search params. The
+  // raw form carried anything a caller invented straight back into every tray
+  // link — see `trayParams`.
+  const search = trayParams(query, tray);
 
   const basePath = `/${area.emirate}/${area.slug}/${category.slug}`;
   const categoryIds = [category.id];

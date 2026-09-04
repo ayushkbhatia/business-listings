@@ -34,25 +34,44 @@ const PUBLIC_BUSINESS = {
  * queries. The alternative — a job, and a window in which the page lies — is
  * the thing CLAUDE.md means by "every number is a query, not a constant".
  */
+/**
+ * The counts each storefront tab calls `notFound()` on when they are zero.
+ *
+ * Exported because `app/sitemap.ts` has to ask the same question this route
+ * answers, and asking it a second way is how the sitemap came to submit
+ * `/b/:slug/reviews` for sellers whose only reviews were removed or held. A
+ * held review is not a review the tab will render, and a sitemap entry for a
+ * page that 404s is the file claiming something untrue about the site.
+ *
+ * `locations` is `published: true` because that is what `getBusinessBySlug`
+ * selects below and what the branches tab counts; `products` matches
+ * `PUBLIC_PRODUCT` in lib/db/queries/storefront-catalogue.ts, which is what
+ * `catalogueTotal` is measured against.
+ */
+export const STOREFRONT_TAB_COUNTS = {
+  products: { where: { status: { not: "draft" as const } } },
+  locations: { where: { published: true } },
+  reviews: { where: { removedAt: null, heldAt: null } },
+} as const;
+
 export async function getBusinessBySlug(slug: string) {
   const business = await prisma.business.findFirst({
     where: { slug, ...PUBLIC_BUSINESS },
     include: {
       primaryCategory: true,
       categories: { include: { category: true } },
-      plan: true,
+      // Two columns, named. `id` decides the Pro chip and the Free-plan
+      // storefront, `rankingMultiplier` nothing here — but see the note in
+      // lib/db/queries/search.ts: a bare `plan: true` on a public route is how
+      // an unapplied billing migration became a 500 on every category page.
+      plan: { select: { id: true, rankingMultiplier: true } },
       locations: {
         where: { published: true },
         include: { area: true },
         orderBy: [{ type: "asc" }, { createdAt: "asc" }],
       },
       media: { orderBy: { sortOrder: "asc" } },
-      _count: {
-        select: {
-          products: { where: { status: { not: "draft" } } },
-          reviews: { where: { removedAt: null, heldAt: null } },
-        },
-      },
+      _count: { select: STOREFRONT_TAB_COUNTS },
     },
   });
   if (!business) return null;

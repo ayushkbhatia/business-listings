@@ -11,8 +11,8 @@ import {
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { prisma } from "@/lib/db/client";
-import { canonicalFor } from "@/lib/seo/canonical";
-import { parseSearchQuery } from "@/lib/search/query";
+import { canonicalFor, robotsForFilteredView } from "@/lib/seo/canonical";
+import { parseSearchQuery, trayParams } from "@/lib/search/query";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { Results } from "@/app/(public)/_results/Results";
@@ -29,6 +29,7 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
   const { category: slug } = await params;
   const category = await getCategoryBySlug(slug);
   if (!category) return {};
+  const sp = await searchParams;
   const count = await countResults(
     parseSearchQuery({}),
     categoryIdsFor(category),
@@ -48,9 +49,21 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
       canonical: await canonicalFor({
         basePath: `/c/${slug}`,
         categoryId: category.id,
-        searchParams: await searchParams,
+        searchParams: sp,
       }),
     },
+    /*
+       A canonical on its own was never enough here.
+
+       A filtered shelf is a view of this trade, not a page in its own right,
+       and the sibling storefront tabs have said so with `noindex` since they
+       shipped. This route said it with a canonical alone — which is a hint a
+       crawler weighs against everything else it knows, not an instruction — so
+       every one of the ~10^45 URLs the filter rail can address was indexable by
+       default. `follow` stays on: the suppliers and products linked from the
+       page are exactly what should be crawled onward from it.
+    */
+    ...robotsForFilteredView(sp),
   };
 }
 
@@ -68,11 +81,10 @@ export default async function CategoryPage({ params, searchParams }: Props) {
     .split(",")
     .filter(Boolean)
     .slice(0, 4);
-  const search = new URLSearchParams(
-    Object.entries(sp).flatMap(([k, v]) =>
-      v === undefined ? [] : [[k, Array.isArray(v) ? v.join(",") : v] as [string, string]],
-    ),
-  ).toString();
+  // Rebuilt from the parsed query rather than from the raw search params. The
+  // raw form carried anything a caller invented straight back into every tray
+  // link — see `trayParams`.
+  const search = trayParams(query, tray);
   const ids = categoryIdsFor(category);
 
   const [stats, chips, area] = await Promise.all([

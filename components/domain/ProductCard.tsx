@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 import { Button, buttonClassName } from "@/components/primitives";
 import { Card } from "@/components/structure";
 import { ImagePlaceholder, StatusBadge, type StatusTone } from "@/components/display";
@@ -192,7 +193,13 @@ export function ProductCard({
             </Button>
           )
         ) : enquireHref ? (
-          <a href={enquireHref} className={buttonClassName({ size: "sm", variant: "primary" })}>
+          // See the note on the same anchor in ListingCard: one uncached,
+          // noindex, force-dynamic URL per supplier, linked from every card.
+          <a
+            href={enquireHref}
+            rel={crawlRel(enquireHref)}
+            className={buttonClassName({ size: "sm", variant: "primary" })}
+          >
             {t("product.enquire")}
           </a>
         ) : (

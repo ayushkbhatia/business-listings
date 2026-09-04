@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 
 /**
  * Tabs. Two flavours of the same component: `line` for a page's sections,
@@ -105,6 +106,11 @@ export function Tabs({ items, active, onChange, label, variant = "line", as = "b
             <a
               key={item.key}
               href={item.href}
+              // A route tab on a results surface carries the whole query string
+              // with it, so switching tab multiplies the facet space rather than
+              // adding to it. Derived from the href, so the storefront's own
+              // path-based tabs — /b/:slug/products and friends — stay followable.
+              rel={item.href ? crawlRel(item.href) : undefined}
               aria-current={isActive ? "page" : undefined}
               className={classes}
             >

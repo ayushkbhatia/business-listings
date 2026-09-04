@@ -4,6 +4,7 @@ import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { toSearchParams, withoutFacet, type SearchQuery } from "@/lib/search/query";
 import type { DropSuggestion } from "@/lib/db/queries";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 
 /**
  * Board 10c. Zero results is a designed state, not a fallback.
@@ -68,6 +69,9 @@ export function ZeroResult({
               */}
               <a
                 href={`${basePath}?${toSearchParams(withoutFacet(query, suggestion.key))}`}
+                // Reached only from a zero-result page, which is where a
+                // crawler walking facet combinations spends most of its time.
+                rel={crawlRel(`${basePath}?${toSearchParams(withoutFacet(query, suggestion.key))}`)}
                 className="inline-flex items-center rounded-ctl border border-line-strong bg-card px-3 py-1.5 text-body-sm text-ink transition-colors duration-120 ease-out hover:bg-fill focus-visible:outline-none focus-visible:shadow-focus"
               >
                 {t("zero.drop", { facet: facetLabel(suggestion.key) })} —{" "}
