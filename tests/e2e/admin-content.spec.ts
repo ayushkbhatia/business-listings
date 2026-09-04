@@ -339,8 +339,29 @@ test.describe("boards 10b and 6d — guides", () => {
     await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeDisabled();
     await expect(page.getByText(/more to publish/)).toBeVisible();
 
-    // Clean up: it is a draft, so it deletes — and deleting returns to the
-    // list, because the editor has nothing left to edit.
+    /*
+       Reload before the cleanup, so the delete runs against a settled editor.
+
+       Saving a new guide calls `history.replaceState` to move the address off
+       `new` onto the guide's own id. Next treats that as a change of the `[id]`
+       segment, re-resolves the route and remounts the editor — which takes a
+       server round trip and resets `reason` to "". Typing into the pre-remount
+       instance and clicking Delete raced that: often the reason survived, and
+       sometimes the remount landed first, wiped it, and left Delete disabled
+       until the 30s timeout. One flake in 806 on the run that found it.
+
+       A reload lands on the guide by its own id with exactly one editor
+       mounted and nothing in flight, which is the same path a person takes who
+       comes back to a draft later. The race it steps around is real and is not
+       fixed here — a person who types a reason inside that window loses it,
+       silently, which is the failure the `pending` comment above already
+       worries about in its other form.
+    */
+    await page.reload();
+    await expect(page.getByRole("textbox", { name: "Title" })).toHaveValue("A draft that is too thin");
+
+    // It is a draft, so it deletes — and deleting returns to the list, because
+    // the editor has nothing left to edit.
     await page.getByRole("textbox", { name: "Reason" }).fill("Removing the end-to-end fixture.");
     await page.getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page).toHaveURL(/\/admin\/content\/guides$/);
