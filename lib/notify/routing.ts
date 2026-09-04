@@ -32,6 +32,8 @@ export type NotificationEvent =
   | "document_expiring"
   /// Criterion 8. A buyer whose search found nothing, told when it would not.
   | "product_alert_matched"
+  /// A subscription charged for another period. The first event a cron sends.
+  | "subscription_renewed"
   | "weekly_digest";
 
 /** The channels quiet hours actually silence. */

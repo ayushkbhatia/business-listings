@@ -2668,7 +2668,23 @@ async function seedStorefrontTemplates(
 async function seedCommercials(db: Db, businesses: Biz[]) {
   console.log("→ subscriptions, placements, invoices");
   const { snapshotOf } = await import("../lib/plan/entitlements.js");
-  const paying = businesses.filter((b) => b.claim === "claimed").slice(0, 12);
+  /*
+     Never the listing board 11a is about.
+
+     `seedAtMonthlyCap` runs just before this and puts `FREE_AT_CAP_SLUG` on
+     Free, at its cap, with missed enquiries to argue about — that is the whole
+     of board 11a. This loop then picked the first twelve claimed listings and
+     sold some of them a plan, and that slug was among them.
+
+     It went unnoticed because the business row and the subscription row
+     disagreed: the subscription said Pro and `Business.planId` still said Free,
+     so every screen that reads the plan kept showing the Free overview. Making
+     the two agree is what surfaced it. A demonstration seller for the Free
+     overview must be genuinely on Free, in both places.
+  */
+  const paying = businesses
+    .filter((b) => b.claim === "claimed" && b.slug !== FREE_AT_CAP_SLUG)
+    .slice(0, 12);
   const planRows = new Map((await db.plan.findMany()).map((p) => [p.id, p]));
 
   /** Signup dates, so the MRR ledger can be backfilled with the real ones. */
@@ -2679,11 +2695,52 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
     if (planId === "free") continue;
     const plan = planRows.get(planId)!;
     const startedAt = days(-int(60, 700));
-    started.set(b.id, {
-      planId,
-      at: startedAt,
-      fils: Math.round(Number(plan.monthlyPriceAed) * 100),
-    });
+
+    /*
+       One account pays yearly.
+
+       Every screen that states a money figure now has to answer for a term —
+       the admin subscription list, the revenue mix, the seller's own billing
+       page — and a seed where every row is monthly leaves all three untested
+       against the case they were changed for. The second Pro account is the
+       one, so the annual state sits beside a monthly one on the same plan.
+    */
+    const term = i === 1 && plan.annualMonthsCharged !== null ? "annual" : "monthly";
+    /*
+       Only read where the plan sells a year.
+
+       This had a `?? 12` fallback, which is the shape of a bug rather than a
+       default: twelve months for a year is not a discount, it is the monthly
+       price with extra steps, and it silently made the seeded annual invoice
+       AED 10,788 instead of AED 8,990. A plan with no annual price cannot have
+       an annual term at all, which is what the condition above now says.
+    */
+    const monthsCharged = plan.annualMonthsCharged ?? 0;
+    const monthlyFils = Math.round(Number(plan.monthlyPriceAed) * 100);
+    // What the account is worth a month, which on an annual term is not the
+    // list price. The same figure `mrrNow` sums, so `reconcile()` holds.
+    const valueFils =
+      term === "annual" ? Math.round((monthlyFils * monthsCharged) / 12) : monthlyFils;
+
+    started.set(b.id, { planId, at: startedAt, fils: valueFils });
+
+    /*
+       The business is on the plan its subscription says it is.
+
+       These two disagreed on six of eight seeded subscriptions, because the
+       listing got a random plan at creation and this loop then wrote a
+       different one onto the subscription without touching the business.
+       `Business.planId` is what every entitlement read uses — `getOverview`,
+       `effectiveFor`, the caps behind every locked panel — so a seller could be
+       Pro on their billing screen and Free everywhere the plan actually does
+       something. Found while checking that a seeded annual account renders;
+       the billing panel read "You are on Free" above a yearly invoice.
+    */
+    await db.business.update({ where: { id: b.id }, data: { planId } });
+
+    // The period this subscription is in. Annual renewals are far out; monthly
+    // ones are within the month, which is what the screens expect to render.
+    const renewsAt = term === "annual" ? days(int(60, 300)) : days(int(2, 30));
 
     await db.subscription.create({
       data: {
@@ -2691,7 +2748,17 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
         planId,
         status: i === 7 ? "past_due" : "active",
         startedAt,
-        renewsAt: days(int(2, 30)),
+        renewsAt,
+        term,
+        /*
+         * The period currently paid for. Backdated a term from its end rather
+         * than set to the signup date, because `startedAt` can be two years ago
+         * and proration divides by the length of the period a change lands in.
+         */
+        periodStartedAt: new Date(
+          renewsAt.getTime() - (term === "annual" ? 365 : 30) * 86_400_000,
+        ),
+        anchorDay: renewsAt.getUTCDate(),
         /*
          * A real snapshot, with the caps in it. This used to be
          * `{ planId, capturedAt }` — no numbers — which meant every seeded
@@ -2717,7 +2784,16 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
       },
     });
 
-    const amount = planId === "pro" ? 899 : 349;
+    /*
+       What the row actually costs, not a literal.
+
+       This was `planId === "pro" ? 899 : 349` beside a description hardcoding
+       "monthly" — two numbers and a word that would go on saying so after
+       somebody changed the plan or the term. The same drift the pricing work
+       took out of the home band.
+    */
+    const amount = term === "annual" ? Number(plan.monthlyPriceAed) * monthsCharged : Number(plan.monthlyPriceAed);
+    const periodLabel = term === "annual" ? "one year" : "one month";
     await db.invoice.create({
       data: {
         ref: `INV-${2600 + i}`,
@@ -2729,7 +2805,7 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
         paidAt: i === 7 ? null : days(-int(1, 30)),
         lines: {
           create: [
-            { kind: "subscription", description: `${planId === "pro" ? "Pro" : "Basic"} plan, monthly`, qty: 1, amountAed: String(amount) },
+            { kind: "subscription", description: `${plan.name} plan, ${periodLabel}`, qty: 1, amountAed: String(amount) },
           ],
         },
       },
@@ -2750,9 +2826,16 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
     },
   });
 
-  // A subscription credit, as an invoice line. Never a refund of buyer money —
-  // there is no buyer money on the platform.
-  const credited = paying[1]!;
+  /*
+     A subscription credit, as an invoice line. Never a refund of buyer money —
+     there is no buyer money on the platform.
+
+     `paying[0]` rather than `[1]`, because `[1]` is now the annual account and
+     this invoice describes a month. A credit example is about the credit, and
+     hanging it on the one row whose term contradicts the line would make it an
+     example of something else.
+  */
+  const credited = paying[0]!;
   await db.invoice.create({
     data: {
       ref: "INV-2699",
@@ -3826,6 +3909,35 @@ interface TemplateSeed {
 }
 
 const TEMPLATES: TemplateSeed[] = [
+  /*
+     The renewal receipt.
+
+     Email and in-app, and deliberately no WhatsApp: a receipt is a record
+     somebody keeps for their accountant, and `INTERRUPTING_CHANNELS` exists to
+     stop us buzzing a phone with something nobody has to act on. It is also the
+     only template here sent by a cron rather than by a request.
+
+     The amount is the period's, not the month's — an annual seller reads what
+     they were actually charged.
+  */
+  {
+    event: "subscription_renewed",
+    channel: "email",
+    body:
+      "Your {planName} plan has been charged {amount}. The next payment is due {renewsAt}. " +
+      "Your invoice is on the billing page.",
+    actionLabel: "See the invoice",
+    actionPath: "/dashboard/billing",
+    status: "live",
+  },
+  {
+    event: "subscription_renewed",
+    channel: "in_app",
+    body: "{planName} charged {amount}. Next payment {renewsAt}.",
+    actionLabel: "See the invoice",
+    actionPath: "/dashboard/billing",
+    status: "live",
+  },
   {
     event: "enquiry_received",
     channel: "whatsapp",

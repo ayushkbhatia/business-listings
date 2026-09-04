@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db/client";
-import { featuresOf, priceLabelOf, summaryOf } from "@/lib/billing/plan-features";
+import { annualPriceLabelOf, featuresOf, priceLabelOf, summaryOf } from "@/lib/billing/plan-features";
+import { recommendedPlanId } from "@/lib/billing/pricing";
+import { offersAnnual } from "@/lib/billing/period";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../../_shell";
-import { confirmPlanChange, quoteChange } from "../actions";
+import { confirmPlanChange, confirmTermChange, quoteChange, quoteTerm } from "../actions";
 import { PlanChooser } from "./PlanChooser";
 
 /**
@@ -21,6 +23,8 @@ const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
   locationLimit: true, photoLimit: true, teamSeats: true, rankingMultiplier: true,
   customDomain: true, siteVisitIncluded: true, sortOrder: true,
+  // What a year costs, so a card can state the term the seller is actually on.
+  annualMonthsCharged: true,
 } as const;
 
 export default async function ChangePlanPage() {
@@ -30,12 +34,17 @@ export default async function ChangePlanPage() {
     prisma.plan.findMany({ orderBy: { sortOrder: "asc" }, select: PLAN_SELECT }),
     prisma.business.findUniqueOrThrow({
       where: { id: seat.businessId },
-      select: { planId: true },
+      select: {
+        planId: true,
+        plan: { select: { monthlyPriceAed: true, annualMonthsCharged: true } },
+        subscription: { select: { term: true } },
+      },
     }),
     getNavBadges(seat.businessId),
   ]);
 
   const currentId = business.planId ?? "free";
+  const recommendedId = recommendedPlanId(plans);
 
   return (
     <SellerPage
@@ -59,15 +68,38 @@ export default async function ChangePlanPage() {
         <PlanChooser
           quoteAction={quoteChange}
           confirmAction={confirmPlanChange}
+          termQuoteAction={quoteTerm}
+          termConfirmAction={confirmTermChange}
+          term={business.subscription?.term ?? "monthly"}
+          /*
+             Only where there is a year to buy and a subscription to move.
+
+             A seller on Free has no term — there is nothing to pay either way —
+             and a plan we do not sell yearly has no annual price to quote.
+          */
+          offersAnnual={
+            Boolean(business.subscription) &&
+            Boolean(
+              business.plan &&
+                offersAnnual({
+                  monthlyPriceAed: business.plan.monthlyPriceAed,
+                  annualMonthsCharged: business.plan.annualMonthsCharged,
+                }),
+            )
+          }
           plans={plans.map((plan) => ({
             id: plan.id,
             name: plan.name,
             monthlyPriceAed: plan.monthlyPriceAed,
             priceLabel: priceLabelOf(plan),
+            annualPriceLabel: annualPriceLabelOf(plan),
             ...(summaryOf(plan.id) ? { summary: summaryOf(plan.id)! } : {}),
             features: featuresOf(plan),
-            // The middle tier, not the dearest.
-            recommended: plan.id === "basic" && currentId !== "basic",
+            // The middle tier, not the dearest — derived from price rather than
+            // named, so a fourth tier moves the recommendation without anybody
+            // remembering to. `/pricing` and the plan step read the same
+            // function, which is what stops the three screens disagreeing.
+            recommended: plan.id === recommendedId && plan.id !== currentId,
             current: plan.id === currentId,
           }))}
         />

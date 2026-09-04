@@ -4,6 +4,7 @@ import { applyEndedCancellations, cancelSubscription, changePlan } from "@/lib/b
 import type { Actor } from "@/lib/auth/roles";
 import { mrrByMonth, mrrNow, reconcile, waterfall, MRR_KINDS } from "@/lib/billing/revenue";
 import { classify } from "@/lib/billing/mrr";
+import { monthlyValueFils } from "@/lib/billing/period";
 import { exportFilename, toCsv, vatReturn } from "@/lib/billing/vat";
 
 /**
@@ -184,16 +185,55 @@ describe("MRR, from the ledger and from the table", () => {
   });
 
   it("counts active and past due, and nothing else", async () => {
+    /*
+       Summed by what each account is worth a month, not by the list price.
+
+       This read `Σ plan.monthlyPriceAed` and was right while every subscription
+       was monthly. An annual account pays ten months for twelve, so it is worth
+       ten twelfths of the list price a month — and the first seeded annual
+       subscription made this fail by exactly the discount, which is the test
+       doing its job rather than the number being wrong.
+
+       `monthlyValueFils` is the same function `mrrNow` and `recordMovement`
+       both call. Reimplementing the arithmetic here would let the assertion
+       agree with a bug.
+    */
     const now = await mrrNow();
     const expected = await prisma.subscription.findMany({
       where: { status: { in: ["active", "past_due"] } },
-      select: { plan: { select: { monthlyPriceAed: true } } },
+      select: {
+        term: true,
+        plan: { select: { monthlyPriceAed: true, annualMonthsCharged: true } },
+      },
     });
     const sum = expected.reduce(
-      (total, row) => total + Math.round(Number(row.plan.monthlyPriceAed) * 100),
+      (total, row) =>
+        total +
+        monthlyValueFils(
+          {
+            monthlyPriceAed: Number(row.plan.monthlyPriceAed),
+            annualMonthsCharged: row.plan.annualMonthsCharged,
+          },
+          row.term,
+        ),
       0,
     );
     expect(now.mrrFils).toBe(sum);
+  });
+
+  it("values an annual account below a monthly one on the same plan", async () => {
+    // The trade an annual price makes, stated rather than left to be inferred:
+    // less recurring revenue, in exchange for a year of cash and a year of
+    // retention. A revenue screen that hid it would be the wrong screen.
+    const pro = await prisma.plan.findUniqueOrThrow({
+      where: { id: "pro" },
+      select: { monthlyPriceAed: true, annualMonthsCharged: true },
+    });
+    const caps = {
+      monthlyPriceAed: Number(pro.monthlyPriceAed),
+      annualMonthsCharged: pro.annualMonthsCharged,
+    };
+    expect(monthlyValueFils(caps, "annual")).toBeLessThan(monthlyValueFils(caps, "monthly"));
   });
 
   it("leaves the free plan out of revenue", async () => {

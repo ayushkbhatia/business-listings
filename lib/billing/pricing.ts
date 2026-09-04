@@ -20,57 +20,71 @@ import type { RankingWeights } from "@/lib/search/ranking";
  * because each is one line of arithmetic somebody can rewrite locally.
  */
 
-/**
- * A year costs ten months.
- *
- * Stated as months rather than as a percentage on purpose: a supplier budgets
- * in months, and "two months free" is a sentence they can check. The percentage
- * is 16.67%, which is a number nobody has ever felt.
- */
-export const ANNUAL_MONTHS_CHARGED = 10;
 export const MONTHS_IN_YEAR = 12;
-export const ANNUAL_MONTHS_FREE = MONTHS_IN_YEAR - ANNUAL_MONTHS_CHARGED;
 
 /**
- * Whether a seller can actually be charged for a year.
+ * A year costs what the plan says a year costs.
  *
- * They cannot. `Plan` carries one price column — `monthlyPriceAed` — and every
- * mechanism below it is monthly: `prorate()` divides by a thirty-day period,
- * `Subscription.renewsAt` is a single date the change screen never moves, and
- * `InvoiceLineKind` has no annual line. Nothing anywhere can take a year's
- * money.
+ * This was a constant, and beside it sat `ANNUAL_BILLING_LIVE = false` with a
+ * note ending *"the day billing grows a yearly period, this becomes true and
+ * the note goes."* That day arrived: `Subscription.term` exists, `runRenewals`
+ * charges a period, and `Plan.annualMonthsCharged` says how many months a year
+ * is worth. Both the constant and the flag are gone, and the discount is a
+ * column that `/admin/plans` will edit rather than a deploy.
  *
- * So the toggle shows what a year costs and says plainly that billing runs
- * monthly, rather than offering a purchase the product cannot complete. Same
- * shape, and the same reason, as `paymentProvider().live`: a surface that is
- * built in front of a mechanism that is not says so, because the alternative is
- * a seller finding out at the point of payment.
- *
- * The day billing grows a yearly period, this becomes true and the note goes.
+ * Null means the plan is not sold by the year — Free, and any tier we decide
+ * not to offer yearly. `offersAnnual` in `lib/billing/period.ts` is the check,
+ * and it is the same one the billing screens use.
  */
-export const ANNUAL_BILLING_LIVE = false;
-
 export type BillingPeriod = "monthly" | "annual";
 
 /** The `Plan` columns this module needs, plus the one that says it is on sale. */
 export interface PricingPlan extends PlanCaps {
   /** Null while the plan is still sold. See `Plan.withdrawnAt`. */
   withdrawnAt: Date | null;
+  /** Months charged for a year. Null means this plan is monthly-only. */
+  annualMonthsCharged: number | null;
 }
 
 /**
- * What a year costs, from the monthly price alone.
+ * What a year costs, from the monthly price and the plan's own discount.
  *
  * There is no second price column and there must not be one: two prices for the
  * same plan is two numbers to keep in step, and the discount stops being
  * checkable the moment they drift.
+ *
+ * Returns null where the plan has no annual price, so a caller has to decide
+ * what to render rather than being handed a figure nobody can be charged.
  */
-export function annualPriceAed(plan: { monthlyPriceAed: number }): number {
-  return plan.monthlyPriceAed * ANNUAL_MONTHS_CHARGED;
+export function annualPriceAed(plan: {
+  monthlyPriceAed: number;
+  annualMonthsCharged: number | null;
+}): number | null {
+  if (plan.annualMonthsCharged === null) return null;
+  return plan.monthlyPriceAed * plan.annualMonthsCharged;
 }
 
-/** The price for the period being shown, in whole dirhams. */
-export function priceForPeriod(plan: { monthlyPriceAed: number }, period: BillingPeriod): number {
+/**
+ * How many months of twelve a year saves, on this plan.
+ *
+ * Stated as months rather than as a percentage on purpose: a supplier budgets
+ * in months, and "two months free" is a sentence they can check. The percentage
+ * is 16.67%, which is a number nobody has ever felt.
+ *
+ * Per plan rather than per page, because the discount is a column. Two tiers
+ * with different discounts each state their own, which is the honest rendering
+ * of a thing that can differ.
+ */
+export function annualMonthsFree(plan: { annualMonthsCharged: number | null }): number {
+  if (plan.annualMonthsCharged === null) return 0;
+  return MONTHS_IN_YEAR - plan.annualMonthsCharged;
+}
+
+/** The price for the period being shown, in whole dirhams. Null where there is none. */
+export function priceForPeriod(
+  plan: { monthlyPriceAed: number; annualMonthsCharged: number | null },
+  period: BillingPeriod,
+): number | null {
   return period === "annual" ? annualPriceAed(plan) : plan.monthlyPriceAed;
 }
 

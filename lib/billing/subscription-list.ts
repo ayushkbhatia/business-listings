@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { effectiveCaps, type PlanCaps } from "@/lib/plan/entitlements";
-import { FILS_PER_AED } from "./proration";
+import { monthlyValueFils } from "./period";
 
 /**
  * Every subscription, for board 4g's list.
@@ -20,7 +20,16 @@ export interface SubscriptionRow {
   planId: string;
   planName: string;
   status: string;
+  /**
+   * What the account is worth a month — not what it pays in one go.
+   *
+   * An annual subscription pays ten months for twelve, so this is ten twelfths
+   * of the list price. It is the same figure `mrrNow` sums, which is what lets
+   * a reader add this column up and get the number on the revenue screen.
+   */
   monthlyFils: number;
+  /** Monthly or annual. The column beside `monthlyFils` that explains it. */
+  term: "monthly" | "annual";
   startedAt: Date;
   renewsAt: Date;
   endsAt: Date | null;
@@ -46,6 +55,7 @@ export async function subscriptionList(limit = 500): Promise<SubscriptionRow[]> 
       businessId: true,
       planId: true,
       status: true,
+      term: true,
       startedAt: true,
       renewsAt: true,
       endsAt: true,
@@ -57,6 +67,7 @@ export async function subscriptionList(limit = 500): Promise<SubscriptionRow[]> 
           id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true,
           productLimit: true, locationLimit: true, photoLimit: true, teamSeats: true,
           rankingMultiplier: true, customDomain: true, siteVisitIncluded: true, sortOrder: true,
+          annualMonthsCharged: true,
         },
       },
     },
@@ -78,7 +89,13 @@ export async function subscriptionList(limit = 500): Promise<SubscriptionRow[]> 
       planId: subscription.planId,
       planName: subscription.plan.name,
       status: subscription.status,
-      monthlyFils: Math.round(caps.monthlyPriceAed * FILS_PER_AED),
+      monthlyFils: monthlyValueFils(
+        // `PlanCaps` is entitlements; the annual price is not one of them, so
+        // it comes off the row rather than out of the caps.
+        { monthlyPriceAed: caps.monthlyPriceAed, annualMonthsCharged: subscription.plan.annualMonthsCharged },
+        subscription.term,
+      ),
+      term: subscription.term,
       startedAt: subscription.startedAt,
       renewsAt: subscription.renewsAt,
       endsAt: subscription.endsAt,

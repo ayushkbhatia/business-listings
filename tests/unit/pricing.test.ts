@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  ANNUAL_BILLING_LIVE,
-  ANNUAL_MONTHS_CHARGED,
-  ANNUAL_MONTHS_FREE,
   MONTHS_IN_YEAR,
+  annualMonthsFree,
   annualPriceAed,
   ctaFor,
   isPurchasable,
@@ -49,11 +47,20 @@ function plan(over: Partial<PricingPlan> = {}): PricingPlan {
     siteVisitIncluded: false,
     sortOrder: 1,
     withdrawnAt: null,
+    annualMonthsCharged: 10,
     ...over,
   };
 }
 
-const FREE = plan({ id: "free", name: "Free", monthlyPriceAed: 0, rankingMultiplier: 1, sortOrder: 0 });
+const FREE = plan({
+  id: "free",
+  name: "Free",
+  monthlyPriceAed: 0,
+  rankingMultiplier: 1,
+  sortOrder: 0,
+  // A discount on nothing is nothing.
+  annualMonthsCharged: null,
+});
 const BASIC = plan();
 const PRO = plan({
   id: "pro",
@@ -74,17 +81,44 @@ describe("criterion 4 — a year is ten months, and the discount is stated in mo
     expect(annualPriceAed(PRO)).toBe(PRO.monthlyPriceAed * 10);
   });
 
-  it("leaves free free", () => {
-    expect(annualPriceAed(FREE)).toBe(0);
+  it("leaves free free, and reads the same either way", () => {
+    // Free has no annual price because there is nothing to discount — the
+    // arithmetic would be AED 0 a year, which is true and says nothing. The
+    // label still resolves, so the card never renders a gap.
+    expect(annualPriceAed(FREE)).toBeNull();
     expect(annualPriceLabelOf(FREE)).toBe(priceLabelOf(FREE));
   });
 
   it("expresses the discount as two months rather than a percentage", () => {
-    expect(ANNUAL_MONTHS_FREE).toBe(MONTHS_IN_YEAR - ANNUAL_MONTHS_CHARGED);
-    expect(ANNUAL_MONTHS_FREE).toBe(2);
+    expect(annualMonthsFree(PRO)).toBe(MONTHS_IN_YEAR - PRO.annualMonthsCharged!);
+    expect(annualMonthsFree(PRO)).toBe(2);
     // A percentage anywhere in the copy would be the version nobody can check.
     expect(en["pricing.period_saving"]).not.toContain("%");
     expect(en["pricing.annual_explained"]).not.toContain("%");
+  });
+
+  /*
+     The discount is a column, so a plan can decline to have one.
+
+     `annualPriceAed` returns null rather than a figure, because a caller handed
+     a number for a year nobody can be charged would render it — and Free, at
+     AED 0 a year, is the case that makes that look plausible.
+  */
+  it("offers no annual price on a plan that is not sold by the year", () => {
+    expect(annualPriceAed(FREE)).toBeNull();
+    expect(annualMonthsFree(FREE)).toBe(0);
+    expect(priceForPeriod(FREE, "annual")).toBeNull();
+
+    const monthlyOnly = plan({ id: "starter", monthlyPriceAed: 199, annualMonthsCharged: null });
+    expect(annualPriceAed(monthlyOnly)).toBeNull();
+  });
+
+  it("moves with the column rather than with a constant", () => {
+    // Nine months for twelve is a different offer, and the page states it
+    // without a deploy. That is the whole reason the discount left the code.
+    const keener = plan({ annualMonthsCharged: 9 });
+    expect(annualPriceAed(keener)).toBe(349 * 9);
+    expect(annualMonthsFree(keener)).toBe(3);
   });
 
   it("switches which price the period shows, from one column", () => {
@@ -93,17 +127,23 @@ describe("criterion 4 — a year is ten months, and the discount is stated in mo
   });
 
   /*
-     The claim on the page and the mechanism under it, held together.
+     The note that said annual could not be charged is gone, and so is the flag
+     that gated it.
 
-     Nothing in this product can charge a year — `Plan` has one price column and
-     proration divides by a thirty-day period — so the annual view says so. If
-     somebody flips this constant without building the billing, the page will
-     quietly stop saying it, so the constant and the sentence are asserted
-     together and one cannot move without the other failing.
+     `ANNUAL_BILLING_LIVE = false` and `pricing.annual_not_live` were bolted
+     together by a test so neither could move alone. Both moved: `Subscription`
+     carries a term, `runRenewals` charges a period, and the page sells a year.
+     This asserts the retreat is complete — a page still carrying the apology
+     while billing works would be its own kind of untrue.
   */
-  it("says annual is not live, while it is not", () => {
-    expect(ANNUAL_BILLING_LIVE).toBe(false);
-    expect(en["pricing.annual_not_live"]).toMatch(/charged monthly/i);
+  it("no longer apologises for annual, because annual works", () => {
+    expect(Object.keys(en)).not.toContain("pricing.annual_not_live");
+    const copy = Object.entries(en)
+      .filter(([key]) => key.startsWith("pricing."))
+      .flatMap(([, value]) => (typeof value === "string" ? [value] : Object.values(value)));
+    for (const line of copy) {
+      expect(line).not.toMatch(/not switched on|charged monthly today/i);
+    }
   });
 });
 

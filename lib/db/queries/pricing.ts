@@ -50,6 +50,8 @@ const PRICING_PLAN_SELECT = {
   siteVisitIncluded: true,
   sortOrder: true,
   withdrawnAt: true,
+  // What a year costs, in months. Null where the plan is monthly-only.
+  annualMonthsCharged: true,
 } as const;
 
 /**

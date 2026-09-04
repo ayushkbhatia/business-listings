@@ -2475,3 +2475,132 @@ Naming the absence — "No ranking lift in search" — was worse again, because
 struck through that is a double negative. It reads "A lift in search ranking"
 now, the same shape as "Your own web address" beside it, with the strike doing
 the negating. Fixed on `1l`, `2e` and `11f` alike.
+
+## Recurring renewals, and the billing term
+
+### `Subscription.renewsAt` had never been advanced by anything
+
+Written in two places — `changePlan`'s upsert `create` branch and the seed — and
+moved by nothing. No job charged at period end, no code path ever set
+`status: "past_due"`, and `runDunning` was therefore a complete, tested
+D0/D3/D7/D14 sequence with no trigger. A subscription simply ran past its
+renewal date for ever.
+
+This was found while asking why `/pricing` could not sell an annual plan. The
+answer was larger than the question: annual is a property of a recurring cycle,
+and there was no cycle.
+
+### Term is on the subscription, not on the plan
+
+A `Plan` row per term (`pro-annual`) was rejected before anything was written.
+`Business.planId` would stop answering "what plan are you on" with one value;
+`mrrNow` groups by `planId` and would show six rows for three plans;
+`cheapestPlanUnlocking` and `cheapestPlanWith` iterate `plans` and would offer a
+payment schedule as an upgrade; `classify()` in the MRR ledger reads one price
+axis; `/pricing` would render six cards.
+
+Term is a **payment** fact. An annual Pro seller is entitled to exactly what a
+monthly Pro seller is, so it never reaches `snapshotOf` —
+`tests/unit/entitlements.test.ts` asserts the absence, because spreading a
+subscription row into a snapshot is a one-line way to introduce it.
+
+### A plan change keeps the period. A term change starts a new one
+
+The rule that keeps the arithmetic to one page, and it is the opposite of what
+the change screen used to promise unconditionally. Switching to annual in the
+middle of a month cannot charge "the rest of a year", because there is no year
+yet. So the unused days of the current period are credited at that period's own
+daily rate, a fresh period opens today, and the new one is charged in full.
+
+`ChangeQuote.renewalMoves` carries which case it is, because
+`tests/e2e/account.spec.ts` asserts the words *"your renewal date does not
+move"* and that sentence is false for a term change.
+
+### `periodDays` stopped defaulting to thirty
+
+`prorate()` took `periodDays?: number`, defaulted to 30, and no caller had ever
+passed it. That default is a trap rather than a convenience: on a yearly period
+it credits a day at a thirtieth of a year's price, roughly twelve times what the
+day is worth, silently, in the seller's favour, on an invoice a supplier keeps
+for their accountant. It is required now, and `fromMonthlyAed` / `toMonthlyAed`
+were renamed `fromPeriodAed` / `toPeriodAed` so the names stop lying.
+
+### `monthlyValueFils` is one function because `reconcile()` compares two sums
+
+`mrrNow` valued an account at headcount × list monthly price and never looked at
+what was billed. An annual account pays ten months for twelve and is worth ten
+twelfths of the list price a month, so the live sum and the `MrrMovement` ledger
+would have derived a monthly figure differently — and `reconcile()`, which the
+revenue screen renders whether it passes or not, would have started reporting a
+difference nobody could explain.
+
+Both now read `monthlyValueFils`. Switching monthly→annual records a
+**contraction** of two twelfths, which is correct and is the number finance will
+ask about: an annual price trades recurring revenue for cash and retention.
+
+### The renewal job does nothing at all without a gateway
+
+`consoleProvider` answers `ok: true` to every charge. Trusting it would advance
+every renewal date in staging without a card being touched, and the failure
+branch that feeds dunning would never run. Marking them past due instead is the
+opposite mistake: every subscription would march D0 to D14 and drop to Free
+inside a fortnight.
+
+So with `provider.live === false` the job charges nothing, moves no date, marks
+nobody past due, and reports `skippedNoProvider`. `dunning-job.ts` already made
+this call for retries; this is the same one. It is the first assertion in
+`tests/integration/renewal.test.ts` for that reason.
+
+Idempotency copies the restated guard from `verification/expiry-job.ts`: every
+selection condition is repeated on the write, so a row another pass already
+advanced matches nothing and the invoice rolls back with it. `runSteps` returns
+500 when a step throws and the whole batch is retried, so a second pass in the
+same minute is not hypothetical.
+
+### `Plan.annualMonthsCharged` is a count, not a price
+
+`tests/unit/schema-invariants.test.ts` censuses every `*price*` field in the
+schema and asserts the set is exactly three. Naming this `annualPriceAed` would
+have failed that census — and would have given `Plan` two prices to keep in
+step, which is the drift the one price column exists to prevent.
+
+Null means the plan is not sold by the year, which is the honest value for Free.
+A CHECK holds it between 1 and 11: zero would make a year free and twelve or
+more would make it dearer than paying monthly, and both are commercial mistakes
+worth catching before a seller does.
+
+**Not editable in `/admin/plans`.** `editPlanEntitlements` deliberately excludes
+the price, and `admin-commercials.spec.ts` asserts the form does not offer it.
+This is a price, so it follows the price: seeded, changed by migration, and
+given an editor in board 12e when the price gets one — the same treatment
+`Plan.withdrawnAt` has.
+
+### The renewal receipt is the first notification any job sends
+
+`dunning-job.ts` advances a stage and its comment about the notice going through
+`lib/notify` is aspirational — the file does not import the notify layer. So
+`subscription_renewed` needed four things rather than one: an enum value in its
+own migration (Postgres will not add and use one in a single transaction), an
+`EVENT_PARAMS` entry, seeded templates, and an emitter.
+
+Email and in-app, deliberately no WhatsApp: a receipt is a record somebody keeps
+for their accountant, and `INTERRUPTING_CHANNELS` exists to stop us buzzing a
+phone with something nobody has to act on. No advance notice before a renewal —
+that was considered and left out.
+
+### Found in passing
+
+- **`Business.planId` and `Subscription.planId` disagreed on six of eight seeded
+  subscriptions.** The listing took a random plan at creation and
+  `seedCommercials` then wrote a different one onto the subscription without
+  touching the business. `Business.planId` is what every entitlement read uses,
+  so a seeded seller could be Pro on their billing screen and Free everywhere
+  the plan actually does something. Noticed because the billing panel read "You
+  are on Free" above a yearly Pro invoice.
+- **The seed hardcoded invoice amounts** as `planId === "pro" ? 899 : 349` beside
+  a description saying "monthly" — two numbers and a word that would go on
+  saying so after somebody changed the plan or the term.
+- **The change screen did not use `recommendedPlanId()`**, carrying a literal
+  `plan.id === "basic"` that board 1l had already replaced everywhere else.
+- **A card read "AED 899 a month" to a seller paying yearly.** The same defect
+  the billing panel had, one screen along.

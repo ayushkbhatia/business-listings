@@ -1,0 +1,12 @@
+-- The receipt a renewal sends.
+--
+-- Its own migration for the reason `20260829093000_alert_event` gives: Postgres
+-- will not let a new enum value be added and used inside the same transaction,
+-- and Prisma runs one migration as one transaction.
+--
+-- This is the first notification any scheduled job sends. `lib/notify` has never
+-- been reached from a cron — `dunning-job.ts` advances a stage and its comment
+-- about sending is aspirational — so the emitter in `lib/notify/events.ts` is
+-- written to the same shape as the request-context ones and swallows its own
+-- failures: a carrier being down must not roll back a payment that succeeded.
+ALTER TYPE "notification_event" ADD VALUE IF NOT EXISTS 'subscription_renewed' BEFORE 'weekly_digest';

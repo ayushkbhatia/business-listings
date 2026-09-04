@@ -127,11 +127,17 @@ export function priceLabelOf(plan: PlanCaps): string {
   return plan.monthlyPriceAed === 0 ? t("plan.free") : `AED ${formatCount(plan.monthlyPriceAed)}`;
 }
 
-/** The same label for a year, from the same column. Free stays free. */
-export function annualPriceLabelOf(plan: PlanCaps): string {
-  return plan.monthlyPriceAed === 0
-    ? t("plan.free")
-    : `AED ${formatCount(annualPriceAed(plan))}`;
+/**
+ * The same label for a year, from the same column.
+ *
+ * Null where the plan is not sold by the year, so a caller decides what to show
+ * rather than being handed a price nobody can be charged. Free stays free: it
+ * costs nothing either way and has no annual discount to state.
+ */
+export function annualPriceLabelOf(plan: PlanCaps & { annualMonthsCharged: number | null }): string | null {
+  if (plan.monthlyPriceAed === 0) return t("plan.free");
+  const yearly = annualPriceAed(plan);
+  return yearly === null ? null : `AED ${formatCount(yearly)}`;
 }
 
 /**

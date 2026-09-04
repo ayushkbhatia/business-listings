@@ -18,6 +18,7 @@ export interface SubscriptionRowView {
   planName: string;
   status: string;
   monthly: string;
+  term: "monthly" | "annual";
   renews: string;
   grandfathered: readonly string[];
 }
@@ -59,6 +60,21 @@ export function SubscriptionTable({ rows }: { rows: readonly SubscriptionRowView
       numeric: true,
       width: "8rem",
       render: (row) => row.monthly,
+    },
+    {
+      /*
+         What the account actually pays in one go.
+
+         The column beside it is headed "monthly" and, for an annual
+         subscription, states a figure nobody is ever invoiced — ten twelfths of
+         a list price. That number is right for revenue and wrong as a receipt,
+         so the term is named next to it rather than left to be inferred.
+      */
+      key: "term",
+      header: t("admin.subscriptions.col.term"),
+      width: "7rem",
+      hideBelow: "md",
+      render: (row) => t(`subscription.term.${row.term}` as never),
     },
     {
       key: "renews",

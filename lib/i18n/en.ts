@@ -2467,9 +2467,10 @@ export const en = {
   "pricing.period_saving": "−{months} months",
   "pricing.per_month": "a month",
   "pricing.per_year": "a year",
-  "pricing.annual_explained": "{months} months, charged as {charged}.",
-  "pricing.annual_not_live":
-    "Annual is not switched on yet. Every plan is charged monthly today, at the monthly price.",
+  // No discount figure here. It is a column now, and two tiers can carry
+  // different ones — so each card states its own saving and this line says only
+  // what is true of every plan.
+  "pricing.annual_explained": "{months} months, charged once a year.",
 
   "pricing.plans_heading": "The three plans",
   "pricing.free_is_permanent":
@@ -2513,6 +2514,10 @@ export const en = {
   "billing.eyebrow": "Account",
   "billing.on_plan": "You are on {plan}",
   "billing.renews": "Renews {when}",
+  // The term beside the date. An annual seller reading only a date a year out
+  // has to work out from the distance how they are paying.
+  "billing.renews_monthly": "Billed monthly. Next payment {when}.",
+  "billing.renews_annual": "Billed yearly. Next payment {when}.",
   "billing.ending": "Ending on {when}. Your listing stays live on Free after that.",
   "billing.free_forever": "Free is a plan, not a trial. Nothing expires.",
   "billing.change": "Change plan",
@@ -2536,7 +2541,9 @@ export const en = {
   "billing.not_live": "No card has been charged. Payment is not connected in this environment.",
 
   "change.title": "Change plan",
-  "change.intro": "Pick a plan. What it costs today is worked out from the days left in your month, and shown before anything is charged.",
+  // "your month" was true while every subscription was monthly. A seller
+  // halfway through a paid year is prorated over the days left in that year.
+  "change.intro": "Pick a plan. What it costs today is worked out from the days left in the period you have paid for, and shown before anything is charged.",
   "change.choose": "Move to {plan}",
   "change.staying": "You are on this plan",
   "change.quote_heading": "What changes today",
@@ -2545,6 +2552,12 @@ export const en = {
   "change.net_charge": "To pay today",
   "change.net_credit": "Credited to your next invoice",
   "change.renews_unchanged": "Your renewal date does not move. It stays {when}.",
+  "change.term_heading": "How you pay",
+  // No discount figure. It is a column per plan now, and this control sits
+  // above all three — naming one plan's saving here is the drift the pricing
+  // page just took out of its own copy.
+  "change.term_note": "What you get is the same either way. The plan does not change, only how often it is charged, and a year costs less than twelve months of it.",
+  "change.renews_moved": "A new period starts today. Your next payment is {when}.",
   "change.confirm": "Confirm the change",
   "change.back": "Back to subscription",
   "change.done": "You are on {plan}.",
@@ -2777,6 +2790,7 @@ export const en = {
   "admin.subscriptions.col.plan": "Plan",
   "admin.subscriptions.col.status": "Status",
   "admin.subscriptions.col.monthly": "Monthly",
+  "admin.subscriptions.col.term": "Paid",
   "admin.subscriptions.col.renews": "Renews",
   "admin.subscriptions.col.grandfathered": "On old numbers",
   "admin.subscriptions.on_plan": "on the plan",
@@ -2790,6 +2804,8 @@ export const en = {
   "admin.subscriptions.empty.body": "A subscription is written when a business moves off Free. Free is the default and has no subscription row.",
   "subscription.status.active": "Active",
   "subscription.status.trialing": "Trial",
+  "subscription.term.monthly": "Monthly",
+  "subscription.term.annual": "Annual",
   "subscription.status.past_due": "Past due",
   "subscription.status.cancelled": "Cancelled",
   "subscription.status.expired": "Expired",

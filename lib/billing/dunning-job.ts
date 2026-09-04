@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { paymentProvider } from "./provider";
 import { nextAction, SCHEDULE, type DunningStage } from "./dunning";
 import { aedToFils, recordMovement } from "./mrr";
+import { monthlyValueFils, periodPriceAed } from "./period";
 
 /**
  * The dunning runner.
@@ -44,7 +45,8 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
       planId: true,
       dunningStage: true,
       pastDueSince: true,
-      plan: { select: { monthlyPriceAed: true } },
+      term: true,
+      plan: { select: { monthlyPriceAed: true, annualMonthsCharged: true } },
     },
   });
 
@@ -61,8 +63,24 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
      * date is `now`, so day zero is due and the retry fires on this same pass.
      */
     const pastDueSince = subscription.pastDueSince ?? now;
-    // Whole fils, as everywhere else in billing. Never a float.
-    const monthlyFils = aedToFils(Number(subscription.plan.monthlyPriceAed));
+    /*
+       The **period** price, not the month's.
+
+       A retry is a second attempt at the payment that failed, and on an annual
+       subscription that payment was a year. Charging a month instead would take
+       a twelfth of what is owed, mark the account active, and leave eleven
+       months unpaid with nothing to notice it. Whole fils, as everywhere else
+       in billing; never a float.
+    */
+    const periodFils = aedToFils(
+      periodPriceAed(
+        {
+          monthlyPriceAed: Number(subscription.plan.monthlyPriceAed),
+          annualMonthsCharged: subscription.plan.annualMonthsCharged,
+        },
+        subscription.term,
+      ),
+    );
 
     const action = nextAction(subscription.dunningStage as DunningStage, pastDueSince, now);
     if (action.kind === "wait") continue;
@@ -86,7 +104,7 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
        * past due, but if one is, there is no card to retry and a zero-fils
        * attempt row would fail `payment_attempt_amount_is_positive` anyway.
        */
-      if (!provider.live || monthlyFils <= 0) {
+      if (!provider.live || periodFils <= 0) {
         await prisma.subscription.update({
           where: { id: subscription.id },
           data: { dunningStage: "retry", pastDueSince, dunningAdvancedAt: now },
@@ -97,7 +115,7 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
 
       const charge = await provider.charge({
         businessId: subscription.businessId,
-        fils: monthlyFils,
+        fils: periodFils,
         description: "Subscription retry",
         reference: `DUNNING-${subscription.id}-${pastDueSince.getTime()}`,
       });
@@ -105,7 +123,7 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
       await prisma.paymentAttempt.create({
         data: {
           subscriptionId: subscription.id,
-          amountFils: monthlyFils,
+          amountFils: periodFils,
           succeeded: charge.ok,
           providerMessage: charge.ok ? null : (charge.error ?? null),
           attemptedAt: now,
@@ -176,13 +194,27 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
           data: { planId: "free" },
         });
 
-        // Churn, in the ledger board 4g reads. Same transaction, so a waterfall
-        // can never be missing a drop that happened.
+        /*
+           Churn, in the ledger board 4g reads. Same transaction, so a waterfall
+           can never be missing a drop that happened.
+
+           The monthly **value**, not the period price — an annual account that
+           drops loses ten twelfths of a list price a month, not a whole year's
+           worth. `mrrNow` values live accounts with the same function and
+           `reconcile()` compares the two, so the period price here would put a
+           twelve-times error into the waterfall on the day it mattered most.
+        */
         await recordMovement(tx, {
           businessId: subscription.businessId,
           fromPlanId: subscription.planId,
           toPlanId: "free",
-          beforeFils: monthlyFils,
+          beforeFils: monthlyValueFils(
+            {
+              monthlyPriceAed: Number(subscription.plan.monthlyPriceAed),
+              annualMonthsCharged: subscription.plan.annualMonthsCharged,
+            },
+            subscription.term,
+          ),
           afterFils: 0,
           occurredAt: now,
           note: `Dunning drop after ${SCHEDULE.final} days past due`,

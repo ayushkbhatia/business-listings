@@ -5,6 +5,7 @@ import {
   cheapestPlanUnlocking,
   cheapestPlanWith,
   monthStart,
+  snapshotOf,
   type PlanCaps,
 } from "@/lib/plan/entitlements";
 
@@ -109,5 +110,40 @@ describe("monthStart", () => {
     expect(monthStart(new Date("2026-08-01T00:00:00Z")).toISOString()).toBe(
       "2026-08-01T00:00:00.000Z",
     );
+  });
+});
+
+describe("a snapshot freezes entitlements and nothing else", () => {
+  /*
+     The billing term is a payment fact, not an entitlement one.
+
+     An annual Pro seller is entitled to exactly what a monthly Pro seller is —
+     the same products, the same locations, the same ranking. If the term ever
+     reached a snapshot then `effectiveCaps` would start handing two sellers on
+     one plan different caps, and the difference would be how they chose to pay.
+     That is the failure this asserts against, and it is cheap to introduce by
+     spreading a subscription row into `snapshotOf` by accident.
+  */
+  it("carries no billing term", () => {
+    const frozen = snapshotOf(PRO, new Date("2026-09-04T00:00:00Z"));
+    expect(Object.keys(frozen)).not.toContain("term");
+    expect(Object.keys(frozen)).not.toContain("periodStartedAt");
+    expect(Object.keys(frozen)).not.toContain("anchorDay");
+  });
+
+  it("carries no price of any kind", () => {
+    // A snapshot is what the seller may do, not what they pay. The price lives
+    // on the plan row, which is why a grandfathered account is still on Pro at
+    // Pro's price — `effectiveCaps` says so in its own comment.
+    const frozen = snapshotOf(PRO, new Date("2026-09-04T00:00:00Z"));
+    expect(Object.keys(frozen)).not.toContain("monthlyPriceAed");
+    expect(Object.keys(frozen)).not.toContain("annualMonthsCharged");
+  });
+
+  it("freezes every cap the plan carries", () => {
+    const frozen = snapshotOf(PRO, new Date("2026-09-04T00:00:00Z"));
+    expect(frozen.productLimit).toBe(PRO.productLimit);
+    expect(frozen.teamSeats).toBe(PRO.teamSeats);
+    expect(frozen.customDomain).toBe(PRO.customDomain);
   });
 });

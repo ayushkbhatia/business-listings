@@ -12,9 +12,8 @@ import {
   summaryOf,
 } from "@/lib/billing/plan-features";
 import {
-  ANNUAL_BILLING_LIVE,
-  ANNUAL_MONTHS_CHARGED,
   MONTHS_IN_YEAR,
+  annualMonthsFree,
   ctaFor,
   purchasable,
   recommendedPlanId,
@@ -163,6 +162,7 @@ export default async function PricingPage() {
       monthlyPriceAed: plan.monthlyPriceAed,
       monthlyLabel: priceLabelOf(plan),
       annualLabel: annualPriceLabelOf(plan),
+      monthsFree: annualMonthsFree(plan),
       ...(summaryOf(plan.id) ? { summary: summaryOf(plan.id)! } : {}),
       features: featuresOf(plan),
       recommended,
@@ -267,12 +267,7 @@ export default async function PricingPage() {
             {t("pricing.plans_heading")}
           </h2>
 
-          <PlanGrid
-            cards={cards}
-            monthsInYear={MONTHS_IN_YEAR}
-            monthsCharged={ANNUAL_MONTHS_CHARGED}
-            annualLive={ANNUAL_BILLING_LIVE}
-          />
+          <PlanGrid cards={cards} monthsInYear={MONTHS_IN_YEAR} />
 
           {/*
              Free is a product, not a trial. No countdown, no expiry, no nag —

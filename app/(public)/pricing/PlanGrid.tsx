@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Alert } from "@/components/display";
 import { PlanCard, type PlanFeature } from "@/components/domain";
 import { Button, SegmentedControl, buttonClassName } from "@/components/primitives";
 import type { BillingPeriod, PlanCtaKind } from "@/lib/billing/pricing";
@@ -41,8 +40,10 @@ export interface PricingCard {
   monthlyPriceAed: number;
   /** "Free" / "AED 349", formatted on the server. */
   monthlyLabel: string;
-  /** "Free" / "AED 3,490". Ten months, from the same column. */
-  annualLabel: string;
+  /** "AED 3,490", ten months from the same column. Null where none is sold. */
+  annualLabel: string | null;
+  /** How many of twelve months a year saves on this plan. Zero where none is. */
+  monthsFree: number;
   summary?: string;
   features: readonly PlanFeature[];
   recommended: boolean;
@@ -54,15 +55,19 @@ export interface PlanGridProps {
   cards: readonly PricingCard[];
   /** Twelve, from `MONTHS_IN_YEAR`. Passed rather than assumed. */
   monthsInYear: number;
-  /** Ten, from `ANNUAL_MONTHS_CHARGED`. The discount is the difference. */
-  monthsCharged: number;
-  /** False while nothing can actually take a year's money. */
-  annualLive: boolean;
 }
 
-export function PlanGrid({ cards, monthsInYear, monthsCharged, annualLive }: PlanGridProps) {
+export function PlanGrid({ cards, monthsInYear }: PlanGridProps) {
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
-  const monthsFree = monthsInYear - monthsCharged;
+  /*
+     The toggle appears when there is a year to buy.
+
+     The discount is a column per plan, so a page where nothing is sold yearly
+     shows no toggle at all rather than one that switches between two identical
+     views. Each card states its own saving, because two tiers can legitimately
+     carry different ones.
+  */
+  const sellsAnnual = cards.some((card) => card.annualLabel !== null);
 
   /*
      No cards, no toggle.
@@ -75,43 +80,23 @@ export function PlanGrid({ cards, monthsInYear, monthsCharged, annualLive }: Pla
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col items-center gap-3">
-        <SegmentedControl<BillingPeriod>
-          label={t("pricing.period_label")}
-          value={period}
-          onChange={setPeriod}
-          options={[
-            { value: "monthly", label: t("pricing.period_monthly") },
-            {
-              value: "annual",
-              // The discount as months, not a percentage. A supplier budgets in
-              // months; 16.67% is a number nobody has ever felt.
-              label: `${t("pricing.period_annual")} · ${t("pricing.period_saving", {
-                months: monthsFree,
-              })}`,
-            },
-          ]}
-        />
-        {period === "annual" && (
-          <p className="text-caption text-muted">
-            {t("pricing.annual_explained", { months: monthsInYear, charged: monthsCharged })}
-          </p>
-        )}
-      </div>
-
-      {/*
-         Said once, where the choice is made, and only when it is made.
-
-         Nothing in this product can charge a year: `Plan` has one price column
-         and every mechanism under it is monthly. A page that offers annual and
-         then bills monthly is exactly the surprise board 1l exists to avoid, so
-         the toggle shows what a year costs and this line says what will
-         actually happen. It goes when annual billing does.
-      */}
-      {period === "annual" && !annualLive && (
-        <Alert tone="info" live="polite">
-          {t("pricing.annual_not_live")}
-        </Alert>
+      {sellsAnnual && (
+        <div className="flex flex-col items-center gap-3">
+          <SegmentedControl<BillingPeriod>
+            label={t("pricing.period_label")}
+            value={period}
+            onChange={setPeriod}
+            options={[
+              { value: "monthly", label: t("pricing.period_monthly") },
+              { value: "annual", label: t("pricing.period_annual") },
+            ]}
+          />
+          {period === "annual" && (
+            <p className="text-caption text-muted">
+              {t("pricing.annual_explained", { months: monthsInYear })}
+            </p>
+          )}
+        </div>
       )}
 
       <div className="grid gap-4 lg:grid-cols-3">
@@ -129,8 +114,25 @@ export function PlanGrid({ cards, monthsInYear, monthsCharged, annualLive }: Pla
               name={card.name}
               headingLevel={2}
               monthlyPriceAed={card.monthlyPriceAed}
-              priceLabel={period === "annual" ? card.annualLabel : card.monthlyLabel}
-              periodLabel={period === "annual" ? t("pricing.per_year") : t("pricing.per_month")}
+              /*
+                 A plan with no annual price keeps its monthly one on the annual
+                 view rather than blanking. Free is the case that matters: it
+                 costs nothing either way, and a gap where a price should be
+                 reads as a page that failed to load.
+              */
+              priceLabel={
+                period === "annual" && card.annualLabel !== null
+                  ? card.annualLabel
+                  : card.monthlyLabel
+              }
+              periodLabel={
+                period === "annual" && card.annualLabel !== null
+                  ? t("pricing.per_year")
+                  : t("pricing.per_month")
+              }
+              {...(period === "annual" && card.monthsFree > 0
+                ? { note: t("pricing.period_saving", { months: card.monthsFree }) }
+                : {})}
               {...(card.summary ? { summary: card.summary } : {})}
               features={card.features}
               recommended={card.recommended}

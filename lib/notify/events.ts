@@ -211,6 +211,51 @@ export async function onQuoteSent(input: {
   });
 }
 
+/**
+ * A subscription was charged for another period.
+ *
+ * The first notification any scheduled job sends. Everything about it is
+ * ordinary except where it is called from: `notify()` reads no request context —
+ * no `headers()`, no `cookies()`, no actor — so a cron may call it, and the only
+ * reason none ever had is that nothing in the product renewed anything.
+ *
+ * Seller-side, so it routes through the business's own matrix on board 7e and
+ * respects their quiet hours. A seller with no `NotificationPreference` row gets
+ * nothing and `notify` returns an empty list, which is the same graceful nothing
+ * every other emitter gets in that case.
+ *
+ * A receipt and not a warning. There is no advance notice before a renewal:
+ * that was considered and left out, and if it is wanted later it belongs beside
+ * the job that knows the date rather than bolted to this one.
+ */
+export async function onSubscriptionRenewed(input: {
+  businessId: string;
+  planName: string;
+  /** Already formatted by `filsToAed` — "8990.00". */
+  amountAed: string;
+  renewsAt: Date;
+}): Promise<void> {
+  await safely("subscription_renewed", async () => {
+    const owner = await prisma.user.findFirst({
+      where: { businessId: input.businessId, roles: { has: "seller_owner" } },
+      select: { id: true },
+    });
+    if (!owner) return;
+
+    await notify({
+      event: "subscription_renewed",
+      businessId: input.businessId,
+      recipientUserId: owner.id,
+      params: withParams("subscription_renewed", {
+        planName: input.planName,
+        amount: formatAED(input.amountAed),
+        renewsAt: formatDate(input.renewsAt),
+        shortLink: absoluteUrl("/dashboard/billing"),
+      }),
+    });
+  });
+}
+
 async function deliver(
   channel: "whatsapp" | "sms" | "email" | "in_app",
   senders: ReturnType<typeof resolveNotificationSenders>,

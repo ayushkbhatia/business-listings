@@ -7,8 +7,9 @@ describe("criterion 10 — a plan change prorates correctly", () => {
   it("credits the unused days and charges the same days on the new plan", () => {
     // Free → Basic on the 20th, renewing on the 1st: twelve days left.
     const result = prorate({
-      fromMonthlyAed: 0,
-      toMonthlyAed: 349,
+      fromPeriodAed: 0,
+      toPeriodAed: 349,
+      periodDays: 30,
       renewsAt: RENEWS,
       now: new Date("2026-08-20T00:00:00Z"),
     });
@@ -23,8 +24,9 @@ describe("criterion 10 — a plan change prorates correctly", () => {
 
   it("produces a credit on a downgrade, not a charge", () => {
     const result = prorate({
-      fromMonthlyAed: 899,
-      toMonthlyAed: 349,
+      fromPeriodAed: 899,
+      toPeriodAed: 349,
+      periodDays: 30,
       renewsAt: RENEWS,
       now: new Date("2026-08-20T00:00:00Z"),
     });
@@ -37,8 +39,9 @@ describe("criterion 10 — a plan change prorates correctly", () => {
     // A change on the 12th swaps what is being paid for over the days that were
     // left. It does not restart the month.
     const result = prorate({
-      fromMonthlyAed: 349,
-      toMonthlyAed: 899,
+      fromPeriodAed: 349,
+      toPeriodAed: 899,
+      periodDays: 30,
       renewsAt: RENEWS,
       now: new Date("2026-08-12T00:00:00Z"),
     });
@@ -47,8 +50,9 @@ describe("criterion 10 — a plan change prorates correctly", () => {
 
   it("charges nothing on the day of renewal", () => {
     const result = prorate({
-      fromMonthlyAed: 349,
-      toMonthlyAed: 899,
+      fromPeriodAed: 349,
+      toPeriodAed: 899,
+      periodDays: 30,
       renewsAt: RENEWS,
       now: RENEWS,
     });
@@ -83,8 +87,9 @@ describe("criterion 10 — a plan change prorates correctly", () => {
     for (const aed of [349, 899, 1, 7, 1200]) {
       for (const days of [1, 7, 13, 29, 30]) {
         const result = prorate({
-          fromMonthlyAed: 0,
-          toMonthlyAed: aed,
+          fromPeriodAed: 0,
+          toPeriodAed: aed,
+          periodDays: 30,
           renewsAt: new Date(RENEWS.getTime()),
           now: new Date(RENEWS.getTime() - days * 86_400_000),
         });

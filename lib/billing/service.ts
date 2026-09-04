@@ -8,10 +8,18 @@ import {
 } from "@/lib/auth/guards";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
-import { filsToAed, prorate, type Proration } from "./proration";
+import { FILS_PER_AED, filsToAed, perDayFils, prorate, type Proration } from "./proration";
+import {
+  advance,
+  anchorDayOf,
+  monthlyValueFils,
+  periodDays,
+  periodPriceAed,
+  type BillingTerm,
+} from "./period";
 import { snapshotOf } from "@/lib/plan/entitlements";
 import { paymentProvider } from "./provider";
-import { aedToFils, recordMovement } from "./mrr";
+import { recordMovement } from "./mrr";
 
 /**
  * Plan changes, cancellation and invoices.
@@ -38,11 +46,18 @@ const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
   locationLimit: true, photoLimit: true, teamSeats: true, rankingMultiplier: true,
   customDomain: true, siteVisitIncluded: true, sortOrder: true,
+  // What a year costs, for pricing a period that is not a month. Not an
+  // entitlement, so `snapshotOf` ignores it — see lib/plan/entitlements.ts.
+  annualMonthsCharged: true,
 } as const;
 
 export interface PlanChangeQuote {
-  fromPlan: { id: string; name: string; monthlyPriceAed: number };
-  toPlan: { id: string; name: string; monthlyPriceAed: number };
+  fromPlan: { id: string; name: string; monthlyPriceAed: number; annualMonthsCharged: number | null };
+  toPlan: { id: string; name: string; monthlyPriceAed: number; annualMonthsCharged: number | null };
+  /** What this subscription is paid on. A plan change never moves it. */
+  term: BillingTerm;
+  /** Start of the period the change lands in, so the caller can price a day of it. */
+  periodStartedAt: Date;
   proration: Proration;
   /** "139.56", already signed. */
   netAed: string;
@@ -72,7 +87,10 @@ export async function quotePlanChange(
   const [business, toPlan] = await Promise.all([
     prisma.business.findUniqueOrThrow({
       where: { id: businessId },
-      select: { plan: { select: PLAN_SELECT }, subscription: { select: { renewsAt: true } } },
+      select: {
+        plan: { select: PLAN_SELECT },
+        subscription: { select: { renewsAt: true, term: true, periodStartedAt: true } },
+      },
     }),
     prisma.plan.findUnique({ where: { id: toPlanId }, select: PLAN_SELECT }),
   ]);
@@ -89,9 +107,24 @@ export async function quotePlanChange(
   const renewsAt =
     business.subscription?.renewsAt ?? new Date(now.getTime() + 30 * 86_400_000);
 
+  /*
+     Periods, not months.
+
+     A plan change keeps the period it happens in — that is the promise the
+     change screen makes and the reason `renewsAt` comes back untouched — so
+     both sides are priced over the *same* period and the same day count. On a
+     monthly subscription that is a month, on an annual one it is a year, and
+     `periodDays` is what tells the arithmetic which.
+  */
+  const term = business.subscription?.term ?? "monthly";
+  const periodStartedAt = business.subscription?.periodStartedAt ?? now;
+  const caps = { monthlyPriceAed: fromPlan.monthlyPriceAed, annualMonthsCharged: fromPlan.annualMonthsCharged };
+  const toCapsRow = { monthlyPriceAed: toPlan.monthlyPriceAed, annualMonthsCharged: toPlan.annualMonthsCharged };
+
   const proration = prorate({
-    fromMonthlyAed: fromPlan.monthlyPriceAed,
-    toMonthlyAed: toPlan.monthlyPriceAed,
+    fromPeriodAed: periodPriceAed(caps, term),
+    toPeriodAed: periodPriceAed(toCapsRow, term),
+    periodDays: periodDays(periodStartedAt, renewsAt),
     renewsAt,
     now,
   });
@@ -99,8 +132,20 @@ export async function quotePlanChange(
   return {
     ok: true,
     quote: {
-      fromPlan: { id: fromPlan.id, name: fromPlan.name, monthlyPriceAed: fromPlan.monthlyPriceAed },
-      toPlan: { id: toPlan.id, name: toPlan.name, monthlyPriceAed: toPlan.monthlyPriceAed },
+      fromPlan: {
+        id: fromPlan.id,
+        name: fromPlan.name,
+        monthlyPriceAed: fromPlan.monthlyPriceAed,
+        annualMonthsCharged: fromPlan.annualMonthsCharged,
+      },
+      toPlan: {
+        id: toPlan.id,
+        name: toPlan.name,
+        monthlyPriceAed: toPlan.monthlyPriceAed,
+        annualMonthsCharged: toPlan.annualMonthsCharged,
+      },
+      term,
+      periodStartedAt,
       proration,
       netAed: filsToAed(proration.netFils),
       providerIsLive: paymentProvider().live,
@@ -174,8 +219,17 @@ export async function changePlan(
       businessId,
       fromPlanId: quote.fromPlan.id,
       toPlanId,
-      beforeFils: aedToFils(quote.fromPlan.monthlyPriceAed),
-      afterFils: aedToFils(quote.toPlan.monthlyPriceAed),
+      /*
+       * The monthly *value*, not the list price.
+       *
+       * An annual subscription pays ten months for twelve, so it is worth ten
+       * twelfths of the list price a month. `mrrNow` values live accounts with
+       * the same function, and `reconcile()` compares the two — deriving a
+       * monthly figure two ways here is how that check starts reporting a
+       * difference nobody can explain.
+       */
+      beforeFils: monthlyValueFils(quote.fromPlan, quote.term),
+      afterFils: monthlyValueFils(quote.toPlan, quote.term),
       occurredAt: now,
       note: `Plan change to ${quote.toPlan.name}`,
     });
@@ -187,6 +241,15 @@ export async function changePlan(
         planId: toPlanId,
         status: "active",
         renewsAt,
+        /*
+         * The first period. Monthly, because a term is chosen on the change
+         * screen and this branch is the seller who had no subscription at all.
+         * The anchor is today's day of the month, which is the day every future
+         * renewal should land on.
+         */
+        term: "monthly",
+        periodStartedAt: now,
+        anchorDay: anchorDayOf(now),
         // A snapshot of what was bought, so a later plan edit cannot rewrite
         // what this seller is entitled to for the period they paid for.
         entitlementSnapshot: frozen,
@@ -222,6 +285,237 @@ export async function changePlan(
                   {
                     kind: "subscription_credit" as const,
                     description: `${quote.fromPlan.name}, ${quote.proration.daysRemaining} unused days`,
+                    amountAed: `-${filsToAed(quote.proration.creditLine.fils)}`,
+                  },
+                ]
+              : []),
+          ],
+        },
+      },
+      select: { id: true },
+    });
+
+    return invoice.id;
+  });
+
+  return { ok: true, invoiceId };
+}
+
+/* ── Changing term — the same plan, paid differently ─────────────────────── */
+
+export interface TermChangeQuote {
+  planName: string;
+  from: BillingTerm;
+  to: BillingTerm;
+  proration: Proration;
+  /** "3141.44", already signed. */
+  netAed: string;
+  /** When the new period ends. A term change **does** move this. */
+  renewsAt: Date;
+  providerIsLive: boolean;
+}
+
+export type TermQuoteResult =
+  | { ok: true; quote: TermChangeQuote }
+  | { ok: false; error: string };
+
+/**
+ * What switching between monthly and annual costs today.
+ *
+ * ## A term change starts a new period
+ *
+ * This is the one rule that keeps the arithmetic explainable, and it is the
+ * opposite of what a plan change does. A plan change keeps the period — the
+ * renewal date does not move, and the screen says so. A term change cannot:
+ * switching to annual in the middle of a month cannot charge "the rest of a
+ * year", because there is no year yet.
+ *
+ * So: the unused days of the current period are credited at that period's own
+ * daily rate, a fresh period opens today, and the new period is charged in
+ * full. The seller pays the difference. Where the credit is the larger — a
+ * seller a fortnight into a paid year moving back to monthly — the net is
+ * negative and lands on the next invoice as a subscription credit. This
+ * platform holds no funds and pays none out.
+ */
+export async function quoteTermChange(
+  actor: Actor,
+  businessId: string,
+  toTerm: BillingTerm,
+  now = new Date(),
+): Promise<TermQuoteResult> {
+  assertCanChangePlan(actor);
+  if (actor.businessId !== businessId) {
+    return { ok: false, error: "You can only change your own plan." };
+  }
+
+  const business = await prisma.business.findUniqueOrThrow({
+    where: { id: businessId },
+    select: {
+      plan: { select: PLAN_SELECT },
+      subscription: {
+        select: { term: true, periodStartedAt: true, renewsAt: true, anchorDay: true },
+      },
+    },
+  });
+
+  const subscription = business.subscription;
+  if (!subscription || !business.plan) {
+    return { ok: false, error: "There is no subscription to change." };
+  }
+  if (subscription.term === toTerm) {
+    return { ok: false, error: "That is how you already pay." };
+  }
+
+  const caps = {
+    monthlyPriceAed: business.plan.monthlyPriceAed,
+    annualMonthsCharged: business.plan.annualMonthsCharged,
+  };
+  if (toTerm === "annual" && caps.annualMonthsCharged === null) {
+    return { ok: false, error: "That plan is not sold by the year." };
+  }
+  if (caps.monthlyPriceAed === 0) {
+    return { ok: false, error: "Free has nothing to pay, so it has no term." };
+  }
+
+  /*
+     Two periods, priced separately.
+
+     `prorate` compares two plans over one period, which is not this shape: here
+     the plan is the same and the period is what changes. So the credit is
+     computed over the period being left and the charge is the whole of the new
+     one — which is `prorate` with the outgoing price and nothing incoming, plus
+     the new period's full price added on.
+  */
+  const leaving = prorate({
+    fromPeriodAed: periodPriceAed(caps, subscription.term),
+    toPeriodAed: 0,
+    periodDays: periodDays(subscription.periodStartedAt, subscription.renewsAt),
+    renewsAt: subscription.renewsAt,
+    now,
+  });
+
+  const anchorDay = anchorDayOf(now);
+  const nextRenewsAt = advance(now, toTerm, anchorDay);
+  const newPeriodFils = Math.round(periodPriceAed(caps, toTerm) * FILS_PER_AED);
+
+  const proration: Proration = {
+    creditLine: leaving.creditLine,
+    chargeLine: {
+      kind: "charge",
+      fils: newPeriodFils,
+      days: periodDays(now, nextRenewsAt),
+      perDayFils: perDayFils(periodPriceAed(caps, toTerm), periodDays(now, nextRenewsAt)),
+    },
+    netFils: newPeriodFils - leaving.creditLine.fils,
+    daysRemaining: leaving.daysRemaining,
+    renewsAt: nextRenewsAt,
+  };
+
+  return {
+    ok: true,
+    quote: {
+      planName: business.plan.name,
+      from: subscription.term,
+      to: toTerm,
+      proration,
+      netAed: filsToAed(proration.netFils),
+      renewsAt: nextRenewsAt,
+      providerIsLive: paymentProvider().live,
+    },
+  };
+}
+
+/**
+ * Move the subscription onto the other term.
+ *
+ * Same shape as `changePlan`: the charge happens outside the transaction and
+ * only a success reaches the switch, so a slow provider does not hold a
+ * transaction open and a failed one does not leave a seller on a period nobody
+ * paid for.
+ *
+ * Writes an MRR movement, and it is the fifth caller of `recordMovement` —
+ * `lib/billing/mrr.ts` lists them. Monthly to annual on the same plan is a
+ * **contraction** of two twelfths, because that is what it is: an annual price
+ * trades recurring revenue for cash and retention, and a revenue screen that
+ * hid the trade would be the wrong screen.
+ */
+export async function changeTerm(
+  actor: Actor,
+  businessId: string,
+  toTerm: BillingTerm,
+  now = new Date(),
+): Promise<ChangeResult> {
+  assertCanChangePlan(actor);
+
+  const quoted = await quoteTermChange(actor, businessId, toTerm, now);
+  if (!quoted.ok) return quoted;
+  const { quote } = quoted;
+
+  const plan = await prisma.plan.findFirstOrThrow({
+    where: { businesses: { some: { id: businessId } } },
+    select: PLAN_SELECT,
+  });
+  const caps = {
+    monthlyPriceAed: plan.monthlyPriceAed,
+    annualMonthsCharged: plan.annualMonthsCharged,
+  };
+
+  const reference = `TERM-${businessId.slice(-6)}-${toTerm}-${now.getTime()}`;
+
+  if (quote.proration.netFils > 0) {
+    const charge = await paymentProvider().charge({
+      businessId,
+      fils: quote.proration.netFils,
+      description: `${quote.planName} plan, ${toTerm === "annual" ? "one year" : "one month"}`,
+      reference,
+    });
+    if (!charge.ok) {
+      return { ok: false, error: charge.error ?? "That payment did not go through." };
+    }
+  }
+
+  const invoiceId = await prisma.$transaction(async (tx) => {
+    await recordMovement(tx, {
+      businessId,
+      fromPlanId: plan.id,
+      toPlanId: plan.id,
+      beforeFils: monthlyValueFils(caps, quote.from),
+      afterFils: monthlyValueFils(caps, quote.to),
+      occurredAt: now,
+      note: toTerm === "annual" ? "Moved to annual" : "Moved to monthly",
+    });
+
+    await tx.subscription.update({
+      where: { businessId },
+      data: {
+        term: toTerm,
+        // A new period, opening today. This is the half a plan change does not do.
+        periodStartedAt: now,
+        renewsAt: quote.renewsAt,
+        anchorDay: anchorDayOf(now),
+      },
+    });
+
+    if (quote.proration.netFils === 0) return null;
+
+    const invoice = await tx.invoice.create({
+      data: {
+        ref: reference,
+        businessId,
+        status: "issued",
+        issuedAt: now,
+        lines: {
+          create: [
+            {
+              kind: "subscription",
+              description: `${quote.planName}, ${toTerm === "annual" ? "one year" : "one month"}`,
+              amountAed: filsToAed(quote.proration.chargeLine.fils),
+            },
+            ...(quote.proration.creditLine.fils > 0
+              ? [
+                  {
+                    kind: "subscription_credit" as const,
+                    description: `${quote.planName}, ${quote.proration.daysRemaining} unused days`,
                     amountAed: `-${filsToAed(quote.proration.creditLine.fils)}`,
                   },
                 ]
@@ -321,7 +615,8 @@ export async function applyEndedCancellations(now = new Date()) {
     select: {
       businessId: true,
       planId: true,
-      plan: { select: { monthlyPriceAed: true } },
+      term: true,
+      plan: { select: { monthlyPriceAed: true, annualMonthsCharged: true } },
     },
   });
 
@@ -342,7 +637,15 @@ export async function applyEndedCancellations(now = new Date()) {
         businessId: subscription.businessId,
         fromPlanId: subscription.planId,
         toPlanId: "free",
-        beforeFils: aedToFils(Number(subscription.plan.monthlyPriceAed)),
+        // What the account was worth a month, which on an annual term is not
+        // the list price. Same function `mrrNow` values it with.
+        beforeFils: monthlyValueFils(
+          {
+            monthlyPriceAed: Number(subscription.plan.monthlyPriceAed),
+            annualMonthsCharged: subscription.plan.annualMonthsCharged,
+          },
+          subscription.term,
+        ),
         afterFils: 0,
         occurredAt: now,
         note: "Cancellation reached its end date",

@@ -26,6 +26,7 @@ export default async function SubscriptionsPage() {
     planName: subscription.planName,
     status: subscription.status,
     monthly: formatAED(subscription.monthlyFils / 100),
+    term: subscription.term,
     renews: subscription.renewsAt.toISOString().slice(0, 10),
     grandfathered: subscription.grandfatheredFields,
   }));

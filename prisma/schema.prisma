@@ -2047,6 +2047,16 @@ model Plan {
   customDomain      Boolean @default(false) @map("custom_domain")
   siteVisitIncluded Boolean @default(false) @map("site_visit_included")
   sortOrder         Int     @default(0) @map("sort_order")
+  /// Months charged for a year. Null means this plan is monthly-only.
+  ///
+  /// A commercial figure, so it lives beside the others rather than as a
+  /// constant somebody has to deploy to change. Null on Free, because a
+  /// discount on nothing is nothing.
+  ///
+  /// A count and not a price. `Plan` has one price column and a second would be
+  /// a second number to keep in step — which is the drift the one column exists
+  /// to prevent, and which `tests/unit/schema-invariants.test.ts` censuses for.
+  annualMonthsCharged Int?  @map("annual_months_charged")
   /// When this plan stopped being sold.
   ///
   /// Board 1l, criterion 12: a withdrawn plan does not appear on `/pricing`,
@@ -2067,6 +2077,19 @@ model Plan {
   @@map("plan")
 }
 
+/// How much of a subscription is paid at once.
+///
+/// A payment fact and never an entitlement one: an annual Pro seller is
+/// entitled to exactly what a monthly Pro seller is, so this must never reach
+/// `snapshotOf` in lib/plan/entitlements.ts. Freezing it would make
+/// `effectiveCaps` treat two sellers on the same plan differently.
+enum BillingTerm {
+  monthly
+  annual
+
+  @@map("billing_term")
+}
+
 model Subscription {
   id                  String       @id @default(cuid())
   businessId          String       @unique @map("business_id")
@@ -2074,6 +2097,19 @@ model Subscription {
   status              SubStatus    @default(active)
   startedAt           DateTime     @default(now()) @map("started_at")
   renewsAt            DateTime     @map("renews_at")
+  term                BillingTerm  @default(monthly)
+  /// Start of the period currently paid for. `renewsAt` is its end.
+  ///
+  /// Proration divides by the real length of this period. Without it the only
+  /// divisor available is a thirty-day default, which on a yearly period
+  /// credits a downgrade about twelve times over.
+  periodStartedAt     DateTime     @default(now()) @map("period_started_at")
+  /// Day of the month the period lands on, taken from the first period.
+  ///
+  /// A subscription starting 31 January renews 28 February and must then return
+  /// to 31 March. Clamping without an anchor walks the date back to the 28th
+  /// and leaves it there for good.
+  anchorDay           Int          @default(1) @map("anchor_day")
   cancelledAt         DateTime?    @map("cancelled_at")
   /// When the cancellation takes effect. Criterion 10: a cancel drops to Free
   /// at period end, never immediately, so the seller keeps what they paid for.
@@ -3087,6 +3123,8 @@ enum NotificationEvent {
   document_expiring
   /// Criterion 8. A buyer whose search found nothing, told when it would not.
   product_alert_matched
+  /// A subscription charged for another period. The first event a cron sends.
+  subscription_renewed
   weekly_digest
 
   @@map("notification_event")
