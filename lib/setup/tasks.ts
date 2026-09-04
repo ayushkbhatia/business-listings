@@ -1,5 +1,6 @@
 import { UAE_TIME_ZONE } from "@/lib/format/locale";
 import type { StrengthItem, WeightKey } from "@/lib/metrics/profile-strength";
+import { PHOTO_MINUTES, PHOTO_TARGET } from "@/lib/photos/targets";
 
 /**
  * Board 8a's four cards, worked out rather than written down.
@@ -57,14 +58,22 @@ export const LEVERS_WITHOUT_TASK: readonly WeightKey[] = ["identity", "filterabl
    when one is finished or how long it takes, and the seller sees both.
 */
 const TARGETS: Record<SetupTaskId, number> = {
-  photos: 6,
+  /*
+     From lib/photos/targets.ts, not typed again here.
+
+     The hub's card and board 8b's own heading state this number to the same
+     seller minutes apart. They disagreed the moment both existed — six here
+     against five there — and a seller told they had finished on one screen and
+     not on the other stops believing both.
+  */
+  photos: PHOTO_TARGET,
   products: 10,
   team: 2,
   visit: 1,
 };
 
 const MINUTES: Record<SetupTaskId, number> = {
-  photos: 10,
+  photos: PHOTO_MINUTES,
   products: 25,
   team: 3,
   visit: 2,

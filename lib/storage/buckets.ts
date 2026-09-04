@@ -19,7 +19,23 @@ export const PUBLIC_BUCKETS = [MEDIA_BUCKET] as const;
 /** No public read at any URL. Reached only through a signed link, briefly. */
 export const PRIVATE_BUCKETS = [DOCUMENT_BUCKET] as const;
 
-export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+/**
+ * One megabyte, for a stored photograph.
+ *
+ * It was eight, which was a ceiling on what a browser could send rather than a
+ * decision about what we keep. At the scale this directory is built for —
+ * tens of thousands of listings, five photographs each, every one of them
+ * fetched by a buyer on a phone — eight megabytes an image is the difference
+ * between a storefront that opens and one that does not.
+ *
+ * **This is not a refusal a seller ever meets.** A photograph off any current
+ * phone is two to eight megabytes, and board 8b's whole premise is that a phone
+ * camera is fine. `lib/images/downscale.ts` decodes, resizes and re-encodes in
+ * the browser before anything is uploaded, so the file that arrives is already
+ * under this. The limit is the fence behind that, and the bucket carries the
+ * same number so a direct write to a signed URL cannot walk around it.
+ */
+export const MAX_IMAGE_BYTES = 1024 * 1024;
 export const MAX_DOCUMENT_BYTES = 16 * 1024 * 1024;
 
 /**
@@ -86,9 +102,15 @@ export function checkImage(type: string, bytes: number): UploadAccepted | Upload
     };
   }
   if (bytes > MAX_IMAGE_BYTES) {
+    /*
+       A seller should not reach this. The browser resizes first, so arriving
+       here means the resize was skipped or bypassed — which is worth a plain
+       sentence rather than a cheerful one, because there is nothing they can
+       do about it from where they are standing.
+    */
     return {
       ok: false,
-      reason: `That photograph is ${megabytes(bytes)} MB. The limit is ${megabytes(MAX_IMAGE_BYTES)} MB.`,
+      reason: `That photograph is ${megabytes(bytes)} MB after resizing. The limit is ${megabytes(MAX_IMAGE_BYTES)} MB.`,
     };
   }
   return { ok: true };

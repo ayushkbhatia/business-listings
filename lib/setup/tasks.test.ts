@@ -9,6 +9,7 @@ import {
   type SetupTaskId,
 } from "./tasks";
 import { profileStrength, strengthItems, type ProfileFacts } from "@/lib/metrics/profile-strength";
+import { PHOTO_MINUTES } from "@/lib/photos/targets";
 
 /**
  * The chips are the reason this module is pure.
@@ -100,10 +101,17 @@ describe("the hero counts what is on the page", () => {
     expect(state.doneCount).toBe(4);
   });
 
-  it("counts all four on a cold start, at 40 minutes", () => {
+  it("counts all four on a cold start, and adds up their own estimates", () => {
+    /*
+       The photographs estimate is read from `lib/photos/targets.ts` rather than
+       written again here — board 8b states it to the same seller minutes later,
+       and a test that hardcoded it would go green while the two screens
+       disagreed. The other three are still literals because nothing else states
+       them yet.
+    */
     const state = board();
     expect(state.openCount).toBe(4);
-    expect(state.openMinutes).toBe(10 + 25 + 3 + 2);
+    expect(state.openMinutes).toBe(PHOTO_MINUTES + 25 + 3 + 2);
   });
 });
 

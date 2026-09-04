@@ -416,3 +416,65 @@ site visit is plan-gated, so putting it in the denominator makes a Free seller's
 uncloseable. What the handoff actually requires — that the per-task percentage chips are
 arithmetic on *this* seller's score rather than constants — is what `lib/setup/tasks.ts`
 computes, from `strengthItems()`.
+
+### Photographs after board 8b
+
+```prisma
+model Media {
+  slotKey   String?  @map("slot_key")   // which suggested slot, or null
+  width     Int?                        // measured in the browser, finally written
+  height    Int?
+  sortOrder Int      @default(0)        // ordered by since handoff 1, written since 8b
+  @@index([businessId, kind, sortOrder])
+}
+```
+
+**The cover is a `kind`, not a flag.** `MediaKind` already had `cover`, and
+`lib/storefront/loader.ts` already picked the hero with
+`media.find(e => e.kind === "storefront" || e.kind === "cover")` — so promoting a
+photograph is a kind change, needs no column, and the storefront learns nothing. "Exactly
+one" is enforced twice: a transaction that demotes before it promotes, and a partial
+unique index (`WHERE kind = 'cover'`) behind it, because two tabs and a retry are enough
+to leave a listing with two covers and a storefront picking whichever row sorted first.
+
+**`slotKey` is a label, never a claim about the picture.** The green line under a tile —
+"Good — shows racking and stock" — is the *slot's* static copy, shown because the seller
+filed the photograph there. Nothing in this build looks at image content. Board 8b §4
+spends half its length on that distinction because one visual treatment hides both, and
+it instructs that `slotHint` and `qualityFlag` stay separate fields with separate
+colours. There is no `qualityFlag` in this phase at all — see below.
+
+**`width`/`height` had existed since handoff 0 and nothing ever wrote them**, so no
+surface could reserve space for an image or refuse one too small to render. The canvas
+that resizes a file has already decoded it, so the numbers were free and were being
+thrown away.
+
+**`sortOrder` was ordered by and never written.** Two production queries have sorted on
+it since handoff 1 while only the seed set it, so every real seller's photographs tied at
+zero and came back in insertion order by accident.
+
+### One megabyte, and why that is not a refusal
+
+`MAX_IMAGE_BYTES` dropped from 8 MB to 1 MB, and the bucket carries the same number. A
+photograph off any current phone is two to eight megabytes, so a limit alone would refuse
+exactly the files board 8b exists to accept — its premise is that a phone camera is fine.
+`lib/images/downscale.ts` decodes, resizes to a 1600px long edge and re-encodes in the
+browser until the file fits, before a byte is uploaded. Both the task screen and the media
+library go through it; they write into the same bucket and cannot disagree about what a
+photograph is.
+
+Browser rather than server for two reasons: uploading eight megabytes over a UAE mobile
+connection so the server can discard seven is the slowest version of this on the
+connection least able to afford it, and `sharp` would be a native dependency and a
+server-side processing step on a path that today never opens the bytes at all.
+
+The one hard refusal is a long edge under 800px — a thumbnail or a logo dragged into the
+wrong place, with nothing to recover.
+
+### The Free photograph cap moved from 5 to 30
+
+`photoLimit` on Free was 5 against a task that asks for 5 and a count that includes the
+logo, so a Free seller with a logo had four slots, could never reach the target, and task
+1 of the setup hub was uncompletable for them. That is the same defect board 8a found in
+the team task. Thirty is board 8b §2's own figure; the migration guards on the old value
+so it corrects the seeded default and never overwrites a number somebody has since chosen.

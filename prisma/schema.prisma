@@ -901,9 +901,31 @@ model Media {
   /// Supabase Storage object path. The bucket is not in Prisma's schema.
   storagePath String    @map("storage_path")
   alt         String?
+  /// Pixels, measured in the browser before upload. Board 8b writes these.
+  ///
+  /// They existed and nothing ever wrote them, which is why the long-edge
+  /// floor could not be enforced: a 300px thumbnail of a logo went up as a
+  /// warehouse photograph and the storefront stretched it. The measurement is
+  /// free — the same canvas that resizes the file to fit under a megabyte has
+  /// already decoded it.
   width       Int?
   height      Int?
+  /// Bytes as stored. Asserted by the client, bounded by the bucket.
   bytes       Int?
+  /// Which suggested slot the seller filed this under. Board 8b.
+  ///
+  /// A prompt, never a required field: "Your team at work", "Delivery
+  /// vehicle". It is what gives a photograph a name on the grid instead of
+  /// `IMG_4471.jpg`, and it is what the green line under a tile describes —
+  /// the **slot's** static copy, not an assessment of the pixels. Nothing in
+  /// this build looks at image content, and the two must not converge: see
+  /// docs/inferred.md, board 8b.
+  slotKey     String?   @map("slot_key")
+  /// Position in the storefront gallery. Drag to reorder on board 8b.
+  ///
+  /// Two production queries have ordered by this since handoff 1 while nothing
+  /// but the seed ever wrote it, so every real seller's photographs tied at
+  /// zero and came back in insertion order by accident.
   sortOrder   Int       @default(0) @map("sort_order")
   createdAt   DateTime  @default(now()) @map("created_at")
 
@@ -920,6 +942,8 @@ model Media {
 
   @@index([businessId])
   @@index([productId])
+  /// The grid, in order. Board 8b reads exactly this.
+  @@index([businessId, kind, sortOrder])
   @@map("media")
 }
 
