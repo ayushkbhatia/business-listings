@@ -40,7 +40,7 @@ export default async function BillingPage() {
       select: {
         trn: true,
         plan: { select: { id: true, name: true, monthlyPriceAed: true } },
-        subscription: { select: { renewsAt: true, cancelledAt: true, endsAt: true } },
+        subscription: { select: { renewsAt: true, cancelledAt: true, endsAt: true, term: true } },
       },
     }),
     getNavBadges(seat.businessId),
@@ -61,11 +61,24 @@ export default async function BillingPage() {
       <div className="flex flex-col gap-5">
         <Panel
           title={t("billing.on_plan", { plan: planName })}
+          /*
+             The term and the date, in words.
+
+             "Renews 4 March 2027" on its own is a puzzle for an annual seller,
+             who has to work out from the distance that they must be paying
+             yearly. Saying which, beside the date, is the difference between a
+             screen that reports and one that answers.
+          */
           description={
             subscription?.endsAt
               ? t("billing.ending", { when: formatDate(subscription.endsAt) })
               : subscription
-                ? t("billing.renews", { when: formatDate(subscription.renewsAt) })
+                ? t(
+                    subscription.term === "annual"
+                      ? "billing.renews_annual"
+                      : "billing.renews_monthly",
+                    { when: formatDate(subscription.renewsAt) },
+                  )
                 : t("billing.free_forever")
           }
           actions={

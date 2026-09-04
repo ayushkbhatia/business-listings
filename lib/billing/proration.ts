@@ -1,6 +1,10 @@
 /**
  * What a plan change costs today.
  *
+ * Periods are not always months. A subscription paid yearly has a period of a
+ * year, and every figure below is per *period* — the price it costs, the days
+ * it runs, and the rate a day of it is worth. `periodDays` says which.
+ *
  * Criterion 10: "plan change prorates correctly and unlocks entitlements within
  * a minute". This is the first half, and it is pure so that the number on the
  * screen and the number on the invoice come from one place.
@@ -28,15 +32,28 @@ export const FILS_PER_AED = 100;
 const MS_PER_DAY = 86_400_000;
 
 export interface ProrationInput {
-  /** Whole dirhams a month, from the Plan row. */
-  fromMonthlyAed: number;
-  toMonthlyAed: number;
-  /** When the current period ends. Unchanged by the switch. */
+  /**
+   * Whole dirhams for the period being left — not necessarily a month.
+   *
+   * An annual subscription pays for a year in one go, so the figure a credit is
+   * computed from is the year's price and the divisor is the year's length.
+   */
+  fromPeriodAed: number;
+  toPeriodAed: number;
+  /**
+   * Real length of the period, from `periodDays()` in `./period`.
+   *
+   * This was optional and defaulted to thirty, and no caller ever passed it.
+   * That default is a trap rather than a convenience: on a yearly period it
+   * credits a downgrade roughly twelve times over, silently, in the seller's
+   * favour on an invoice they keep. Required now, so nobody can assume a month
+   * by omission.
+   */
+  periodDays: number;
+  /** When the current period ends. Unchanged by a plan switch. */
   renewsAt: Date;
   /** When the change happens. */
   now: Date;
-  /** Length of the billing period. Thirty days unless the caller knows better. */
-  periodDays?: number;
 }
 
 export interface ProrationLine {
@@ -70,17 +87,17 @@ export function daysRemaining(now: Date, renewsAt: Date): number {
 }
 
 /** Whole fils a day. Floored, so a rounding error never favours us. */
-export function perDayFils(monthlyAed: number, periodDays: number): number {
+export function perDayFils(periodAed: number, periodDays: number): number {
   if (periodDays <= 0) return 0;
-  return Math.floor((monthlyAed * FILS_PER_AED) / periodDays);
+  return Math.floor((periodAed * FILS_PER_AED) / periodDays);
 }
 
 export function prorate(input: ProrationInput): Proration {
-  const periodDays = input.periodDays ?? 30;
+  const { periodDays } = input;
   const days = daysRemaining(input.now, input.renewsAt);
 
-  const fromPerDay = perDayFils(input.fromMonthlyAed, periodDays);
-  const toPerDay = perDayFils(input.toMonthlyAed, periodDays);
+  const fromPerDay = perDayFils(input.fromPeriodAed, periodDays);
+  const toPerDay = perDayFils(input.toPeriodAed, periodDays);
 
   const creditLine: ProrationLine = {
     kind: "credit",

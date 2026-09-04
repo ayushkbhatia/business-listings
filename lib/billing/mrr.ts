@@ -12,15 +12,26 @@ import { FILS_PER_AED } from "./proration";
  * inside the same transaction, and the waterfall is a `GROUP BY` over events
  * rather than a reconstruction.
  *
- * Four callers, and that is the whole list:
+ * Five callers, and that is the whole list:
  *
  *   1. `changePlan`               — a signup, an upgrade or a downgrade.
- *   2. `applyEndedCancellations`  — a cancellation reaching its end date.
- *   3. `runDunning`               — the D14 drop to Free.
- *   4. the seed                   — backfill, so the screens have a history.
+ *   2. `changeTerm`               — monthly to annual, or back.
+ *   3. `applyEndedCancellations`  — a cancellation reaching its end date.
+ *   4. `runDunning`               — the D14 drop to Free.
+ *   5. the seed                   — backfill, so the screens have a history.
  *
- * A fifth would be a bug: anything else that moves a plan is moving it behind
+ * A sixth would be a bug: anything else that moves a plan is moving it behind
  * the ledger's back, and the reconciliation test would catch it.
+ *
+ * `changeTerm` is the newest and the least obvious. The plan does not move, so
+ * for a long time there was nothing to record — but an annual subscription pays
+ * ten months for twelve and is therefore worth less a month than the same plan
+ * paid monthly. Switching to it is a real contraction, and a waterfall that
+ * omitted it would drift from the live sum by exactly the discount.
+ *
+ * **`runRenewals` is deliberately not on this list.** A renewal changes nothing
+ * about what an account pays a month; `classify` returns null on the zero delta
+ * and `mrr_movement_sign_matches_kind` would refuse the row anyway.
  */
 
 export type MrrKind = "new_business" | "expansion" | "contraction" | "churn" | "reactivation";

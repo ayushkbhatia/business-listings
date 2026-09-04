@@ -90,6 +90,9 @@ async function restore() {
       status: originalSubscription.status,
       startedAt: originalSubscription.startedAt,
       renewsAt: originalSubscription.renewsAt,
+      term: originalSubscription.term,
+      periodStartedAt: originalSubscription.periodStartedAt,
+      anchorDay: originalSubscription.anchorDay,
       cancelledAt: originalSubscription.cancelledAt,
       endsAt: originalSubscription.endsAt,
       providerRef: originalSubscription.providerRef,
@@ -98,6 +101,23 @@ async function restore() {
       dunningAdvancedAt: originalSubscription.dunningAdvancedAt,
       entitlementSnapshot: originalSubscription.entitlementSnapshot ?? Prisma.DbNull,
     };
+
+    /*
+     * Every column, checked rather than remembered.
+     *
+     * The list above is hand-written and a column missing from it is discarded
+     * on restore — which is the drift described at the top of this file, the
+     * one that surfaced as a failure in `revenue.test.ts` and only when the
+     * runner happened to order the two files the other way round. Adding `term`
+     * to the schema and forgetting it here would reproduce it exactly.
+     *
+     * `id` and `businessId` are the two deliberate omissions: the row is keyed
+     * on `businessId` and a re-created subscription takes a new cuid.
+     */
+    const missing = Object.keys(originalSubscription).filter(
+      (key) => key !== "id" && key !== "businessId" && !(key in columns),
+    );
+    expect(missing, `restore() drops ${missing.join(", ")}`).toEqual([]);
     await prisma.subscription.upsert({
       where: { businessId },
       create: { businessId, ...columns },

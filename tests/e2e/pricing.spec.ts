@@ -109,17 +109,41 @@ test.describe("the monthly / annual toggle", () => {
       expect(asNumber(annual[index]!)).toBe(asNumber(label) * 10);
     }
 
-    // The discount as months, never as a percentage.
-    await expect(page.getByRole("radio", { name: /Annual/ })).toContainText("−2 months");
+    /*
+       The discount as months, never as a percentage — and now on the cards
+       rather than on the toggle.
+
+       It moved when `Plan.annualMonthsCharged` replaced the constant: two tiers
+       can carry different discounts, so a single label above all three would
+       have to state one plan's saving over another plan's price. Each card says
+       its own.
+    */
+    await expect(page.getByText("−2 months").first()).toBeVisible();
     await expect(page.locator("main")).not.toContainText(/16(\.\d+)?%/);
   });
 
-  test("says annual cannot be charged yet rather than implying it can", async ({ page }) => {
+  /*
+     The page used to carry a line saying annual could not be charged, gated on
+     `ANNUAL_BILLING_LIVE = false`, and a test here held it in place. Both are
+     gone: `Subscription.term` exists, `runRenewals` charges a period, and the
+     page sells a year. This asserts the retreat rather than the apology — a
+     page still saying sorry while the billing works would be its own untruth.
+  */
+  test("no longer says annual cannot be charged, because it can", async ({ page }) => {
     await page.goto("/pricing");
     await page.getByRole("radio", { name: /Annual/ }).click();
-    // Nothing in the product can take a year's money: `Plan` has one price
-    // column and every mechanism under it is monthly.
-    await expect(page.getByText(/charged monthly today/i)).toBeVisible();
+    await expect(page.locator("main")).not.toContainText(/charged monthly today/i);
+    await expect(page.locator("main")).not.toContainText(/not switched on/i);
+  });
+
+  test("offers no annual price on a plan that is not sold by the year", async ({ page }) => {
+    await page.goto("/pricing");
+    // Free costs nothing either way and has no discount to state, so it keeps
+    // its own label rather than rendering a gap where a price should be.
+    const free = page.locator("section[aria-label='Free']");
+    await page.getByRole("radio", { name: /Annual/ }).click();
+    await expect(free.locator(".font-serif")).toHaveText("Free");
+    await expect(free).not.toContainText("−2 months");
   });
 });
 

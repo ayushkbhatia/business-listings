@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { FILS_PER_AED } from "./proration";
+import { monthlyValueFils } from "./period";
 import type { MrrKind } from "./mrr";
 
 /**
@@ -47,27 +47,52 @@ export interface MrrNow {
 }
 
 export async function mrrNow(): Promise<MrrNow> {
+  /*
+     Grouped by plan **and term**, because the two are worth different amounts.
+
+     This used to be headcount × list monthly price, which was right while every
+     subscription was monthly and silently wrong the moment one was not: an
+     annual account pays ten months for twelve and is therefore worth ten
+     twelfths of the list price a month. `monthlyValueFils` is the one function
+     that knows, and `recordMovement` uses it too — `reconcile()` compares the
+     live sum against the ledger, so the two deriving a monthly figure
+     differently is exactly how that check starts reporting a difference nobody
+     can explain.
+
+     The rows still collapse to one per plan below. Board 4g's table is a plan
+     mix; splitting it by payment schedule would answer a question nobody asked
+     and double every row.
+  */
   const rows = await prisma.subscription.groupBy({
-    by: ["planId"],
+    by: ["planId", "term"],
     where: { status: { in: [...COUNTS_AS_MRR] } },
     _count: { _all: true },
   });
 
   const plans = await prisma.plan.findMany({
-    select: { id: true, name: true, monthlyPriceAed: true, sortOrder: true },
+    select: {
+      id: true,
+      name: true,
+      monthlyPriceAed: true,
+      annualMonthsCharged: true,
+      sortOrder: true,
+    },
     orderBy: { sortOrder: "asc" },
   });
 
   const byPlan = plans
     .map((plan) => {
-      const row = rows.find((candidate) => candidate.planId === plan.id);
-      const accounts = row?._count._all ?? 0;
-      return {
-        planId: plan.id,
-        planName: plan.name,
-        accounts,
-        mrrFils: accounts * Math.round(Number(plan.monthlyPriceAed) * FILS_PER_AED),
+      const caps = {
+        monthlyPriceAed: Number(plan.monthlyPriceAed),
+        annualMonthsCharged: plan.annualMonthsCharged,
       };
+      const mine = rows.filter((candidate) => candidate.planId === plan.id);
+      const accounts = mine.reduce((sum, row) => sum + row._count._all, 0);
+      const mrrFils = mine.reduce(
+        (sum, row) => sum + row._count._all * monthlyValueFils(caps, row.term),
+        0,
+      );
+      return { planId: plan.id, planName: plan.name, accounts, mrrFils };
     })
     // A free plan is not revenue, and a row of zeros on a revenue screen is
     // noise. Plans nobody is on are dropped for the same reason.

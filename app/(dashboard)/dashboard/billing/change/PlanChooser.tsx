@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { Alert } from "@/components/display";
 import { useState, useTransition } from "react";
-import { Button } from "@/components/primitives";
+import { Button, SegmentedControl } from "@/components/primitives";
+import type { BillingTerm } from "@/lib/billing/period";
 import { PlanCard, type PlanFeature } from "@/components/domain";
 import { Panel } from "@/components/structure";
 import { t } from "@/lib/i18n";
@@ -25,6 +26,15 @@ export interface PlanOption {
   name: string;
   monthlyPriceAed: number;
   priceLabel: string;
+  /**
+   * "AED 8,990", or null where the plan is not sold by the year.
+   *
+   * Shown when the seller is on an annual term, because a card reading
+   * "AED 899 a month" to somebody who pays AED 8,990 a year states a figure
+   * they are never invoiced — the same defect the billing panel had before it
+   * learned to say which term it was talking about.
+   */
+  annualPriceLabel: string | null;
   summary?: string;
   features: PlanFeature[];
   recommended: boolean;
@@ -38,6 +48,7 @@ export interface QuoteLine {
 }
 
 export interface ChangeQuote {
+  /** A plan id for a plan change, a term for a term change. */
   planId: string;
   planName: string;
   credit: QuoteLine | null;
@@ -45,24 +56,75 @@ export interface ChangeQuote {
   netAed: string;
   netIsCharge: boolean;
   renewsAt: string;
+  /**
+   * Whether the renewal date moves.
+   *
+   * A plan change keeps the period — that is the promise this screen has always
+   * made, and it is why a change on the 12th does not restart the month. A
+   * **term** change cannot keep it: there is no year to be part-way through, so
+   * it credits the unused days and opens a new period today. Saying "your
+   * renewal date does not move" over a date that just moved is the one thing
+   * this panel must not do.
+   */
+  renewalMoves: boolean;
 }
 
 export interface PlanChooserProps {
   plans: readonly PlanOption[];
   quoteAction: (formData: FormData) => Promise<{ ok: true; quote: ChangeQuote } | { ok: false; error: string }>;
   confirmAction: (formData: FormData) => Promise<BillingResult>;
+  /** How this subscription is paid today. */
+  term: BillingTerm;
+  /** False where the plan is not sold by the year, which hides the control. */
+  offersAnnual: boolean;
+  termQuoteAction: (formData: FormData) => Promise<{ ok: true; quote: ChangeQuote } | { ok: false; error: string }>;
+  termConfirmAction: (formData: FormData) => Promise<BillingResult>;
 }
 
-export function PlanChooser({ plans, quoteAction, confirmAction }: PlanChooserProps) {
+export function PlanChooser({
+  plans,
+  quoteAction,
+  confirmAction,
+  term,
+  offersAnnual,
+  termQuoteAction,
+  termConfirmAction,
+}: PlanChooserProps) {
   const [quote, setQuote] = useState<ChangeQuote | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  /*
+     Which pair of actions the panel below belongs to.
+
+     One quote panel, two things that can produce it. Keeping a single panel is
+     deliberate: a seller comparing a plan change against a term change wants
+     the two costs in the same place and the same shape, and two panels would
+     invite them to read one while the other was stale.
+  */
+  const [asking, setAsking] = useState<"plan" | "term">("plan");
+
+  function askTerm(to: BillingTerm) {
+    const form = new FormData();
+    form.set("term", to);
+    setError(null);
+    setAsking("term");
+    startTransition(async () => {
+      const result = await termQuoteAction(form);
+      if (!result.ok) {
+        setError(result.error);
+        setQuote(null);
+        return;
+      }
+      setQuote(result.quote);
+    });
+  }
 
   function ask(planId: string) {
     const form = new FormData();
     form.set("planId", planId);
     setError(null);
+    setAsking("plan");
     startTransition(async () => {
       const result = await quoteAction(form);
       if (!result.ok) {
@@ -77,9 +139,9 @@ export function PlanChooser({ plans, quoteAction, confirmAction }: PlanChooserPr
   function confirm() {
     if (!quote) return;
     const form = new FormData();
-    form.set("planId", quote.planId);
+    form.set(asking === "term" ? "term" : "planId", quote.planId);
     startTransition(async () => {
-      const result = await confirmAction(form);
+      const result = await (asking === "term" ? termConfirmAction : confirmAction)(form);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -108,6 +170,29 @@ export function PlanChooser({ plans, quoteAction, confirmAction }: PlanChooserPr
         <Alert tone="bad" live="assertive">{error}</Alert>
       )}
 
+      {offersAnnual && (
+        /*
+           The term, above the plans and not among them.
+
+           An annual Pro is the same plan on a different payment schedule, not a
+           fourth card — putting it in the grid would give `Business.planId` two
+           answers and this screen six things to choose between.
+        */
+        <Panel title={t("change.term_heading")} description={t("change.term_note")}>
+          <SegmentedControl<BillingTerm>
+            label={t("change.term_heading")}
+            value={term}
+            onChange={(next) => {
+              if (next !== term) askTerm(next);
+            }}
+            options={[
+              { value: "monthly", label: t("subscription.term.monthly") },
+              { value: "annual", label: t("subscription.term.annual") },
+            ]}
+          />
+        </Panel>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-3">
         {plans.map((plan) => (
           <PlanCard
@@ -115,8 +200,16 @@ export function PlanChooser({ plans, quoteAction, confirmAction }: PlanChooserPr
             name={plan.name}
             headingLevel={2}
             monthlyPriceAed={plan.monthlyPriceAed}
-            priceLabel={plan.priceLabel}
-            periodLabel={t("plan.period")}
+            priceLabel={
+              term === "annual" && plan.annualPriceLabel !== null
+                ? plan.annualPriceLabel
+                : plan.priceLabel
+            }
+            periodLabel={
+              term === "annual" && plan.annualPriceLabel !== null
+                ? t("pricing.per_year")
+                : t("plan.period")
+            }
             {...(plan.summary ? { summary: plan.summary } : {})}
             features={plan.features}
             recommended={plan.recommended}
@@ -168,7 +261,9 @@ export function PlanChooser({ plans, quoteAction, confirmAction }: PlanChooserPr
           </dl>
 
           <p className="mt-3 text-caption text-muted">
-            {t("change.renews_unchanged", { when: quote.renewsAt })}
+            {quote.renewalMoves
+              ? t("change.renews_moved", { when: quote.renewsAt })
+              : t("change.renews_unchanged", { when: quote.renewsAt })}
           </p>
 
           <div className="mt-4">

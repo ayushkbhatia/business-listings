@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { runRenewals } from "@/lib/billing/renewal-job";
 import { runDunning } from "@/lib/billing/dunning-job";
 import { applyEndedCancellations } from "@/lib/billing/service";
 import { pruneAttempts } from "@/lib/auth/attempts";
@@ -24,10 +25,17 @@ import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
  * changes; a cron is not a member of staff. `lib/billing/dunning-job.ts` makes
  * the same argument at more length.
  *
- * Order matters. Dunning reads subscription state and may drop an account to
- * free; ending cancellations then applies the period-end moves. Running the
- * second first would let a subscription that ends today take a dunning step it
- * had already aged out of.
+ * Order matters. Renewals run first: a payment that fails today has to be
+ * marked past due before dunning reads the row, or the D0 retry waits a day and
+ * the whole fourteen-day sequence starts late for everybody. Dunning then reads
+ * subscription state and may drop an account to free; ending cancellations
+ * applies the period-end moves last. Running that second first would let a
+ * subscription that ends today take a dunning step it had already aged out of.
+ *
+ * With no payment gateway configured, `runRenewals` charges nothing, moves no
+ * date and marks nobody past due — it reports `skippedNoProvider` and leaves the
+ * rows alone. Anything else would either advance every renewal without taking
+ * money or march every subscription in staging into dunning inside a fortnight.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -54,6 +62,7 @@ export async function GET(request: NextRequest) {
   const olderThan = new Date(Date.now() - KEEP_ATTEMPTS_MS);
 
   const outcome = await runSteps({
+    renewals: () => runRenewals(),
     dunning: () => runDunning(),
     endedCancellations: () => applyEndedCancellations(),
     async prunedAuthAttempts() {

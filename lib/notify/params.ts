@@ -36,6 +36,14 @@ export const EVENT_PARAMS = {
   quote_received: ["ref", "businessName", "businessSlug", "revision", "enquiryId", "shortLink"],
   quote_revised: ["ref", "businessName", "businessSlug", "revision", "enquiryId", "shortLink"],
   quote_accepted: ["ref", "quoteRef", "amount", "enquiryId", "shortLink"],
+  /*
+     The first event a scheduled job sends.
+
+     No `ref` and no `enquiryId`: a renewal is about a subscription, and
+     `NotificationDelivery` has no column for one — the invoice is the record
+     and `shortLink` is how the seller reaches it.
+  */
+  subscription_renewed: ["planName", "amount", "renewsAt", "shortLink"],
 
   // Declared, seeded, and emitted by nothing yet.
   enquiry_unanswered: [],

@@ -37,6 +37,10 @@ describe("criterion 1 — every figure the page prints exists on the row", () =>
       // than the one being sold.
       expect(Object.keys(plan).sort()).toEqual(
         [
+          // What a year costs, in months. Added when the renewal cycle landed:
+          // the page reads it to decide whether a plan can be sold by the year
+          // at all, and null means it cannot.
+          "annualMonthsCharged",
           "customDomain",
           "enquiriesPerMonth",
           "id",
