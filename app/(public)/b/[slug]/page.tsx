@@ -28,6 +28,9 @@ import { EnquireButton } from "./EnquireDrawer";
 import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
 import { navPages } from "@/lib/storefront/pages";
+import { PageEvent } from "@/components/telemetry";
+import { ShortlistButton, shortlistLabels, toggleShortlistAction } from "@/app/(public)/_shortlist";
+import { isShortlisted } from "@/lib/shortlist/service";
 
 export const revalidate = 300;
 
@@ -110,10 +113,36 @@ export default async function StorefrontPage({ params }: Params) {
   const movedTo = await absorbedInto(slug);
   if (movedTo) permanentRedirect(`/b/${movedTo}`);
 
-  return business.claimStatus === "unclaimed" ? (
-    <UnclaimedStorefront business={business} />
-  ) : (
-    <ClaimedStorefront business={business} />
+  return (
+    <>
+      {/*
+         The view, counted from the browser and not from this render.
+
+         Two reasons, and both are about what the word "view" is allowed to
+         mean. This route declares `revalidate = 300`, so one render can be
+         served to many readers — a render is not a visit, and counting here
+         would report a busy storefront as one hit every five minutes. And this
+         directory is built to be crawled: a crawler that does not run
+         JavaScript is not a buyer, and a seller's "views since you went live"
+         made mostly of Googlebot is a number they would be right to stop
+         believing.
+
+         `listing_viewed` is the one event with no session behind it. It
+         increments `listing_view_day` and writes no `product_event` row, so an
+         anonymous visitor is counted and never followed.
+
+         Mounted above the branch rather than inside the claimed composition,
+         because an unclaimed listing is looked at too, and that count is the
+         history a supplier inherits on the day they claim it. `recordListingView`
+         will not count a draft or a suspended listing whatever is posted at it.
+      */}
+      <PageEvent name="listing_viewed" businessId={business.id} />
+      {business.claimStatus === "unclaimed" ? (
+        <UnclaimedStorefront business={business} />
+      ) : (
+        <ClaimedStorefront business={business} />
+      )}
+    </>
   );
 }
 
@@ -124,10 +153,20 @@ type Business = NonNullable<Awaited<ReturnType<typeof getBusinessBySlug>>>;
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function ClaimedStorefront({ business }: { business: Business }) {
-  // Only to decide whether the composer asks for a phone number. A buyer with
-  // no account can still send one — that is the point of the provisional
-  // identity — they just have to say where the quotes should go.
+  // Decides whether the composer asks for a phone number, and now also who the
+  // save control is answering for. A buyer with no account can still send an
+  // enquiry — that is the point of the provisional identity — they just have to
+  // say where the quotes should go.
   const actor = await getActor();
+
+  /*
+     Only asked where there is somebody to ask about. A shortlist is keyed on a
+     user and there is no anonymous one — `lib/shortlist/service.ts` says why,
+     and a query with no user to key it on would be a round trip that could only
+     ever answer false.
+  */
+  const saved = actor ? await isShortlisted(actor.id, business.id) : false;
+
   const plan = await storefrontPlan({
     id: business.id,
     slug: business.slug,
@@ -189,6 +228,47 @@ async function ClaimedStorefront({ business }: { business: Business }) {
   );
 
   /*
+     Save, beside the quote and the two channels.
+
+     ## What the cache does to `saved`
+
+     This file declares `revalidate = 300`, and Cache Components is off, so the
+     previous caching model applies: the page is cacheable for five minutes
+     unless something in the render reads a request-time API. `getActor()` reads
+     the request's cookies, so today every render of this route is dynamic and
+     `saved` is this buyer's own answer.
+
+     That is a property of the current composition, not a guarantee. Anything
+     that puts the page back in the cache — a `force-static` above, an
+     `unstable_cache` wrapped round the actor, a CDN rule in front — would serve
+     one buyer's "Saved" to the next reader, who would then press a button that
+     says it is removing something they never saved.
+
+     Which is why signed-out is decided twice and not once. The prop is the fast
+     answer and the refusal is the true one: `toggleShortlistAction` resolves the
+     actor server-side and refuses `signed_out`, and the button turns itself into
+     the sign-in link on that refusal rather than on this prop. A cached page can
+     be wrong about who is reading it; it cannot make the write succeed.
+
+     `shortlistLabels` is handed the path to come back to and encodes it itself.
+     `/b/<slug>` is a same-origin absolute path, which is the shape `isSafeNext`
+     in lib/auth/flow.ts accepts and the sign-in screen will honour.
+
+     No save control on the mobile bar. That bar is WhatsApp · Call · Enquire at
+     44px each and the slot is row-only — see `ContactCard`. Adding a fourth
+     control there is a layout decision, and it is in the follow-ups.
+  */
+  const saveAction = (
+    <ShortlistButton
+      businessId={business.id}
+      saved={saved}
+      signedIn={Boolean(actor)}
+      toggle={toggleShortlistAction}
+      labels={shortlistLabels(`/b/${business.slug}`)}
+    />
+  );
+
+  /*
      The same actions twice, at opposite breakpoints, hidden with `display`.
 
      Exactly one is in the accessibility tree at any width — `visibility` or
@@ -237,6 +317,7 @@ async function ClaimedStorefront({ business }: { business: Business }) {
           }}
         />
       }
+      saveAction={saveAction}
     />
   );
 

@@ -28,6 +28,7 @@ import {
 } from "@/components/display";
 import { formatAED, formatCount, formatDecimal, formatDuration, formatPercent, formatRating } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { STRONG_ENOUGH } from "@/lib/metrics/profile-strength";
 import { RADIUS_DEFAULT, RADIUS_MAX, RADIUS_MIN } from "@/lib/onboarding/branch-fields";
 import { Frame, Section, Specimen, States } from "../_kit";
 
@@ -331,7 +332,11 @@ export function Display() {
         </States>
       </Section>
 
-      <Section id="progress-bar" title="ProgressBar" note="the value is always text as well as a bar">
+      <Section
+        id="progress-bar"
+        title="ProgressBar"
+        note="the value is always text as well as a bar, and so is the target"
+      >
         <States label="states" stack>
           <div className="w-80">
             <ProgressBar
@@ -354,6 +359,35 @@ export function Display() {
           </div>
           <div className="w-80">
             <ProgressBar label={t("display.profile_strength")} value={100} tone="ok" valueLabel="100%" />
+          </div>
+        </States>
+
+        {/*
+          The marker is the same rule on both bars; only the value moves. Shown
+          as a pair because the failure it guards against is invisible on one:
+          a rule that reads on the bare track and vanishes under the fill. The
+          line underneath is not a caption on the story — it is `targetLabel`,
+          and the reason a `target` cannot be passed without one.
+        */}
+        <States label="target" stack>
+          <div className="w-80">
+            <ProgressBar
+              label={t("display.profile_strength")}
+              value={62}
+              valueLabel={formatPercent(0.62)}
+              target={STRONG_ENOUGH}
+              targetLabel={t("setup.lift_mechanism", { threshold: STRONG_ENOUGH })}
+            />
+          </div>
+          <div className="w-80">
+            <ProgressBar
+              label={t("display.profile_strength")}
+              value={93}
+              tone="ok"
+              valueLabel={formatPercent(0.93)}
+              target={STRONG_ENOUGH}
+              targetLabel={t("setup.lift_mechanism", { threshold: STRONG_ENOUGH })}
+            />
           </div>
         </States>
       </Section>

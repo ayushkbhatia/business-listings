@@ -62,45 +62,48 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  business            Business?              @relation("BusinessTeam", fields: [businessId], references: [id], onDelete: SetNull)
-  buyerCompanyId      String?                @map("buyer_company_id")
-  buyerCompany        BuyerCompany?          @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
-  enquiries           Enquiry[]
-  reviews             Review[]
-  auditEvents         AuditEvent[]
-  reportsFiled        SupplierReport[]       @relation("ReportReporter")
-  visitsMade          Business[]             @relation("BusinessVisitedBy")
-  messages            Message[]
-  contactReveals      ContactReveal[]
-  savedSearches       SavedSearch[]
-  productAlerts       ProductAlert[]
-  reviewRequests      ReviewRequest[]
-  importRuns          ImportRun[]
-  changeRequests      ListingChangeRequest[] @relation("ChangeRequestActor")
-  changesDecided      ListingChangeRequest[] @relation("ChangeRequestDecider")
-  invitesSent         TeamInvite[]           @relation("InviteSender")
-  claimsMade          ClaimSubmission[]      @relation("ClaimClaimant")
-  onboardingDrafts    OnboardingDraft[]      @relation("OnboardingDraftUser")
-  categoryActivityCleared BusinessCategory[]  @relation("CategoryActivityClearedBy")
-  visitsRequested     SiteVisitRequest[]     @relation("VisitRequester")
-  conflictsResolved   ClaimConflict[]        @relation("ConflictResolvedBy")
-  licenceImports      LicenceImportRun[]     @relation("IngestActor")
-  merges              BusinessMerge[]        @relation("MergeActor")
-  visitReports        SiteVisitReport[]      @relation("VisitReporter")
-  pdplSubjectOf       PdplRequest[]          @relation("PdplSubject")
-  pdplClosed          PdplRequest[]          @relation("PdplClosedBy")
-  apiKeys             ApiKey[]               @relation("ApiKeyCreator")
-  viewAsSessions      ViewAsSession[]        @relation("ViewAsStaff")
-  callsMade           CallOutcome[]          @relation("CallStaff")
-  candidatesDismissed MergeCandidate[]       @relation("CandidateDismissedBy")
-  proposalsDecided    SpecFieldProposal[]    @relation("ProposalDecidedBy")
-  templateVersions    TemplateVersion[]
-  boostsCreated       ListingBoost[]
-  settingsWritten     PlatformSetting[]      @relation("SettingWriter")
+  business                Business?                @relation("BusinessTeam", fields: [businessId], references: [id], onDelete: SetNull)
+  buyerCompanyId          String?                  @map("buyer_company_id")
+  buyerCompany            BuyerCompany?            @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
+  enquiries               Enquiry[]
+  reviews                 Review[]
+  auditEvents             AuditEvent[]
+  reportsFiled            SupplierReport[]         @relation("ReportReporter")
+  visitsMade              Business[]               @relation("BusinessVisitedBy")
+  messages                Message[]
+  contactReveals          ContactReveal[]
+  savedSearches           SavedSearch[]
+  shortlist               Shortlist[]              @relation("BuyerShortlist")
+  productEvents           ProductEvent[]           @relation("EventActor")
+  catalogueImports        CatalogueImportRequest[] @relation("CatalogueImportRequester")
+  productAlerts           ProductAlert[]
+  reviewRequests          ReviewRequest[]
+  importRuns              ImportRun[]
+  changeRequests          ListingChangeRequest[]   @relation("ChangeRequestActor")
+  changesDecided          ListingChangeRequest[]   @relation("ChangeRequestDecider")
+  invitesSent             TeamInvite[]             @relation("InviteSender")
+  claimsMade              ClaimSubmission[]        @relation("ClaimClaimant")
+  onboardingDrafts        OnboardingDraft[]        @relation("OnboardingDraftUser")
+  categoryActivityCleared BusinessCategory[]       @relation("CategoryActivityClearedBy")
+  visitsRequested         SiteVisitRequest[]       @relation("VisitRequester")
+  conflictsResolved       ClaimConflict[]          @relation("ConflictResolvedBy")
+  licenceImports          LicenceImportRun[]       @relation("IngestActor")
+  merges                  BusinessMerge[]          @relation("MergeActor")
+  visitReports            SiteVisitReport[]        @relation("VisitReporter")
+  pdplSubjectOf           PdplRequest[]            @relation("PdplSubject")
+  pdplClosed              PdplRequest[]            @relation("PdplClosedBy")
+  apiKeys                 ApiKey[]                 @relation("ApiKeyCreator")
+  viewAsSessions          ViewAsSession[]          @relation("ViewAsStaff")
+  callsMade               CallOutcome[]            @relation("CallStaff")
+  candidatesDismissed     MergeCandidate[]         @relation("CandidateDismissedBy")
+  proposalsDecided        SpecFieldProposal[]      @relation("ProposalDecidedBy")
+  templateVersions        TemplateVersion[]
+  boostsCreated           ListingBoost[]
+  settingsWritten         PlatformSetting[]        @relation("SettingWriter")
+  askedQuestions          ProductQuestion[]
 
   @@index([businessId])
   @@map("user")
-  askedQuestions ProductQuestion[]
 }
 
 /// What was attempted. Kept separate because the thresholds differ: asking for
@@ -565,7 +568,7 @@ model Business {
   reviewCount          Int       @default(0) @map("review_count")
   derivedAt            DateTime? @map("derived_at")
 
-  primaryCategory        Category                @relation("BusinessPrimaryCategory", fields: [primaryCategoryId], references: [id], onDelete: Restrict)
+  primaryCategory        Category                 @relation("BusinessPrimaryCategory", fields: [primaryCategoryId], references: [id], onDelete: Restrict)
   /// Declared so Prisma knows the constraint the database already has.
   ///
   /// `sectorId` stays a denormalised pointer and is still read directly — see
@@ -574,14 +577,14 @@ model Business {
   /// did on every run because a constraint the datamodel cannot see is drift to
   /// remove. Restrict, matching the database: a sector with listings standing
   /// on it should not be deletable.
-  sector                 Category?               @relation("BusinessSector", fields: [sectorId], references: [id], onDelete: Restrict)
+  sector                 Category?                @relation("BusinessSector", fields: [sectorId], references: [id], onDelete: Restrict)
   categories             BusinessCategory[]
-  plan                   Plan?                   @relation(fields: [planId], references: [id], onDelete: SetNull)
-  visitedByStaff         User?                   @relation("BusinessVisitedBy", fields: [visitedByStaffId], references: [id], onDelete: SetNull)
-  team                   User[]                  @relation("BusinessTeam")
+  plan                   Plan?                    @relation(fields: [planId], references: [id], onDelete: SetNull)
+  visitedByStaff         User?                    @relation("BusinessVisitedBy", fields: [visitedByStaffId], references: [id], onDelete: SetNull)
+  team                   User[]                   @relation("BusinessTeam")
   locations              Location[]
   products               Product[]
-  productQuestions ProductQuestion[]
+  productQuestions       ProductQuestion[]
   media                  Media[]
   documents              Document[]
   sellerTemplates        SellerTemplate[]
@@ -591,27 +594,31 @@ model Business {
   importMappings         ImportMapping[]
   changeRequests         ListingChangeRequest[]
   teamInvites            TeamInvite[]
+  shortlistedBy          Shortlist[]
+  viewDays               ListingViewDay[]
+  productEvents          ProductEvent[]
+  catalogueImports       CatalogueImportRequest[]
   claimSubmissions       ClaimSubmission[]
   visitRequests          SiteVisitRequest[]
-  licenceImportRun       LicenceImportRun?       @relation(fields: [licenceImportRunId], references: [id], onDelete: SetNull)
-  mergedInto             Business?               @relation("BusinessMergedInto", fields: [mergedIntoId], references: [id], onDelete: SetNull)
-  absorbed               Business[]              @relation("BusinessMergedInto")
-  mergeCandidatesKeep    MergeCandidate[]        @relation("CandidateKeep")
-  mergeCandidatesAbsorb  MergeCandidate[]        @relation("CandidateAbsorb")
-  mergesKept             BusinessMerge[]         @relation("MergeKeep")
-  mergesAbsorbed         BusinessMerge[]         @relation("MergeAbsorb")
+  licenceImportRun       LicenceImportRun?        @relation(fields: [licenceImportRunId], references: [id], onDelete: SetNull)
+  mergedInto             Business?                @relation("BusinessMergedInto", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  absorbed               Business[]               @relation("BusinessMergedInto")
+  mergeCandidatesKeep    MergeCandidate[]         @relation("CandidateKeep")
+  mergeCandidatesAbsorb  MergeCandidate[]         @relation("CandidateAbsorb")
+  mergesKept             BusinessMerge[]          @relation("MergeKeep")
+  mergesAbsorbed         BusinessMerge[]          @relation("MergeAbsorb")
   stagedListings         StagedListing[]
   visitReports           SiteVisitReport[]
   viewAsSessions         ViewAsSession[]
   callOutcomes           CallOutcome[]
-  claimConflicts         ClaimConflict[]         @relation("ConflictBusiness")
-  onboardingDrafts       OnboardingDraft[]       @relation("OnboardingDraftBusiness")
-  producedByConflicts    ClaimConflict[]         @relation("ConflictProduced")
+  claimConflicts         ClaimConflict[]          @relation("ConflictBusiness")
+  onboardingDrafts       OnboardingDraft[]        @relation("OnboardingDraftBusiness")
+  producedByConflicts    ClaimConflict[]          @relation("ConflictProduced")
   placementWaitlist      PlacementWaitlist[]
   quotes                 Quote[]
   messages               Message[]
   reviews                Review[]
-  reports                SupplierReport[]        @relation("ReportSubject")
+  reports                SupplierReport[]         @relation("ReportSubject")
   subscription           Subscription?
   invoices               Invoice[]
   mrrMovements           MrrMovement[]
@@ -716,12 +723,12 @@ model Location {
   /// A CHECK refuses a half-set window and a reason-less closure — the strip
   /// says what is wrong and when it ends, and it can only do that if both are
   /// there.
-  closedFrom      DateTime?    @map("closed_from")
-  closedUntil     DateTime?    @map("closed_until")
-  closureReason   String?      @map("closure_reason")
+  closedFrom    DateTime? @map("closed_from")
+  closedUntil   DateTime? @map("closed_until")
+  closureReason String?   @map("closure_reason")
 
-  published       Boolean      @default(false)
-  createdAt       DateTime     @default(now()) @map("created_at")
+  published Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
   /// When this branch last changed, for the "Saved 20 seconds ago" line the
   /// onboarding step and the dashboard both carry.
   ///
@@ -729,7 +736,7 @@ model Location {
   /// autosaves a single field of a single branch and the header reports that
   /// save. A business-level stamp would move when any branch changed and would
   /// report the wrong branch's work as this one's.
-  updatedAt       DateTime     @updatedAt @map("updated_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   business            Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   area                Area            @relation(fields: [areaId], references: [id], onDelete: Restrict)
@@ -765,14 +772,14 @@ enum ProductStatus {
 }
 
 model Product {
-  id           String        @id @default(cuid())
-  businessId   String        @map("business_id")
-  name         String
-  slug         String
-  sku          String?
-  categoryId   String        @map("category_id")
-  availability Availability
-  stockQty     Int?          @map("stock_qty")
+  id             String        @id @default(cuid())
+  businessId     String        @map("business_id")
+  name           String
+  slug           String
+  sku            String?
+  categoryId     String        @map("category_id")
+  availability   Availability
+  stockQty       Int?          @map("stock_qty")
   /// When the stock number was last stated, not when the row last changed.
   ///
   /// Board 1e shows a quantity only while it is under thirty days old, and
@@ -782,35 +789,35 @@ model Product {
   /// "240 units" from March is a promise the seller never made.
   ///
   /// Null means the count has never been dated, which is read as stale.
-  stockUpdatedAt DateTime?   @map("stock_updated_at")
-  leadTimeDays Int?          @map("lead_time_days")
-  minOrderQty  Int?          @map("min_order_qty")
+  stockUpdatedAt DateTime?     @map("stock_updated_at")
+  leadTimeDays   Int?          @map("lead_time_days")
+  minOrderQty    Int?          @map("min_order_qty")
   /// Keyed by SpecField id. Normalised size tokens land in searchText so a
   /// DN100 query finds a product the seller typed as 4".
-  specValues   Json          @default("{}") @map("spec_values")
+  specValues     Json          @default("{}") @map("spec_values")
   /// Denormalised match surface: name, sku, spec values and every size synonym.
-  searchText   String?       @map("search_text")
-  description  String?
-  status       ProductStatus @default(draft)
+  searchText     String?       @map("search_text")
+  description    String?
+  status         ProductStatus @default(draft)
   /// Which import created this row, so a run can be undone without guessing.
-  importRunId  String?       @map("import_run_id")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  updatedAt    DateTime      @updatedAt @map("updated_at")
+  importRunId    String?       @map("import_run_id")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
 
   // NO price. NO currency. NO tier pricing. Prices live on quote_line only.
   // The CSV importer is the widest path into this table and refuses a price
   // column outright — see lib/import/columns.ts.
 
-  business     Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  importRun    ImportRun?     @relation(fields: [importRunId], references: [id], onDelete: SetNull)
-  category     Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  importRun    ImportRun?        @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+  category     Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   media        Media[]
   documents    Document[]
   quoteLines   QuoteLine[]
   enquiryLines EnquiryLine[]
   alerts       ProductAlert[]
   /// Buyers waiting for this one to come back into stock.
-  watches      ProductAlert[] @relation("ProductWatch")
+  watches      ProductAlert[]    @relation("ProductWatch")
   questions    ProductQuestion[]
 
   @@unique([businessId, slug])
@@ -948,29 +955,30 @@ model Document {
   ///
   /// Defaults to false. A document becomes public because somebody said so,
   /// never because it was uploaded.
-  isPublic    Boolean      @default(false) @map("is_public")
+  isPublic    Boolean   @default(false) @map("is_public")
   /// What a buyer would call it — "ISO 9001:2015", not "scan_0043_final.pdf".
   ///
   /// `filename` is whatever came off the seller's desktop and is not fit to
   /// render. Null means the row has never been prepared for the public list,
   /// which is another reason it is not on it.
-  displayName String?      @map("display_name")
+  displayName String?   @map("display_name")
   /// Validity, rendered to the month.
   ///
   /// The board asks for the month rather than the day on purpose: a certificate
   /// that expires "March 2027" is the fact a buyer needs, and a precise date
   /// invites a page that looks wrong for the twenty-four hours around it. Null
   /// for documents that do not expire.
-  validUntil  DateTime?    @map("valid_until")
+  validUntil  DateTime? @map("valid_until")
 
   businessId String? @map("business_id")
   productId  String? @map("product_id")
   enquiryId  String? @map("enquiry_id")
 
-  business Business?         @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  product  Product?          @relation(fields: [productId], references: [id], onDelete: Cascade)
-  enquiry  Enquiry?          @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
-  claims   ClaimSubmission[]
+  business         Business?                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  product          Product?                 @relation(fields: [productId], references: [id], onDelete: Cascade)
+  enquiry          Enquiry?                 @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  claims           ClaimSubmission[]
+  catalogueImports CatalogueImportRequest[]
 
   @@index([businessId])
   @@index([productId])
@@ -1017,16 +1025,16 @@ enum QuoteStatus {
 }
 
 model Enquiry {
-  id                          String        @id @default(cuid())
+  id             String        @id @default(cuid())
   /// ENQ-8841
-  ref                         String        @unique
-  buyerId                     String        @map("buyer_id") @db.Uuid
-  buyerCompanyId              String?       @map("buyer_company_id")
-  requirement                 String
-  deliverToArea               String?       @map("deliver_to_area")
-  neededBy                    DateTime?     @map("needed_by")
-  termsWanted                 PaymentTerms? @map("terms_wanted")
-  closesAt                    DateTime      @map("closes_at")
+  ref            String        @unique
+  buyerId        String        @map("buyer_id") @db.Uuid
+  buyerCompanyId String?       @map("buyer_company_id")
+  requirement    String
+  deliverToArea  String?       @map("deliver_to_area")
+  neededBy       DateTime?     @map("needed_by")
+  termsWanted    PaymentTerms? @map("terms_wanted")
+  closesAt       DateTime      @map("closes_at")
 
   /// Board 1i: editing a requirement creates a revision, never a silent edit.
   ///
@@ -1037,12 +1045,12 @@ model Enquiry {
   ///
   /// The buyer sees `REVISED 2 SEP · R2` under the header. `revisedAt` is null
   /// on R1, which is every enquiry that was sent once and left alone.
-  revision                    Int           @default(1)
-  revisedAt                   DateTime?     @map("revised_at")
+  revision                    Int       @default(1)
+  revisedAt                   DateTime? @map("revised_at")
   /// Set only on acceptance. Releases contact to exactly one business.
-  contactReleasedToBusinessId String?       @map("contact_released_to_business_id")
-  contactReleasedAt           DateTime?     @map("contact_released_at")
-  createdAt                   DateTime      @default(now()) @map("created_at")
+  contactReleasedToBusinessId String?   @map("contact_released_to_business_id")
+  contactReleasedAt           DateTime? @map("contact_released_at")
+  createdAt                   DateTime  @default(now()) @map("created_at")
 
   /// Criterion 9. Where this enquiry came from, if the buyer arrived through a
   /// campaign or a tagged link.
@@ -1351,8 +1359,8 @@ model ClaimSubmission {
   /// Not `User.fullName`: the account holder and the person named on the
   /// document are frequently different people, and the reviewer is matching the
   /// second one.
-  claimantName     String?       @map("claimant_name")
-  claimantRole     ClaimantRole? @map("claimant_role")
+  claimantName String?       @map("claimant_name")
+  claimantRole ClaimantRole? @map("claimant_role")
 
   /// What the claimant submitted, after any correction.
   ///
@@ -1930,32 +1938,32 @@ model EnquiryRecipient {
 }
 
 model Quote {
-  id           String      @id @default(cuid())
+  id              String      @id @default(cuid())
   /// QT-8841-R2
-  ref          String      @unique
-  enquiryId    String      @map("enquiry_id")
-  businessId   String      @map("business_id")
-  revision     Int         @default(1)
-  validityDays Int         @default(14) @map("validity_days")
-  note         String?
-  status       QuoteStatus @default(draft)
-  lostReason   String?     @map("lost_reason")
-  sentAt       DateTime?   @map("sent_at")
-  readAt       DateTime?   @map("read_at")
-  acceptedAt   DateTime?   @map("accepted_at")
+  ref             String      @unique
+  enquiryId       String      @map("enquiry_id")
+  businessId      String      @map("business_id")
+  revision        Int         @default(1)
+  validityDays    Int         @default(14) @map("validity_days")
+  note            String?
+  status          QuoteStatus @default(draft)
+  lostReason      String?     @map("lost_reason")
+  sentAt          DateTime?   @map("sent_at")
+  readAt          DateTime?   @map("read_at")
+  acceptedAt      DateTime?   @map("accepted_at")
   /// sentAt + validityDays, materialised so the expiry job and the buyer's
   /// countdown read the same number.
-  expiresAt    DateTime?   @map("expires_at")
+  expiresAt       DateTime?   @map("expires_at")
   /// Set when the buyer revised the requirement after this quote was sent.
   ///
   /// Not a status, because the quote is still live and still acceptable — the
   /// buyer may prefer it to anything the revision brings back. It records that
   /// the thing quoted has changed since, which board 1i renders as
   /// `QUOTED R1 · REQUIREMENT CHANGED SINCE`.
-  supersededAt DateTime?   @map("superseded_at")
+  supersededAt    DateTime?   @map("superseded_at")
   /// The enquiry revision this quote was priced against.
-  againstRevision Int      @default(1) @map("against_revision")
-  createdAt    DateTime    @default(now()) @map("created_at")
+  againstRevision Int         @default(1) @map("against_revision")
+  createdAt       DateTime    @default(now()) @map("created_at")
 
   enquiry  Enquiry     @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   business Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -2166,14 +2174,14 @@ enum InvoiceStatus {
 }
 
 model Plan {
-  id                String  @id
-  name              String
-  monthlyPriceAed   Int     @map("monthly_price_aed")
+  id                  String    @id
+  name                String
+  monthlyPriceAed     Int       @map("monthly_price_aed")
   /// Null means unlimited.
-  enquiriesPerMonth Int?    @map("enquiries_per_month")
-  productLimit      Int?    @map("product_limit")
-  locationLimit     Int?    @map("location_limit")
-  photoLimit        Int?    @map("photo_limit")
+  enquiriesPerMonth   Int?      @map("enquiries_per_month")
+  productLimit        Int?      @map("product_limit")
+  locationLimit       Int?      @map("location_limit")
+  photoLimit          Int?      @map("photo_limit")
   /// How many categories a listing may sit in, **including the primary one**.
   ///
   /// Board 2c counts this two ways on one screen and they are both right: the
@@ -2186,12 +2194,12 @@ model Plan {
   /// fan-out matches on, so a seller in one category receives one category's
   /// demand. That is what makes the ladder mean something rather than being a
   /// paywall detail.
-  categoryLimit     Int?    @map("category_limit")
-  teamSeats         Int     @map("team_seats")
-  rankingMultiplier Float   @default(1) @map("ranking_multiplier")
-  customDomain      Boolean @default(false) @map("custom_domain")
-  siteVisitIncluded Boolean @default(false) @map("site_visit_included")
-  sortOrder         Int     @default(0) @map("sort_order")
+  categoryLimit       Int?      @map("category_limit")
+  teamSeats           Int       @map("team_seats")
+  rankingMultiplier   Float     @default(1) @map("ranking_multiplier")
+  customDomain        Boolean   @default(false) @map("custom_domain")
+  siteVisitIncluded   Boolean   @default(false) @map("site_visit_included")
+  sortOrder           Int       @default(0) @map("sort_order")
   /// Months charged for a year. Null means this plan is monthly-only.
   ///
   /// A commercial figure, so it lives beside the others rather than as a
@@ -2201,7 +2209,7 @@ model Plan {
   /// A count and not a price. `Plan` has one price column and a second would be
   /// a second number to keep in step — which is the drift the one column exists
   /// to prevent, and which `tests/unit/schema-invariants.test.ts` censuses for.
-  annualMonthsCharged Int?  @map("annual_months_charged")
+  annualMonthsCharged Int?      @map("annual_months_charged")
   /// When this plan stopped being sold.
   ///
   /// Board 1l, criterion 12: a withdrawn plan does not appear on `/pricing`,
@@ -2212,7 +2220,7 @@ model Plan {
   ///
   /// A date rather than a boolean because "since when" is the question asked
   /// of a plan nobody can buy any more, and a flag cannot answer it.
-  withdrawnAt       DateTime? @map("withdrawn_at")
+  withdrawnAt         DateTime? @map("withdrawn_at")
 
   // NO commissionRate. NO transactionFee.
 
@@ -2535,6 +2543,163 @@ model ContactReveal {
   @@map("contact_reveal")
 }
 
+/// A buyer keeping a supplier for later. Board 8a's right rail counts these.
+///
+/// Deliberately not a `SavedSearch`: that is a query, and a query cannot answer
+/// "four buyers kept you". A shortlist row names one buyer and one supplier, so
+/// the count on the seller's side is a fact rather than an inference — which is
+/// the whole reason it exists, since the alternative on offer was a DISTINCT
+/// over `ContactReveal.actorId`, three quarters of which is null by design.
+///
+/// Signed-in only. There is no anonymous shortlist and no cookie behind one:
+/// a list that lives in a browser is lost on the next device, and a buyer whose
+/// shortlist evaporates trusts the list less than they trusted their memory.
+model Shortlist {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id") @db.Uuid
+  businessId String   @map("business_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user     User     @relation("BuyerShortlist", fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// One row per buyer per supplier. Saving twice is saving once.
+  @@unique([userId, businessId])
+  /// The seller's count, and the buyer's list.
+  @@index([businessId, createdAt])
+  @@index([userId, createdAt])
+  @@map("shortlist")
+}
+
+/// Storefront views, rolled up to the day.
+///
+/// A row per view was the other option and it is the wrong one for a directory:
+/// this product is built to be crawled, most of the traffic is not a person,
+/// and 41,000 listings times a crawl is a table nobody can afford to keep. The
+/// grain is the smallest one any surface asks a question at — board 8a wants
+/// "since you went live", analytics wants a week — so the rollup loses nothing
+/// that is read.
+///
+/// **Counted from the browser, not from the render.** The storefront is a
+/// public page and the framework may serve it from a cache, so a render is not
+/// a visit; and a crawler that does not run JavaScript is not a buyer. The write
+/// path is `/api/events`, which is also what makes the count honest enough to
+/// put on a seller's screen.
+model ListingViewDay {
+  businessId String   @map("business_id")
+  /// Asia/Dubai, so a "day" is the day the supplier had.
+  day        DateTime @map("day") @db.Date
+  views      Int      @default(0)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, day])
+  @@map("listing_view_day")
+}
+
+/// What somebody did, so a screen can be judged rather than guessed at.
+///
+/// The product had no event of any kind. Board 8a asks the one question this
+/// table exists for — *what score are sellers at when they give up* — and
+/// nothing in the schema could answer "when", "in what order" or "how long",
+/// because every completion was derived from the rows a task happens to leave
+/// behind. Derived state answers "is it done now" and nothing else.
+///
+/// **Not `AuditEvent`.** That log records staff decisions and its `actorId` and
+/// `reason` are both NOT NULL for that reason (CLAUDE.md, non-negotiable 3). A
+/// product event has no reason at all and often no actor, and mixing the two
+/// would make the log that has to be readable in a dispute unreadable.
+///
+/// `props` is deliberately loose. The alternative is a column per question and
+/// a migration per screen, and the rows are read by analysis rather than by a
+/// surface — nothing renders from this table.
+model ProductEvent {
+  id         String   @id @default(cuid())
+  /// Snake case, past tense, verbatim from the board: `setup_task_completed`.
+  name       String
+  /// Which supplier this was about. Null for an event with no business in it.
+  businessId String?  @map("business_id")
+  /// Who, when there is a session. Null for anonymous public traffic, and
+  /// there is no fallback identifier — see docs/telemetry.md.
+  actorId    String?  @map("actor_id") @db.Uuid
+  /// Groups the events of one page life so a duration can be measured. Minted
+  /// per tab, never persisted in the browser, and only ever set where `actorId`
+  /// is: an anonymous visitor is counted, never followed.
+  sessionId  String?  @map("session_id")
+  props      Json     @default("{}")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  business Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actor    User?     @relation("EventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  /// The analysis read: one event name over a window.
+  @@index([name, createdAt])
+  /// One supplier's funnel.
+  @@index([businessId, name, createdAt])
+  /// The prune.
+  @@index([createdAt])
+  @@map("product_event")
+}
+
+/// Where a concierge catalogue load has got to.
+///
+/// `loaded` and not "complete": what staff did is put products on the listing,
+/// and the seller may well add more afterwards. `cancelled` is either side
+/// withdrawing.
+enum CatalogueImportStatus {
+  requested
+  in_progress
+  loaded
+  cancelled
+
+  @@map("catalogue_import_status")
+}
+
+/// "Send us your price list and we will key it in." Board 8a's right rail.
+///
+/// A queue, not a parser. `lib/import/service.ts` is the parser and it needs a
+/// spreadsheet with columns; this is for the PDF a supplier has had since 2019,
+/// and the work at the other end is a person reading it. Modelled on
+/// `SiteVisitRequest`, which is the same shape of promise: the seller asks, we
+/// do something physical, and the row is what either side points at.
+///
+/// The file itself is a `Document` with `kind: catalogue` in the private bucket.
+/// A price list is commercially sensitive and belongs nowhere public.
+///
+/// **Every staff move on this row writes an audit row with a written reason**
+/// (CLAUDE.md, non-negotiable 3). The seller's own create and cancel do not:
+/// they are the subject acting on their own data, which is what the log is for
+/// distinguishing from.
+model CatalogueImportRequest {
+  id             String                @id @default(cuid())
+  businessId     String                @map("business_id")
+  requestedById  String                @map("requested_by_id") @db.Uuid
+  documentId     String?               @map("document_id")
+  status         CatalogueImportStatus @default(requested)
+  /// What the seller said about the file. Not instructions we promise to follow.
+  note           String?
+  /// What it costs on this seller's plan, in whole dirhams, frozen at the
+  /// moment of asking. Zero where the plan includes it. A price read later
+  /// would be a different price, and the seller agreed to this one.
+  feeAed         Int                   @default(0) @map("fee_aed")
+  /// The two working days the panel promises, resolved to a date on create.
+  dueAt          DateTime?             @map("due_at")
+  /// How many products went on. Written by staff, shown back to the seller.
+  productsLoaded Int?                  @map("products_loaded")
+  loadedAt       DateTime?             @map("loaded_at")
+  cancelledAt    DateTime?             @map("cancelled_at")
+  createdAt      DateTime              @default(now()) @map("created_at")
+
+  business    Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  requestedBy User      @relation("CatalogueImportRequester", fields: [requestedById], references: [id], onDelete: Restrict)
+  document    Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  /// The seller's own read, and the staff queue.
+  @@index([businessId, createdAt])
+  @@index([status, createdAt])
+  @@map("catalogue_import_request")
+}
+
 /// Written on every search that returns nothing. Feeds the admin gap report and
 /// the recruitment call list. Required by handoff 1 acceptance criterion 6 —
 /// added here rather than at handoff 1 so it is never a retrofit.
@@ -2571,18 +2736,18 @@ model ZeroResultQuery {
 /// normalised form is what is grouped on, so the raw text is kept only to
 /// render a chip a buyer will recognise.
 model SearchQueryLog {
-  id         String   @id @default(cuid())
+  id          String   @id @default(cuid())
   /// As the buyer typed it. What a chip renders.
-  query      String
+  query       String
   /// Lowercased, collapsed whitespace. What the grouping counts.
-  normalised String   @map("normalised")
+  normalised  String   @map("normalised")
   /// How many results came back. The home page reads `> 0` only — a chip
   /// leading to an empty page is worse than no chip.
-  resultCount Int     @map("result_count")
-  categoryId String?  @map("category_id")
-  emirate    Emirate?
-  tab        String   @default("businesses")
-  createdAt  DateTime @default(now()) @map("created_at")
+  resultCount Int      @map("result_count")
+  categoryId  String?  @map("category_id")
+  emirate     Emirate?
+  tab         String   @default("businesses")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   /// The home page's read is "group by normalised, where createdAt >= 30 days
   /// ago and resultCount > 0". This is that query's index, in that order.
@@ -2609,7 +2774,7 @@ model RateLimitHit {
 
   /// Which limit this counts against — `claim_search`. Never a user-facing
   /// string; the policy for a bucket lives in `lib/rate-limit/policy.ts`.
-  bucket String
+  bucket     String
   /// A salted SHA-256 digest of the caller — the session's actor id where there
   /// is one, otherwise the forwarded IP. Never the address itself: this table
   /// exists to count, and an address kept in order to count is an address kept
@@ -2823,7 +2988,7 @@ model ProductAlert {
   /// Board 1e criterion 7. A watch on a *specific* product is a stronger
   /// promise than a query alert that fires when anybody lists something
   /// similar, and it is the promise the button makes.
-  productId  String?  @map("product_id")
+  productId String? @map("product_id")
 
   /// Who to tell. Provisional is normal here rather than exceptional.
   userId String @map("user_id") @db.Uuid
@@ -2921,7 +3086,7 @@ enum TestimonialAudience {
 /// the one thing §08 will not let a trust signal do — and `verification_tier`
 /// exists precisely because we do not take unattributed word for anything.
 model Testimonial {
-  id       String        @id @default(cuid())
+  id       String              @id @default(cuid())
   audience TestimonialAudience
 
   /// The quote. Held to a floor in `lib/content/testimonials.ts` — a five-word
@@ -3329,6 +3494,10 @@ enum NotificationEvent {
   product_alert_matched
   /// A subscription charged for another period. The first event a cron sends.
   subscription_renewed
+  /// Board 8a's one nudge: 72 hours after go-live, if a setup task is still
+  /// open. Exactly one, ever — the panel on the hub says so out loud, so the
+  /// job has to honour it. See lib/setup/nudge-job.ts.
+  setup_nudge
   weekly_digest
 
   @@map("notification_event")

@@ -15,11 +15,15 @@ import type { NotificationEvent } from "@/lib/db/generated/enums";
  *
  * ## The events with no params
  *
- * Seven of the eleven are declared in the enum, seeded with templates, and
+ * Eight of the fourteen are declared in the enum, seeded with templates, and
  * emitted by nothing. They get an empty list and the admin screen says so. A
  * template written against an event that never fires is not a bug — somebody
  * has to write it before the emitter lands — but staff should know which is
  * which before they spend an afternoon on the copy.
+ *
+ * That count read "seven of the eleven" over a list of thirteen until board 8a
+ * came past, which is what a number written in prose beside a list that grows
+ * does. `params.test.ts` counts the keys, so the list cannot drift again.
  */
 
 export const EVENT_PARAMS = {
@@ -44,6 +48,28 @@ export const EVENT_PARAMS = {
      and `shortLink` is how the seller reaches it.
   */
   subscription_renewed: ["planName", "amount", "renewsAt", "shortLink"],
+  /*
+     Board 8a's one nudge, sent 72 hours after a listing goes live.
+
+     Two declared params and no more, because this is the one event whose
+     recipient did not ask for it. `taskList` names what is still open and
+     `minutes` is what those tasks cost — the estimates in
+     `lib/onboarding/service.ts`, which `lib/setup/tasks.ts` deliberately shares
+     so that two screens describing the same four jobs cannot disagree about how
+     long one takes.
+
+     **Not points.** A card on the hub shows what a task would still *add*, so a
+     seller three photographs in sees a smaller number than the lever's weight.
+     A message quoting the full weight would be a bigger number than the screen
+     it links to, on the one page whose whole argument is that its figures are
+     real. Minutes are the same number wherever they are read.
+
+     Nothing here identifies a person. No `businessName`: the message goes to
+     the owner of that listing, who knows whose listing it is, and every param
+     added to a notification is a param `render()` has to prove is not a leak.
+     No `shortLink` either — the action path is the static `/dashboard/setup`.
+  */
+  setup_nudge: ["taskList", "minutes"],
 
   // Declared, seeded, and emitted by nothing yet.
   enquiry_unanswered: [],

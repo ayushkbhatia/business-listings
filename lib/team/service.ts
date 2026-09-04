@@ -5,6 +5,7 @@ import { assertCanManageTeam } from "@/lib/auth/guards";
 import type { Actor, Role } from "@/lib/auth/roles";
 import { allowance, type PlanCaps } from "@/lib/plan/entitlements";
 import { medianResponseMs, windowStart } from "@/lib/metrics/response-time";
+import { inviteUrl, sendInviteEmail } from "./invite-email";
 
 /**
  * Team, seats and lead routing. Board 7d.
@@ -106,7 +107,25 @@ export interface InviteInput {
   roles: Role[];
 }
 
-export type InviteResult = { ok: true; token: string } | { ok: false; error: string };
+export type InviteResult =
+  | {
+      ok: true;
+      token: string;
+      /**
+       * The link, built. The cheapest possible unblock when an email does not
+       * arrive: the owner copies it and sends it themselves, over whatever they
+       * already use to talk to the person.
+       *
+       * It used to be that the token was generated here and thrown away by the
+       * caller, so a supplier whose invitation went to a spam folder had no
+       * recourse at all — not even a resend, because re-inviting mints a new
+       * token and the old one stops working.
+       */
+      acceptUrl: string;
+      /** False when the carrier refused or none is configured. The screen then leads with the link. */
+      emailed: boolean;
+    }
+  | { ok: false; error: string };
 
 export async function inviteSeat(
   actor: Actor,
@@ -149,7 +168,8 @@ export async function inviteSeat(
   }
 
   const token = randomBytes(24).toString("base64url");
-  await prisma.teamInvite.upsert({
+  const expiresAt = new Date(now.getTime() + INVITE_DAYS * 86_400_000);
+  const invite = await prisma.teamInvite.upsert({
     where: { businessId_email: { businessId, email } },
     create: {
       businessId,
@@ -157,7 +177,7 @@ export async function inviteSeat(
       roles,
       invitedById: actor.id,
       token,
-      expiresAt: new Date(now.getTime() + INVITE_DAYS * 86_400_000),
+      expiresAt,
     },
     // Re-inviting replaces the offer rather than stacking a second one. The
     // roles may have changed since, and the older token should stop working.
@@ -165,12 +185,40 @@ export async function inviteSeat(
       roles,
       invitedById: actor.id,
       token,
-      expiresAt: new Date(now.getTime() + INVITE_DAYS * 86_400_000),
+      expiresAt,
       revokedAt: null,
+    },
+    // Selected from the write rather than fetched after it. The email needs the
+    // supplier's name and the sender's, and a second read for two strings is a
+    // second round trip on the one path a person is waiting on.
+    select: {
+      business: { select: { displayName: true } },
+      invitedBy: { select: { fullName: true } },
     },
   });
 
-  return { ok: true, token };
+  /*
+     Sent here rather than by the screen.
+
+     The invitation exists the moment the row is written, so delivery is part of
+     creating one — a service that wrote the row and left the sending to
+     whichever caller remembered would eventually have a caller that did not,
+     and the invitee would wait for an email nobody sent. `sendInviteEmail`
+     never throws and reports what happened, so a carrier that is down costs the
+     owner a copy-and-paste rather than the seat.
+  */
+  const emailed = await sendInviteEmail({
+    email,
+    token,
+    // displayName, never tradeName: it is the name the invitee will see on the
+    // storefront whose enquiries they are about to answer.
+    businessName: invite.business.displayName,
+    inviterName: invite.invitedBy.fullName ?? invite.business.displayName,
+    roles,
+    expiresAt,
+  });
+
+  return { ok: true, token, acceptUrl: inviteUrl(token), emailed };
 }
 
 export async function revokeInvite(
@@ -230,3 +278,16 @@ export async function saveRouting(
 
   return { ok: true };
 }
+
+/**
+ * The rest of the seat lifecycle, re-exported so the team screen has one import.
+ *
+ * `removeSeat` is the inverse this file never had: docs/permissions.md §07 says
+ * the owner may "invite or remove team members", and until now only half of
+ * that existed. It lives in `./invite.ts` with acceptance and expiry because
+ * the three share the roles ceiling and the claim repair, not because a team
+ * screen needs them separated.
+ */
+export { acceptInvite, expireInvites, readInvite, removeSeat } from "./invite";
+export type { AcceptResult, InviteView, RemoveResult } from "./invite";
+export { inviteUrl } from "./invite-email";

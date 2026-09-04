@@ -34,6 +34,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { readTarget, resolveTarget, type EnvLike, type Target } from "./target-url";
 
 /** Set to the exact hostname being unlocked. Never valid from a dotenv file. */
 export const OVERRIDE_VAR = "DB_DESTRUCTIVE_ALLOW_HOST";
@@ -47,79 +48,19 @@ export const OVERRIDE_VAR = "DB_DESTRUCTIVE_ALLOW_HOST";
  * ones are safe is a guard nobody can reason about. Four literals, and the
  * override for everything else.
  */
-const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
+/*
+   Re-exported, not redefined.
+
+   The parse lives in `./target-url.ts`, which touches no filesystem, because
+   `lib/dev/guard.ts` asks "is this loopback?" on a request and importing this
+   module from a Server Component would pull `node:fs` and a runtime-resolved
+   `readFileSync` into the app bundle. The same split `lib/trade/hours.ts` and
+   `lib/catalogue-import/terms.ts` make, for the same reason.
+*/
+export { readTarget, resolveTarget, type EnvLike, type Target } from "./target-url";
 
 /** The files a target may be read from, and the ones an override may not. */
 const ENV_FILES = [".env.local", ".env"] as const;
-
-export interface Target {
-  /*
-     Deliberately no `url`.
-
-     A connection string carries the password, and an error object that holds
-     one gets printed in full by any handler that logs the error rather than its
-     message — which is what `prisma/seed.mts` did, so the first run of this
-     guard printed the production password to the terminal. Nothing downstream
-     needs the string: the guard reports, it does not connect.
-  */
-  host: string;
-  port: string;
-  database: string;
-  /** `127.0.0.1:54322/postgres` — what a message prints. Never the password. */
-  description: string;
-  isLoopback: boolean;
-}
-
-/**
- * Parse a connection string into the parts a refusal needs to name.
- *
- * An unparseable string is **not** treated as local. A guard that fails open on
- * input it did not understand is not a guard, and `postgres://…` with a stray
- * character is exactly the shape of a hand-edited production URL.
- */
-export function readTarget(url: string): Target {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return {
-      host: "",
-      port: "",
-      database: "",
-      description: "an unparseable connection string",
-      isLoopback: false,
-    };
-  }
-
-  // `new URL` keeps the brackets on an IPv6 literal; the set holds the address.
-  const host = parsed.hostname.replace(/^\[|\]$/g, "");
-  const port = parsed.port || "5432";
-  const database = parsed.pathname.replace(/^\//, "");
-
-  return {
-    host,
-    port,
-    database,
-    description: `${host}:${port}/${database}`,
-    isLoopback: LOOPBACK.has(host),
-  };
-}
-
-/**
- * The two variables this module reads, and nothing else.
- *
- * Not `NodeJS.ProcessEnv`: this repo declares that type with a required
- * `NODE_ENV`, so every caller and every test would have to supply one to ask a
- * question about a connection string. `process.env` satisfies this.
- */
-export type EnvLike = Record<string, string | undefined>;
-
-/** What `DIRECT_URL` / `DATABASE_URL` currently name, or null if neither is set. */
-export function resolveTarget(env: EnvLike = process.env): Target | null {
-  const url = env["DIRECT_URL"] ?? env["DATABASE_URL"];
-  if (url === undefined || url === "") return null;
-  return readTarget(url);
-}
 
 /**
  * True when a dotenv file in the repo names the override.

@@ -4,6 +4,12 @@ Every route the canvas defines. Board ids in brackets refer to the screen canvas
 Routes marked `later` are named so the router and nav config are shaped correctly now;
 they 404 until their handoff.
 
+**This file drifts, in both directions.** `/dashboard/questions` was built and in the nav
+for a whole handoff without a row here, and the three `/dashboard/setup/*` task routes had
+rows here without existing. Nothing automated reads the file. The rendered version — every
+row, marked live or missing by asking the router — is at `/dev` on a development machine,
+and it is the one that argues back.
+
 ## Public — businesslistings.me
 
 ```
@@ -42,6 +48,8 @@ they 404 until their handoff.
 /list-your-business                     Supplier entry surface                      built h5s7
 /staff                                  Staff sign in — noindex, unlinked         built h5s7
 /account/enquiries                      Buyer enquiry inbox                  [10e]  built h2s3
+/account/saved/shortlist                Saved suppliers                             built h8s1
+/invite/:token                          Accept a team seat                    [8d]  built h8s1
 /account/saved                          Saved searches & alerts              [10e]
 /account/suppliers                      Saved suppliers                       later
 /account/requirements                   Saved requirements                    later
@@ -59,11 +67,11 @@ they 404 until their handoff.
 /onboarding/plan                        Pick a plan                           [2e]  built h6s5
 /dashboard                              Overview                              [3a]
 /dashboard (free variant)               Free-plan overview                   [11a]
-/dashboard/setup                        Setup hub                             [8a]
-/dashboard/setup/photos                 Task 1                                [8b]
-/dashboard/setup/products               Task 2                                [8c]
-/dashboard/setup/team                   Task 3                                [8d]
-/dashboard/setup/visit                  Task 4 + done                         [8e]
+/dashboard/setup                        Setup hub                             [8a]  built h8s1
+/dashboard/setup/photos                 Task 1 — photos                       [8b]  later
+/dashboard/setup/products               Task 2 — template, first products     [8c]  later
+/dashboard/setup/team                   Task 3 — invite the team              [8d]  later
+/dashboard/setup/visit                  Task 4 — site visit                   [8e]  built h3
 /dashboard/listing                      Listing profile                       [3b]
 /dashboard/locations                    Locations                             [3c]
 /dashboard/hours                        Hours & Ramadan                       [3d]
@@ -71,12 +79,14 @@ they 404 until their handoff.
 /dashboard/products                     Catalogue                             [3f]
 /dashboard/products/:sku                Product editor                        [3g]
 /dashboard/products/import              CSV import mapper                    [11d]
-/dashboard/templates/:slug              Spec template                         [3h]
+/dashboard/templates                    Spec templates                        [3h]
 /dashboard/media                        Media library                         [3i]
 /dashboard/leads                        Leads & RFQ inbox                     [3j]  built h2s1
 /dashboard/leads/:id/thread             Seller message thread                [11b]  built h2s1 + h2s4
 /dashboard/quotes                       Quotes sent pipeline                  [3k]  built h2s1
 /dashboard/reviews                      Reviews                              [11c]  built h2s6
+/dashboard/questions                    Buyer questions                       [1g]  built h5
+/dashboard/team                         Team, seats & lead routing            [7d]  built h4
 /dashboard/analytics                    Analytics                             [3l]
 /dashboard/billing                      Subscription & invoices               [3m]
 /dashboard/domain                       Your own web address                  [5e]  built h4s6
@@ -84,7 +94,6 @@ they 404 until their handoff.
 /dashboard/billing/cancel               Cancel                               [11f]
 /dashboard/invoice/:id                  Tax invoice                          [11f]
 /dashboard/promote                      Sponsored placement                  [11e]
-/dashboard/team                         Team & lead routing                   [7d]
 /dashboard/settings                     Settings & notifications              [7e]  built h2s5 (alerts only)
 ```
 
@@ -101,6 +110,7 @@ they 404 until their handoff.
 /admin/search                           Ranking, boosts, routing             [12c]  built h4s8
 /admin/categories                       Taxonomy                              [4d]  rename h5s6
 /admin/spec-library                     Spec templates                        [4e]
+/admin/catalogue-imports                Concierge catalogue queue            [12i]  built h8s1
 /admin/attributes                       Attribute dictionary                  later
 /admin/businesses                       Businesses & health                   [4f]  built h4s4
 /admin/crm                              Recruitment & accounts               [12d]  built h4s4
@@ -143,7 +153,15 @@ they 404 until their handoff.
 Not part of any of the three products. They exist so a person can see every
 state at once, which is the only way to notice that two of them disagree.
 
+Rendered only when `DATABASE_URL` is loopback — see `lib/dev/guard.ts`. The database is
+the condition that carries the weight rather than `NODE_ENV`, because Playwright builds
+for production and the gallery has to survive that. Before this gate existed they were
+prerendered public routes, kept out of search results by a robots directive and nothing
+else.
+
 ```
+/dev                                    Every surface, and which seat opens it      built h8s1
+/dev/seat                               Sign in as any seat, on any business        built h8s1
 /dev/gallery                            Every component, every state          built h0-h2
 /dev/notifications                      Notification templates rendered [7f]  built h2s5
 ```

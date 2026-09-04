@@ -552,43 +552,15 @@ test.describe("board 2e — the plan step, from a seat that already pays", () =>
   });
 });
 
-test.describe("board 8a — the setup hub", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto("/dashboard/setup");
-  });
+/*
+   Board 8a moved to its own file.
 
-  test("states what each task is worth and how long it takes", async ({ page }) => {
-    // "Complete your profile" tells nobody anything.
-    await expect(page.getByText(/WORTH 20 POINTS/i).first()).toBeVisible();
-    await expect(page.getByText(/ABOUT \d+ MINUTES/i).first()).toBeVisible();
-  });
-
-  test("shows the 80% threshold the boards draw", async ({ page }) => {
-    await expect(page.getByText(/80% is where a listing stops looking thin/)).toBeVisible();
-  });
-
-  test("shows progress per task, so a half-done one says so", async ({ page }) => {
-    await expect(page.getByText(/\d+ OF \d+/i).first()).toBeVisible();
-  });
-
-  test("says the visit does not move the strength meter", async ({ page }) => {
-    // It moves trust, not strength. Implying otherwise would be selling a
-    // number the task does not touch.
-    await expect(page.getByText(/DOES NOT CHANGE YOUR PROFILE STRENGTH/i)).toBeVisible();
-  });
-
-  test("links each task to where the work happens", async ({ page }) => {
-    // Independent: a task is not a wizard step, it is a link to the screen
-    // that already does that job.
-    const links = page.getByRole("link", { name: /Start|Carry on|Done/ });
-    await expect(links).not.toHaveCount(0);
-  });
-
-  test("is axe clean", async ({ page }) => {
-    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
-    expect(results.violations).toEqual([]);
-  });
-});
+   `tests/e2e/dashboard-setup.spec.ts`, which matches the same signed-in
+   Playwright project this file does. It was a block here while the hub was a
+   list of four rows; it is a screen now, with a rail, a threshold marker, a
+   completed summary and a plan gate, and those want asserting next to each
+   other rather than at the end of the onboarding funnel.
+*/
 
 test.describe("board 8e — the visit", () => {
   test("asks what suits rather than offering a slot we cannot keep", async ({ page }) => {

@@ -26,6 +26,14 @@ import { DN_SYNONYMS } from "../lib/trade/nominal-size.js";
 // The key and the estimates from the module that owns both — a typo here would
 // be a row nothing reads.
 import { FALLBACK_RAMADAN, RAMADAN_SETTING_KEY } from "../lib/trade/hours.js";
+// Board 8a's site-visit fee, on the same terms. `lib/setup/tasks.ts` is pure —
+// no `server-only`, no database client — which is what lets a seed run by plain
+// tsx read the figure the card draws instead of keeping a second copy of it.
+import { FALLBACK_SITE_VISIT_FEE_AED, SITE_VISIT_FEE_SETTING_KEY } from "../lib/setup/tasks.js";
+import {
+  CATALOGUE_IMPORT_PRICING_KEY,
+  FALLBACK_CATALOGUE_PRICING,
+} from "../lib/catalogue-import/terms.js";
 import { buildProductSearchText, valueAliases } from "../lib/search/index-text.js";
 import { matchLine } from "../lib/quote/match.js";
 import { medianResponseMs, windowStart } from "../lib/metrics/response-time.js";
@@ -258,6 +266,61 @@ async function main() {
     where: { key: RAMADAN_SETTING_KEY },
     update: {},
     create: { key: RAMADAN_SETTING_KEY, value: FALLBACK_RAMADAN },
+  });
+
+  /*
+   * The site-visit fee, as a platform setting.
+   *
+   * Board 8a draws AED 750 on the site-visit card and its own open question 2
+   * says the figure is unconfirmed against the pricing page. A setting is the
+   * right answer to an unconfirmed number: correcting it costs a row rather
+   * than a build, a deploy and a cold cache. That is CLAUDE.md's rule that
+   * content belongs in the database and its rule that every number is a query,
+   * landing on the same figure.
+   *
+   * The value is `FALLBACK_SITE_VISIT_FEE_AED` rather than 750 typed out again.
+   * Two copies of a price drift the first time either moves, and the copy that
+   * loses is the one nobody is looking at — the card would go on saying 750
+   * while the row said something else, and it is the row the hub charges from.
+   *
+   * `updatedById` is left unset, which the schema allows on purpose: the column
+   * is nullable so that a migration or a seed can write a settings row before
+   * any user exists to attribute it to. A **staff** write to this table is a
+   * different act — a state change, owing an audit row with a written reason
+   * under CLAUDE.md non-negotiable 3 — and that writer is board 12h's, not the
+   * seed's. Nothing here is a precedent for an unattributed write from a screen.
+   *
+   * Unlike the Ramadan row above, no migration writes this one, so it exists
+   * where the seed has run and nowhere else. Production reads the compiled
+   * figure until 12h's settings screen writes the confirmed one, which is the
+   * fallback doing its job rather than a gap.
+   *
+   * An upsert for the reason given above the Ramadan row — `truncate ...
+   * cascade` over `user` reaches `platform_setting` through this same nullable
+   * key, so a reseed drops the row and this is what puts it back — and because
+   * an upsert that updates nothing leaves a confirmed fee alone rather than
+   * overwriting somebody's correction with the drawn estimate.
+   */
+  await prisma.platformSetting.upsert({
+    where: { key: SITE_VISIT_FEE_SETTING_KEY },
+    update: {},
+    create: { key: SITE_VISIT_FEE_SETTING_KEY, value: FALLBACK_SITE_VISIT_FEE_AED },
+  });
+
+  /*
+     What a concierge catalogue load costs on each plan, board 8a's right rail.
+
+     Imported from `lib/catalogue-import/terms.ts` rather than retyped, for the
+     same reason as the fee above: two copies of a price drift, and the copy
+     that loses is the one nobody is looking at. `terms.ts` is the pure half of
+     `pricing.ts` and exists so this line can import it — anything behind
+     `server-only` throws under plain `tsx` and would take the seed down before
+     the first row was written.
+  */
+  await prisma.platformSetting.upsert({
+    where: { key: CATALOGUE_IMPORT_PRICING_KEY },
+    update: {},
+    create: { key: CATALOGUE_IMPORT_PRICING_KEY, value: FALLBACK_CATALOGUE_PRICING },
   });
 
   console.log("→ areas");
@@ -4096,6 +4159,11 @@ async function seedSellerAccounts(db: Db, businesses: Biz[]) {
           quote_expiring: ["in_app"],
           review_posted: ["email", "in_app"],
           document_expiring: ["email", "in_app"],
+          // Board 8a's one nudge. Routed here as well as templated, because an
+          // event absent from a seller's matrix sends nothing at all — a seeded
+          // template with no routing row is a feature that looks wired and is
+          // not, which is how the nudge would have been judged as dead.
+          setup_nudge: ["whatsapp", "in_app"],
           weekly_digest: ["email"],
         },
         // A seller who never turns them off still gets no WhatsApp at 02:00.
@@ -4282,6 +4350,41 @@ const TEMPLATES: TemplateSeed[] = [
     body: "The trade licence on your listing expires {expiresAt}. Verification drops to tier 2 the day it lapses, with no grace period.",
     actionLabel: "Upload the renewal",
     actionPath: "/dashboard/verification",
+    status: "live",
+  },
+  /*
+     Board 8a's one nudge, and the only template here whose recipient did not
+     ask for it.
+
+     WhatsApp because that is what the hub promises out loud — "one WhatsApp
+     three days after you went live if anything is still open, then nothing" —
+     and in-app because the delivery log should carry a real row rather than a
+     skip when Meta has not approved the words yet. **Deliberately no email.**
+     An email fallback is a second message, and the promise is one.
+
+     `pending_meta` like every other WhatsApp template: Meta approves the words
+     before they can be sent, and seeding one live would have the send layer
+     believe in a template that does not exist on the Bird side.
+  */
+  {
+    event: "setup_nudge",
+    channel: "whatsapp",
+    // One string rather than two concatenated: the criterion-8 scan in
+    // tests/unit/notification-templates.test.ts matches `body: "…"` and reads
+    // only the first chunk, so a split body hides half of itself from the check
+    // that exists to stop a template carrying contact details.
+    body: "Your listing is live and some setup is still open: {taskList}. About {minutes} minutes of work. This is the only reminder we send.",
+    actionLabel: "Finish setting up",
+    actionPath: "/dashboard/setup",
+    metaTemplateName: "bl_setup_nudge_v1",
+    status: "pending_meta",
+  },
+  {
+    event: "setup_nudge",
+    channel: "in_app",
+    body: "Still open on your listing: {taskList}. About {minutes} minutes of work.",
+    actionLabel: "Finish setting up",
+    actionPath: "/dashboard/setup",
     status: "live",
   },
   {

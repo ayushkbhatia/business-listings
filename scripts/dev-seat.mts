@@ -3,7 +3,12 @@
  *
  *   pnpm dev:seat ops
  *   pnpm dev:seat seller --slug al-marwan-industrial-supplies-llc
+ *   pnpm dev:seat sales  --slug al-marwan-industrial-supplies-llc
  *   pnpm dev:seat buyer --email someone@example.com
+ *
+ * There is a page that does the same thing without the copy-and-paste step:
+ * `/dev/seat`, gated to a loopback database. This stays because a script is
+ * reachable from CI and from a terminal with no browser in front of it.
  *
  * ## Why this exists
  *
@@ -48,6 +53,21 @@ const ROLES = {
   finance: { roles: ["staff_finance"], name: "Dev Finance", landing: "/admin" },
   field: { roles: ["staff_field"], name: "Dev Field Verifier", landing: "/admin" },
   seller: { roles: ["seller_owner"], name: "Dev Seller", landing: "/dashboard/leads" },
+  /*
+     The three non-owner seller seats.
+
+     Board 8a refuses a `seller_sales` seat and the team screen refuses
+     everything but an owner, and until these existed there was no way to stand
+     behind either fence and look at it. A refusal nobody has seen render is a
+     refusal nobody has checked.
+  */
+  manager: { roles: ["seller_manager"], name: "Dev Manager", landing: "/dashboard" },
+  sales: { roles: ["seller_sales"], name: "Dev Sales", landing: "/dashboard/leads" },
+  "seller-finance": {
+    roles: ["seller_finance"],
+    name: "Dev Seller Finance",
+    landing: "/dashboard/billing",
+  },
   buyer: { roles: ["buyer"], name: "Dev Buyer", landing: "/" },
 } as const;
 
@@ -109,7 +129,7 @@ await db.connect();
 
 try {
   let businessId: string | null = null;
-  if (seat.roles[0] === "seller_owner") {
+  if ((seat.roles as readonly string[])[0]?.startsWith("seller_")) {
     if (!slug) usage("A seller seat needs --slug, so there is a business to own.");
     const found = await db.query<{ id: string }>("SELECT id FROM business WHERE slug = $1", [slug]);
     businessId = found.rows[0]?.id ?? null;

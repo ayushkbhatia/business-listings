@@ -7,7 +7,8 @@ import { getOverview, usageOf, type Overview, type MissedEnquiryRow } from "@/li
 import { cheapestPlanUnlocking, cheapestPlanWith, type PlanCaps } from "@/lib/plan/entitlements";
 import { formatCount, formatDate, formatDuration, formatRelative } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { getNavBadges, requireSellerSeat, SellerPage } from "./_shell";
+import type { SetupChrome } from "@/lib/setup/service";
+import { getNavBadges, getSetupProgress, requireSellerSeat, SellerPage } from "./_shell";
 
 /**
  * Boards 3a and 11a — the seller's overview, on both plans.
@@ -32,13 +33,14 @@ export const dynamic = "force-dynamic";
 export default async function OverviewPage({
   searchParams,
 }: {
-  searchParams: Promise<{ notice?: string }>;
+  searchParams: Promise<{ notice?: string; strength?: string }>;
 }) {
   const seat = await requireSellerSeat();
-  const [{ notice }, overview, badges] = await Promise.all([
+  const [{ notice, strength }, overview, badges, setup] = await Promise.all([
     searchParams,
     getOverview(seat.businessId),
     getNavBadges(seat.businessId),
+    getSetupProgress(seat.businessId),
   ]);
   if (!overview) return null;
 
@@ -49,6 +51,7 @@ export default async function OverviewPage({
     <SellerPage
       seat={seat}
       badges={badges}
+      setup={setup}
       activeHref="/dashboard"
       eyebrow={t("overview.eyebrow")}
       title={seat.businessName}
@@ -66,6 +69,28 @@ export default async function OverviewPage({
             {t("claim.already_yours")}
           </Alert>
         )}
+
+        {/*
+          The flash the hub redirects with. It carries the figure rather than
+          saying "all done", because the number is the thing the seller has
+          been working on and "complete" on its own is a word about the product
+          rather than about them.
+        */}
+        {notice === "setup_complete" && (
+          <Alert tone="ok" live="polite">
+            {t("setup.complete_flash", {
+              strength: strength ?? String(overview.profileStrength ?? 100),
+            })}
+          </Alert>
+        )}
+
+        {/*
+          Board 8a's own entry point. The hub has no nav row — it is temporary,
+          and a permanent one would still be there a year later reading "nothing
+          left" — so this banner and the sidebar figure are the two ways in, and
+          both stop rendering when there is nothing left to do.
+        */}
+        {setup && setup.openCount > 0 && <SetupBanner setup={setup} />}
 
         <ReplyQueue overview={overview} />
 
@@ -86,6 +111,37 @@ export default async function OverviewPage({
 
 function tierOf(planId: string): PlanTier {
   return planId === "pro" ? "pro" : planId === "basic" ? "basic" : "free";
+}
+
+/* ── Finish setting up ───────────────────────────────────────────────────── */
+
+function SetupBanner({ setup }: { setup: SetupChrome }) {
+  /*
+     `openPoints`, not `100 - strength`. The gap to a hundred includes two
+     levers no card offers — who you are, and how completely the catalogue is
+     specified — so quoting the gap would promise points these tasks do not pay,
+     which is the failure mode the hub's own chips exist to avoid.
+  */
+  return (
+    <Alert
+      tone="info"
+      title={t("overview.setup_banner_title")}
+      action={
+        <Link
+          href="/dashboard/setup"
+          className={buttonClassName({ variant: "secondary", size: "sm" })}
+        >
+          {t("overview.setup_banner_action")}
+        </Link>
+      }
+    >
+      {t("overview.setup_banner", {
+        count: setup.openCount,
+        formatted: formatCount(setup.openCount),
+        points: formatCount(setup.openPoints),
+      })}
+    </Alert>
+  );
 }
 
 /* ── What needs a reply ──────────────────────────────────────────────────── */

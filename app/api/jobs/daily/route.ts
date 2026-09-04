@@ -11,14 +11,22 @@ import { measureProfileStrength } from "@/lib/metrics/strength-job";
 import { sweepAreaPages } from "@/lib/seo/area";
 import { sweepExpiredLicences } from "@/lib/verification/expiry-job";
 import { sweepZeroQuoteEnquiries } from "@/lib/enquiry/zero-quote";
+import { pruneProductEvents } from "@/lib/telemetry/record";
+import { expireInvites } from "@/lib/team/invite";
+import { sweepSetupNudges } from "@/lib/setup/nudge-job";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
 
 /**
- * The daily run — the three jobs whose natural grain is a day.
+ * The daily run — the jobs whose natural grain is a day.
  *
- * Grouped into one route rather than three because Vercel's cron allowance is
- * small and these three are cheap, ordered and related: two of them read and
- * write the same `Subscription` rows, and the third is a `deleteMany`.
+ * Grouped into one route rather than one route each because Vercel's cron
+ * allowance is small and these are cheap, ordered and related: several read and
+ * write the same `Subscription` rows, several are a `deleteMany`, and each step
+ * whose position matters says so where it sits.
+ *
+ * The heading said "the three jobs" for a while, over a list that had long
+ * stopped being three. A count written into prose beside a list that grows is a
+ * number that goes wrong quietly, so this one no longer carries it.
  *
  * None of these writes an audit row, and that is deliberate rather than an
  * omission. `AuditEvent.actorId` is NOT NULL because the log is a record of
@@ -57,6 +65,18 @@ const KEEP_ATTEMPTS_MS = 24 * 60 * 60 * 1000;
 /** How many of the longest rate-limit window to keep. Margin, not tidiness. */
 const RATE_HIT_MARGIN = 12;
 
+/**
+ * How much `product_event` history to keep.
+ *
+ * The table exists to answer board 8a's question — *what score are sellers at
+ * when they give up* — and that is a cohort question: a supplier's setup runs
+ * over weeks, so a window has to hold several of them side by side before it
+ * says anything. Two quarters does. Beyond that these are rows that grow with
+ * traffic and that nothing renders, which is the same argument the two prunes
+ * above make one table over.
+ */
+const KEEP_PRODUCT_EVENTS_DAYS = 180;
+
 export async function GET(request: NextRequest) {
   const refusal = authorizeJob(request, "daily");
   if (refusal) return refusal;
@@ -92,6 +112,19 @@ export async function GET(request: NextRequest) {
     async prunedRateLimitHits() {
       const cutoff = new Date(Date.now() - RATE_HIT_MARGIN * LONGEST_RATE_WINDOW_MS);
       const pruned = await pruneRateLimitHits(cutoff);
+      return { pruned, olderThan: cutoff };
+    },
+    /*
+       Board 8a's telemetry, on the same argument as the two prunes above.
+
+       `product_event` is written by `/api/events` on every setup screen, so it
+       grows with traffic rather than with sign-ups, and nothing else would ever
+       delete from it. Unlike those two the cutoff is not a security parameter —
+       it is how far back the funnel is worth reading. See the constant.
+    */
+    async prunedProductEvents() {
+      const cutoff = new Date(Date.now() - KEEP_PRODUCT_EVENTS_DAYS * 24 * 60 * 60 * 1000);
+      const pruned = await pruneProductEvents(cutoff);
       return { pruned, olderThan: cutoff };
     },
     /*
@@ -156,6 +189,32 @@ export async function GET(request: NextRequest) {
        This only makes the stored column agree with what is already served.
     */
     areaPages: () => sweepAreaPages(),
+    /*
+       Team invitations that have run out of time.
+
+       The same kind of job as the licence sweep — something lapses on a date
+       and the row has to catch up with the calendar — but with nothing reading
+       it, so it does not have to run before anything. An invitation nobody
+       accepted is not a seat: profile strength counts users, and an expired
+       invite was never one.
+    */
+    expiredInvites: () => expireInvites(new Date()),
+    /*
+       Board 8a's one nudge, and it runs last on purpose.
+
+       Every step above it is a database write that a retry repeats harmlessly.
+       This one hands a message to a carrier, and a WhatsApp cannot be taken
+       back. `runSteps` reports 500 when any step failed and Vercel retries the
+       whole batch, so a nudge placed early would be re-entered on every retry
+       caused by a step that has nothing to do with it — with only its own guard
+       between the supplier and a second reminder. Last, the guard is the belt
+       and the ordering is the braces.
+
+       Idempotent all the same: `sweepSetupNudges` skips any business that
+       already has a `setup_nudge` delivery row, so the retry finds nothing to
+       do rather than being trusted not to run.
+    */
+    setupNudges: () => sweepSetupNudges(),
   });
 
   console.info("[jobs] daily", outcome.steps);
