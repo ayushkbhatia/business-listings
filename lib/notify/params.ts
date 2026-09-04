@@ -73,7 +73,13 @@ export const EVENT_PARAMS = {
 
   // Declared, seeded, and emitted by nothing yet.
   enquiry_unanswered: [],
-  enquiry_escalated: [],
+  /*
+     Board 8d §8 gave this its first emitter. The four are exactly what the
+     seeded templates already interpolate — they were written before anything
+     sent them, and `render` throws MissingParamError on a placeholder the
+     params do not carry, in a cron where nobody is watching.
+  */
+  enquiry_escalated: ["ref", "hours", "closesAt", "enquiryId"],
   quote_expiring: [],
   review_posted: [],
   review_requested: [],

@@ -142,7 +142,7 @@ export default async function InvitePage({ params, searchParams }: Props) {
       <InviteFrame>
         <InviteCard
           title={t("invite.title", { business: invite.businessName })}
-          body={t("invite.intro", { inviter: invite.inviterName, email: invite.email })}
+          body={t("invite.intro", { inviter: invite.inviterName, contact: invite.contact })}
         >
           {roles ? (
             <p className="mb-4 max-w-prose text-body-sm text-body">
@@ -166,14 +166,26 @@ export default async function InvitePage({ params, searchParams }: Props) {
      meant for — and a seat that landed on whoever clicked first would be a seat
      granted to a mailing list.
   */
-  const signedInAs = holder.email?.trim().toLowerCase() ?? null;
-  if (!signedInAs || signedInAs !== invite.email.trim().toLowerCase()) {
+  /*
+     Either channel, the same rule the service applies. An invitation to a
+     mobile is accepted by the account holding that mobile; comparing only the
+     address would refuse every WhatsApp invitation, and the refusal reads like
+     a broken link rather than a mismatch.
+  */
+  const holds = [holder.email, holder.phone]
+    .filter((value): value is string => typeof value === "string" && value !== "")
+    .map((value) => value.trim().toLowerCase());
+  if (!holds.includes(invite.contact.trim().toLowerCase())) {
     return (
       <InviteFrame>
         <InviteCard
-          title={t("invite.wrong_account_title")}
+          title={t(
+            invite.channel === "whatsapp"
+              ? "invite.wrong_account_title_phone"
+              : "invite.wrong_account_title",
+          )}
           body={t("invite.wrong_account_body", {
-            email: invite.email,
+            contact: invite.contact,
             // A phone-only account has no address to name, and the number is
             // more use to them than an empty gap in the sentence.
             current: holder.email ?? holder.phone ?? "",
@@ -211,7 +223,7 @@ export default async function InvitePage({ params, searchParams }: Props) {
     <InviteFrame>
       <InviteCard
         title={t("invite.title", { business: invite.businessName })}
-        body={t("invite.intro", { inviter: invite.inviterName, email: invite.email })}
+        body={t("invite.intro", { inviter: invite.inviterName, contact: invite.contact })}
       >
         <form action={acceptInviteAction}>
           <input type="hidden" name="token" value={token} />

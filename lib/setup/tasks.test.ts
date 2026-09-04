@@ -37,12 +37,13 @@ const EMPTY: ProfileFacts = {
   teamSeats: 1,
 };
 
-function board(profile: Partial<ProfileFacts> = {}, visitRequests = 0) {
+function board(profile: Partial<ProfileFacts> = {}, visitRequests = 0, invitesSent = 0) {
   const facts: ProfileFacts = { ...EMPTY, ...profile };
   const input: SetupTaskFacts = {
     photos: facts.photos,
     products: facts.products,
     seats: facts.teamSeats,
+    invitesSent,
     visitRequests,
     items: strengthItems(facts),
   };
@@ -198,5 +199,24 @@ describe("the day a view is counted against", () => {
     expect(dubaiDayStart(new Date("2026-09-04T06:00:00.000Z")).toISOString()).toBe(
       "2026-09-04T00:00:00.000Z",
     );
+  });
+});
+
+describe("the team task ticks on send", () => {
+  it("counts an outstanding invitation towards the target", () => {
+    /*
+       Board 8d §5. The seller cannot make a colleague click a link, and a task
+       held open by somebody else's inaction is one they learn to ignore. The
+       eight points still wait for an active seat, so the checkbox and the meter
+       legitimately disagree until the invitation is accepted — which is why the
+       invite screen states it in a line.
+    */
+    const withSeatOnly = board().tasks.find((task) => task.id === "team");
+    expect(withSeatOnly?.done).toBe(false);
+
+    const withInvite = board({}, 0, 1).tasks.find((task) => task.id === "team");
+    expect(withInvite?.done).toBe(true);
+    // The points are the lever's, and the lever still wants a seat.
+    expect(withInvite?.points).toBe(0);
   });
 });

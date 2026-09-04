@@ -35,6 +35,14 @@ model User {
   roles      Role[]  @default([])
   /// Set for a seller seat. Scopes every seller capability to one business.
   businessId String? @map("business_id")
+  /// Set where a seat is scoped to one branch. Board 7d, built by board 8d.
+  ///
+  /// `Actor.branchId` has been declared in lib/auth/roles.ts since handoff 0
+  /// and is consumed by `withinScope()` and `analyticsScopeFor()` — and nothing
+  /// has ever populated it, because there was no column to populate it from.
+  /// Every branch-scoping check in the product therefore returned true. This is
+  /// the column those checks were written against.
+  branchId   String? @map("branch_id")
   locale     String  @default("en")
 
   /// A buyer can send an enquiry with no account at all — the board says so and
@@ -63,6 +71,7 @@ model User {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   business                Business?                @relation("BusinessTeam", fields: [businessId], references: [id], onDelete: SetNull)
+  branch                  Location?                @relation("SeatBranch", fields: [branchId], references: [id], onDelete: SetNull)
   buyerCompanyId          String?                  @map("buyer_company_id")
   buyerCompany            BuyerCompany?            @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
   enquiries               Enquiry[]
@@ -743,6 +752,8 @@ model Location {
   producedByConflicts ClaimConflict[] @relation("ConflictProducedLocation")
   contactReveals      ContactReveal[]
   teamMembers         TeamMember[]
+  seats               User[]          @relation("SeatBranch")
+  teamInvites         TeamInvite[]    @relation("InviteBranch")
 
   @@index([businessId])
   @@index([areaId])
@@ -1290,21 +1301,46 @@ enum LeadRouting {
 /// the roles it will grant, so accepting cannot quietly grant more than was
 /// offered.
 model TeamInvite {
-  id          String    @id @default(cuid())
-  businessId  String    @map("business_id")
-  email       String
+  id         String  @id @default(cuid())
+  businessId String  @map("business_id")
+  /// Where it goes, when it goes by email. Null for a mobile invitation.
+  ///
+  /// Nullable since board 8d. It was `String`, and the screen offers one box
+  /// reading "Mobile or email" — a supplier's staff are reached on WhatsApp in
+  /// this market, and an invitation that could only be emailed was one half of
+  /// them would never see.
+  email      String?
+  /// E.164, normalised on the way in. Null for an email invitation.
+  phone      String?
+  /// Which branch this seat is scoped to. Null is every branch.
+  ///
+  /// Applied to `User.branchId` on acceptance, so the scope the owner chose
+  /// while inviting is the scope the seat gets — rather than a second decision
+  /// nobody remembers to make afterwards.
+  branchId   String? @map("branch_id")
+
   roles       Role[]    @default([])
   invitedById String    @map("invited_by_id") @db.Uuid
   token       String    @unique
   expiresAt   DateTime  @map("expires_at")
+  /// When the last message actually went, for the once-an-hour resend limit.
+  ///
+  /// §6 asks for that limit server-side rather than only in the UI, and
+  /// `createdAt` cannot answer it — a resend does not create a row.
+  lastSentAt  DateTime? @map("last_sent_at")
   acceptedAt  DateTime? @map("accepted_at")
   revokedAt   DateTime? @map("revoked_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
-  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  invitedBy User     @relation("InviteSender", fields: [invitedById], references: [id], onDelete: Restrict)
+  business  Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  invitedBy User      @relation("InviteSender", fields: [invitedById], references: [id], onDelete: Restrict)
+  branch    Location? @relation("InviteBranch", fields: [branchId], references: [id], onDelete: SetNull)
 
+  /// One outstanding invitation per contact, on whichever channel it uses.
+  /// Re-inviting resends rather than stacking a second — §4, and the reason the
+  /// send is idempotent.
   @@unique([businessId, email])
+  @@unique([businessId, phone])
   @@index([businessId])
   @@map("team_invite")
 }

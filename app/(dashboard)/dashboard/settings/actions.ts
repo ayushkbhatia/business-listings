@@ -47,6 +47,27 @@ export async function saveAlerts(formData: FormData): Promise<SaveAlertsResult> 
   const escalateAfterMinutes = pick(formData.get("escalateAfterMinutes"), ESCALATION_CHOICES, 120);
   const nudgeAfterHours = pick(formData.get("nudgeAfterHours"), NUDGE_CHOICES, 24);
 
+  /*
+     One number, two doors.
+
+     `NotificationPreference.escalateAfterMinutes` and
+     `Business.leadEscalationMinutes` are the same setting, written by this
+     screen and by Team settings respectively, and until board 8d neither was
+     read by anything — so a seller could set 30 here and 240 there and the
+     disagreement was invisible because nothing acted on either. The escalation
+     sweep reads `leadEscalationMinutes`, which makes the other one a control
+     that lies.
+
+     Both are written rather than one dropped: `escalateAfterMinutes` is what
+     this form posts and what the alerts screen reads back, and re-pointing that
+     screen at a different table is a change to a board that is not this one.
+     The write below is what makes the two agree whichever door the seller used.
+  */
+  await prisma.business.update({
+    where: { id: seat.businessId },
+    data: { leadEscalationMinutes: escalateAfterMinutes },
+  });
+
   await prisma.notificationPreference.upsert({
     where: { businessId: seat.businessId },
     create: {
@@ -75,6 +96,8 @@ export async function saveAlerts(formData: FormData): Promise<SaveAlertsResult> 
   });
 
   revalidatePath("/dashboard/settings");
+  // Team settings shows the same number under the routing control.
+  revalidatePath("/dashboard/team");
   return { ok: true };
 }
 

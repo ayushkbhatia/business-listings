@@ -120,7 +120,7 @@ export async function setupHubState(
 
   const since = business.publishedAt === null ? null : dubaiDayStart(business.publishedAt);
 
-  const [media, products, visitRequests, shortlists, openEnquiries, views, nudge, plan, lift, fee] =
+  const [media, products, visitRequests, invitesSent, shortlists, openEnquiries, views, nudge, plan, lift, fee] =
     await Promise.all([
       /*
          Kinds rather than counts: the meter needs the logo and the cover named
@@ -140,6 +140,12 @@ export async function setupHubState(
       */
       prisma.product.findMany({ where: { businessId }, select: { specValues: true } }),
       prisma.siteVisitRequest.count({ where: { businessId, cancelledAt: null } }),
+    /*
+       Outstanding invitations. Board 8d §5: the team task ticks on send, not on
+       acceptance — the seller cannot make a colleague click a link, and a task
+       held open by somebody else's inaction is one they learn to ignore.
+    */
+    prisma.teamInvite.count({ where: { businessId, acceptedAt: null, revokedAt: null } }),
       prisma.shortlist.count({ where: { businessId } }),
       /*
          Delivered or opened, not yet quoted — `getOverview`'s `awaitingReply`,
@@ -211,6 +217,7 @@ export async function setupHubState(
     photos: facts.photos,
     products: facts.products,
     seats: facts.teamSeats,
+    invitesSent,
     visitRequests,
     items: strengthItems(facts),
   });
@@ -330,13 +337,19 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
   });
   if (!business) return null;
 
-  const [media, products, visitRequests] = await Promise.all([
+  const [media, products, visitRequests, invitesSent] = await Promise.all([
     prisma.media.findMany({
       where: { OR: [{ businessId }, { product: { businessId } }], reviewId: null },
       select: { kind: true },
     }),
     prisma.product.findMany({ where: { businessId }, select: { specValues: true } }),
     prisma.siteVisitRequest.count({ where: { businessId, cancelledAt: null } }),
+    /*
+       Outstanding invitations. Board 8d §5: the team task ticks on send, not on
+       acceptance — the seller cannot make a colleague click a link, and a task
+       held open by somebody else's inaction is one they learn to ignore.
+    */
+    prisma.teamInvite.count({ where: { businessId, acceptedAt: null, revokedAt: null } }),
   ]);
 
   const facts: ProfileFacts = {
@@ -359,6 +372,7 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
     photos: facts.photos,
     products: facts.products,
     seats: facts.teamSeats,
+    invitesSent,
     visitRequests,
     items: strengthItems(facts),
   });

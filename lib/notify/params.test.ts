@@ -46,17 +46,23 @@ describe("what an event supplies", () => {
 
   it("knows which events nothing emits yet", () => {
     /*
-     * Six of fourteen are emitted. The rest are declared in the enum, seeded
+     * Seven of fourteen are emitted. The rest are declared in the enum, seeded
      * with templates, and sent by nothing — which is not a bug, but staff
      * should know before spending an afternoon on the copy.
      *
-     * `subscription_renewed` and `setup_nudge` are the two sent from a schedule
-     * rather than from a request. Every other emitted event is sent by the
-     * service that did the work; these two are sent by the daily cron, which is
-     * why both of them carry their own exactly-once guard.
+     * `subscription_renewed`, `setup_nudge` and `enquiry_escalated` are the
+     * three sent from a schedule rather than from a request. Every other
+     * emitted event is sent by the service that did the work; these are sent by
+     * a cron, which is why each carries its own exactly-once guard —
+     * `notify()` deduplicates nothing.
+     *
+     * `enquiry_escalated` had a seeded email template and no emitter from
+     * handoff 4 until board 8d, which put the sentence promising it on the
+     * invite screen and then had to build the sweep behind it.
      */
     const emitted = (Object.keys(EVENT_PARAMS) as (keyof typeof EVENT_PARAMS)[]).filter(isEmitted);
     expect([...emitted].sort()).toEqual([
+      "enquiry_escalated",
       "enquiry_received",
       "quote_accepted",
       "quote_received",

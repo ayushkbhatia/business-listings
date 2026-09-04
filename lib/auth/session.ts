@@ -54,7 +54,14 @@ export async function getActor(): Promise<Actor | null> {
   */
   const profile = await prisma.user.findUnique({
     where: { id: user.id },
-    select: { roles: true, businessId: true },
+    /*
+       `branchId` since board 8d, and it closes a hole rather than adding a
+       feature. `Actor.branchId` has been declared in ./roles.ts since handoff 0
+       and read by `withinScope()` and `analyticsScopeFor()` ever since — with
+       nothing ever setting it, so every branch-scoping check in the product
+       returned true and board 7d's branch-scoped sales seat scoped nothing.
+    */
+    select: { roles: true, businessId: true, branchId: true },
   });
 
   /*
@@ -88,6 +95,10 @@ export async function getActor(): Promise<Actor | null> {
     id: user.id,
     roles,
     ...(businessId ? { businessId } : {}),
+    // Absent means unscoped, which is what an owner and most managers are.
+    // `withinScope` reads the absence that way, so it must stay absent rather
+    // than becoming null.
+    ...(profile?.branchId ? { branchId: profile.branchId } : {}),
   };
 }
 

@@ -1,5 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { channelOf, contactLabel } from "./contact";
+import { sendInvite } from "./invite-email";
 import { repairClaims } from "@/lib/auth/flow";
 import { assertCanManageTeam } from "@/lib/auth/guards";
 import { SELLER_ROLES, type Actor, type Role } from "@/lib/auth/roles";
@@ -67,8 +69,19 @@ export interface InviteOffer {
   /** Who sent it. Falls back to the business where the sender has no name on file. */
   inviterName: string;
   /** The address the offer is bound to. Lowercased at creation. */
-  email: string;
+  /** The address or the mobile, whichever the invitation was sent to. */
+  contact: string;
+  channel: "whatsapp" | "email";
   roles: Role[];
+  /**
+   * The branch the seat is scoped to, or null for the whole business.
+   *
+   * Read here so `acceptInvite` can copy it onto the user in the same
+   * transaction that grants the seat. `Actor.branchId` has been declared since
+   * handoff 0 and read by `withinScope()` ever since with nothing writing it,
+   * so every branch-scoped check returned true. This is the writer.
+   */
+  branchId: string | null;
   expiresAt: Date;
 }
 
@@ -106,7 +119,9 @@ export async function readInvite(token: string, now: Date = new Date()): Promise
     select: {
       businessId: true,
       email: true,
+      phone: true,
       roles: true,
+      branchId: true,
       expiresAt: true,
       acceptedAt: true,
       revokedAt: true,
@@ -139,11 +154,13 @@ export async function readInvite(token: string, now: Date = new Date()): Promise
     businessId: invite.businessId,
     businessName: invite.business.displayName,
     inviterName: invite.invitedBy.fullName ?? invite.business.displayName,
-    email: invite.email,
+    contact: contactLabel(invite),
+    channel: channelOf(invite),
     // Filtered through the same ceiling the accept path applies, so the screen
     // shows what will actually be granted rather than what the row happens to
     // hold.
     roles: invite.roles.filter(isOfferable),
+    branchId: invite.branchId,
     expiresAt: invite.expiresAt,
   };
 }
@@ -259,14 +276,26 @@ export async function acceptInvite(
      written by any other path with a capital in it would be an invitation that
      silently never matched anybody, which looks exactly like a broken link.
   */
-  const invitedEmail = offer.email.trim().toLowerCase();
-  const signedInAs = holder.email?.trim().toLowerCase() ?? null;
-  if (!signedInAs || signedInAs !== invitedEmail) {
+  /*
+     Matched on whichever channel the invitation used.
+
+     An invitation to a mobile is accepted by the account holding that mobile,
+     and one to an address by the account holding it. Comparing only the address
+     — which is what this did while `email` was NOT NULL — would refuse every
+     WhatsApp invitation the moment they existed, and the refusal reads exactly
+     like a broken link.
+  */
+  const invited = offer.contact.trim().toLowerCase();
+  const holds = [holder.email, holder.phone]
+    .filter((value): value is string => typeof value === "string" && value !== "")
+    .map((value) => value.trim().toLowerCase());
+
+  if (!holds.includes(invited)) {
     return {
       ok: false,
       reason: "wrong_account",
-      invitedEmail: offer.email,
-      // A phone-only account has no address to compare, and saying so is more
+      invitedEmail: offer.contact,
+      // An account with neither has nothing to compare, and saying so is more
       // use than an empty quotation mark.
       signedInAs: holder.email ?? holder.phone ?? "",
     };
@@ -311,7 +340,21 @@ export async function acceptInvite(
 
     await tx.user.update({
       where: { id: actor.id },
-      data: { businessId: offer.businessId, roles: nextRoles },
+      data: {
+        businessId: offer.businessId,
+        roles: nextRoles,
+        /*
+           The branch, copied from the offer onto the person.
+
+           This is the only writer of `User.branchId`, and without it the column
+           the whole scoping mechanism reads would stay null on every seat ever
+           granted — `withinScope()` treats a null branch as "the whole
+           business", so a sales seat invited to Al Quoz would silently see
+           Sharjah's enquiries too. An unscoped invitation stores null, which
+           means the same thing deliberately rather than by omission.
+        */
+        branchId: offer.branchId,
+      },
     });
     return true;
   });
@@ -436,7 +479,11 @@ export async function removeSeat(actor: Actor, userId: string): Promise<RemoveRe
 
   await prisma.user.update({
     where: { id: userId },
-    data: { businessId: null, roles: nextRoles },
+    // The branch goes with the seat. A cleared `businessId` and a surviving
+    // `branchId` would leave a pointer at a location belonging to a business
+    // this person is no longer on — and the next seat they take somewhere else
+    // would start already scoped to a stranger's branch.
+    data: { businessId: null, roles: nextRoles, branchId: null },
   });
 
   // Same reason as acceptInvite: the claim is what `getActor` reads first, and
@@ -445,4 +492,79 @@ export async function removeSeat(actor: Actor, userId: string): Promise<RemoveRe
   await repairClaims(userId, nextRoles, null);
 
   return { ok: true, name: target.fullName ?? target.email ?? "" };
+}
+
+/** Board 8d §6: once an hour, per invitation, enforced here and not in the UI. */
+const RESEND_EVERY_MS = 60 * 60 * 1000;
+
+/** The seven days §6 gives a link. Restated rather than imported to avoid a cycle. */
+const INVITE_DAYS = 7;
+
+export type ResendResult = { ok: true } | { ok: false; error: "too_soon" | string };
+
+/**
+ * Send an outstanding invitation again, and reset its seven days.
+ *
+ * The limit is server-side because §6 says so, and because the reason is not
+ * politeness: each WhatsApp send is a billed conversation, and a resend button
+ * with only a disabled state is a limit that a second tab walks straight past.
+ *
+ * `lastSentAt` rather than `createdAt` — a resend does not create a row, so the
+ * creation time stops being the answer the moment this function is used once.
+ */
+export async function resendInvite(
+  actor: Actor,
+  businessId: string,
+  inviteId: string,
+  now: Date = new Date(),
+): Promise<ResendResult> {
+  assertCanManageTeam(actor);
+  if (actor.businessId !== businessId) {
+    return { ok: false, error: "You can only resend your own team's invitations." };
+  }
+
+  const invite = await prisma.teamInvite.findFirst({
+    where: { id: inviteId, businessId, acceptedAt: null, revokedAt: null },
+    select: {
+      id: true,
+      email: true,
+      phone: true,
+      token: true,
+      roles: true,
+      lastSentAt: true,
+      business: { select: { displayName: true } },
+      invitedBy: { select: { fullName: true } },
+    },
+  });
+  if (!invite) return { ok: false, error: "That invitation cannot be found." };
+
+  if (invite.lastSentAt && now.getTime() - invite.lastSentAt.getTime() < RESEND_EVERY_MS) {
+    return { ok: false, error: "too_soon" };
+  }
+
+  /*
+     The same token, and a fresh expiry.
+
+     `inviteSeat` mints a new token when it is called again, which is right for
+     a re-invitation with different roles and wrong here: the seller has already
+     sent this person a link, and a resend that silently kills the first one
+     turns "I forwarded it to him" into a dead link.
+  */
+  const expiresAt = new Date(now.getTime() + INVITE_DAYS * 86_400_000);
+  await prisma.teamInvite.update({
+    where: { id: invite.id },
+    data: { expiresAt, lastSentAt: now },
+  });
+
+  await sendInvite({
+    ...(invite.email ? { email: invite.email } : { phone: invite.phone as string }),
+    channel: invite.phone ? "whatsapp" : "email",
+    token: invite.token,
+    businessName: invite.business.displayName,
+    inviterName: invite.invitedBy.fullName ?? invite.business.displayName,
+    roles: invite.roles,
+    expiresAt,
+  });
+
+  return { ok: true };
 }

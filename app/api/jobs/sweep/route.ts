@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { deliverQueued, flushDeferred } from "@/lib/notify/service";
 import { sweepAlerts } from "@/lib/alerts/service";
 import { pollDomains } from "@/lib/domains/service";
+import { sweepEscalations } from "@/lib/enquiry/escalation-job";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
 
 /**
@@ -49,6 +50,13 @@ export async function GET(request: NextRequest) {
   if (refusal) return refusal;
 
   const outcome = await runSteps({
+    /*
+       First, because it is the one step somebody is waiting on. Board 8d's
+       invite screen promises "anything unanswered for two hours escalates to
+       you", and an escalation that arrives an hour late is an escalation about
+       a reply time it has itself made worse.
+    */
+    escalations: () => sweepEscalations(),
     async deferredNotifications() {
       let flushed = 0;
       let passes = 0;

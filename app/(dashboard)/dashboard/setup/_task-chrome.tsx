@@ -1,4 +1,5 @@
-import "server-only";
+"use client";
+
 import Link from "next/link";
 import { buttonClassName } from "@/components/primitives";
 import { cn } from "@/lib/cn";
@@ -34,6 +35,16 @@ import type { SetupTaskId } from "@/lib/setup/tasks";
  * as work lands (three of five photographs is sixty per cent), and the other
  * three fill only when their done-condition is met. The label says what is
  * still open rather than which number this is.
+ *
+ * ## Why this is a client component
+ *
+ * Board 8d's primary is not a link. It sends invitations, so it has to know how
+ * many valid draft rows there are — state that lives in the rows below it. A
+ * server chrome would have forced 8d to duplicate the bar rather than share it,
+ * and two task headers would drift apart the first time one was edited.
+ *
+ * It takes only strings and nodes, so nothing about the boards that pass plain
+ * data changes.
  */
 
 export interface TaskSegment {
@@ -56,12 +67,36 @@ export interface TaskChromeProps {
    * task's condition is met, which is the only thing about it that moves.
    */
   done: boolean;
+  /**
+   * Replaces the default link, for a task whose primary does work.
+   *
+   * Board 8d sends invitations from here — §4: sending puts a message on
+   * somebody else's phone, so it is explicit rather than autosaved, and the one
+   * press both sends and returns.
+   */
+  primary?: React.ReactNode;
+  /**
+   * Replaces "Skip for now" where the task has a truer reason to leave.
+   *
+   * Board 8d's is "I work alone — skip", which is not a deferral: a supplier who
+   * has no colleagues is finished with this task, and offering to remind them
+   * later would be nagging them about a thing that will never be true.
+   */
+  skipLabel?: string;
   children: React.ReactNode;
 }
 
 const HUB = "/dashboard/setup";
 
-export function TaskChrome({ name, segments, openCount, done, children }: TaskChromeProps) {
+export function TaskChrome({
+  name,
+  segments,
+  openCount,
+  done,
+  primary,
+  skipLabel,
+  children,
+}: TaskChromeProps) {
   return (
     <div data-density="comfortable" className="flex min-h-dvh flex-col bg-paper">
       <header className="flex flex-none flex-wrap items-center gap-4 border-b border-line bg-card px-6 py-3">
@@ -121,11 +156,13 @@ export function TaskChrome({ name, segments, openCount, done, children }: TaskCh
             href={HUB}
             className="text-body-sm text-muted underline-offset-2 hover:text-ink hover:underline focus-visible:outline-none focus-visible:shadow-focus"
           >
-            {t("task.skip")}
+            {skipLabel ?? t("task.skip")}
           </Link>
-          <Link href={HUB} className={buttonClassName({ size: "md" })}>
-            {done ? t("task.done") : t("task.save")}
-          </Link>
+          {primary ?? (
+            <Link href={HUB} className={buttonClassName({ size: "md" })}>
+              {done ? t("task.done") : t("task.save")}
+            </Link>
+          )}
         </div>
       </header>
 

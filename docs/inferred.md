@@ -2859,3 +2859,87 @@ how a screen loses a seller.
 - **A formatter nearly crossed the client boundary.** The sheet-change confirm took a
   label function from the server component. `sheetChangeCost` now returns finished
   sentences.
+
+## Board 8d — invite the team
+
+### An invitation could only be emailed, and half this market is not on email
+
+§2 asks for one field reading "Mobile or email" that sniffs which. What existed was a
+`TeamInvite` with `email` `NOT NULL` and one carrier, Resend. So the screen the board
+draws could not have been built without a schema change:
+`20260905160000_team_seats_branch_and_phone` drops the NOT NULL, adds `phone`, and adds
+a second unique index — `(business_id, phone)` beside `(business_id, email)`, not one
+partial index over both, so re-inviting the same colleague on the other channel finds
+its own row rather than overwriting the first.
+
+`readContact` is the sniff, and it is deliberately pure: it runs in the browser so the
+row can state its channel as the seller types, and again on the server because a
+client-side check is a courtesy. It refuses a landline. `toE164` normalises `04 883
+4120` perfectly happily and no WhatsApp reaches it, so accepting one would produce an
+invitation that looks sent and never arrives — and a WhatsApp template is a billed
+conversation, so the honest version is also the cheaper one to get wrong.
+
+### `User.branchId` had no writer, so every branch check returned true
+
+`Actor.branchId` has been declared in `lib/auth/roles.ts` since handoff 0 and read by
+`withinScope()` and `analyticsScopeFor()` ever since. Nothing ever set it. Board 7d
+shipped a "branch-scoped sales seat" that scoped nothing, and no test caught it because
+an unscoped actor is the permissive case — the check passed, so the screen worked.
+
+The chain now runs end to end: the invite row carries `branchId`, `acceptInvite` copies
+it onto the user in the same transaction that grants the seat, `getActor` reads it into
+the actor, and `removeSeat` clears it with the seat. A null branch still means the whole
+business, which is what an owner and most managers are.
+
+### Free rises to two seats, because one is the owner
+
+The Free plan's `teamSeats` was 1. The owner occupies it, so a Free seller could never
+send an invitation at all — the setup task the hub showed them was uncompletable, in
+exactly the way board 8b's photo cap and 8c's missing product writer were. Two is the
+smallest number that makes the task real: the owner and one other person.
+
+### The escalation sentence is kept rather than cut
+
+§8 says to cut "anything unanswered for two hours escalates to you" unless a job exists,
+and it was right to — the line sits beside a paragraph telling the seller their ranking
+depends on reply time. `lib/enquiry/escalation-job.ts` is that job, running first in the
+hourly sweep.
+
+It escalates **to the owner**, which is what the screen says and also all it can do:
+`EnquiryRecipient` carries no assignee and `Business.leadRouting` is stored and applied
+nowhere, so round-robin currently routes nothing. The threshold is the supplier's own
+`leadEscalationMinutes`, the look-back is seven days so the first run after deploy is
+not a broadcast, and the once-per-enquiry guard lives in the job because `notify()`
+deduplicates nothing.
+
+### The tick and the score disagree, and the screen says so
+
+The task ticks when the invitation goes; the ten points wait for an active seat, because
+`profileStrength` counts `_count.team` and an unaccepted invitation is not a seat. §5
+calls this the most likely support ticket on the screen, so the sentence is rendered
+rather than left to be discovered — and it names `WEIGHTS.team` rather than the "8" in
+the handoff, because the meter on the hub renders ten and two numbers three lines apart
+must agree.
+
+### Found in passing
+
+- **Two seller controls wrote two columns for one setting.** `/dashboard/settings` wrote
+  `NotificationPreference.escalateAfterMinutes` and `/dashboard/team` wrote
+  `Business.leadEscalationMinutes`; both said "escalate after N minutes" and neither was
+  read by anything, so the disagreement was invisible. The sweep reads
+  `leadEscalationMinutes`, which turned the other into a control that lies. Both writers
+  now keep both columns level.
+- **The dev seat page listed the wrong forty businesses.** It ordered by
+  `profileStrength: "desc"`, and Postgres sorts NULLs first on a descending sort — so
+  every strengthless fixture came top and every seeded supplier with a plan, branches and
+  a filled profile fell off the end. Nulls are now explicitly last.
+- **`resendInvite` reuses the token.** `inviteSeat` mints a new one when called again,
+  which is right for a re-invitation with different roles and wrong for a resend: the
+  seller has already sent this person a link, and a fresh token turns "I forwarded it to
+  him" into a dead link. The once-an-hour limit is enforced in the service rather than by
+  a disabled button, because a second tab walks past a client-side limit and each
+  WhatsApp send costs money.
+- **The accept screen called a mobile an address.** `invite.wrong_account_title` and
+  `invite.intro` both named `{email}`; the first now has a phone variant and the second's
+  placeholder is `{contact}`, which is what it has always actually carried since the
+  channel split.

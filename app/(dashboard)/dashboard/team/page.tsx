@@ -46,7 +46,16 @@ export default async function TeamPage() {
 
         <TeamForm
           seats={seats}
-          invites={invites}
+          /*
+             Whichever channel it used. `pendingInvites` returns both columns
+             since board 8d made a mobile invitation possible, and the row shows
+             the one that is set.
+          */
+          invites={invites.map((invite) => ({
+            id: invite.id,
+            contact: invite.email ?? invite.phone ?? "",
+            roles: invite.roles,
+          }))}
           /*
              The reader's own id, so their row offers no remove control. It is
              the actor's rather than the seat's: a staff member looking through

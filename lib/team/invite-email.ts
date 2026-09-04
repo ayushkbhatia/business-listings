@@ -32,8 +32,11 @@ export function inviteUrl(token: string): string {
 }
 
 export interface InviteEmailInput {
-  /** The invited address, as stored on the row. */
-  email: string;
+  /** The invited address, when the invitation goes by email. */
+  email?: string;
+  /** E.164, when it goes by WhatsApp. */
+  phone?: string;
+  channel?: "whatsapp" | "email";
   token: string;
   /** `displayName`. The name the invitee will see on the storefront they are joining. */
   businessName: string;
@@ -44,7 +47,7 @@ export interface InviteEmailInput {
 
 export async function sendInviteEmail(input: InviteEmailInput): Promise<boolean> {
   const sender = resolveNotificationSenders().email;
-  if (!sender) {
+  if (!sender || !input.email) {
     // Honest rather than silent: in production with no Resend key there is no
     // carrier, and the caller has to offer the link instead of claiming a send.
     console.warn("[team] no email carrier configured; the invitation link was not sent", {
@@ -98,6 +101,75 @@ export async function sendInviteEmail(input: InviteEmailInput): Promise<boolean>
     console.error("[team] the invitation email could not be sent", {
       to: input.email,
       cause: cause instanceof Error ? cause.name : "unknown",
+    });
+    return false;
+  }
+}
+
+/**
+ * Send it, by whichever channel the contact resolved to. Board 8d §2.
+ *
+ * ## Why WhatsApp falls back to email and never the other way
+ *
+ * A WhatsApp template message needs a Meta-approved template, and every seeded
+ * one in this product is `pending_meta` — so on a mobile invitation today the
+ * carrier refuses and there is nothing to fall back to, because a mobile-only
+ * contact has no address. The screen handles that the way it handles a refused
+ * email: it leads with the copyable link, which is the cheapest unblock and the
+ * reason the token stopped being thrown away in board 8a.
+ *
+ * Never throws. A carrier that is down costs the owner a copy-and-paste rather
+ * than the seat — the same contract `sendInviteEmail` has always had.
+ */
+export async function sendInvite(input: InviteEmailInput): Promise<boolean> {
+  if (input.channel === "whatsapp" || (input.phone && !input.email)) {
+    return sendInviteWhatsApp(input);
+  }
+  return sendInviteEmail(input);
+}
+
+/**
+ * The mobile half.
+ *
+ * Deliberately not routed through `notify()`: that resolves its recipient by
+ * `recipientUserId`, and an invitee has no `User` row at all — which is the
+ * whole reason invitations were never delivered before board 8a. It uses the
+ * sender directly, as the buyer quote path does for the same reason.
+ */
+async function sendInviteWhatsApp(input: InviteEmailInput): Promise<boolean> {
+  const sender = resolveNotificationSenders().whatsapp;
+  if (!sender || !input.phone) {
+    console.warn("[team] no WhatsApp carrier configured; the invitation link was not sent");
+    return false;
+  }
+
+  try {
+    const outcome = await sender.send({
+      channel: "whatsapp",
+      to: input.phone,
+      subject: null,
+      body: t("invite.whatsapp_body", {
+        inviter: input.inviterName,
+        business: input.businessName,
+      }),
+      actionLabel: t("invite.email_cta"),
+      actionUrl: inviteUrl(input.token),
+      /*
+         No Meta template name, and that is the honest state rather than an
+         omission: none is approved for this message. The Bird sender refuses
+         without one and reports why, which is what makes the screen fall back
+         to the copyable link instead of claiming a send.
+      */
+      metaTemplateName: null,
+    });
+
+    if (!outcome.delivered) {
+      console.warn("[team] the WhatsApp invitation was refused", { detail: outcome.detail });
+    }
+    return outcome.delivered;
+  } catch (error) {
+    console.warn("[team] the WhatsApp invitation did not send", {
+      reason: error instanceof Error ? error.message : "unknown",
     });
     return false;
   }

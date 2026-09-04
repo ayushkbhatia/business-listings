@@ -3514,15 +3514,21 @@ export const en = {
   "invite.email_cta": "Accept the invitation",
   "invite.email_expiry": "The link works until {date}.",
   "invite.title": "Join {business}",
-  "invite.intro": "{inviter} has given you a seat on this listing. Sign in with {email} to take it.",
+  // `{contact}` rather than `{email}`: the same slot now carries a mobile half
+  // the time, and a placeholder named for one of its two values is how the
+  // wrong noun ends up in the sentence around it.
+  "invite.intro": "{inviter} has given you a seat on this listing. Sign in with {contact} to take it.",
   "invite.roles": "The seat lets you {roles}.",
   "invite.accept": "Accept and sign in",
   "invite.accepted_title": "You are on the team",
   "invite.accepted_body": "You now have a seat on {business}. Your dashboard is where the enquiries are.",
   "invite.to_dashboard": "Open the dashboard",
+  // Two titles, because the invitation now goes to one of two things. Calling a
+  // mobile "a different address" is the screen not knowing what it sent.
   "invite.wrong_account_title": "This invitation is for a different address",
+  "invite.wrong_account_title_phone": "This invitation is for a different mobile",
   "invite.wrong_account_body":
-    "It was sent to {email} and you are signed in as {current}. Sign out, then open the link again.",
+    "It was sent to {contact} and you are signed in as {current}. Sign out, then open the link again.",
   "invite.expired_title": "This invitation has expired",
   "invite.expired_body": "Ask {business} to send another. They expire after seven days.",
   "invite.revoked_title": "This invitation was withdrawn",
@@ -3540,6 +3546,81 @@ export const en = {
   "invite.email_sent": "Invitation emailed to {email}.",
   "invite.email_failed":
     "The invitation was created but the email did not send. Copy the link below and send it yourself.",
+  "invite.whatsapp_body":
+    "{inviter} has given you a seat on {business} on Business Listings. Open the link to set a password and start answering enquiries.",
+
+  // ── Board 8d — the invite screen ─────────────────────────────────────────
+  "team_setup.eyebrow": "Invite your team",
+  "team_setup.title": "Who else should see enquiries?",
+  "team_setup.intro":
+    "Enquiries arrive at all hours. One person on the inbox means a slow reply the day they are on site — and reply time is what decides your ranking.",
+  "team_setup.contact_label": "Mobile or email",
+  "team_setup.contact_placeholder": "Mobile or email",
+  "team_setup.role_label": "Role",
+  "team_setup.branch_label": "Branch",
+  "team_setup.all_branches": "All branches",
+  "team_setup.remove_row": "Remove this row",
+  "team_setup.add_person": "+ Add another person",
+  "team_setup.seats_used": "{used} of {total} seats used on {plan}",
+  "team_setup.at_cap": "{plan} has no seat left. Upgrade to invite more people.",
+  "team_setup.see_pricing": "See pricing",
+  "team_setup.skip": "I work alone — skip",
+  "team_setup.send": {
+    one: "Send {formatted} invite & back to setup",
+    other: "Send {formatted} invites & back to setup",
+  },
+  "team_setup.send_none": "Back to setup",
+  "team_setup.sent": {
+    one: "{formatted} invite sent.",
+    other: "{formatted} invites sent.",
+  },
+  "team_setup.some_failed": {
+    one: "{formatted} invite sent. The row below still needs fixing.",
+    other: "{formatted} invites sent. The rows below still need fixing.",
+  },
+
+  // Stated per row and resolved live, because the rail used to promise WhatsApp
+  // while the field took an address — and the two channels cost different money.
+  "team_setup.by_whatsapp": "Invite goes by WhatsApp",
+  "team_setup.by_email": "Invite goes by email",
+  "team_setup.ambiguous": "That is not a UAE mobile or an email address.",
+
+  // The tick and the score disagree while an invitation sits unaccepted, and
+  // §5 says to state it rather than let the seller discover it.
+  "team_setup.tick_note":
+    "The task ticks when the invite goes. The {points} points land when they accept and the seat is active.",
+
+  "team_setup.routing_title": "How new enquiries get shared",
+  "team_setup.routing.round_robin": "Round-robin",
+  "team_setup.routing.by_branch": "Nearest branch",
+  "team_setup.routing.everyone": "Everyone sees everything",
+  "team_setup.routing_note": "Changeable any time in Team settings.",
+  "team_setup.escalation_note": "Anything unanswered for {threshold} escalates to you.",
+  // Two units for one number, chosen by whether it divides. The escalation
+  // email says "2 hours" because its seeded template renders `{hours}`, and a
+  // screen reading "120 minutes" next to a message reading "2 hours" is the
+  // same fact told two ways.
+  "team_setup.escalation_hours": { one: "{formatted} hour", other: "{formatted} hours" },
+  "team_setup.escalation_minutes": { one: "{formatted} minute", other: "{formatted} minutes" },
+
+  "team_setup.role.manager": "Manager",
+  "team_setup.role.sales": "Sales",
+
+  "team_setup.sent_rows": "Already invited",
+  "team_setup.sent_ago": "Sent {when}",
+  "team_setup.resend": "Resend",
+  "team_setup.revoke": "Revoke",
+  "team_setup.resent": "Sent again.",
+  "team_setup.resend_too_soon": "That invitation went recently. You can send it again in an hour.",
+  "team_setup.already_seated": "{name} is already on your team.",
+
+  "team_setup.what_eyebrow": "WHAT THEY'LL GET",
+  "team_setup.what_body":
+    "A link they open on their phone. They set a password, and from then on new enquiries reach them directly — no forwarding, no shared inbox.",
+  "team_setup.money_title": "Sales cannot touch the money",
+  "team_setup.money_body":
+    "A sales seat replies to enquiries and sends quotes. It cannot see invoices, change the plan or edit your licence details.",
+
   "invite.remove_seat": "Remove the seat",
   "invite.remove_confirm": "Remove {name} from the team?",
   "invite.remove_body":
