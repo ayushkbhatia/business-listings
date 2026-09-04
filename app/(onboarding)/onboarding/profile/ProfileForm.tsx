@@ -14,7 +14,7 @@ import type { ProfileCategory, PatchField, PatchProblem } from "@/lib/onboarding
 import { DESCRIPTION_MAX, ESTABLISHED_MIN } from "@/lib/onboarding/profile-fields";
 import type { AddCategoryResult } from "@/lib/onboarding/categories";
 import type { ContinueResult, SaveFieldResult } from "./actions";
-import { useSaved } from "./SavedState";
+import { useSaved } from "../_saved";
 
 /**
  * Board 2c's left column — the first screen in onboarding where a seller writes
@@ -92,7 +92,7 @@ export function ProfileForm(props: ProfileFormProps) {
       void props.saveAction(form).then((result) => {
         if (result.ok) {
           setErrors((current) => ({ ...current, [field]: undefined }));
-          setSaved(t("profile_step.saved_now"));
+          setSaved(t("onboarding.saved_now"));
           return;
         }
         const problem = result.problem as PatchProblem;

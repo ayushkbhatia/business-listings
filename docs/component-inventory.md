@@ -80,6 +80,22 @@ which left the gallery reading 15 over a table holding 16 for a whole handoff.
 | 49 | `CategoryMark` | moss tile, two-letter mono code |
 | 50 | `MapCanvas` | 4-level pin hierarchy + cluster count |
 
+Row 50 is one inventory component with three renderings, and the count stays at one because
+the pin hierarchy in §03.5 is what the row is about — all three read the same tokens and draw
+the same four levels. They are separate files because the rendering paths differ and one set
+of props would only half apply to each:
+
+- `MapCanvas` — DOM markers, right for a storefront's three branches: focusable, named, few.
+- `ResultsMap` — a GeoJSON source and paint layers, because board 1c carries up to two
+  hundred results and has to cluster them.
+- `BranchPinMap` — board 2d, and the only map a seller can move: one draggable marker, an
+  accuracy ring that follows it, and a radius editor that changes what the map is showing.
+
+All three load MapLibre through `lib/map/loader.ts`, which points `config.WORKER_URL` at a
+worker the app actually serves. Without it MapLibre resolves its worker to a 404 and every
+map on the platform renders a blank rectangle with working controls.
+
+
 ## Tier 4 — domain (14, plus 66 and 67 below)
 
 | # | Component | Lands in |

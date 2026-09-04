@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Map as MapLibreMap, MapGeoJSONFeature } from "maplibre-gl";
+import { loadMapLibre } from "@/lib/map/loader";
 import { cn } from "@/lib/cn";
 import type { MapBounds } from "@/lib/search/query";
 
@@ -201,7 +202,7 @@ export function ResultsMap({
     let cancelled = false;
 
     (async () => {
-      const maplibre = await import("maplibre-gl");
+      const maplibre = await loadMapLibre();
       if (cancelled || !containerRef.current) return;
 
       const map = new maplibre.Map({

@@ -96,6 +96,7 @@ model User {
   proposalsDecided    SpecFieldProposal[]    @relation("ProposalDecidedBy")
   templateVersions    TemplateVersion[]
   boostsCreated       ListingBoost[]
+  settingsWritten     PlatformSetting[]      @relation("SettingWriter")
 
   @@index([businessId])
   @@map("user")
@@ -721,6 +722,14 @@ model Location {
 
   published       Boolean      @default(false)
   createdAt       DateTime     @default(now()) @map("created_at")
+  /// When this branch last changed, for the "Saved 20 seconds ago" line the
+  /// onboarding step and the dashboard both carry.
+  ///
+  /// A per-row timestamp rather than one on the business, because board 2d
+  /// autosaves a single field of a single branch and the header reports that
+  /// save. A business-level stamp would move when any branch changed and would
+  /// report the wrong branch's work as this one's.
+  updatedAt       DateTime     @updatedAt @map("updated_at")
 
   business            Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   area                Area            @relation(fields: [areaId], references: [id], onDelete: Restrict)
@@ -3456,4 +3465,41 @@ model ReviewRequest {
   @@unique([businessId, buyerId])
   @@index([businessId, sentAt])
   @@map("review_request")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Platform settings — the calendar and the geography board 12h owns
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One row per platform-level setting. Board 12h edits these; everything else
+/// reads them.
+///
+/// It exists because of one specific line in board 2d: *"The dates come from one
+/// platform-level setting, not from each seller. Ramadan moves yearly and 41,000
+/// sellers will not update it."* The dates were already platform-level — a
+/// constant in `lib/trade/hours.ts` — which satisfied the "not each seller" half
+/// and failed the other: a lunar calendar that shifts every year should not need
+/// a deploy to correct, and CLAUDE.md is explicit that content belongs in the
+/// database rather than in a commit.
+///
+/// A key/value table rather than a column per setting, because the alternative
+/// is a one-row table that grows a migration every time the platform learns a
+/// new fact about itself. `value` is validated on read by whichever module owns
+/// the key — see `lib/trade/ramadan-calendar.ts` — and a malformed or missing
+/// row falls back to the compiled default rather than taking a surface down.
+///
+/// **A staff write to this table is a staff state change and owes an audit row
+/// with a written reason** (CLAUDE.md, non-negotiable 3). `updatedById` is who,
+/// and it is nullable only because the seed writes these rows before any user
+/// exists. There is deliberately no writer in this codebase yet: board 12h owns
+/// it, and it must go through the audit service rather than around it.
+model PlatformSetting {
+  key         String   @id
+  value       Json
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedById String?  @map("updated_by_id") @db.Uuid
+
+  updatedBy User? @relation("SettingWriter", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("platform_setting")
 }

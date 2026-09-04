@@ -197,13 +197,7 @@ test.describe("board 2a — at 1024 and above", () => {
     // Scoped to the chain itself: the collapsed "1 / 5" line beside it carries
     // the current step's name too, and is only hidden by a media query.
     const chain = page.getByRole("navigation", { name: "Set up your listing" }).getByRole("list");
-    for (const step of [
-      "Find your business",
-      "Prove it is yours",
-      "Your profile",
-      "Where you are",
-      "Pick a plan",
-    ]) {
+    for (const step of ["Claimed", "Verified", "Profile", "Locations", "Plan"]) {
       await expect(chain.getByText(step, { exact: true })).toBeVisible();
     }
   });
@@ -218,8 +212,8 @@ test.describe("board 2a — below 768", () => {
     await page.goto("/onboarding/claim");
     const nav = page.getByRole("navigation", { name: "Set up your listing" });
     await expect(nav).toContainText("1 / 5");
-    await expect(nav).toContainText("Find your business");
-    await expect(nav.getByText("Pick a plan")).toBeHidden();
+    await expect(nav).toContainText("Claimed");
+    await expect(nav.getByText("Plan", { exact: true })).toBeHidden();
   });
 
   test("puts the search button and the row actions on the 44px target floor", async ({ page }) => {

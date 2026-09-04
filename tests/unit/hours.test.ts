@@ -154,7 +154,30 @@ describe("which hours apply today", () => {
     const result = hoursInEffect(COUNTER, ramadan, new Date("2026-03-01T09:00:00Z"));
     expect(result.isRamadan).toBe(true);
     expect(result.hours.sun).toEqual([{ open: "09:00", close: "15:00" }]);
-    expect(result.hours.sat).toEqual([{ open: "09:00", close: "15:00" }]);
+    expect(result.hours.fri).toEqual([{ open: "09:00", close: "15:00" }]);
+  });
+
+  it("never opens a day the seller switched off", () => {
+    /*
+       Board 2d, criterion 14. COUNTER is shut on Saturday, and the band used to
+       spread across all seven days with `everyDay` — so a workshop with the
+       shutters down was published as open 09:00–15:00 every Saturday of
+       Ramadan. This is the assertion that stops it coming back.
+    */
+    const result = hoursInEffect(COUNTER, ramadan, new Date("2026-03-01T09:00:00Z"));
+    expect(result.hours.sat).toEqual([]);
+    // Nor a day the ordinary week never mentions at all.
+    expect(result.hours.tue).toEqual([]);
+  });
+
+  it("will not let a per-day override reopen a shut day either", () => {
+    // The rule is about the day being off, not about which field said so.
+    const result = hoursInEffect(
+      COUNTER,
+      { all: [{ open: "09:00", close: "15:00" }], sat: [{ open: "10:00", close: "14:00" }] },
+      new Date("2026-03-01T09:00:00Z"),
+    );
+    expect(result.hours.sat).toEqual([]);
   });
 
   it("lets a single day override the blanket Ramadan hours", () => {
@@ -174,9 +197,22 @@ describe("which hours apply today", () => {
 
   it("does not close a business because its Ramadan block is empty", () => {
     // An empty block is a seller who opened the section and left, not a
-    // seller who shuts for a month.
+    // seller who shuts for a month — and not a "Ramadan hours" badge over
+    // hours nobody changed.
     const result = hoursInEffect(COUNTER, {}, new Date("2026-03-01T09:00:00Z"));
     expect(result.isRamadan).toBe(false);
     expect(result.hours).toBe(COUNTER);
+  });
+
+  it("reads the calendar it is given rather than only the compiled one", () => {
+    /*
+       Criterion 15: the dates are a platform setting, so a year the compiled
+       table has never heard of still switches a supplier's hours over.
+    */
+    const result = hoursInEffect(COUNTER, ramadan, new Date("2044-05-05T09:00:00Z"), {
+      2044: { from: "2044-05-01", to: "2044-05-30" },
+    });
+    expect(result.isRamadan).toBe(true);
+    expect(result.hours.sun).toEqual([{ open: "09:00", close: "15:00" }]);
   });
 });

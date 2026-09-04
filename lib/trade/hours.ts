@@ -146,8 +146,21 @@ export function isClosedAllWeek(hours: WeekHours): boolean {
  * as fact. `ramadanFor` returns null past the table rather than extrapolating.
  *
  * Sourced per Hijri year. Extend it rather than computing it.
+ *
+ * **This is the fallback, not the source.** Board 2d, criterion 15: the dates
+ * come from a platform setting, so `platform_setting.ramadan_dates` is what a
+ * running system reads and `lib/trade/ramadan-calendar.ts` is what reads it.
+ * A year the table below has not been extended to is a year the platform can
+ * correct without a deploy — which is the whole reason the setting exists, given
+ * that the calendar moves annually and 41,000 sellers will not update it.
+ *
+ * Kept compiled as well so that every function here stays pure and callable
+ * without a database, and so a missing or malformed row degrades to the last
+ * known-good estimates rather than taking a storefront's hours down.
  */
-const RAMADAN: Record<number, { from: string; to: string }> = {
+export type RamadanCalendar = Record<number, { from: string; to: string }>;
+
+const RAMADAN: RamadanCalendar = {
   2026: { from: "2026-02-17", to: "2026-03-19" },
   2027: { from: "2027-02-07", to: "2027-03-08" },
   2028: { from: "2028-01-27", to: "2028-02-25" },
@@ -155,6 +168,9 @@ const RAMADAN: Record<number, { from: string; to: string }> = {
   2030: { from: "2030-01-05", to: "2030-02-03" },
   2031: { from: "2031-12-15", to: "2032-01-13" },
 };
+
+/** The compiled estimates, for the module that merges the platform setting over them. */
+export const FALLBACK_RAMADAN: RamadanCalendar = RAMADAN;
 
 export interface RamadanWindow {
   year: number;
@@ -166,8 +182,12 @@ export interface RamadanWindow {
   approximate: true;
 }
 
-export function ramadanFor(year: number, now = new Date()): RamadanWindow | null {
-  const entry = RAMADAN[year];
+export function ramadanFor(
+  year: number,
+  now = new Date(),
+  calendar: RamadanCalendar = RAMADAN,
+): RamadanWindow | null {
+  const entry = calendar[year];
   if (!entry) return null;
 
   const from = new Date(`${entry.from}T00:00:00Z`);
@@ -182,31 +202,70 @@ export function ramadanFor(year: number, now = new Date()): RamadanWindow | null
 }
 
 /** The window covering or next following `now`, or null past the table. */
-export function nextRamadan(now = new Date()): RamadanWindow | null {
-  const years = Object.keys(RAMADAN)
+export function nextRamadan(
+  now = new Date(),
+  calendar: RamadanCalendar = RAMADAN,
+): RamadanWindow | null {
+  const years = Object.keys(calendar)
     .map(Number)
     .sort((a, b) => a - b);
   for (const year of years) {
-    const window = ramadanFor(year, now);
+    const window = ramadanFor(year, now, calendar);
     if (window && (window.active || window.to >= now)) return window;
   }
   return null;
 }
 
-/** Which week applies today. The switch is automatic, which is the whole point. */
+/**
+ * Which week applies today. The switch is automatic, which is the whole point.
+ *
+ * ## The band never opens a shut day
+ *
+ * Board 2d, criterion 14: *"The Ramadan band applies to every open day and never
+ * opens a day that is switched off."* The first version of this spread `all`
+ * across all seven days with `everyDay`, which meant a workshop closed on Sunday
+ * was published as open 09:00–15:00 every Sunday of Ramadan — a locked gate with
+ * the storefront's blessing, and the exact failure the "measured, never claimed"
+ * rule exists to prevent.
+ *
+ * So the Ramadan week is the normal week's **open days**, re-timed. A day with no
+ * ordinary shifts has no Ramadan shifts either, whether the seller stated the
+ * band or a per-day override: a supplier who wants Saturday open in Ramadan
+ * opens Saturday, which is a sentence the editor can already say. Erring the
+ * other way would have the page claim a business is open when it is shut, and
+ * that is the more expensive of the two mistakes by a distance — a buyer drives
+ * to Al Quoz for it.
+ */
 export function hoursInEffect(
   hours: WeekHours,
   ramadan: RamadanHours | null,
   now = new Date(),
+  calendar: RamadanCalendar = RAMADAN,
 ): { hours: WeekHours; isRamadan: boolean } {
-  const window = nextRamadan(now);
+  const window = nextRamadan(now, calendar);
   if (!window?.active || !ramadan) return { hours, isRamadan: false };
 
-  const all = ramadan.all;
-  const week: WeekHours = all ? everyDay(all) : {};
+  /*
+     A block that states nothing is a seller who opened the section and left,
+     not a seller who keeps their ordinary hours through Ramadan. Checked before
+     the week is built rather than after: since the band now falls back to the
+     ordinary day, an empty block produces a week identical to the normal one,
+     which `isClosedAllWeek` cannot tell from a real Ramadan week and which would
+     otherwise put a "Ramadan hours" badge over hours nobody changed.
+  */
+  const states = ramadan.all !== undefined || DAYS.some((day) => ramadan[day] !== undefined);
+  if (!states) return { hours, isRamadan: false };
+
+  const week: WeekHours = {};
+  if (hours.publicHolidays) week.publicHolidays = hours.publicHolidays;
+
   for (const day of DAYS) {
-    const override = ramadan[day];
-    if (override) week[day] = override;
+    // Closed in the ordinary week means closed, and no Ramadan value reopens it.
+    if ((hours[day] ?? []).length === 0) {
+      week[day] = [];
+      continue;
+    }
+    week[day] = ramadan[day] ?? ramadan.all ?? hours[day] ?? [];
   }
 
   // A Ramadan block with nothing in it is not a reason to close the business.

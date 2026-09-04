@@ -2,7 +2,9 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
+import { loadMapLibre } from "@/lib/map/loader";
 import { cn } from "@/lib/cn";
+import { circlePolygon } from "@/lib/geo/distance";
 
 /**
  * A map, wrapping MapLibre.
@@ -152,7 +154,7 @@ export function MapCanvas({
     let cancelled = false;
 
     (async () => {
-      const maplibre = await import("maplibre-gl");
+      const maplibre = await loadMapLibre();
       if (cancelled || !containerRef.current) return;
 
       const map = new maplibre.Map({
@@ -360,7 +362,7 @@ function drawRadii(map: MapLibreMap, rings: MapCanvasProps["radii"]): void {
     features: rings.map((ring) => ({
       type: "Feature" as const,
       properties: { id: ring.id },
-      geometry: { type: "Polygon" as const, coordinates: [ringOf(ring)] },
+      geometry: { type: "Polygon" as const, coordinates: [circlePolygon(ring, ring.km)] },
     })),
   };
 
@@ -392,28 +394,6 @@ function drawRadii(map: MapLibreMap, rings: MapCanvasProps["radii"]): void {
     source: SOURCE,
     paint: { "line-color": moss, "line-opacity": 0.4, "line-width": 1 },
   });
-}
-
-/**
- * A circle of `km` around a point, as polygon coordinates.
- *
- * 64 points is enough that the edge reads as curved at any zoom a storefront
- * map reaches, and the latitude correction matters at this one: a degree of
- * longitude in the UAE is about 0.9 of a degree of latitude, and skipping it
- * draws an ellipse that overstates the reach east and west.
- */
-function ringOf(ring: { lat: number; lng: number; km: number }): [number, number][] {
-  const points: [number, number][] = [];
-  const latDegrees = ring.km / 110.574;
-  const lngDegrees = ring.km / (111.32 * Math.cos((ring.lat * Math.PI) / 180));
-  for (let i = 0; i <= 64; i += 1) {
-    const angle = (i / 64) * 2 * Math.PI;
-    points.push([
-      ring.lng + lngDegrees * Math.cos(angle),
-      ring.lat + latDegrees * Math.sin(angle),
-    ]);
-  }
-  return points;
 }
 
 function pinClass(kind: MapPin["kind"], selected: boolean): string {

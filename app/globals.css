@@ -1,6 +1,26 @@
 @import "tailwindcss";
 
 /* ==========================================================================
+   MapLibre's own stylesheet.
+
+   Required, and it was missing. MapLibre positions the canvas, the four control
+   corners, the attribution and every marker from this file — `.maplibregl-canvas
+   { position: absolute }` is in here, not in the JavaScript — so without it a
+   map renders its canvas in flow and stacks the zoom buttons, the scale bar and
+   the OpenStreetMap credit underneath it as ordinary block elements.
+
+   Three maps had shipped without it: the storefront's branches, board 1c's
+   results, and now board 2d's branch pin. Board 2d is where it stopped being
+   cosmetic — criterion 8 wants the attribution visible and unobscured, and
+   criterion 9 wants zoom on the control and the scale bar, neither of which can
+   be true of an element the library never got to position.
+
+   Imported here rather than in each component so one copy loads once, ahead of
+   the Tailwind layers that some of these rules are deliberately overridden by.
+   ========================================================================== */
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+/* ==========================================================================
    Pinned states, for the gallery.
 
    Acceptance criterion 1 asks that /dev/gallery render every documented state,
@@ -297,6 +317,82 @@
      not be tapped. Radio.tsx had already patched around this with `min-w-0`
      on its own fieldset; this is the same fix, once, for every fieldset. */
   fieldset { min-inline-size: 0; }
+}
+
+/* ==========================================================================
+   Map chrome, in the platform's colours.
+
+   MapLibre ships its controls in its own grey and its own type. Left alone
+   they read as somebody else's widget bolted to the page, and the attribution
+   — which is a licence condition, not a credit — comes out at a contrast the
+   §09.2 floor would not accept.
+
+   Only colour, type and radius are touched. Nothing here moves a control, and
+   nothing here hides the attribution: a map on this platform states where its
+   geometry came from, and a rule that shrank it to nothing would be a licence
+   breach with a stylesheet in front of it.
+   ========================================================================== */
+@layer base {
+  .maplibregl-map { font-family: var(--f-sans); }
+
+  .maplibregl-ctrl-group {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--r-ctl);
+    box-shadow: var(--e-raised);
+  }
+  .maplibregl-ctrl-group button + button { border-top: 1px solid var(--line); }
+  .maplibregl-ctrl-group button:focus-visible {
+    box-shadow: var(--focus-ring);
+    outline: none;
+  }
+
+  .maplibregl-ctrl-attrib,
+  .maplibregl-ctrl-scale {
+    background: color-mix(in srgb, var(--card) 92%, transparent);
+    color: var(--text-muted);
+    font-size: var(--t-caption);
+  }
+  .maplibregl-ctrl-scale { border-color: var(--line-strong); }
+  .maplibregl-ctrl-attrib a { color: var(--text-body); }
+
+  /* ------------------------------------------------------------------------
+     Board 2d's draggable pin.
+
+     Written here rather than as classes on a React node because MapLibre owns
+     the marker element — it is created outside the component tree and handed to
+     the library, so Tailwind's utilities never see it. The colours are the same
+     tokens every other pin on the platform uses; §03.5 fixes the pin hierarchy
+     and a map that invented its own moss would be the first surface to break it.
+     ---------------------------------------------------------------------- */
+  .bl-pin {
+    position: relative;
+    cursor: grab;
+    white-space: nowrap;
+    line-height: 1;
+  }
+  .bl-pin:active { cursor: grabbing; }
+
+  .bl-pin-pill {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: var(--r-pill);
+    background: var(--moss);
+    color: var(--text-on-ink);
+    font-size: var(--t-caption);
+    font-weight: 500;
+    box-shadow: var(--e-promoted);
+  }
+
+  .bl-pin-point {
+    position: absolute;
+    left: 50%;
+    bottom: -4px;
+    width: 9px;
+    height: 9px;
+    background: var(--moss);
+    transform: translateX(-50%) rotate(45deg);
+  }
 }
 
 

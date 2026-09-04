@@ -22,6 +22,10 @@ export { CategoryMark, type CategoryMarkProps } from "./CategoryMark";
 // The mono uppercase label. One of exactly two places §08 allows uppercase.
 export { Eyebrow, type EyebrowProps } from "./Eyebrow";
 export { MapCanvas, type MapCanvasProps, type MapPin } from "./MapCanvas";
+// Board 2d's branch pin. A third map rather than a mode of the other two,
+// because this one is edited: a draggable marker, a ring that follows it and a
+// radius editor that changes what the map is showing.
+export { BranchPinMap, type BranchPinMapProps } from "./BranchPinMap";
 // Board 1c's results map. Separate from MapCanvas because it clusters, which
 // means a GeoJSON source and paint layers rather than DOM markers.
 export {

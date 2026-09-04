@@ -275,3 +275,27 @@ completeness. `specCompleteness` — filled required fields ÷ template fields. 
 sum of accepted quote lines, labelled self-reported everywhere it appears.
 
 None of these are seller-editable. That is what makes them worth showing.
+
+## Platform settings
+
+```prisma
+model PlatformSetting {
+  key         String   @id
+  value       Json
+  updatedAt   DateTime @updatedAt
+  updatedById String?           // who, when a person changed it
+}
+```
+
+One row per platform-level fact that is not a fact about any seller. The first is
+`ramadan_dates` — board 2d, criterion 15: *"The dates come from one platform-level setting,
+not from each seller. Ramadan moves yearly and 41,000 sellers will not update it."*
+
+Two rules, both load-bearing:
+
+- **Read through a module that owns the key.** `lib/trade/ramadan-calendar.ts` validates the
+  value per entry and merges it over a compiled fallback, so one malformed year costs that
+  year rather than every storefront's opening hours.
+- **A staff write is a staff state change and owes an audit row with a reason.** There is
+  deliberately no writer in this codebase yet; board `12h` owns it, and it goes through the
+  audit service rather than around it.

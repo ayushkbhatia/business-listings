@@ -91,3 +91,59 @@ export function nearestKm(
   }
   return nearest;
 }
+
+/**
+ * A circle of `km` around a point, as GeoJSON polygon coordinates.
+ *
+ * Drawn as a polygon rather than as a map library's `circle` layer, because a
+ * circle layer's radius is in screen pixels and would grow and shrink with the
+ * zoom — a 40 km promise that changes size as the reader zooms is not a promise
+ * about distance at all.
+ *
+ * The latitude correction matters at this one: a degree of longitude in the UAE
+ * is about 0.9 of a degree of latitude, and skipping it draws an ellipse that
+ * overstates the reach east and west. 64 points is enough that the edge reads as
+ * curved at any zoom a map here reaches.
+ *
+ * Shared by the storefront's coverage rings and board 2d's radius editor, so the
+ * shape a seller sets is the same shape a buyer is shown.
+ */
+export function circlePolygon(
+  centre: Point,
+  km: number,
+  points = 64,
+): [number, number][] {
+  const ring: [number, number][] = [];
+  const latDegrees = km / 110.574;
+  const lngDegrees = km / (111.32 * Math.cos(toRadians(centre.lat)));
+  for (let i = 0; i <= points; i += 1) {
+    const angle = (i / points) * 2 * Math.PI;
+    ring.push([
+      centre.lng + lngDegrees * Math.cos(angle),
+      centre.lat + latDegrees * Math.sin(angle),
+    ]);
+  }
+  return ring;
+}
+
+/**
+ * The bounding box of a circle, for fitting a map to it.
+ *
+ * Board 2d, criterion 12: the radius editor zooms the map out to fit the circle
+ * and draws it there, because at street zoom a 40 km circle is several screens
+ * wide and would be a shape with no visible edge. The corners come off the same
+ * degree conversion the polygon uses, so what is drawn is what is framed.
+ */
+export function circleBounds(
+  centre: Point,
+  km: number,
+): { west: number; south: number; east: number; north: number } {
+  const latDegrees = km / 110.574;
+  const lngDegrees = km / (111.32 * Math.cos(toRadians(centre.lat)));
+  return {
+    west: centre.lng - lngDegrees,
+    south: centre.lat - latDegrees,
+    east: centre.lng + lngDegrees,
+    north: centre.lat + latDegrees,
+  };
+}

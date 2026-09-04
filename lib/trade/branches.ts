@@ -1,5 +1,5 @@
 import { openNow, type OpenState } from "./open-now";
-import { nextRamadan } from "./hours";
+import { nextRamadan, type RamadanCalendar } from "./hours";
 import { haversineKm } from "@/lib/geo/distance";
 import type { Emirate, LocationType } from "@/lib/db/generated/enums";
 
@@ -85,7 +85,12 @@ export function activeClosure(
  * line — an office is worth phoning during its hours — but the badge carries
  * the fact that changes the buyer's plan.
  */
-export function branchStatus(location: BranchLocation, now: Date): BranchStatus {
+export function branchStatus(
+  location: BranchLocation,
+  now: Date,
+  /** The platform's Ramadan calendar. Omitted, the compiled estimates apply. */
+  calendar?: RamadanCalendar,
+): BranchStatus {
   if (!isStocking(location.type)) return { kind: "type", type: location.type };
   const closure = activeClosure(location, now);
   // Criterion 7 forbids a bare "Closed". A closure's answer is a date, not a time.
@@ -95,6 +100,7 @@ export function branchStatus(location: BranchLocation, now: Date): BranchStatus 
     location.hours as never,
     location.ramadanHours as never,
     now,
+    calendar,
   );
   if (state.state === "open") return { kind: "open", until: state.until };
   if (state.state === "closed") {
@@ -110,8 +116,11 @@ export function branchStatus(location: BranchLocation, now: Date): BranchStatus 
 }
 
 /** Is the Ramadan week in effect right now? Drives the strip, once, for the page. */
-export function ramadanActive(now: Date): { from: Date; to: Date } | null {
-  const window = nextRamadan(now);
+export function ramadanActive(
+  now: Date,
+  calendar?: RamadanCalendar,
+): { from: Date; to: Date } | null {
+  const window = nextRamadan(now, calendar);
   return window?.active ? { from: window.from, to: window.to } : null;
 }
 

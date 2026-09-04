@@ -59,3 +59,7 @@ prisma/*.db-journal
 /lib/db/generated/
 tests/e2e/.auth/
 tmp/
+
+# MapLibre's worker, copied from node_modules before dev and build.
+# Generated, never committed: a stale copy is a second version of the library.
+/public/maplibre/

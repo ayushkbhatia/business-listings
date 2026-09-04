@@ -82,13 +82,14 @@ export default defineConfig({
           {
             name: "seller",
             testMatch: /(dashboard|overview|catalogue|listing|account|onboarding|pricing-seller)[\w-]*\.spec\.ts/,
-            testIgnore: /overview-free\.spec\.ts/,
+            // The two Free-plan specs belong to the session below.
+            testIgnore: /(overview-free|onboarding-free)\.spec\.ts/,
             dependencies: ["setup"],
             use: { ...devices["Desktop Chrome"], storageState: SELLER_STATE },
           },
           {
             name: "seller-free",
-            testMatch: /overview-free\.spec\.ts/,
+            testMatch: /(overview-free|onboarding-free)\.spec\.ts/,
             dependencies: ["setup"],
             use: { ...devices["Desktop Chrome"], storageState: FREE_SELLER_STATE },
           },

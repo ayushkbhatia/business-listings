@@ -12,6 +12,7 @@ import {
   FunnelBars,
   ImagePlaceholder,
   LogoTile,
+  BranchPinMap,
   MapCanvas,
   ResultsMap,
   PlanBadge,
@@ -27,6 +28,7 @@ import {
 } from "@/components/display";
 import { formatAED, formatCount, formatDecimal, formatDuration, formatPercent, formatRating } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { RADIUS_DEFAULT, RADIUS_MAX, RADIUS_MIN } from "@/lib/onboarding/branch-fields";
 import { Frame, Section, Specimen, States } from "../_kit";
 
 const TONES: StatusTone[] = ["ok", "warn", "bad", "info", "neutral"];
@@ -521,6 +523,68 @@ export function Display() {
               excluded={3}
               excludedLabel={t("display.map_excluded", { count: 3 })}
               emptyLabel={t("display.map_empty")}
+            />
+          </div>
+        </States>
+      </Section>
+
+      <Section
+        id="branch-pin-map"
+        title="BranchPinMap"
+        note="board 2d · the only map a seller can move · pin drag writes lat/lng to six decimals · the radius circle is drawn only in the editor, which zooms out to fit it · wheel zoom off, because the map sits in a scrolling form"
+      >
+        <States label="pinned, with a radius" stack>
+          <div className="h-96 w-full max-w-3xl overflow-hidden rounded-card border border-line">
+            <BranchPinMap
+              lat={25.1281}
+              lng={55.2296}
+              fallback={{ lat: 25.1281, lng: 55.2296 }}
+              label="Head office — Al Quoz Industrial 3"
+              onPin={() => {}}
+              radiusKm={40}
+              onRadius={() => {}}
+              radiusMin={RADIUS_MIN}
+              radiusMax={RADIUS_MAX}
+              radiusDefault={RADIUS_DEFAULT}
+              mapLabel={t("display.branch_map_label")}
+              dragHint={t("locations_step.drag_hint")}
+              unpinnedHint={t("locations_step.unpinned_hint")}
+              radiusTitle={t("locations_step.radius")}
+              radiusNote={t("locations_step.radius_note")}
+              radiusEdit={t("locations_step.radius_edit")}
+              radiusDone={t("locations_step.radius_done")}
+              radiusNone={t("locations_step.radius_none")}
+              radiusSliderLabel={t("locations_step.radius_slider")}
+              formatRadius={(km) => t("locations_step.radius_km", { km: String(km) })}
+              unavailableLabel={t("locations_step.map_unavailable")}
+            />
+          </div>
+        </States>
+
+        <States label="unpinned — a marker to drag, and no accuracy ring to claim" stack>
+          <div className="h-96 w-full max-w-3xl overflow-hidden rounded-card border border-line">
+            <BranchPinMap
+              lat={null}
+              lng={null}
+              fallback={{ lat: 25.3197, lng: 55.4083 }}
+              label="Warehouse — Sharjah Industrial 4"
+              onPin={() => {}}
+              radiusKm={null}
+              onRadius={() => {}}
+              radiusMin={RADIUS_MIN}
+              radiusMax={RADIUS_MAX}
+              radiusDefault={RADIUS_DEFAULT}
+              mapLabel={t("display.branch_map_label")}
+              dragHint={t("locations_step.drag_hint")}
+              unpinnedHint={t("locations_step.unpinned_hint")}
+              radiusTitle={t("locations_step.radius")}
+              radiusNote={t("locations_step.radius_note")}
+              radiusEdit={t("locations_step.radius_edit")}
+              radiusDone={t("locations_step.radius_done")}
+              radiusNone={t("locations_step.radius_none")}
+              radiusSliderLabel={t("locations_step.radius_slider")}
+              formatRadius={(km) => t("locations_step.radius_km", { km: String(km) })}
+              unavailableLabel={t("locations_step.map_unavailable")}
             />
           </div>
         </States>
