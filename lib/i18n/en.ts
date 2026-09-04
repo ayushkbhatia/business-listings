@@ -2665,24 +2665,63 @@ export const en = {
   "onboarding.step.plan": "Pick a plan",
   "onboarding.next": "Continue",
   "onboarding.back": "Back",
+  // The chain collapses to this below 768px, beside the current step's name.
+  "onboarding.step_of": "{current} / {total}",
+  "onboarding.have_account": "Already have an account?",
+  "onboarding.sign_in": "Sign in",
 
-  "claim.title": "Find your business",
-  "claim.intro": "We already hold licence records for suppliers across the UAE. Search for yours by trade name, licence number or phone.",
-  "claim.search_label": "Trade name, licence number or phone",
+  // ── 2a · Find or add your business ────────────────────────────────────────
+  "claim.title": "Is your business already listed?",
+  // The count is a query, never a constant, and the second sentence is the
+  // whole pitch. It has to be literally true: reviews, enquiry history and the
+  // slug all survive a claim, which is asserted by a test rather than promised.
+  "claim.intro": "We hold {count} UAE businesses from public licence records. Search yours and claim it — you keep the reviews and search history already attached to it.",
+  // Three entry points, because the PRO holds the licence number, the owner
+  // remembers the trade name, and the office manager knows the landline. This
+  // is the field's accessible name as well as the line under it.
+  "claim.search_label": "Search by trade name, trade licence number or phone",
+  "claim.search_placeholder": "Trade name, licence number or phone",
   "claim.search_action": "Search",
   "claim.searching": "Searching",
-  "claim.no_results": "Nothing matched \"{query}\"",
-  "claim.no_results_body": "Check the spelling, or try the licence number. If we do not hold your business yet, add it from scratch.",
-  "claim.add_new": "Add my business from scratch",
-  "claim.results": "{count} matches",
+
+  "claim.matches_head": { one: "{count} possible match", other: "{count} possible matches" },
+  "claim.exact_licence": "Exact licence match",
+  "claim.more_matches": { one: "{count} more match", other: "{count} more matches" },
   "claim.unclaimed": "Unclaimed",
-  "claim.already_claimed": "Already claimed",
-  "claim.this_is_mine": "This is my business",
-  "claim.dispute": "This is mine — somebody else claimed it",
+  "claim.already_claimed": "Claimed",
+  "claim.this_is_us": "This is us",
+  "claim.dispute": "Report a dispute",
+
+  // No matches. Never an empty results card, never "0 matches" as a heading.
+  "claim.no_results": "Nothing matched. That is normal for a newer licence — add your business and we will verify it the same way.",
+
+  // The add-new card. Say the time and name the document: a supplier who starts
+  // without their licence abandons at the next step, and an abandoned claim is
+  // harder to recover than one that never started.
+  "claim.add_heading": "Not in the list?",
+  "claim.add_body": "Add your business from scratch. Takes about six minutes with your trade licence to hand.",
+  "claim.add_action": "Add a new business",
+
+  // The dispute route. Never a closed door, and never the incumbent's name.
+  "claim.dispute_note": "Submit your licence anyway. Where two claims conflict, our team asks both parties for the licence and decides in 48 hours.",
+
+  // What claiming carries over, and what it does not.
   "claim.preserves_heading": "Claiming keeps everything already here",
   "claim.preserves": "{reviews} reviews and {enquiries} enquiries stay exactly as they are. Claiming attaches you to the listing buyers already see; it does not start a new one.",
   "claim.preserves_none": "Nothing is lost by claiming. It attaches you to the listing buyers already see rather than starting a new one.",
+  "claim.not_trust": "Claiming carries your history over, not your badge. The green mark is earned at the next step, when we check the licence.",
   "claim.tier": "Tier {tier}",
+
+  // Rate limit. It says the limit and when it clears, because the search reads
+  // public records — refusing without a reason would read as a fault.
+  "claim.too_many": "That is more searches than we take from one place in a few minutes.",
+  "claim.too_many_fix": {
+    one: "Try again in {count} second. Nothing you have typed is lost.",
+    other: "Try again in {count} seconds. Nothing you have typed is lost.",
+  },
+
+  // A seller already holding a claimed listing. Stated, not silent.
+  "claim.already_yours": "You are already set up with a listing. Claiming a second business is not something this flow can do yet — write to us and we will attach it to your account.",
 
   "verify.title": "Prove it is yours",
   "verify.intro": "Two ways, both checked by a person, usually within four working hours. Your listing does not wait for it.",

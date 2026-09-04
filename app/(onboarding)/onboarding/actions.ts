@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
 import { getActor } from "@/lib/auth/session";
-import { findClaimCandidates, submitClaim, type ClaimCandidate } from "@/lib/onboarding/claim";
+import { submitClaim } from "@/lib/onboarding/claim";
 import { goLive } from "@/lib/onboarding/service";
 import { checkDocument, DOCUMENT_BUCKET, documentPath, signUpload } from "@/lib/storage";
 import { t } from "@/lib/i18n";
@@ -17,14 +17,6 @@ import { t } from "@/lib/i18n";
  * off the actor, so a half-finished funnel cannot be pointed at somebody else's
  * listing by editing a hidden field.
  */
-
-export type SearchResult = { ok: true; results: ClaimCandidate[] } | { ok: false; error: string };
-
-export async function searchListings(formData: FormData): Promise<SearchResult> {
-  const actor = await getActor();
-  if (!actor) return { ok: false, error: t("dev.no_seat_title") };
-  return { ok: true, results: await findClaimCandidates(String(formData.get("query") ?? "")) };
-}
 
 export type ClaimActionResult =
   | { ok: true; contested: boolean }
