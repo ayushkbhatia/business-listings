@@ -2814,11 +2814,88 @@ export const en = {
   "verify.conflict_heading": "Someone else claimed it?",
   "verify.conflict_body": "Submit your licence anyway. Where two claims conflict, our team asks both parties for the licence and decides in 48 hours.",
 
-  "profile_step.title": "Your profile",
-  "profile_step.intro": "What buyers see when they find you. Your trade name comes from the licence and cannot be edited here.",
-  "profile_step.preview": "How you will look in search",
+  // ── 2c · Profile basics, with live preview ────────────────────────────────
+  "profile_step.title": "Tell buyers what you do",
+  // The second sentence is the one that matters: category membership is the
+  // join the enquiry fan-out runs on.
+  "profile_step.intro": "Everything here is searchable. The categories you pick decide which RFQs reach you.",
+
+  "profile_step.trade_name": "Trade name",
+  "profile_step.trade_name_locked": "· locked to your licence",
+  "profile_step.display_name": "Display name",
+  "profile_step.display_name_hint": "What buyers see. Leave the legal suffix to the registry.",
+
+  "profile_step.primary_category": "Primary category",
+  "profile_step.extras": "Also list under",
+  // The extras allowance — the plan cap minus the primary. Not the total.
+  "profile_step.extras_used": "· {used} of {allowed} extra used on {plan}",
+  "profile_step.extras_unlimited": "· unlimited on {plan}",
+  "profile_step.extras_add": "Add category",
+  "profile_step.extras_remove": "Remove {category}",
+  // The upgrade line replaces the add control once the plan is spent. A control
+  // that would be refused on click is a lie.
+  "profile_step.extras_upgrade": "{plan} adds {more} more →",
+  "profile_step.extras_upgrade_unlimited": "{plan} adds unlimited →",
+  "profile_step.extras_none_yet": "No extra categories yet.",
+  // Accepted and flagged, never refused inline.
+  "profile_step.unverified_activity": "Waiting on a check against your licence",
+  "profile_step.unverified_activity_note": "We take the category and check it against the activity on your licence. Until that clears, RFQs in it go to other suppliers.",
+
+  "profile_step.description": "What you do",
+  "profile_step.description_hint": "Write it the way you'd say it on the phone. Avoid keyword lists — they rank worse, not better.",
+  "profile_step.counter": "{used} / {max}",
+
+  "profile_step.established": "Established",
+  "profile_step.team_size": "Team size",
+  "profile_step.logo_cover": "Logo & cover",
+  "profile_step.logo": "Logo",
+  "profile_step.logo_hint": "400×400 minimum, square.",
+  "profile_step.cover": "Cover image",
+  "profile_step.cover_hint": "1440×400 recommended.",
+
+  // ── The live preview ──────────────────────────────────────────────────────
+  "profile_step.preview": "Live preview",
+  "profile_step.preview_search": "Search result",
+  "profile_step.preview_full": "Full page",
+  "profile_step.preview_mode": "What the preview shows",
+  "profile_step.preview_pending": "Verification pending",
+
+  // ── The strength meter ────────────────────────────────────────────────────
   "profile_step.strength": "Profile strength",
-  "profile_step.threshold": "80% is where a listing stops looking thin",
+  "profile_step.threshold": "{threshold}% is where a listing stops looking thin",
+  "profile_step.lever": "+{points}%",
+  "profile_step.item.identity": "Fill in your business details",
+  "profile_step.item.identity_done": "Business details filled in",
+  "profile_step.item.photos": "Add a logo and photos",
+  "profile_step.item.photos_done": "Logo and photos added",
+  "profile_step.item.catalogue": "Add your first products",
+  "profile_step.item.catalogue_done": "Products listed",
+  "profile_step.item.filterableSpecs": "Fill in product specifications",
+  "profile_step.item.filterableSpecs_done": "Specifications filled in",
+  "profile_step.item.team": "Add somebody who can reply",
+  "profile_step.item.team_done": "A second person can reply",
+
+  // Measured, and only once both cohorts clear the floor.
+  "profile_step.lift_measured": "Listings above {threshold}% get {multiple}× more enquiries. This is the single biggest lever you control.",
+  // Until then: the mechanism, which is true on day one because it describes
+  // how the filters on the results page behave rather than a measured outcome.
+  "profile_step.lift_mechanism": "Buyers filter on photos and specs. A listing with neither is invisible to those filters.",
+
+  // ── Autosave and the one button ───────────────────────────────────────────
+  "profile_step.saved_now": "Saved",
+  "profile_step.saved_at": "Saved {when}",
+  "profile_step.saving": "Saving",
+  "profile_step.save_failed": "That did not save. Your text is still here — try again.",
+  "profile_step.continue": "Continue to locations",
+
+  "profile_step.error.too_short": "A display name needs at least two characters.",
+  "profile_step.error.too_long": "That is {length} characters. The limit is 60.",
+  "profile_step.error.legal_suffix": "Leave \"{found}\" off. The registry keeps the legal name; buyers see this one.",
+  "profile_step.error.repeats_category": "Your categories already say \"{word}\". Saying it twice on one card reads as padding.",
+  "profile_step.error.description_too_long": "That is {length} characters. The limit is 600.",
+  "profile_step.error.established_out_of_range": "Enter the year the business started, from 1960 onwards.",
+  "profile_step.error.unknown_team_size": "Pick one of the bands.",
+  "profile_step.error.required": "Add a display name, a primary category and a description before you carry on.",
 
   "locations_step.title": "Where you are",
   "locations_step.intro": "The address buyers should come to. You can add more branches later.",

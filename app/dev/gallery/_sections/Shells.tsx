@@ -43,7 +43,11 @@ const OPS: Actor = { id: "u4", roles: ["staff_ops_lead"] };
 export function Shells() {
   return (
     <>
-      <Section id="public-nav" title="PublicNav" note="68px, and the search field lives in the bar">
+      <Section
+        id="public-nav"
+        title="PublicNav"
+        note="68px, and the search field lives in the bar — two rows and 112px below sm, which is a viewport state and so shows here only in a narrow window"
+      >
         <States label="states" stack>
           <div className="w-full overflow-hidden rounded-card border border-line">
             <PublicNav

@@ -172,6 +172,153 @@ test.describe("board 2b — prove ownership", () => {
   });
 });
 
+test.describe("board 2c — profile basics, with live preview", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/onboarding/profile");
+  });
+
+  test("locks the trade name and offers a display name beside it", async ({ page }) => {
+    /*
+     * Criterion 1, and the screen where the split between the two names is
+     * created: the legal name is what the registry holds, the display name is
+     * what buyers see. Showing them side by side is what makes the rule legible
+     * rather than arbitrary.
+     */
+    await expect(page.getByText("· locked to your licence")).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /Display name/ })).toBeEditable();
+    // The legal name is text, not a field. There is no code path that edits it.
+    await expect(page.getByRole("textbox", { name: /Trade name/ })).toHaveCount(0);
+  });
+
+  test("refuses a legal suffix in the display name, inline", async ({ page }) => {
+    // Criterion 2. Carrying the suffix onto a card is how a directory ends up
+    // looking like the registry export buyers already have.
+    const field = page.getByRole("textbox", { name: /Display name/ });
+    await field.fill("Something Cool LLC");
+    await expect(page.getByRole("alert").filter({ hasText: /Leave "LLC" off/ })).toBeVisible();
+  });
+
+  test("counts extras against the plan cap minus the primary", async ({ page }) => {
+    /*
+     * Criterion 4. The extras allowance, not the total — the meter counts the
+     * total, and a single counter would have to be wrong on one of them.
+     *
+     * Either shape, because this seat's plan decides which: a capped plan states
+     * the allowance it has left, and an uncapped one says so rather than
+     * printing a denominator it does not have.
+     */
+    await expect(
+      page.getByText(/(\d+ of \d+ extra used on \w+|unlimited on \w+)/),
+    ).toBeVisible();
+  });
+
+  test("renders the real search card, with the display name and no legal name", async ({ page }) => {
+    /*
+     * Criteria 3 and 11. The rail is the component `1c` renders, fed the draft —
+     * a bespoke approximation would drift from the real card within a sprint and
+     * take the screen's premise with it.
+     */
+    const preview = page.getByRole("region", { name: /Live preview/i });
+    await expect(preview.locator("article")).toBeVisible();
+    await expect(preview).not.toContainText("LLC");
+    await expect(preview).not.toContainText("FZE");
+  });
+
+  test("re-renders the preview as the seller types", async ({ page }) => {
+    const preview = page.getByRole("region", { name: /Live preview/i });
+    await page.getByRole("textbox", { name: /Display name/ }).fill("Cool Air Counter");
+    await expect(preview.locator("article")).toContainText("Cool Air Counter");
+  });
+
+  test("switches the preview between the search card and the full page", async ({ page }) => {
+    const preview = page.getByRole("region", { name: /Live preview/i });
+    await preview.getByRole("radio", { name: "Full page" }).click();
+    await expect(preview.getByRole("radio", { name: "Full page" })).toBeChecked();
+  });
+
+  test("counts the description from the field, never from a constant", async ({ page }) => {
+    // Criterion 9. A counter that disagrees with its own input teaches the next
+    // developer to trust neither.
+    const field = page.getByRole("textbox", { name: /What you do/ });
+    await field.fill("Twelve chars");
+    await expect(page.getByText("12 / 600")).toBeVisible();
+  });
+
+  test("names levers that close the gap to a hundred exactly", async ({ page }) => {
+    /*
+     * Criterion 13, and the property that makes the meter worth trusting: a
+     * seller at 96% with nothing left to do concludes the number is decorative.
+     */
+    const meter = page.getByRole("region", { name: /Profile strength/i });
+    const text = await meter.innerText();
+    const percent = Number(/(\d+)%/.exec(text)?.[1]);
+    const levers = [...text.matchAll(/\+(\d+)%/g)].map((match) => Number(match[1]));
+    expect(percent + levers.reduce((sum, value) => sum + value, 0)).toBe(100);
+  });
+
+  test("keeps locations out of the meter — a gate is not a lever", async ({ page }) => {
+    // Criterion 14. A location is required to publish, so it cannot be something
+    // a seller declines.
+    const meter = page.getByRole("region", { name: /Profile strength/i });
+    await expect(meter).not.toContainText(/location/i);
+    await expect(meter).not.toContainText(/hours/i);
+  });
+
+  test("shows the mechanism, not a measured lift, on a cold directory", async ({ page }) => {
+    /*
+     * Criterion 15. The 2.4× is a cohort query and never a placeholder; until
+     * both sides clear forty listings the callout states the mechanism, which is
+     * true on day one because it describes how the filters behave.
+     */
+    const meter = page.getByRole("region", { name: /Profile strength/i });
+    const text = await meter.innerText();
+    if (/×\s*more enquiries/.test(text)) {
+      expect(text).toMatch(/\d+(\.\d+)?× more enquiries/);
+    } else {
+      expect(text).toContain("Buyers filter on photos and specs");
+    }
+  });
+
+  test("autosaves and says when it last did", async ({ page }) => {
+    // Criterion 16. The header timestamp is the promise that a seller can close
+    // the tab and come back.
+    const field = page.getByRole("textbox", { name: /What you do/ });
+    await field.fill(`Counter sales and site delivery across Dubai. ${Date.now()}`);
+
+    /*
+     * One indicator, in the chrome where the board puts it, and a generous
+     * window: the save is a server action against a real database, and this
+     * asserts that it happens rather than how fast.
+     */
+    const header = page.getByRole("banner");
+    await expect(header.getByText("Saved", { exact: true })).toBeVisible({ timeout: 20_000 });
+  });
+
+  test("offers one button, and neither a Back nor a Skip", async ({ page }) => {
+    /*
+     * Criterion 18 and 19. Steps 1 and 2 are irreversible, so a Back leads to a
+     * read-only receipt; the three required fields are the minimum for a
+     * publishable listing, so there is nothing to skip past.
+     */
+    await expect(page.getByRole("button", { name: "Continue to locations" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Back$/ })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /^Back$/ })).toHaveCount(0);
+    await expect(page.getByText(/^Skip$/i)).toHaveCount(0);
+  });
+
+  test("shows steps one and two as done, in the shared chain", async ({ page }) => {
+    // Criterion 20, and the same component every step of the funnel carries.
+    const chain = page.getByRole("navigation", { name: "Set up your listing" }).getByRole("list");
+    await expect(chain.getByText("Your profile", { exact: true })).toBeVisible();
+    await expect(chain.getByText("Pick a plan", { exact: true })).toBeVisible();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
 test.describe("criterion 3 — the plan step is not a gate", () => {
   test("says the listing is already live, and gives its address", async ({ page }) => {
     // A pricing table shown to somebody who thinks they are still blocked

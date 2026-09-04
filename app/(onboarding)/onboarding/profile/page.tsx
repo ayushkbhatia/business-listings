@@ -1,96 +1,173 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import type { Metadata } from "next";
 import { prisma } from "@/lib/db/client";
-import { CompletenessMeter } from "@/components/domain";
-import { STRONG_ENOUGH } from "@/lib/metrics/profile-strength";
+import { formatRelative } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { OnboardingPage, requireClaimant } from "../_shell";
-import { saveListingProfile } from "../../../(dashboard)/dashboard/listing/actions";
-import { ListingForm } from "../../../(dashboard)/dashboard/listing/ListingForm";
-import { submitModeratedChange, withdrawModeratedChange } from "../../../(dashboard)/dashboard/listing/actions";
+import { EMIRATES } from "@/lib/uae";
+import { allowanceFor } from "@/lib/onboarding/categories";
+import { profileStateFor } from "@/lib/onboarding/profile";
+import { TEAM_SIZES } from "@/lib/onboarding/profile-fields";
+import { getEnquiryLift } from "@/lib/metrics/enquiry-lift";
+import { STRONG_ENOUGH } from "@/lib/metrics/profile-strength";
+import { publicUrl, MEDIA_BUCKET } from "@/lib/storage";
+import { OnboardingHeader, OnboardingColumn } from "../_chrome";
+import { requireClaimant } from "../_shell";
+import { addCategory, continueToLocations, removeCategory, saveProfileField } from "./actions";
+import { ProfileWorkspace } from "./ProfileWorkspace";
+import { SavedIndicator, SavedProvider } from "./SavedState";
 
 /**
- * Board 2c — the profile.
+ * Board 2c — profile basics, with a live preview.
  *
- * The same form as `/dashboard/listing`, deliberately. A supplier who fills
- * this in during onboarding and comes back a month later should find the same
- * screen, and a second implementation is a second place for the moderated /
- * instant split to drift.
+ * The first screen in onboarding where the seller **writes** rather than proves.
+ * `2a` and `2b` established that they are entitled to speak for the licence;
+ * this is where they decide what they sound like.
  *
- * The live preview the board draws is the strength meter plus the 80% marker:
- * a supplier filling in a description wants to know whether it was worth doing,
- * and a card mock-up that cannot show their own photographs — they have none
- * yet — would answer that less honestly than a number.
+ * Two things make it work and both are structural. The preview renders the card
+ * `1c` will actually produce, so a seller can see the consequence of every
+ * field. The strength meter turns "please fill this in" into a number with named
+ * levers that sum to exactly a hundred — the same figure the dashboard shows
+ * afterwards, from the same config.
  */
-export const metadata = { title: "Your profile" };
+export const metadata: Metadata = {
+  title: "Your profile",
+  robots: { index: false, follow: true },
+};
+
 export const dynamic = "force-dynamic";
 
 export default async function ProfileStepPage() {
   const actor = await requireClaimant("profile");
   if (!actor.businessId) redirect("/onboarding/claim");
 
-  const [business, categories] = await Promise.all([
-    prisma.business.findUniqueOrThrow({
-      where: { id: actor.businessId },
-      select: {
-        displayName: true,
-        description: true,
-        establishedYear: true,
-        teamSize: true,
-        languages: true,
-        tradeName: true,
-        licenceNumber: true,
-        primaryCategoryId: true,
-        profileStrength: true,
-        primaryCategory: { select: { name: true } },
-      },
-    }),
+  const state = await profileStateFor(actor.businessId);
+  if (!state) redirect("/onboarding/claim");
+
+  const [addable, plans, lift] = await Promise.all([
+    /*
+       Leaves only. A parent category is a heading on the taxonomy rather than a
+       thing a supplier trades in, and letting one be chosen would put a listing
+       in the fan-out for every trade beneath it.
+    */
     prisma.category.findMany({
-      where: { children: { none: {} } },
+      where: {
+        children: { none: {} },
+        id: { notIn: [state.primaryCategoryId, ...state.extras.map((extra) => extra.id)] },
+      },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
+    prisma.plan.findMany({ orderBy: { sortOrder: "asc" }, select: { id: true, name: true, categoryLimit: true, sortOrder: true } }),
+    getEnquiryLift(),
   ]);
 
+  const allowance = allowanceFor(state.categoryLimit, state.planName, state.extras.length);
+
+  /*
+     The next plan up that actually adds categories.
+     Read from the plans table rather than named in copy: "Growth adds unlimited"
+     hardcoded is a sentence that survives the plan being renamed or repriced.
+  */
+  const current = plans.find((plan) => plan.id === state.planId);
+  const upgrade =
+    plans.find(
+      (plan) =>
+        plan.sortOrder > (current?.sortOrder ?? -1) &&
+        (plan.categoryLimit === null || plan.categoryLimit > (state.categoryLimit ?? 0)),
+    ) ?? null;
+
+  const savedAt = t("profile_step.saved_at", { when: formatRelative(state.savedAt) });
+
   return (
-    <OnboardingPage step="profile" title={t("profile_step.title")} intro={t("profile_step.intro")}>
-      <div className="rounded-card border border-line bg-paper-sunk p-3">
-        <CompletenessMeter
-          filled={business.profileStrength ?? 0}
-          total={100}
-          valueLabel={`${business.profileStrength ?? 0}%`}
-          label={t("profile_step.strength")}
-        />
-        <p className="mt-1.5 text-caption text-muted">{t("profile_step.threshold")}</p>
-      </div>
+    <SavedProvider initial={savedAt}>
+      <OnboardingHeader step="profile" signedIn trailing={<SavedIndicator />} />
 
-      <ListingForm
-        displayName={business.displayName}
-        description={business.description ?? ""}
-        establishedYear={business.establishedYear}
-        teamSize={business.teamSize}
-        languages={business.languages}
-        tradeName={business.tradeName}
-        licenceNumber={business.licenceNumber}
-        categoryName={business.primaryCategory.name}
-        primaryCategoryId={business.primaryCategoryId}
-        categories={categories.map((c) => ({ value: c.id, label: c.name }))}
-        pending={[]}
-        saveAction={saveListingProfile}
-        submitAction={submitModeratedChange}
-        withdrawAction={withdrawModeratedChange}
-      />
+      <OnboardingColumn wide>
+        <h1 className="font-serif text-h1-serif text-ink sm:text-[2rem]">
+          {t("profile_step.title")}
+        </h1>
+        <p className="mt-3 max-w-prose text-body-sm text-body">{t("profile_step.intro")}</p>
 
-      <div className="flex justify-end border-t border-line pt-4">
-        <Link
-          href="/onboarding/locations"
-          className="inline-flex items-center rounded-ctl border border-moss bg-moss px-3.5 py-1.5 text-body-sm font-medium text-on-ink hover:bg-moss-hover focus-visible:shadow-focus focus-visible:outline-none"
-        >
-          {t("onboarding.next")}
-        </Link>
-      </div>
-    </OnboardingPage>
+        <div className="mt-7">
+          <ProfileWorkspace
+            record={{
+              slug: state.businessId,
+              displayName: state.displayName,
+              categoryName: state.primaryCategoryName,
+              categoryCode: state.categoryCode,
+              areaName: state.areaName ?? "",
+              emirateName: emirateLabel(state.emirateName),
+              verificationTier: state.verificationTier,
+              description: state.description,
+              logoUrl: state.logoUrl ? publicUrl(MEDIA_BUCKET, state.logoUrl) : null,
+              coverUrl: state.coverUrl ? publicUrl(MEDIA_BUCKET, state.coverUrl) : null,
+              establishedYear: state.establishedYear,
+              tradeLine: [state.primaryCategoryName, ...state.extras.map((e) => e.name)].join(" · "),
+              verified: state.isVerified,
+            }}
+            strength={state.strength}
+            items={state.items}
+            threshold={STRONG_ENOUGH}
+            lift={lift ? { multiple: lift.multiple, threshold: lift.threshold } : null}
+            form={{
+              /*
+                 Board 2c is where the split between the two names is created,
+                 and this is the field that shows a seller why it exists: the
+                 legal name sits locked and grey beside the one they choose,
+                 and the preview to the right carries only the chosen one. It
+                 reaches the form to be *rendered read-only*, and there is no
+                 code path that makes it editable.
+              */
+              tradeName: state.tradeName, // licence-locked
+
+              displayName: state.displayName,
+              description: state.description,
+              establishedYear: state.establishedYear,
+              teamSize: state.teamSize,
+              primaryCategoryLabel: state.primaryParentName
+                ? `${state.primaryParentName} → ${state.primaryCategoryName}`
+                : state.primaryCategoryName,
+              extras: state.extras,
+              allowance,
+              upgrade: upgrade
+                ? {
+                    planName: upgrade.name,
+                    more:
+                      upgrade.categoryLimit === null
+                        ? null
+                        : Math.max(0, upgrade.categoryLimit - (state.categoryLimit ?? 1)),
+                  }
+                : null,
+              addable: addable.map((category) => ({ value: category.id, label: category.name })),
+              teamSizes: TEAM_SIZES.map((band) => ({ value: band, label: bandLabel(band) })),
+              saveAction: saveProfileField,
+              addAction: addCategory,
+              removeAction: removeCategory,
+              continueAction: continueToLocations,
+            }}
+          />
+        </div>
+      </OnboardingColumn>
+    </SavedProvider>
   );
 }
 
-export { STRONG_ENOUGH };
+function emirateLabel(value: string | null): string {
+  return EMIRATES.find((emirate) => emirate.value === value)?.label ?? "";
+}
+
+/**
+ * `11 – 50`, from the enum the schema already holds.
+ *
+ * The board draws four bands and the schema carries five. The schema's are the
+ * ones already rendered on every storefront, and re-cutting an enum that public
+ * surfaces read — to change where a boundary sits, not what the field means —
+ * would be a migration and a rewrite of every seller's answer for no gain the
+ * buyer can see. Both are bands, which is the property that mattered.
+ */
+function bandLabel(band: string): string {
+  const digits = band.replace(/^b/, "").split("_");
+  if (band === "b500_plus") return "500+";
+  return `${digits[0]} – ${digits[1]}`;
+}
+

@@ -13,6 +13,25 @@
  * The weights are a judgement, and the setup hub in board 8a states what each
  * task is worth in percentage points — so they are published to the seller and
  * have to add to a hundred. `WEIGHTS` is the source both read.
+ *
+ * ## Why locations are not in here
+ *
+ * Board 2c, criterion 14, and it is a correction rather than an omission. A
+ * location is **required to publish** — `goLive` refuses without one — so it is
+ * a gate, not a lever. Levers are things a seller can decline.
+ *
+ * Mixing the two made the meter unreadable in a specific way: board 8a offers
+ * four tasks worth fifty points between them against a denominator of a hundred,
+ * so a seller could finish every task on offer and still be short, with nothing
+ * named to do about it. That is the state a completeness meter must never reach,
+ * and criterion 13 states it as a property — the named levers and the current
+ * percentage sum to exactly a hundred. `strengthItems` below is what makes that
+ * true by construction rather than by arithmetic somebody checked once.
+ *
+ * The fifteen points went to `identity` rather than being spread, so the three
+ * figures board 8a publishes — photographs, catalogue, team — are the same
+ * numbers they were. Identity is what board 2c is *for*, and it is now weighted
+ * like it.
  */
 
 export interface ProfileFacts {
@@ -41,15 +60,13 @@ export interface ProfileFacts {
  */
 export const WEIGHTS = {
   /** Who you are: the storefront reads as a real company. */
-  identity: 20,
+  identity: 35,
   /** Photographs. The single biggest driver of a buyer opening a listing. */
   photos: 20,
   /** A catalogue at all. */
   catalogue: 20,
   /** A catalogue that can be filtered — the difference between listed and found. */
   filterableSpecs: 15,
-  /** Where you are, and when you are open. */
-  locations: 15,
   /** Somebody other than the owner who can reply. */
   team: 10,
 } as const;
@@ -87,11 +104,6 @@ export function profileStrength(facts: ProfileFacts): number {
   const catalogue = ratio(facts.products, PRODUCT_TARGET);
   const filterable = ratio(facts.productsWithFilterableSpecs, Math.max(1, facts.products));
 
-  // Hours are half of this: an address with no opening times is the complaint
-  // a buyer makes about every other directory in the market.
-  const locations =
-    facts.locations === 0 ? 0 : 0.5 + 0.5 * ratio(facts.locationsWithHours, facts.locations);
-
   const team = ratio(facts.teamSeats - 1, 1);
 
   const score =
@@ -99,10 +111,89 @@ export function profileStrength(facts: ProfileFacts): number {
     photos * WEIGHTS.photos +
     catalogue * WEIGHTS.catalogue +
     filterable * WEIGHTS.filterableSpecs +
-    locations * WEIGHTS.locations +
     team * WEIGHTS.team;
 
   return Math.round((score / TOTAL) * 100);
+}
+
+/**
+ * How far each part of the profile has come, as a fraction of its own weight.
+ *
+ * The same arithmetic `profileStrength` runs, exposed per component so a meter
+ * can name what is left. Split out rather than duplicated: two copies of this
+ * would drift, and the drift would be a screen promising points the score does
+ * not award.
+ */
+function fractions(facts: ProfileFacts): Record<WeightKey, number> {
+  return {
+    identity:
+      (Number(facts.hasDescription) * 8 +
+        Number(facts.hasEstablishedYear) * 4 +
+        Number(facts.hasTeamSize) * 3 +
+        ratio(facts.languages, 2) * 3 +
+        ratio(facts.additionalCategories, 2) * 2) /
+      20,
+    photos: ratio(facts.photos + Number(facts.hasLogo) + Number(facts.hasCover), PHOTO_TARGET),
+    catalogue: ratio(facts.products, PRODUCT_TARGET),
+    filterableSpecs: ratio(facts.productsWithFilterableSpecs, Math.max(1, facts.products)),
+    team: ratio(facts.teamSeats - 1, 1),
+  };
+}
+
+export type WeightKey = keyof typeof WEIGHTS;
+
+export interface StrengthItem {
+  key: WeightKey;
+  /** Whole points already earned here. */
+  earned: number;
+  /** Whole points still on the table. Zero once the item is done. */
+  remaining: number;
+  done: boolean;
+}
+
+/**
+ * The meter's rows, in whole points that sum to exactly a hundred.
+ *
+ * Criterion 13, and the reason it needs its own function: rounding each of five
+ * components independently can land on 99 or 101, and a meter whose levers do
+ * not close the gap is the trick the criterion exists to forbid. Largest
+ * remainder distributes the rounding error to the components with the biggest
+ * fractional part, which is the standard way to make a set of rounded shares add
+ * up to their total.
+ *
+ * `earned` across every item equals `profileStrength`; `earned + remaining`
+ * across every item equals a hundred. Both are asserted in the tests.
+ */
+export function strengthItems(facts: ProfileFacts): StrengthItem[] {
+  const parts = fractions(facts);
+  const keys = Object.keys(WEIGHTS) as WeightKey[];
+
+  const exact = keys.map((key) => (parts[key] * WEIGHTS[key] * 100) / TOTAL);
+  const floors = exact.map(Math.floor);
+  const shortfall = Math.round(exact.reduce((a, b) => a + b, 0)) - floors.reduce((a, b) => a + b, 0);
+
+  const order = exact
+    .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
+    .sort((a, b) => b.fraction - a.fraction);
+  for (let i = 0; i < shortfall; i += 1) floors[order[i]!.index]! += 1;
+
+  /*
+     The same distribution over each component's *whole* weight, so `remaining`
+     is what this item would still pay rather than what is left of the meter.
+  */
+  const caps = keys.map((key) => Math.round((WEIGHTS[key] * 100) / TOTAL));
+  const capShortfall = 100 - caps.reduce((a, b) => a + b, 0);
+  if (capShortfall !== 0) caps[0] = (caps[0] ?? 0) + capShortfall;
+
+  return keys.map((key, index) => {
+    const earned = Math.min(floors[index]!, caps[index]!);
+    return {
+      key,
+      earned,
+      remaining: caps[index]! - earned,
+      done: earned >= caps[index]!,
+    };
+  });
 }
 
 /** Board 2c and board 8a draw the threshold at 80%. */
