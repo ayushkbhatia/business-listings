@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { FALLBACK_RAMADAN, type RamadanCalendar } from "./hours";
+import { FALLBACK_RAMADAN, RAMADAN_SETTING_KEY, type RamadanCalendar } from "./hours";
 
 /**
  * The Ramadan calendar, from the platform setting.
@@ -32,7 +32,8 @@ import { FALLBACK_RAMADAN, type RamadanCalendar } from "./hours";
  */
 
 /** The setting's key. One string, so a typo is a compile error somewhere. */
-export const RAMADAN_SETTING_KEY = "ramadan_dates";
+// Declared in ./hours, which has no database in it, so the seed can read it too.
+export { RAMADAN_SETTING_KEY };
 
 /**
  * `{"2026":{"from":"2026-02-17","to":"2026-03-19"}}` → a calendar.

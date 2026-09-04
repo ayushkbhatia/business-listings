@@ -172,6 +172,16 @@ const RAMADAN: RamadanCalendar = {
 /** The compiled estimates, for the module that merges the platform setting over them. */
 export const FALLBACK_RAMADAN: RamadanCalendar = RAMADAN;
 
+/**
+ * The `platform_setting` row the dates are read from.
+ *
+ * Here rather than in `ramadan-calendar.ts` because that module imports
+ * `server-only`, and `prisma/seed.mts` needs both the key and the fallback to
+ * put the row back after its truncate. Re-exported there, so the reader still
+ * has it beside the code that uses it.
+ */
+export const RAMADAN_SETTING_KEY = "ramadan_dates";
+
 export interface RamadanWindow {
   year: number;
   from: Date;

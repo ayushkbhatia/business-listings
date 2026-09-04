@@ -12,6 +12,7 @@ loadEnv({ path: [".env.local", ".env"], quiet: true });
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/db/generated/client.js";
 import { assertLocalTarget, NonLocalTargetError } from "../lib/db/target.js";
+import { FALLBACK_RAMADAN, RAMADAN_SETTING_KEY } from "../lib/trade/hours.js";
 import {
   AREAS,
   AUTHORITY_BY_EMIRATE,
@@ -221,6 +222,35 @@ async function main() {
       "category","area","plan","user","buyer_company"
     restart identity cascade;
   `);
+
+  /*
+     Put back what the CASCADE took, which is not only what the list names.
+
+     `truncate ... cascade` empties every table holding a foreign key into a
+     listed one, transitively — thirty tables beyond the forty-eight above. That
+     is right for all of them but one. `platform_setting` gains a foreign key to
+     `user` (board 2d), so truncating `user` empties it, and its `ramadan_dates`
+     row is inserted by migration 20260904180000 and never by this file. A
+     reseeded database was left with no Ramadan calendar at all, which the
+     board 2d criterion-15 test caught and `main` went red on.
+
+     The comment above already warns about this shape for `ranking_weights`,
+     which escapes by having no foreign keys at all. Keeping `platform_setting`
+     out of the truncate list would not have saved it: the cascade reaches it
+     through `user` whatever the list says.
+
+     Written from `FALLBACK_RAMADAN` rather than restating the dates, so the
+     compiled estimates and the seeded row cannot drift. The migration copied
+     the same constant; this reads it.
+  */
+  console.log("→ platform settings");
+  await prisma.platformSetting.upsert({
+    where: { key: RAMADAN_SETTING_KEY },
+    // Nobody edited it, so no `updatedById` — the column is nullable for
+    // exactly this reason, and a staff write owes an audit row besides.
+    create: { key: RAMADAN_SETTING_KEY, value: FALLBACK_RAMADAN },
+    update: { value: FALLBACK_RAMADAN },
+  });
 
   console.log("→ plans");
   for (const plan of PLANS) await prisma.plan.create({ data: { ...plan } });
