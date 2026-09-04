@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { prisma } from "@/lib/db/client";
 import { VERIFIED_TIER } from "@/lib/verification";
 
@@ -153,7 +154,14 @@ export type PublicProductDetail = NonNullable<Awaited<ReturnType<typeof getProdu
  * silently took the spec fields away from their whole catalogue — the editor
  * offered none, the spec table rendered none, and nothing said why.
  */
-export async function getSpecTemplate(categoryId: string) {
+/**
+ * Memoised per request — see the note on `getCategoryBySlug`.
+ *
+ * The results page reads the template twice: once in `Results` for the spec
+ * column, once inside `getSpecFacets` for the rail. Each read is two queries
+ * (the template, then its fields), so this was four round trips for one answer.
+ */
+export const getSpecTemplate = cache(async (categoryId: string) => {
   const own = await prisma.specTemplate.findFirst({
     where: { categoryId, status: "live" },
     orderBy: { version: "desc" },
@@ -172,7 +180,7 @@ export async function getSpecTemplate(categoryId: string) {
     orderBy: { version: "desc" },
     include: { fields: { orderBy: { sortOrder: "asc" } } },
   });
-}
+});
 
 export type SpecTemplateWithFields = NonNullable<Awaited<ReturnType<typeof getSpecTemplate>>>;
 
