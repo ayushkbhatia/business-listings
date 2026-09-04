@@ -64,37 +64,73 @@ export async function removeObject(bucket: string, path: string): Promise<void> 
 }
 
 /**
- * Create the buckets if they are not there.
+ * Create the buckets, and reconcile the ones that are already there.
  *
  * Idempotent, and deliberately not a migration: `storage.*` belongs to Supabase,
  * and CI runs a plain Postgres with no storage schema at all — a migration
  * touching it would fail every build for a feature CI cannot exercise anyway.
  * `pnpm storage:setup` runs this against a real project.
+ *
+ * ## Why it updates rather than skipping
+ *
+ * It used to `continue` past any bucket that existed, which made it a
+ * create-once script wearing the name of a reconciler. Board 8b dropped
+ * `MAX_IMAGE_BYTES` from 8 MB to 1 MB and the code obeyed it immediately — but
+ * every environment whose bucket already existed kept the old ceiling, so the
+ * limit the product enforced and the limit the storage layer enforced were
+ * different numbers, and the one that actually stops a write was the stale one.
+ *
+ * A limit that only applies to environments created after the change is not a
+ * limit. `updateBucket` is the same call shape and makes the script mean what
+ * its name says.
  */
-export async function ensureBuckets(): Promise<{ created: string[]; existing: string[] }> {
+export async function ensureBuckets(): Promise<{
+  created: string[];
+  updated: string[];
+  existing: string[];
+}> {
   const admin = createAdminClient();
   const { data: existing } = await admin.storage.listBuckets();
   const have = new Set((existing ?? []).map((b) => b.name));
 
   const created: string[] = [];
-  for (const name of PUBLIC_BUCKETS) {
-    if (have.has(name)) continue;
-    await admin.storage.createBucket(name, {
-      public: true,
-      fileSizeLimit: MAX_IMAGE_BYTES,
-      allowedMimeTypes: [...IMAGE_TYPES],
-    });
-    created.push(name);
-  }
-  for (const name of PRIVATE_BUCKETS) {
-    if (have.has(name)) continue;
-    await admin.storage.createBucket(name, {
-      public: false,
-      fileSizeLimit: MAX_DOCUMENT_BYTES,
-      allowedMimeTypes: [...DOCUMENT_TYPES],
-    });
+  const updated: string[] = [];
+
+  const settings = [
+    ...PUBLIC_BUCKETS.map((name) => ({
+      name,
+      options: {
+        public: true,
+        fileSizeLimit: MAX_IMAGE_BYTES,
+        allowedMimeTypes: [...IMAGE_TYPES],
+      },
+    })),
+    ...PRIVATE_BUCKETS.map((name) => ({
+      name,
+      options: {
+        public: false,
+        fileSizeLimit: MAX_DOCUMENT_BYTES,
+        allowedMimeTypes: [...DOCUMENT_TYPES],
+      },
+    })),
+  ];
+
+  for (const { name, options } of settings) {
+    if (have.has(name)) {
+      const { error } = await admin.storage.updateBucket(name, options);
+      // Reported rather than thrown: a project whose key cannot update buckets
+      // should still be told which limit is now wrong, not handed a stack trace.
+      if (error) console.warn(`[storage] could not reconcile ${name}: ${error.message}`);
+      else updated.push(name);
+      continue;
+    }
+    await admin.storage.createBucket(name, options);
     created.push(name);
   }
 
-  return { created, existing: [...have].filter((n) => n === MEDIA_BUCKET || n === DOCUMENT_BUCKET) };
+  return {
+    created,
+    updated,
+    existing: [...have].filter((n) => n === MEDIA_BUCKET || n === DOCUMENT_BUCKET),
+  };
 }

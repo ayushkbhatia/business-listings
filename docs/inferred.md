@@ -2777,3 +2777,85 @@ rather than restating it.
 - **A hidden `sr-only` file input was focusable and unnamed** — a control a screen-reader
   user meets, cannot name, and did not ask for. It is out of the tab order and out of the
   accessibility tree; the visible buttons drive it.
+
+---
+
+## Board 8c — the spec sheet, then the first ten products
+
+### Nothing could create a product
+
+The only `Product` writer in the application layer was `tx.product.createMany`
+inside the CSV importer. `saveProduct` on the product editor opens with
+`findUnique` and ends with `update`; there was no `/dashboard/products/new`; and
+the catalogue's two calls to action both pointed at the import wizard. A leftover
+`"catalogue.add": "Add a product"` had been sitting in `lib/i18n/en.ts` rendered by
+nothing — somebody wrote the button's label and the button never arrived.
+
+So a supplier without a correctly-columned spreadsheet could not put a single product
+on this platform, and task 2 — worth eighteen points, and the only task that creates
+new indexable pages — was uncompletable by the route its own copy describes. That is
+the third instance of one defect: the team task could not complete because invitations
+had no accept route, and the photographs task could not complete on Free because the
+cap sat exactly at the target. All three were hidden by seeded data.
+
+### The five open questions, answered
+
+1. **Importer** — cut, per §6's own instruction. "Paste from Excel" ships; "Upload a
+   price list" does not. They share one visual weight in the render and are not the
+   same feature: paste is reading the clipboard, upload is a file parse, a mapping
+   step, a preview table, per-row errors and a job queue. Board 8a already routes the
+   hard case to the concierge, which is a human process that works today.
+2. **Template cloning** — the clause stays, because cloning already exists.
+   `cloneTemplate` has been wired to `/dashboard/templates` since handoff 3. §9 asked
+   to scope it or cut the copy; neither was needed.
+3. **Required-attr sets** for the top 12 categories are content, not code. The screen
+   reads whatever the sheet declares.
+4. **Score reconciliation** — the chip counts *qualifying* rows, as §9 recommends and
+   as the footer already counts. A chip counting rows the footer excludes would be the
+   screen arguing with itself a centimetre apart.
+5. **Blank-sheet products** — deferred with the blank sheet itself. §2 allows starting
+   from a blank sheet and §9 recommends its products not count towards the ten; neither
+   ships in this phase, so the question does not arise yet. "Browse all" opens the real
+   library and the blank-sheet route is not offered.
+
+### Deviations from the render, and why
+
+**The size column is headed with the sheet's own field.** There is no `size` column on
+`Product` and no field keyed `size` on any seeded sheet — on Valves it is
+`nominal_diameter`, carrying the unit `DN`. So "size" is a role rather than a name:
+the first field with a unit, because a unit is what makes an attribute a measurement.
+The column reads "Nominal diameter" rather than "Size". The render is generic because
+it was drawn without a sheet in front of it, and a supplier reading "Size" has to guess
+whether we mean the bore or the box.
+
+**Availability keeps the schema's four values.** §3 lists `in_stock`, `made_to_order`,
+`on_request` and `discontinued`. The enum is `in_stock | made_to_order | indent |
+out_of_stock`, and it ships: "indent order" is in CLAUDE.md's vocabulary table as the
+correct term for this market, every public surface already renders these four, and
+adding two enum values nothing else understands would be a migration in exchange for
+words no buyer here uses.
+
+### The Free cap stays at 10, and the screen says the right thing because of it
+
+§5 specifies 50 and argues the cap sits above the target so nobody meets it during
+setup. The cap was left at 10 as a commercial decision, which means a Free seller
+completing the task lands exactly on it. The consequence is implemented rather than
+ignored: at the cap and still short of ten qualifying rows, the footer stops saying
+"add more" and says to fill in the specs on the rows that exist — which is the only
+move the product will accept. Telling somebody to add a row the next click refuses is
+how a screen loses a seller.
+
+### Found in passing
+
+- **`MATCHES YOUR CATEGORY` never fired for anybody.** Sheets were matched on exact
+  category id, and templates belong to the trade rather than the niche: the seeded
+  sheet is on "Valves & fittings" while a supplier is filed under "Ball valves". The
+  most useful signal on step 1 was silently off for most suppliers.
+  `resolveDefaultTemplateId` already walks one hop up and says why; this now does too.
+- **`ensureBuckets` was a create-once script wearing the name of a reconciler.** It
+  skipped any bucket that already existed, so board 8b's 1 MB ceiling applied only to
+  environments created after the change — the code enforced one number and storage
+  enforced another, and storage is the one that stops a write.
+- **A formatter nearly crossed the client boundary.** The sheet-change confirm took a
+  label function from the server component. `sheetChangeCost` now returns finished
+  sentences.

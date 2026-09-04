@@ -3245,6 +3245,102 @@ export const en = {
   "photos.error.upload_failed": "That photo did not upload. It is still on your phone — try again.",
   "photos.error.at_cap": "You have reached the photo limit on {plan}.",
 
+  // ── Board 8c — the spec sheet, then the first ten rows ───────────────────
+  "products.eyebrow": "First products",
+  "products.step1": "Step 1 — which spec sheet fits what you sell?",
+  "products.step1_body":
+    "We maintain these per category so buyers can compare you against other suppliers on the same rows. Clone one and edit it later if you need to.",
+  "products.sheet_meta": "{fields} fields · {required} required · {filterable} filterable",
+  "products.sheet_adoption": {
+    one: "used by {formatted} supplier",
+    other: "used by {formatted} suppliers",
+  },
+  "products.sheet_matches": "MATCHES YOUR CATEGORY",
+  "products.browse_all": {
+    one: "Browse all {formatted}",
+    other: "Browse all {formatted}",
+  },
+  "products.browse_body": "Or start from a blank sheet",
+  "products.browse_title": "Every spec sheet",
+  "products.browse_search": "Search sheets",
+  "products.browse_close": "Close",
+  "products.choose": "Use this sheet",
+  "products.chosen": "In use",
+
+  "products.step2": "Step 2 — add your first ten",
+  "products.step2_body":
+    "Start with your best sellers. Name, size and availability is enough to go live — specs can follow.",
+  "products.no_sheet": "Pick a sheet first.",
+  "products.paste": "Paste from Excel",
+  "products.paste_hint":
+    "Copy the rows out of your spreadsheet and paste them here. Name, size, availability — in that order.",
+  "products.paste_apply": "Add these rows",
+  "products.paste_landed": {
+    one: "{formatted} row added.",
+    other: "{formatted} rows added.",
+  },
+  "products.paste_none": "Nothing in that paste had a product name in the first column.",
+
+  "products.col.img": "IMG",
+  "products.col.name": "PRODUCT NAME",
+  "products.col.size": "SIZE",
+  "products.col.availability": "AVAILABILITY",
+  "products.col.specs": "REQ. SPECS",
+  "products.col.actions": "Row actions",
+  "products.name_placeholder": "Start typing a product name…",
+  "products.add_line": "+ Add another line",
+  "products.remove_row": "Remove",
+  "products.caption": "The products on this listing, with how complete each one's required specs are",
+  "products.specs_of": "{filled} / {required}",
+  "products.no_specs": "—",
+  "products.not_live": "Not live yet — add a size and availability",
+
+  "products.footer": {
+    one: "{formatted} live · {more} more to finish this task",
+    other: "{formatted} live · {more} more to finish this task",
+  },
+  "products.footer_done": {
+    one: "{formatted} live",
+    other: "{formatted} live",
+  },
+  "products.points_so_far": "+{points}% SO FAR",
+  "products.at_cap": {
+    one: "{formatted} product is the limit on {plan}.",
+    other: "{formatted} products are the limit on {plan}.",
+  },
+  // The case the Free cap creates: at the limit and still short of the ten,
+  // the way forward is filling specs on rows that exist, not adding more.
+  "products.at_cap_improve":
+    "You are at the limit on {plan}. Fill in the specs on the rows you have to finish this task.",
+
+  "products.no_prices_title": "No prices needed.",
+  "products.no_prices_body":
+    "Buyers enquire and you quote — that is how most suppliers here prefer it. You can add indicative pricing later if you want to.",
+
+  "products.preview_eyebrow": "LIVE PREVIEW",
+  "products.preview_price": "Price on enquiry",
+  "products.preview_enquire": "Enquire",
+  "products.preview_empty": "Type a product name and this is what a buyer sees.",
+  "products.why_title": "Why ten, not one",
+  "products.why_body":
+    "Each product is its own searchable page. Ten products is roughly ten times the chance of being found — and buyers searching a part number are the ones who convert.",
+
+  "products.availability.in_stock": "In stock",
+  "products.availability.made_to_order": "Made to order",
+  "products.availability.indent": "Indent order",
+  "products.availability.out_of_stock": "Out of stock",
+
+  "products.error.too_short": "A product name needs at least three characters.",
+  "products.error.at_cap": "You have reached the product limit on {plan}.",
+  "products.error.save_failed": "That row did not save. Try again.",
+
+  "products.change_sheet_title": "Change the spec sheet?",
+  "products.change_sheet_body":
+    "These attributes are not on the new sheet. The values stay on your products and stop being shown.",
+  "products.change_sheet_row": "{label} — on {formatted} products",
+  "products.change_sheet_confirm": "Change the sheet",
+  "products.change_sheet_cancel": "Keep the one I have",
+
   "photos.works_eyebrow": "WHAT WORKS",
   "photos.works.stock": "Stock on shelves — proves you hold inventory",
   "photos.works.signage": "Your signage — buyers use it to find the unit",
