@@ -1,10 +1,18 @@
 # What a category shelf costs
 
-`/c/valves-and-fittings` takes **3.2 seconds** to first byte in production, every
-time, uncached. This is the scope for fixing that, and for the guard that would
+`/c/valves-and-fittings` took **3.2 seconds** to first byte in production, every
+time, uncached. This was the scope for fixing that, and for the guard that would
 have caught the outage on 2026-09-04 before it reached anybody.
 
-Four pieces of work. One of them is not about speed at all and ships first.
+**Status, 2026-09-04.** Pieces 1 to 3 are built. Piece 4 is not, and the
+measurement below is why.
+
+| | | |
+|---|---|---|
+| 1 | Schema-drift guard | **shipped** — `pnpm check:schema-deployed` |
+| 2 | Round trips, 45 → 27 | **shipped** — the facet counts are one cache entry |
+| 3 | Functions moved to `bom1` | **shipped** — one line in `vercel.json` |
+| 4 | Make the shelf CDN-cacheable | **not built.** The gate cannot be read yet, and piece 2 already took the part that was worth taking |
 
 Measurements below were taken on 2026-09-04 against production and against the
 production database. Where a number is an estimate rather than a measurement it
@@ -64,12 +72,16 @@ ship* already gives the rule: a migration that "adds a table, column, index or
 constraint nothing yet reads" is applied **before the merge**. All seven were
 additive. The rule is written down and nothing enforces it.
 
-**The change.** `scripts/vercel-ignore-build.sh` already runs before every
-production build, in the repo root, with the project's environment. It already
-cancels a deployment by exiting 0. Give it a schema check: compare the tables and
-columns the Prisma schema declares against `information_schema` on the target
-database, and cancel the production build when the code needs schema the database
-does not have.
+**What shipped, and where the plan was wrong.** The check is `pnpm
+check:schema-deployed`, and it runs from the **build script** rather than from
+`scripts/vercel-ignore-build.sh`. The plan named the ignore script because it is
+cheaper — it cancels before the build spends anything — and that turned out to be
+impossible: Vercel runs the Ignored Build Step *before installing dependencies*,
+so that container has no `pg`, no `dotenv` and no `tsx`.
+
+From the build script, a non-zero exit marks the deployment ERROR and Vercel
+keeps serving the previous one, which is the same outcome that mattered. It costs
+one wasted build when it fires. Six hours was the cost of it not existing.
 
 - Reuse `scripts/pending-migrations.mts`. It is already read-only, already
   resolves the target the same way every other command does, and already joins
@@ -85,15 +97,23 @@ does not have.
   pending migration and would run against the same pooled Postgres as the build
   the merge just started.
 
-**Why this shape works.** The drift check is exact. Run against production before
-the migrations were applied it reported precisely 12 columns and 2 tables, which
-is precisely what the seven pending migrations add — no false positives, nothing
-missed. Run again afterwards: none.
+**Why this shape works.** The signal is pending migrations rather than a
+hand-rolled schema diff — `scripts/pending-migrations.mts` already computes it,
+read-only, and already names the PR behind each one. Run against production
+before the migrations were applied, the equivalent drift check reported precisely
+12 columns and 2 tables, which is precisely what the seven pending migrations
+add. No false positives, nothing missed.
 
-**Risk.** A false positive blocks a production deploy. Mitigated by failing
-towards deploying and by the check being derived from the schema rather than
-hand-maintained. Worth one integration test that asserts a known-good database
-produces an empty drift list.
+**The escape hatch.** `ALLOW_PENDING_MIGRATIONS` covers the one legitimate case
+in the ordering table — a `DROP` that lands after the merge. It is not a boolean:
+it must name every pending migration, so a value set for one deploy cannot
+silently cover the next. That was the actual shape of the incident, four PRs'
+worth accumulating one at a time.
+
+**Verified.** Ten unit tests on the decision, and all five paths exercised
+end to end against a real database: production + pending refuses, preview passes,
+a naming override passes, a boolean override still refuses, and no database
+configured passes with a note.
 
 ## PR 2 — 47 round trips down to about 10
 
@@ -107,10 +127,22 @@ maps every option value to its own `countResults` call:
 tier 4 + emirate 4 + availability 4 + freeZone 1 + reply 3 + years 3 = 19
 ```
 
-Nineteen `SELECT COUNT(*)` queries that differ only in one predicate. One query
-with `FILTER (WHERE …)` clauses returns all nineteen counts in a single trip.
-Check whether Prisma can express it before reaching for `$queryRaw`; if raw SQL
-is needed, `docs/database.md` has the house rules on hand-written statements.
+Nineteen `SELECT COUNT(*)` queries that differ only in one predicate.
+
+**The plan said one query with `FILTER` clauses. Do not do that.** `businessWhere`
+exists so the header, the chip counts and the results are one predicate rather
+than two that drift, and its own comment says so; hand-writing it again in SQL is
+the second one. Two alternatives that keep the predicate whole were measured
+rather than argued: `$transaction([...])` does not batch, it *adds* a round trip
+for `BEGIN` and `COMMIT`; and bucketing in JavaScript trades nineteen O(1) counts
+for one unbounded fetch of every matching business with its locations and
+products — cheaper at 203 listings, worse at 30,000.
+
+**What shipped instead:** the nineteen answers are one `unstable_cache` entry, at
+a 60-second lifetime, keyed on a query normalised by `countable` so that `page`,
+`sort` and `view` — none of which can move a count — do not fragment it. The
+predicate is untouched. This is the pattern `getHomePlans` and `getPricingPlans`
+already use.
 
 **The duplicated resolver.** `generateMetadata` and the page component each
 resolve `getCategoryBySlug` and `countResults` independently, and there is no
@@ -133,14 +165,22 @@ above, look at what is still serial in `Results.tsx` — the `countResults` pair
 then `searchBusinesses`, then the facet queries — and flatten what can be
 flattened.
 
-**Expected:** 47 → roughly 10, and the serial depth from three levels to one or
-two. At 39 ms per trip that is worth about 1.4 s from Dubai and more from
-Virginia. **Verify by re-running the query-log count**, not by feel.
+**Measured, on a production build against a seeded database: 45 → 27** on a warm
+cache, business `COUNT`s from 26 to 7. Not the ~10 the plan hoped for, because
+the remaining 20 are the page's actual data — the results, their relations, the
+spec template, the sponsored slot — and those are the work, not waste.
 
-**Risk.** Low, but the facet counts are user-visible numbers and CLAUDE.md is
-explicit that every number is a query. A collapsed `FILTER` query must return
-byte-identical counts to the nineteen it replaces; assert that in an integration
-test against seeded data before deleting the old path.
+**The staleness trade, named.** Sixty seconds is tighter than anything else
+cached here (the home page's product band is five minutes, its plan band an
+hour). CLAUDE.md says every number is a query rather than a constant; a cached
+count is a constant for its lifetime. The rule is aimed at a number nobody
+recomputes. This one is recomputed every minute, and a newly published supplier
+reaches the rail inside it.
+
+**Verified rather than asserted.** Twelve integration tests recompute all
+nineteen counts the slow way, one query at a time with nothing cached, across
+eleven query shapes chosen to hit a different branch of `businessWhere` each. Five
+unit tests pin `countable` in both directions.
 
 ## PR 3 — move the function to the database's region
 
@@ -199,8 +239,21 @@ Next's own `use-cache-remote.md` names under *When to avoid remote caching*:
 "If cache keys have mostly unique values per request (search filters, price
 ranges, user-specific parameters), cache utilization will be near-zero."
 
-**The gate.** Before spending a week on this, measure clean-shelf traffic now
-that the crawler is blocked:
+**The gate, run on 2026-09-04.** Inconclusive, and honestly so. The only window
+available was eleven minutes (10:31–10:42 UTC), immediately after a six-hour
+outage and a fresh deployment, and its shape — `/signup`, `/onboarding/claim`,
+`/signin` in round multiples of twenty — does not look like buyers. There is not
+yet a week of ordinary traffic to read.
+
+**What changed the answer anyway.** Piece 2 cached the nineteen facet counts,
+which was the expensive, repeated, identical-for-every-visitor part of the
+render. What piece 4 would add on top is making the whole response CDN-cacheable,
+which needs either Cache Components or a route split — a restructure of the
+busiest route in the app, for 13 of the 420 URLs in the sitemap. On the evidence
+that is disproportionate, and it stays unbuilt until the gate below says
+otherwise.
+
+**Re-run the gate** after a week of ordinary traffic:
 
 ```bash
 npx vercel logs --project business-listings \
