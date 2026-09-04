@@ -53,15 +53,18 @@ export function featuresOf(plan: PlanCaps): PlanFeature[] {
     },
     {
       /*
-         A plan with no lift says so, rather than saying "Ranked 1× in search"
-         with a line through it.
+         An absent line names the thing, and the strike says it is absent.
 
-         Every other absent line names a thing the seller does not get. `1×` is
-         not a thing anybody gets or misses — it is the baseline every listing
-         already has — so struck through it read as a feature being withheld and
-         was the one line on the free card that was actively confusing. Board
-         1l is where it became visible; it was wrong on `2e` and `11f` too, and
-         all three read the same way now.
+         This read "Ranked 1× in search" with a line through it, which is not an
+         absence anybody can parse: `1×` is the baseline every listing already
+         has, not a feature being withheld. Naming the absence directly — "No
+         ranking lift in search" — was worse again, because struck through it is
+         a double negative. So it takes the shape every other absent row already
+         has: "Your own web address", "A verification site visit", "A lift in
+         search ranking". The line through it is what says no.
+
+         Board 1l is where this became visible; it was wrong on `2e` and `11f`
+         too, and all three read the same way now.
 
          "1.15", "1.35", and plain "1" — not "1.0". `.replace(/\.?0+$/, "")`
          strips the trailing zeros and the dot they leave behind.

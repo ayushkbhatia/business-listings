@@ -303,10 +303,15 @@ describe("criteria 9 and 11 — free is a product, and nothing offers a trial", 
     }
   });
 
+  /*
+     Each absent line names the thing, so the strike through it is what says no.
+     "No ranking lift in search" struck through is a double negative, which is
+     the shape this row had before it took the same form as the other two.
+  */
   it("names what free lacks rather than leaving it out", () => {
     const absent = featuresOf(FREE).filter((feature) => !feature.included);
     expect(absent.map((feature) => feature.label)).toEqual([
-      "No ranking lift in search",
+      "A lift in search ranking",
       "Your own web address",
       "A verification site visit",
     ]);

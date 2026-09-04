@@ -2471,4 +2471,7 @@ product; found by the keyboard pass on the monthly/annual toggle.
 **A free plan's ranking line read "Ranked 1× in search", struck through.** Every
 other absent line names something the seller does not get; `1×` is the baseline
 every listing already has, so struck through it read as a feature being withheld.
-It is "No ranking lift in search" now, on `1l`, `2e` and `11f` alike.
+Naming the absence — "No ranking lift in search" — was worse again, because
+struck through that is a double negative. It reads "A lift in search ranking"
+now, the same shape as "Your own web address" beside it, with the strike doing
+the negating. Fixed on `1l`, `2e` and `11f` alike.

@@ -2308,7 +2308,7 @@ export const en = {
   "plan.seats": "{n} team seats",
   "plan.seat_one": "1 seat",
   "plan.ranking": "Ranked {multiplier}× in search",
-  "plan.ranking_none": "No ranking lift in search",
+  "plan.ranking_none": "A lift in search ranking",
   "plan.custom_domain": "Your own web address",
   "plan.site_visit": "A verification site visit",
   "plan.summary.free": "Be listed, and answer three enquiries a month.",
