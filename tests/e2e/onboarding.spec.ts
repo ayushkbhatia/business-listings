@@ -28,19 +28,145 @@ test.describe("board 2a — a seller who already has a listing", () => {
   });
 });
 
-test.describe("board 2b — prove it is yours", () => {
-  test("calls the number on the record, not one the claimant types", async ({ page }) => {
-    // Anybody can answer their own phone. Because it is the recorded number,
-    // answering it is the proof.
+/**
+ * Board 2b, from the seat that meets it.
+ *
+ * Two fixtures, and the split is the point. `MINE` is this seat's own listing,
+ * which is verified — reaching the route with nothing left to prove is
+ * criterion 11 and is what the seat sees by default. `CLAIMABLE` is an
+ * unclaimed, unverified record reached by slug, which is the shape a claimant
+ * arrives at from board 2a and the only way to see the gate itself.
+ */
+const CLAIMABLE = "/onboarding/verify?business=al-bariq-trading-llc";
+/** No number on the public record, so route B is absent rather than disabled. */
+const NO_PHONE = "/onboarding/verify?business=al-hvac-027";
+/** Lapsed, so the claim is taken and the badge withheld. */
+const EXPIRED = "/onboarding/verify?business=al-firdaus-technical-services-llc";
+
+test.describe("board 2b — prove ownership", () => {
+  test("sends an already-verified listing to the profile step", async ({ page }) => {
+    // Criterion 11. A second queue row on a settled listing is work for a
+    // reviewer that answers a question already answered.
     await page.goto("/onboarding/verify");
-    await expect(page.getByText(/the number on the public record, not one you type/)).toBeVisible();
-    // And there is no field to supply one.
-    const routes = page.locator("fieldset");
-    await expect(routes.getByRole("textbox")).toHaveCount(0);
+    await expect(page).toHaveURL(/\/onboarding\/profile/);
+  });
+
+  test("names the licensed entity, with its legal suffix", async ({ page }) => {
+    /*
+     * The documented exception to the display-name rule, and the only element on
+     * the page that takes a legal name: the claimant is proving ownership of a
+     * licensed entity, and the heading has to match the name printed on the
+     * document they are about to upload.
+     */
+    await page.goto(CLAIMABLE);
+    const h1 = page.getByRole("heading", { level: 1 });
+    await expect(h1).toHaveText(/^Claiming .+(LLC|FZE)$/);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  });
+
+  test("carries one chrome row: wordmark, rail and Save & exit", async ({ page }) => {
+    // Criterion 14. No mono step eyebrow, and no second header band — the rail
+    // states both the position and the name of every step already.
+    await page.goto(CLAIMABLE);
+    const chain = page.getByRole("navigation", { name: "Set up your listing" }).getByRole("list");
+    await expect(chain.getByText("Find your business", { exact: true })).toBeVisible();
+    await expect(chain.getByText("Prove it is yours", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save & exit" })).toBeVisible();
+    await expect(page.getByText(/STEP\s*2\s*OF\s*5/i)).toHaveCount(0);
+  });
+
+  test("makes the two routes mutually exclusive, collapsing the one not chosen", async ({ page }) => {
+    // Criterion 2. A supplier who tries to do both has misunderstood, and the
+    // interface should not make the confusion available.
+    await page.goto(CLAIMABLE);
+    const licence = page.getByRole("radio", { name: /Upload your trade licence/ });
+    const phone = page.getByRole("radio", { name: /Verify by phone instead/ });
+
+    await expect(licence).toBeChecked();
+    await expect(page.getByLabel("Licence number")).toBeVisible();
+
+    await phone.check();
+    await expect(phone).toBeChecked();
+    await expect(licence).not.toBeChecked();
+    // The licence route's fields go with it; only its label line remains.
+    await expect(page.getByLabel("Licence number")).toHaveCount(0);
+  });
+
+  test("calls the number on the public record, masked, and offers no field for one", async ({ page }) => {
+    /*
+     * Criterion 4, and the whole security value of the route: anybody can answer
+     * their own phone. Because it is the recorded number, answering it is the
+     * proof — so there is nothing to type.
+     */
+    await page.goto(CLAIMABLE);
+    await page.getByRole("radio", { name: /Verify by phone instead/ }).check();
+    await expect(page.getByText(/the number on the public licence record/)).toBeVisible();
+    // Masked: enough to recognise your own line, not enough to intercept it.
+    await expect(page.getByText(/[•]{2,}/)).toBeVisible();
+    await expect(page.locator("fieldset").getByRole("textbox")).toHaveCount(0);
+  });
+
+  test("drops the phone route entirely where the register holds no number", async ({ page }) => {
+    // Absent, not disabled: a disabled control is a thing somebody spends time
+    // trying to enable.
+    await page.goto(NO_PHONE);
+    await expect(page.getByRole("radio", { name: /Verify by phone instead/ })).toHaveCount(0);
+    // And nothing left to be faster than, so the tag goes too.
+    await expect(page.getByText("FASTEST")).toHaveCount(0);
+  });
+
+  test("labels the licence route fastest only when there is a second route", async ({ page }) => {
+    await page.goto(CLAIMABLE);
+    await expect(page.getByText("FASTEST")).toBeVisible();
+  });
+
+  test("accepts an expired licence and withholds the badge", async ({ page }) => {
+    // Criterion 7. An expired licence usually means a business under pressure,
+    // not a fake, and refusing it turns a renewal into a lost supplier.
+    await page.goto(EXPIRED);
+    await expect(page.getByText(/This licence expired on/)).toBeVisible();
+    await expect(page.getByText(/We will still take the claim/)).toBeVisible();
+    await expect(page.getByText(/the verified badge follows/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Submit for verification" })).toBeVisible();
+  });
+
+  test("never implies the claimant verifies themselves", async ({ page }) => {
+    // Criterion 6. Submitting queues a review and grants no tier.
+    await page.goto(CLAIMABLE);
+    await expect(page.getByRole("button", { name: "Submit for verification" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Verify my business/i })).toHaveCount(0);
+    await expect(page.getByText(/Verification is ours, not yours to declare/)).toBeVisible();
+  });
+
+  test("offers the camera first on the file input", async ({ page }) => {
+    // Criterion 13. Most suppliers are photographing a licence on a wall rather
+    // than uploading a scan — `image/*` is what puts the camera at the top of
+    // the sheet, while still offering Files below it.
+    await page.goto(CLAIMABLE);
+    await expect(page.getByText("Take a photo or choose a file")).toBeVisible();
+    const accept = await page.locator('input[type="file"]').first().getAttribute("accept");
+    expect(accept).toContain("image/*");
+    expect(accept?.indexOf("image/*")).toBeLessThan(accept?.indexOf("application/pdf") ?? 0);
+  });
+
+  test("names the conflict path in plain words", async ({ page }) => {
+    // Criterion 5. Blocking the second claimant would hand the listing
+    // permanently to whoever arrived first.
+    await page.goto(CLAIMABLE);
+    await expect(page.getByText(/decides in 48 hours/)).toBeVisible();
+  });
+
+  test("saves what was typed and says where the link went", async ({ page }) => {
+    // Criterion 10. Onboarding takes six minutes with the licence to hand and a
+    // fortnight without it.
+    await page.goto(CLAIMABLE);
+    await page.getByLabel("Your name (as on the licence or POA)").fill("Suresh Menon");
+    await page.getByRole("button", { name: "Save & exit" }).click();
+    await expect(page.getByText(/Saved\./)).toBeVisible();
   });
 
   test("is axe clean", async ({ page }) => {
-    await page.goto("/onboarding/verify");
+    await page.goto(CLAIMABLE);
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
   });

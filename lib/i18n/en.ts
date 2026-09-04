@@ -2723,19 +2723,96 @@ export const en = {
   // A seller already holding a claimed listing. Stated, not silent.
   "claim.already_yours": "You are already set up with a listing. Claiming a second business is not something this flow can do yet — write to us and we will attach it to your account.",
 
-  "verify.title": "Prove it is yours",
-  "verify.intro": "Two ways, both checked by a person, usually within four working hours. Your listing does not wait for it.",
+  // ── 2b · Prove ownership ──────────────────────────────────────────────────
+  // The h1 names the licensed entity, which is why it takes the legal name.
+  "verify.title": "Claiming {name}",
+  "verify.intro": "Pick one route. Both are checked by a person, usually within {hours} working hours.",
+  "verify.legend": "How you want to prove this is yours",
+
   "verify.route.licence": "Upload your trade licence",
-  "verify.route.licence_hint": "We read the licence number and expiry from it. PDF, JPEG or PNG.",
-  "verify.route.phone": "A call to the number on your licence record",
-  "verify.route.phone_hint": "We call {phone} — the number on the public record, not one you type. That is the check.",
-  "verify.no_phone": "We hold no phone number for this licence, so the call route is not available. Upload the licence instead.",
-  "verify.submit": "Submit",
-  "verify.submitted": "Submitted. We will be in touch within four working hours.",
+  "verify.route.licence_hint": "PDF or JPG, up to {limit}. We read the licence number and expiry from it.",
+  "verify.route.fastest": "Fastest",
+  "verify.route.phone": "Verify by phone instead",
+  // The masked number is the whole security argument of this route, stated.
+  "verify.route.phone_hint": "We call the number on the public licence record — {phone} — and read you a 6-digit code. Use this if the licence is with your PRO.",
+  "verify.no_phone": "We hold no phone number for this licence, so there is no call to answer.",
+
+  "verify.file.idle": "Take a photo or choose a file",
+  "verify.file.uploading": "Uploading the licence",
+  "verify.file.replace": "Replace this file",
+  "verify.file.reading": "Reading the licence number and expiry",
+
+  "verify.field.number": "Licence number",
+  "verify.field.number_hint": "As printed, with or without the {authority} prefix.",
+  "verify.field.expiry": "Expiry",
+  "verify.field.name": "Your name (as on the licence or POA)",
+  "verify.field.role": "Your role",
+  "verify.role.choose": "Choose one",
+  "verify.role.owner": "Owner",
+  "verify.role.partner": "Partner",
+  "verify.role.manager": "Manager",
+  "verify.role.pro": "PRO",
+  "verify.role.authorised_signatory": "Authorised signatory",
+
+  // OCR read nothing, or read it badly. Never a wrong value shown confidently.
+  "verify.ocr_failed": "We could not read this automatically — please type the number and expiry from the licence.",
+  "verify.ocr_filled": "We read these from your licence. Check them and correct anything wrong.",
+
+  // Wrong document. Named, because "invalid document" sends nobody anywhere.
+  "verify.wrong_document": "That looks like a {document} rather than a trade licence.",
+  "verify.wrong_document_fix": "Upload the trade licence issued by the licensing authority. You can submit anyway if you think this is right.",
+  "verify.document.health_authority": "health authority licence",
+  "verify.document.municipality_permit": "municipality permit",
+  "verify.document.vat_certificate": "tax registration certificate",
+  "verify.document.establishment_card": "establishment card",
+  "verify.document.chamber_certificate": "chamber of commerce certificate",
+  "verify.document.passport_or_id": "passport or Emirates ID",
+
+  // An expired licence is accepted. It usually means a business under pressure.
+  "verify.expired_heading": "This licence expired on {date}",
+  "verify.expired_body": "We will still take the claim, and you can carry on setting up while we look at it.",
+  "verify.expired_fix": "Upload a current licence when you have it, and the verified badge follows.",
+
+  "verify.submit": "Submit for verification",
+  "verify.submitting": "Submitting",
+  "verify.back": "Back",
+  "verify.save_exit": "Save & exit",
+  "verify.saved": "Saved. We have emailed {masked} a link back to this step.",
+  "verify.saved_no_email": "Saved. Sign in again and you will come back to this step.",
+
+  "verify.error.licence_number": "That is not a licence number. Type it as it is printed, for example {authority}-618402.",
+  "verify.error.wrong_authority": "That number starts with {found}, and this licence was issued by {expected}. Check you are claiming the right listing.",
+  "verify.gone": "That listing cannot be found.",
+
+  // The submitted state. The page becomes a status card and never a dead end.
+  "verify.submitted": "Submitted for verification",
+  "verify.submitted_body": "Sent {when}. A person checks it, usually within {hours} working hours. Nothing waits for us — carry on setting up.",
+  "verify.submitted_route.licence_upload": "Trade licence uploaded",
+  "verify.submitted_route.phone_callback": "Call to the number on the licence record",
+  "verify.continue": "Continue to your profile",
+
   "verify.contested_heading": "Somebody else has claimed this listing",
   "verify.contested_body": "We are taking your submission anyway. If a former employee or an agency claimed it, this is how it gets put right — a person will look at both.",
   "verify.contested_fix": "Submit below and carry on setting up. Nothing you fill in is lost if the claim takes a day to resolve.",
-  "verify.continue": "Carry on setting up",
+  "verify.contested_after": "Both parties have been asked for their licence. We decide within 48 hours.",
+  "verify.contested_after_fix": "Carry on setting up. Nothing you fill in is lost while we decide.",
+
+  // ── The sidebar ───────────────────────────────────────────────────────────
+  "verify.unlock_heading": "What you unlock now",
+  "verify.unlock.edit": "Edit everything on the listing",
+  "verify.unlock.reply": "Reply to reviews and enquiries",
+  "verify.unlock.badge": "The green Licence verified badge",
+  // The commercial one: a claimed-but-unverified listing is left out of fan-outs.
+  "verify.unlock.fanout": "Appear in RFQ fan-outs",
+
+  "verify.reviews_heading": { one: "Already {count} review on this listing", other: "Already {count} reviews on this listing" },
+  "verify.reviews_body": "They stay where they are. Claiming does not reset your rating — and you can reply to all of them once verified.",
+  // Replaced, never zeroed: "0 reviews" is a worse thing to say than nothing.
+  "verify.ladder_heading": "Verification is ours, not yours to declare",
+  "verify.ladder_body": "Submitting queues a check. We confirm the licence with the issuing authority, and only then does the badge appear.",
+
+  "verify.conflict_heading": "Someone else claimed it?",
+  "verify.conflict_body": "Submit your licence anyway. Where two claims conflict, our team asks both parties for the licence and decides in 48 hours.",
 
   "profile_step.title": "Your profile",
   "profile_step.intro": "What buyers see when they find you. Your trade name comes from the licence and cannot be edited here.",

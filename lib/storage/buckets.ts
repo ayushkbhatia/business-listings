@@ -22,6 +22,17 @@ export const PRIVATE_BUCKETS = [DOCUMENT_BUCKET] as const;
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 export const MAX_DOCUMENT_BYTES = 16 * 1024 * 1024;
 
+/**
+ * A trade licence, on board 2b, where the ceiling is lower than the platform's.
+ *
+ * Ten megabytes is what that screen tells a supplier, and a limit stated on a
+ * screen has to be the limit enforced by the server or it is decoration. Below
+ * `MAX_DOCUMENT_BYTES` on purpose: a licence is one or two pages, and an upload
+ * larger than this is a photograph nobody has resized — which is a slow upload
+ * on a warehouse connection and a slow read afterwards.
+ */
+export const MAX_LICENCE_BYTES = 10 * 1024 * 1024;
+
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"] as const;
 export const DOCUMENT_TYPES = ["application/pdf", "image/jpeg", "image/png"] as const;
 
@@ -83,17 +94,22 @@ export function checkImage(type: string, bytes: number): UploadAccepted | Upload
   return { ok: true };
 }
 
-export function checkDocument(type: string, bytes: number): UploadAccepted | UploadRefusal {
+export function checkDocument(
+  type: string,
+  bytes: number,
+  /** Board 2b passes its own, lower ceiling. Defaults to the platform's. */
+  limit: number = MAX_DOCUMENT_BYTES,
+): UploadAccepted | UploadRefusal {
   if (!(DOCUMENT_TYPES as readonly string[]).includes(type)) {
     return {
       ok: false,
       reason: `That is a ${type || "file of unknown type"}. Documents must be a PDF, JPEG or PNG.`,
     };
   }
-  if (bytes > MAX_DOCUMENT_BYTES) {
+  if (bytes > limit) {
     return {
       ok: false,
-      reason: `That document is ${megabytes(bytes)} MB. The limit is ${megabytes(MAX_DOCUMENT_BYTES)} MB.`,
+      reason: `That document is ${megabytes(bytes)} MB. The limit is ${megabytes(limit)} MB.`,
     };
   }
   return { ok: true };

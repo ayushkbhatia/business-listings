@@ -4,6 +4,7 @@ import { runDunning } from "@/lib/billing/dunning-job";
 import { applyEndedCancellations } from "@/lib/billing/service";
 import { pruneAttempts } from "@/lib/auth/attempts";
 import { LONGEST_RATE_WINDOW_MS, pruneRateLimitHits } from "@/lib/rate-limit";
+import { DRAFT_KEEP_DAYS, pruneDrafts } from "@/lib/onboarding/draft";
 import { measureResponseTimes } from "@/lib/metrics/job";
 import { measureProfileStrength } from "@/lib/metrics/strength-job";
 import { sweepAreaPages } from "@/lib/seo/area";
@@ -82,6 +83,19 @@ export async function GET(request: NextRequest) {
     async prunedRateLimitHits() {
       const cutoff = new Date(Date.now() - RATE_HIT_MARGIN * LONGEST_RATE_WINDOW_MS);
       const pruned = await pruneRateLimitHits(cutoff);
+      return { pruned, olderThan: cutoff };
+    },
+    /*
+       And board 2b's half-finished forms.
+
+       `onboarding_draft` holds what a supplier typed before going to find their
+       trade licence. Ninety days rather than the fortnight the board names as
+       typical: a cutoff at the typical case deletes the slow half of it, and the
+       slow half is exactly who this feature is for.
+    */
+    async prunedOnboardingDrafts() {
+      const cutoff = new Date(Date.now() - DRAFT_KEEP_DAYS * 24 * 60 * 60 * 1000);
+      const pruned = await pruneDrafts(cutoff);
       return { pruned, olderThan: cutoff };
     },
     /*

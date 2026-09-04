@@ -145,6 +145,21 @@ const CLAIM_SELECT = {
   phone: true,
   documentId: true,
   createdAt: true,
+  /*
+     Board 2b's evidence, so board 4c can read it.
+
+     The two `stated_`/`ocr_` pairs are the point: a reviewer deciding between
+     two claimants needs to see who corrected what the reader produced and to
+     what — `claimCorrections` in ./claim.ts turns the pair into the flag. Stored
+     and never surfaced would have been the same as not stored.
+  */
+  claimantName: true,
+  claimantRole: true,
+  statedLicenceNumber: true,
+  statedLicenceExpiry: true,
+  ocrLicenceNumber: true,
+  ocrLicenceExpiry: true,
+  ocrConfidence: true,
   claimant: { select: { id: true, fullName: true, email: true, phone: true } },
   document: { select: { id: true, filename: true, kind: true } },
 } as const;
