@@ -2670,22 +2670,19 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
   console.log("→ subscriptions, placements, invoices");
   const { snapshotOf } = await import("../lib/plan/entitlements.js");
   /*
-     Never the listing board 11a is about.
+     The first twelve claimed listings, and the slice is taken **before** the one
+     exclusion below rather than after.
 
-     `seedAtMonthlyCap` runs just before this and puts `FREE_AT_CAP_SLUG` on
-     Free, at its cap, with missed enquiries to argue about — that is the whole
-     of board 11a. This loop then picked the first twelve claimed listings and
-     sold some of them a plan, and that slug was among them.
+     Excluding a business from the filter would shift every index in the window,
+     and the plan each listing gets is decided by its index (`i < 3 ? pro : …`).
+     Doing it that way moved eleven other listings between plans as a side
+     effect — which changed which sellers are on a capped plan, and left one of
+     them a single enquiry below their cap where `enquiry-fanout.test.ts` fills
+     and empties a month. The suite passed once and failed on the next run.
 
-     It went unnoticed because the business row and the subscription row
-     disagreed: the subscription said Pro and `Business.planId` still said Free,
-     so every screen that reads the plan kept showing the Free overview. Making
-     the two agree is what surfaced it. A demonstration seller for the Free
-     overview must be genuinely on Free, in both places.
+     So: same twelve as before, and one of them is skipped in the loop.
   */
-  const paying = businesses
-    .filter((b) => b.claim === "claimed" && b.slug !== FREE_AT_CAP_SLUG)
-    .slice(0, 12);
+  const paying = businesses.filter((b) => b.claim === "claimed").slice(0, 12);
   const planRows = new Map((await db.plan.findMany()).map((p) => [p.id, p]));
 
   /** Signup dates, so the MRR ledger can be backfilled with the real ones. */
@@ -2694,6 +2691,19 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
   for (const [i, b] of paying.entries()) {
     const planId = i < 3 ? "pro" : i < 8 ? "basic" : "free";
     if (planId === "free") continue;
+    /*
+       Never the listing board 11a is about.
+
+       `seedAtMonthlyCap` runs just before this and puts `FREE_AT_CAP_SLUG` on
+       Free, at its cap, with missed enquiries to argue about — that is the whole
+       of board 11a. This loop was selling it a Pro subscription.
+
+       It went unnoticed because the business row and the subscription row
+       disagreed: the subscription said Pro and `Business.planId` still said
+       Free, so every screen that reads the plan kept showing the Free overview.
+       Making the two agree is what surfaced it.
+    */
+    if (b.slug === FREE_AT_CAP_SLUG) continue;
     const plan = planRows.get(planId)!;
     const startedAt = days(-int(60, 700));
 
