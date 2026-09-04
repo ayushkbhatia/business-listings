@@ -51,7 +51,7 @@ they 404 until their handoff.
 /onboarding/claim                       Find or add the business              [2a]  built h6s1 · public
 /onboarding/verify                      Prove ownership                       [2b]  built h6s2
 /onboarding/profile                     Profile basics                        [2c]  built h6s3
-/onboarding/locations                   Locations & hours                     [2d]
+/onboarding/locations                   Locations & hours                     [2d]  built h6s4
 /onboarding/plan                        Pick a plan                           [2e]
 /dashboard                              Overview                              [3a]
 /dashboard (free variant)               Free-plan overview                   [11a]

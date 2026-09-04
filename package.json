@@ -43,7 +43,10 @@
     "acceptance:4": "./scripts/acceptance-handoff-4.sh",
     "acceptance:5": "./scripts/acceptance-handoff-5.sh",
     "lighthouse:5": "./scripts/lighthouse-h5.sh",
-    "dev:seat": "tsx --env-file=.env.local scripts/dev-seat.mts"
+    "dev:seat": "tsx --env-file=.env.local scripts/dev-seat.mts",
+    "map:worker": "tsx scripts/copy-map-worker.mts",
+    "predev": "pnpm map:worker",
+    "prebuild": "pnpm map:worker"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

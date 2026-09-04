@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { Map as MapLibreMap, MapGeoJSONFeature } from "maplibre-gl";
+import { loadMapLibre } from "@/lib/map/loader";
 import { cn } from "@/lib/cn";
 import type { MapBounds } from "@/lib/search/query";
 
@@ -201,7 +202,7 @@ export function ResultsMap({
     let cancelled = false;
 
     (async () => {
-      const maplibre = await import("maplibre-gl");
+      const maplibre = await loadMapLibre();
       if (cancelled || !containerRef.current) return;
 
       const map = new maplibre.Map({
@@ -236,6 +237,14 @@ export function ResultsMap({
       unlandmark();
 
       map.on("error", () => setFailed(true));
+      /*
+         MapLibre names its own canvas `region "Map"`. One map on a page is fine;
+         two are two landmarks with the same name — `landmark-unique`, and a
+         screen-reader user given a list of identical destinations. The canvas
+         stays a region because it is keyboard-pannable and wants a name; the
+         name becomes this map's own.
+      */
+      map.getCanvas().setAttribute("aria-label", label);
       map.addControl(new maplibre.NavigationControl({ showCompass: false }), "bottom-right");
 
       map.on("load", () => {

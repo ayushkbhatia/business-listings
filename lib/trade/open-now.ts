@@ -3,6 +3,7 @@ import {
   hoursInEffect,
   minutesOf,
   type Day,
+  type RamadanCalendar,
   type RamadanHours,
   type Shift,
   type WeekHours,
@@ -109,6 +110,8 @@ export function openNow(
   hours: WeekHours | null | undefined,
   ramadan: RamadanHours | null | undefined,
   now = new Date(),
+  /** The platform's calendar. Omitted, the compiled estimates apply. */
+  calendar?: RamadanCalendar,
 ): OpenState {
   if (!hours || !hasAnyHours(hours)) return { state: "unknown" };
 
@@ -118,7 +121,7 @@ export function openNow(
      `hoursInEffect` owns the decision, including refusing to apply a Ramadan
      block that would close the business all week.
   */
-  const { hours: week, isRamadan } = hoursInEffect(hours, ramadan ?? null, now);
+  const { hours: week, isRamadan } = hoursInEffect(hours, ramadan ?? null, now, calendar);
   if (!hasAnyHours(week)) return { state: "unknown" };
 
   const { day, minutes } = dubaiNow(now);
@@ -161,12 +164,13 @@ export function openingHoursSchema(
   hours: WeekHours | null | undefined,
   ramadan: RamadanHours | null | undefined,
   now = new Date(),
+  calendar?: RamadanCalendar,
 ):
   | { "@type": "OpeningHoursSpecification"; dayOfWeek: string; opens: string; closes: string }[]
   | undefined {
   if (!hours) return undefined;
 
-  const { hours: week } = hoursInEffect(hours, ramadan ?? null, now);
+  const { hours: week } = hoursInEffect(hours, ramadan ?? null, now, calendar);
 
   const SCHEMA_DAY: Record<Day, string> = {
     sun: "Sunday",

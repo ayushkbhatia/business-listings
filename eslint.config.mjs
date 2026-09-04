@@ -45,6 +45,11 @@ const eslintConfig = defineConfig([
     // bundle.
     "supabase/.temp/**",
     "supabase/.branches/**",
+    // MapLibre's worker, copied out of node_modules before dev and build so the
+    // browser has a URL that exists — see scripts/copy-map-worker.mts. Half a
+    // megabyte of somebody else's minified output, gitignored, and lint walks
+    // the filesystem rather than the index.
+    "public/maplibre/**",
   ]),
 ]);
 

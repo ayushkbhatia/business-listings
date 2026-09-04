@@ -14,7 +14,7 @@ import { OnboardingHeader, OnboardingColumn } from "../_chrome";
 import { requireClaimant } from "../_shell";
 import { addCategory, continueToLocations, removeCategory, saveProfileField } from "./actions";
 import { ProfileWorkspace } from "./ProfileWorkspace";
-import { SavedIndicator, SavedProvider } from "./SavedState";
+import { SavedIndicator, SavedProvider } from "../_saved";
 
 /**
  * Board 2c — profile basics, with a live preview.
@@ -76,7 +76,7 @@ export default async function ProfileStepPage() {
         (plan.categoryLimit === null || plan.categoryLimit > (state.categoryLimit ?? 0)),
     ) ?? null;
 
-  const savedAt = t("profile_step.saved_at", { when: formatRelative(state.savedAt) });
+  const savedAt = t("onboarding.saved_at", { when: formatRelative(state.savedAt) });
 
   return (
     <SavedProvider initial={savedAt}>

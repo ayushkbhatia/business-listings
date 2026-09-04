@@ -702,6 +702,10 @@ export const en = {
   "display.unclaimed": "Unclaimed",
   "display.in_review": "In review",
   "display.no_image": "No photo yet",
+  // Two, because the gallery renders both specimens at once and a map's canvas
+  // is a landmark: the same name twice is `landmark-unique`.
+  "display.branch_map_label": "A pinned branch, on a map",
+  "display.branch_map_label_unpinned": "An unpinned branch, on a map",
   "display.map_empty": "No pinned locations to show",
   "display.map_excluded": { one: "{count} branch has no map pin", other: "{count} branches have no map pin" },
   "display.map_label": "Supplier locations",
@@ -1132,6 +1136,16 @@ export const en = {
   "storefront.day.thu": "Thursday",
   "storefront.day.fri": "Friday",
   "storefront.day.sat": "Saturday",
+  // Three letters, for a day range: "Mon – Thu". Separate keys rather than a
+  // slice of the full name, because a locale that abbreviates differently — or
+  // does not abbreviate at all — needs to say so rather than be truncated.
+  "storefront.day_short.sun": "Sun",
+  "storefront.day_short.mon": "Mon",
+  "storefront.day_short.tue": "Tue",
+  "storefront.day_short.wed": "Wed",
+  "storefront.day_short.thu": "Thu",
+  "storefront.day_short.fri": "Fri",
+  "storefront.day_short.sat": "Sat",
 
   // ── Search and results ──
   "results.businesses_tab": "Suppliers",
@@ -2658,15 +2672,23 @@ export const en = {
 
   // ── Onboarding, boards 2a to 2e ───────────────────────────────────────────
   "onboarding.sequence": "Set up your listing",
-  "onboarding.step.claim": "Find your business",
-  "onboarding.step.verify": "Prove it is yours",
-  "onboarding.step.profile": "Your profile",
-  "onboarding.step.locations": "Where you are",
-  "onboarding.step.plan": "Pick a plan",
+  /*
+     One word each, and the same five words on all four renders of this funnel.
+     A step chain is read at a glance between fields; "Prove it is yours" is a
+     sentence, and five sentences across a 60px bar is a paragraph nobody reads.
+     Past tense on the ones behind you, because that is what the tick means.
+  */
+  "onboarding.step.claim": "Claimed",
+  "onboarding.step.verify": "Verified",
+  "onboarding.step.profile": "Profile",
+  "onboarding.step.locations": "Locations",
+  "onboarding.step.plan": "Plan",
   "onboarding.next": "Continue",
   "onboarding.back": "Back",
   // The chain collapses to this below 768px, beside the current step's name.
   "onboarding.step_of": "{current} / {total}",
+  "onboarding.saved_now": "Saved",
+  "onboarding.saved_at": "Saved {when}",
   "onboarding.have_account": "Already have an account?",
   "onboarding.sign_in": "Sign in",
 
@@ -2882,8 +2904,6 @@ export const en = {
   "profile_step.lift_mechanism": "Buyers filter on photos and specs. A listing with neither is invisible to those filters.",
 
   // ── Autosave and the one button ───────────────────────────────────────────
-  "profile_step.saved_now": "Saved",
-  "profile_step.saved_at": "Saved {when}",
   "profile_step.saving": "Saving",
   "profile_step.save_failed": "That did not save. Your text is still here — try again.",
   "profile_step.continue": "Continue to locations",
@@ -2897,10 +2917,86 @@ export const en = {
   "profile_step.error.unknown_team_size": "Pick one of the bands.",
   "profile_step.error.required": "Add a display name, a primary category and a description before you carry on.",
 
-  "locations_step.title": "Where you are",
-  "locations_step.intro": "The address buyers should come to. You can add more branches later.",
+  // ── Board 2d, locations and hours ─────────────────────────────────────────
+  "locations_step.title": "Where can buyers find you?",
+  // The stake, not encouragement. Area is the second-most-used facet after
+  // category, and an unpinned branch is filtered out of the results map by a
+  // where clause rather than ranked below a pinned one.
+  "locations_step.intro": "Drop a pin per branch. Buyers filter by area constantly — an unpinned listing loses most local searches.",
+
+  "locations_step.branch": "Branch {n} — {type}",
+  "locations_step.emirate": "Emirate",
+  "locations_step.area": "Area",
+  "locations_step.street": "Street address",
+  "locations_step.street_hint": "Building, street and the landmark you give drivers.",
+  "locations_step.landline": "Landline",
+  "locations_step.whatsapp": "WhatsApp",
+  "locations_step.branch_type": "Branch type",
+  "locations_step.pinned": "Pinned",
+  "locations_step.not_pinned": "Not pinned",
+  "locations_step.not_pinned_help": "Drag the pin on the map to your gate. Without it this branch appears on no area page.",
+  "locations_step.select_branch": "Edit this branch",
+  "locations_step.showing_on_map": "Showing on the map",
+
+  "locations_step.counter": "{used} of {cap} locations used on {plan}",
+  "locations_step.counter_one": "{used} of {cap} location used on {plan}",
+  "locations_step.counter_unlimited": "{used} locations. {plan} does not cap them.",
+  "locations_step.add": "Add another branch",
+  "locations_step.add_area": "Area for the new branch",
+  "locations_step.upgrade": "{plan} allows {cap} →",
+  "locations_step.upgrade_unlimited": "{plan} allows as many as you like →",
+  "locations_step.remove": "Remove this branch",
+  "locations_step.confirm_remove": "Remove this branch? Buyers will stop seeing this address.",
+  "locations_step.keep_branch": "Keep it",
+  "locations_step.last_branch": "This is your only branch. Add another before removing it.",
+
+  "locations_step.map_label": "Map of this branch",
+  "locations_step.drag_hint": "Drag the pin to your gate, not the street",
+  "locations_step.unpinned_hint": "Drag the pin to your gate to pin this branch",
+  "locations_step.map_unavailable": "The map did not load. Everything else on this page still saves.",
+  "locations_step.radius": "Service radius",
+  "locations_step.radius_km": "{km} km",
+  "locations_step.radius_note": "Used to match you to nearby RFQs and \"near me\" searches.",
+  "locations_step.radius_edit": "EDIT",
+  "locations_step.radius_done": "Done",
+  "locations_step.radius_none": "No delivery radius set",
+  "locations_step.radius_slider": "Service radius in kilometres",
+
+  "locations_step.hours": "Opening hours",
+  "locations_step.day_range": "{from} – {to}",
+  "locations_step.to": "to",
+  "locations_step.split_shift": "Split shift",
+  "locations_step.ramadan_on": "Ramadan hours on",
+  "locations_step.ramadan_note": "on every open day · applies automatically on the announced dates",
+  "locations_step.hours_optional": "Not needed to carry on. A branch with none reads \"Hours not provided\".",
+  "locations_step.copy_all": "Copy to all branches",
+  "locations_step.copy_all_confirm": "{count} other branches already have hours. Copying replaces them.",
+  "locations_step.copy_all_confirm_one": "One other branch already has hours. Copying replaces them.",
+  "locations_step.copy_all_go": "Replace them",
+  "locations_step.copy_all_cancel": "Keep them",
+  "locations_step.copied": "Applied to {count} branches.",
+
+  "locations_step.continue": "Continue to plans",
+  "locations_step.back": "Back",
   "locations_step.go_live": "Put my listing live",
   "locations_step.live_note": "Your listing goes live on Free as soon as you save this. The plan step is next and it is a choice, not a gate.",
+  "locations_step.blocked": "Branch {n} still needs {what}.",
+  "locations_step.blocked_none": "Add the address buyers should come to before you carry on.",
+  "locations_step.gap.area": "an area",
+  "locations_step.gap.address": "a street address",
+  "locations_step.gap.contact": "a phone number",
+  "locations_step.gap.pin": "a pin on the map",
+  "locations_step.gap_join": " and ",
+
+  "locations_step.error.landline": "That is a mobile. A landline with its area code — 04 for Dubai, 06 for Sharjah — tells buyers where you are.",
+  "locations_step.error.whatsapp": "WhatsApp needs a mobile, like 055 704 1120. A landline makes the button a dead link.",
+  "locations_step.error.number": "That is not a UAE number. Write it as 04 340 6688 or 055 704 1120.",
+  "locations_step.error.address": "Add the building, street and the landmark you give drivers.",
+  "locations_step.error.area": "Pick an area from the list. Every area page is built from it.",
+  "locations_step.error.type": "Pick what this branch is.",
+  "locations_step.error.pin_bounds": "That pin is outside the UAE. Drag it back to the branch.",
+  "locations_step.error.at_cap": "{plan} includes {cap}. Move up a plan to add another branch.",
+  "locations_step.error.save_failed": "That did not save. What you typed is still here — try again.",
 
   "plan_step.title": "Pick a plan",
   "plan_step.live_already": "Your listing is already live at {url}. Free is a real plan — you can stay on it.",

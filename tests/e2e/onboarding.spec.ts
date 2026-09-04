@@ -69,8 +69,8 @@ test.describe("board 2b — prove ownership", () => {
     // states both the position and the name of every step already.
     await page.goto(CLAIMABLE);
     const chain = page.getByRole("navigation", { name: "Set up your listing" }).getByRole("list");
-    await expect(chain.getByText("Find your business", { exact: true })).toBeVisible();
-    await expect(chain.getByText("Prove it is yours", { exact: true })).toBeVisible();
+    await expect(chain.getByText("Claimed", { exact: true })).toBeVisible();
+    await expect(chain.getByText("Verified", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Save & exit" })).toBeVisible();
     await expect(page.getByText(/STEP\s*2\s*OF\s*5/i)).toHaveCount(0);
   });
@@ -309,11 +309,189 @@ test.describe("board 2c — profile basics, with live preview", () => {
   test("shows steps one and two as done, in the shared chain", async ({ page }) => {
     // Criterion 20, and the same component every step of the funnel carries.
     const chain = page.getByRole("navigation", { name: "Set up your listing" }).getByRole("list");
-    await expect(chain.getByText("Your profile", { exact: true })).toBeVisible();
-    await expect(chain.getByText("Pick a plan", { exact: true })).toBeVisible();
+    await expect(chain.getByText("Profile", { exact: true })).toBeVisible();
+    await expect(chain.getByText("Plan", { exact: true })).toBeVisible();
   });
 
   test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+test.describe("board 2d — locations and hours", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/onboarding/locations");
+  });
+
+  test("states the stake rather than encouraging", async ({ page }) => {
+    /*
+     * Not motivational copy. Area is the second-most-used facet after category,
+     * and an unpinned branch is excluded from the results map by a `where`
+     * clause and scores no distance in the ranking — so the sentence is a
+     * description of board 1c.
+     */
+    await expect(page.getByRole("heading", { level: 1, name: "Where can buyers find you?" })).toBeVisible();
+    await expect(page.getByText(/an unpinned listing loses most local searches/)).toBeVisible();
+  });
+
+  test("counts locations used against the plan, in the grammar 2c set", async ({ page }) => {
+    // Criterion 1. `N of M locations used on <plan>` — used over allowed, plan
+    // named. The render's own correction: "Branch 2 of 3 available on your plan"
+    // reads as either an allowance or a position and is therefore neither.
+    await expect(page.getByText(/\d+ of \d+ locations? used on \w+|\d+ locations\./)).toBeVisible();
+  });
+
+  test("tags every branch with whether it is pinned", async ({ page }) => {
+    // Criterion 3. State, not decoration — and a word beside the colour, so it
+    // is readable without it.
+    const tags = page.getByText(/^(Pinned|Not pinned)$/);
+    expect(await tags.count()).toBeGreaterThan(0);
+    // Amber where there is no pin. The word is what makes it readable without
+    // the colour; the colour is what makes it findable in a list of six.
+    await expect(page.getByText("Not pinned").first()).toHaveClass(/text-warn-ink/);
+  });
+
+  test("blocks Continue on a branch with no pin, and names the branch", async ({ page }) => {
+    /*
+     * Criterion 4. The Pro fixture has a branch with no coordinates, which is
+     * the state this gate exists for: without a pin the listing cannot appear on
+     * the area page that publishing it is for.
+     */
+    await page.getByRole("button", { name: "Continue to plans" }).click();
+    await expect(page.getByText(/Branch \d+ still needs/)).toBeVisible({ timeout: 20_000 });
+    await expect(page).toHaveURL(/\/onboarding\/locations/);
+  });
+
+  test("does not ask for hours", async ({ page }) => {
+    // Criterion 5. A branch with none renders "Hours not provided" on 1f, which
+    // is honest and fixable later.
+    await expect(page.getByText(/Not needed to carry on/).first()).toBeVisible();
+  });
+
+  test("offers the area as a select, never as a text field", async ({ page }) => {
+    /*
+     * Criterion 6. Every area page on board 6a is generated from this join, so a
+     * typed area is a listing that appears on no area page at all. The emirate
+     * is the group heading rather than a second field: two fields that must
+     * agree are two fields that eventually will not.
+     */
+    const area = page.getByRole("combobox", { name: "Area" }).first();
+    await expect(area).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Area" })).toHaveCount(0);
+
+    // The emirate is the control that narrows it, and it is a select too — the
+    // stored emirate still comes off the chosen area on the server, so the two
+    // cannot disagree whatever this screen does.
+    await expect(page.getByRole("combobox", { name: "Emirate" }).first()).toBeVisible();
+  });
+
+  test("renders real map geometry, with its attribution", async ({ page }) => {
+    /*
+     * Criteria 7 and 8. The canvas is MapLibre's; the attribution is the tile
+     * licence's condition rather than a credit, and the service-radius card must
+     * not cover it.
+     */
+    const map = page.getByRole("group", { name: "Map of this branch" });
+    await expect(map).toBeVisible();
+    await expect(map.locator("canvas.maplibregl-canvas")).toBeVisible({ timeout: 30_000 });
+    await expect(map.getByText(/OpenStreetMap/)).toBeVisible();
+  });
+
+  test("gives zoom a control and a scale bar", async ({ page }) => {
+    /*
+     * Criterion 9. The wheel is deliberately not a zoom: this map sits inside a
+     * scrolling form, and one that grabs the wheel traps the seller half way
+     * down it. So the control has to be there, and reachable — the drag
+     * instruction sits in the opposite corner for that reason.
+     */
+    const map = page.getByRole("group", { name: "Map of this branch" });
+    await expect(map.getByRole("button", { name: /Zoom in/i })).toBeVisible();
+    await expect(map.locator(".maplibregl-ctrl-scale")).toBeVisible({ timeout: 30_000 });
+  });
+
+  test("keeps the service radius a number until it is edited", async ({ page }) => {
+    /*
+     * Criterion 12. At street zoom a 40 km circle is several screens wide — a
+     * shape with no visible edge — so the card carries the figure and the editor
+     * draws the circle, zoomed out to fit it.
+     */
+    const map = page.getByRole("group", { name: "Map of this branch" });
+    /*
+       The canvas, not the wrapper. The wrapper is in the server-rendered HTML
+       and the canvas is not — MapLibre creates it after the client mounts — so
+       waiting for it is what tells this test the button it is about to press has
+       a handler attached. Waiting for the wrapper clicked a hydrating page and
+       failed with "element not found" three lines later.
+    */
+    await expect(map.locator("canvas.maplibregl-canvas")).toBeVisible({ timeout: 30_000 });
+
+    /*
+       Exact, and scoped to the map. `getByRole` matches an accessible name as a
+       case-insensitive substring unless told otherwise, so `name: "EDIT"` also
+       matched the five "Edit this branch" buttons in the form — and `.first()`
+       clicked one of those, selected a different branch, and reported the
+       radius editor missing.
+    */
+    const edit = map.getByRole("button", { name: "EDIT", exact: true });
+    await expect(edit).toBeVisible();
+    await edit.click();
+    await expect(page.getByRole("slider", { name: /Service radius in kilometres/ })).toBeVisible();
+    // Criterion 12's other half: the circle is drawn only in here.
+    await expect(page.getByRole("button", { name: "Done" })).toBeVisible();
+  });
+
+  test("supports two shifts a day, because the market keeps them", async ({ page }) => {
+    /*
+     * Criterion 13. A trade counter opens at eight, shuts at one for the
+     * afternoon and opens again at four. One pair per day forces those sellers
+     * to declare hours they do not keep, and 1f's "open now" is then wrong for
+     * several hours a day.
+     */
+    await expect(page.getByRole("button", { name: /Split shift/ }).first()).toBeVisible();
+  });
+
+  test("asks before copying hours over another branch", async ({ page }) => {
+    /*
+     * Criterion 17. This control is one click from the row the seller was
+     * editing, and the cost of a mis-click is somebody else's Tuesday — so the
+     * confirm names how many branches would lose their hours rather than asking
+     * a generic "are you sure".
+     */
+    await page.getByRole("button", { name: "Copy to all branches" }).first().click();
+    await expect(page.getByText(/branch(es)? already (has|have) hours/)).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByRole("button", { name: "Keep them" })).toBeVisible();
+  });
+
+  test("autosaves and says when it last did", async ({ page }) => {
+    // Criterion 18. One indicator, in the chrome where the board puts it.
+    const address = page.getByRole("textbox", { name: "Street address" }).first();
+    await address.fill(`Warehouse 43, Street 19, Al Quoz Industrial 1 ${Date.now() % 1000}`);
+
+    const header = page.getByRole("banner");
+    await expect(header.getByText("Saved", { exact: true })).toBeVisible({ timeout: 20_000 });
+  });
+
+  test("offers a Back that reaches step 3 and no further", async ({ page }) => {
+    /*
+     * Criterion 19. This step is editable and re-enterable, so Back is honest
+     * here where it was not on 2c. Steps 1 and 2 are irreversible — a claim is
+     * submitted and a licence is with a reviewer — so nothing leads to them.
+     */
+    await page.getByRole("button", { name: /^Back$/ }).click();
+    await expect(page).toHaveURL(/\/onboarding\/profile/);
+  });
+
+  test("carries the same step chain as every other step", async ({ page }) => {
+    // Criterion 20, and a property of using one component rather than a thing
+    // to check on five screens.
+    const chain = page.getByRole("navigation", { name: "Set up your listing" }).getByRole("list");
+    await expect(chain.getByText("Locations", { exact: true })).toBeVisible();
+    await expect(chain.getByText("Plan", { exact: true })).toBeVisible();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    await expect(page.getByRole("group", { name: "Map of this branch" })).toBeVisible();
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
   });

@@ -3,11 +3,13 @@
 import { createContext, useContext, useMemo, useState } from "react";
 
 /**
- * When the profile last saved, held above the header and the form.
+ * When this step last saved, held above the header and the form.
  *
- * Board 2c puts the timestamp in the chrome — "`Saved 20 seconds ago` in the
- * header" — and it is the promise the whole step rests on: a seller can close
- * the tab at any point and come back to everything intact.
+ * Boards `2c` and `2d` both put the timestamp in the chrome — "`Saved 20 seconds
+ * ago` in the header" — and it is the promise the autosave steps rest on: a
+ * seller can close the tab at any point and come back to everything intact. It
+ * lives beside the shell rather than inside either step for that reason; two
+ * copies of a receipt is two receipts to keep in agreement.
  *
  * The form is what knows a save landed and the header is what says so, and they
  * are siblings under the page. A context spans them, the same way board 2b's
@@ -15,7 +17,7 @@ import { createContext, useContext, useMemo, useState } from "react";
  *
  * There was briefly a second indicator beside the Continue button. Two places
  * telling a seller the same thing is one place too many to keep in agreement,
- * and the one the board asks for is the header.
+ * and the one the boards ask for is the header.
  */
 
 interface SavedValue {
