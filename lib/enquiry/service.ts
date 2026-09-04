@@ -91,7 +91,29 @@ export async function findFanoutCandidates(
         : {}),
       OR: [
         { primaryCategoryId: { in: [...request.categoryIds] } },
-        { categories: { some: { categoryId: { in: [...request.categoryIds] } } } },
+        /*
+           An extra category only counts while its activity flag is clear.
+
+           Board 2c, criterion 8. A seller may add any category up to their
+           plan's cap and the chip is accepted — refusing inline on a text match
+           against registry prose would tell a legitimate seller their own
+           licence is wrong. What the flag buys is this line: until a reviewer
+           clears it, the listing is out of the fan-out *for that category* and
+           in every other one it holds. A paint trader does not receive
+           electrical RFQs, and nobody had to guess at the form.
+
+           The primary category is deliberately not filtered: it came from the
+           licence import, and changing it goes through `ListingChangeRequest`,
+           so a person has already looked at it.
+        */
+        {
+          categories: {
+            some: {
+              categoryId: { in: [...request.categoryIds] },
+              unverifiedActivityAt: null,
+            },
+          },
+        },
         /*
            A supplier the buyer named is a candidate whatever they sell.
 

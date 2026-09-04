@@ -50,7 +50,7 @@ they 404 until their handoff.
 ```
 /onboarding/claim                       Find or add the business              [2a]  built h6s1 · public
 /onboarding/verify                      Prove ownership                       [2b]  built h6s2
-/onboarding/profile                     Profile basics                        [2c]
+/onboarding/profile                     Profile basics                        [2c]  built h6s3
 /onboarding/locations                   Locations & hours                     [2d]
 /onboarding/plan                        Pick a plan                           [2e]
 /dashboard                              Overview                              [3a]
@@ -179,6 +179,21 @@ half of the directive we want.
 A signed-in seller already holding a claimed listing is redirected from `2a` to
 `/dashboard?notice=one_business`, which states the reason. Claiming a second
 business is not something this flow does.
+
+`/onboarding/profile` is where the split between a legal name and a display name
+is created, and the only screen carrying both as fields. The trade name is
+locked; the display name is validated against legal suffixes and against words
+its own categories already carry, and a near-match to a verified listing in the
+same emirate is **accepted and flagged** to the trust queue rather than refused —
+in a market where a hundred firms are called Al Something Trading it is usually
+a coincidence, and a form cannot tell that from impersonation.
+
+Categories are capped by `plan.categoryLimit`, which counts the primary. The
+screen shows two counters over the same two arrays and both are right: the extras
+allowance is the cap minus the primary, the strength meter counts the total. An
+extra whose category is not covered by the licence's stated activity is taken,
+flagged, and left out of the enquiry fan-out **for that category only** until a
+reviewer clears it.
 
 `/onboarding/verify` takes `?business=` as either an id or a slug. Board 2a hands
 over an id, which is what a link built by a screen carries; a link built by a

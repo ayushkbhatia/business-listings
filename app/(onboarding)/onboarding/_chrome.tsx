@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { StepHeader } from "@/components/structure";
+import { cn } from "@/lib/cn";
 import { STEPS, type Step } from "@/lib/onboarding/service";
 import { t } from "@/lib/i18n";
 
@@ -95,9 +96,25 @@ export function OnboardingHeader({
  * Full width with gutters below `md`, per the board's responsive notes: an
  * outbound recruitment message lands on a phone, and this is the page it opens.
  */
-export function OnboardingColumn({ children }: { children: React.ReactNode }) {
+export function OnboardingColumn({
+  children,
+  wide = false,
+}: {
+  children: React.ReactNode;
+  /**
+   * Board 2c's width. That step is a form beside a live preview of the card the
+   * form produces, and the preview is the argument rather than an ornament — at
+   * 760px the two columns are each too narrow to be what they are.
+   */
+  wide?: boolean;
+}) {
   return (
-    <main className="mx-auto w-full max-w-[47.5rem] px-[var(--section-pad)] pb-16 pt-8 md:pt-11">
+    <main
+      className={cn(
+        "mx-auto w-full px-[var(--section-pad)] pb-16 pt-8 md:pt-11",
+        wide ? "max-w-[75rem]" : "max-w-[47.5rem]",
+      )}
+    >
       {children}
     </main>
   );

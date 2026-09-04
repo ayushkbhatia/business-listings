@@ -3,6 +3,7 @@ import {
   PHOTO_TARGET,
   PRODUCT_TARGET,
   profileStrength,
+  strengthItems,
   STRONG_ENOUGH,
   WEIGHTS,
   type ProfileFacts,
@@ -87,18 +88,18 @@ describe("profileStrength", () => {
     expect(Number.isInteger(score)).toBe(true);
   });
 
-  it("counts hours as half the value of having a location at all", () => {
-    // The score is a rounded integer, so half of an odd weight is not
-    // observable exactly — 7.5 points shows up as 7. Assert the half rather
-    // than a figure that would have to change every time a weight moves.
-    const addressOnly = profileStrength({ ...EMPTY, locations: 2, locationsWithHours: 0 });
-    const withHours = profileStrength({ ...EMPTY, locations: 2, locationsWithHours: 2 });
-    expect(withHours - addressOnly).toBe(Math.floor(WEIGHTS.locations / 2));
-    expect(addressOnly).toBe(Math.round(WEIGHTS.locations / 2));
-  });
-
-  it("gives no location credit for having none", () => {
-    expect(profileStrength({ ...EMPTY, locations: 0, locationsWithHours: 0 })).toBe(0);
+  it("gives no credit for a location or its hours — a gate is not a lever", () => {
+    /*
+       Board 2c, criterion 14. A location is required to publish, so it is a
+       gate; levers are things a seller can decline. Mixing the two is what let
+       board 8a offer four tasks worth fifty points against a denominator of a
+       hundred, so a seller could finish everything on offer and still be short
+       with nothing named to do about it.
+    */
+    const none = profileStrength({ ...EMPTY, locations: 0, locationsWithHours: 0 });
+    const both = profileStrength({ ...EMPTY, locations: 4, locationsWithHours: 4 });
+    expect(none).toBe(0);
+    expect(both).toBe(0);
   });
 
   it("stops rewarding photos past the target", () => {
@@ -136,12 +137,17 @@ describe("profileStrength", () => {
   });
 
   it("rises monotonically as a seller does the work", () => {
+    /*
+       Every step is a lever the seller can pull. Adding a location used to be
+       one of them and no longer moves the number at all — board 2c, criterion
+       14: a location is required to publish, so it is a gate.
+    */
     const steps: ProfileFacts[] = [
       EMPTY,
       { ...EMPTY, hasDescription: true },
-      { ...EMPTY, hasDescription: true, locations: 1, locationsWithHours: 1 },
-      { ...EMPTY, hasDescription: true, locations: 1, locationsWithHours: 1, products: 10, productsWithFilterableSpecs: 10 },
-      { ...EMPTY, hasDescription: true, locations: 1, locationsWithHours: 1, products: 10, productsWithFilterableSpecs: 10, photos: 10 },
+      { ...EMPTY, hasDescription: true, hasEstablishedYear: true, hasTeamSize: true },
+      { ...EMPTY, hasDescription: true, hasEstablishedYear: true, hasTeamSize: true, products: 10, productsWithFilterableSpecs: 10 },
+      { ...EMPTY, hasDescription: true, hasEstablishedYear: true, hasTeamSize: true, products: 10, productsWithFilterableSpecs: 10, photos: 10 },
     ];
     const scores = steps.map(profileStrength);
     for (let i = 1; i < scores.length; i += 1) {
@@ -169,5 +175,61 @@ describe("profileStrength", () => {
       teamSeats: 2,
     };
     expect(profileStrength(realistic)).toBeGreaterThanOrEqual(STRONG_ENOUGH);
+  });
+});
+
+describe("strengthItems — the meter's rows", () => {
+  /**
+   * Criterion 13, as a property rather than an example.
+   *
+   * A meter whose named levers do not close the gap to a hundred is the trick
+   * the criterion exists to forbid: a seller at 96% with nothing left to do
+   * concludes the number is decorative. Asserted across a spread of profiles
+   * rather than one, because rounding five components independently is exactly
+   * where it would break.
+   */
+  const PROFILES: ProfileFacts[] = [
+    EMPTY,
+    FULL,
+    { ...EMPTY, hasDescription: true },
+    { ...EMPTY, hasDescription: true, additionalCategories: 2, hasEstablishedYear: true },
+    { ...EMPTY, photos: 3, products: 4, productsWithFilterableSpecs: 1 },
+    { ...EMPTY, hasLogo: true, hasCover: true, languages: 1, teamSeats: 2 },
+    { ...FULL, products: 7, productsWithFilterableSpecs: 3, photos: 5 },
+    { ...EMPTY, hasTeamSize: true, languages: 2, products: 1, productsWithFilterableSpecs: 1 },
+  ];
+
+  it("earns and leaves exactly a hundred points between them", () => {
+    for (const facts of PROFILES) {
+      const items = strengthItems(facts);
+      const total = items.reduce((sum, item) => sum + item.earned + item.remaining, 0);
+      expect(total, JSON.stringify(facts)).toBe(100);
+    }
+  });
+
+  it("earns what the score says it earned", () => {
+    for (const facts of PROFILES) {
+      const earned = strengthItems(facts).reduce((sum, item) => sum + item.earned, 0);
+      expect(earned, JSON.stringify(facts)).toBe(profileStrength(facts));
+    }
+  });
+
+  it("marks an item done only when it has nothing left to give", () => {
+    for (const facts of PROFILES) {
+      for (const item of strengthItems(facts)) {
+        expect(item.done, `${item.key} of ${JSON.stringify(facts)}`).toBe(item.remaining === 0);
+      }
+    }
+  });
+
+  it("names every weight, so nothing contributes anonymously", () => {
+    expect(strengthItems(EMPTY).map((item) => item.key).sort()).toEqual(
+      Object.keys(WEIGHTS).sort(),
+    );
+  });
+
+  it("has everything to give on an empty profile and nothing on a full one", () => {
+    expect(strengthItems(EMPTY).every((item) => item.earned === 0)).toBe(true);
+    expect(strengthItems(FULL).every((item) => item.remaining === 0)).toBe(true);
   });
 });
