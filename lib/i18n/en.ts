@@ -2442,7 +2442,7 @@ export const en = {
   "plan.recommended": "Recommended",
   "plan.current": "Your plan",
   "plan.period": "a month",
-  "plan.enquiries": "{n} enquiries a month",
+  "plan.enquiries": "{n} enquiries a month to answer",
   "plan.enquiries_unlimited": "Unlimited enquiries",
   "plan.products": "{n} products",
   "plan.products_unlimited": "Unlimited products",
@@ -2998,11 +2998,76 @@ export const en = {
   "locations_step.error.at_cap": "{plan} includes {cap}. Move up a plan to add another branch.",
   "locations_step.error.save_failed": "That did not save. What you typed is still here — try again.",
 
-  "plan_step.title": "Pick a plan",
+  // ── Board 2e, the plan step and the first-run checklist ───────────────────
+  //
+  // The listing is live before this page loads, so nothing here can lean on a
+  // withheld listing. Every line argues on merit or states a measured fact, and
+  // criterion 2 forbids a countdown, an expiry or a nag against Free.
+  "plan_step.title": "You\u2019re live. Now decide how far the storefront goes.",
+  "plan_step.live_header": "Your listing is already live on the free plan",
   "plan_step.live_already": "Your listing is already live at {url}. Free is a real plan — you can stay on it.",
+
+  // The sub-line, from the seller's own rows. Criterion 9.
+  "plan_step.recommend_lead": "Based on what you told us — {facts}.",
+  "plan_step.clause.locations_one": "one location with a {type}",
+  "plan_step.clause.locations": "{count} locations, one of them a {type}",
+  "plan_step.clause.categories": "listed under {names}",
+  "plan_step.clause.catalogue": "a product list to load",
+  "plan_step.clause_join": ", ",
+  "plan_step.clause_and": " and ",
+  // Measured, or absent. Criterion 10 forbids softening it to "many".
+  "plan_step.cohort": "{count} of the {total} claimed suppliers in {category} are on {plan}.",
+
   "plan_step.choose": "Choose {plan}",
+  "plan_step.current_plan": "Current plan",
+  "plan_step.start_trial": "Start {plan} trial",
+  // Criterion 11: this is what the button says once a trial has been used.
+  "plan_step.start_on": "Start on {plan}",
+  "plan_step.trial_pill": "{days} days free",
+  "plan_step.trial_note": "No card. At {days} days it drops back to Free — your products stay saved.",
+  "plan_step.trial_active": "Your {plan} trial runs until {date}. Nothing is charged, and it drops back to Free on its own.",
+  "plan_step.already_paid": "You are on {plan}. Nothing else to choose here — the checklist below is what is left.",
   "plan_step.stay_free": "Stay on Free",
   "plan_step.done": "Go to my dashboard",
+
+  "plan_step.trial_error.already_used": "That trial has already been used on this listing.",
+  "plan_step.trial_error.already_paid": "You are already on a paid plan.",
+  "plan_step.trial_error.wrong_plan": "That plan is not on sale.",
+  "plan_step.trial_error.not_found": "That listing cannot be found.",
+
+  // The checklist. Same rows as board 8a, worded for the payoff rather than the
+  // action — these four are the difference between a live listing and a listing
+  // that wins work, and the seller has no reason to believe that yet.
+  "plan_step.checklist": "Finish setting up — {n} things left",
+  "plan_step.checklist_one": "Finish setting up — one thing left",
+  "plan_step.checklist_est": "EST. {n} MIN",
+  "plan_step.checklist_done": "Everything is done",
+  "plan_step.checklist_done_body": "Nothing is waiting. Your dashboard opens on whatever needs a reply.",
+  "plan_step.task_profile": "Profile and description",
+  "plan_step.task.photos": "Upload {n} photos of your premises and team",
+  "plan_step.task.products": "Pick a spec template and add {n} products",
+  "plan_step.task.team": "Invite your sales lead so enquiries don\u2019t sit unanswered",
+  "plan_step.task.visit": "Request a site visit for the top verification tier",
+  "plan_step.cta.photos": "Upload",
+  "plan_step.cta.products": "Start",
+  "plan_step.cta.team": "Invite",
+  "plan_step.cta.visit": "Request",
+
+  // The rail.
+  "plan_step.live_at": "YOUR LISTING IS LIVE AT",
+  "plan_step.view_it": "View it",
+  "plan_step.copy_link": "Copy link",
+  "plan_step.copied": "Copied",
+  "plan_step.pro_title": "WHAT {plan} CHANGES FOR YOU",
+  // Criterion 4: the multiplier and eligibility, never a guaranteed slot.
+  "plan_step.pro_ranking": "Your ranking weight for {category} in {emirate} is multiplied {multiplier}×, and you become eligible to buy the sponsored slot.",
+  "plan_step.pro_ranking_no_area": "Your ranking weight for {category} is multiplied {multiplier}×, and you become eligible to buy the sponsored slot.",
+  // Criterion 5, said out loud rather than left to be inferred.
+  "plan_step.pro_weight_note": "Plan is {points} of the {total} points a search score is built from, and the smallest of the six.",
+  "plan_step.pro_specs": "Buyers see your stock and specs before they enquire, so your quote goes out quicker.",
+  "plan_step.pro_searches": "You see what buyers searched before they called.",
+  "plan_step.no_lockin": "No lock-in",
+  "plan_step.no_lockin_body": "Cancel any month and drop to Free. Your products stay saved — hidden, not deleted.",
 
   // ── Setup hub, boards 8a to 8e ────────────────────────────────────────────
   "setup.title": "Finish setting up",

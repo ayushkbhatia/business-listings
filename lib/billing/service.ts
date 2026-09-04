@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth/guards";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
+import { hideOverPlanCap, restoreHiddenByPlan } from "./plan-caps";
 import { FILS_PER_AED, filsToAed, perDayFils, prorate, type Proration } from "./proration";
 import {
   advance,
@@ -208,6 +209,18 @@ export async function changePlan(
     const renewsAt = quote.proration.renewsAt;
 
     await tx.business.update({ where: { id: businessId }, data: { planId: toPlanId } });
+
+    /*
+       Both directions, in the order that keeps the count right.
+
+       Up: put back what a previous drop hid, as far as the new cap allows — a
+       seller who cancelled and came back should find their catalogue where they
+       left it rather than as a page of drafts to republish one at a time.
+       Down: hide what the new plan has no room for. Each is a no-op in the
+       other direction, so one pair of calls covers an upgrade and a downgrade.
+    */
+    await restoreHiddenByPlan(businessId, toPlanRow, tx);
+    await hideOverPlanCap(businessId, toPlanRow, tx);
 
     /*
      * The revenue ledger, written where the change happens. Board 4g's
@@ -610,6 +623,12 @@ export async function cancelSubscription(
  * nobody is holding a request open until then. Idempotent.
  */
 export async function applyEndedCancellations(now = new Date()) {
+  const free = await prisma.plan.findUnique({
+    where: { id: "free" },
+    select: { productLimit: true },
+  });
+  const freeProductLimit = free?.productLimit ?? null;
+
   const due = await prisma.subscription.findMany({
     where: { cancelledAt: { not: null }, endsAt: { lte: now }, status: { not: "cancelled" } },
     select: {
@@ -626,6 +645,18 @@ export async function applyEndedCancellations(now = new Date()) {
         where: { businessId: subscription.businessId },
         data: { status: "cancelled", planId: "free" },
       });
+
+      /*
+         And the half of the promise that was never kept.
+
+         `cancelSubscription` has returned `kept: ["listing", "products", ...]`
+         since handoff 5 and nothing anywhere hid a product, so a Pro seller who
+         cancelled carried a hundred and fifty live products onto Free and the
+         cap the ladder rests on stopped meaning anything after the first
+         downgrade. Board 2e puts the sentence in the rail — "hidden, not
+         deleted" — which is criterion 20, and this is where it becomes true.
+      */
+      await hideOverPlanCap(subscription.businessId, { productLimit: freeProductLimit }, tx);
 
       /*
        * Churn, dated the day the money stops rather than the day the seller

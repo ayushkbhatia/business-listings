@@ -2268,6 +2268,32 @@ model Subscription {
   /// explicitly sets "apply to existing".
   entitlementSnapshot Json?        @map("entitlement_snapshot")
   /// Where this subscription is in the D0/D3/D7/D14 sequence.
+  /// When the Pro trial started, and when it ends.
+  ///
+  /// Board 2e, criterion 11: *"A seller who has used the trial sees no trial
+  /// language."* `trialStartedAt` is the durable record of that — it is set
+  /// once and nothing clears it, so a seller who trialled, dropped to Free and
+  /// came back a year later is not offered a second one. The subscription row
+  /// is unique per business and is never deleted, which is what makes it the
+  /// right place to keep a fact about the account rather than about the plan it
+  /// is on today.
+  ///
+  /// `trialEndsAt` is what the sweep reads. A trial takes no card — criterion
+  /// 12 — so there is nothing to charge at the end of it and the account simply
+  /// drops to Free, which is criterion 13 and the same guarantee the No lock-in
+  /// card makes.
+  trialStartedAt      DateTime?    @map("trial_started_at")
+  trialEndsAt         DateTime?    @map("trial_ends_at")
+  /// Product ids this platform hid when the plan dropped below what they need.
+  ///
+  /// "Hidden, not deleted" is the most load-bearing sentence on board 2e, and
+  /// it was a claim rather than a behaviour: the cancel summary promised it and
+  /// nothing did it. Hiding is `ProductStatus.draft`, which every public
+  /// surface already excludes — so no read path had to learn a new rule and
+  /// none can forget one. This column is what makes it reversible: an upgrade
+  /// restores exactly the products the drop hid, and not the drafts the seller
+  /// made themselves.
+  hiddenByPlan        Json?        @map("hidden_by_plan")
   dunningStage        DunningStage @default(none) @map("dunning_stage")
   /// When the payment first failed. Every step is measured from here rather
   /// than from the previous one, so a missed run does not push the sequence

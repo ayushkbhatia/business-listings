@@ -497,22 +497,56 @@ test.describe("board 2d — locations and hours", () => {
   });
 });
 
-test.describe("criterion 3 — the plan step is not a gate", () => {
-  test("says the listing is already live, and gives its address", async ({ page }) => {
-    // A pricing table shown to somebody who thinks they are still blocked
-    // reads as a paywall however it is worded.
+test.describe("board 2e — the plan step, from a seat that already pays", () => {
+  test.beforeEach(async ({ page }) => {
     await page.goto("/onboarding/plan");
-    await expect(page.getByText(/Your listing is already live at/)).toBeVisible();
-    await expect(page.getByText(/Free is a real plan — you can stay on it/)).toBeVisible();
   });
 
-  test("makes staying on Free a button, not small print", async ({ page }) => {
-    await page.goto("/onboarding/plan");
-    await expect(page.getByRole("button", { name: "Stay on Free" })).toBeVisible();
+  test("says the listing is already live before it says anything else", async ({ page }) => {
+    /*
+     * Criterion 1, and the funnel's criterion 3 from the other side. The
+     * listing went up at the end of `2d`, so a pricing table shown to somebody
+     * who thinks they are still blocked reads as a paywall however it is
+     * worded. The header says it, and the rail carries the URL as the proof.
+     */
+    await expect(page.getByRole("heading", { level: 1, name: /You.re live/ })).toBeVisible();
+    await expect(page.getByRole("banner")).toContainText("already live");
+    await expect(page.getByRole("link", { name: "View it" })).toHaveAttribute(
+      "href",
+      /^\/b\/[a-z0-9-]+$/,
+    );
+  });
+
+  test("shows one line instead of three cards to somebody who has chosen", async ({ page }) => {
+    /*
+     * Criterion 21. This seat bought before onboarding — the board's own edge
+     * case — and a chooser put in front of a person who has already chosen asks
+     * them to make the decision twice.
+     */
+    await expect(page.getByText(/Nothing else to choose here/)).toBeVisible();
+    await expect(page.locator('[data-promoted="true"]')).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Start Pro trial/ })).toHaveCount(0);
+  });
+
+  test("keeps the checklist, which is what is left to do", async ({ page }) => {
+    // The plan decision is why the page exists; the checklist is what decides
+    // whether the seller ever gets value.
+    await expect(page.getByText(/Finish setting up|Everything is done/)).toBeVisible();
+  });
+
+  test("promises no lock-in, and 11f honours it", async ({ page }) => {
+    // Criterion 20. The most load-bearing sentence on the page for somebody who
+    // has just spent twenty minutes on data entry.
+    await expect(page.getByText(/hidden, not deleted/)).toBeVisible();
+  });
+
+  test("carries no countdown, expiry or nag", async ({ page }) => {
+    // Criterion 2.
+    const body = await page.locator("main").innerText();
+    expect(body).not.toMatch(/expires?|hurry|limited time/i);
   });
 
   test("is axe clean", async ({ page }) => {
-    await page.goto("/onboarding/plan");
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
   });

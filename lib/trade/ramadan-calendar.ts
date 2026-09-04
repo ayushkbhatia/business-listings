@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { FALLBACK_RAMADAN, type RamadanCalendar } from "./hours";
+import { FALLBACK_RAMADAN, RAMADAN_SETTING_KEY, type RamadanCalendar } from "./hours";
 
 /**
  * The Ramadan calendar, from the platform setting.
@@ -31,8 +31,12 @@ import { FALLBACK_RAMADAN, type RamadanCalendar } from "./hours";
  * not.
  */
 
-/** The setting's key. One string, so a typo is a compile error somewhere. */
-export const RAMADAN_SETTING_KEY = "ramadan_dates";
+/*
+   Re-exported, not redefined. It lives in `./hours.ts` — the pure module — so
+   the seed can write the row without importing a `server-only` file, which is
+   the same split board 2c made for `profile-fields.ts`.
+*/
+export { RAMADAN_SETTING_KEY } from "./hours";
 
 /**
  * `{"2026":{"from":"2026-02-17","to":"2026-03-19"}}` → a calendar.

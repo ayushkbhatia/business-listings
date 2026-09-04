@@ -172,6 +172,15 @@ const RAMADAN: RamadanCalendar = {
 /** The compiled estimates, for the module that merges the platform setting over them. */
 export const FALLBACK_RAMADAN: RamadanCalendar = RAMADAN;
 
+/**
+ * The settings key the calendar lives under.
+ *
+ * Here rather than in `ramadan-calendar.ts` because that module is
+ * `server-only` and the seed writes this row: a plain constant should not drag
+ * a database client into a script that already has one.
+ */
+export const RAMADAN_SETTING_KEY = "ramadan_dates";
+
 export interface RamadanWindow {
   year: number;
   from: Date;
