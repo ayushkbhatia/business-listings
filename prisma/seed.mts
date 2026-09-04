@@ -232,13 +232,23 @@ async function main() {
    * The Ramadan calendar, as a platform setting.
    *
    * Written by migration 20260904180000 and again here, and the second one is
-   * not redundant. `platform_setting` is not in the truncate list above — like
-   * `ranking_weights`, it is reference data rather than fixture data — but a
-   * database built with `db push` rather than `migrate deploy` gets the table
-   * without the migration's INSERT, and this is the path a sibling checkout
-   * takes. The row then does not exist, and the calendar silently falls back to
-   * the compiled estimates: nothing breaks, which is exactly why nobody would
-   * notice it had gone.
+   * not redundant — for a stronger reason than the one first recorded here.
+   *
+   * `platform_setting` is not named in the truncate list above, which looks
+   * like the `ranking_weights` arrangement and is not. `ranking_weights` has no
+   * foreign keys, so leaving it out of the list is enough to save it.
+   * `platform_setting` has one, to `user`, and `user` IS in the list — so
+   * `truncate ... cascade` reaches it anyway. Postgres extends CASCADE to every
+   * table referencing a truncated one, transitively, whatever that key's
+   * `ON DELETE` rule says; thirty tables beyond the forty-eight named go with
+   * it. Measured on a fresh database: after `migrate deploy` the row is there,
+   * and after the truncate statement above and nothing else, it is gone.
+   *
+   * So this upsert is what puts it back on the ordinary `migrate deploy` path,
+   * not only on the `db push` one a sibling checkout takes. Removing it because
+   * the table is absent from the list would delete the Ramadan calendar on
+   * every reseed — and the calendar falls back to the compiled estimates
+   * rather than erroring, which is exactly why nobody would notice.
    *
    * An upsert rather than a create, so reseeding a database that already has it
    * leaves a corrected calendar alone rather than overwriting somebody's fix
