@@ -27,6 +27,10 @@ import type { Actor } from "@/lib/auth/roles";
 
 const PREFIX = "zz-claim-test-";
 
+/** A trade name no seeded record shares a trigram with, so a fixture ranks alone. */
+const FIXTURE = "Zqx";
+const FIXTURE_SLUG = "zz-claim-fixture";
+
 let claimant: Actor;
 let unclaimed: { id: string; tradeName: string; licenceNumber: string; slug: string };
 let claimed: { id: string; tradeName: string; slug: string };
@@ -85,6 +89,7 @@ afterEach(async () => {
   await prisma.searchQueryLog.deleteMany({ where: { query: { startsWith: PREFIX } } });
   await prisma.zeroResultQuery.deleteMany({ where: { query: { startsWith: PREFIX } } });
   await prisma.rateLimitHit.deleteMany({ where: { identifier: { startsWith: PREFIX } } });
+  await prisma.business.deleteMany({ where: { slug: { startsWith: FIXTURE_SLUG } } });
 });
 
 afterAll(async () => {
@@ -158,6 +163,65 @@ describe("criterion 3 — one box, three ways in", () => {
   it("asks the database nothing for a query too short to mean anything", async () => {
     expect(await findClaimMatches("a")).toEqual({ kind: "none", results: [], total: 0 });
     expect(await findClaimMatches("   ")).toEqual({ kind: "none", results: [], total: 0 });
+  });
+
+  it("ranks a name that contains the query above one that merely resembles it", async () => {
+    /*
+       The regression this tier exists for, proved on fixtures rather than on
+       the seed, because the seed happens not to contain the shape.
+
+       `similarity()` divides by the longer string's trigram count, so a short
+       name outscores a long one that contains the query outright. Searching
+       "Al Wadi" put "Al Waha FZE" above "Al Wadi Technical Services LLC" — and
+       with a handful of near-namesakes in the register, the record the supplier
+       is actually looking for falls off the first page. They then go to "add
+       from scratch", which creates the duplicate this screen exists to prevent.
+
+       UAE trade names are long and the distinctive part is short, which is
+       exactly the shape that breaks, so this is the common case rather than an
+       edge one.
+    */
+    const category = await prisma.category.findFirstOrThrow({ select: { id: true } });
+    const stamp = Date.now();
+    const base = {
+      licenceAuthority: "DED" as const,
+      licenceExpiry: new Date(Date.now() + 365 * 86_400_000),
+      primaryCategoryId: category.id,
+      source: "licence_import" as const,
+    };
+
+    const [verbatim, lookalike] = await Promise.all([
+      prisma.business.create({
+        data: {
+          ...base,
+          tradeName: `${FIXTURE} Wadi Technical Services LLC`,
+          displayName: `${FIXTURE} Wadi Technical Services`,
+          slug: `${FIXTURE_SLUG}-wadi-${stamp}`,
+          licenceNumber: `DED-${stamp}1`,
+        },
+        select: { id: true },
+      }),
+      prisma.business.create({
+        data: {
+          ...base,
+          tradeName: `${FIXTURE} Waha FZE`,
+          displayName: `${FIXTURE} Waha`,
+          slug: `${FIXTURE_SLUG}-waha-${stamp}`,
+          licenceNumber: `DED-${stamp}2`,
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    try {
+      const matches = await findClaimMatches(`${FIXTURE} Wadi`);
+      const order = matches.results.map((r) => r.id);
+      expect(order).toContain(verbatim.id);
+      expect(order.indexOf(verbatim.id)).toBeLessThan(order.indexOf(lookalike.id));
+      expect(order[0]).toBe(verbatim.id);
+    } finally {
+      await prisma.business.deleteMany({ where: { id: { in: [verbatim.id, lookalike.id] } } });
+    }
   });
 
   it("ranks the closest name first", async () => {

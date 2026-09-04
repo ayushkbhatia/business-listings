@@ -217,12 +217,31 @@ export async function findClaimMatches(
 }
 
 /**
- * Rank by name, with a phone match promoted.
+ * Rank by name, in three tiers.
  *
- * Two queries rather than one join: the ordering is computed in SQL because
- * `similarity()` is where the ranking lives, and the rows are then read through
- * Prisma so the counts and the relations come back typed. Ordering by ids in
- * JavaScript afterwards is what keeps the second query a plain `findMany`.
+ * Two queries rather than one join: the ordering is computed in SQL because the
+ * ranking lives there, and the rows are then read through Prisma so the counts
+ * and the relations come back typed. Ordering by ids in JavaScript afterwards
+ * is what keeps the second query a plain `findMany`.
+ *
+ * The tiers, and why there are three rather than one:
+ *
+ *   1. **A number the searcher typed.** Somebody who reaches for the landline
+ *      is identifying a company, not describing one.
+ *   2. **The typed text, verbatim, inside the name.** This tier exists because
+ *      trigram similarity alone gets this exact screen wrong. `similarity()`
+ *      divides by the longer string's trigram count, so a short name scores
+ *      higher than a long one containing the query outright: searching
+ *      `Al Wadi` scored `Al Waha FZE` above `Al Wadi Technical Services LLC`,
+ *      and with more than one near-namesake in the register the record somebody
+ *      is actually looking for falls off the first page entirely. UAE trade
+ *      names are long and the distinctive part is short, which is precisely the
+ *      shape that breaks. A supplier who types their own name and does not see
+ *      it goes to "add from scratch", which creates the duplicate this screen
+ *      exists to prevent.
+ *   3. **Trigram similarity**, for the misspellings and the transliterations
+ *      the substring cannot reach — which is what it is good at, and all it is
+ *      being asked to do now.
  */
 async function rankByName(
   text: string,
@@ -251,11 +270,7 @@ async function rankByName(
         )
       )
     ORDER BY
-      /*
-         A number the searcher typed beats a name that merely looks alike.
-         Somebody who reaches for the landline is identifying a company, not
-         describing one.
-      */
+      -- 1. A number they typed.
       (
         ${phone}::text IS NOT NULL
         AND EXISTS (
@@ -264,6 +279,9 @@ async function rankByName(
             AND regexp_replace(COALESCE(l."phone", ''), '[^0-9]', '', 'g') LIKE '%' || ${phone}::text
         )
       ) DESC,
+      -- 2. The name contains what they typed, exactly.
+      (b."trade_name" ILIKE ${pattern} OR b."display_name" ILIKE ${pattern}) DESC,
+      -- 3. Similarity, for the spellings a substring cannot reach.
       GREATEST(
         similarity(b."trade_name", ${text}),
         similarity(b."display_name", ${text})
