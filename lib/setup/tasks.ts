@@ -85,6 +85,17 @@ export interface SetupTaskFacts {
   products: number;
   /** Seats on the listing, the owner included. */
   seats: number;
+  /**
+   * Invitations sent and still outstanding.
+   *
+   * Board 8d §5: the task ticks **on send**, because the seller cannot control
+   * whether a colleague accepts and a task left open by somebody else's
+   * inaction is a bad task. `profile_score` still wants an active seat for its
+   * points, so the checkbox and the meter legitimately disagree while an
+   * invitation sits unaccepted — which the invite screen states in a line
+   * rather than letting the seller discover it.
+   */
+  invitesSent: number;
   /** Site visits asked for and not withdrawn. */
   visitRequests: number;
   /** From `strengthItems`, so the chips and the meter cannot drift apart. */
@@ -133,12 +144,13 @@ export function setupBoard(facts: SetupTaskFacts): SetupBoard {
   const got: Record<SetupTaskId, number> = {
     photos: facts.photos,
     products: facts.products,
-    team: facts.seats,
+    team: facts.seats + facts.invitesSent,
     visit: facts.visitRequests,
   };
 
   const tasks: SetupTaskRow[] = SETUP_TASKS.map((id) => {
     const done = got[id] >= TARGETS[id];
+
     const lever = LEVER_OF[id];
     const item = lever === null ? undefined : byLever.get(lever);
 

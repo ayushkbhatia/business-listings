@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { acceptInvite, expireInvites, readInvite, removeSeat } from "@/lib/team/invite";
-import { inviteSeat } from "@/lib/team/service";
+import { acceptInvite, expireInvites, readInvite, removeSeat, resendInvite } from "@/lib/team/invite";
+import { inviteSeat, pendingInvites } from "@/lib/team/service";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
 
@@ -29,6 +29,7 @@ let categoryId: string;
 let alphaId: string;
 let alphaName: string;
 let betaId: string;
+let alphaBranchId: string;
 let ownerId: string;
 let ownerActor: Actor;
 let seq = 0;
@@ -64,12 +65,18 @@ async function addBusiness(name: string) {
   return business.id;
 }
 
-async function addUser(fields: { roles: Role[]; businessId?: string | null; email?: string }) {
+async function addUser(fields: {
+  roles: Role[];
+  businessId?: string | null;
+  email?: string;
+  phone?: string;
+}) {
   const email = fields.email ?? emailFor("person");
   const user = await prisma.user.create({
     data: {
       id: randomUUID(),
       email,
+      ...(fields.phone ? { phone: fields.phone } : {}),
       fullName: `Invite Test ${stamp()}`,
       roles: fields.roles,
       businessId: fields.businessId ?? null,
@@ -79,19 +86,31 @@ async function addUser(fields: { roles: Role[]; businessId?: string | null; emai
   return { id: user.id, email: user.email as string };
 }
 
+/** A distinct 05x per call, so no two fixtures fight over the unique index. */
+function mobileFor(): string {
+  seq += 1;
+  return `+9715${String(10_000_000 + seq).slice(0, 8)}`;
+}
+
 async function addInvite(fields: {
   businessId: string;
-  email: string;
+  email?: string | null;
+  phone?: string | null;
+  branchId?: string | null;
   roles: Role[];
   expiresAt?: Date;
   acceptedAt?: Date | null;
   revokedAt?: Date | null;
+  lastSentAt?: Date | null;
 }) {
   const token = `${PREFIX}${stamp()}`;
   await prisma.teamInvite.create({
     data: {
       businessId: fields.businessId,
-      email: fields.email,
+      email: fields.email ?? null,
+      phone: fields.phone ?? null,
+      branchId: fields.branchId ?? null,
+      lastSentAt: fields.lastSentAt ?? null,
       roles: fields.roles,
       invitedById: ownerId,
       token,
@@ -110,8 +129,14 @@ function actorFor(id: string, roles: Role[], businessId?: string): Actor {
 async function removeFixtures() {
   await prisma.message.deleteMany({ where: { body: { startsWith: PREFIX } } });
   await prisma.enquiry.deleteMany({ where: { ref: { startsWith: PREFIX } } });
+  // By business, not by address: a WhatsApp invitation has no email to match on,
+  // and a leftover row holds the unique `(businessId, phone)` against the next run.
+  await prisma.teamInvite.deleteMany({
+    where: { business: { slug: { startsWith: PREFIX } } },
+  });
   await prisma.teamInvite.deleteMany({ where: { email: { endsWith: EMAIL_DOMAIN } } });
   await prisma.user.deleteMany({ where: { email: { endsWith: EMAIL_DOMAIN } } });
+  await prisma.location.deleteMany({ where: { business: { slug: { startsWith: PREFIX } } } });
   await prisma.business.deleteMany({ where: { slug: { startsWith: PREFIX } } });
   await prisma.category.deleteMany({ where: { slug: { startsWith: PREFIX } } });
 }
@@ -144,6 +169,20 @@ beforeAll(async () => {
   const owner = await addUser({ roles: ["seller_owner"], businessId: alphaId });
   ownerId = owner.id;
   ownerActor = actorFor(ownerId, ["seller_owner"], alphaId);
+
+  const area = await prisma.area.findFirstOrThrow({ select: { id: true } });
+  const branch = await prisma.location.create({
+    data: {
+      businessId: alphaId,
+      type: "warehouse",
+      emirate: "dubai" as never,
+      areaId: area.id,
+      addressLine: `${PREFIX}Unit 4`,
+      published: true,
+    },
+    select: { id: true },
+  });
+  alphaBranchId = branch.id;
 });
 
 afterAll(async () => {
@@ -290,14 +329,17 @@ describe("accepting a seat", () => {
 describe("the link the owner can send themselves", () => {
   it("comes back from inviteSeat with the token already built into a URL", async () => {
     const email = emailFor("linked");
-    const result = await inviteSeat(ownerActor, alphaId, { email, roles: ["seller_sales"] }, null);
+    const result = await inviteSeat(ownerActor, alphaId, { contact: email, roles: ["seller_sales"] }, null);
     if (!result.ok) throw new Error(`expected the invitation to be created: ${result.error}`);
 
     expect(result.acceptUrl.endsWith(`/invite/${result.token}`)).toBe(true);
     expect(await readInvite(result.token)).toMatchObject({
       state: "ok",
       businessName: alphaName,
-      email,
+      // `contact` rather than `email` since board 8d: the offer names whichever
+      // channel it was sent on, and an email is now one of two.
+      contact: email,
+      channel: "email",
       roles: ["seller_sales"],
     });
   });
@@ -439,5 +481,270 @@ describe("taking a seat back", () => {
     await expect(
       removeSeat(actorFor(sales.id, ["seller_sales"], alphaId), theirs.id),
     ).rejects.toBeInstanceOf(PermissionError);
+  });
+});
+
+describe("an invitation to a mobile", () => {
+  /*
+     The half of §2 that did not exist. `TeamInvite.email` was NOT NULL and the
+     only carrier was Resend, so the field labelled "Mobile or email" could take
+     one of those two. Everything below is about the second one behaving like
+     the first rather than like a special case.
+  */
+  it("stores the mobile, no address, and reads back as a WhatsApp invitation", async () => {
+    const mobile = mobileFor();
+    const result = await inviteSeat(
+      ownerActor,
+      alphaId,
+      { contact: mobile, roles: ["seller_sales"] },
+      null,
+    );
+    if (!result.ok) throw new Error(`expected the invitation to be created: ${result.error}`);
+    expect(result.channel).toBe("whatsapp");
+
+    const row = await prisma.teamInvite.findUniqueOrThrow({
+      where: { token: result.token },
+      select: { email: true, phone: true },
+    });
+    expect(row).toEqual({ email: null, phone: mobile });
+
+    expect(await readInvite(result.token)).toMatchObject({
+      state: "ok",
+      channel: "whatsapp",
+      contact: mobile,
+    });
+  });
+
+  it("is accepted by the account holding that mobile", async () => {
+    const mobile = mobileFor();
+    const invitee = await addUser({ roles: ["buyer"], phone: mobile });
+    const token = await addInvite({ businessId: alphaId, phone: mobile, roles: ["seller_sales"] });
+
+    const result = await acceptInvite(token, actorFor(invitee.id, ["buyer"]));
+    if (!result.ok) throw new Error(`expected the seat to be granted, got ${result.reason}`);
+
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: invitee.id }, select: { businessId: true } }),
+    ).toMatchObject({ businessId: alphaId });
+  });
+
+  it("refuses an account holding a different mobile", async () => {
+    // The same rule as a forwarded email, on the channel where forwarding is a
+    // screenshot in a group chat.
+    const invitee = await addUser({ roles: ["buyer"], phone: mobileFor() });
+    const token = await addInvite({
+      businessId: alphaId,
+      phone: mobileFor(),
+      roles: ["seller_sales"],
+    });
+
+    expect(await acceptInvite(token, actorFor(invitee.id, ["buyer"]))).toMatchObject({
+      ok: false,
+      reason: "wrong_account",
+    });
+  });
+
+  it("does not collide with an email invitation to the same person", async () => {
+    /*
+       Two unique indexes, not one: `(businessId, email)` and
+       `(businessId, phone)`. A single partial index would have made the second
+       send overwrite the first, and a supplier who invited a colleague both ways
+       would have seen one row and one channel.
+    */
+    const email = emailFor("both");
+    const mobile = mobileFor();
+    const first = await inviteSeat(ownerActor, alphaId, { contact: email, roles: ["seller_sales"] }, null);
+    const second = await inviteSeat(ownerActor, alphaId, { contact: mobile, roles: ["seller_sales"] }, null);
+    if (!first.ok || !second.ok) throw new Error("expected both invitations to be created");
+
+    expect(first.token).not.toBe(second.token);
+    expect(
+      await prisma.teamInvite.count({ where: { businessId: alphaId, OR: [{ email }, { phone: mobile }] } }),
+    ).toBe(2);
+  });
+
+  it("finds the existing row rather than stacking a second on the same mobile", async () => {
+    const mobile = mobileFor();
+    const first = await inviteSeat(ownerActor, alphaId, { contact: mobile, roles: ["seller_sales"] }, null);
+    const again = await inviteSeat(ownerActor, alphaId, { contact: mobile, roles: ["seller_manager"] }, null);
+    if (!first.ok || !again.ok) throw new Error("expected both sends to succeed");
+
+    expect(await prisma.teamInvite.count({ where: { businessId: alphaId, phone: mobile } })).toBe(1);
+    // The newer roles win and the older token stops working, which is what
+    // re-inviting somebody with a different role has to mean.
+    expect(await readInvite(again.token)).toMatchObject({ state: "ok", roles: ["seller_manager"] });
+    expect(await readInvite(first.token)).toEqual({ state: "not_found" });
+  });
+});
+
+describe("the branch a seat is scoped to", () => {
+  it("travels from the invitation onto the person who accepts it", async () => {
+    /*
+       The gap this board closed. `Actor.branchId` has been declared since
+       handoff 0 and read by `withinScope()` ever since — and no code path wrote
+       `User.branchId`, so every branch-scoped check in the product returned
+       true and board 7d's branch-scoped sales seat scoped nothing.
+    */
+    const invitee = await addUser({ roles: ["buyer"] });
+    const token = await addInvite({
+      businessId: alphaId,
+      email: invitee.email,
+      branchId: alphaBranchId,
+      roles: ["seller_sales"],
+    });
+
+    expect(await readInvite(token)).toMatchObject({ state: "ok", branchId: alphaBranchId });
+
+    const result = await acceptInvite(token, actorFor(invitee.id, ["buyer"]));
+    if (!result.ok) throw new Error(`expected the seat to be granted, got ${result.reason}`);
+
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: invitee.id }, select: { branchId: true } }),
+    ).toMatchObject({ branchId: alphaBranchId });
+  });
+
+  it("stays null for an unscoped invitation, which means every branch", async () => {
+    const invitee = await addUser({ roles: ["buyer"] });
+    const token = await addInvite({ businessId: alphaId, email: invitee.email, roles: ["seller_sales"] });
+    await acceptInvite(token, actorFor(invitee.id, ["buyer"]));
+
+    // Null and "all branches" are the same fact here, and `withinScope` reads
+    // the absence that way. It has to be written deliberately, not left over.
+    expect(
+      await prisma.user.findUniqueOrThrow({ where: { id: invitee.id }, select: { branchId: true } }),
+    ).toMatchObject({ branchId: null });
+  });
+
+  it("goes with the seat when the seat is taken back", async () => {
+    const leaver = await addUser({ roles: ["buyer"] });
+    const token = await addInvite({
+      businessId: alphaId,
+      email: leaver.email,
+      branchId: alphaBranchId,
+      roles: ["seller_sales"],
+    });
+    await acceptInvite(token, actorFor(leaver.id, ["buyer"]));
+
+    expect(await removeSeat(ownerActor, leaver.id)).toMatchObject({ ok: true });
+
+    // A branch pointer surviving a cleared businessId would aim at a location
+    // belonging to a business this person is no longer on.
+    expect(
+      await prisma.user.findUniqueOrThrow({
+        where: { id: leaver.id },
+        select: { businessId: true, branchId: true },
+      }),
+    ).toEqual({ businessId: null, branchId: null });
+  });
+});
+
+describe("sending an invitation again", () => {
+  const HOUR = 60 * 60 * 1000;
+
+  it("keeps the token, resets the seven days, and stamps the send", async () => {
+    const sentAt = new Date("2026-03-01T09:00:00.000Z");
+    const token = await addInvite({
+      businessId: alphaId,
+      email: emailFor("resend"),
+      roles: ["seller_sales"],
+      expiresAt: new Date(sentAt.getTime() + 86_400_000),
+      lastSentAt: sentAt,
+    });
+    const before = await prisma.teamInvite.findUniqueOrThrow({
+      where: { token },
+      select: { id: true },
+    });
+
+    const later = new Date(sentAt.getTime() + 2 * HOUR);
+    expect(await resendInvite(ownerActor, alphaId, before.id, later)).toEqual({ ok: true });
+
+    const after = await prisma.teamInvite.findUniqueOrThrow({
+      where: { id: before.id },
+      select: { token: true, expiresAt: true, lastSentAt: true },
+    });
+    /*
+       The same token, deliberately. `inviteSeat` mints a new one when it is
+       called again — right for a re-invitation with different roles, wrong
+       here: the seller has already sent this person a link, and a resend that
+       killed the first one turns "I forwarded it to him" into a dead link.
+    */
+    expect(after.token).toBe(token);
+    expect(after.lastSentAt).toEqual(later);
+    expect(after.expiresAt.getTime()).toBe(later.getTime() + 7 * 86_400_000);
+  });
+
+  it("refuses a second send inside the hour", async () => {
+    const sentAt = new Date("2026-03-01T09:00:00.000Z");
+    const token = await addInvite({
+      businessId: alphaId,
+      email: emailFor("too-soon"),
+      roles: ["seller_sales"],
+      lastSentAt: sentAt,
+    });
+    const row = await prisma.teamInvite.findUniqueOrThrow({
+      where: { token },
+      select: { id: true, expiresAt: true },
+    });
+
+    /*
+       Enforced here rather than by a disabled button, and the reason is money
+       rather than politeness: each WhatsApp send is a billed conversation, and
+       a second tab walks straight past a client-side limit.
+    */
+    const soon = new Date(sentAt.getTime() + 59 * 60 * 1000);
+    expect(await resendInvite(ownerActor, alphaId, row.id, soon)).toEqual({
+      ok: false,
+      error: "too_soon",
+    });
+    // The refusal changed nothing — in particular it did not extend the link.
+    expect(
+      await prisma.teamInvite.findUniqueOrThrow({ where: { id: row.id }, select: { expiresAt: true } }),
+    ).toMatchObject({ expiresAt: row.expiresAt });
+  });
+
+  it("refuses another team's invitation and an accepted one", async () => {
+    const theirs = await addInvite({
+      businessId: betaId,
+      email: emailFor("theirs"),
+      roles: ["seller_sales"],
+    });
+    const theirRow = await prisma.teamInvite.findUniqueOrThrow({
+      where: { token: theirs },
+      select: { id: true },
+    });
+    // Scoped by the actor's own business, so a guessed id reaches nothing.
+    expect(await resendInvite(ownerActor, alphaId, theirRow.id)).toMatchObject({ ok: false });
+
+    const taken = await addInvite({
+      businessId: alphaId,
+      email: emailFor("taken-resend"),
+      roles: ["seller_sales"],
+      acceptedAt: new Date(),
+    });
+    const takenRow = await prisma.teamInvite.findUniqueOrThrow({
+      where: { token: taken },
+      select: { id: true },
+    });
+    expect(await resendInvite(ownerActor, alphaId, takenRow.id)).toMatchObject({ ok: false });
+  });
+});
+
+describe("what the screen lists as outstanding", () => {
+  it("carries the last send rather than the creation, so a resent row reads as recent", async () => {
+    const created = new Date("2026-03-01T09:00:00.000Z");
+    const resent = new Date("2026-03-05T09:00:00.000Z");
+    const token = await addInvite({
+      businessId: betaId,
+      email: emailFor("listed"),
+      roles: ["seller_sales"],
+      lastSentAt: resent,
+    });
+    await prisma.teamInvite.update({ where: { token }, data: { createdAt: created } });
+
+    const listed = (await pendingInvites(betaId)).find((invite) => invite.email?.includes("listed"));
+    // "Sent 4 days ago" is about the message, not the row. Without `lastSentAt`
+    // the line would age past a WhatsApp that went this morning.
+    expect(listed?.lastSentAt).toEqual(resent);
+    expect(listed?.createdAt).toEqual(created);
   });
 });

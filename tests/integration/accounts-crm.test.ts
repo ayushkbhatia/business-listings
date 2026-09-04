@@ -241,7 +241,7 @@ describe("read-only is enforced where the mutations are", () => {
       inviteSeat(
         { ...staffActor(), businessId: business.id } as Actor,
         business.id,
-        { email: "someone@example.com", roles: ["seller_sales"] },
+        { contact: "someone@example.com", roles: ["seller_sales"] },
         plan,
       ),
     ).rejects.toBeInstanceOf(PermissionError);

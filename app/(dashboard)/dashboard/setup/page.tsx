@@ -102,7 +102,11 @@ function mayFinishSetup(seat: SellerSeat): boolean {
   return seat.actor.roles.some((role) => role === "seller_owner" || role === "seller_manager");
 }
 
-export default async function SetupPage() {
+export default async function SetupPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const seat = await requireSellerSeat();
   if (!mayFinishSetup(seat)) redirect("/dashboard/leads");
 
@@ -137,6 +141,17 @@ export default async function SetupPage() {
   const open = state.tasks.filter((task) => !task.done);
   const done = state.tasks.filter((task) => task.done);
 
+  /*
+     Board 8d's send returns here rather than staying put, so the confirmation
+     has to survive the navigation. The count is read back and re-rendered from
+     the parameter — but only when it is a plausible number of invitations, so
+     a hand-edited URL cannot make the hub announce something that never
+     happened.
+  */
+  const sentParam = Number((await searchParams).sent);
+  const invitesSent =
+    Number.isInteger(sentParam) && sentParam > 0 && sentParam <= 20 ? sentParam : 0;
+
   return (
     <SellerPage
       seat={seat}
@@ -170,6 +185,15 @@ export default async function SetupPage() {
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start">
         <div className="flex min-w-0 flex-1 flex-col gap-4">
           {state.suspended && <SuspendedNotice />}
+
+          {invitesSent > 0 && (
+            <Alert tone="ok" live="polite">
+              {t("team_setup.sent", {
+                count: invitesSent,
+                formatted: formatCount(invitesSent),
+              })}
+            </Alert>
+          )}
 
           <div>
             <h2 className="font-serif text-h1-serif tracking-tight text-ink">

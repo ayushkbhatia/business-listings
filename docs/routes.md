@@ -70,7 +70,7 @@ and it is the one that argues back.
 /dashboard/setup                        Setup hub                             [8a]  built h8s1
 /dashboard/setup/photos                 Task 1 — photos                       [8b]  built h8s2
 /dashboard/setup/products               Task 2 — template, first products     [8c]  built h8s3
-/dashboard/setup/team                   Task 3 — invite the team              [8d]  later
+/dashboard/setup/team                   Task 3 — invite the team              [8d]  built h8s4
 /dashboard/setup/visit                  Task 4 — site visit                   [8e]  built h3
 /dashboard/listing                      Listing profile                       [3b]
 /dashboard/locations                    Locations                             [3c]

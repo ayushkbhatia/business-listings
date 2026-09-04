@@ -5,7 +5,8 @@ import { assertCanManageTeam } from "@/lib/auth/guards";
 import type { Actor, Role } from "@/lib/auth/roles";
 import { allowance, type PlanCaps } from "@/lib/plan/entitlements";
 import { medianResponseMs, windowStart } from "@/lib/metrics/response-time";
-import { inviteUrl, sendInviteEmail } from "./invite-email";
+import { readContact } from "./contact";
+import { inviteUrl, sendInvite } from "./invite-email";
 
 /**
  * Team, seats and lead routing. Board 7d.
@@ -103,8 +104,11 @@ export async function teamFor(businessId: string, now = new Date()): Promise<Sea
 }
 
 export interface InviteInput {
-  email: string;
+  /** Whatever the seller typed into "Mobile or email". Sniffed, not asked. */
+  contact: string;
   roles: Role[];
+  /** Which branch the seat is scoped to. Null is every branch. */
+  branchId?: string | null;
 }
 
 export type InviteResult =
@@ -124,8 +128,21 @@ export type InviteResult =
       acceptUrl: string;
       /** False when the carrier refused or none is configured. The screen then leads with the link. */
       emailed: boolean;
+      /** Which channel it actually went by. Stated per row, never promised. */
+      channel: "whatsapp" | "email";
     }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      /**
+       * Who they already are, for the one refusal that names somebody.
+       *
+       * §4: a contact who already holds a seat is refused inline — "Rajesh is
+       * already on your team" — rather than being sent an invitation to a seat
+       * they are sitting in.
+       */
+      name?: string;
+    };
 
 export async function inviteSeat(
   actor: Actor,
@@ -139,9 +156,21 @@ export async function inviteSeat(
     return { ok: false, error: "You can only invite people to your own team." };
   }
 
-  const email = input.email.trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return { ok: false, error: "Enter an email address they can receive." };
+  /*
+     One box, sniffed. Board 8d §2 — a supplier's staff are reached on WhatsApp
+     here, and an invitation that could only be emailed is one half of them
+     would never see. `readContact` decides the channel and normalises; the
+     screen shows the same answer live as the seller types.
+  */
+  const contact = readContact(input.contact);
+  if (!contact.ok) {
+    return {
+      ok: false,
+      error:
+        contact.reason === "empty"
+          ? "Enter a mobile number or an email address."
+          : "That is not a UAE mobile or an email address.",
+    };
   }
 
   const roles = input.roles.filter((role) => SEATABLE.includes(role));
@@ -153,6 +182,26 @@ export async function inviteSeat(
   // invite form.
   if (input.roles.includes("seller_owner")) {
     return { ok: false, error: "An invite cannot make somebody an owner." };
+  }
+
+  /*
+     Already on the team. §4: refused inline and offered as a role change,
+     rather than sending somebody an invitation to a seat they already hold —
+     which arrives looking like the product has forgotten them.
+  */
+  const seated = await prisma.user.findFirst({
+    where: {
+      businessId,
+      ...(contact.email ? { email: contact.email } : { phone: contact.phone as string }),
+    },
+    select: { fullName: true, email: true, phone: true },
+  });
+  if (seated) {
+    return {
+      ok: false,
+      error: "already_seated",
+      name: seated.fullName ?? seated.email ?? seated.phone ?? "",
+    };
   }
 
   if (plan) {
@@ -170,28 +219,43 @@ export async function inviteSeat(
   const token = randomBytes(24).toString("base64url");
   const expiresAt = new Date(now.getTime() + INVITE_DAYS * 86_400_000);
   const invite = await prisma.teamInvite.upsert({
-    where: { businessId_email: { businessId, email } },
+    /*
+       Keyed on the channel this contact uses. Both columns carry a unique per
+       business, and Postgres treats NULLs as distinct — so an email invitation
+       and a mobile one never collide, and re-inviting the same contact finds
+       the row rather than stacking a second. §4: the send is idempotent.
+    */
+    where: contact.email
+      ? { businessId_email: { businessId, email: contact.email } }
+      : { businessId_phone: { businessId, phone: contact.phone as string } },
     create: {
       businessId,
-      email,
+      email: contact.email,
+      phone: contact.phone,
+      branchId: input.branchId ?? null,
       roles,
       invitedById: actor.id,
       token,
       expiresAt,
+      lastSentAt: now,
     },
     // Re-inviting replaces the offer rather than stacking a second one. The
     // roles may have changed since, and the older token should stop working.
     update: {
       roles,
+      branchId: input.branchId ?? null,
       invitedById: actor.id,
       token,
       expiresAt,
+      lastSentAt: now,
       revokedAt: null,
     },
     // Selected from the write rather than fetched after it. The email needs the
     // supplier's name and the sender's, and a second read for two strings is a
     // second round trip on the one path a person is waiting on.
     select: {
+      email: true,
+      phone: true,
       business: { select: { displayName: true } },
       invitedBy: { select: { fullName: true } },
     },
@@ -203,12 +267,13 @@ export async function inviteSeat(
      The invitation exists the moment the row is written, so delivery is part of
      creating one — a service that wrote the row and left the sending to
      whichever caller remembered would eventually have a caller that did not,
-     and the invitee would wait for an email nobody sent. `sendInviteEmail`
+     and the invitee would wait for a message nobody sent. `sendInvite`
      never throws and reports what happened, so a carrier that is down costs the
      owner a copy-and-paste rather than the seat.
   */
-  const emailed = await sendInviteEmail({
-    email,
+  const sent = await sendInvite({
+    ...(contact.email ? { email: contact.email } : { phone: contact.phone as string }),
+    channel: contact.channel,
     token,
     // displayName, never tradeName: it is the name the invitee will see on the
     // storefront whose enquiries they are about to answer.
@@ -218,7 +283,7 @@ export async function inviteSeat(
     expiresAt,
   });
 
-  return { ok: true, token, acceptUrl: inviteUrl(token), emailed };
+  return { ok: true, token, acceptUrl: inviteUrl(token), emailed: sent, channel: contact.channel };
 }
 
 export async function revokeInvite(
@@ -239,7 +304,18 @@ export async function pendingInvites(businessId: string) {
   return prisma.teamInvite.findMany({
     where: { businessId, acceptedAt: null, revokedAt: null, expiresAt: { gt: new Date() } },
     orderBy: { createdAt: "desc" },
-    select: { id: true, email: true, roles: true, expiresAt: true },
+    select: {
+      id: true,
+      email: true,
+      phone: true,
+      roles: true,
+      expiresAt: true,
+      // "Sent 2 days ago" is about the last send, not the first. A resend moves
+      // it; without `lastSentAt` the row would age past a message that went an
+      // hour ago.
+      createdAt: true,
+      lastSentAt: true,
+    },
   });
 }
 
@@ -274,6 +350,22 @@ export async function saveRouting(
       leadRouting: input.routing as never,
       leadEscalationMinutes: input.escalationMinutes,
     },
+  });
+
+  /*
+     The same number on the alerts screen, kept level.
+
+     `NotificationPreference.escalateAfterMinutes` is the other door onto this
+     setting — the alerts form at /dashboard/settings posts it and reads it
+     back. Only `leadEscalationMinutes` is acted on, so leaving the preference
+     stale would show the seller a threshold on one screen that the sweep
+     ignores. `updateMany` rather than `update` because a business that has
+     never opened the alerts screen has no preference row, and the absence is
+     not an error here.
+  */
+  await prisma.notificationPreference.updateMany({
+    where: { businessId },
+    data: { escalateAfterMinutes: input.escalationMinutes },
   });
 
   return { ok: true };

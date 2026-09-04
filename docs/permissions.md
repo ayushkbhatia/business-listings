@@ -52,9 +52,14 @@ from the pre-pivot board is **deleted**, not renamed — there is no order entit
 
 Scoping: a `sales` seat may be branch-scoped, in which case every capability above is further
 limited to enquiries and locations for that branch. Board 7d shows Fatima scoped to Al Quoz.
+The scope is set on the invitation and copied onto the user when the seat is taken —
+`TeamInvite.branchId` to `User.branchId` to `Actor.branchId`. Before board 8d the last two
+links did not exist, so `withinScope()` read an always-absent branch and every scoped check
+passed. A null branch means the whole business, which is what an owner and most managers are.
 
 Escalation is not a permission — an unanswered enquiry escalates to the owner after the
-configured interval regardless of routing.
+configured interval regardless of routing. `lib/enquiry/escalation-job.ts` runs it hourly,
+reading `Business.leadEscalationMinutes` and sending once per enquiry.
 
 ---
 

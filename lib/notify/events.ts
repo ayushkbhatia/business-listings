@@ -268,6 +268,60 @@ export async function onSubscriptionRenewed(input: {
 }
 
 /**
+ * An enquiry nobody answered, escalated to the owner. Board 8d §8.
+ *
+ * The one promise on the invite screen that needed a job rather than a
+ * sentence, and the reason §8 says an unkept version is worse here than
+ * elsewhere: it sits next to a paragraph telling the seller their ranking
+ * depends on reply time.
+ *
+ * To the owner, because that is what the screen says — "escalates to you".
+ * `NotificationPreference.escalateToUserId` exists and would let a supplier
+ * name somebody else; it is read by nothing yet, and honouring it here without
+ * a screen to set it would be a behaviour nobody could see or change.
+ *
+ * Once per enquiry, guarded by the caller in `lib/enquiry/escalation-job.ts` —
+ * `notify()` deduplicates nothing, and an owner paged hourly about one slow
+ * enquiry turns notifications off.
+ */
+export async function onEnquiryEscalated(input: {
+  enquiryId: string;
+  businessId: string;
+  /** The threshold that was passed, so the message can say how long. */
+  minutes: number;
+}): Promise<void> {
+  await safely("enquiry_escalated", async () => {
+    const [enquiry, owner] = await Promise.all([
+      prisma.enquiry.findUnique({
+        where: { id: input.enquiryId },
+        select: { id: true, ref: true, closesAt: true },
+      }),
+      prisma.user.findFirst({
+        where: { businessId: input.businessId, roles: { has: "seller_owner" } },
+        select: { id: true },
+      }),
+    ]);
+    if (!enquiry || !owner) return;
+
+    await notify({
+      event: "enquiry_escalated",
+      businessId: input.businessId,
+      enquiryId: input.enquiryId,
+      recipientUserId: owner.id,
+      params: withParams("enquiry_escalated", {
+        ref: enquiry.ref,
+        // The seeded templates say "hours", and a threshold a seller set in
+        // minutes reads badly as "120 hours". Rounded up, so a 90-minute
+        // threshold reads as two rather than as one it has not reached.
+        hours: formatCount(Math.max(1, Math.ceil(input.minutes / 60))),
+        closesAt: formatDate(enquiry.closesAt),
+        enquiryId: enquiry.id,
+      }),
+    });
+  });
+}
+
+/**
  * The one setup nudge, 72 hours after a listing went live.
  *
  * Board 8a states the promise on the hub in so many words — one WhatsApp three

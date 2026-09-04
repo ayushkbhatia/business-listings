@@ -4387,6 +4387,24 @@ const TEMPLATES: TemplateSeed[] = [
     actionPath: "/dashboard/setup",
     status: "live",
   },
+  /*
+     Board 8d §8 gave this event its first emitter, and the routing matrix has
+     always listed `in_app` for it with no template to satisfy — so an
+     escalation would have recorded `skipped / no_live_template` on the one
+     channel a seller sees without leaving the product.
+
+     Same placeholders as the email above, because `withParams` type-checks one
+     set per event and two templates wanting different ones is how `render`
+     starts throwing MissingParamError in a cron.
+  */
+  {
+    event: "enquiry_escalated",
+    channel: "in_app",
+    body: "Enquiry {ref} reached your team {hours} hours ago and has no reply. It closes {closesAt}.",
+    actionLabel: "Open the enquiry",
+    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    status: "live",
+  },
   {
     event: "weekly_digest",
     channel: "email",

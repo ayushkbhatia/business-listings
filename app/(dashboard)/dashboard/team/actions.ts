@@ -52,7 +52,10 @@ export async function sendInvite(formData: FormData): Promise<InviteActionResult
     seat.actor,
     seat.businessId,
     {
-      email,
+      // Board 8d turned this into one field that takes a mobile or an address
+      // and sniffs which. This screen still posts an address; the service reads
+      // either, so nothing here has to change to keep working.
+      contact: email,
       roles: [String(formData.get("role") ?? "seller_sales") as Role],
     },
     plan,

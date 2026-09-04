@@ -225,7 +225,13 @@ export interface SeatBusiness {
 export async function seatBusinesses(limit = 40): Promise<SeatBusiness[]> {
   const rows = await prisma.business.findMany({
     where: { claimStatus: "claimed" },
-    orderBy: [{ profileStrength: "desc" }, { displayName: "asc" }],
+    /*
+       Nulls last, explicitly. Postgres sorts NULLs first on a DESC, so the
+       default put every strengthless fixture at the top and pushed the seeded
+       suppliers — the ones with a plan, branches and a filled profile, which
+       are the only rows worth seating into — off the end of the forty.
+    */
+    orderBy: [{ profileStrength: { sort: "desc", nulls: "last" } }, { displayName: "asc" }],
     take: limit,
     select: {
       slug: true,

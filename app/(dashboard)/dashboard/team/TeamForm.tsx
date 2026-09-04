@@ -41,7 +41,8 @@ export interface SeatRow {
 
 export interface InviteRow {
   id: string;
-  email: string;
+  /** The address or the mobile, whichever the invitation went to. */
+  contact: string;
   roles: string[];
 }
 
@@ -245,7 +246,7 @@ export function TeamForm(props: TeamFormProps) {
               {props.invites.map((invite) => (
                 <tr key={invite.id} className="border-t border-line align-top">
                   <th scope="row" className="px-3 py-3 text-left font-normal">
-                    <span className="block text-body-sm text-muted">{invite.email}</span>
+                    <span className="block text-body-sm text-muted">{invite.contact}</span>
                     <span className="mt-0.5 block text-caption text-faint">{t("team.pending")}</span>
                   </th>
                   <td className="px-3 py-3 text-body-sm text-muted">
