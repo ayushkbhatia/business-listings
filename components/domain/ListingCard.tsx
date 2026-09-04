@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 import { Card } from "@/components/structure";
 import { ImagePlaceholder, LogoTile, StatusBadge, Tag } from "@/components/display";
 import { Button, buttonClassName } from "@/components/primitives";
@@ -269,7 +270,18 @@ export function ListingCard({
                     </Button>
                   </a>
                   {enquireHref ? (
-                    <a href={enquireHref} className={buttonClassName({ size: "sm", variant: "secondary" })}>
+                    /*
+                       `/rfq/new?to=<seller>` is one force-dynamic, uncached URL
+                       per supplier — 30,000 of them at the listing target,
+                       each linked from every row the supplier appears in. The
+                       composer is already `noindex`, so there was never
+                       anything at the end of these for a crawler to find.
+                    */
+                    <a
+                      href={enquireHref}
+                      rel={crawlRel(enquireHref)}
+                      className={buttonClassName({ size: "sm", variant: "secondary" })}
+                    >
                       {t("listing.enquire")}
                     </a>
                   ) : (
@@ -461,6 +473,7 @@ export function ListingCard({
                       {enquireHref ? (
                         <a
                           href={enquireHref}
+                          rel={crawlRel(enquireHref)}
                           className={cn(buttonClassName({ size: "sm", variant: "secondary" }), "flex-1")}
                         >
                           {t("product.enquire")}
@@ -484,6 +497,15 @@ export function ListingCard({
                     */}
                     <a
                       href={compareHref ?? `/compare?p=${business.slug}`}
+                      /*
+                         Adding a supplier to the tray preserves every other
+                         parameter, so this control is a second combinatorial
+                         space stacked on the facet one — 1.3 million tray
+                         permutations from the 75 slugs a crawler reached on a
+                         single shelf. The fallback href points at /compare,
+                         which is disallowed outright.
+                      */
+                      rel={crawlRel(compareHref ?? `/compare?p=${business.slug}`)}
                       className={cn(
                         "rounded-tag text-center text-caption underline-offset-2 hover:underline",
                         "focus-visible:outline-none focus-visible:shadow-focus",

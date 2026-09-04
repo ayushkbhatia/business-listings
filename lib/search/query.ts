@@ -97,6 +97,32 @@ const RESERVED = new Set([
   "compare",
 ]);
 
+/**
+ * The shape of a spec facet's query key: a `SpecField` id, which is a cuid.
+ *
+ * ## Why this guard exists
+ *
+ * The spec bucket is open on purpose — a filterable field is added to a
+ * template, not to this file — and until 2026-09-04 "open" meant *anything not
+ * reserved*. That made the page a reflector: an unknown parameter was absorbed
+ * as a facet and then re-emitted by `toSearchParams` into every one of the
+ * ~165 anchors the filter rail renders. So a single junk parameter did not
+ * decorate one URL, it forked the entire crawlable space beneath it, and the
+ * space was bounded by what a caller could invent rather than by our data.
+ *
+ * It was not hypothetical. 27 of the 797 URLs an AI crawler walked that night
+ * carried `nxtPcategory=` — Next's own internal route-parameter prefix, which
+ * we picked up off the request and dutifully linked back. Any `utm_source`,
+ * `gclid` or `fbclid` on an inbound campaign link did the same thing, which
+ * means our own marketing links were spawning parallel URL universes.
+ *
+ * A `SpecField.id` is `@default(cuid())`, and `getSpecFacets` keys every group
+ * by exactly that id. So the bucket stays open to every field the template
+ * grows and closed to everything else. The bound is loose on length rather than
+ * pinned at 25 so a future cuid revision does not silently empty every rail.
+ */
+const SPEC_KEY = /^c[a-z0-9]{20,30}$/;
+
 function list(value: string | string[] | undefined): string[] {
   if (!value) return [];
   return (Array.isArray(value) ? value : [value]).flatMap((v) => v.split(",")).filter(Boolean);
@@ -130,12 +156,13 @@ export function parseSearchQuery(
   const years = Number(one(params.yearsTrading));
   const page = Number(one(params.page));
 
-  // Anything not reserved is a spec facet, keyed by SpecField id. The rail is
-  // generated from the template, so the query string has to be open the same
-  // way: adding a filterable field must not need a code change here either.
+  // Anything not reserved and shaped like a SpecField id is a spec facet. The
+  // rail is generated from the template, so the query string has to be open the
+  // same way: adding a filterable field must not need a code change here
+  // either. What it must NOT be open to is a key nobody defined — see SPEC_KEY.
   const spec: Record<string, string[]> = {};
   for (const [key, value] of Object.entries(params)) {
-    if (RESERVED.has(key)) continue;
+    if (RESERVED.has(key) || !SPEC_KEY.test(key)) continue;
     const values = list(value);
     if (values.length > 0) spec[key] = values;
   }
@@ -194,6 +221,42 @@ export function toSearchParams(query: SearchQuery, overrides: Partial<SearchQuer
   if (merged.bounds) params.set("bounds", formatBounds(merged.bounds));
 
   return params.toString();
+}
+
+/**
+ * The query string that tray links carry, rebuilt from the parsed query.
+ *
+ * The three results routes each used to build this by re-serialising the raw
+ * `searchParams` they were handed, which put the reflector back on the page one
+ * layer below `parseSearchQuery`: a junk key survived into every "add to
+ * comparison" href even after the facet bucket had learned to drop it. Rebuild
+ * from the parsed query instead, and a parameter nobody defined has nowhere
+ * left to hide.
+ *
+ * `compare` is carried through explicitly because it is the one reserved key
+ * that is not part of `SearchQuery` — it is tray state, not a filter, and
+ * `toSearchParams` has no business knowing about it.
+ */
+export function trayParams(query: SearchQuery, tray: readonly string[]): string {
+  const params = toSearchParams(query);
+  if (tray.length === 0) return params;
+  const compare = `compare=${encodeURIComponent(tray.join(","))}`;
+  return params ? `${params}&${compare}` : compare;
+}
+
+/**
+ * `basePath` with `query` on it, and no bare `?` when there is nothing to put
+ * there.
+ *
+ * `${basePath}?${toSearchParams(query)}` renders `/c/valves-and-fittings?` for
+ * an unfiltered view, which addresses the same page under a second URL. Harmless
+ * to a browser and not harmless in a crawl graph: it is a duplicate a crawler
+ * has to fetch to discover is a duplicate, and the tabs emitted it as the
+ * `aria-current` self-link on every clean shelf on the site.
+ */
+export function pathWithQuery(basePath: string, query: SearchQuery, overrides: Partial<SearchQuery> = {}): string {
+  const params = toSearchParams(query, overrides);
+  return params ? `${basePath}?${params}` : basePath;
 }
 
 /** The same query with one facet removed. Drives "drop this filter". */

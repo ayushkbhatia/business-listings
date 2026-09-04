@@ -14,6 +14,7 @@ import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { Results } from "@/app/(public)/_results/Results";
 import { Faq, Prose } from "@/app/(public)/_landing/Blocks";
+import { isFiltered } from "@/lib/seo/canonical";
 
 /**
  * `/:emirate/:category` — one trade across one emirate.
@@ -82,9 +83,10 @@ async function resolve(params: { emirate: string; area: string }) {
   return { category, state };
 }
 
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const resolved = await resolve(await params);
   if (!resolved) return {};
+  const sp = await searchParams;
 
   const { category, state } = resolved;
   const emirateName = t(`emirate.${resolved.state.emirate}` as never);
@@ -100,7 +102,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // The floors, said to a crawler. Below them the page still serves — a
     // buyer who followed a link should see what there is — but it is not one
     // we ask anybody to index.
-    robots: state.live ? undefined : { index: false, follow: true },
+    //
+    // And the same for a filtered view, whatever the floors say: this route
+    // renders the same filter rail as `/c/:category` and addresses the same
+    // combinatorial URL space. See lib/seo/crawl-policy.ts.
+    robots:
+      state.live && !isFiltered(sp)
+        ? undefined
+        : { index: false, follow: true },
   };
 }
 

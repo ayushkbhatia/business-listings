@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { ChevronDown } from "@/components/primitives/icons";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 
 /**
  * The rail down the side of a category or results page.
@@ -70,7 +71,7 @@ export function FilterRail({
             {appliedLabel}
           </span>
           {clearAllHref ? (
-            <a href={clearAllHref} className={clearClasses}>
+            <a href={clearAllHref} rel={crawlRel(clearAllHref)} className={clearClasses}>
               {clearAllLabel}
             </a>
           ) : (

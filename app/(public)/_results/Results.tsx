@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { FilterRail } from "@/components/structure";
 import { t } from "@/lib/i18n";
 import {
@@ -15,6 +16,7 @@ import {
   type FacetGroup,
 } from "@/lib/db/queries";
 import { appliedKeys, toSearchParams, type SearchQuery } from "@/lib/search/query";
+import { isCrawler } from "@/lib/seo/crawl-policy";
 import { BrowseToolbar } from "./BrowseToolbar";
 import { FilterPanel } from "./FilterPanel";
 import { FacetLinks } from "./FacetLinks";
@@ -114,25 +116,44 @@ export async function Results({ query, basePath, category, tray = [], search = "
   const total = query.tab === "products" ? productTotal : businessTotal;
 
   /*
-     Every search is logged, whatever it returned. The home page's "Popular:"
-     chips are the five most-searched terms of the last thirty days that
-     returned something, so the row this writes is the only thing standing
+     Every search a BUYER makes is logged, whatever it returned. The home page's
+     "Popular:" chips are the five most-searched terms of the last thirty days
+     that returned something, so the row this writes is the only thing standing
      between that panel and a hardcoded list.
 
      Not awaited alongside the zero-result write below, and never allowed to
      throw: a log that fails must not take a results page with it.
+
+     ## Why a crawler is excluded
+
+     Both of these tables are business signals — what buyers looked for, and
+     what they looked for and did not find. A crawler walking facet
+     combinations is not a buyer, and on 2026-09-04 one generated 797
+     permutations of this page in 75 minutes, nearly all of which would have
+     landed on zero results. Recorded, that is 797 rows in a table nothing
+     prunes, feeding a call list a person is expected to act on and a "Popular:"
+     panel a buyer is expected to trust.
+
+     The gate reads the user agent and NOTHING is gated on it but these two
+     writes. The markup a crawler is served stays byte-identical to the markup a
+     buyer is served — anything else is cloaking, and the loose regex behind
+     `isCrawler` would be a terrible instrument for it.
   */
-  void recordSearch(
-    { q: query.q, tab: query.tab, emirate: query.emirate },
-    total,
-    category?.id ?? null,
-  );
+  const robot = isCrawler((await headers()).get("user-agent"));
+
+  if (!robot) {
+    void recordSearch(
+      { q: query.q, tab: query.tab, emirate: query.emirate },
+      total,
+      category?.id ?? null,
+    );
+  }
 
   let suggestion = null;
   if (total === 0) {
     // Written before the suggestion is computed so a slow count never costs the
     // record. Nothing reads it until handoff 4; the history is the point.
-    await recordZeroResult(query, category?.id ?? null);
+    if (!robot) await recordZeroResult(query, category?.id ?? null);
     suggestion = await suggestFilterToDrop(query, categoryIds);
   }
 

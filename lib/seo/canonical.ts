@@ -55,13 +55,53 @@ function one(value: string | string[] | undefined): string | undefined {
  *
  * Spec facets arrive as bare query keys named for a field id, so anything not
  * reserved counts too — the same open shape `parseSearchQuery` reads.
+ *
+ * Exported, and that is the point of the change rather than a convenience.
+ * `/b/:slug/products` and `/b/:slug/reviews` take their filtered-ness from a
+ * predicate their query layer exports, and both set `noindex` on the strength
+ * of it. The category route had the same policy and no way to ask the question,
+ * because this lived private in this file — so `/c/:category` was the one
+ * faceted surface on the site that stayed indexable however deep the filtering
+ * went. One crawler generated 797 of those URLs in 75 minutes.
  */
-function isFiltered(params: Record<string, string | string[] | undefined>): boolean {
+export function isFiltered(params: Record<string, string | string[] | undefined>): boolean {
   return Object.entries(params).some(([key, value]) => {
     if (key === "compare") return false; // The tray is UI state, not a filter.
+    /*
+       Nor is pagination. Page 2 is twenty different suppliers, not a narrowed
+       view of page 1, and it is the only internal-link path to them — which is
+       exactly why `page` is the one query key `CRAWLABLE_QUERY_KEYS` keeps in
+       the crawl graph. The two lists have to agree, or the site nofollows a URL
+       it asks to be indexed, or indexes one it nofollows.
+
+       Caught by requesting `?page=2` against the running app and reading the
+       `<meta name="robots">` it came back with, which said `noindex` — a
+       regression this function introduced the moment it started being consulted
+       for robots as well as for canonicals.
+    */
+    if (key === "page") return false;
     if (value === undefined || value === "") return false;
     return true;
   });
+}
+
+/**
+ * The `robots` metadata a results route should emit for this query string.
+ *
+ * `noindex, follow` rather than `noindex, nofollow`: the page's own outbound
+ * links to supplier storefronts and product pages are the reachable, indexable
+ * things on it, and they should keep being followed. The links that must NOT be
+ * followed are the facet anchors, and those carry `rel="nofollow"` of their own
+ * — see lib/seo/crawl-policy.ts. Blanket `nofollow` here would take the
+ * suppliers out with the facets.
+ *
+ * `undefined` for an unfiltered view, so the shelf itself indexes normally and
+ * the caller can spread this without a conditional.
+ */
+export function robotsForFilteredView(
+  params: Record<string, string | string[] | undefined>,
+): { robots: { index: false; follow: true } } | Record<string, never> {
+  return isFiltered(params) ? { robots: { index: false, follow: true } } : {};
 }
 
 export async function canonicalFor(input: CanonicalInput): Promise<string> {
@@ -104,5 +144,17 @@ export async function canonicalFor(input: CanonicalInput): Promise<string> {
   return basePath;
 }
 
-/** The reserved keys, exported so the route and the tests agree on the list. */
+/**
+ * The reserved keys, exported so the route and the tests agree on the list.
+ *
+ * Nothing imports it and nothing ever did, which is worth saying out loud
+ * rather than deleting quietly: for as long as this constant sat here looking
+ * like the policy, `isFiltered` a few lines above was the actual policy and it
+ * reads EVERY key rather than these ten. Anyone auditing which query parameters
+ * made a category view unindexable would have read the wrong list.
+ *
+ * Kept because the canonical rules in this file are written against these names
+ * and a reader needs them enumerated somewhere. `robotsForFilteredView` is the
+ * thing to call.
+ */
 export const CANONICAL_FILTER_KEYS = FILTER_KEYS;

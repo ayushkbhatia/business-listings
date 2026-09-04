@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db/client";
+import { STOREFRONT_TAB_COUNTS } from "@/lib/db/queries/business";
 import { absoluteUrl } from "@/lib/site";
 import { livePages } from "@/lib/seo/area";
 import { liveLists } from "@/lib/seo/curated";
@@ -28,7 +29,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [businesses, products, categories, areaPages, lists, guides, emiratePages] = await Promise.all([
     prisma.business.findMany({
       where: PUBLIC_BUSINESS,
-      select: { slug: true, updatedAt: true, claimStatus: true },
+      select: {
+        slug: true,
+        updatedAt: true,
+        claimStatus: true,
+        /*
+           The three counts each storefront tab 404s on when it is zero.
+
+           Each tab calls `notFound()` for an empty one — products on
+           `catalogueTotal === 0`, branches on no published location, reviews on
+           `_count.reviews === 0` — and this file was submitting all three for
+           every claimed business regardless. A sitemap is a claim that its URLs
+           are worth indexing, and the file header a few lines up says so; three
+           guaranteed 404s per claimed supplier is that claim being false at
+           scale, and each one a crawler follows is a billed function invocation
+           that renders nothing.
+
+           Imported rather than restated. Writing the predicate out here got the
+           reviews case wrong on the first attempt — a bare count includes the
+           removed and held reviews the tab refuses to render — which is the
+           whole argument for there being one definition.
+        */
+        _count: { select: STOREFRONT_TAB_COUNTS },
+      },
     }),
     prisma.product.findMany({
       where: { status: { not: "draft" }, business: PUBLIC_BUSINESS },
@@ -181,7 +204,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
 
     if (business.claimStatus !== "unclaimed") {
-      for (const suffix of ["products", "branches", "reviews"]) {
+      // Each tab only where it has something to render — see the counts in the
+      // query above. The condition here has to stay the same one the route
+      // uses; a tab that 404s and a tab we submit are the same question asked
+      // in two places.
+      const tabs = [
+        ["products", business._count.products],
+        ["branches", business._count.locations],
+        ["reviews", business._count.reviews],
+      ] as const;
+
+      for (const [suffix, count] of tabs) {
+        if (count === 0) continue;
         entries.push({
           url: absoluteUrl(`/b/${business.slug}/${suffix}`),
           lastModified: business.updatedAt,

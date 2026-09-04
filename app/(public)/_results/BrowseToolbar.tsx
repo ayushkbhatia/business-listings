@@ -4,6 +4,7 @@ import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { toSearchParams, type SearchQuery, type SearchSort, type SearchView } from "@/lib/search/query";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 
 /**
  * The bar above the results: how they are ordered, how many there are, and
@@ -66,10 +67,16 @@ export function BrowseToolbar({
             <div className="flex flex-wrap gap-1.5" role="group" aria-labelledby="sort-label">
               {SORTS.map((sort) => {
                 const active = query.sort === sort.key;
+                const to = href(basePath, query, { sort: sort.key });
                 return (
                   <Link
                     key={sort.key}
-                    href={href(basePath, query, { sort: sort.key })}
+                    href={to}
+                    // A sort order is a view of this shelf, never a page of its
+                    // own: it is noindex, it canonicalises back here, and it
+                    // multiplies against every facet already applied. Out of the
+                    // crawl graph — see lib/seo/crawl-policy.ts.
+                    rel={crawlRel(to)}
                     aria-current={active ? "true" : undefined}
                     className={cn(
                       "inline-flex h-8 items-center rounded-ctl border px-3 text-body-sm",
@@ -99,10 +106,14 @@ export function BrowseToolbar({
         <div className="flex gap-1.5" role="group" aria-label={t("browse.view_list")}>
           {(["list", "grid"] as const).map((view) => {
             const active = query.view === view;
+            const to = href(basePath, query, { view: view as SearchView });
             return (
               <Link
                 key={view}
-                href={href(basePath, query, { view: view as SearchView })}
+                href={to}
+                // List or grid is the same results in a different shape. Same
+                // reasoning as sort, and the two multiply against each other.
+                rel={crawlRel(to)}
                 aria-current={active ? "true" : undefined}
                 className={cn(
                   "inline-flex h-8 items-center rounded-ctl border px-3 text-caption",

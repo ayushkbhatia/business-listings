@@ -2,6 +2,7 @@
 
 import { cn } from "@/lib/cn";
 import { Close } from "@/components/primitives/icons";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 
 /**
  * An applied filter, above the results. Removable, always.
@@ -51,7 +52,19 @@ export function FilterChip({
       {facet && <span className="text-muted">{facet}:</span>}
       {children}
       {!fixed && removeLabel && removeHref && (
-        <a href={removeHref} aria-label={removeLabel} title={removeLabel} className={removeClasses}>
+        <a
+          href={removeHref}
+          /*
+             Derived here rather than passed in, so a new caller cannot forget
+             it. Removing a filter usually lands on another filtered URL, and
+             only the chip that clears the last one yields a clean shelf —
+             `crawlRel` reads that off the href.
+          */
+          rel={crawlRel(removeHref)}
+          aria-label={removeLabel}
+          title={removeLabel}
+          className={removeClasses}
+        >
           <Close size={11} />
         </a>
       )}
