@@ -126,8 +126,16 @@ interface FooterColumn {
  *
  * Terms and privacy are two links rather than the board's single "Terms &
  * privacy". They are two pages, they have been live since handoff 5, and
- * `campaign.spec.ts` checks that the footer reaches all four policies from
- * every page on the site — a combined label would reach three.
+ * `campaign.spec.ts` checks that the footer reaches every policy from every
+ * page on the site — a combined label would reach one fewer.
+ *
+ * Cookies joined them with board 13h. It is not decoration: 13h §4 puts the
+ * consent answer behind a footer link, the policy states that the answer can be
+ * changed "from Cookie settings in the footer", and a page that promises a
+ * link the footer does not carry is a page telling the reader something untrue.
+ * The settings screen itself is not built — this reaches the register and the
+ * §03 explanation of how to withdraw, and the label goes to "Cookie settings"
+ * when the four toggles land.
  */
 export function DirectoryFooter() {
   const columns: FooterColumn[] = [
@@ -161,6 +169,7 @@ export function DirectoryFooter() {
         { key: "guides", label: t("chrome.guides"), href: "/guides" },
         { key: "terms", label: t("chrome.terms"), href: "/terms" },
         { key: "privacy", label: t("chrome.privacy"), href: "/privacy" },
+        { key: "cookies", label: t("chrome.cookies"), href: "/cookies" },
         { key: "report", label: t("home.link_report"), href: "/verification-policy" },
       ],
     },

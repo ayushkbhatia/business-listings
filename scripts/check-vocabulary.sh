@@ -24,7 +24,22 @@ echo "→ 1. words for things that do not exist"
 BANNED='\b(cart|basket|checkout|purchase|payout|refund|dispatch|GMV|POD)\b'
 BANNED+='|price on request|price: low to high|download price list'
 BANNED+='|get quote\b|get a quote|add to cart'
-if values | grep -inE "$BANNED"; then
+#
+# One key is exempt, by name, with its reason.
+#
+# The ban exists because these words name things that do not exist here: there
+# is no cart, no checkout, no order, and no refund of buyer money because the
+# platform never holds any. Clause 08 of the terms of use is the one place the
+# word is about money we *do* take — a subscription fee — and what it says is
+# that a part-used term is not paid back. Board 13f's pre-flight judged it
+# legitimate on exactly that reading, and the alternative is rewriting a
+# cancellation clause to suit a grep.
+#
+# Exempted by key rather than by pattern, before the key is blanked, so the
+# exemption is one line a reviewer can argue with rather than a hole in the
+# expression. Anything else saying "refund" still fails.
+EXEMPT='"legal\.terms\.08\.p2":'
+if raw | grep -vE "$EXEMPT" | only_values | grep -inE "$BANNED"; then
   echo "   FAIL — these name a cart, a checkout or an order entity. None exist."
   echo "          enquiry · quote · accepted quote · subscription credit · quoted value."
   fail=1

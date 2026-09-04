@@ -247,7 +247,7 @@ test.describe("home", () => {
     }
   });
 
-  test("the footer links to all four policies, and they are reachable by clicking", async ({
+  test("the footer links to all five policies, and they are reachable by clicking", async ({
     page,
   }) => {
     /*
@@ -259,6 +259,9 @@ test.describe("home", () => {
     const policies = [
       ["Terms", "/terms"],
       ["Privacy", "/privacy"],
+      // Board 13h. The cookie policy says its own answer can be changed "from
+      // the footer", so a footer that does not reach it makes the page untrue.
+      ["Cookies", "/cookies"],
       ["How we verify", "/verification-policy"],
       ["Review policy", "/review-policy"],
     ] as const;

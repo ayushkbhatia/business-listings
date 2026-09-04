@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db/client";
 import { STOREFRONT_TAB_COUNTS } from "@/lib/db/queries/business";
+import { LEGAL_PAGES } from "@/lib/legal/pages";
 import { absoluteUrl } from "@/lib/site";
 import { livePages } from "@/lib/seo/area";
 import { liveLists } from "@/lib/seo/curated";
@@ -150,6 +151,22 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
      the `Plan` table and a plan price moves about once a year.
   */
   entries.push({ url: absoluteUrl("/pricing"), changeFrequency: "weekly", priority: 0.7 });
+
+  /*
+     The five legal pages — 13f §1: indexable, canonical, in the sitemap,
+     `changefreq: yearly`. Not `noindex`, which is the reflex and is wrong here:
+     buyers search for these by name, and a directory whose only asset is that
+     its numbers are true is not the site that hides what it does with an
+     enquiry. Yearly because a legal document that changes more often than that
+     has a different problem.
+
+     `lastModified` is deliberately absent. Three of the five are content
+     modules with no timestamp of their own and the other two carry a row date;
+     an invented date is a claim a crawler discounts the next one for.
+  */
+  for (const page of LEGAL_PAGES) {
+    entries.push({ url: absoluteUrl(page.href), changeFrequency: "yearly", priority: 0.3 });
+  }
 
   /*
      The emirate × sector pages board 6c's matrix links to.
