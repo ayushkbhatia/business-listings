@@ -40,6 +40,8 @@
 import { createClient } from "@supabase/supabase-js";
 import { Client } from "pg";
 
+import { assertLocalTarget } from "../lib/db/target.js";
+
 const ROLES = {
   ops: { roles: ["staff_ops_lead"], name: "Dev Ops Lead", landing: "/admin" },
   moderator: { roles: ["staff_moderator"], name: "Dev Moderator", landing: "/admin" },
@@ -87,6 +89,16 @@ if (!url || !secret || !database) {
 if (process.env["NODE_ENV"] === "production") {
   usage("Refusing to run against production.");
 }
+
+/*
+   The line above reads as the production guard and is not one. `NODE_ENV` is
+   whatever the shell running this script says it is, and nobody exports
+   `production` before running a dev helper — so it stays false while
+   `DATABASE_URL` points wherever `.env.local` points. This script deletes
+   rows from "user" by email, so the check that matters is which database it
+   is deleting them from. See lib/db/target.ts.
+*/
+assertLocalTarget("provision a staff seat, which deletes and recreates a user row");
 
 const admin = createClient(url, secret, {
   auth: { autoRefreshToken: false, persistSession: false },
