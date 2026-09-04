@@ -171,28 +171,33 @@ async function main() {
   /*
      Order matters only where a FK is Restrict rather than Cascade.
 
-     The list names 46 of the schema's 73 tables and that is enough: `truncate
+     The list names 48 of the schema's 79 models and that is enough: `truncate
      … cascade` also empties every table holding a foreign key to a named one,
      transitively, whatever the ON DELETE action. `staged_listing` goes with
      `licence_import_run` → `user`, `merge_candidate` with `business`, and so on
      for twenty-odd more. They are absent from this list because they are
      unreachable by hand, not because they survive.
 
-     Two tables have no relations at all and so are reached by nothing:
+     Three tables have no relations at all and so are reached by nothing:
 
        - `auth_attempt` is named below. It is the throttle counter, and left
-         alone it is the one table a reseed does not clear — 933 rows on the
+         alone it is one of the tables a reseed does not clear — 933 rows on the
          machine this comment was written on, which is what sent somebody
          looking for a seed bug that was not there. Production needs the
          `/api/jobs/prune-attempts` cron, not this line; this line is so that a
          developer's OTP throttle does not outlive their database.
+       - `rate_limit_hit` is named below for the same reason. Board 2a's claim
+         search is metered through it, it has no foreign key to anything, and a
+         reseed left thirteen rows of a previous afternoon's searches behind —
+         which on a tighter policy is a developer wondering why the first search
+         after a fresh database refuses them.
        - `ranking_weights` is deliberately NOT named. Its singleton `current`
          row is inserted by migration 20260827220000 and never by the seed, so
          truncating it would leave `liveWeights()` returning null for good.
   */
   await prisma.$executeRawUnsafe(`
     truncate table
-      "audit_event","auth_attempt","contact_reveal","zero_result_query","search_query_log","saved_search","redirect","guide","area_page","curated_list","campaign","legal_page",
+      "audit_event","auth_attempt","rate_limit_hit","contact_reveal","zero_result_query","search_query_log","saved_search","redirect","guide","area_page","curated_list","campaign","legal_page",
       "notification_delivery","notification_template","notification_preference","review_request",
       "invoice_line","invoice","placement_slot","subscription",
       "supplier_report","review","message","quote_line","quote",
