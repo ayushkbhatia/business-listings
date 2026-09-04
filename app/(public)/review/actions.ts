@@ -17,6 +17,10 @@ export type PostReviewResult = { ok: false; error: string };
 
 export async function postReview(formData: FormData): Promise<PostReviewResult> {
   const enquiryId = String(formData.get("enquiryId") ?? "");
+  // Present only where the fan-out drew replies from several suppliers and none
+  // was accepted. `canReview` refuses an id the enquiry cannot account for, so
+  // a hand-edited field buys nothing.
+  const businessId = formData.get("businessId");
   const token = formData.get("t");
   const buyerId = await resolveBuyerId(typeof token === "string" ? token : null);
   if (!buyerId) return { ok: false, error: t("review.error.not_your_enquiry") };
@@ -26,6 +30,7 @@ export async function postReview(formData: FormData): Promise<PostReviewResult> 
   const result = await createReview({
     buyerId,
     enquiryId,
+    ...(typeof businessId === "string" && businessId ? { businessId } : {}),
     ratings: {
       overall: score("overall"),
       quotedAccurate: score("quotedAccurate"),
@@ -40,7 +45,7 @@ export async function postReview(formData: FormData): Promise<PostReviewResult> 
   if (!result.ok) {
     return {
       ok: false,
-      error: t(`review.error.${result.error}` as "review.error.no_accepted_quote"),
+      error: t(`review.error.${result.error}` as "review.error.no_confirmed_enquiry"),
     };
   }
 

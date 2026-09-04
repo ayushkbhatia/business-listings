@@ -45,7 +45,7 @@ export {
 } from "./EmirateAreaPicker";
 
 export { PlanCard, type PlanCardProps, type PlanFeature } from "./PlanCard";
-export { ReviewCard, type ReviewCardProps } from "./ReviewCard";
+export { ReviewCard, ReviewHeldRow, type ReviewCardProps, type ReviewPhoto } from "./ReviewCard";
 
 // Board 1a. The directory home's two compositions.
 export { DirectorySearchBar, type DirectorySearchBarProps } from "./DirectorySearchBar";

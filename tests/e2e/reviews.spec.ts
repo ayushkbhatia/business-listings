@@ -15,15 +15,25 @@ import { expect, test } from "@playwright/test";
 const TOKEN = "seed-0000-4000-8000-provisional01";
 /** Accepted and unreviewed. ENQ-8871 stays unaccepted so /compare has buttons. */
 const ACCEPTED = "seedenquiryaccepted000001";
-/** Live, no accepted quote — the gated case. */
+/**
+ * Live, no accepted quote, and answered by two of the suppliers it went to.
+ *
+ * The gate admits two rungs since board 1m — an accepted quote, or a supplier
+ * who received the enquiry and replied — so this fixture is no longer the
+ * "nobody may review it" case. It is the ambiguous one: one review per enquiry,
+ * two suppliers who could be its subject, and nobody has said which.
+ */
 const OPEN = "seedenquiryprovisional0001";
 
 test.describe("the gate, seen from outside", () => {
-  test("an enquiry with no accepted quote cannot be reviewed, and says why", async ({ page }) => {
+  test("a fan-out several suppliers answered asks which one, and says why", async ({ page }) => {
     await page.goto(`/review/new?enq=${OPEN}&t=${TOKEN}`);
-    await expect(page.getByText(/A review needs an accepted quote/)).toBeVisible();
-    // The gate is the product, so it is stated rather than implied by absence.
-    await expect(page.getByText(/Reviews come from buyers who accepted a quote/)).toBeVisible();
+    await expect(page.getByText(/Several suppliers answered this enquiry/)).toBeVisible();
+    // The gate is the product, so it is stated rather than implied by absence —
+    // and it now states both rungs, because both are real.
+    await expect(
+      page.getByText(/buyers who sent an enquiry here and heard back, or who accepted a quote/),
+    ).toBeVisible();
     await expect(page.getByRole("radio")).toHaveCount(0);
   });
 

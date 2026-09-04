@@ -9,6 +9,49 @@
  * Pure. The query layer fetches, this decides.
  */
 
+
+/**
+ * How a review earned its place, and therefore what badge it carries.
+ *
+ * Board 1m calls this the provenance ladder, and it inverted at the pivot. The
+ * board treated a purchase as the strongest signal and an accepted quote as the
+ * weaker one; with no transactions on the platform an accepted quote *is* the
+ * strongest thing we can prove, so the tones swap and the weaker label — the
+ * one freed up — becomes the grey tier.
+ *
+ *   `accepted_quote`    ok / green   the buyer accepted this seller's quote here
+ *   `verified_enquiry`  neutral      the buyer enquired and this seller replied
+ *
+ * There is no third rung. A review with neither cannot be created, which is
+ * what `canReview` below is for, and the label a competitor would use for the
+ * absent third rung — "Verified purchase" — names something that does not
+ * exist on this platform at all.
+ */
+export const PROVENANCE = ["accepted_quote", "verified_enquiry"] as const;
+
+export type Provenance = (typeof PROVENANCE)[number];
+
+/**
+ * The rung a published review sits on.
+ *
+ * Derived, never stored. The fact it reads — did this seller's quote get
+ * accepted on this enquiry — is already a column, and a second copy of it on
+ * the review row is a column that can disagree with the first. Interface
+ * honesty: derived metrics have no writable path, and the cheapest way to
+ * guarantee that is not to have the path.
+ */
+export function provenanceOf(review: {
+  businessId: string;
+  enquiry: { contactReleasedToBusinessId: string | null };
+}): Provenance {
+  return review.enquiry.contactReleasedToBusinessId === review.businessId
+    ? "accepted_quote"
+    : "verified_enquiry";
+}
+
+/** Board 1m: at or below this the review answers the Critical filter. */
+export const CRITICAL_AT_OR_BELOW = 3;
+
 /** The four grounds. "It is unfair" is not one of them. */
 export const REMOVAL_GROUNDS = [
   "no_traceable_enquiry",
@@ -35,33 +78,76 @@ export type Dimension = (typeof DIMENSIONS)[number];
 export interface EnquiryForReview {
   id: string;
   buyerId: string;
-  /** Set on acceptance. The business the review is about. */
+  /** Set on acceptance. The strongest rung, and the default subject. */
   contactReleasedToBusinessId: string | null;
   contactReleasedAt: Date | null;
+  /**
+   * Recipients of this enquiry that actually replied.
+   *
+   * `EnquiryRecipient.firstReplyAt` is the timestamp response time is measured
+   * from, which makes it the one fact the platform holds about whether a
+   * supplier engaged at all. A recipient that never replied is a supplier the
+   * buyer has nothing to report on, so it is not on this list.
+   */
+  repliedBusinessIds: readonly string[];
   /** True when a review already exists for this enquiry. */
   alreadyReviewed: boolean;
 }
 
 export type EligibilityVerdict =
-  | { ok: true; businessId: string }
-  | { ok: false; reason: "not_your_enquiry" | "no_accepted_quote" | "already_reviewed" };
+  | { ok: true; businessId: string; provenance: Provenance }
+  | {
+      ok: false;
+      reason: "not_your_enquiry" | "no_confirmed_enquiry" | "ambiguous_subject" | "already_reviewed";
+    };
 
 /**
- * May this buyer review this enquiry?
+ * May this buyer review this enquiry, and about which supplier?
  *
- * An accepted quote is the confirmation. There is no other kind: the platform
- * holds no delivery record and no payment, so acceptance is the last thing it
- * knows for certain happened between the two of them.
+ * Board 1m: *"a review requires a confirmed enquiry or an accepted quote on
+ * this platform"* — two rungs, not one. This function used to admit only the
+ * accepted-quote rung, which made the grey `Verified enquiry` badge on the
+ * reviews page a label nothing could ever carry, and the provenance ladder a
+ * decoration rather than a claim.
+ *
+ * A confirmed enquiry means this seller received it and replied. Delivery on
+ * its own is not confirmation of anything: eight suppliers receive a fan-out,
+ * and a buyer who heard from two of them has met two suppliers.
+ *
+ * One review per enquiry regardless of rung — `Review.enquiryId` is unique, and
+ * a buyer with three enquiries to one seller leaves three reviews, each tied to
+ * its own. So where a fan-out drew replies from several sellers the caller has
+ * to name the one being reviewed; naming none is only unambiguous when a quote
+ * was accepted, or when exactly one supplier replied.
  */
 export function canReview(
   buyerId: string,
   enquiry: EnquiryForReview | null,
+  /** The supplier being reviewed, where the buyer picked one. */
+  businessId?: string,
 ): EligibilityVerdict {
   // A missing enquiry and somebody else's are the same answer.
   if (!enquiry || enquiry.buyerId !== buyerId) return { ok: false, reason: "not_your_enquiry" };
-  if (!enquiry.contactReleasedToBusinessId) return { ok: false, reason: "no_accepted_quote" };
   if (enquiry.alreadyReviewed) return { ok: false, reason: "already_reviewed" };
-  return { ok: true, businessId: enquiry.contactReleasedToBusinessId };
+
+  const accepted = enquiry.contactReleasedToBusinessId;
+  const replied = enquiry.repliedBusinessIds;
+
+  if (businessId) {
+    if (accepted === businessId) return { ok: true, businessId, provenance: "accepted_quote" };
+    if (replied.includes(businessId)) {
+      return { ok: true, businessId, provenance: "verified_enquiry" };
+    }
+    return { ok: false, reason: "no_confirmed_enquiry" };
+  }
+
+  // Nobody named a supplier. An accepted quote answers it on its own.
+  if (accepted) return { ok: true, businessId: accepted, provenance: "accepted_quote" };
+  if (replied.length === 1) {
+    return { ok: true, businessId: replied[0]!, provenance: "verified_enquiry" };
+  }
+  if (replied.length === 0) return { ok: false, reason: "no_confirmed_enquiry" };
+  return { ok: false, reason: "ambiguous_subject" };
 }
 
 export interface Ratings {

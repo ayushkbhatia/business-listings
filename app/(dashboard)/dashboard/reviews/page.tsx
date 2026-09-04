@@ -46,6 +46,7 @@ export default async function SellerReviewsPage() {
         sellerReply: true,
         sellerRepliedAt: true,
         removedAt: true,
+        heldAt: true,
         removalReason: true,
         createdAt: true,
         buyer: { select: { fullName: true, buyerCompany: { select: { name: true } } } },
@@ -84,7 +85,17 @@ export default async function SellerReviewsPage() {
       acceptedAt: enquiry.contactReleasedAt ? formatDate(enquiry.contactReleasedAt) : "",
     }));
 
-  const visible = reviews.filter((review) => review.removedAt === null);
+  /*
+     The seller's average is the buyer's average.
+
+     Removed and held are both out of it. A held review is off the public page
+     while a decision is made, and a dashboard that kept counting it would show
+     the seller a figure their own storefront disagrees with — which is the
+     shared-record failure, one surface removed.
+  */
+  const visible = reviews.filter(
+    (review) => review.removedAt === null && review.heldAt === null,
+  );
   const average =
     visible.length === 0
       ? null
@@ -94,8 +105,9 @@ export default async function SellerReviewsPage() {
     id: review.id,
     overall: review.overall,
     body: review.body,
-    // The buyer's own choice about their name. Off means a verified buyer with
-    // no name — never their phone, never their email.
+    // The buyer's own choice about their name. Off means a buyer with no name
+    // shown — never their phone, never their email. The provenance badge is a
+    // separate thing and is not the buyer's to switch off.
     buyerLabel: review.showCompanyName
       ? (review.buyer.buyerCompany?.name ?? firstNameOf(review.buyer.fullName))
       : firstNameOf(review.buyer.fullName),

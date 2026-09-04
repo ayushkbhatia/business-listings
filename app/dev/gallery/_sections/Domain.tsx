@@ -9,6 +9,8 @@ import {
   PlanCard,
   EnquiryComposer,
   ModerationRow,
+  ReviewCard,
+  ReviewHeldRow,
   Thread,
   QuoteLineEditor,
   ListingCard,
@@ -354,6 +356,8 @@ export function Domain() {
       <EnquiryComposerSpecimens />
 
       <ThreadSpecimens />
+
+      <ReviewCardSpecimens />
 
       <ModerationSpecimens />
 
@@ -814,6 +818,116 @@ const THREAD_MESSAGES: ThreadMessageView[] = [
     },
   },
 ];
+
+/**
+ * 67 · `ReviewCard`, in the states board 1m documents.
+ *
+ * Both variants, because the reason this is one component and not two is that
+ * the storefront section and the reviews page must render one record one way. A
+ * gallery that showed only the card would let the row drift.
+ */
+function ReviewCardSpecimens() {
+  const body =
+    "Forty DN100 gate valves for a chilled water riser, quoted the same afternoon and on site in three days. The price held to the quote and the certificates came with the delivery.";
+
+  return (
+    <Section
+      id="review-card"
+      title="ReviewCard"
+      note="67 · board 1m · one review, on the reviews page and in the storefront section"
+    >
+      {/*
+         The two rungs. `ok` is an accepted quote, which is the strongest thing
+         a platform holding no transactions can prove; `neutral` is an enquiry
+         this seller answered. There is no third rung and no purchase.
+      */}
+      <States label="provenance" stack>
+        <Frame width="40rem">
+          <ul>
+            <ReviewCard
+              as="li"
+              variant="row"
+              author="Harbour Contracting LLC"
+              rating="5"
+              ratingValue={5}
+              ratingLabel={t("reviewpage.rating_label", { rating: "5" })}
+              date={formatDate(new Date("2026-08-31T09:00:00+04:00"))}
+              provenance={{ label: t("reviewpage.provenance.accepted_quote"), tone: "ok" }}
+              body={body}
+              replyLabel={t("reviewpage.seller_reply", { name: "Al Waha Industrial Supplies" })}
+            />
+            <ReviewCard
+              as="li"
+              variant="row"
+              author={t("storefront.review_anonymous")}
+              rating="3"
+              ratingValue={3}
+              ratingLabel={t("reviewpage.rating_label", { rating: "3" })}
+              date={formatDate(new Date("2026-08-04T09:00:00+04:00"))}
+              provenance={{ label: t("reviewpage.provenance.verified_enquiry"), tone: "neutral" }}
+              body="Answered within the hour with stock and a lead time. We went elsewhere on price."
+              replyLabel={t("reviewpage.seller_reply", { name: "Al Waha Industrial Supplies" })}
+            />
+          </ul>
+        </Frame>
+      </States>
+
+      <States label="with a reply, and with photos" stack>
+        <Frame width="40rem">
+          <ul>
+            <ReviewCard
+              as="li"
+              variant="row"
+              author="Marina Facilities LLC"
+              rating="4"
+              ratingValue={4}
+              ratingLabel={t("reviewpage.rating_label", { rating: "4" })}
+              date={formatDate(new Date("2026-07-17T09:00:00+04:00"))}
+              provenance={{ label: t("reviewpage.provenance.accepted_quote"), tone: "ok" }}
+              body="The valves were right. The delivery was not — quoted three days, arrived on the ninth."
+              photos={[
+                { id: "a", url: "/window.svg", alt: "Valves on the pallet as delivered" },
+                { id: "b", url: "/file.svg", alt: "The delivery note" },
+              ]}
+              sellerReply="That was our transport contractor and we have changed it since."
+              replyLabel={t("reviewpage.seller_reply", { name: "Al Waha Industrial Supplies" })}
+            />
+          </ul>
+        </Frame>
+      </States>
+
+      {/*
+         Held: one neutral line, no body, no rating, no reviewer. Leaving the
+         review visible with a warning attached would publish the complaint and
+         the doubt at once, which board 1m rules out.
+      */}
+      <States label="held for moderation" stack>
+        <Frame width="40rem">
+          <ul>
+            <ReviewHeldRow label={t("reviewpage.held", { count: 1, formatted: "1" })} />
+          </ul>
+        </Frame>
+      </States>
+
+      {/*
+         The card variant, which is what the storefront section renders. No
+         marks, so the numeral beside the date carries the rating.
+      */}
+      <States label="card variant · storefront section" stack>
+        <Frame width="40rem">
+          <ReviewCard
+            author="Cornerstone MEP Contracting LLC"
+            rating="5"
+            date={formatDate(new Date("2026-06-20T09:00:00+04:00"))}
+            body={body}
+            sellerReply="Thank you. Staged delivery is worth asking for on anything over twenty items."
+            replyLabel={t("storefront.seller_reply")}
+          />
+        </Frame>
+      </States>
+    </Section>
+  );
+}
 
 export function ThreadSpecimens() {
   return (

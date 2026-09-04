@@ -10,6 +10,8 @@ import {
   isEditable,
   isRemovalGround,
   ratingsAreValid,
+  type EnquiryForReview,
+  type Provenance,
   type Ratings,
   type RemovalGround,
 } from "./eligibility";
@@ -31,14 +33,32 @@ import {
 export interface CreateReviewInput {
   buyerId: string;
   enquiryId: string;
+  /**
+   * The supplier being reviewed.
+   *
+   * Optional, because most enquiries answer it themselves: one accepted quote,
+   * or one supplier out of the fan-out that replied. Where several replied and
+   * none was accepted, the buyer has to say which, and `ambiguous_subject` is
+   * what comes back when nobody did.
+   */
+  businessId?: string;
   ratings: Ratings;
   body: string;
   showCompanyName?: boolean;
 }
 
 export type CreateReviewResult =
-  | { ok: true; reviewId: string; businessId: string }
-  | { ok: false; error: "not_your_enquiry" | "no_accepted_quote" | "already_reviewed" | "invalid_ratings" | "empty_body" };
+  | { ok: true; reviewId: string; businessId: string; provenance: Provenance }
+  | {
+      ok: false;
+      error:
+        | "not_your_enquiry"
+        | "no_confirmed_enquiry"
+        | "ambiguous_subject"
+        | "already_reviewed"
+        | "invalid_ratings"
+        | "empty_body";
+    };
 
 const MIN_BODY = 20;
 
@@ -50,24 +70,9 @@ export async function createReview(input: CreateReviewInput): Promise<CreateRevi
   // enough for "Quick, correct, fair price" and high enough to stop a full stop.
   if (body.length < MIN_BODY) return { ok: false, error: "empty_body" };
 
-  const enquiry = await prisma.enquiry.findUnique({
-    where: { id: input.enquiryId },
-    select: {
-      id: true,
-      buyerId: true,
-      contactReleasedToBusinessId: true,
-      contactReleasedAt: true,
-      review: { select: { id: true } },
-    },
-  });
+  const enquiry = await enquiryForReview(input.enquiryId);
 
-  const verdict = canReview(input.buyerId, enquiry && {
-    id: enquiry.id,
-    buyerId: enquiry.buyerId,
-    contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
-    contactReleasedAt: enquiry.contactReleasedAt,
-    alreadyReviewed: enquiry.review !== null,
-  });
+  const verdict = canReview(input.buyerId, enquiry, input.businessId);
   if (!verdict.ok) return { ok: false, error: verdict.reason };
 
   const now = new Date();
@@ -88,7 +93,50 @@ export async function createReview(input: CreateReviewInput): Promise<CreateRevi
     select: { id: true, businessId: true },
   });
 
-  return { ok: true, reviewId: review.id, businessId: review.businessId };
+  return {
+    ok: true,
+    reviewId: review.id,
+    businessId: review.businessId,
+    provenance: verdict.provenance,
+  };
+}
+
+/**
+ * The enquiry as the gate needs to see it.
+ *
+ * One place rather than three: board 10f renders the gate before offering the
+ * form, this file re-checks it before writing, and both have to be looking at
+ * the same fields or the page offers a form the service refuses.
+ *
+ * `firstReplyAt` is the confirmation for the second rung, and it is the same
+ * column response time is measured from — so "this seller replied" is a fact
+ * the platform already holds rather than one this gate invents.
+ */
+export async function enquiryForReview(enquiryId: string): Promise<EnquiryForReview | null> {
+  const enquiry = await prisma.enquiry.findUnique({
+    where: { id: enquiryId },
+    select: {
+      id: true,
+      buyerId: true,
+      contactReleasedToBusinessId: true,
+      contactReleasedAt: true,
+      review: { select: { id: true } },
+      recipients: {
+        where: { firstReplyAt: { not: null } },
+        select: { businessId: true },
+      },
+    },
+  });
+  if (!enquiry) return null;
+
+  return {
+    id: enquiry.id,
+    buyerId: enquiry.buyerId,
+    contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
+    contactReleasedAt: enquiry.contactReleasedAt,
+    repliedBusinessIds: enquiry.recipients.map((recipient) => recipient.businessId),
+    alreadyReviewed: enquiry.review !== null,
+  };
 }
 
 export type EditReviewResult = { ok: true } | { ok: false; error: "not_yours" | "window_closed" | "invalid_ratings" | "empty_body" };
@@ -145,10 +193,13 @@ export async function replyToReview(input: {
 
   const review = await prisma.review.findUnique({
     where: { id: input.reviewId },
-    select: { businessId: true, sellerReply: true, removedAt: true },
+    select: { businessId: true, sellerReply: true, removedAt: true, heldAt: true },
   });
   if (!review || review.businessId !== input.businessId) return { ok: false, error: "not_yours" };
-  if (review.removedAt) return { ok: false, error: "removed" };
+  // A held review is off the page and may never come back. A reply written
+  // against something the seller cannot see is a reply they cannot mean, and it
+  // is the one thing on this record that cannot be edited afterwards.
+  if (review.removedAt || review.heldAt) return { ok: false, error: "removed" };
   if (review.sellerReply) return { ok: false, error: "already_replied" };
 
   // Guarded again in the where clause: two tabs, one reply.
@@ -226,6 +277,103 @@ export async function removeReview(input: RemoveReviewInput): Promise<{ ok: true
   return { ok: true };
 }
 
+export interface HoldReviewInput {
+  actor: Actor;
+  reviewId: string;
+  /** A sentence somebody wrote. Validated by writeAudit, not just by a form. */
+  reason: string;
+}
+
+/**
+ * Holding a review while a decision is made, and letting it go again.
+ *
+ * Board 1m: a held review renders as one neutral line — "one review is being
+ * reviewed by our team" — with no content and no rating, and it is out of every
+ * average and out of `AggregateRating` from the moment of the hold. Leaving it
+ * visible with a warning attached is the thing the board rules out: it would
+ * publish the complaint and the doubt at once, which is worse for the seller
+ * than removing it and worse for the buyer than showing it.
+ *
+ * A hold is a staff state change, so it carries a written reason and an audit
+ * row like every other one. It is reversible, which is the whole reason it is
+ * not `removedAt`: releasing restores the row exactly as it was, and the log
+ * shows both moves rather than one.
+ */
+export async function holdReview(
+  input: HoldReviewInput,
+): Promise<{ ok: true } | { ok: false; error: "not_found" | "already_held" | "removed" }> {
+  const written = assertReason("review_held", input.reason);
+
+  const existing = await prisma.review.findUnique({
+    where: { id: input.reviewId },
+    select: { id: true, businessId: true, heldAt: true, removedAt: true },
+  });
+  if (!existing) return { ok: false, error: "not_found" };
+  // A removed review is already off every surface. Holding it says nothing.
+  if (existing.removedAt) return { ok: false, error: "removed" };
+  if (existing.heldAt) return { ok: false, error: "already_held" };
+
+  await prisma.$transaction(async (tx) => {
+    await staffMutation(
+      {
+        actor: input.actor,
+        capability: "review.hold",
+        action: "review_held",
+        subject: `Review:${input.reviewId}`,
+        reason: written,
+        tx,
+      },
+      async () => {
+        const after = await tx.review.update({
+          where: { id: input.reviewId },
+          data: { heldAt: new Date(), heldReason: written },
+          select: { id: true, heldAt: true, heldReason: true },
+        });
+        return { result: after, before: existing, after };
+      },
+    );
+  });
+
+  return { ok: true };
+}
+
+/** The undo. Same rung, same reason requirement, its own action in the log. */
+export async function releaseReview(
+  input: HoldReviewInput,
+): Promise<{ ok: true } | { ok: false; error: "not_found" | "not_held" }> {
+  const written = assertReason("review_released", input.reason);
+
+  const existing = await prisma.review.findUnique({
+    where: { id: input.reviewId },
+    select: { id: true, businessId: true, heldAt: true, heldReason: true },
+  });
+  if (!existing) return { ok: false, error: "not_found" };
+  if (!existing.heldAt) return { ok: false, error: "not_held" };
+
+  await prisma.$transaction(async (tx) => {
+    await staffMutation(
+      {
+        actor: input.actor,
+        capability: "review.hold",
+        action: "review_released",
+        subject: `Review:${input.reviewId}`,
+        reason: written,
+        tx,
+      },
+      async () => {
+        const after = await tx.review.update({
+          where: { id: input.reviewId },
+          data: { heldAt: null, heldReason: null },
+          select: { id: true, heldAt: true, heldReason: true },
+        });
+        return { result: after, before: existing, after };
+      },
+    );
+  });
+
+  return { ok: true };
+}
+
 /**
  * Published reviews, newest first, for the removal screen.
  *
@@ -250,6 +398,8 @@ export interface ModerationReview {
   createdAt: Date;
   removedAt: Date | null;
   removalReason: string | null;
+  heldAt: Date | null;
+  heldReason: string | null;
   hasSellerReply: boolean;
 }
 
@@ -264,6 +414,8 @@ export async function reviewsForModeration(limit = 200): Promise<ModerationRevie
       createdAt: true,
       removedAt: true,
       removalReason: true,
+      heldAt: true,
+      heldReason: true,
       sellerReply: true,
       business: { select: { displayName: true, slug: true } },
       buyer: { select: { fullName: true } },
@@ -280,6 +432,8 @@ export async function reviewsForModeration(limit = 200): Promise<ModerationRevie
     createdAt: row.createdAt,
     removedAt: row.removedAt,
     removalReason: row.removalReason,
+    heldAt: row.heldAt,
+    heldReason: row.heldReason,
     hasSellerReply: row.sellerReply !== null,
   }));
 }

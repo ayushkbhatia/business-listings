@@ -89,6 +89,8 @@ const STAFF_TABLE: [Capability, Staff[]][] = [
   ["taxonomy.write", ["ops"]],
   ["storefront.template.write", ["ops"]],
   ["review.remove", ["ops"]],
+  // Board 1m's reversible pause, one rung below the removal above it.
+  ["review.hold", ["ops", "moderator"]],
   ["report.resolve", ["ops", "moderator"]],
   ["business.suspend", ["ops"]],
   ["subscription.credit", ["finance"]],
@@ -175,10 +177,23 @@ describe("every row cites the document", () => {
        taking down a buyer's published words is the same decision whichever
        surface it was written on — and erring higher is the safe direction for
        a removal.
+
+       `review.hold` joined on board 1m, which states the held row — "one review
+       is being reviewed by our team", out of every average while it stands —
+       without saying who may set it. It sits one rung *below* `review.remove`,
+       which is the opposite direction from the paragraph above and is deliberate:
+       a hold is reversible and a removal is not, so putting the reversible
+       control out of a moderator's reach would push them towards the
+       irreversible one.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
     );
-    expect(inferred.sort()).toEqual(["business.merge", "question.remove", "staff.manage"]);
+    expect(inferred.sort()).toEqual([
+      "business.merge",
+      "question.remove",
+      "review.hold",
+      "staff.manage",
+    ]);
   });
 });

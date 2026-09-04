@@ -16,7 +16,7 @@ they 404 until their handoff.
 /b/:slug                                Storefront overview                   [1d]
 /b/:slug/products                       Catalogue                             [1e]
 /b/:slug/branches                       Branches & hours                      [1f]
-/b/:slug/reviews                        Reviews                               [1m]
+/b/:slug/reviews                        Reviews & ratings                     [1m]  built h4s6
 /b/:slug/p/:product                     Product + spec table                  [1g]
 /b/:slug (unclaimed variant)            Unclaimed listing                    [10g]
 /rfq/new                                RFQ fan-out                           [1h]  built h2s3
@@ -162,6 +162,15 @@ enumeration oracle.
 is validated by `isSafeNext` and is never a destination for a signed-in session.
 Neither grants anything: roles are read from the profile row after the code is
 verified.
+
+`/b/:slug/reviews` takes `?show=` (all · accepted · photos · critical), `?sort=` (recent ·
+highest · lowest · detailed) and `?page=`. Every narrowed view is `noindex, follow` and
+canonicalises to the bare path — sixteen filter-and-sort permutations of one list is the
+doorway-page shape `/b/:slug/products` already rules out, and the review text is the thing
+worth ranking. `?page=` is cumulative: page 3 renders thirty rows, so "Load more" is an anchor
+a buyer can go back through rather than an endless list. The route 404s where the business has
+no published review, because `StorefrontHeader` hides a tab with a zero count and a tab that
+does not exist should not have a URL that renders.
 
 Slugs are immutable once published. Renaming a category or merging two listings creates a
 301 automatically; deleting a page without one is blocked at the service layer.

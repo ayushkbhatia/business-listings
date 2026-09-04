@@ -651,6 +651,15 @@ async function main() {
   await seedProductDetail(prisma);
   await seedTestimonials(prisma);
   await seedTrackingStates(prisma);
+  /*
+     Last of the fixture builders, and PRNG-free.
+
+     It creates a business and its review history from fixed arrays with no
+     `rnd()` draw in it, so it can sit anywhere without renaming anything. It
+     sits here anyway: the two above it do draw, and keeping them at the offsets
+     `main` gave them means this branch changes no slug either of them pins.
+  */
+  await seedReviewDepth(prisma);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
@@ -3113,6 +3122,579 @@ async function recomputeDerived(db: Db) {
   `);
 
   await db.$executeRawUnsafe(`update "business" set "derived_at" = now();`);
+}
+
+/**
+ * Board 1m's fixture set: thirty-four published reviews, one held, one removed.
+ *
+ * Written out rather than generated. A review body is a person describing their
+ * own job, and a template with a size substituted into it would be the platform
+ * writing reviews — which is the thing this whole page exists to say it does
+ * not do. The lengths vary deliberately: "Most detailed" sorts on body length,
+ * and a set where every body is the same length cannot show that it works.
+ *
+ * `accepted` is the provenance rung. It is not a column on the review — the
+ * page derives it from whether the enquiry released contact to this seller, so
+ * a fixture that sets it here is setting the fact, not the label.
+ */
+interface ReviewFixture {
+  overall: number;
+  /** quotedAccurate, onTime, asDescribed, responsiveness. */
+  scores: readonly [number, number, number, number];
+  body: string;
+  requirement: string;
+  qty: number;
+  accepted: boolean;
+  showCompany: boolean;
+  reply?: string;
+  photos: number;
+  photoAlt?: string;
+  state: "published" | "held" | "removed";
+}
+
+const REVIEW_FIXTURES: readonly ReviewFixture[] = [
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: true, showCompany: true, photos: 2,
+    requirement: "DN100 resilient seated gate valves, PN16, flanged",
+    qty: 40,
+    photoAlt: "Gate valves on the pallet as delivered to site",
+    body: "Forty DN100 gate valves for a chilled water riser, quoted the same afternoon and on site in three days. The price held to the quote and the certificates came with the delivery rather than a week later, which is what usually happens. The storeman had the crates broken down and counted before the driver left.",
+    reply: "Thank you. We keep DN50 to DN200 on the floor in Al Quoz, so the three days is the delivery window rather than the lead time.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 4, 5, 5], accepted: true, showCompany: true, photos: 0,
+    requirement: "Wafer butterfly valves DN150 with gear operators",
+    qty: 18,
+    body: "Priced below the two quotes I had on paper and the gear operators were the ones specified rather than the nearest thing in stock. One day late against the date given, and they called about it the morning before.",
+    state: "published",
+  },
+  {
+    overall: 4, scores: [5, 3, 4, 4], accepted: true, showCompany: false, photos: 0,
+    requirement: "Brass ball valves, assorted sizes",
+    qty: 120,
+    body: "Quote was accurate to the fils. Delivery slipped by two days over a public holiday, which was not really theirs to control.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 4], accepted: false, showCompany: true, photos: 0,
+    requirement: "Y-strainers DN80 cast iron, mesh 40",
+    qty: 24,
+    body: "Answered within the hour with stock and a lead time. We ended up going elsewhere on price but the reply was the fastest of the six we asked.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: true, showCompany: true, photos: 1,
+    requirement: "Swing check valves DN200, ductile iron",
+    qty: 8,
+    photoAlt: "Check valve body with the casting marks visible",
+    body: "Second time using them for a pump room refit. Castings are clean, the flange drilling matched the drawing, and they took back two we over-ordered without an argument.",
+    reply: "Appreciated. Returns on standard stock lines are fine within thirty days as long as the crate is unopened.",
+    state: "published",
+  },
+  {
+    overall: 3, scores: [4, 2, 3, 3], accepted: true, showCompany: true, photos: 0,
+    requirement: "Flanged globe valves DN65",
+    qty: 12,
+    body: "The valves were right. The delivery was not — quoted three days, arrived on the ninth, and I had to chase twice to find out where it was. Fine on the goods, poor on telling me anything.",
+    reply: "That was our transport contractor and we have changed it since. The chasing was the part we got wrong, not just the days.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: false, showCompany: true, photos: 0,
+    requirement: "PN25 butterfly valves for a fire ring main",
+    qty: 30,
+    body: "Sent a proper technical answer rather than a price list. Knew the Civil Defence requirement without being told it.",
+    state: "published",
+  },
+  {
+    overall: 4, scores: [4, 4, 5, 4], accepted: true, showCompany: true, photos: 0,
+    requirement: "Stainless 316 ball valves DN25 threaded",
+    qty: 60,
+    body: "Exactly what was described, and the material certificates were the mill's rather than a photocopy of somebody's letterhead.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: true, showCompany: true, photos: 3,
+    requirement: "Complete valve package for a district cooling substation",
+    qty: 1,
+    photoAlt: "Valve package staged in the plant room before installation",
+    body: "The biggest job we have given them: a full substation package across four sizes, staged over three deliveries so we were not storing it on a live site. Every drop arrived on the day agreed and the third one was pulled forward when we asked. Where they earned it was the two items they could not hold — they said so at quotation stage with an indent lead time rather than discovering it three weeks later, which is the failure that costs a programme.",
+    reply: "Thank you. Staged delivery is worth asking for on anything over about twenty items, and we would rather flag an indent line at quotation than at delivery.",
+    state: "published",
+  },
+  {
+    overall: 2, scores: [2, 2, 3, 2], accepted: false, showCompany: false, photos: 0,
+    requirement: "DN300 butterfly valves, urgent",
+    qty: 4,
+    body: "Replied quickly to say they had them and then took four days to confirm they did not. I would rather have been told no on day one.",
+    reply: "Fair. The stock figure was a branch transfer that had not landed, and we now check the physical count before confirming anything above DN250.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 4, 5], accepted: true, showCompany: true, photos: 0,
+    requirement: "Gate valves and strainers for a villa compound",
+    qty: 22,
+    body: "Small job by their standards and they still sent somebody to the site to measure before quoting. That is not nothing.",
+    state: "published",
+  },
+  {
+    overall: 4, scores: [4, 5, 4, 3], accepted: true, showCompany: true, photos: 0,
+    requirement: "Bronze non-return valves DN40",
+    qty: 35,
+    body: "Delivered early. Slow to answer the first email, quick once the thing was moving.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: false, showCompany: true, photos: 0,
+    requirement: "Replacement seats for an existing valve set",
+    qty: 16,
+    body: "Identified the valve from a photograph and told me the seat kit part number in twenty minutes. Did not try to sell me new valves.",
+    state: "published",
+  },
+  {
+    overall: 3, scores: [3, 3, 4, 3], accepted: true, showCompany: true, photos: 1,
+    requirement: "DN150 gate valves for a pump replacement",
+    qty: 6,
+    photoAlt: "Valve tag showing the pressure rating",
+    body: "Adequate. The valves are fine and the paperwork was fine. Nothing went wrong and nothing was better than expected either, and at this price I would have liked one of those two.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: true, showCompany: true, photos: 0,
+    requirement: "Fire fighting valve set, UL listed",
+    qty: 14,
+    body: "UL listed as specified and they had the listing documents ready before I asked for them. Consultant approved it first time.",
+    reply: "We hold the listings for everything on the fire lines. Ask at enquiry stage and they go out with the quote.",
+    state: "published",
+  },
+  {
+    overall: 4, scores: [4, 4, 4, 5], accepted: false, showCompany: true, photos: 0,
+    requirement: "Assorted flanges and gaskets",
+    qty: 200,
+    body: "Answered on a Friday afternoon, which nobody else did. Priced a little above the market but I would ask them again.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: true, showCompany: true, photos: 0,
+    requirement: "DN80 butterfly valves with limit switches",
+    qty: 10,
+    body: "Switches wired and tested before they left the warehouse. Saved us a day on site.",
+    state: "published",
+  },
+  {
+    overall: 1, scores: [1, 1, 2, 1], accepted: false, showCompany: false, photos: 0,
+    requirement: "Emergency replacement valve, same day",
+    qty: 1,
+    body: "Asked for one valve on an emergency and got a reply the next afternoon. By then the plant had been down for a shift and I had found it elsewhere. Their normal service may well be good; this was not.",
+    reply: "We were closed when this came in and there is no overnight desk. That is our limit rather than an excuse, and the enquiry should have been answered at eight the next morning rather than at two.",
+    state: "published",
+  },
+  {
+    overall: 4, scores: [5, 4, 4, 4], accepted: true, showCompany: true, photos: 0,
+    requirement: "Chilled water balancing valves DN50",
+    qty: 48,
+    body: "Quote was clear about what was stock and what was indent, with separate lead times for each. More suppliers should do that.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: true, showCompany: true, photos: 0,
+    requirement: "Ductile iron check valves DN125",
+    qty: 9,
+    body: "Straightforward. Quoted, delivered, invoiced, all as agreed.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [4, 5, 5, 5], accepted: true, showCompany: true, photos: 1,
+    requirement: "Pressure reducing valves for a high rise",
+    qty: 7,
+    photoAlt: "Pressure reducing valve installed on the riser",
+    body: "Set the reducing valves to our schedule before delivery and labelled each one with the floor it was for. Commissioning took an afternoon instead of two days.",
+    reply: "Pre-setting and tagging is free on anything over five units. Send the schedule with the enquiry.",
+    state: "published",
+  },
+  {
+    overall: 3, scores: [3, 4, 3, 2], accepted: false, showCompany: true, photos: 0,
+    requirement: "Butterfly valves DN200 wafer type",
+    qty: 20,
+    body: "Priced well and answered, but the answer took three days and I had already committed by then.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: true, showCompany: true, photos: 0,
+    requirement: "Strainers and isolation valves for a laundry plant",
+    qty: 26,
+    body: "Third job with them this year. Consistent, which is the whole thing I want from a stockist.",
+    state: "published",
+  },
+  {
+    overall: 4, scores: [4, 3, 5, 4], accepted: true, showCompany: false, photos: 0,
+    requirement: "Gate valves DN65 for a retrofit",
+    qty: 15,
+    body: "Goods exactly as described. A day late and they told me the day before, which I can work with.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: false, showCompany: true, photos: 0,
+    requirement: "Technical query on seat material for treated water",
+    qty: 1,
+    body: "Asked a question rather than an enquiry and got a proper answer with the temperature limits written down. Went back to them with the real job a month later.",
+    state: "published",
+  },
+  {
+    overall: 2, scores: [3, 1, 2, 2], accepted: true, showCompany: true, photos: 0,
+    requirement: "DN100 check valves, three week programme",
+    qty: 11,
+    body: "Two weeks late on a three week programme and the second delivery was short by two units, which nobody mentioned until I counted them. The credit came through without argument once I raised it, but I should not have been the one counting.",
+    reply: "The shortage was ours and the delivery note was wrong, which is why nothing flagged it. We now count out against the note at the gate rather than at the rack.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: true, showCompany: true, photos: 0,
+    requirement: "Compact ball valves for a fit-out",
+    qty: 80,
+    body: "Bulk of small sizes, all in stock, collected from the counter the same morning.",
+    state: "published",
+  },
+  {
+    overall: 4, scores: [4, 4, 4, 4], accepted: false, showCompany: true, photos: 0,
+    requirement: "Flanged gate valves DN250",
+    qty: 5,
+    body: "Solid reply with a firm indent lead time. We could not wait fourteen weeks but the answer was honest about it.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: true, showCompany: true, photos: 0,
+    requirement: "Valve spares for an annual maintenance contract",
+    qty: 44,
+    body: "They keep our AMC spares list on file and quote against it without me re-typing it every year.",
+    state: "published",
+  },
+  {
+    overall: 4, scores: [5, 4, 4, 3], accepted: true, showCompany: true, photos: 0,
+    requirement: "Grooved end valves for a sprinkler main",
+    qty: 28,
+    body: "Right goods, right price, slightly hard to reach on the phone during the afternoon break.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: true, showCompany: true, photos: 0,
+    requirement: "Air release valves for a pumped main",
+    qty: 6,
+    body: "Small delivery, handled as carefully as the big ones.",
+    state: "published",
+  },
+  {
+    overall: 3, scores: [2, 3, 4, 3], accepted: false, showCompany: true, photos: 0,
+    requirement: "Stainless butterfly valves for a coastal site",
+    qty: 12,
+    body: "The quoted figure moved between the first reply and the formal quote. Same goods, different number, and nobody explained the gap.",
+    state: "published",
+  },
+  {
+    overall: 5, scores: [5, 5, 5, 5], accepted: false, showCompany: true, photos: 0,
+    requirement: "Emergency isolation valve, Sharjah site",
+    qty: 2,
+    body: "Held two units for us on a phone call and did not release them to anyone else while we arranged transport.",
+    state: "published",
+  },
+  {
+    overall: 4, scores: [4, 5, 4, 4], accepted: true, showCompany: true, photos: 0,
+    requirement: "Bronze gate valves for a potable line",
+    qty: 33,
+    body: "WRAS approved as asked. Early delivery, and the driver waited while the storeman checked every box.",
+    state: "published",
+  },
+  {
+    overall: 1, scores: [1, 1, 1, 1], accepted: false, showCompany: false, photos: 0,
+    requirement: "Valve set for a warehouse fit-out",
+    qty: 18,
+    body: "Held while our team checks a report.",
+    state: "held",
+  },
+  {
+    overall: 1, scores: [1, 1, 1, 1], accepted: false, showCompany: false, photos: 0,
+    requirement: "Assorted valves",
+    qty: 3,
+    body: "Removed by moderation.",
+    state: "removed",
+  },
+];
+
+/**
+ * A seller with enough reviews to have a reviews page, for board 1m.
+ *
+ * The rest of the seed carries one published review, which is what a young
+ * directory honestly looks like and is exactly the wrong fixture for this
+ * board: it exercises the "fewer than five" state and nothing else. Board 1m is
+ * a distribution, four filter chips, four sorts, a page size and a held row,
+ * and none of those can be looked at — or tested — against a single row.
+ *
+ * So one supplier gets a real review history and everybody else keeps theirs.
+ * `al-manara-equipment-trading-llc` stays on one review and is the thin-page
+ * fixture; `al-marwan-industrial-supplies-llc` stays on none, which is what
+ * `storefront.spec.ts` asserts when it checks that `aggregateRating` is absent
+ * where there is nothing to aggregate.
+ *
+ * **No PRNG draws in here.** Two comments in this file record what happens when
+ * one moves: every business generated afterwards is renamed and a dozen test
+ * files pin those slugs. Everything below is index arithmetic over fixed
+ * arrays, so it can be added, reordered or removed without touching anything
+ * else in the seed.
+ */
+async function seedReviewDepth(db: Db) {
+  console.log("→ a review history, for board 1m");
+
+  const category = await db.category.findFirst({
+    where: { slug: "valves-and-fittings" },
+    select: { id: true },
+  });
+  const area = await db.area.findFirst({
+    where: { slug: "al-quoz-industrial-3" },
+    select: { id: true, lat: true, lng: true },
+  });
+  if (!category || !area) {
+    console.log("   skipped — the taxonomy this seller sits in is not in this seed");
+    return;
+  }
+
+  /*
+     A fixed slug, because it is the board's own URL and because every test that
+     asserts a count on this page has to be able to find the page. The name
+     collides with nothing: `NAME_PREFIX` carries "Al Waha", but the generated
+     suffix differs and the claim search that broke on an ambiguous prefix
+     searches "Al Marwan".
+  */
+  const seller = await db.business.upsert({
+    where: { slug: "al-waha-industrial-supplies" },
+    update: {},
+    create: {
+      tradeName: "Al Waha Industrial Supplies LLC",
+      displayName: "Al Waha Industrial Supplies",
+      slug: "al-waha-industrial-supplies",
+      licenceNumber: "DED-664201",
+      licenceAuthority: "DED",
+      licenceExpiry: days(420),
+      trn: "100664201900003",
+      establishedYear: 2009,
+      teamSize: "b11_50",
+      languages: ["English", "Arabic", "Hindi"],
+      description:
+        "Valve and fitting stockist supplying MEP contractors across Dubai and the Northern Emirates. Counter sales, scheduled site delivery and an indent desk for sizes held off the shelf.",
+      verificationTier: 3,
+      verifiedAt: days(-64),
+      visitedAt: days(-64),
+      claimStatus: "claimed",
+      planId: "pro",
+      primaryCategoryId: category.id,
+      source: "self_added",
+      publishedAt: days(-380),
+      themePreset: "industrial",
+      paymentTerms: "30 days on approved account · 50% with order otherwise",
+      ratingOverall: null,
+      reviewCount: 0,
+      derivedAt: NOW,
+      locations: {
+        create: {
+          type: "head_office",
+          emirate: "dubai",
+          areaId: area.id,
+          addressLine: "Warehouse 11, Street 8, Al Quoz Industrial 3",
+          published: true,
+          phone: "043470112",
+          whatsapp: "+971506610044",
+          phoneVerified: true,
+          lat: area.lat === null ? null : Number((area.lat + 0.004).toFixed(6)),
+          lng: area.lng === null ? null : Number((area.lng - 0.003).toFixed(6)),
+          hours: {
+            sun: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
+            mon: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
+            tue: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
+            wed: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
+            thu: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "18:00" }],
+            sat: [{ open: "08:00", close: "13:00" }],
+          },
+        },
+      },
+    },
+    select: { id: true, slug: true },
+  });
+
+  const existing = await db.review.count({ where: { businessId: seller.id } });
+  if (existing > 0) {
+    console.log(`   skipped — ${seller.slug} already has ${existing} reviews`);
+    return;
+  }
+
+  /*
+     Buyers with names, because a page of thirty-four reviews from two accounts
+     reads as a fixture rather than as a directory. Each is a real shape: a
+     company that shows its name, a company that does not, and a sole trader
+     with no company at all.
+  */
+  const BUYERS = [
+    { company: "Harbour Contracting LLC", person: "Rashid Al Hameli", emirate: "dubai" },
+    { company: "Marina Facilities LLC", person: "Suhail Bin Haider", emirate: "dubai" },
+    { company: "Cornerstone MEP Contracting LLC", person: "Anita Menon", emirate: "sharjah" },
+    { company: "Deira Cold Store LLC", person: "Yousef Haddad", emirate: "dubai" },
+    { company: "Northgate Facilities Management LLC", person: "Priya Raghavan", emirate: "abu_dhabi" },
+    { company: null, person: "Imran Sheikh", emirate: "dubai" },
+    { company: "Bluewater Marine Services LLC", person: "Kareem Nassar", emirate: "sharjah" },
+    { company: "Sandpiper Property Services LLC", person: "Grace Okoye", emirate: "ajman" },
+  ] as const;
+
+  const buyerIds: string[] = [];
+  for (const [index, buyer] of BUYERS.entries()) {
+    const id = uuid(300 + index);
+    const companyId = buyer.company
+      ? (
+          await db.buyerCompany.create({
+            data: { name: buyer.company, emirate: buyer.emirate as never },
+            select: { id: true },
+          })
+        ).id
+      : null;
+    await db.user.create({
+      data: {
+        id,
+        phone: `+9715${index}${(4110022 + index * 137).toString().padStart(7, "0")}`,
+        fullName: buyer.person,
+        roles: ["buyer"],
+        ...(companyId ? { buyerCompanyId: companyId } : {}),
+      },
+    });
+    buyerIds.push(id);
+  }
+
+  /*
+     Thirty-four published reviews, plus one held and one removed.
+
+     Each row is written rather than generated: a review body is a person
+     describing their own job, and a template with a size substituted into it
+     would be the platform writing reviews. The lengths vary because "Most
+     detailed" sorts on length and a fixture where every body is the same
+     length cannot show that the sort does anything.
+
+     `accepted` decides the provenance rung, which is derived from the enquiry
+     rather than stored — an accepted row releases contact to this seller, an
+     unaccepted one only records that the seller replied.
+  */
+  let created = 0;
+  let photos = 0;
+
+  for (const [index, row] of REVIEW_FIXTURES.entries()) {
+    const buyerId = buyerIds[index % buyerIds.length]!;
+    const createdAt = days(-(4 + index * 9));
+
+    const enquiry = await db.enquiry.create({
+      data: {
+        ref: `ENQ-7${(200 + index).toString().padStart(3, "0")}`,
+        buyerId,
+        requirement: row.requirement,
+        closesAt: new Date(createdAt.getTime() - 7 * 86_400_000),
+        createdAt: new Date(createdAt.getTime() - 21 * 86_400_000),
+        ...(row.accepted
+          ? {
+              contactReleasedToBusinessId: seller.id,
+              contactReleasedAt: new Date(createdAt.getTime() - 9 * 86_400_000),
+            }
+          : {}),
+        lines: { create: [{ description: row.requirement, qty: row.qty, sortOrder: 0 }] },
+      },
+      select: { id: true },
+    });
+
+    /*
+       The recipient row is what makes the second rung true.
+
+       `firstReplyAt` is the column response time is measured from, and
+       `canReview` reads exactly it: a supplier who received a fan-out and never
+       answered is not a supplier the buyer has anything to report on.
+    */
+    await db.enquiryRecipient.create({
+      data: {
+        enquiryId: enquiry.id,
+        businessId: seller.id,
+        // `quoted` either way: the second rung is "this seller answered", and
+        // a quote that was sent and not accepted is exactly that. `delivered`
+        // would describe a supplier who never replied, which is the case the
+        // gate refuses.
+        state: "quoted",
+        openedAt: new Date(createdAt.getTime() - 20 * 86_400_000),
+        firstReplyAt: new Date(createdAt.getTime() - 20 * 86_400_000 + 3_600_000),
+        createdAt: new Date(createdAt.getTime() - 21 * 86_400_000),
+      },
+    });
+
+    const review = await db.review.create({
+      data: {
+        businessId: seller.id,
+        buyerId,
+        enquiryId: enquiry.id,
+        overall: row.overall,
+        quotedAccurate: row.scores[0],
+        onTime: row.scores[1],
+        asDescribed: row.scores[2],
+        responsiveness: row.scores[3],
+        body: row.body,
+        showCompanyName: row.showCompany,
+        editableUntil: new Date(createdAt.getTime() + 14 * 86_400_000),
+        createdAt,
+        ...(row.reply
+          ? {
+              sellerReply: row.reply,
+              sellerRepliedAt: new Date(createdAt.getTime() + 2 * 86_400_000),
+            }
+          : {}),
+        ...(row.state === "held"
+          ? {
+              heldAt: days(-2),
+              heldReason:
+                "Reported as containing a third party's mobile number. Held while the reporter's evidence is checked.",
+            }
+          : {}),
+        ...(row.state === "removed"
+          ? {
+              removedAt: days(-11),
+              removalReason:
+                "provably_false: names a delivery date the enquiry thread shows was never quoted, and the reviewer withdrew the claim on being asked.",
+            }
+          : {}),
+      },
+      select: { id: true },
+    });
+
+    /*
+       Photographs on a handful of them, so the "With photos" chip counts
+       something. The objects are not in the bucket — nothing uploads during a
+       seed — so these 404 at the storage layer exactly as the seeded datasheet
+       does. That is the honest failure for a fixture: it does not pretend a
+       file exists.
+    */
+    for (let p = 0; p < row.photos; p += 1) {
+      await db.media.create({
+        data: {
+          kind: "review",
+          reviewId: review.id,
+          storagePath: `reviews/${review.id}/${p + 1}.jpg`,
+          alt: row.photoAlt ?? "Goods as delivered, photographed by the buyer",
+          sortOrder: p,
+        },
+      });
+      photos += 1;
+    }
+
+    created += 1;
+  }
+
+  const published = REVIEW_FIXTURES.filter((row) => row.state === "published").length;
+  const accepted = REVIEW_FIXTURES.filter(
+    (row) => row.state === "published" && row.accepted,
+  ).length;
+  console.log(
+    `   ${created} on ${seller.slug} — ${published} published, ${accepted} from accepted quotes, ` +
+      `${photos} photos`,
+  );
 }
 
 main()
