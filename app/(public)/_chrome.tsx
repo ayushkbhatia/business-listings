@@ -89,7 +89,24 @@ export function DirectoryNav({
           >
             {t("chrome.sign_in")}
           </Link>
-          <Link href="/onboarding/claim" className="contents">
+          {/*
+             A box, not `display: contents`.
+
+             The button carries `tabIndex={-1}` so the anchor is the one
+             focusable thing here — and an anchor with `display: contents`
+             generates no box, which in Blink means it cannot be focused at
+             all. `.focus()` on it was a no-op and Tab skipped straight past:
+             the site's primary seller call to action was unreachable by
+             keyboard on every public page.
+
+             With a box it also gets the ring, and `min-h-11` gives it the
+             44px mobile target §09's floor asks for — the green button itself
+             is 32px, which is the desktop floor and no more.
+          */}
+          <Link
+            href="/onboarding/claim"
+            className="inline-flex min-h-11 items-center rounded-ctl focus-visible:outline-none focus-visible:shadow-focus sm:min-h-0"
+          >
             <Button size="sm" tabIndex={-1}>
               {t("gallery.list_your_business")}
             </Button>

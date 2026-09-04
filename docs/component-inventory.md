@@ -45,7 +45,7 @@ whether you split a variant into its own component.
 | 25 | `Panel` | 12px radius, section container |
 | 26 | `Tabs` | 1.5px ink underline, with optional count |
 | 27 | `Breadcrumb` | mono caps, last crumb ink and not a link |
-| 28 | `PublicNav` | 68px, search in the bar |
+| 28 | `PublicNav` | 68px, search in the bar; two rows and 112px below `sm` |
 | 29 | `AppSidebar` | 236px, one component, nav config drives seller vs admin |
 | 30 | `PageHeader` | 58px, title + badges + actions |
 | 31 | `StepHeader` | done/current/future, count not percentage |
