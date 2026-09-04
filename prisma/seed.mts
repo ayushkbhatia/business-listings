@@ -23,6 +23,9 @@ import {
   VALVE_TEMPLATE_FIELDS,
 } from "./seed-data.mjs";
 import { DN_SYNONYMS } from "../lib/trade/nominal-size.js";
+// The key and the estimates from the module that owns both — a typo here would
+// be a row nothing reads.
+import { FALLBACK_RAMADAN, RAMADAN_SETTING_KEY } from "../lib/trade/hours.js";
 import { buildProductSearchText, valueAliases } from "../lib/search/index-text.js";
 import { matchLine } from "../lib/quote/match.js";
 import { medianResponseMs, windowStart } from "../lib/metrics/response-time.js";
@@ -224,6 +227,28 @@ async function main() {
 
   console.log("→ plans");
   for (const plan of PLANS) await prisma.plan.create({ data: { ...plan } });
+
+  /*
+   * The Ramadan calendar, as a platform setting.
+   *
+   * Written by migration 20260904180000 and again here, and the second one is
+   * not redundant. `platform_setting` is not in the truncate list above — like
+   * `ranking_weights`, it is reference data rather than fixture data — but a
+   * database built with `db push` rather than `migrate deploy` gets the table
+   * without the migration's INSERT, and this is the path a sibling checkout
+   * takes. The row then does not exist, and the calendar silently falls back to
+   * the compiled estimates: nothing breaks, which is exactly why nobody would
+   * notice it had gone.
+   *
+   * An upsert rather than a create, so reseeding a database that already has it
+   * leaves a corrected calendar alone rather than overwriting somebody's fix
+   * with the estimates.
+   */
+  await prisma.platformSetting.upsert({
+    where: { key: RAMADAN_SETTING_KEY },
+    update: {},
+    create: { key: RAMADAN_SETTING_KEY, value: FALLBACK_RAMADAN },
+  });
 
   console.log("→ areas");
   const areaByslug = new Map<string, string>();
