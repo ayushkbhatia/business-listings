@@ -192,6 +192,42 @@ whose required-reviewer rule needs a paid plan on a private repository, and with
 one committer approves nothing anyway. Not built. The two guards above are what
 the incident actually called for.
 
+### The build refuses to ship code the database cannot serve
+
+The ordering table above is a rule, and until 2026-09-04 nothing checked it. On
+that day seven migrations from #75, #77, #79 (x3), #80 and #85 sat unapplied
+while their code ran in production. The home page, every category shelf, every
+storefront, `/pricing` and `/search` returned 500 for about six hours. Only the
+build-time prerenders kept serving — `/categories`, `/guides`, `robots.txt` —
+which made it look like a runtime connection failure rather than a schema one.
+
+`pnpm check:schema-deployed` now runs inside `pnpm build`, before `next build`.
+On a Vercel **production** build with migrations pending it exits non-zero, the
+deployment is marked ERROR, and Vercel keeps serving the previous one — which is
+the point. The site stays up on the schema it already matches.
+
+It is not in `scripts/vercel-ignore-build.sh`, which would be cheaper: Vercel
+runs the Ignored Build Step before installing dependencies, so there is no `pg`
+and no `tsx` in that container.
+
+It fails towards deploying, for the same reason the ignore script does. No
+database URL, an unreachable database, or any build that is not production: all
+pass.
+
+| Situation | Build |
+|---|---|
+| Nothing pending | proceeds |
+| Preview build, anything pending | proceeds |
+| No `DIRECT_URL` / `DATABASE_URL`, or unreachable | proceeds, with a note |
+| **Production build, migrations pending** | **refused** |
+| Production, and `ALLOW_PENDING_MIGRATIONS` names every pending migration | proceeds |
+
+`ALLOW_PENDING_MIGRATIONS` exists for the one legitimate case in the ordering
+table: a migration that drops or renames something lands *after* the merge, so
+it is pending while its own build runs. It is deliberately not a boolean — it
+must name every pending migration, so that a value set for one deploy cannot
+silently cover the next. Set it on the deployment, never on the project.
+
 ## Preview builds are opt-in
 
 Every push to every branch used to trigger a preview build. Since
