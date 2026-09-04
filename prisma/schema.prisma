@@ -81,6 +81,7 @@ model User {
   invitesSent         TeamInvite[]           @relation("InviteSender")
   claimsMade          ClaimSubmission[]      @relation("ClaimClaimant")
   onboardingDrafts    OnboardingDraft[]      @relation("OnboardingDraftUser")
+  categoryActivityCleared BusinessCategory[]  @relation("CategoryActivityClearedBy")
   visitsRequested     SiteVisitRequest[]     @relation("VisitRequester")
   conflictsResolved   ClaimConflict[]        @relation("ConflictResolvedBy")
   licenceImports      LicenceImportRun[]     @relation("IngestActor")
@@ -446,6 +447,17 @@ model Business {
   establishedYear  Int?          @map("established_year")
   teamSize         TeamSizeBand? @map("team_size")
   languages        String[]      @default([])
+  /// The trading activity as the licence register words it, carried over from
+  /// `StagedListing.activity` at import.
+  ///
+  /// Kept as the registry's own prose rather than a code: the exports word it
+  /// differently per emirate and free zone, and a normalised enum would be a
+  /// mapping table that is wrong for the thirty-seventh authority. Board 2c
+  /// reads it to decide whether a category a seller picked is one their licence
+  /// covers — a paint trader receiving electrical RFQs is the failure this
+  /// prevents. Null where the import carried none, which is not the same as
+  /// covering nothing: an absent activity flags nothing.
+  licenceActivity  String?       @map("licence_activity")
   description      String?
   /// "30 days on approved account", "50% advance, balance on delivery".
   ///
@@ -625,16 +637,38 @@ model Business {
 }
 
 /// Additional categories beyond the primary one.
+/// An extra category a listing sits in, beyond its primary one.
+///
+/// The primary lives on `Business.primaryCategoryId` and is a moderated field —
+/// changing it goes through `ListingChangeRequest`, so a person has already
+/// looked at it. These are chosen freely on board 2c up to the plan's cap, which
+/// is why the activity check lives here and not there.
 model BusinessCategory {
   businessId String   @map("business_id")
   categoryId String   @map("category_id")
   createdAt  DateTime @default(now()) @map("created_at")
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  /// Set when the category matched nothing in the licence's stated activity.
+  ///
+  /// Board 2c, criterion 8: the chip is **accepted** — a seller is not refused
+  /// mid-form on a text match against registry prose — and flagged for a
+  /// reviewer, and the listing is left out of fan-outs *in this category* until
+  /// somebody clears it. Silently accepting would let a paint trader receive
+  /// electrical RFQs; silently refusing would tell a legitimate seller their own
+  /// licence is wrong. Null once a reviewer has cleared it, and null from the
+  /// start where the activity did cover it.
+  unverifiedActivityAt DateTime? @map("unverified_activity_at")
+  /// Who cleared the flag, so the decision has an author.
+  clearedById          String?   @map("cleared_by_id") @db.Uuid
+
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category  Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  clearedBy User?    @relation("CategoryActivityClearedBy", fields: [clearedById], references: [id], onDelete: SetNull)
 
   @@id([businessId, categoryId])
   @@index([categoryId])
+  /// The reviewer's queue: every flag still standing, oldest first.
+  @@index([unverifiedActivityAt])
   @@map("business_category")
 }
 
@@ -2131,6 +2165,19 @@ model Plan {
   productLimit      Int?    @map("product_limit")
   locationLimit     Int?    @map("location_limit")
   photoLimit        Int?    @map("photo_limit")
+  /// How many categories a listing may sit in, **including the primary one**.
+  ///
+  /// Board 2c counts this two ways on one screen and they are both right: the
+  /// extras field says "2 of 2 extra used on Basic" — the allowance, which is
+  /// this number minus the primary — and the strength meter says "3 categories
+  /// chosen", the total. A single counter would have to be wrong on one of them.
+  ///
+  /// Null is unlimited, the same convention as the other caps here. It matters
+  /// more than the rest of them: category membership is the join the enquiry
+  /// fan-out matches on, so a seller in one category receives one category's
+  /// demand. That is what makes the ladder mean something rather than being a
+  /// paywall detail.
+  categoryLimit     Int?    @map("category_limit")
   teamSeats         Int     @map("team_seats")
   rankingMultiplier Float   @default(1) @map("ranking_multiplier")
   customDomain      Boolean @default(false) @map("custom_domain")

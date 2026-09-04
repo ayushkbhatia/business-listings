@@ -2,16 +2,14 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "business-listings",
+      "name": "profile-dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["dev"],
-      "port": 3000
-    },
-    {
-      "name": "prod",
-      "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["start"],
-      "port": 3000
+      "runtimeArgs": [
+        "dev",
+        "--port",
+        "3214"
+      ],
+      "port": 3214
     }
   ]
 }

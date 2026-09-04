@@ -318,7 +318,21 @@ export function ListingCard({
     */
     return (
       <Card as="article" elevation="flat" interactive selected={selected} padded={false}>
-        <div className="flex flex-col overflow-hidden sm:flex-row">
+        {/*
+           A container query, not a media query.
+
+           The row reflows on its **own** width rather than the window's, which
+           is the difference between a card that works wherever it is put and one
+           that only works in the results column it was drawn for. Board 2c puts
+           this exact component in a 470px rail as a live preview, where the
+           viewport is a desktop and the card is not — under `sm:` it kept the
+           three-column row and squeezed the name to one word a line.
+
+           The thresholds are chosen so nothing on `1c` moves: the results column
+           is far wider than 24rem on a desktop and narrower than it on a phone,
+           which is where the old breakpoints already put it.
+        */}
+        <div className="@container/row flex flex-col overflow-hidden @sm/row:flex-row">
           {/*
              Always reserved, even with nothing in it. A row whose height
              depends on whether a seller uploaded a photo makes the list jump,
@@ -329,7 +343,7 @@ export function ListingCard({
              aspect-ratio here would make an empty listing taller than a full
              one, which is the list jumping for the worst possible reason.
           */}
-          <div className="relative h-32 w-full shrink-0 self-stretch sm:h-auto sm:w-[214px]">
+          <div className="relative h-32 w-full shrink-0 self-stretch @sm/row:h-auto @sm/row:w-[214px]">
             {business.coverImageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
@@ -353,7 +367,7 @@ export function ListingCard({
             )}
           </div>
 
-          <div className="flex min-w-0 flex-1 flex-col gap-5 p-4 lg:flex-row lg:gap-6">
+          <div className="flex min-w-0 flex-1 flex-col gap-5 p-4 @3xl/row:flex-row @3xl/row:gap-6">
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="min-w-0 text-h2 text-ink">
@@ -400,7 +414,7 @@ export function ListingCard({
             </div>
 
             {/* Where the decision happens. */}
-            <div className="flex shrink-0 flex-col gap-2 lg:w-[196px] lg:border-s lg:border-line-mid lg:ps-5">
+            <div className="flex shrink-0 flex-col gap-2 @3xl/row:w-[196px] @3xl/row:border-s @3xl/row:border-line-mid @3xl/row:ps-5">
               {business.ratingOverall != null && (
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-h1 font-medium tabular-nums text-ink">
