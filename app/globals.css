@@ -576,4 +576,15 @@
   --transition-state:   var(--t-state);
   --transition-reveal:  var(--t-reveal);
   --transition-overlay: var(--t-overlay);
+
+  /* One breakpoint the default six do not carry.
+
+     Board 13f draws its three-column legal layout at 1200px and its
+     two-column one below that, and 1200 falls between `lg` (1024) and `xl`
+     (1280). Written as `min-[75rem]:` it silently loses: Tailwind emits
+     arbitrary media variants *before* the named breakpoints, so `md:` sits
+     later in the stylesheet, wins on order, and the rail lands under the
+     measure at every width. Naming it sorts it by value, which is the only
+     thing that makes it beat `md:`. */
+  --breakpoint-wide: 75rem;
 }

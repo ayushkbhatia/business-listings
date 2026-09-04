@@ -32,7 +32,11 @@ they 404 until their handoff.
 /:emirate/:area/:category               Area landing page                     [6a]  built h5s3
 /lp/:campaign                           Campaign landing                     [10i]  built h5s5
 /report/:subject                        Report a listing (modal route)       [10j]
-/terms · /privacy · /verification-policy · /review-policy                    [10j]  built h5s5
+/terms                                  Terms of use, 16 clauses             [13f]  built h7s1
+/privacy                                Privacy policy, 12 sections          [13g]  built h7s1
+/cookies                                Cookie policy + 9-cookie register    [13h]  built h7s1
+/cookies/settings                       Consent toggles                       later
+/verification-policy · /review-policy                                        [10j]  built h5s5
 /signin · /signup · /verify · /reset                                          [7a]  built h2s2
 /for-buyers                             Buyer entry surface                         built h5s7
 /list-your-business                     Supplier entry surface                      built h5s7

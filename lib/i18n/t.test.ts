@@ -61,7 +61,25 @@ describe("the catalogue itself", () => {
     // "order" is allowed inside "made to order" and "indent order" — those
     // describe the seller's own process, not a platform order entity.
     const banned = /\b(cart|checkout|payout|GMV|refund)\b/i;
+
+    /*
+       One key, by name, with its reason — the same exemption
+       `scripts/check-vocabulary.sh` carries, in the same words.
+
+       The ban is on naming things that do not exist here: no cart, no
+       checkout, and no refund of buyer money, because the platform never holds
+       any. Clause 08 of the terms of use is the one place the word is about
+       money we do take — a subscription fee — and what it says is that a
+       part-used term is not paid back. Board 13f pre-flighted it on exactly
+       that reading. The alternative is rewriting a cancellation clause to suit
+       a regular expression.
+
+       Anything else in the catalogue saying "refund" still fails.
+    */
+    const exempt = new Set(["legal.terms.08.p2"]);
+
     for (const [key, value] of Object.entries(en)) {
+      if (exempt.has(key)) continue;
       const strings = typeof value === "string" ? [value] : Object.values(value);
       for (const s of strings) expect(s, key).not.toMatch(banned);
     }

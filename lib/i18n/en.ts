@@ -821,6 +821,7 @@ export const en = {
   "chrome.privacy": "Privacy",
   "chrome.verification_policy": "How we verify",
   "chrome.review_policy": "Review policy",
+  "chrome.cookies": "Cookies",
   "chrome.footer_nav": "Policies",
   "chrome.footer_count": "{count} listed businesses across seven emirates.",
   "chrome.directory": "Directory",
@@ -3908,12 +3909,292 @@ export const en = {
   "legal.effective": "In effect since {date}",
   "legal.updated": "Last changed {date}",
   "legal.kind.terms": "Terms of use",
-  "legal.kind.privacy": "Privacy",
+  "legal.kind.privacy": "Privacy policy",
   "legal.kind.verification_policy": "Verification policy",
   "legal.kind.review_policy": "Review policy",
   "legal.others": "The other policies",
   "legal.missing": "This policy has not been written yet.",
   "legal.missing_body": "That is a gap rather than a position. Nothing here is being withheld — ask us and we will answer while it is written.",
+
+  // ── Legal pages, boards 13f/13g/13h ───────────────────────────────────────
+  //
+  // Three documents — sixteen clauses, twelve sections, five sections and a
+  // register of nine cookies — and one `LegalPage` template that renders all
+  // three. The prose is here rather than in `legal_page` rows because these are
+  // the pages CLAUDE.md's localisation rule is actually about: 13g open
+  // question 1 says they are the ones most likely to be legally required in
+  // Arabic, and a translator quotes on a catalogue, not on a database.
+  //
+  // Anchors are an API. `docs/routes.md` and 13f §2 both say so: support
+  // replies, the claim flow and the acceptance checkboxes deep-link to a
+  // clause, so a renumbering keeps the old id as an alias rather than breaking
+  // the link. The numbers below are part of the id and not decoration.
+  "legal.on_this_page": "On this page",
+  "legal.siblings": "The other four",
+  "legal.glance": "At a glance",
+  "legal.versions": "Previous versions",
+  "legal.version_current": "Current",
+  "legal.version_view": "View",
+  "legal.versions_first": "This is the first published version.",
+  "legal.contents_summary": "Contents",
+  "legal.print_source": "{url} — {version}",
+  "legal.kind.cookies": "Cookie policy",
+
+  // ── 13f · Terms of use ────────────────────────────────────────────────────
+  "legal.terms.title": "Terms of use",
+  "legal.terms.meta": "Updated 4 Sep 2026 · 16 clauses · UAE law · DIFC Courts",
+  "legal.terms.glance.1": "We publish licence data and let businesses correct it.",
+  "legal.terms.glance.2": "We never sell goods, take payment for goods or hold funds.",
+  "legal.terms.glance.3": "Verified means a document was checked, with a date on it.",
+  "legal.terms.glance.4": "Placement is not for sale, and sponsored is labelled.",
+  "legal.terms.glance.5": "Plans renew until cancelled; part-used terms are not refunded.",
+  "legal.terms.glance.6": "Liability capped at fees paid, or AED 1,000, whichever is greater.",
+
+  "legal.terms.01.heading": "Who we are",
+  "legal.terms.01.p1": "Business Listings operates businesslistings.me, a directory of businesses licensed in the United Arab Emirates. We publish business information from public licence records and from businesses themselves, and we put buyers in touch with suppliers. In these terms, **we** means Business Listings and **you** means anyone using the site, as a buyer, as a business, or as a visitor who never signs in.",
+  "legal.terms.01.p2": "We are not a party to any transaction between a buyer and a supplier, and we do not guarantee price, quality, timing or delivery. We do not sell goods, take payment for goods, hold funds, or ship, install or service anything. Where a supplier invoices you, they invoice you directly and on their own terms. The only money we take is a subscription fee from businesses on a paid plan, and a fee for placements labelled as sponsored.",
+
+  "legal.terms.02.heading": "Accepting these terms",
+  "legal.terms.02.p1": "Using the site means accepting these terms. Creating an account, claiming a listing, sending an enquiry or subscribing to a plan each means accepting them again as they stand on that day.",
+  "legal.terms.02.p2": "If you accept on behalf of a company, you confirm you are authorised to bind it. Where a signed agreement exists between us and your company, that agreement prevails over these terms to the extent the two conflict.",
+
+  "legal.terms.03.heading": "Your account",
+  "legal.terms.03.p1": "You must be 18 or older to hold an account. You are responsible for what happens under your login, including what your colleagues do with the roles you grant them. Tell us at once if you think someone else has access.",
+  "legal.terms.03.p2": "We identify accounts by mobile number and one-time code, so keeping your number current matters: losing the number can mean losing access to the listing attached to it. Recovery then needs the same ownership evidence as a fresh claim.",
+  "legal.terms.03.p3": "One person holds one account. One business has one live listing per trade licence. Duplicate listings for the same licence are merged, and the earlier verified claim wins.",
+
+  "legal.terms.04.heading": "What we publish",
+  "legal.terms.04.p1": "Listings come from two places: licence records published by UAE authorities, and information a business gives us after claiming its listing. A business can correct its own record at any time, and anyone can report a listing that is wrong.",
+  "legal.terms.04.p2": "Until a listing is claimed we publish only what the licence record and other public sources show, and we say on the page that nobody has claimed it. An unclaimed listing carries no badge, no catalogue and no performance figures.",
+  "legal.terms.04.p3": "Where we mark a business as verified, we state what we checked and when. That is a statement about a document, not a recommendation. A badge is removed when the document behind it expires, and verification does not transfer when a listing changes hands.",
+  "legal.terms.04.p4": "Placement in search results is not for sale. Sponsored slots are labelled as sponsored wherever they appear, and no plan buys a position in an unlabelled result. Ranking uses relevance, listing completeness, verification, responsiveness and distance; plan level is capped as a minor factor and never overrides relevance.",
+
+  "legal.terms.05.heading": "Using the directory as a buyer",
+  "legal.terms.05.p1": "The site is free for buyers. You can search, view listings, compare suppliers and send enquiries without paying us anything.",
+  "legal.terms.05.p2": "Prices are not published here. What you get back is a quote from a supplier, valid for the period that supplier states and on that supplier's terms. A quote is an offer from the supplier to you, never from us.",
+  "legal.terms.05.p3": "Send enquiries you mean. Sending one requirement to several suppliers is expected and supported. Fabricating requirements, harvesting contact details, or enquiring in order to sell something to the supplier is not, and we suspend accounts that do it.",
+  "legal.terms.05.p4": "When you accept a quote we release your contact details to that supplier and tell the others the enquiry is closed. What happens after that is between you and the supplier.",
+
+  "legal.terms.06.heading": "Listing a business",
+  "legal.terms.06.p1": "To claim a listing you must hold, or be authorised by the holder of, the trade licence for that business. We ask for licence evidence and check it against the authority's record. Claiming a business you do not own is grounds for permanent removal, and we report attempts where the law requires it.",
+  "legal.terms.06.p2": "You are responsible for everything on your listing: trade name, categories, contact details, locations, hours, photographs, specifications and documents. It must be accurate, it must be yours to publish, and it must describe what you actually supply. Do not list goods or services your licence does not cover.",
+  "legal.terms.06.p3": "By publishing content you grant us a non-exclusive, royalty-free licence to host, resize, cache and display it on the site and in the search results and feeds that point to it, for as long as your listing is live and for a reasonable period afterwards in cached and archived copies.",
+  "legal.terms.06.p4": "Answer enquiries or turn the category off. Response rate and response time are published on your listing because buyers ask for them, and a listing that never replies is downgraded in ranking before it is delisted.",
+
+  "legal.terms.07.heading": "Reviews",
+  "legal.terms.07.p1": "Reviews are written by buyers, not by us. We publish a review when we can tie it to an account, and we keep it up whether it flatters the business or not. A business may reply once to each review, publicly.",
+  "legal.terms.07.p2": "We remove reviews that are abusive, that identify individuals, that are written by the business or a competitor, or that concern a transaction we can establish never happened. We do not remove a review because it is negative, and we do not sell removals. The review policy sets out the detail.",
+
+  "legal.terms.08.heading": "Plans, fees and VAT",
+  "legal.terms.08.p1": "A listing is free. Paid plans add catalogue capacity, enquiry volume, team seats, analytics and sponsored placement, priced on the pricing page in dirhams.",
+  "legal.terms.08.p2": "Plans renew automatically for the same term until cancelled. Cancel before the renewal date and the plan runs to the end of the term you paid for; we do not refund part-used terms. Cancelling does not delete your listing, it returns it to the free plan, and anything above the free limits is hidden rather than deleted.",
+  "legal.terms.08.p3": "Prices exclude VAT. UAE VAT at 5% is added where it applies, and we issue a tax invoice showing our TRN and yours where you have given it to us. Give us the correct TRN: we cannot reissue an invoice to correct one after the tax period it falls in has closed.",
+  "legal.terms.08.p4": "If a payment fails we retry, tell you, and keep the plan live for a grace period before it reverts to free. Sponsored placement stops immediately on non-payment.",
+
+  "legal.terms.09.heading": "Acceptable use",
+  "legal.terms.09.p1": "Do not scrape or crawl beyond what our robots file allows, bulk-extract listings or contact details, or build a competing directory from ours. Do not use automated means to send enquiries, register accounts or post reviews.",
+  "legal.terms.09.p2": "Do not impersonate a business or a member of our staff, upload malware, attempt to reach data or systems that are not yours, or use the site to send anything UAE law prohibits.",
+  "legal.terms.09.p3": "Contact details are published so that buyers can reach suppliers. Using them for marketing lists, unsolicited bulk contact or resale is a misuse of the site and ends access to it.",
+
+  "legal.terms.10.heading": "Intellectual property",
+  "legal.terms.10.p1": "The site, its design, our name and marks, the category taxonomy and the specification templates are ours. Business names, logos and listing content belong to the businesses they describe. You may link to any page and quote a short extract with attribution; you may not copy the directory or any substantial part of it.",
+
+  "legal.terms.11.heading": "Suspension, removal and appeals",
+  "legal.terms.11.p1": "We can hide, downgrade or remove a product, a listing, a review or an account where it breaks these terms, where the document behind a verification has lapsed, where a licence appears cancelled, or where we are required to. We act on the narrowest thing that fixes it: a product before a listing, a listing before an account.",
+  "legal.terms.11.p2": "We tell you what we did and why, on the listing and by message. You may appeal once, to a person, and we answer within five working days. Where something was removed because a document expired, supplying a current document restores it without an appeal.",
+  "legal.terms.11.p3": "You can close your account and remove your listing's claimed content at any time. The underlying licence record stays published, unclaimed, because it is public information.",
+
+  "legal.terms.12.heading": "Our liability",
+  "legal.terms.12.p1": "We provide the directory as it is. We do not warrant that a listing is accurate, that a supplier is solvent, competent or available, that a quote will be honoured, or that the site will be uninterrupted.",
+  "legal.terms.12.p2": "To the extent the law allows, we are not liable for loss of profit, loss of business, loss of data, or any indirect or consequential loss. Our total liability to you in any twelve-month period is limited to the greater of the fees you paid us in that period and AED 1,000.",
+  "legal.terms.12.p3": "Nothing here excludes liability that cannot be excluded under UAE law, including liability for fraud.",
+
+  "legal.terms.13.heading": "Indemnity",
+  "legal.terms.13.p1": "If you publish a listing, you cover us against third-party claims arising from what you published or supplied: infringement, misdescription, defective goods, or a dispute with a buyer. That includes reasonable legal costs.",
+
+  "legal.terms.14.heading": "Changes to these terms",
+  "legal.terms.14.p1": "We change these terms when the product or the law changes. Material changes are announced on the site and messaged to account holders at least fourteen days before they take effect, and every previous version stays on this page with the date it applied from.",
+  "legal.terms.14.p2": "Using the site after a change takes effect means accepting it. If you do not accept it, cancel your plan and close your account before that date.",
+
+  "legal.terms.15.heading": "Governing law and disputes",
+  "legal.terms.15.p1": "These terms are governed by the laws of the United Arab Emirates, and disputes are subject to the DIFC Courts.",
+  "legal.terms.15.p2": "Before filing anything, write to legal@businesslistings.me. We answer substantive complaints within ten working days, and most matters end there.",
+
+  "legal.terms.16.heading": "Contact",
+  "legal.terms.16.p1": "Write to legal@businesslistings.me, or use the report link on any listing if the problem is with a specific business. For data questions write to privacy@businesslistings.me. Our registered name, licence number and address appear on every tax invoice we issue.",
+
+  // ── 13g · Privacy policy ──────────────────────────────────────────────────
+  //
+  // §04 is not boilerplate. It states in policy language exactly what the
+  // enquiry fan-out already does, which is why `lib/enquiry/payload.test.ts`
+  // names this section: adding `buyer.phone` to the payload has to fail a test
+  // that points here, or the policy drifts from the code and that is a
+  // compliance problem rather than a copy one.
+  "legal.privacy.title": "Privacy policy",
+  "legal.privacy.meta": "Updated 4 Sep 2026 · UAE PDPL · Federal Decree-Law 45 of 2021",
+  "legal.privacy.glance.1": "An enquiry goes only to the suppliers you picked.",
+  "legal.privacy.glance.2": "Your phone and email are withheld until you accept a quote.",
+  "legal.privacy.glance.3": "We do not sell personal data and run no ad networks.",
+  "legal.privacy.glance.4": "Enquiry threads five years, invoices five years, analytics 26 months.",
+  "legal.privacy.glance.5": "Primary storage is in the UAE; four processors sit outside it.",
+  "legal.privacy.glance.6": "Copies, corrections and deletions: privacy@businesslistings.me.",
+
+  "legal.privacy.01.heading": "What this covers",
+  "legal.privacy.01.p1": "This policy covers businesslistings.me and the accounts behind it, for buyers, for businesses, and for visitors who never sign in. It is written to the UAE Personal Data Protection Law, Federal Decree-Law 45 of 2021. Business Listings is the controller of the data described here.",
+  "legal.privacy.01.p2": "Business information published from a trade licence is public record. Where a licence record contains an individual's name, we publish the trade name and withhold the rest unless the business chooses to publish it.",
+
+  "legal.privacy.02.heading": "What we collect",
+  "legal.privacy.02.e1": "From you",
+  "legal.privacy.02.p1": "Mobile number, name, email, company name, and the text and attachments of the enquiries and reviews you write. From businesses: trade licence, TRN, the identity document of the person signing the claim, and everything you publish on your listing. Card details are entered with our payment processor and never reach us.",
+  "legal.privacy.02.e2": "From your use of the site",
+  "legal.privacy.02.p2": "IP address, the approximate location derived from it, device and browser, pages viewed, searches run, listings opened, contact reveals, and the cookies listed in the cookie policy.",
+  "legal.privacy.02.e3": "From public and third-party sources",
+  "legal.privacy.02.p3": "UAE licensing authorities, sanctions screening for paid accounts, map and geocoding providers, and our payment processor's confirmation that a charge succeeded.",
+
+  "legal.privacy.03.heading": "Why we use it",
+  "legal.privacy.03.p1": "Every use below is either necessary to run the service you asked for, required of us by law, or consented to. Where we rely on consent you can withdraw it.",
+  "legal.privacy.03.caption": "Eight purposes, and the data each one uses",
+  "legal.privacy.03.col.purpose": "Purpose",
+  "legal.privacy.03.col.data": "What it uses",
+  "legal.privacy.03.r1.purpose": "Run your account and keep it secure",
+  "legal.privacy.03.r1.data": "Mobile number, one-time codes, session cookies",
+  "legal.privacy.03.r2.purpose": "Deliver an enquiry to the suppliers you chose",
+  "legal.privacy.03.r2.data": "Requirement, quantity, location, first name, company, attachments",
+  "legal.privacy.03.r3.purpose": "Withhold your contact details until you accept",
+  "legal.privacy.03.r3.data": "Phone and email, held back from the enquiry payload",
+  "legal.privacy.03.r4.purpose": "Publish and rank listings",
+  "legal.privacy.03.r4.data": "Licence records, listing content, response times",
+  "legal.privacy.03.r5.purpose": "Verify a business",
+  "legal.privacy.03.r5.data": "Trade licence, TRN, signatory identity",
+  "legal.privacy.03.r6.purpose": "Bill a plan and meet tax rules",
+  "legal.privacy.03.r6.data": "Company details, TRN, payment records",
+  "legal.privacy.03.r7.purpose": "Measure and improve the site",
+  "legal.privacy.03.r7.data": "Pageviews, searches, contact reveals, in aggregate",
+  "legal.privacy.03.r8.purpose": "Detect fraud, scraping and fake reviews",
+  "legal.privacy.03.r8.data": "Device signals, enquiry patterns, IP",
+
+  "legal.privacy.04.heading": "Who sees your enquiry",
+  "legal.privacy.04.p1": "Only the suppliers you selected. An enquiry sent to four suppliers reaches those four and nobody else. Suppliers do not see one another and do not see how many others you asked.",
+  "legal.privacy.04.p2": "They receive your requirement, quantity, location, timeframe, first name, company name and any attachment. They do not receive your phone number or your email. Those are released when you accept a quote, or when you reply to one supplier and choose to reveal them.",
+  "legal.privacy.04.p3": "We keep the thread so that a dispute has a record, and we count the enquiry so that response rate and response time can be published. We do not sell enquiries, and we never pass one to a supplier you did not choose.",
+
+  "legal.privacy.05.heading": "Who else we share with",
+  "legal.privacy.05.p1": "Processors who run parts of the service under contract: hosting, SMS delivery, email delivery, payment processing, error monitoring and maps. They act on our instructions and may not use your data for anything else.",
+  "legal.privacy.05.p2": "Authorities where the law requires it, and our advisers where a claim requires it. Reviews and published listing content are, by design, visible to the world and indexed by search engines.",
+  "legal.privacy.05.p3": "We do not sell personal data. We run no third-party advertising networks on the site, so there is no audience-sharing with ad platforms.",
+
+  "legal.privacy.06.heading": "Where your data goes",
+  "legal.privacy.06.p1": "Primary storage is in the United Arab Emirates. Some processors operate outside it, specifically SMS routing, email delivery, error monitoring and payment processing. Where data leaves the UAE we rely on the adequacy findings or contractual safeguards the PDPL requires, and we will give you the current list of processors and their locations on request.",
+
+  "legal.privacy.07.heading": "How long we keep it",
+  "legal.privacy.07.caption": "Eight kinds of record, how long each is kept, and why",
+  "legal.privacy.07.col.what": "What",
+  "legal.privacy.07.col.how_long": "How long",
+  "legal.privacy.07.col.why": "Why",
+  "legal.privacy.07.r1.what": "Account and login records",
+  "legal.privacy.07.r1.how_long": "While open, then 12 months",
+  "legal.privacy.07.r1.why": "Recovery and dispute",
+  "legal.privacy.07.r2.what": "Enquiries and quote threads",
+  "legal.privacy.07.r2.how_long": "5 years from the last message",
+  "legal.privacy.07.r2.why": "Dispute record",
+  "legal.privacy.07.r3.what": "Response-time and reveal counts",
+  "legal.privacy.07.r3.how_long": "Aggregated; unlinked after 24 months",
+  "legal.privacy.07.r3.why": "Published performance figures",
+  "legal.privacy.07.r4.what": "Verification documents",
+  "legal.privacy.07.r4.how_long": "12 months after expiry or removal",
+  "legal.privacy.07.r4.why": "Proof of what we checked",
+  "legal.privacy.07.r5.what": "Invoices and tax records",
+  "legal.privacy.07.r5.how_long": "5 years",
+  "legal.privacy.07.r5.why": "UAE tax law",
+  "legal.privacy.07.r6.what": "Reviews",
+  "legal.privacy.07.r6.how_long": "While published",
+  "legal.privacy.07.r6.why": "A review must not vanish on request",
+  "legal.privacy.07.r7.what": "Analytics events",
+  "legal.privacy.07.r7.how_long": "26 months",
+  "legal.privacy.07.r7.why": "Trend reporting",
+  "legal.privacy.07.r8.what": "Support messages",
+  "legal.privacy.07.r8.how_long": "3 years",
+  "legal.privacy.07.r8.why": "The history of a complaint",
+  "legal.privacy.07.p1": "When an account closes we delete what nothing above requires us to keep, and reduce the reviewer's name on published reviews to an initial.",
+
+  "legal.privacy.08.heading": "Your rights",
+  "legal.privacy.08.p1": "You can ask for a copy of what we hold, correct it, delete it, restrict or object to a use, withdraw a consent, or ask about any automated decision that affects you. Write to privacy@businesslistings.me from the email or number on the account and we answer within 30 days.",
+  "legal.privacy.08.p2": "Four limits worth knowing. We keep invoices and tax records for the statutory period whatever you ask. We keep an enquiry thread the other party also relies on. A published review is not deleted on request. And the licence record behind a listing is public information that we cannot unpublish.",
+  "legal.privacy.08.p3": "If we get it wrong you can complain to the UAE Data Office. Tell us first, because we would rather fix it.",
+
+  "legal.privacy.09.heading": "Security",
+  "legal.privacy.09.p1": "Traffic is encrypted in transit. Documents are stored encrypted, and access is limited to the staff whose role requires it. Every staff action on a business record is logged with the reason for it. Verification documents are visible to moderators, never to other businesses and never on a public page.",
+  "legal.privacy.09.p2": "If data is exposed we tell the people affected and the Data Office within the period the PDPL sets, and we say what happened rather than that an incident occurred.",
+
+  "legal.privacy.10.heading": "Cookies",
+  "legal.privacy.10.p1": "What we set, why, and how to turn the optional ones off is in the cookie policy. Essential cookies keep you signed in and are set on load; nothing else is set until you choose.",
+
+  "legal.privacy.11.heading": "Children",
+  "legal.privacy.11.p1": "The site is for business use and is not directed at anyone under 18. We do not knowingly collect data from children, and we delete it if we find it.",
+
+  "legal.privacy.12.heading": "Changes and contact",
+  "legal.privacy.12.p1": "We post changes here with the date they take effect and keep every previous version. Material changes are messaged to account holders.",
+  "legal.privacy.12.p2": "Rights requests and privacy questions: privacy@businesslistings.me. Everything else: legal@businesslistings.me. Our data protection contact is named in the reply you get.",
+
+  // ── 13h · Cookie policy ───────────────────────────────────────────────────
+  //
+  // The register in §02 is a contract, not a description: it names every cookie
+  // the application is permitted to set. `lib/legal/cookie-register.ts` holds
+  // the same nine names as data so a crawl can assert against them, and 13h §3
+  // asks for the CI job that makes the two agree.
+  "legal.cookies.title": "Cookie policy",
+  "legal.cookies.meta": "Updated 4 Sep 2026 · 9 cookies · 4 categories",
+  "legal.cookies.glance.1": "Essential cookies only, until you choose otherwise.",
+  "legal.cookies.glance.2": "Nine cookies in four categories, every one of them listed.",
+  "legal.cookies.glance.3": "Analytics declined means no identifier is set at all.",
+  "legal.cookies.glance.4": "No third-party advertising, retargeting or social trackers.",
+  "legal.cookies.glance.5": "Global Privacy Control is honoured without asking again.",
+  "legal.cookies.glance.6": "Change your answer from the footer, any time.",
+
+  "legal.cookies.01.heading": "What a cookie does here",
+  "legal.cookies.01.p1": "A cookie is a small file the site asks your browser to keep. We use them to keep you signed in, to remember choices such as language and emirate, and to count what gets used. We use browser storage for the same purposes, and this policy covers both.",
+  "legal.cookies.01.p2": "Essential cookies are set when the site loads, because it cannot work without them. Everything else waits for your answer on the banner, and declining leaves the site fully usable.",
+
+  "legal.cookies.02.heading": "What we set",
+  "legal.cookies.02.caption": "The nine cookies this site may set, in four categories",
+  "legal.cookies.02.col.name": "Name",
+  "legal.cookies.02.col.purpose": "Purpose",
+  "legal.cookies.02.col.life": "Life",
+  "legal.cookies.02.band.essential": "Essential — set on load",
+  "legal.cookies.02.band.preferences": "Preferences — set on use",
+  "legal.cookies.02.band.analytics": "Analytics — optional",
+  "legal.cookies.02.band.advertising": "Advertising — optional",
+  "legal.cookies.02.bl_session.purpose": "Keeps you signed in",
+  "legal.cookies.02.bl_session.life": "30 days",
+  "legal.cookies.02.bl_csrf.purpose": "Blocks forged form submissions",
+  "legal.cookies.02.bl_csrf.life": "Session",
+  "legal.cookies.02.bl_consent.purpose": "Remembers your cookie choice",
+  "legal.cookies.02.bl_consent.life": "12 months",
+  "legal.cookies.02.bl_lang.purpose": "Language, English or Arabic",
+  "legal.cookies.02.bl_lang.life": "12 months",
+  "legal.cookies.02.bl_emirate.purpose": "Emirate and area you last browsed",
+  "legal.cookies.02.bl_emirate.life": "90 days",
+  "legal.cookies.02.bl_recent.purpose": "Listings you opened, for the compare tray",
+  "legal.cookies.02.bl_recent.life": "30 days",
+  "legal.cookies.02.bl_a_id.purpose": "Anonymous visit identifier for counting",
+  "legal.cookies.02.bl_a_id.life": "13 months",
+  "legal.cookies.02.bl_a_ses.purpose": "Groups pageviews into a single visit",
+  "legal.cookies.02.bl_a_ses.life": "30 minutes",
+  "legal.cookies.02.bl_sp.purpose": "Sponsored slots already shown, so they are not repeated",
+  "legal.cookies.02.bl_sp.life": "7 days",
+  "legal.cookies.02.p1": "Nine cookies, four categories, and the register above is the whole of it. A cookie not on this list is a defect; report it to privacy@businesslistings.me.",
+
+  "legal.cookies.03.heading": "Your choices",
+  "legal.cookies.03.p1": "The banner appears on the first visit and your answer is remembered for twelve months. Change it any time from Cookie settings in the footer. Withdrawing analytics consent stops collection and clears the identifiers on your next page load.",
+  "legal.cookies.03.p2": "Your browser can block or delete cookies too. Blocking essential cookies signs you out and stops enquiries from sending, so the site says so rather than failing quietly.",
+  "legal.cookies.03.p3": "We honour Global Privacy Control. Where your browser sends the signal, optional categories stay off and the banner records that rather than asking again.",
+
+  "legal.cookies.04.heading": "What we do not do",
+  "legal.cookies.04.p1": "No third-party advertising or retargeting tags. No social-network trackers. No fingerprinting to identify a device where you declined cookies. No selling of what analytics collects, and no passing of enquiry content to any advertising platform.",
+  "legal.cookies.04.p2": "Sponsored placement is sold by position and category, not by following you around. A sponsored result is chosen by what you searched for, not by what you did last week.",
+
+  "legal.cookies.05.heading": "Changes and contact",
+  "legal.cookies.05.p1": "Changes are listed here with the date they take effect. Adding a cookie to an optional category asks for your consent again; renaming or shortening an existing one does not. Questions: privacy@businesslistings.me.",
 
   // ── Campaign attribution in the console, criterion 9 ──────────────────────
   "attribution.title": "Where enquiries come from",

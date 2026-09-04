@@ -133,12 +133,26 @@ test.describe("criterion 9 — the tag survives leaving the page", () => {
   });
 });
 
-test.describe("board 10j — the four policies", () => {
+test.describe("board 10j — the policies", () => {
+  /*
+     Two of the original four. Boards 13f, 13g and 13h took `/terms`,
+     `/privacy` and the new `/cookies` onto the `LegalPage` template, which
+     draws a numbered document with a section nav and a rail rather than a
+     title and an effective date — `legal.spec.ts` owns those three. These two
+     are still the wording-in-a-row shape this block was written for, and the
+     assertions below are the ones that stayed true.
+  */
   const POLICIES = [
-    ["/terms", "Terms of use"],
-    ["/privacy", "Privacy"],
     ["/verification-policy", "Verification policy"],
     ["/review-policy", "Review policy"],
+  ] as const;
+
+  const ALL = [
+    "/terms",
+    "/privacy",
+    "/cookies",
+    "/verification-policy",
+    "/review-policy",
   ] as const;
 
   for (const [path, title] of POLICIES) {
@@ -151,24 +165,25 @@ test.describe("board 10j — the four policies", () => {
     });
   }
 
-  test("each links to the other three", async ({ page }) => {
-    await page.goto("/terms");
+  test("each links to the other four", async ({ page }) => {
+    await page.goto("/review-policy");
     const others = page.getByRole("navigation", { name: "The other policies" });
-    await expect(others.getByRole("link", { name: "Privacy" })).toBeVisible();
-    await expect(others.getByRole("link", { name: "Verification policy" })).toBeVisible();
-    await expect(others.getByRole("link", { name: "Review policy" })).toBeVisible();
+    await expect(others.getByRole("link")).toHaveCount(4);
+    for (const name of ["Terms of use", "Privacy policy", "Cookie policy", "Verification policy"]) {
+      await expect(others.getByRole("link", { name })).toBeVisible();
+    }
   });
 
   test("the footer's links from every page resolve", async ({ page }) => {
-    // The footer names these on every page on the site. Three working links
+    // The footer names these on every page on the site. Four working links
     // beside a 404 is worse than none.
-    for (const [path] of POLICIES) {
+    for (const path of ALL) {
       const response = await page.goto(path);
       expect(response?.status(), path).toBe(200);
     }
   });
 
-  test("404s on an address that is not one of the four", async ({ page }) => {
+  test("404s on an address that is not one of the five", async ({ page }) => {
     const response = await page.goto("/not-a-policy");
     expect(response?.status()).toBe(404);
   });
