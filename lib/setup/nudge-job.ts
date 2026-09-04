@@ -127,8 +127,6 @@ export interface SetupNudgeSweepResult {
   alreadyNudged: number;
   /** Every task done. Nothing to nudge about. */
   nothingOpen: number;
-  /** Open question 4: only the site visit is left, so it is suppressed. */
-  visitOnly: number;
   /** Threw, and the sweep carried on. */
   failed: number;
   ranAt: Date;
@@ -137,18 +135,18 @@ export interface SetupNudgeSweepResult {
 /**
  * The tasks a nudge may be about.
  *
- * Board 8a's open question 4 asks whether the nudge should fire when only the
- * site visit is left, and answers no: that task waits on our scheduling rather
- * than on the seller, and chasing somebody for our own backlog is the kind of
- * message that teaches people to mute a channel.
+ * Every remaining task is one the seller can finish tonight, which is what this
+ * predicate used to be for: board 8a's open question 4 asked whether to nudge
+ * when only the site visit was left and answered no, because that task waited
+ * on our scheduling rather than on them. The visit was withdrawn, so the
+ * exception went with it and every open task is now theirs by definition.
  *
- * So the visit is dropped from the list rather than special-cased at the end.
- * One rule covers both "nothing is open" and "only the visit is open", and it
- * also keeps the message honest: what the seller reads is work they can go and
- * finish tonight, and the estimate it quotes is the estimate for that work.
+ * Kept as a named predicate rather than inlined, because the message's honesty
+ * depends on it: what the seller reads has to be work they can act on, and the
+ * estimate it quotes has to be the estimate for that work.
  */
 function isOpenAndTheirs(row: { task: Task; done: boolean }): boolean {
-  return !row.done && row.task !== "visit";
+  return !row.done;
 }
 
 export async function sweepSetupNudges(
@@ -159,7 +157,6 @@ export async function sweepSetupNudges(
     nudged: 0,
     alreadyNudged: 0,
     nothingOpen: 0,
-    visitOnly: 0,
     failed: 0,
     ranAt: now,
   };
@@ -205,8 +202,8 @@ export async function sweepSetupNudges(
 
      Affordable because of the window, not by luck: only listings that crossed
      72 hours in the last four days are here, which at any plausible signup rate
-     is a handful. The batch alternative — group-bys over media, products, seats
-     and visits — would be a second implementation of "is this task finished",
+     is a handful. The batch alternative — group-bys over media, products and
+     seats — would be a second implementation of "is this task finished",
      and two answers to that question is the drift `lib/setup/tasks.ts` was
      careful to avoid. If the batch ever gets big enough to matter, the fix is a
      shared batched reader, not a copy of the rule.
@@ -224,8 +221,8 @@ export async function sweepSetupNudges(
          The hub's reader also fetches entitlements, the enquiry lift, view days
          and shortlist counts — everything board 8a renders — and none of that
          decides whether a nudge is owed. It also takes the cached lift by
-         default, which needs a request context this job may not have. The four
-         task rows are what matters here, and `lib/setup/tasks.ts` says in its
+         default, which needs a request context this job may not have. The task
+         rows are what matters here, and `lib/setup/tasks.ts` says in its
          own comment that its targets and estimates are the ones this module
          publishes, so the two cannot disagree about what is finished.
       */
@@ -233,9 +230,7 @@ export async function sweepSetupNudges(
       const open = state.tasks.filter(isOpenAndTheirs);
 
       if (open.length === 0) {
-        const anyOpen = state.tasks.some((task) => !task.done);
-        if (anyOpen) result.visitOnly += 1;
-        else result.nothingOpen += 1;
+        result.nothingOpen += 1;
         continue;
       }
 

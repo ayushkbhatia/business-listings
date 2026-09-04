@@ -8,7 +8,6 @@ import {
 } from "./capabilities";
 import { PermissionError } from "./errors";
 import { ROLES, STAFF_ROLES, type Actor, type Role } from "./roles";
-import { assertCanSetVerificationTier, canSetVerificationTier } from "./subject";
 import { mayRemoveReview } from "./guards";
 
 const actor = (...roles: Role[]): Actor => ({ id: `user_${roles.join("_")}`, roles });
@@ -17,56 +16,38 @@ describe("acceptance criterion 6 — a staff_moderator cannot change a verificat
   /*
    * Rewritten against docs/permissions.md.
    *
-   * This asserted "rejected for every role except ops_lead", which was true of
-   * the inferred matrix and is not true of §07: a field verifier holds the row
-   * too, **only for a visit they recorded**. The criterion itself is unchanged
-   * — a moderator still cannot — but the test around it was asserting a
-   * narrower world than the one the design describes, and would have made the
-   * correct implementation look like a regression.
+   * It asserted "rejected for every role except ops_lead", which was true of
+   * the inferred matrix and then untrue of §07, which gave a field verifier the
+   * row as well **for a visit they recorded**. Site visits were withdrawn and
+   * that conditional half had nothing left to read, so the grant was narrowed
+   * rather than widened and the original assertion is true again — for a
+   * different reason, which is why the history is left here rather than tidied
+   * away.
    */
-  const OWN_VISIT = { businessId: "b1", recordedByStaffId: "user_staff_field" };
-  const SOMEBODY_ELSES = { businessId: "b1", recordedByStaffId: "user_someone_else" };
 
   it("is rejected server-side for a moderator", () => {
     const moderator = actor("staff_moderator");
     expect(can(moderator, "business.verification_tier.write")).toBe(false);
-    expect(() => assertCanSetVerificationTier(moderator, OWN_VISIT)).toThrow(PermissionError);
+    expect(() => assertCan(moderator, "business.verification_tier.write")).toThrow(PermissionError);
   });
 
-  it("is rejected for every role that does not hold the row", () => {
+  it("is rejected for every role except the ops lead", () => {
     for (const role of ROLES) {
-      const holds = role === "staff_ops_lead" || role === "staff_field";
-      expect(can(actor(role), "business.verification_tier.write"), role).toBe(holds);
+      expect(can(actor(role), "business.verification_tier.write"), role).toBe(
+        role === "staff_ops_lead",
+      );
     }
   });
 
-  it("is allowed for ops_lead, with or without a visit", () => {
-    const opsLead = actor("staff_ops_lead");
-    expect(() => assertCanSetVerificationTier(opsLead, OWN_VISIT)).not.toThrow();
-    expect(() => assertCanSetVerificationTier(opsLead, null)).not.toThrow();
-  });
-
-  it("lets a field verifier set a tier only for a visit they recorded", () => {
-    // permissions.md: "it is not a general grant. Enforce with a subject check,
-    // not just a role check."
-    const verifier = actor("staff_field");
-    expect(canSetVerificationTier(verifier, OWN_VISIT)).toBe(true);
-    expect(canSetVerificationTier(verifier, SOMEBODY_ELSES)).toBe(false);
-  });
-
-  it("denies a field verifier where no visit was recorded at all", () => {
-    // A tier change licensed by a visit that did not happen is the thing this
-    // check exists to prevent, so missing information denies.
-    const verifier = actor("staff_field");
-    expect(canSetVerificationTier(verifier, null)).toBe(false);
-    expect(canSetVerificationTier(verifier, { businessId: "b1", recordedByStaffId: null })).toBe(
-      false,
-    );
+  it("is allowed for ops_lead", () => {
+    expect(() =>
+      assertCan(actor("staff_ops_lead"), "business.verification_tier.write"),
+    ).not.toThrow();
   });
 
   it("carries a mono reference code the buyer can quote to support", () => {
     try {
-      assertCanSetVerificationTier(actor("staff_moderator"), OWN_VISIT);
+      assertCan(actor("staff_moderator"), "business.verification_tier.write");
       expect.unreachable("should have thrown");
     } catch (error) {
       expect(error).toBeInstanceOf(PermissionError);
@@ -170,16 +151,18 @@ describe("may* helpers", () => {
   it("are not offered for a subject-dependent row", () => {
     /*
      * A `may*` taking only an actor would answer the wrong question for the
-     * three rows §07 calls subject-dependent, and would answer it optimistically
-     * — a field verifier dimming nothing, a scoped sales seat seeing every
-     * branch. The guard file does not export one, so this asserts the list a
-     * reviewer should check against.
+     * rows §07 calls subject-dependent, and would answer it optimistically — a
+     * scoped sales seat seeing every branch. The guard file does not export
+     * one, so this asserts the list a reviewer should check against.
+     *
+     * `business.verification_tier.write` used to be on it, and is not since
+     * site visits were withdrawn: its subject was the visit that licensed a
+     * field verifier, and it is a plain ops-lead role check now.
      */
     expect(SUBJECT_DEPENDENT.sort()).toEqual(
       [
         "analytics.read",
         "audit.read",
-        "business.verification_tier.write",
         "enquiry.read_other_business",
         "enquiry.respond",
         "quote.send",

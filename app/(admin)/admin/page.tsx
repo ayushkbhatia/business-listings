@@ -165,7 +165,6 @@ export default async function AdminOverviewPage() {
             moderation: String(SLA_DAYS.moderation),
             claim: String(SLA_DAYS.claim),
             report: String(SLA_DAYS.report),
-            visit: String(SLA_DAYS.visit),
             dunning: String(SLA_DAYS.dunning),
           })}
         </p>

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { getOverview } from "@/lib/db/queries/overview";
 import { readEnquiryLift } from "@/lib/metrics/enquiry-lift";
 import { STRONG_ENOUGH } from "@/lib/metrics/profile-strength";
-import { setupHubState, FALLBACK_SITE_VISIT_FEE_AED } from "@/lib/setup/service";
+import { setupHubState } from "@/lib/setup/service";
 
 /**
  * Board 8a's hub, against a real database.
@@ -110,10 +110,16 @@ describe("the cold start reads honest rather than broken", () => {
     expect(state!.threshold).toBe(STRONG_ENOUGH);
   });
 
-  it("offers all four tasks, and the hero counts four", async () => {
+  it("offers every task, and the hero counts them", async () => {
+    /*
+       Three since site visits were withdrawn. The fourth was the site visit,
+       and it was the reason this hub could never be finished: it closed on our
+       scheduling rather than the seller's work, so `openCount` never reached
+       zero however much a supplier did.
+    */
     const state = await hub();
 
-    expect(state!.openCount).toBe(4);
+    expect(state!.openCount).toBe(3);
     expect(state!.doneCount).toBe(0);
     expect(state!.openMinutes).toBe(
       state!.tasks.reduce((total, task) => total + task.minutes, 0),
@@ -136,7 +142,7 @@ describe("the cold start reads honest rather than broken", () => {
     const state = await hub();
     const points = Object.fromEntries(state!.tasks.map((task) => [task.id, task.points]));
 
-    expect(points).toEqual({ photos: 20, products: 20, team: 10, visit: 0 });
+    expect(points).toEqual({ photos: 20, products: 20, team: 10 });
   });
 
   it("names the rest of the meter, so a hundred is reachable", async () => {
@@ -151,22 +157,11 @@ describe("the cold start reads honest rather than broken", () => {
     expect(uncarded).toEqual(["identity", "filterableSpecs"]);
   });
 
-  it("knows the plan and what a site visit would cost on it", async () => {
+  it("knows the plan the seller is on", async () => {
     const state = await hub();
 
     expect(state!.plan).not.toBeNull();
     expect(state!.plan!.id).toBe("free");
-    // A price, whatever the setting says. Zero here would tell a Free seller
-    // the top badge costs nothing.
-    expect(state!.siteVisitFeeAed).toBeGreaterThan(0);
-
-    const setting = await prisma.platformSetting.findUnique({
-      where: { key: "site_visit_fee_aed" },
-      select: { value: true },
-    });
-    // Board 8a's own open question 2: the drawn figure is unconfirmed against
-    // pricing, so it lives in a setting and the compiled number is the floor.
-    if (setting === null) expect(state!.siteVisitFeeAed).toBe(FALLBACK_SITE_VISIT_FEE_AED);
   });
 
   it("promises the one nudge, because it has not been sent", async () => {

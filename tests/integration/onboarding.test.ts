@@ -378,9 +378,6 @@ describe("criterion 4 — the four setup tasks", () => {
     expect(TASK_POINTS.photos).toBe(WEIGHTS.photos);
     expect(TASK_POINTS.products).toBe(WEIGHTS.catalogue);
     expect(TASK_POINTS.team).toBe(WEIGHTS.team);
-    // A visit moves trust, not strength, and the hub says so rather than
-    // implying a meter it does not touch.
-    expect(TASK_POINTS.visit).toBe(0);
   });
 
   it("marks the 80% threshold the boards draw", async () => {

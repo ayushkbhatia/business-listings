@@ -1,7 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { auditLog, openReports, priorsFor, resolveReport } from "@/lib/reports/service";
-import { recordVisit, openVisitRequests, visitHistory, MIN_PHOTOS } from "@/lib/visits/service";
 import { setVerificationTier } from "@/lib/verification/service";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
@@ -13,8 +12,8 @@ import type { Actor, Role } from "@/lib/auth/roles";
  *
  * That has been true and tested since step 0. What step 3 adds is the thing
  * that made the *other* half of the rule real: a field verifier may set a tier
- * only for a visit **they** recorded, and until `recordVisit` existed nothing
- * wrote `Business.visitedByStaffId` except the seed. The subject check was
+ * only for a visit **they** recorded. Site visits were withdrawn and the grant
+ * was narrowed to the ops lead rather than widened. The subject check was
  * reading a column no code path filled in.
  */
 
@@ -97,209 +96,44 @@ async function photo(businessId: string, over: Partial<{ lat: number; lng: numbe
 
 const REASON = "Attended the trade counter and the yard. Stock on the shelves, signage matches.";
 
-describe("recording a visit", () => {
-  it("writes the two columns the tier check reads, and nothing else does", async () => {
-    const business = await listing("Visited");
-    const photos = [await photo(business.id), await photo(business.id)];
+describe("the checkpoint — a tier is nobody's but the ops lead's", () => {
+  /*
+     §07 called this row "not a general grant" and enforced it with a subject
+     check: a field verifier could tier a business they had recorded a visit to.
+     Site visits were withdrawn, `Business.visitedByStaffId` went with them, and
+     the conditional half had nothing left to read.
 
-    const result = await recordVisit({
-      actor: actor(fieldOfficerId, "staff_field"),
-      businessId: business.id,
-      visitedAt: new Date(),
-      premisesFound: true,
-      signageMatches: true,
-      stockPresent: true,
-      photos,
-      reason: REASON,
-    });
-    expect(result.ok).toBe(true);
-
-    const after = await prisma.business.findUniqueOrThrow({
-      where: { id: business.id },
-      select: { visitedAt: true, visitedByStaffId: true, verificationTier: true },
-    });
-    expect(after.visitedAt).not.toBeNull();
-    expect(after.visitedByStaffId).toBe(fieldOfficerId);
-    // Recording what somebody found and deciding what it is worth are two
-    // decisions, made by two capabilities.
-    expect(after.verificationTier).toBe(business.verificationTier);
-  });
-
-  it("refuses fewer than two photographs", async () => {
-    const business = await listing("One Photo");
-    const result = await recordVisit({
-      actor: actor(fieldOfficerId, "staff_field"),
-      businessId: business.id,
-      visitedAt: new Date(),
-      premisesFound: true,
-      signageMatches: true,
-      stockPresent: true,
-      photos: [await photo(business.id)],
-      reason: REASON,
-    });
-    expect(result).toMatchObject({ ok: false, error: "needs_photos" });
-    if (result.ok) return;
-    expect(result.message).toContain(String(MIN_PHOTOS));
-  });
-
-  it("refuses a photograph taken outside the UAE", async () => {
-    // A photograph from somewhere else is not evidence about this business.
-    const business = await listing("Wrong Country");
-    const result = await recordVisit({
-      actor: actor(fieldOfficerId, "staff_field"),
-      businessId: business.id,
-      visitedAt: new Date(),
-      premisesFound: true,
-      signageMatches: true,
-      stockPresent: true,
-      photos: [
-        await photo(business.id),
-        await photo(business.id, { lat: 51.5074, lng: -0.1278 }),
-      ],
-      reason: REASON,
-    });
-    expect(result).toMatchObject({ ok: false, error: "outside_the_uae" });
-  });
-
-  it("refuses a moderator — visit.record is ops lead or field", async () => {
-    const business = await listing("Not Theirs");
-    await expect(
-      recordVisit({
-        actor: actor(moderatorId, "staff_moderator"),
-        businessId: business.id,
-        visitedAt: new Date(),
-        premisesFound: true,
-        signageMatches: true,
-        stockPresent: true,
-        photos: [await photo(business.id), await photo(business.id)],
-        reason: REASON,
-      }),
-    ).rejects.toBeInstanceOf(PermissionError);
-  });
-
-  it("keeps what was found, so a tier can be argued with later", async () => {
-    const business = await listing("Evidence");
-    await recordVisit({
-      actor: actor(fieldOfficerId, "staff_field"),
-      businessId: business.id,
-      visitedAt: new Date(),
-      premisesFound: true,
-      signageMatches: false,
-      stockPresent: true,
-      notes: "Signage still shows the previous tenant. Owner says the new board is on order.",
-      photos: [await photo(business.id), await photo(business.id)],
-      reason: REASON,
-    });
-
-    const history = await visitHistory(business.id);
-    expect(history).toHaveLength(1);
-    expect(history[0]!.signageMatches).toBe(false);
-    expect(history[0]!.photos).toHaveLength(2);
-    expect(history[0]!.staff.id).toBe(fieldOfficerId);
-  });
-
-  it("closes the seller's request when the visit answers one", async () => {
-    const business = await listing("Requested");
-    const owner = await prisma.user.create({
-      data: {
-        id: crypto.randomUUID(),
-        fullName: "Visit Owner",
-        roles: ["seller_owner"],
-        businessId: business.id,
-      },
-      select: { id: true },
-    });
-    const request = await prisma.siteVisitRequest.create({
-      data: { businessId: business.id, requestedById: owner.id },
-      select: { id: true },
-    });
-
-    await recordVisit({
-      actor: actor(fieldOfficerId, "staff_field"),
-      businessId: business.id,
-      requestId: request.id,
-      visitedAt: new Date(),
-      premisesFound: true,
-      signageMatches: true,
-      stockPresent: true,
-      photos: [await photo(business.id), await photo(business.id)],
-      reason: REASON,
-    });
-
-    const after = await prisma.siteVisitRequest.findUniqueOrThrow({
-      where: { id: request.id },
-      select: { completedAt: true },
-    });
-    expect(after.completedAt).not.toBeNull();
-
-    const open = await openVisitRequests();
-    expect(open.map((r) => r.id)).not.toContain(request.id);
-  });
-});
-
-describe("the checkpoint — a tier is not a general grant", () => {
-  it("lets the field verifier who recorded the visit set the tier", async () => {
-    const business = await listing("Own Visit");
-    await recordVisit({
-      actor: actor(fieldOfficerId, "staff_field"),
-      businessId: business.id,
-      visitedAt: new Date(),
-      premisesFound: true,
-      signageMatches: true,
-      stockPresent: true,
-      photos: [await photo(business.id), await photo(business.id)],
-      reason: REASON,
-    });
+     Narrowed rather than widened. The failure the subject check existed to
+     prevent — one field verifier tiering a business somebody else checked — is
+     now impossible because no field verifier holds the row at all.
+  */
+  it("lets the ops lead set a tier", async () => {
+    const business = await listing("Ops Tier");
 
     const result = await setVerificationTier({
-      actor: actor(fieldOfficerId, "staff_field"),
+      actor: actor(opsLeadId, "staff_ops_lead"),
       businessId: business.id,
       tier: 3,
-      reason: "Visited on the date above. Premises, signage and stock all check out.",
+      reason: "Trading history audited. Reply times and quote volume match the listing.",
     });
     expect(result).toMatchObject({ ok: true, tier: 3 });
   });
 
-  it("refuses a different field verifier, on the same business", async () => {
-    /*
-     * The row §07 calls "not a general grant". Until `recordVisit` existed
-     * nothing wrote `visitedByStaffId` but the seed, so this check was reading
-     * a column no code path filled in.
-     */
-    const business = await listing("Somebody Else Visit");
-    await recordVisit({
-      actor: actor(fieldOfficerId, "staff_field"),
-      businessId: business.id,
-      visitedAt: new Date(),
-      premisesFound: true,
-      signageMatches: true,
-      stockPresent: true,
-      photos: [await photo(business.id), await photo(business.id)],
-      reason: REASON,
-    });
+  it("refuses a field verifier", async () => {
+    const business = await listing("Field Refused");
 
     await expect(
       setVerificationTier({
-        actor: actor("00000000-0000-4000-8000-0000000000fe", "staff_field"),
+        actor: actor(fieldOfficerId, "staff_field"),
         businessId: business.id,
         tier: 3,
-        reason: "I did not visit this business.",
+        reason: "Not my row any more.",
       }),
     ).rejects.toBeInstanceOf(PermissionError);
   });
 
-  it("still refuses a moderator, whoever visited", async () => {
+  it("still refuses a moderator", async () => {
     const business = await listing("Moderator Refused");
-    await recordVisit({
-      actor: actor(fieldOfficerId, "staff_field"),
-      businessId: business.id,
-      visitedAt: new Date(),
-      premisesFound: true,
-      signageMatches: true,
-      stockPresent: true,
-      photos: [await photo(business.id), await photo(business.id)],
-      reason: REASON,
-    });
 
     await expect(
       setVerificationTier({

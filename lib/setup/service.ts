@@ -11,10 +11,7 @@ import { effectiveFor } from "@/lib/billing/entitlements-service";
 import type { PlanCaps } from "@/lib/plan/entitlements";
 import {
   dubaiDayStart,
-  parseSiteVisitFeeAed,
   setupBoard,
-  FALLBACK_SITE_VISIT_FEE_AED,
-  SITE_VISIT_FEE_SETTING_KEY,
   type SetupLever,
   type SetupTaskRow,
 } from "./tasks";
@@ -36,10 +33,8 @@ import {
  */
 
 export {
-  FALLBACK_SITE_VISIT_FEE_AED,
   LEVERS_WITHOUT_TASK,
   SETUP_TASKS,
-  SITE_VISIT_FEE_SETTING_KEY,
   type SetupLever,
   type SetupTaskId,
   type SetupTaskRow,
@@ -76,8 +71,6 @@ export interface SetupHubState {
 
   /** Null only for a listing that has never had a plan, which is pre-`goLive`. */
   plan: PlanCaps | null;
-  /** What a site visit costs where the plan does not include it. */
-  siteVisitFeeAed: number;
 
   /** When the one nudge went. Null while it is still to come. */
   nudgeSentAt: Date | null;
@@ -120,7 +113,7 @@ export async function setupHubState(
 
   const since = business.publishedAt === null ? null : dubaiDayStart(business.publishedAt);
 
-  const [media, products, visitRequests, invitesSent, shortlists, openEnquiries, views, nudge, plan, lift, fee] =
+  const [media, products, invitesSent, shortlists, openEnquiries, views, nudge, plan, lift] =
     await Promise.all([
       /*
          Kinds rather than counts: the meter needs the logo and the cover named
@@ -139,7 +132,6 @@ export async function setupHubState(
          task the page is asking them to do.
       */
       prisma.product.findMany({ where: { businessId }, select: { specValues: true } }),
-      prisma.siteVisitRequest.count({ where: { businessId, cancelledAt: null } }),
     /*
        Outstanding invitations. Board 8d §5: the team task ticks on send, not on
        acceptance — the seller cannot make a colleague click a link, and a task
@@ -176,11 +168,10 @@ export async function setupHubState(
         orderBy: { createdAt: "desc" },
         select: { sentAt: true },
       }),
-      // Through the snapshot, so a grandfathered seller keeps the site visit
-      // they bought even after the plan stopped including one.
+      // Through the snapshot, so a grandfathered seller keeps the caps they
+      // bought even after the plan they bought them on changed.
       effectiveFor(businessId),
       readLift(),
-      readSiteVisitFeeAed(),
     ]);
 
   const facts: ProfileFacts = {
@@ -218,7 +209,6 @@ export async function setupHubState(
     products: facts.products,
     seats: facts.teamSeats,
     invitesSent,
-    visitRequests,
     items: strengthItems(facts),
   });
 
@@ -251,7 +241,6 @@ export async function setupHubState(
     },
 
     plan,
-    siteVisitFeeAed: fee,
 
     nudgeSentAt: nudge?.sentAt ?? null,
     nudgeUsed: nudge !== null,
@@ -266,29 +255,6 @@ function hasHours(hours: unknown): boolean {
 /** Any spec value at all. An empty object is a product nobody can filter to. */
 function hasSpecs(values: unknown): boolean {
   return typeof values === "object" && values !== null && Object.keys(values).length > 0;
-}
-
-/**
- * The site-visit fee, from the platform setting over the compiled figure.
- *
- * The same shape as `readRamadanCalendar`, and for the same reason: a hub that
- * cannot read one settings row should still be able to price a site visit, and
- * a `value` somebody has mangled in the admin screen should degrade to the last
- * known-good number rather than to zero. Not cached — it is one indexed
- * primary-key read on a page that already issues ten, and `unstable_cache` only
- * works inside a request, which the tests that call this are not.
- */
-async function readSiteVisitFeeAed(): Promise<number> {
-  try {
-    const row = await prisma.platformSetting.findUnique({
-      where: { key: SITE_VISIT_FEE_SETTING_KEY },
-      select: { value: true },
-    });
-    return parseSiteVisitFeeAed(row?.value) ?? FALLBACK_SITE_VISIT_FEE_AED;
-  } catch (error) {
-    console.warn("[setup] could not read the site-visit fee", error);
-    return FALLBACK_SITE_VISIT_FEE_AED;
-  }
 }
 
 export interface SetupChrome {
@@ -337,13 +303,12 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
   });
   if (!business) return null;
 
-  const [media, products, visitRequests, invitesSent] = await Promise.all([
+  const [media, products, invitesSent] = await Promise.all([
     prisma.media.findMany({
       where: { OR: [{ businessId }, { product: { businessId } }], reviewId: null },
       select: { kind: true },
     }),
     prisma.product.findMany({ where: { businessId }, select: { specValues: true } }),
-    prisma.siteVisitRequest.count({ where: { businessId, cancelledAt: null } }),
     /*
        Outstanding invitations. Board 8d §5: the team task ticks on send, not on
        acceptance — the seller cannot make a colleague click a link, and a task
@@ -373,7 +338,6 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
     products: facts.products,
     seats: facts.teamSeats,
     invitesSent,
-    visitRequests,
     items: strengthItems(facts),
   });
 

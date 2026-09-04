@@ -227,7 +227,6 @@ export const ADMIN_NAV: readonly NavGroup[] = [
         href: "/admin/catalogue-imports",
         capability: "queue.decide",
       },
-      { key: "visits", labelKey: "nav.visits", href: "/admin/visits", capability: "visit.record" },
       { key: "crm", labelKey: "nav.crm", href: "/admin/crm" },
     ],
   },

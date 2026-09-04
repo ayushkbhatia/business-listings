@@ -10,9 +10,9 @@ export const PLANS = [
   // on board 2c are this minus one: Free gets none, Basic two, Pro as many as it
   // likes. It is the cap that decides which RFQs reach a listing, which is what
   // makes the ladder mean something rather than being a paywall detail.
-  { id: "free", name: "Free", monthlyPriceAed: 0, enquiriesPerMonth: 3, productLimit: 10, locationLimit: 1, photoLimit: 30, teamSeats: 2, categoryLimit: 1, rankingMultiplier: 1.0, customDomain: false, siteVisitIncluded: false, sortOrder: 0, annualMonthsCharged: null },
-  { id: "basic", name: "Basic", monthlyPriceAed: 349, enquiriesPerMonth: 40, productLimit: 150, locationLimit: 3, photoLimit: 40, teamSeats: 3, categoryLimit: 3, rankingMultiplier: 1.15, customDomain: false, siteVisitIncluded: false, sortOrder: 1, annualMonthsCharged: 10 },
-  { id: "pro", name: "Pro", monthlyPriceAed: 899, enquiriesPerMonth: null, productLimit: null, locationLimit: 10, photoLimit: 200, teamSeats: 10, categoryLimit: null, rankingMultiplier: 1.35, customDomain: true, siteVisitIncluded: true, sortOrder: 2, annualMonthsCharged: 10 },
+  { id: "free", name: "Free", monthlyPriceAed: 0, enquiriesPerMonth: 3, productLimit: 10, locationLimit: 1, photoLimit: 30, teamSeats: 2, categoryLimit: 1, rankingMultiplier: 1.0, customDomain: false, sortOrder: 0, annualMonthsCharged: null },
+  { id: "basic", name: "Basic", monthlyPriceAed: 349, enquiriesPerMonth: 40, productLimit: 150, locationLimit: 3, photoLimit: 40, teamSeats: 3, categoryLimit: 3, rankingMultiplier: 1.15, customDomain: false, sortOrder: 1, annualMonthsCharged: 10 },
+  { id: "pro", name: "Pro", monthlyPriceAed: 899, enquiriesPerMonth: null, productLimit: null, locationLimit: 10, photoLimit: 200, teamSeats: 10, categoryLimit: null, rankingMultiplier: 1.35, customDomain: true, sortOrder: 2, annualMonthsCharged: 10 },
 ] as const;
 
 export const AREAS = [

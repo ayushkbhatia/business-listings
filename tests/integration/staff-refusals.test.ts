@@ -36,9 +36,9 @@ let fieldOfficerId: string;
 let financeId: string;
 let sellerOwnerId: string;
 
-/** A business somebody has actually visited, and one nobody has. */
-let visitedBusinessId: string;
-let unvisitedBusinessId: string;
+/** The listing this file borrows and puts back, and a second one to refuse on. */
+let subjectBusinessId: string;
+let otherBusinessId: string;
 /**
  * What the borrowed listing's tier was before this file raised it.
  *
@@ -85,14 +85,11 @@ beforeAll(async () => {
      fails on whether that row's licence happens to be current. It went red the
      first time a seed elsewhere wrote to `business` and shifted the row order.
 
-     The rule under test is "a field verifier may tier a business they visited",
-     which presupposes a licence worth tiering. Asserting it against a lapsed
-     one was testing two rules at once and pinning neither.
+     The rules under test presuppose a licence worth tiering. Asserting them
+     against a lapsed one was testing two rules at once and pinning neither.
   */
-  const visited = await prisma.business.findFirstOrThrow({
+  const subject = await prisma.business.findFirstOrThrow({
     where: {
-      visitedAt: { not: null },
-      visitedByStaffId: { not: null },
       suspendedAt: null,
       mergedIntoId: null,
       licenceExpiry: { gt: new Date() },
@@ -100,19 +97,19 @@ beforeAll(async () => {
     orderBy: { slug: "asc" },
     select: { id: true, verificationTier: true, verifiedAt: true },
   });
-  visitedBusinessId = visited.id;
-  originalTier = visited.verificationTier;
-  originalVerifiedAt = visited.verifiedAt;
+  subjectBusinessId = subject.id;
+  originalTier = subject.verificationTier;
+  originalVerifiedAt = subject.verifiedAt;
 
-  const unvisited = await prisma.business.findFirstOrThrow({
-    where: { visitedAt: null, suspendedAt: null, mergedIntoId: null },
+  const other = await prisma.business.findFirstOrThrow({
+    where: { suspendedAt: null, mergedIntoId: null, id: { not: subject.id } },
     select: { id: true },
   });
 
-  unvisitedBusinessId = unvisited.id;
+  otherBusinessId = other.id;
 
   /*
-   * Chosen explicitly rather than taken from whichever business the visited
+   * Chosen explicitly rather than taken from whichever business the subject
    * query happened to return. CI failed here and a local run did not: a fresh
    * database offered a business with no subscription, and the credit ceiling
    * is computed from the plan price.
@@ -130,12 +127,12 @@ afterAll(async () => {
 
      This file raises a tier to 4 and used to leave it there — its own comment
      above says the database is not reset. That was harmless while the listing
-     it borrowed was one nobody asserted on. Handoff 5 seeded visited listings
+     it borrowed was one nobody asserted on. Handoff 5 seeded more listings
      whose slugs sort early, `findFirstOrThrow` has no ordering, and a curated
      list started reporting a supplier as "Audited" that the seed made tier 2.
   */
   await prisma.business.update({
-    where: { id: visitedBusinessId },
+    where: { id: subjectBusinessId },
     data: { verificationTier: originalTier, verifiedAt: originalVerifiedAt },
   });
   await prisma.$disconnect();
@@ -148,8 +145,8 @@ describe("a moderator is refused the three rows §07 denies them", () => {
     await expect(
       setVerificationTier({
         actor: actor(moderatorId, "staff_moderator"),
-        businessId: visitedBusinessId,
-        tier: 4,
+        businessId: subjectBusinessId,
+        tier: 3,
         reason: REASON,
       }),
     ).rejects.toBeInstanceOf(PermissionError);
@@ -159,7 +156,7 @@ describe("a moderator is refused the three rows §07 denies them", () => {
     await expect(
       suspendBusiness({
         actor: actor(moderatorId, "staff_moderator"),
-        businessId: visitedBusinessId,
+        businessId: subjectBusinessId,
         reason: REASON,
       }),
     ).rejects.toBeInstanceOf(PermissionError);
@@ -169,7 +166,7 @@ describe("a moderator is refused the three rows §07 denies them", () => {
     await expect(
       issueSubscriptionCredit({
         actor: actor(moderatorId, "staff_moderator"),
-        businessId: visitedBusinessId,
+        businessId: subjectBusinessId,
         fils: 10_000,
         description: "One month, service interruption",
         reason: REASON,
@@ -193,7 +190,7 @@ describe("the other roles are refused what is not theirs", () => {
     await expect(
       issueSubscriptionCredit({
         actor: actor(opsLeadId, "staff_ops_lead"),
-        businessId: visitedBusinessId,
+        businessId: subjectBusinessId,
         fils: 10_000,
         description: "One month",
         reason: REASON,
@@ -205,7 +202,7 @@ describe("the other roles are refused what is not theirs", () => {
     await expect(
       suspendBusiness({
         actor: actor(financeId, "staff_finance"),
-        businessId: visitedBusinessId,
+        businessId: subjectBusinessId,
         reason: REASON,
       }),
     ).rejects.toBeInstanceOf(PermissionError);
@@ -215,56 +212,52 @@ describe("the other roles are refused what is not theirs", () => {
     await expect(
       setVerificationTier({
         actor: actor(sellerOwnerId, "seller_owner"),
-        businessId: visitedBusinessId,
-        tier: 4,
+        businessId: subjectBusinessId,
+        tier: 3,
         reason: REASON,
       }),
     ).rejects.toBeInstanceOf(PermissionError);
   });
 });
 
-describe("the field verifier's tier grant is not a general one", () => {
-  it("is refused for a business they did not visit", async () => {
-    // Recorded by somebody, but not by this actor.
-    await expect(
-      setVerificationTier({
-        actor: actor("00000000-0000-4000-8000-0000000000ff", "staff_field"),
-        businessId: visitedBusinessId,
-        tier: 4,
-        reason: REASON,
-      }),
-    ).rejects.toBeInstanceOf(PermissionError);
+describe("the field verifier no longer holds the tier grant at all", () => {
+  /*
+     It used to hold it conditionally: a field verifier could tier a business
+     they had recorded a visit to, read off `Business.visitedByStaffId`. Site
+     visits were withdrawn and that evidence with them, so rather than widen the
+     grant into an unconditional one the narrower half was removed. These cases
+     are the same refusals as before, now for a simpler reason.
+  */
+  it("is refused whichever business it is asked about", async () => {
+    for (const businessId of [subjectBusinessId, otherBusinessId]) {
+      await expect(
+        setVerificationTier({
+          actor: actor(fieldOfficerId, "staff_field"),
+          businessId,
+          tier: 3,
+          reason: REASON,
+        }),
+      ).rejects.toBeInstanceOf(PermissionError);
+    }
   });
 
-  it("is refused for a business nobody visited", async () => {
-    await expect(
-      setVerificationTier({
-        actor: actor(fieldOfficerId, "staff_field"),
-        businessId: unvisitedBusinessId,
-        tier: 2,
-        reason: REASON,
-      }),
-    ).rejects.toBeInstanceOf(PermissionError);
-  });
-
-  it("is allowed for a visit they recorded", async () => {
+  it("is allowed for the ops lead, who holds it unconditionally", async () => {
     const business = await prisma.business.findUniqueOrThrow({
-      where: { id: visitedBusinessId },
-      select: { visitedByStaffId: true, verificationTier: true },
+      where: { id: subjectBusinessId },
+      select: { verificationTier: true },
     });
-    const recorder = business.visitedByStaffId!;
-    const target = business.verificationTier === 4 ? 3 : 4;
+    const target = business.verificationTier === 3 ? 2 : 3;
 
     const result = await setVerificationTier({
-      actor: actor(recorder, "staff_field"),
-      businessId: visitedBusinessId,
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      businessId: subjectBusinessId,
       tier: target,
       reason: REASON,
     });
 
     expect(result.ok).toBe(true);
     const audit = await prisma.auditEvent.findFirst({
-      where: { actorId: recorder, action: "tier_change", subject: `Business:${visitedBusinessId}` },
+      where: { actorId: opsLeadId, action: "tier_change", subject: `Business:${subjectBusinessId}` },
       orderBy: { createdAt: "desc" },
       select: { reason: true },
     });
@@ -274,12 +267,19 @@ describe("the field verifier's tier grant is not a general one", () => {
 
 describe("the harness refuses the shapes that would fail open", () => {
   it("refuses a subject-dependent capability without the subject check", async () => {
+    /*
+       The example used to be `business.verification_tier.write`, where a role
+       test alone passed for every field verifier — including one tiering a
+       business they had never visited. Site visits were withdrawn and that row
+       became a plain ops-lead check, so this uses the audited capability that
+       is still subject-dependent: reading another business's enquiries.
+    */
     await expect(
       staffMutation(
         {
           actor: actor(opsLeadId, "staff_ops_lead"),
-          capability: "business.verification_tier.write",
-          subject: `Business:${visitedBusinessId}`,
+          capability: "enquiry.read_other_business",
+          subject: `Business:${subjectBusinessId}`,
           reason: REASON,
         },
         async () => ({ result: null }),
@@ -293,7 +293,7 @@ describe("the harness refuses the shapes that would fail open", () => {
         {
           actor: actor(opsLeadId, "staff_ops_lead"),
           capability: "business.suspend",
-          subject: `Business:${visitedBusinessId}`,
+          subject: `Business:${subjectBusinessId}`,
           reason: REASON,
           subjectChecked: true,
         },
@@ -306,7 +306,7 @@ describe("the harness refuses the shapes that would fail open", () => {
     await expect(
       suspendBusiness({
         actor: actor(opsLeadId, "staff_ops_lead"),
-        businessId: visitedBusinessId,
+        businessId: subjectBusinessId,
         reason: "   ",
       }),
     ).rejects.toBeInstanceOf(AuditReasonError);
@@ -316,7 +316,7 @@ describe("the harness refuses the shapes that would fail open", () => {
     await expect(
       suspendBusiness({
         actor: actor(opsLeadId, "staff_ops_lead"),
-        businessId: visitedBusinessId,
+        businessId: subjectBusinessId,
         reason: "-----",
       }),
     ).rejects.toBeInstanceOf(AuditReasonError);
@@ -326,7 +326,7 @@ describe("the harness refuses the shapes that would fail open", () => {
 describe("what the permitted roles can do, and what it leaves behind", () => {
   it("ops lead suspends and lifts, and each carries its own reason", async () => {
     const target = await prisma.business.findFirstOrThrow({
-      where: { suspendedAt: null, mergedIntoId: null, id: { not: visitedBusinessId } },
+      where: { suspendedAt: null, mergedIntoId: null, id: { not: subjectBusinessId } },
       select: { id: true },
     });
 
@@ -456,24 +456,32 @@ describe("what the permitted roles can do, and what it leaves behind", () => {
   });
 });
 
-describe("tier 3 cannot exist without a visit", () => {
-  it("is refused before the write, with a message naming the fix", async () => {
+describe("the ladder stops at 3", () => {
+  /*
+     It stopped at 4, and tier 3 additionally required a recorded site visit —
+     a database CHECK enforced that. Visits were withdrawn, `audited` moved down
+     from 4 to 3, and the range CHECK was rewritten to match. What is asserted
+     here is the same shape as before: the service refuses first so the message
+     can say what is wrong, and the constraint refuses underneath so a second
+     code path cannot get around it.
+  */
+  it("is refused before the write, with a message naming the range", async () => {
     const result = await setVerificationTier({
       actor: actor(opsLeadId, "staff_ops_lead"),
-      businessId: unvisitedBusinessId,
-      tier: 3,
+      businessId: otherBusinessId,
+      tier: 4,
       reason: REASON,
     });
-    expect(result).toMatchObject({ ok: false, error: "needs_a_visit" });
+    expect(result).toMatchObject({ ok: false, error: "out_of_range" });
     if (result.ok) return;
-    expect(result.message).toMatch(/record the visit first/i);
+    expect(result.message).toMatch(/from 0 to 3/i);
   });
 
   it("and the database refuses it too, if a second path ever tries", async () => {
     await expect(
       prisma.business.update({
-        where: { id: unvisitedBusinessId },
-        data: { verificationTier: 3 },
+        where: { id: otherBusinessId },
+        data: { verificationTier: 4 },
       }),
     ).rejects.toThrow();
   });

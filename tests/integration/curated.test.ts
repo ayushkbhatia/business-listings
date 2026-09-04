@@ -39,7 +39,6 @@ interface Candidate {
   tier?: number;
   replyMs?: number | null;
   reviews?: number;
-  visited?: boolean;
   planId?: string | null;
 }
 
@@ -62,9 +61,6 @@ async function candidate(spec: Candidate): Promise<string> {
       // Set directly, because this file is testing the list and not the
       // measurement. `tests/integration/*` covers derivation elsewhere.
       responseTimeMedianMs: spec.replyMs === undefined ? MAX_REPLY_MS - 60_000 : spec.replyMs,
-      ...(spec.visited
-        ? { visitedAt: new Date(), visitedByStaffId: "00000000-0000-4000-8000-000000000003" }
-        : {}),
       ...(spec.planId ? { planId: spec.planId } : {}),
       locations: {
         create: {
@@ -183,15 +179,14 @@ describe("criterion 4 — placement cannot be bought", () => {
   it("keeps the best-paying supplier off the list when it fails a rule", async () => {
     /*
        The fixture that matters. This listing has everything the product sells —
-       the top plan, a site visit, a verified licence, more reviews than the
-       floor — and one thing it cannot buy: a reply time under four hours,
+       the top plan, a verified licence, more reviews than the floor — and one
+       thing it cannot buy: a reply time under four hours,
        which is measured from enquiry timestamps and has no seller-writable
        field. It is not on the list, and no amount of money changes that.
     */
     const paid = await candidate({
       name: "paid",
       planId: "pro",
-      visited: true,
       reviews: MIN_REVIEWS + 10,
       replyMs: MAX_REPLY_MS + 1,
     });
@@ -216,14 +211,20 @@ describe("criterion 4 — placement cannot be bought", () => {
     expect(order.indexOf(free)).toBeLessThan(order.indexOf(pro));
   }, 180_000);
 
-  it("ranks a visited supplier above an unvisited one that replies faster", async () => {
-    // The one weighted rule, and it is the one that costs us money to earn
-    // rather than the seller money to buy.
-    const visited = await candidate({ name: "seen", visited: true, replyMs: 3 * 3_600_000 });
-    const quick = await candidate({ name: "quick", visited: false, replyMs: 10 * 60_000 });
+  it("ranks a higher tier above a lower one that replies faster", async () => {
+    /*
+       This used to be about the site visit, which was the one weighted
+       criterion and which the seller could not buy. Visits were withdrawn and
+       nothing replaced the weight — the tier absorbed it, and the tier is the
+       same kind of signal: staff-written, no seller-writable field, and above
+       reply time in the comparator precisely so a fast typist cannot outrank a
+       checked company.
+    */
+    const audited = await candidate({ name: "audited", tier: 3, replyMs: 3 * 3_600_000 });
+    const quick = await candidate({ name: "quick", tier: VERIFIED_TIER, replyMs: 10 * 60_000 });
 
     const order = (await membersOf({ categoryId })).members.map((member) => member.id);
-    expect(order.indexOf(visited)).toBeLessThan(order.indexOf(quick));
+    expect(order.indexOf(audited)).toBeLessThan(order.indexOf(quick));
   }, 180_000);
 
   it("has no field anywhere on the model that could hold a bought position", async () => {
@@ -249,7 +250,9 @@ describe("the page states the rules it applies", () => {
     const required = CRITERIA.filter((c) => c.kind === "required").map((c) => c.key);
     expect(required.sort()).toEqual(["reply", "reviews", "verified"]);
     expect(CRITERIA.some((c) => c.key === "placement" && c.kind === "never")).toBe(true);
-    expect(CRITERIA.some((c) => c.key === "visit" && c.kind === "weighted")).toBe(true);
+    // No weighted criterion remains. The site visit was the only one, and a
+    // published list must not name a rule the comparator does not apply.
+    expect(CRITERIA.filter((c) => c.kind === "weighted")).toEqual([]);
   });
 });
 

@@ -3,9 +3,6 @@ import { prisma } from "@/lib/db/client";
 import { readEnquiryLift } from "@/lib/metrics/enquiry-lift";
 import { setupHubState } from "@/lib/setup/service";
 import {
-  FALLBACK_SITE_VISIT_FEE_AED,
-  parseSiteVisitFeeAed,
-  SITE_VISIT_FEE_SETTING_KEY,
 } from "@/lib/setup/tasks";
 import {
   CATALOGUE_IMPORT_PRICING_KEY,
@@ -50,7 +47,6 @@ const PREFIX = "platform-settings-test-";
 let businessId: string;
 
 /** The two rows as they were found, so `afterAll` puts them back. */
-let originalFee: { value: unknown } | null = null;
 let originalPricing: { value: unknown } | null = null;
 
 async function setSetting(key: string, value: unknown): Promise<void> {
@@ -109,16 +105,10 @@ beforeAll(async () => {
   });
   businessId = business.id;
 
-  [originalFee, originalPricing] = await Promise.all([
-    prisma.platformSetting.findUnique({
-      where: { key: SITE_VISIT_FEE_SETTING_KEY },
-      select: { value: true },
-    }),
-    prisma.platformSetting.findUnique({
-      where: { key: CATALOGUE_IMPORT_PRICING_KEY },
-      select: { value: true },
-    }),
-  ]);
+  originalPricing = await prisma.platformSetting.findUnique({
+    where: { key: CATALOGUE_IMPORT_PRICING_KEY },
+    select: { value: true },
+  });
 });
 
 afterAll(async () => {
@@ -128,54 +118,9 @@ afterAll(async () => {
      request. Leaving this file's nonsense behind would make the next run's
      failures belong here.
   */
-  await restoreSetting(SITE_VISIT_FEE_SETTING_KEY, originalFee);
   await restoreSetting(CATALOGUE_IMPORT_PRICING_KEY, originalPricing);
   await removeFixtures();
   await prisma.$disconnect();
-});
-
-describe("the site-visit fee is a row", () => {
-  it("is seeded, and reads back as the figure the card draws", async () => {
-    const row = await prisma.platformSetting.findUnique({
-      where: { key: SITE_VISIT_FEE_SETTING_KEY },
-      select: { value: true },
-    });
-
-    expect(row).not.toBeNull();
-    /*
-       The drift assertion. The seed writes the imported constant, so this can
-       only fail two ways: somebody wrote the price out a second time, or this
-       database carries a fee a person has since corrected — which is the
-       setting working as designed. Reseed before reading it as a defect.
-    */
-    expect(parseSiteVisitFeeAed(row?.value)).toBe(FALLBACK_SITE_VISIT_FEE_AED);
-  });
-
-  it("reaches the hub as the fee a site visit is quoted at", async () => {
-    await restoreSetting(SITE_VISIT_FEE_SETTING_KEY, originalFee);
-    const state = await hub();
-
-    expect(state).not.toBeNull();
-    expect(state!.siteVisitFeeAed).toBe(FALLBACK_SITE_VISIT_FEE_AED);
-  });
-
-  it("falls back rather than throwing when the value is nonsense", async () => {
-    await setSetting(SITE_VISIT_FEE_SETTING_KEY, "seven hundred and fifty");
-    const state = await hub();
-
-    // Not a thrown error, and not zero either: an unreadable setting read as a
-    // free site visit would tell a Free seller the top badge costs nothing.
-    expect(state!.siteVisitFeeAed).toBe(FALLBACK_SITE_VISIT_FEE_AED);
-  });
-
-  it("falls back rather than throwing when there is no row at all", async () => {
-    await clearSetting(SITE_VISIT_FEE_SETTING_KEY);
-    const state = await hub();
-
-    // The state every environment is in before the seed runs, production
-    // included — no migration writes this row.
-    expect(state!.siteVisitFeeAed).toBe(FALLBACK_SITE_VISIT_FEE_AED);
-  });
 });
 
 describe("the concierge catalogue prices are a row", () => {

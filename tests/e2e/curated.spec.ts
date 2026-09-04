@@ -10,7 +10,7 @@ import { expect, test } from "@playwright/test";
  * are sold and none of which say so.
  *
  * The seed builds the fixture that carries the point — `al-hvac-005` has the
- * top plan, a site visit, a verified licence and fifteen reviews, and a median
+ * top plan, a verified licence and fifteen reviews, and a median
  * reply of seven hours. It is not on the list.
  */
 
@@ -34,7 +34,6 @@ test.describe("the criteria are published above the names", () => {
     await expect(block.getByText(/Trade licence checked against the issuing authority/)).toBeVisible();
     await expect(block.getByText(/Median first reply under 4 hours/)).toBeVisible();
     await expect(block.getByText(/At least 15 reviews/)).toBeVisible();
-    await expect(block.getByText("Premises visited by our field team")).toBeVisible();
 
     // The one every competitor omits.
     await expect(block.getByText("Paid placement")).toBeVisible();
@@ -61,15 +60,15 @@ test.describe("who is on it", () => {
     await page.goto(LIST);
     const names = await members(page).getByRole("heading").allTextContents();
     expect(names.length).toBeGreaterThan(1);
-    // The visited one leads — the single weighted rule.
+    // The highest tier leads; the comparator reads it first.
     expect(names[0]).toContain("001");
   });
 
   test("the supplier with the top plan and a slow reply is not on it", async ({ page }) => {
     /*
-       Criterion 4's second half, as a page. `al-hvac-005` is on Pro, has been
-       visited, is verified and has fifteen reviews. Its median reply is seven
-       hours, which is measured and has no seller-writable field.
+       Criterion 4's second half, as a page. `al-hvac-005` is on Pro, is
+       verified and has fifteen reviews. Its median reply is seven hours, which
+       is measured and has no seller-writable field.
     */
     await page.goto(LIST);
     const names = await members(page).getByRole("heading").allTextContents();
@@ -88,12 +87,22 @@ test.describe("who is on it", () => {
 
        Deliberately not asserting a particular rung. A tier is staff-owned and
        moves, and an earlier version of this test named "Licence verified" and
-       failed the first time another suite promoted the listing to tier 4. What
+       failed the first time another suite promoted the listing a rung. What
        the criterion requires is the sentence, not the word.
+
+       The alternation is every label the ladder can render, from
+       `components/domain/verification.ts` — the compact badge shows the label
+       rather than the longer "what was checked" line. It used to include
+       "visited", which is what made it pass: the leading member was tier 3 and
+       tier 3 was "Site visited". With that rung withdrawn the top of this list
+       is "Licence verified", and a regex that still expected a visit would have
+       gone red for a reason nothing to do with criterion 8.
     */
     await page.goto(LIST);
     const first = members(page).first();
-    await expect(first.getByText(/checked|visited|audited|recorded/i).first()).toBeVisible();
+    await expect(
+      first.getByText(/not verified|licence on file|licence verified|audited/i).first(),
+    ).toBeVisible();
     await expect(first.getByText(/^tier \d$/)).toBeVisible();
   });
 

@@ -121,15 +121,9 @@ function ComparisonTable({
       render: (b) => {
         const spec = tierSpec(b.verificationTier);
         const date =
-          spec.dateField === "none"
+          spec.dateField === "none" || !b.verifiedAt
             ? undefined
-            : spec.dateField === "visitedAt"
-              ? b.visitedAt
-                ? formatDate(b.visitedAt)
-                : undefined
-              : b.verifiedAt
-                ? formatDate(b.verifiedAt)
-                : undefined;
+            : formatDate(b.verifiedAt);
         return (
           <VerificationBadge
             tier={b.verificationTier}

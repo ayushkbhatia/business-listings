@@ -78,7 +78,6 @@ export function featuresOf(plan: PlanCaps): PlanFeature[] {
       included: plan.rankingMultiplier > 1,
     },
     { label: t("plan.custom_domain"), included: plan.customDomain },
-    { label: t("plan.site_visit"), included: plan.siteVisitIncluded },
   ];
 }
 
@@ -197,12 +196,6 @@ export function comparisonRowsOf(
       header: t("pricing.row.custom_domain"),
       note: t("pricing.row.custom_domain_note"),
       cells: plans.map((plan) => included(plan, plan.customDomain)),
-    },
-    {
-      key: "site_visit",
-      header: t("pricing.row.site_visit"),
-      note: t("pricing.row.site_visit_note"),
-      cells: plans.map((plan) => included(plan, plan.siteVisitIncluded)),
     },
   ];
 

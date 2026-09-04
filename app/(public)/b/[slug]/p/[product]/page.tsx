@@ -406,15 +406,9 @@ export default async function ProductPage({ params }: Params) {
                   label={t(spec.labelKey as never)}
                   checked={t(spec.checkedKey as never)}
                   date={
-                    spec.dateField === "none"
+                    spec.dateField === "none" || !business.verifiedAt
                       ? undefined
-                      : spec.dateField === "visitedAt"
-                        ? business.visitedAt
-                          ? formatDate(business.visitedAt)
-                          : undefined
-                        : business.verifiedAt
-                          ? formatDate(business.verifiedAt)
-                          : undefined
+                      : formatDate(business.verifiedAt)
                   }
                   tierLabel={t("verify.tier", { tier: business.verificationTier })}
                 />

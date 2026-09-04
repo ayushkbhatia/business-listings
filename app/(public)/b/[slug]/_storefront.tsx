@@ -76,15 +76,9 @@ export function StorefrontHeader({
 }) {
   const spec = tierSpec(business.verificationTier);
   const badgeDate =
-    spec.dateField === "none"
+    spec.dateField === "none" || !business.verifiedAt
       ? undefined
-      : spec.dateField === "visitedAt"
-        ? business.visitedAt
-          ? formatDate(business.visitedAt)
-          : undefined
-        : business.verifiedAt
-          ? formatDate(business.verifiedAt)
-          : undefined;
+      : formatDate(business.verifiedAt);
 
   /*
      Criterion 10: an expired licence takes the badge off the same day.

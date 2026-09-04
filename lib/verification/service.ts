@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
-import { assertCanSetVerificationTier } from "@/lib/auth/subject";
+import { assertCan } from "@/lib/auth/can";
 import { EXPIRED_LICENCE_TIER, licenceExpired } from "@/lib/verification";
 import type { Actor } from "@/lib/auth/roles";
 
@@ -13,17 +13,16 @@ import type { Actor } from "@/lib/auth/roles";
  * Three things have to be true at once, and each is enforced somewhere
  * different on purpose:
  *
- *   1. **Only staff, and only the right staff.** Ops lead unconditionally, a
- *      field verifier only for a visit they recorded. That is a subject check,
- *      not a role check — `assertCanSetVerificationTier` reads the visit — and
- *      `staffMutation` now refuses this capability unless the caller says it
- *      ran one. A role test alone would let any field verifier tier any
- *      business, which is exactly the failure the matrix's note is about.
- *   2. **Tier 3 requires a recorded visit**, enforced by a database CHECK
- *      (`prisma/migrations/20260823173500_invariant_constraints`). This
- *      function refuses it before the write so the seller-facing error can say
- *      what is missing, but the constraint is what makes the rule true — a
- *      second code path cannot get around it.
+ *   1. **Only staff, and only the ops lead.** It was ops lead plus a field
+ *      verifier acting on a visit they had recorded — a subject check rather
+ *      than a role check. Site visits were withdrawn and `visitedByStaffId`
+ *      went with them, so the conditional half had nothing left to read. The
+ *      grant was narrowed rather than widened.
+ *   2. **The ladder stops at 3**, enforced by a database CHECK
+ *      (`business_verification_tier_range`). This function refuses an
+ *      out-of-range tier before the write so the error can say what is wrong,
+ *      but the constraint is what makes the rule true — a second code path
+ *      cannot get around it.
  *   3. **A written reason**, on the audit row, in the same transaction.
  *
  * There is no seller path to this function and there never will be one. It is
@@ -37,7 +36,6 @@ export type TierResult =
       error:
         | "not_found"
         | "out_of_range"
-        | "needs_a_visit"
         | "licence_expired"
         | "unchanged";
       message: string;
@@ -51,9 +49,16 @@ export interface SetTierInput {
 }
 
 const MIN_TIER = 0;
-const MAX_TIER = 4;
-/** Below this a tier is a document check; at or above it somebody has been. */
-const TIER_REQUIRING_A_VISIT = 3;
+/**
+ * Three, not four.
+ *
+ * The ladder lost its "site visited" rung when site visits were withdrawn, and
+ * `audited` moved down from 4 to take its place — see components/domain/
+ * verification.ts. A tier of 4 is now out of range here and refused by the
+ * `business_verification_tier_range` CHECK underneath, which is what makes the
+ * ceiling true rather than merely asserted.
+ */
+const MAX_TIER = 3;
 
 export async function setVerificationTier(input: SetTierInput): Promise<TierResult> {
   const business = await prisma.business.findUnique({
@@ -62,8 +67,6 @@ export async function setVerificationTier(input: SetTierInput): Promise<TierResu
       id: true,
       verificationTier: true,
       verifiedAt: true,
-      visitedAt: true,
-      visitedByStaffId: true,
       licenceExpiry: true,
     },
   });
@@ -72,15 +75,15 @@ export async function setVerificationTier(input: SetTierInput): Promise<TierResu
   }
 
   /*
-   * The subject check runs before anything else, and it reads the visit rather
-   * than the role. `visitedByStaffId` is the whole question for a field
-   * verifier: a business with no recorded visit denies them, which is the
-   * correct default rather than an inconvenience.
+   * Ops lead only, and that is the whole check now.
+   *
+   * It used to be subject-dependent: a field verifier could tier a business
+   * they had visited, read off `Business.visitedByStaffId`. Site visits were
+   * withdrawn and that column with them, so rather than widen the grant to an
+   * unconditional one the narrower half was removed — see the note on
+   * `business.verification_tier.write` in lib/auth/capabilities.ts.
    */
-  assertCanSetVerificationTier(input.actor, {
-    businessId: business.id,
-    recordedByStaffId: business.visitedByStaffId,
-  });
+  assertCan(input.actor, "business.verification_tier.write");
 
   if (!Number.isInteger(input.tier) || input.tier < MIN_TIER || input.tier > MAX_TIER) {
     return {
@@ -95,14 +98,6 @@ export async function setVerificationTier(input: SetTierInput): Promise<TierResu
       ok: false,
       error: "unchanged",
       message: `That business is already tier ${business.verificationTier}.`,
-    };
-  }
-
-  if (input.tier >= TIER_REQUIRING_A_VISIT && business.visitedAt === null) {
-    return {
-      ok: false,
-      error: "needs_a_visit",
-      message: `Tier ${input.tier} needs a recorded site visit. Record the visit first, then set the tier.`,
     };
   }
 
@@ -144,7 +139,10 @@ export async function setVerificationTier(input: SetTierInput): Promise<TierResu
         capability: "business.verification_tier.write",
         subject: `Business:${business.id}`,
         reason: input.reason,
-        subjectChecked: true,
+        // No `subjectChecked`: the row stopped being subject-dependent when
+        // site visits were withdrawn, and `staffMutation` refuses the flag on a
+        // capability that does not carry a subject — deliberately, so the two
+        // cannot drift out of agreement about which rows need the narrow check.
         tx,
       },
       async () => {

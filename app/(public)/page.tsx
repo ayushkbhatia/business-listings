@@ -330,7 +330,6 @@ export default async function HomePage() {
                       : "",
                     verificationTier: business.verificationTier,
                     verifiedAt: business.verifiedAt,
-                    visitedAt: business.visitedAt,
                     productCount: business._count.products,
                     reviewCount: business.reviewCount,
                     ratingOverall: business.ratingOverall,

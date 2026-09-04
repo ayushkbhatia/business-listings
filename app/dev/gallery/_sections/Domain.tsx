@@ -50,7 +50,6 @@ const BUSINESS: ListingCardBusiness = {
   areaName: "Al Quoz Industrial 1",
   emirateName: "Dubai",
   verificationTier: 3,
-  visitedAt: "2026-06-02T00:00:00+04:00",
   verifiedAt: "2026-03-14T00:00:00+04:00",
   productCount: 92,
   reviewCount: 4,

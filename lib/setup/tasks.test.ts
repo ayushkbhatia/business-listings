@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  FALLBACK_SITE_VISIT_FEE_AED,
   LEVERS_WITHOUT_TASK,
-  parseSiteVisitFeeAed,
   setupBoard,
   dubaiDayStart,
   type SetupTaskFacts,
@@ -37,14 +35,13 @@ const EMPTY: ProfileFacts = {
   teamSeats: 1,
 };
 
-function board(profile: Partial<ProfileFacts> = {}, visitRequests = 0, invitesSent = 0) {
+function board(profile: Partial<ProfileFacts> = {}, invitesSent = 0) {
   const facts: ProfileFacts = { ...EMPTY, ...profile };
   const input: SetupTaskFacts = {
     photos: facts.photos,
     products: facts.products,
     seats: facts.teamSeats,
     invitesSent,
-    visitRequests,
     items: strengthItems(facts),
   };
   return setupBoard(input);
@@ -68,16 +65,6 @@ describe("the chip is this seller's own arithmetic", () => {
     expect(chip({ teamSeats: 2 }, "team")).toBe(0);
   });
 
-  it("promises nothing for the site visit, done or not", () => {
-    /*
-       A visit moves verification tier, which is platform-owned and not on this
-       meter. Board 8a says so out loud rather than implying points it will not
-       award.
-    */
-    expect(board().tasks.find((task) => task.id === "visit")!.points).toBe(0);
-    expect(board({}, 1).tasks.find((task) => task.id === "visit")!.points).toBe(0);
-  });
-
   it("never offers more than the lever holds", () => {
     for (const photos of [0, 1, 3, 5, 9, 40]) {
       expect(chip({ photos }, "photos")).toBeLessThanOrEqual(20);
@@ -96,32 +83,38 @@ describe("the hero counts what is on the page", () => {
   });
 
   it("reaches zero open with nothing left to say", () => {
-    const state = board({ photos: 10, hasLogo: true, hasCover: true, products: 10, teamSeats: 2 }, 1);
+    /*
+       Reachable at all, which it was not until site visits were withdrawn. The
+       fourth task closed on our scheduling rather than the seller's work, so
+       `openCount` never hit zero and the hub's completion redirect never fired
+       however much a supplier did.
+    */
+    const state = board({ photos: 10, hasLogo: true, hasCover: true, products: 10, teamSeats: 2 });
     expect(state.openCount).toBe(0);
     expect(state.openMinutes).toBe(0);
-    expect(state.doneCount).toBe(4);
+    expect(state.doneCount).toBe(3);
   });
 
-  it("counts all four on a cold start, and adds up their own estimates", () => {
+  it("counts every open task on a cold start, and adds up their own estimates", () => {
     /*
        The photographs estimate is read from `lib/photos/targets.ts` rather than
        written again here — board 8b states it to the same seller minutes later,
        and a test that hardcoded it would go green while the two screens
-       disagreed. The other three are still literals because nothing else states
+       disagreed. The other two are still literals because nothing else states
        them yet.
     */
     const state = board();
-    expect(state.openCount).toBe(4);
-    expect(state.openMinutes).toBe(PHOTO_MINUTES + 25 + 3 + 2);
+    expect(state.openCount).toBe(3);
+    expect(state.openMinutes).toBe(PHOTO_MINUTES + 25 + 3);
   });
 });
 
 describe("the levers close the gap", () => {
   it("sums earned and remaining to exactly a hundred, at every stage", () => {
     /*
-       Criterion 13, from this side of it. A seller who finishes all four cards
-       is at fifty points; if the levers did not add up, the other fifty would
-       be unreachable and unnamed, which is the trick a completeness meter must
+       Criterion 13, from this side of it. A seller who finishes every card is
+       at fifty points; if the levers did not add up, the other fifty would be
+       unreachable and unnamed, which is the trick a completeness meter must
        never play.
     */
     const stages: Partial<ProfileFacts>[] = [
@@ -169,26 +162,6 @@ describe("the levers close the gap", () => {
   });
 });
 
-describe("the site-visit fee", () => {
-  it("reads a whole number of dirhams, written either way", () => {
-    expect(parseSiteVisitFeeAed(750)).toBe(750);
-    expect(parseSiteVisitFeeAed("750")).toBe(750);
-    expect(parseSiteVisitFeeAed(0)).toBe(0);
-  });
-
-  it("refuses anything that is not one, so the compiled figure stands", () => {
-    // A fee of `null` read as zero would tell a Free seller a site visit costs
-    // nothing, which is the wrong direction to be wrong in.
-    for (const value of [null, undefined, "", "free", 749.5, -1, 1_000_000, {}, [750]]) {
-      expect(parseSiteVisitFeeAed(value), JSON.stringify(value) ?? "undefined").toBeNull();
-    }
-  });
-
-  it("draws the fallback board 8a draws", () => {
-    expect(FALLBACK_SITE_VISIT_FEE_AED).toBe(750);
-  });
-});
-
 describe("the day a view is counted against", () => {
   it("buckets an instant into the Dubai day, not the UTC one", () => {
     // 22:00 UTC is 02:00 the next morning in Dubai, and the rail counts from
@@ -214,7 +187,7 @@ describe("the team task ticks on send", () => {
     const withSeatOnly = board().tasks.find((task) => task.id === "team");
     expect(withSeatOnly?.done).toBe(false);
 
-    const withInvite = board({}, 0, 1).tasks.find((task) => task.id === "team");
+    const withInvite = board({}, 1).tasks.find((task) => task.id === "team");
     expect(withInvite?.done).toBe(true);
     // The points are the lever's, and the lever still wants a seat.
     expect(withInvite?.points).toBe(0);

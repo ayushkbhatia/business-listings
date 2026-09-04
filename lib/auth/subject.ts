@@ -41,39 +41,6 @@ export function assertNotSubjectDependent(capability: Capability): void {
   if ("subject" in CAPABILITIES[capability]) throw new SubjectRequiredError(capability);
 }
 
-/* ── 1. A tier a field verifier may set ──────────────────────────────────── */
-
-export interface VisitRecord {
-  businessId: string;
-  /** Who recorded it. `Business.visitedByStaffId`. */
-  recordedByStaffId: string | null;
-}
-
-/**
- * May this actor set the verification tier of this business?
- *
- * An ops lead may, unconditionally. A field verifier may only as the result of
- * a visit **they** recorded — permissions.md: "it is not a general grant".
- *
- * A business with no recorded visit denies the field verifier, which is the
- * correct default: a tier change licensed by a visit that did not happen is the
- * thing this check exists to prevent.
- */
-export function canSetVerificationTier(actor: Actor, visit: VisitRecord | null): boolean {
-  if (!can(actor, "business.verification_tier.write")) return false;
-  if (actor.roles.includes("staff_ops_lead")) return true;
-
-  // Field verifier from here. No visit, or somebody else's visit, is a no.
-  if (!visit?.recordedByStaffId) return false;
-  return visit.recordedByStaffId === actor.id;
-}
-
-export function assertCanSetVerificationTier(actor: Actor, visit: VisitRecord | null): void {
-  if (!canSetVerificationTier(actor, visit)) {
-    throw new PermissionError("business.verification_tier.write", actor.id);
-  }
-}
-
 /* ── 2. A branch-scoped sales seat ───────────────────────────────────────── */
 
 export interface BranchScoped {

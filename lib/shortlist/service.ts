@@ -158,7 +158,6 @@ export interface SavedSupplier {
   displayName: string;
   verificationTier: number;
   verifiedAt: Date | null;
-  visitedAt: Date | null;
   /**
    * False where the listing has since been unpublished, suspended or merged.
    *
@@ -194,7 +193,6 @@ export async function shortlistFor(userId: string): Promise<SavedSupplier[]> {
           displayName: true,
           verificationTier: true,
           verifiedAt: true,
-          visitedAt: true,
           publishedAt: true,
           suspendedAt: true,
         },
@@ -208,7 +206,6 @@ export async function shortlistFor(userId: string): Promise<SavedSupplier[]> {
     displayName: row.business.displayName,
     verificationTier: row.business.verificationTier,
     verifiedAt: row.business.verifiedAt,
-    visitedAt: row.business.visitedAt,
     reachable: row.business.publishedAt !== null && row.business.suspendedAt === null,
     savedAt: row.createdAt,
   }));

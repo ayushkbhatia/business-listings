@@ -89,11 +89,7 @@ export default async function SavedSuppliersPage() {
             {suppliers.map((supplier) => {
               const spec = tierSpec(supplier.verificationTier);
               const verifiedOn =
-                spec.dateField === "visitedAt"
-                  ? supplier.visitedAt
-                  : spec.dateField === "verifiedAt"
-                    ? supplier.verifiedAt
-                    : null;
+                spec.dateField === "verifiedAt" ? supplier.verifiedAt : null;
 
               const nameId = `shortlist-name-${supplier.businessId}`;
               const removeId = `shortlist-remove-${supplier.businessId}`;

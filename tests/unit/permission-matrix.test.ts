@@ -34,7 +34,6 @@ const SELLER_TABLE: [Capability, Seat[]][] = [
   ["quote.send", ["owner", "manager", "sales"]],
   ["product.edit", ["owner", "manager"]],
   ["listing.edit", ["owner", "manager"]],
-  ["visit.request", ["owner"]],
   ["review.reply", ["owner", "manager"]],
   ["review.request", ["owner", "manager", "sales"]],
   ["analytics.read", ["owner", "manager", "sales"]],
@@ -84,8 +83,7 @@ const STAFF: Record<Staff, Role> = {
 const STAFF_TABLE: [Capability, Staff[]][] = [
   ["queue.decide", ["ops", "moderator"]],
   ["claim.resolve", ["ops"]],
-  ["business.verification_tier.write", ["ops", "field"]],
-  ["visit.record", ["ops", "field"]],
+  ["business.verification_tier.write", ["ops"]],
   ["taxonomy.write", ["ops"]],
   ["storefront.template.write", ["ops"]],
   ["review.remove", ["ops"]],
@@ -141,18 +139,28 @@ describe("the cross-surface matrix", () => {
     expect(can(actor("seller_owner"), "enquiry.create")).toBe(true);
   });
 
-  it("lets nobody but an ops lead set a tier without a subject check", () => {
-    // CLAUDE.md non-negotiable 2. A field verifier holds the row, and only for
-    // a visit they recorded — see subject.ts.
-    for (const role of ["buyer", "seller_owner", "seller_manager", "staff_moderator", "staff_finance"] as Role[]) {
+  it("lets nobody but an ops lead set a tier", () => {
+    /*
+       CLAUDE.md non-negotiable 2. A field verifier used to hold the row as
+       well, for a business they had recorded a visit to. Site visits were
+       withdrawn and that evidence with them, so the grant was narrowed to the
+       ops lead rather than widened — `staff_field` is in the list below now.
+    */
+    for (const role of ["buyer", "seller_owner", "seller_manager", "staff_moderator", "staff_finance", "staff_field"] as Role[]) {
       expect(can(actor(role), "business.verification_tier.write"), role).toBe(false);
     }
   });
 
   it("marks every row the document calls subject-dependent", () => {
-    // permissions.md: "three of the rows above are subject-dependent and a
-    // role-only check gets them wrong."
-    expect(CAPABILITIES["business.verification_tier.write"].subject).toBe("own_visit");
+    /*
+       permissions.md: "three of the rows above are subject-dependent and a
+       role-only check gets them wrong." Two, now. The tier row was the third
+       and its subject was the site visit that licensed a field verifier; with
+       visits withdrawn it is a plain role check and must not claim otherwise —
+       a leftover `subject` sends call sites through a check with nothing to
+       read.
+    */
+    expect(CAPABILITIES["business.verification_tier.write"]).not.toHaveProperty("subject");
     expect(CAPABILITIES["enquiry.respond"].subject).toBe("own_branch");
     expect(CAPABILITIES["enquiry.read_other_business"].subject).toBe("other_business");
   });
@@ -185,12 +193,20 @@ describe("every row cites the document", () => {
        a hold is reversible and a removal is not, so putting the reversible
        control out of a moderator's reach would push them towards the
        irreversible one.
+
+       `business.verification_tier.write` joined when site visits were
+       withdrawn. §07 does still have a row for it — ops lead plus a field
+       verifier for a visit they recorded — and half of that row now describes
+       evidence the product does not gather. The grant was narrowed to the ops
+       lead, which is a departure from the document and so is marked inferred
+       rather than left claiming the document says it.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
     );
     expect(inferred.sort()).toEqual([
       "business.merge",
+      "business.verification_tier.write",
       "question.remove",
       "review.hold",
       "staff.manage",

@@ -419,15 +419,15 @@ function Allowances({ overview }: { overview: Overview }) {
  * yet — and, more to the point, neither is a flag the Plan table holds. Dimming
  * them here would mean inventing an entitlement and then naming a price for it,
  * which is the sort of thing a seller finds out is untrue at the moment they
- * pay. `customDomain` and `siteVisitIncluded` are real booleans on real rows,
- * so the line under each panel is checkable.
+ * pay. `customDomain` is a real boolean on a real row, so the line under the
+ * panel is checkable — and since site visits were withdrawn it is the only one
+ * left, which is why this grid now holds a single panel rather than a pair.
  */
 function LockedFeatures({ overview }: { overview: Overview }) {
   const domainPlan = cheapestPlanWith(overview.allPlans, "customDomain", overview.plan.id);
-  const visitPlan = cheapestPlanWith(overview.allPlans, "siteVisitIncluded", overview.plan.id);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid gap-5">
       <Panel
         title={t("overview.locked_domain")}
         {...lockedProps(t("overview.locked_domain"), domainPlan)}
@@ -435,12 +435,6 @@ function LockedFeatures({ overview }: { overview: Overview }) {
         <p className="max-w-prose text-body-sm text-muted">{t("overview.locked_domain_body")}</p>
       </Panel>
 
-      <Panel
-        title={t("overview.locked_visit")}
-        {...lockedProps(t("overview.locked_visit"), visitPlan)}
-      >
-        <p className="max-w-prose text-body-sm text-muted">{t("overview.locked_visit_body")}</p>
-      </Panel>
     </div>
   );
 }

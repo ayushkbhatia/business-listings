@@ -19,7 +19,6 @@ export type AuditAction =
   | "view_as"
   | "report_resolved"
   | "queue_decided"
-  | "visit_recorded"
   | "taxonomy_changed"
   | "staff_changed"
   | "claim_resolved"
@@ -41,7 +40,6 @@ export const ACTION_FOR_CAPABILITY = {
   "question.remove": "question_removed",
   "report.resolve": "report_resolved",
   "queue.decide": "queue_decided",
-  "visit.record": "visit_recorded",
   "subscription.credit": "credit_issued",
   "placement.boost": "boost",
   "taxonomy.write": "taxonomy_changed",

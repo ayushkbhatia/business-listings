@@ -561,22 +561,3 @@ test.describe("board 2e — the plan step, from a seat that already pays", () =>
    completed summary and a plan gate, and those want asserting next to each
    other rather than at the end of the onboarding funnel.
 */
-
-test.describe("board 8e — the visit", () => {
-  test("asks what suits rather than offering a slot we cannot keep", async ({ page }) => {
-    await page.goto("/dashboard/setup/visit");
-    await expect(page.getByLabel("When suits you")).toBeVisible();
-    await expect(page.getByText(/We call to arrange the actual time/)).toBeVisible();
-  });
-
-  test("has no control that sets the tier", async ({ page }) => {
-    await page.goto("/dashboard/setup/visit");
-    await expect(page.getByRole("combobox", { name: /tier/i })).toHaveCount(0);
-  });
-
-  test("is axe clean", async ({ page }) => {
-    await page.goto("/dashboard/setup/visit");
-    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
-    expect(results.violations).toEqual([]);
-  });
-});

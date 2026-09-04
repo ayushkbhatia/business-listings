@@ -78,7 +78,6 @@ model User {
   reviews                 Review[]
   auditEvents             AuditEvent[]
   reportsFiled            SupplierReport[]         @relation("ReportReporter")
-  visitsMade              Business[]               @relation("BusinessVisitedBy")
   messages                Message[]
   contactReveals          ContactReveal[]
   savedSearches           SavedSearch[]
@@ -94,11 +93,9 @@ model User {
   claimsMade              ClaimSubmission[]        @relation("ClaimClaimant")
   onboardingDrafts        OnboardingDraft[]        @relation("OnboardingDraftUser")
   categoryActivityCleared BusinessCategory[]       @relation("CategoryActivityClearedBy")
-  visitsRequested         SiteVisitRequest[]       @relation("VisitRequester")
   conflictsResolved       ClaimConflict[]          @relation("ConflictResolvedBy")
   licenceImports          LicenceImportRun[]       @relation("IngestActor")
   merges                  BusinessMerge[]          @relation("MergeActor")
-  visitReports            SiteVisitReport[]        @relation("VisitReporter")
   pdplSubjectOf           PdplRequest[]            @relation("PdplSubject")
   pdplClosed              PdplRequest[]            @relation("PdplClosedBy")
   apiKeys                 ApiKey[]                 @relation("ApiKeyCreator")
@@ -502,9 +499,17 @@ model Business {
   /// is matched as empty, never as "matches everything".
   searchText       String?       @map("search_text")
 
-  /// 0..4. STAFF WRITE ONLY, ops_lead role. There is no API path and no
+  /// 0..3. STAFF WRITE ONLY, ops_lead role. There is no API path and no
   /// seller-editable field. Drops to 1 automatically the day licenceExpiry
-  /// passes — a scheduled job, no grace period. Tier 3 also requires visitedAt.
+  /// passes — a scheduled job, no grace period.
+  ///
+  /// The ladder ran to 4 until site visits were withdrawn. Tiers 3 and 4 both
+  /// rested on somebody standing in the warehouse — "site visited", and
+  /// "premises visited and trading history audited" — and with no field team
+  /// there is no evidence behind either. Rather than leave two rungs meaning
+  /// whatever staff decide on the day, the visited rung is gone and `audited`
+  /// moves down to 3, resting on the trading history and buyer outcomes this
+  /// platform already measures.
   ///
   /// This said "drops to 2" until the job was written, and 2 was wrong in the
   /// dangerous direction: 2 IS the badge threshold (`VERIFIED_TIER`), and tier
@@ -516,8 +521,6 @@ model Business {
   /// after expiry. See `lib/verification/expiry-job.ts`.
   verificationTier Int       @default(0) @map("verification_tier")
   verifiedAt       DateTime? @map("verified_at")
-  visitedAt        DateTime? @map("visited_at")
-  visitedByStaffId String?   @map("visited_by_staff_id") @db.Uuid
 
   claimStatus        ClaimStatus   @default(unclaimed) @map("claim_status")
   planId             String?       @map("plan_id")
@@ -589,7 +592,6 @@ model Business {
   sector                 Category?                @relation("BusinessSector", fields: [sectorId], references: [id], onDelete: Restrict)
   categories             BusinessCategory[]
   plan                   Plan?                    @relation(fields: [planId], references: [id], onDelete: SetNull)
-  visitedByStaff         User?                    @relation("BusinessVisitedBy", fields: [visitedByStaffId], references: [id], onDelete: SetNull)
   team                   User[]                   @relation("BusinessTeam")
   locations              Location[]
   products               Product[]
@@ -608,7 +610,6 @@ model Business {
   productEvents          ProductEvent[]
   catalogueImports       CatalogueImportRequest[]
   claimSubmissions       ClaimSubmission[]
-  visitRequests          SiteVisitRequest[]
   licenceImportRun       LicenceImportRun?        @relation(fields: [licenceImportRunId], references: [id], onDelete: SetNull)
   mergedInto             Business?                @relation("BusinessMergedInto", fields: [mergedIntoId], references: [id], onDelete: SetNull)
   absorbed               Business[]               @relation("BusinessMergedInto")
@@ -617,7 +618,6 @@ model Business {
   mergesKept             BusinessMerge[]          @relation("MergeKeep")
   mergesAbsorbed         BusinessMerge[]          @relation("MergeAbsorb")
   stagedListings         StagedListing[]
-  visitReports           SiteVisitReport[]
   viewAsSessions         ViewAsSession[]
   callOutcomes           CallOutcome[]
   claimConflicts         ClaimConflict[]          @relation("ConflictBusiness")
@@ -948,7 +948,6 @@ model Media {
   product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
   review   Review?   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
 
-  visitPhotos SiteVisitPhoto[]
   teamMembers TeamMember[]
 
   @@index([businessId])
@@ -1725,56 +1724,6 @@ model BusinessMerge {
   @@map("business_merge")
 }
 
-/// What a field officer found, and the photographs that prove they were there.
-///
-/// `SiteVisitRequest` is the seller asking. This is the evidence, and it is what
-/// licenses a tier: `lib/auth/subject.ts` lets a field verifier set a tier only
-/// for a visit they recorded, and `Business.visitedByStaffId` was written by the
-/// seed and by nothing else until this table existed.
-model SiteVisitReport {
-  id             String   @id @default(cuid())
-  requestId      String?  @map("request_id")
-  businessId     String   @map("business_id")
-  staffId        String   @map("staff_id") @db.Uuid
-  visitedAt      DateTime @map("visited_at")
-  /// The three checks board 12h names. Each is a fact somebody stood in front of.
-  premisesFound  Boolean  @map("premises_found")
-  signageMatches Boolean  @map("signage_matches")
-  stockPresent   Boolean  @map("stock_present")
-  notes          String?
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  request  SiteVisitRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
-  business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  staff    User              @relation("VisitReporter", fields: [staffId], references: [id], onDelete: Restrict)
-  photos   SiteVisitPhoto[]
-
-  @@index([businessId, visitedAt(sort: Desc)], map: "site_visit_report_business_idx")
-  @@map("site_visit_report")
-}
-
-/// A geotagged photograph from a visit.
-///
-/// Rows rather than two columns: two is a floor, not a shape — a warehouse with
-/// three entrances gets three — and each photograph carries its own
-/// coordinates. Those are NOT NULL and bounded to the UAE by a CHECK: a
-/// photograph without them is a photograph of somewhere, and the point is that
-/// it is a photograph of *there*.
-model SiteVisitPhoto {
-  id       String   @id @default(cuid())
-  reportId String   @map("report_id")
-  mediaId  String   @map("media_id")
-  lat      Float
-  lng      Float
-  takenAt  DateTime @map("taken_at")
-
-  report SiteVisitReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  media  Media           @relation(fields: [mediaId], references: [id], onDelete: Restrict)
-
-  @@index([reportId], map: "site_visit_photo_report_idx")
-  @@map("site_visit_photo")
-}
-
 enum PdplKind {
   access
   erasure
@@ -1926,30 +1875,6 @@ model SpecFieldProposal {
   @@unique([categoryId, key], map: "spec_field_proposal_category_key_key")
   @@index([state, businessCount(sort: Desc)], map: "spec_field_proposal_ranked_idx")
   @@map("spec_field_proposal")
-}
-
-/// A seller asking for the site visit that tier 3 needs.
-///
-/// Board 8e. `Business.visitedAt` is staff-written and feeds a trust signal, so
-/// a seller's *request* cannot live on it. Separate row, and the tier still
-/// only moves when somebody has actually been.
-model SiteVisitRequest {
-  id            String    @id @default(cuid())
-  businessId    String    @map("business_id")
-  requestedById String    @map("requested_by_id") @db.Uuid
-  /// What the seller said suits them. Not a booking; we call to arrange.
-  preferredNote String?   @map("preferred_note")
-  scheduledFor  DateTime? @map("scheduled_for")
-  completedAt   DateTime? @map("completed_at")
-  cancelledAt   DateTime? @map("cancelled_at")
-  createdAt     DateTime  @default(now()) @map("created_at")
-
-  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  requestedBy User              @relation("VisitRequester", fields: [requestedById], references: [id], onDelete: Restrict)
-  reports     SiteVisitReport[]
-
-  @@index([businessId, createdAt])
-  @@map("site_visit_request")
 }
 
 model MissedEnquiry {
@@ -2258,7 +2183,6 @@ model Plan {
   teamSeats           Int       @map("team_seats")
   rankingMultiplier   Float     @default(1) @map("ranking_multiplier")
   customDomain        Boolean   @default(false) @map("custom_domain")
-  siteVisitIncluded   Boolean   @default(false) @map("site_visit_included")
   sortOrder           Int       @default(0) @map("sort_order")
   /// Months charged for a year. Null means this plan is monthly-only.
   ///
@@ -2719,9 +2643,9 @@ enum CatalogueImportStatus {
 ///
 /// A queue, not a parser. `lib/import/service.ts` is the parser and it needs a
 /// spreadsheet with columns; this is for the PDF a supplier has had since 2019,
-/// and the work at the other end is a person reading it. Modelled on
-/// `SiteVisitRequest`, which is the same shape of promise: the seller asks, we
-/// do something physical, and the row is what either side points at.
+/// and the work at the other end is a person reading it. It is a promise of a
+/// shape this schema no longer has anywhere else: the seller asks, we do
+/// something by hand, and the row is what either side points at.
 ///
 /// The file itself is a `Document` with `kind: catalogue` in the private bucket.
 /// A price list is commercially sensitive and belongs nowhere public.

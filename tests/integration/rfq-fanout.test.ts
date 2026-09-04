@@ -84,10 +84,9 @@ async function addSupplier(fields: {
       claimStatus: "claimed",
       publishedAt: new Date(),
       verificationTier: tier,
-      // `business_tier_3_requires_visit`: the tiers are a ladder and the
+      // The tiers are a ladder and the
       // database holds them to it, so a fixture has to earn the rung it sits on.
       verifiedAt: tier > 0 ? new Date("2026-01-10T00:00:00.000Z") : null,
-      visitedAt: tier >= 3 ? new Date("2026-02-20T00:00:00.000Z") : null,
       responseTimeMedianMs:
         fields.responseTimeMedianMs === undefined ? 4 * HOUR : fields.responseTimeMedianMs,
       planId: fields.planId ?? null,
@@ -253,8 +252,8 @@ beforeAll(async () => {
   // decides the count and not the size of the pool.
   for (let i = 0; i < 12; i += 1) await addSupplier({ categoryId: catMany });
 
-  await addSupplier({ categoryId: catOrder, tier: 4, responseTimeMedianMs: HOUR });
-  await addSupplier({ categoryId: catOrder, tier: 4, responseTimeMedianMs: 20 * HOUR });
+  await addSupplier({ categoryId: catOrder, tier: 3, responseTimeMedianMs: HOUR });
+  await addSupplier({ categoryId: catOrder, tier: 3, responseTimeMedianMs: 20 * HOUR });
   await addSupplier({ categoryId: catOrder, tier: 0, responseTimeMedianMs: HOUR });
   await addSupplier({ categoryId: catOrder, tier: 0, responseTimeMedianMs: 20 * HOUR });
 
@@ -318,7 +317,7 @@ describe("criterion 7 — the order the buyer sees them in", () => {
     */
     const order = await preview(catOrder);
     expect(order).toHaveLength(4);
-    expect(order.map((r) => r.verificationTier)).toEqual([4, 4, 0, 0]);
+    expect(order.map((r) => r.verificationTier)).toEqual([3, 3, 0, 0]);
 
     const rows = await prisma.business.findMany({
       where: { id: { in: order.map((r) => r.businessId) } },

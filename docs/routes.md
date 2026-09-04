@@ -71,7 +71,6 @@ and it is the one that argues back.
 /dashboard/setup/photos                 Task 1 — photos                       [8b]  built h8s2
 /dashboard/setup/products               Task 2 — template, first products     [8c]  built h8s3
 /dashboard/setup/team                   Task 3 — invite the team              [8d]  built h8s4
-/dashboard/setup/visit                  Task 4 — site visit                   [8e]  built h3
 /dashboard/listing                      Listing profile                       [3b]
 /dashboard/locations                    Locations                             [3c]
 /dashboard/hours                        Hours & Ramadan                       [3d]
@@ -141,7 +140,6 @@ and it is the one that argues back.
 /admin/storefront-templates/:id/theme   Theme presets                    [5b]  built h4s6
 /admin/storefront-templates/:id/pages   Page template editor             [5d]  built h4s6
 /admin/domains                          Custom domain verification       [5e]
-/admin/visits                           Field visit scheduling               [12h]  built h4s3
 /admin/areas                            Emirates, areas, free zones          [12h]
 /admin/api                              API keys & webhooks                  [12h]
 /admin/compliance                       PDPL data requests                   [12h]

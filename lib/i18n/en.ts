@@ -197,7 +197,6 @@ export const en = {
   "nav.reports": "Supplier reports",
   "nav.businesses": "Businesses",
   "nav.ingest": "Licence importer",
-  "nav.visits": "Field visits",
   "nav.crm": "Recruitment",
   "nav.categories": "Taxonomy",
   "nav.spec_library": "Spec templates",
@@ -246,7 +245,7 @@ export const en = {
   "admin.overview.oldest": "oldest {days}d",
   "admin.overview.late": "{count} late",
   "admin.overview.soon": "soon",
-  "admin.overview.sla": "Service level, in days: moderation {moderation}, claims {claim}, supplier reports {report}, visits {visit}, failed payments {dunning}.",
+  "admin.overview.sla": "Service level, in days: moderation {moderation}, claims {claim}, supplier reports {report}, failed payments {dunning}.",
 
   "console.job.supply": "Get listings in",
   "console.job.comparable": "Keep the data comparable",
@@ -268,7 +267,6 @@ export const en = {
   "console.metric.past_due": "Subscriptions past due",
   "console.metric.unpaid": "Invoices issued and unpaid",
   "console.metric.reports": "Supplier reports open",
-  "console.metric.visits": "Site visits requested",
   "console.metric.expiring": "Tier 3+ licences expiring in 30 days",
 
   "admin.queue.title": "Approval queue",
@@ -425,31 +423,6 @@ export const en = {
   "admin.reviews.note": "A review is a buyer\u2019s own words about a deal they had. Removing one is held to a higher bar than moderating a queue, which is why only an ops lead can do it.",
   "admin.reviews.empty.title": "No reviews yet",
   "admin.reviews.empty.body": "A review can only follow an accepted quote, so this fills up behind the enquiry flow.",
-  "admin.visits.file": "File a report",
-  "admin.visit.eyebrow": "Site visit",
-  "admin.visit.what_you_found": "What you found",
-  "admin.visit.visited_at": "Date of the visit",
-  "admin.visit.premises_found": "The premises are there and open",
-  "admin.visit.signage_matches": "The signage matches the trade name",
-  "admin.visit.stock_present": "Stock is on the floor",
-  "admin.visit.notes": "Anything else worth recording",
-  "admin.visit.photos": "Photographs",
-  "admin.visit.photos_hint": "At least two, taken at the premises. Your device position is recorded with each one, which is what tier 3 rests on.",
-  "admin.visit.photos_drop": "Add photographs",
-  "admin.visit.photos_drop_hint": "JPEG, PNG, WebP or AVIF. Location is read from your device as each one is added.",
-  "admin.visit.photos_short": "{count} more before this can be filed.",
-  "admin.visit.photo_remove": "Remove",
-  "admin.visit.photos_unreadable": "The photographs could not be read. Add them again.",
-  "admin.visit.outside_uae": "One photograph is outside the UAE. A photograph from somewhere else is not evidence about this business.",
-  "admin.visit.no_geolocation": "Your device would not give a location. A visit report needs one, so allow location access and add the photograph again.",
-  "admin.visit.reason_hint": "It goes on the record beside the tier this visit supports.",
-  "admin.visit.file": "File the report",
-  "admin.visit.filed": "Filed. The business is marked visited, and you can set a tier of 3 or above.",
-  "admin.visit.not_found": "That business is not in the directory.",
-  "admin.visit.no_address": "No address on file",
-  "admin.visit.seller_note": "The seller asked: {note}",
-  "admin.visit.already_filed": "A report has already been filed for this request.",
-  "admin.visit.cancelled": "This request was cancelled.",
   "admin.businesses.col.decide": "Decide",
   "admin.businesses.action.tier": "Set tier",
   "admin.businesses.action.suspend": "Suspend",
@@ -458,7 +431,6 @@ export const en = {
   "admin.businesses.tier_option": "Tier {tier}",
   "admin.businesses.tier_set": "Tier set to {tier}.",
   "admin.businesses.tier_invalid": "Pick a tier between 0 and 4.",
-  "admin.businesses.tier_visit_note": "Tier 3 and above needs a site visit on the record first.",
   "admin.businesses.suspended": "Suspended. The listing is off the directory.",
   "admin.businesses.lifted": "Suspension lifted. The listing is back.",
   "admin.businesses.suspend_note": "A suspension hides the listing and stops new enquiries. It does not delete anything.",
@@ -520,6 +492,7 @@ export const en = {
   "admin.reports.outcome.seller_corrected": "Seller corrected it",
   "admin.reports.outcome.upheld": "Upheld",
   "admin.reports.outcome.no_action": "No action",
+  "admin.record.not_found": "That business is not in the directory.",
   "admin.reports.resolved": "Resolved.",
   "admin.reports.skipped_heading": "Off-platform payment, outside the queue",
   "admin.reports.skipped_empty": "Nothing detected.",
@@ -538,18 +511,6 @@ export const en = {
   "admin.audit.empty.title": "Nothing logged yet",
   "admin.audit.empty.body": "Every staff state change writes a row here with a written reason. An empty log means nothing has been changed.",
 
-  "admin.visits.title": "Field visits",
-  "admin.visits.eyebrow": "Trust",
-  "admin.visits.meta": "{count} requested, oldest {days} days",
-  "admin.visits.caption": "Visits asked for and not yet made, oldest first",
-  "admin.visits.col.business": "Business",
-  "admin.visits.col.where": "Where",
-  "admin.visits.col.tier": "Tier",
-  "admin.visits.col.note": "What suits them",
-  "admin.visits.col.age": "Waiting",
-  "admin.visits.empty.title": "No visits waiting",
-  "admin.visits.empty.body": "A seller asks for a visit from the setup hub. Tier 3 needs one, and the tier only moves once somebody has been.",
-  "admin.visits.note": "A visit report needs two geotagged photographs and the premises, signage and stock checks. Recording a visit does not set a tier — that is a separate decision, made by a separate capability.",
 
   "admin.dedupe.title": "Dedupe & merge",
   "admin.dedupe.eyebrow": "Supply",
@@ -735,8 +696,11 @@ export const en = {
 
   "map.search_area": "Search this area",
   "map.free_zones": "Free zones overlay",
+  // Moss marks a head office — see the `head_office` case in the pin layer of
+  // components/display/ResultsMap.tsx. This line read "Verified by site visit",
+  // which was wrong before site visits were withdrawn and is now wrong twice.
+  "map.legend_head_office": "Head office",
   "map.legend": "Legend",
-  "map.legend_visited": "Verified by site visit",
   "map.legend_verified": "Licence verified",
   "map.legend_unverified": "Unverified / unclaimed",
   "map.results_label": "Suppliers matching this search",
@@ -761,17 +725,17 @@ export const en = {
   "verify.t1.checked": "Trade licence number recorded",
   "verify.t2": "Licence verified",
   "verify.t2.checked": "Trade licence checked against the issuing authority",
-  "verify.t3": "Site visited",
-  "verify.t3.checked": "Premises visited by our field team",
-  "verify.t4": "Audited",
-  "verify.t4.checked": "Premises visited and trading history audited",
+  // The ladder stops at 3 since site visits were withdrawn. "Audited" moved down
+  // from 4 and lost the visit from its wording, because what is left is what we
+  // measure: enquiries answered, quotes sent, reply times.
+  "verify.t3": "Audited",
+  "verify.t3.checked": "Trading history and buyer outcomes checked by us",
   "verify.tier": "tier {tier}",
   "verify.ladder": "Verification ladder",
   "verify.reached": "Reached",
   "verify.requirement.t1": "The supplier gives us a trade licence number.",
   "verify.requirement.t2": "We check the licence against the issuing authority and confirm it is current.",
-  "verify.requirement.t3": "Our field team visits the premises and confirms the stock and the trade counter.",
-  "verify.requirement.t4": "We audit trading history and buyer outcomes alongside the site visit.",
+  "verify.requirement.t3": "We audit the trading history on this listing — enquiries answered, quotes sent and reply times — against what it claims.",
   "verify.expired": "Licence expired — tier held at 2 until it is renewed",
 
   // ── Listing card ──
@@ -868,6 +832,7 @@ export const en = {
      "log in to see prices", "contact for pricing" or a masked figure — all
      three read as a paywall, which is the one thing this page must not be.
   */
+  "pdp.visit_storefront": "Visit storefront →",
   "pdp.price_reason": "This seller quotes per job — volume, delivery point and payment terms all move the number.",
   "pdp.price_reason_reply": "This seller quotes per job — volume, delivery point and payment terms all move the number. Typical reply in about {duration}.",
   "pdp.quantity": "QUANTITY",
@@ -885,7 +850,6 @@ export const en = {
   /* This page is the Stepper's first caller, so its labels start here. */
   "stepper.decrement": "One fewer",
   "stepper.increment": "One more",
-  "pdp.visit_storefront": "Visit storefront →",
   "pdp.delivery": "Delivery",
   "pdp.collection": "Collection",
   "pdp.payment_terms": "Payment terms",
@@ -1050,7 +1014,6 @@ export const en = {
   "verify.panel_title": "What we checked",
   "verify.row_licence": "Trade licence checked",
   "verify.row_trn": "TRN matched",
-  "verify.row_visit": "Premises visited",
   "verify.row_not_yet": "{check} — not yet",
   "verify.licence_renewal_pending": "Licence renewal pending",
   /* Board 1d: "the most valuable copy on the page. Do not soften it." */
@@ -1280,7 +1243,7 @@ export const en = {
 
   "home.verified_title": "Verified this week",
   "home.verified_body":
-    "Licence checked, contact confirmed, and for the visited tier, someone from our team stood in the warehouse.",
+    "Licence checked, contact confirmed, and for the audited tier, a trading history we measured rather than took somebody's word for.",
   "home.verified_all": "See all verified →",
 
   "home.catalogue_title": "New in supplier catalogues",
@@ -2212,8 +2175,6 @@ export const en = {
   "overview.replies_in": "You typically reply in {duration}",
   "overview.locked_domain": "Your own web address",
   "overview.locked_domain_body": "Your storefront answers on a domain you own, instead of a page inside the directory.",
-  "overview.locked_visit": "A verification site visit",
-  "overview.locked_visit_body": "One of our team visits your premises and photographs them. It is what tier 3 on the verification ladder asks for, and it is the only way to reach it.",
   "overview.free_is_free": "Free is a plan, not a trial. Nothing here expires.",
 
 
@@ -2529,7 +2490,6 @@ export const en = {
   "plan.ranking": "Ranked {multiplier}× in search",
   "plan.ranking_none": "A lift in search ranking",
   "plan.custom_domain": "Your own web address",
-  "plan.site_visit": "A verification site visit",
   "plan.summary.free": "Be listed, and answer three enquiries a month.",
   "plan.summary.basic": "For a supplier answering enquiries most weeks.",
   "plan.summary.pro": "For a supplier whose catalogue is how they get found.",
@@ -2580,9 +2540,6 @@ export const en = {
   "pricing.row.custom_domain": "Your own web address",
   "pricing.row.custom_domain_note":
     "Your storefront on an address you own, with the platform one still working.",
-  "pricing.row.site_visit": "Verified by a site visit",
-  "pricing.row.site_visit_note":
-    "Our team goes to the address and photographs it. The tier that follows is set by us and by nobody else, on this plan or any other.",
   "pricing.cell.multiplier": "{multiplier}×",
   "pricing.cell.included": "Included",
   "pricing.cell.absent": "Not included",
@@ -3121,11 +3078,9 @@ export const en = {
   "plan_step.task.photos": "Upload {n} photos of your premises and team",
   "plan_step.task.products": "Pick a spec template and add {n} products",
   "plan_step.task.team": "Invite your sales lead so enquiries don\u2019t sit unanswered",
-  "plan_step.task.visit": "Request a site visit for the top verification tier",
   "plan_step.cta.photos": "Upload",
   "plan_step.cta.products": "Start",
   "plan_step.cta.team": "Invite",
-  "plan_step.cta.visit": "Request",
 
   // The rail.
   "plan_step.live_at": "YOUR LISTING IS LIVE AT",
@@ -3162,8 +3117,6 @@ export const en = {
   "setup.task.products_body": "Ten is enough to be found. Fill in the fields marked FILTER and buyers can narrow to you.",
   "setup.task.team": "Invite somebody",
   "setup.task.team_body": "A second person who can answer an enquiry when you are on site.",
-  "setup.task.visit": "Book a verification visit",
-  "setup.task.visit_body": "One of our team visits your premises and photographs them. It is the only way to reach tier 3.",
   "setup.all_done": "All four are done",
   "setup.all_done_body": "Nothing else is waiting. Your dashboard opens on whatever needs a reply.",
   "setup.to_dashboard": "Go to my dashboard",
@@ -3382,11 +3335,6 @@ export const en = {
   "setup.card.team": "Invite whoever answers the phone",
   "setup.card.team_body":
     "An enquiry that sits unanswered for a day is usually gone. A second person on the inbox halves how long a buyer waits.",
-  "setup.card.visit": "Ask for a site visit and the top badge",
-  "setup.card.visit_body":
-    "One of our team comes to the address, checks the licence against what is there, and photographs it. Tier 3 cannot be reached any other way.",
-  "setup.card.visit_included": "Included on {plan}.",
-  "setup.card.visit_priced": "AED {fee} on {plan}, once.",
   "setup.cta.start": "Start",
   "setup.cta.resume": "Carry on",
   "setup.cta.invite": "Invite",
@@ -3661,14 +3609,6 @@ export const en = {
   // ── Team, board 7d ───────────────────────────────────────────────────────
   "team.revoked": "The invitation to {email} was withdrawn.",
 
-  "visit.title": "Book a verification visit",
-  "visit.intro": "One of our team comes to your premises, checks the licence against what is there, and photographs it. It is what tier 3 on the ladder means, and it is the only way to reach it.",
-  "visit.note_label": "When suits you",
-  "visit.note_hint": "Mornings, a particular day, a gate to use. We call to arrange the actual time.",
-  "visit.request": "Ask for a visit",
-  "visit.requested": "Asked for. We will call to arrange a time.",
-  "visit.pending": "Requested {when}. We will call to arrange a time.",
-  "visit.cancel": "Cancel the request",
 
 
   // ── Commercials ───────────────────────────────────────────────────────────
@@ -4441,18 +4381,16 @@ export const en = {
   "best.criterion.verified": "Trade licence checked against the issuing authority",
   "best.criterion.reply": "Median first reply under {hours} hours, measured from real enquiries",
   "best.criterion.reviews": "At least {count} reviews, each from a buyer who sent an enquiry through us",
-  "best.criterion.visit": "Premises visited by our field team",
   "best.criterion.placement": "Paid placement",
   "best.kind.required": "Required",
   "best.kind.weighted": "Ranks higher",
   "best.kind.never": "Never a factor",
   "best.considered": "{considered} suppliers in this trade were checked against these rules. {members} met all three.",
-  "best.no_purchase": "No supplier can pay to appear here, to move up, or to keep somebody else off. There is no field in the system for it — the order below is computed from the site visit, the verification tier, the measured reply time and the number of reviews, and from nothing else.",
+  "best.no_purchase": "No supplier can pay to appear here, to move up, or to keep somebody else off. There is no field in the system for it — the order below is computed from the verification tier, the measured reply time and the number of reviews, and from nothing else.",
   "best.rank": "{position}",
   "best.reply": "Replies in {duration}",
   "best.reviews": { one: "{count} review", other: "{count} reviews" },
   "best.rating": "{rating} out of 5",
-  "best.visited": "Visited",
   "best.empty": "Nobody meets all three rules in this trade yet.",
   "best.empty_body": "That is the list working rather than failing. The directory has suppliers in this trade — they are on the trade page, with what we have checked shown on each.",
   "best.browse": "Browse {category}",

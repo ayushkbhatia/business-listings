@@ -774,7 +774,6 @@ async function UnclaimedStorefront({ business }: { business: Business }) {
                         : "",
                       verificationTier: other.verificationTier,
                       verifiedAt: other.verifiedAt,
-                      visitedAt: other.visitedAt,
                       responseTimeMedianMs: other.responseTimeMedianMs,
                       responseDurationLabel: other.responseTimeMedianMs
                         ? formatDuration(other.responseTimeMedianMs)

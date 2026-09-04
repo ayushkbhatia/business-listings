@@ -27,7 +27,7 @@ export type InviteActionResult =
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
   locationLimit: true, photoLimit: true, teamSeats: true, rankingMultiplier: true,
-  customDomain: true, siteVisitIncluded: true, sortOrder: true,
+  customDomain: true, sortOrder: true,
 } as const;
 
 export async function sendInvite(formData: FormData): Promise<InviteActionResult> {

@@ -37,27 +37,20 @@ export async function getAdminNavBadges(seat: StaffSeat): Promise<Record<string,
   const wanted = {
     queue: seat.actor.roles.some((r) => r === "staff_moderator" || r === "staff_ops_lead"),
     reports: seat.actor.roles.some((r) => r === "staff_moderator" || r === "staff_ops_lead"),
-    visits: seat.actor.roles.some((r) => r === "staff_field" || r === "staff_ops_lead"),
   };
 
-  const [queue, reports, visits] = await Promise.all([
+  const [queue, reports] = await Promise.all([
     wanted.queue
       ? prisma.listingChangeRequest.count({ where: { status: "pending" } })
       : Promise.resolve(null),
     wanted.reports
       ? prisma.supplierReport.count({ where: { outcome: null } })
       : Promise.resolve(null),
-    wanted.visits
-      ? prisma.siteVisitRequest.count({
-          where: { completedAt: null, cancelledAt: null },
-        })
-      : Promise.resolve(null),
   ]);
 
   const badges: Record<string, number> = {};
   if (queue !== null) badges["queue"] = queue;
   if (reports !== null) badges["reports"] = reports;
-  if (visits !== null) badges["visits"] = visits;
   return badges;
 }
 

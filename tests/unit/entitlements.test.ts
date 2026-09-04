@@ -13,17 +13,17 @@ import {
 const FREE: PlanCaps = {
   id: "free", name: "Free", monthlyPriceAed: 0, enquiriesPerMonth: 3, productLimit: 10,
   locationLimit: 1, photoLimit: 5, teamSeats: 1, rankingMultiplier: 1, customDomain: false,
-  siteVisitIncluded: false, sortOrder: 0,
+  sortOrder: 0,
 };
 const BASIC: PlanCaps = {
   id: "basic", name: "Basic", monthlyPriceAed: 349, enquiriesPerMonth: 40, productLimit: 150,
   locationLimit: 3, photoLimit: 40, teamSeats: 3, rankingMultiplier: 1.15, customDomain: false,
-  siteVisitIncluded: false, sortOrder: 1,
+  sortOrder: 1,
 };
 const PRO: PlanCaps = {
   id: "pro", name: "Pro", monthlyPriceAed: 899, enquiriesPerMonth: null, productLimit: null,
   locationLimit: 10, photoLimit: 200, teamSeats: 10, rankingMultiplier: 1.35, customDomain: true,
-  siteVisitIncluded: true, sortOrder: 2,
+  sortOrder: 2,
 };
 const PLANS = [FREE, BASIC, PRO];
 
@@ -90,7 +90,7 @@ describe("what to offer, if anything", () => {
 
   it("offers the cheapest plan carrying a feature", () => {
     expect(cheapestPlanWith(PLANS, "customDomain", "free")?.id).toBe("pro");
-    expect(cheapestPlanWith(PLANS, "siteVisitIncluded", "basic")?.id).toBe("pro");
+    expect(cheapestPlanWith(PLANS, "customDomain", "basic")?.id).toBe("pro");
   });
 
   it("offers nothing for a feature the seller already has", () => {

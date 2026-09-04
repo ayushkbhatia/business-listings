@@ -183,7 +183,6 @@ test.describe("boards 4b, 4d and 4e", () => {
       "/admin/ingest",
       "/admin/reports",
       "/admin/audit",
-      "/admin/visits",
       "/admin/businesses",
       "/admin/crm",
       "/admin/support",
@@ -274,11 +273,6 @@ test.describe("boards 4h, 4i and 12h — trust", () => {
     await expect(page.getByText(/entries, every actor/)).toBeVisible();
   });
 
-  test("the visits queue says a visit does not set a tier", async ({ page }) => {
-    await page.goto("/admin/visits");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Field visits");
-    await expect(page.getByText(/Recording a visit does not set a tier/)).toBeVisible();
-  });
 });
 
 test.describe("boards 4f, 12d and 12f — accounts", () => {
@@ -480,58 +474,6 @@ test.describe("criterion 9 — removing a review", () => {
 
   test("is axe clean", async ({ page }) => {
     await page.goto("/admin/reviews");
-    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
-    expect(results.violations).toEqual([]);
-  });
-});
-
-test.describe("board 4h — filing a visit report", () => {
-  /*
-     `recordVisit` was the last of the eight orphaned mutations, and last for a
-     reason: a report needs photographs and there was no admin-side upload path
-     on the platform at all. The queue listed work nobody could complete.
-
-     The upload itself is not exercised here. CI runs a plain Postgres with no
-     Supabase Storage schema, so a test that uploaded would be a test that only
-     ever ran on a laptop. `recordVisit` is covered against a real database in
-     tests/integration/trust.test.ts; what this asserts is the screen.
-  */
-  test("the queue offers a way into the report", async ({ page }) => {
-    await page.goto("/admin/visits");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Field visits");
-
-    const file = page.getByRole("button", { name: "File a report" }).first();
-    await expect(file).toBeVisible();
-    await file.click();
-    await expect(page).toHaveURL(/\/admin\/visits\/[a-z0-9]+$/);
-  });
-
-  test("asks the three questions separately, not as one pass or fail", async ({ page }) => {
-    await page.goto("/admin/visits");
-    await page.getByRole("button", { name: "File a report" }).first().click();
-
-    // A visit where the premises exist and the stock does not is a different
-    // fact from one where nothing was there, and a tier rests on which.
-    await expect(page.getByLabel("The premises are there and open")).toBeVisible();
-    await expect(page.getByLabel("The signage matches the trade name")).toBeVisible();
-    await expect(page.getByLabel("Stock is on the floor")).toBeVisible();
-  });
-
-  test("will not file without photographs, and says how many are missing", async ({ page }) => {
-    await page.goto("/admin/visits");
-    await page.getByRole("button", { name: "File a report" }).first().click();
-
-    await expect(page.getByText(/2 more before this can be filed/)).toBeVisible();
-
-    // A reason alone is not enough — the floor is two geotagged photographs,
-    // and the service refuses below it whatever the form allows.
-    await page.getByRole("textbox", { name: "Reason" }).fill("Visited this morning.");
-    await expect(page.getByRole("button", { name: "File the report" })).toBeDisabled();
-  });
-
-  test("is axe clean", async ({ page }) => {
-    await page.goto("/admin/visits");
-    await page.getByRole("button", { name: "File a report" }).first().click();
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
   });

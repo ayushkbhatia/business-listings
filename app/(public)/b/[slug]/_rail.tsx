@@ -265,12 +265,6 @@ export function VerificationPanel({
       done: Boolean(business.trn) && business.verificationTier >= VERIFIED_TIER,
       date: business.verifiedAt ? formatDate(business.verifiedAt) : undefined,
     },
-    {
-      key: "visit",
-      label: t("verify.row_visit"),
-      done: Boolean(business.visitedAt),
-      date: business.visitedAt ? formatDate(business.visitedAt) : undefined,
-    },
   ];
 
   return (

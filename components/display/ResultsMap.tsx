@@ -76,7 +76,7 @@ export interface ResultsMapProps {
     searchArea: string;
     freeZones: string;
     legend: string;
-    legendVisited: string;
+    legendHeadOffice: string;
     legendVerified: string;
     legendUnverified: string;
     empty: string;
@@ -596,7 +596,7 @@ export function ResultsMap({
           <p className="mb-1.5 font-mono text-eyebrow uppercase text-body">{labels.legend}</p>
         <ul className="flex flex-col gap-1">
           {[
-            { key: "visited", dot: "border-moss bg-moss", text: labels.legendVisited },
+            { key: "head_office", dot: "border-moss bg-moss", text: labels.legendHeadOffice },
             { key: "verified", dot: "border-ink bg-ink", text: labels.legendVerified },
             { key: "unverified", dot: "border-line-strong bg-card", text: labels.legendUnverified },
           ].map((row) => (

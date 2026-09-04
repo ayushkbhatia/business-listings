@@ -40,7 +40,6 @@ export default async function BusinessesPage() {
         claimStatus: true,
         suspendedAt: true,
         mergedIntoId: true,
-        visitedByStaffId: true,
       },
     }),
     getAdminNavBadges(seat),
@@ -50,16 +49,12 @@ export default async function BusinessesPage() {
      What this seat may do, worked out here so the table can offer only what
      the service will accept.
 
-     Tier is the subtle one. `business.verification_tier.write` is held by an
-     ops lead and by a field verifier, but a field verifier may only tier a
-     business *they* visited — `assertCanSetVerificationTier` reads
-     `visitedByStaffId`. Offering the control to a field verifier on every row
-     would put a refusal behind two thirds of the buttons on this screen.
-
-     Note that `visitedByStaffId` is written by `recordVisit` and by nothing
-     else, and `recordVisit` still has no screen. Until it does, a field
-     verifier sees no tier control anywhere and only an ops lead can set one.
-     That is the truth about the system rather than a decision taken here.
+     Tier used to be the subtle one. `business.verification_tier.write` was
+     held by an ops lead and by a field verifier, and a field verifier could
+     only tier a business they had been to — a subject check reading
+     `visitedByStaffId`. Site visits were withdrawn and that column went with
+     them, so the capability is ops-lead only and this is a plain role test
+     again. Narrowed rather than widened: see lib/auth/capabilities.ts.
   */
   const mayTier = can(seat.actor, "business.verification_tier.write");
   const maySuspend = can(seat.actor, "business.suspend");
@@ -78,7 +73,7 @@ export default async function BusinessesPage() {
         : business.claimStatus === "unclaimed"
           ? "unclaimed"
           : "live",
-    mayTier: mayTier && (seat.isOpsLead || business.visitedByStaffId === seat.actor.id),
+    mayTier,
     maySuspend,
   }));
 
