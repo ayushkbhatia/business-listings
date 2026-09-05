@@ -6,6 +6,8 @@ import { parseAedToFils } from "@/lib/quote/money";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { onQuoteSent } from "@/lib/notify/events";
+import { recordEvent } from "@/lib/telemetry/record";
+import { findDraft, nextRevisionFor } from "./draft";
 
 /**
  * Sending a quote — the service.
@@ -53,15 +55,16 @@ export async function sendQuoteForBusiness(
 
   const recipient = await prisma.enquiryRecipient.findUnique({
     where: { enquiryId_businessId: { enquiryId: input.enquiryId, businessId } },
-    select: { firstReplyAt: true },
+    select: { firstReplyAt: true, createdAt: true },
   });
   // Not a recipient and no such enquiry give the same answer, so the endpoint
   // cannot be used to find out which enquiries exist.
   if (!recipient) return { ok: false, error: t("quote.error.not_your_enquiry") };
+  const receivedAt = recipient.createdAt;
 
   const enquiry = await prisma.enquiry.findUnique({
     where: { id: input.enquiryId },
-    select: { closesAt: true, lines: { select: { id: true } } },
+    select: { closesAt: true, revision: true, lines: { select: { id: true } } },
   });
   if (!enquiry) return { ok: false, error: t("quote.error.not_your_enquiry") };
 
@@ -117,39 +120,91 @@ export async function sendQuoteForBusiness(
     ? input.validityDays
     : DEFAULT_VALIDITY_DAYS;
 
-  // A revision is a new row, never an edit. Board 10h shows the buyer both.
-  const previous = await prisma.quote.findFirst({
-    where: { enquiryId: input.enquiryId, businessId },
-    orderBy: { revision: "desc" },
-    select: { revision: true },
-  });
-  const revision = (previous?.revision ?? 0) + 1;
+  /*
+     A revision is a new row, never an edit. Board 10h shows the buyer both.
+
+     The one row this may reuse is the seller's own unsent draft: board 3j
+     autosaves line edits, and a draft *is* the next revision waiting to be
+     finished rather than a second quote beside it. `Quote` is unique on
+     (enquiryId, businessId, revision), so promoting it is the only shape that
+     does not leave a hole in the sequence the buyer reads.
+  */
+  const draft = await findDraft(input.enquiryId, businessId);
+  const revision = draft?.revision ?? (await nextRevisionFor(input.enquiryId, businessId));
 
   const expiresAt = new Date(now.getTime() + validityDays * 24 * 3_600_000);
   const ref = await nextQuoteRef(input.enquiryId, businessId, revision);
 
+  const lineData = input.lines.map((line, i) => ({
+    enquiryLineId: line.enquiryLineId,
+    productId: line.productId,
+    description: line.description,
+    qty: line.qty,
+    unitPrice: line.unitPrice,
+    leadTimeDays: line.leadTimeDays,
+    sortOrder: i,
+  }));
+
   const sent = await prisma.$transaction(async (tx) => {
+    if (draft) {
+      // Promote. The draft's lines are replaced wholesale rather than merged:
+      // what the seller is sending is what is on screen now, and a line they
+      // removed must not survive in the quote a buyer receives.
+      await tx.quoteLine.deleteMany({ where: { quoteId: draft.id } });
+      const promoted = await tx.quote.update({
+        where: { id: draft.id },
+        data: {
+          ref,
+          againstRevision: enquiry.revision,
+          validityDays,
+          note: input.note || null,
+          status: "sent",
+          sentAt: now,
+          expiresAt,
+          lines: { create: lineData },
+        },
+        select: { id: true, ref: true, revision: true },
+      });
+
+      await tx.enquiryRecipient.update({
+        where: { enquiryId_businessId: { enquiryId: input.enquiryId, businessId } },
+        data: {
+          state: "quoted",
+          ...(recipient.firstReplyAt === null ? { firstReplyAt: now } : {}),
+        },
+      });
+
+      return {
+        ok: true as const,
+        quoteId: promoted.id,
+        quoteRef: promoted.ref,
+        revision: promoted.revision,
+      };
+    }
+
     const created = await tx.quote.create({
       data: {
         ref,
         enquiryId: input.enquiryId,
         businessId,
         revision,
+        /*
+           Which version of the requirement this was priced against.
+
+           The column has existed since the revisions migration with a default of
+           1 and no writer, so every quote in the database claimed to be priced
+           against R1 whatever the buyer had since changed. The buyer's tracking
+           page renders it — `QUOTED R1 · REQUIREMENT CHANGED SINCE` — so a
+           supplier who had correctly re-priced against R3 was shown to the buyer
+           as working from the original.
+        */
+        againstRevision: enquiry.revision,
         validityDays,
         note: input.note || null,
         status: "sent",
         sentAt: now,
         expiresAt,
-        lines: {
-          create: input.lines.map((line, i) => ({
-            productId: line.productId,
-            description: line.description,
-            qty: line.qty,
-            unitPrice: line.unitPrice,
-            leadTimeDays: line.leadTimeDays,
-            sortOrder: i,
-          })),
-        },
+        lines: { create: lineData },
       },
       select: { id: true, ref: true, revision: true },
     });
@@ -169,6 +224,26 @@ export async function sendQuoteForBusiness(
 
   // Outside the transaction: a carrier being slow must not hold one open.
   await onQuoteSent({ enquiryId: input.enquiryId, businessId, revision: sent.revision });
+
+  /*
+     A state fact, so the server records it. `hoursSinceReceipt` is the figure
+     board 3a's median is built from, kept per quote so a slow week can be read
+     without recomputing a median over the window.
+  */
+  await recordEvent({
+    name: "quote_sent",
+    businessId,
+    actorId: actor.id,
+    props: {
+      lines: input.lines.length,
+      revision: sent.revision,
+      validityDays,
+      handPriced: input.lines.filter((l) => l.productId === null).length,
+      ...(receivedAt
+        ? { hoursSinceReceipt: Math.round((now.getTime() - receivedAt.getTime()) / 3_600_000) }
+        : {}),
+    },
+  });
 
   return sent;
 }

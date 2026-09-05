@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/primitives/Button";
 import { Input } from "@/components/primitives/Input";
 import { Select } from "@/components/primitives/Select";
@@ -124,6 +124,18 @@ export interface QuoteLineEditorProps {
   /** Formats a fils total for display. Passed in — a server page owns locale. */
   formatTotal: (aed: string) => string;
   onSubmit?: (value: QuoteLineEditorValue) => void | Promise<void>;
+  /**
+   * Every keystroke's worth of state, unvalidated.
+   *
+   * Board 3j §5 autosaves line edits as a draft, and a draft is the seller's
+   * own workings — a half-typed price, a line not reached yet. `onSubmit`
+   * refuses all of that, correctly, because a buyer is about to read it. So
+   * this fires with whatever is on screen and the caller decides what to keep.
+   *
+   * Fired from an effect rather than from each handler, so it cannot miss a
+   * path: there are eleven places a row changes.
+   */
+  onChange?: (value: QuoteLineEditorValue) => void;
   busy?: boolean;
   /** A server-side failure, already localised. */
   error?: string;
@@ -158,6 +170,7 @@ export function QuoteLineEditor({
   initialValidityDays = 14,
   formatTotal,
   onSubmit,
+  onChange,
   busy = false,
   error,
 }: QuoteLineEditorProps) {
@@ -198,6 +211,59 @@ export function QuoteLineEditor({
     return filsToAed(fils);
   }, [lines, rows]);
 
+  /**
+   * The form's state as a value, with nothing refused.
+   *
+   * Shared by the draft and the submit so the two cannot describe the same
+   * screen differently — the submit adds validation on top rather than building
+   * its own shape.
+   */
+  const currentValue = useMemo<QuoteLineEditorValue>(
+    () => ({
+      note: note.trim(),
+      validityDays: Number(validityDays),
+      lines: lines
+        .filter((line) => rows[line.key]?.included)
+        .map((line) => {
+          const row = rows[line.key]!;
+          const lead = row.leadTimeDays.trim();
+          return {
+            enquiryLineId: line.key,
+            productId: row.productId,
+            description: line.description,
+            qty: line.qty,
+            unitPrice: row.unitPrice.trim(),
+            leadTimeDays: lead === "" ? null : Number(lead),
+          };
+        }),
+    }),
+    [lines, rows, note, validityDays],
+  );
+
+  /*
+     Fires on a change, and a mount is not one.
+
+     The obvious guard — a ref set on the first effect run — does not hold:
+     React re-invokes effects on a StrictMode remount, so the second run sees
+     the ref already set and reports an edit nobody made. Opening a lead and
+     touching nothing wrote a draft, which then read as work in progress on a
+     quote the seller had only glanced at.
+
+     Comparing against the value the form opened with holds in both modes and
+     however many times the effect runs. It also covers the case the ref never
+     could: typing a price and deleting it again is not an edit either.
+  */
+  const opened = useRef<string | null>(null);
+  const snapshot = JSON.stringify(currentValue);
+  useEffect(() => {
+    if (opened.current === null) {
+      opened.current = snapshot;
+      return;
+    }
+    if (snapshot === opened.current) return;
+    onChange?.(currentValue);
+  }, [snapshot, currentValue, onChange]);
+
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitError(null);
@@ -227,22 +293,7 @@ export function QuoteLineEditor({
       }
     }
 
-    void onSubmit?.({
-      note: note.trim(),
-      validityDays: Number(validityDays),
-      lines: included.map((line) => {
-        const row = rows[line.key]!;
-        const lead = row.leadTimeDays.trim();
-        return {
-          enquiryLineId: line.key,
-          productId: row.productId,
-          description: line.description,
-          qty: line.qty,
-          unitPrice: row.unitPrice.trim(),
-          leadTimeDays: lead === "" ? null : Number(lead),
-        };
-      }),
-    });
+    void onSubmit?.(currentValue);
   }
 
   const message = error ?? submitError;

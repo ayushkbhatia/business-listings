@@ -81,6 +81,22 @@ export const EVENT_PARAMS = {
   */
   enquiry_escalated: ["ref", "hours", "closesAt", "enquiryId"],
   quote_expiring: [],
+  /*
+     Board 11b's follow-up, and the first message-shaped notification in the
+     product. Everything the enquiry spine sends is about a *quote* — received,
+     revised, accepted, expiring — because a message was assumed to be read
+     where it was written. The follow-up breaks that: it goes to a buyer who has
+     gone quiet, and a quiet buyer is not looking at the thread.
+
+     `preview` is the seller's own words, truncated. It is not a summary we
+     wrote: the whole rule on that screen is that we suggest the act and never
+     the number, so a message body composed here would be the platform putting
+     words in a supplier's mouth on a carrier the supplier cannot see.
+
+     No buyer name and no seller contact detail — `render()` refuses anything
+     that looks like contact details, and there is nothing here it would need to.
+  */
+  message_received: ["businessName", "preview", "enquiryId", "shortLink"],
   review_posted: [],
   review_requested: [],
   document_expiring: [],

@@ -12,6 +12,7 @@ export { ModerationRow, type ModerationRowProps } from "./ModerationRow";
 export { AuditRow, type AuditRowProps } from "./AuditRow";
 export {
   Thread,
+  type ThreadChip,
   type ThreadLabels,
   type ThreadMessageView,
   type ThreadProps,

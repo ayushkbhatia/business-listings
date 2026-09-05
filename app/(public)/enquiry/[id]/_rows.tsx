@@ -93,9 +93,9 @@ export function RecipientRow({
              `delivered`. Once spent the button becomes the mono line saying so
              — the buyer needs to remember they already did this.
           */
-          row.nudgedAt ? (
+          row.buyerNudgedAt ? (
             <span className="font-mono text-eyebrow uppercase text-faint">
-              {t("track.nudged", { when: formatRelative(row.nudgedAt) })}
+              {t("track.nudged", { when: formatRelative(row.buyerNudgedAt) })}
             </span>
           ) : (
             <NudgeButton

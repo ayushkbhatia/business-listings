@@ -1,5 +1,9 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { assertCan } from "@/lib/auth/can";
+import type { Actor } from "@/lib/auth/roles";
+import { recordEvent } from "@/lib/telemetry/record";
+import { cancelFollowUp } from "./follow-up";
 import { describeVerdict, detectOffPlatform, type Verdict } from "./off-platform";
 
 /**
@@ -112,7 +116,63 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
     return { messageId: message.id, reportId };
   });
 
+  /*
+     Board 11b §4: the follow-up is cancelled when the buyer replies. Outside
+     the transaction and unconditional — a reminder that will not send and one
+     that was never armed are the same thing, so there is nothing to check first
+     and nothing to roll back if it finds none.
+  */
+  if (input.sender === "buyer") {
+    await cancelFollowUp(input.enquiryId, input.businessId, "buyer_replied");
+  }
+
+  /*
+     Only the seller's. A buyer's message is not this business's telemetry, and
+     `product_event` is keyed by business — a row counting what a buyer wrote
+     would sit in a supplier's own numbers describing somebody else.
+
+     Length rather than the words. Nothing here is a place to store a message.
+  */
+  if (input.sender === "seller") {
+    await recordEvent({
+      name: "message_sent",
+      businessId: input.businessId,
+      actorId: input.senderId,
+      props: { length: body.length, flagged: verdict.flag },
+    });
+  }
+
   return { ok: true, ...result, flagged: verdict.flag };
+}
+
+/**
+ * The seller's half of `postMessage`, with the capability check it never had.
+ *
+ * `sendQuoteForBusiness` has asserted `quote.send` since handoff 2; the message
+ * path asserted nothing. It resolved a seat and wrote, so a `seller_finance`
+ * seat — which board 7d gives no reply capability at all — could post into a
+ * buyer thread. Board 7d's first row is "Reply to enquiries & send quotes", and
+ * only one half of it was fenced.
+ *
+ * Written here rather than in the action for the same reason as the quote
+ * service: an action resolves who is acting and revalidates, and every invariant
+ * lives where a test can reach it without a request.
+ */
+export async function postSellerMessage(
+  actor: Actor,
+  businessId: string,
+  input: { enquiryId: string; body: string; quoteRevisionId?: string | null },
+): Promise<PostMessageResult> {
+  assertCan(actor, "enquiry.respond");
+
+  return postMessage({
+    enquiryId: input.enquiryId,
+    businessId,
+    senderId: actor.id,
+    sender: "seller",
+    body: input.body,
+    quoteRevisionId: input.quoteRevisionId ?? null,
+  });
 }
 
 export interface ThreadMessage {
@@ -122,6 +182,8 @@ export interface ThreadMessage {
   /** True when the sender is the business on this thread. */
   fromSeller: boolean;
   flagged: boolean;
+  /** Written by the follow-up schedule rather than typed. Tagged on screen. */
+  automatic: boolean;
   quoteRevisionId: string | null;
   createdAt: Date;
 }
@@ -150,6 +212,7 @@ export async function getThread(
       body: true,
       senderId: true,
       flaggedAt: true,
+      automatic: true,
       quoteRevisionId: true,
       createdAt: true,
       sender: { select: { businessId: true } },
@@ -162,38 +225,10 @@ export async function getThread(
     senderId: m.senderId,
     fromSeller: m.sender.businessId === businessId,
     flagged: m.flaggedAt !== null,
+    automatic: m.automatic,
     quoteRevisionId: m.quoteRevisionId,
     createdAt: m.createdAt,
   }));
-}
-
-export type NudgeResult =
-  | { ok: true; nudgedAt: Date }
-  | { ok: false; error: "not_a_participant" | "already_nudged" | "no_reply_needed" };
-
-/**
- * The one follow-up a seller gets.
- *
- * Board 11b says a second nudge loses more deals than it wins, so there is no
- * second. `nudgedAt` is a timestamp rather than a counter for that reason: the
- * schema cannot express "three nudges", so no future screen can offer them.
- */
-export async function nudge(enquiryId: string, businessId: string): Promise<NudgeResult> {
-  const recipient = await prisma.enquiryRecipient.findUnique({
-    where: { enquiryId_businessId: { enquiryId, businessId } },
-    select: { nudgedAt: true, state: true },
-  });
-  if (!recipient) return { ok: false, error: "not_a_participant" };
-  if (recipient.nudgedAt) return { ok: false, error: "already_nudged" };
-  // Nothing to follow up on until a quote has been sent.
-  if (recipient.state !== "quoted") return { ok: false, error: "no_reply_needed" };
-
-  const nudgedAt = new Date();
-  await prisma.enquiryRecipient.update({
-    where: { enquiryId_businessId: { enquiryId, businessId } },
-    data: { nudgedAt },
-  });
-  return { ok: true, nudgedAt };
 }
 
 export type { Verdict };

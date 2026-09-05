@@ -81,8 +81,9 @@ and it is the one that argues back.
 /dashboard/products/import              CSV import mapper                    [11d]
 /dashboard/templates                    Spec templates                        [3h]
 /dashboard/media                        Media library                         [3i]
-/dashboard/leads                        Leads & RFQ inbox                     [3j]  built h2s1
-/dashboard/leads/:id/thread             Seller message thread                [11b]  built h2s1 + h2s4
+/dashboard/leads                        Leads & RFQ inbox                     [3j]  built h3 wave 1
+/dashboard/leads/:id                    One lead, and the quote composer      [3j]  built h3 wave 1
+/dashboard/leads/:id/thread             Seller message thread                [11b]  built h3 wave 1
 /dashboard/quotes                       Quotes sent pipeline                  [3k]  built h2s1
 /dashboard/reviews                      Reviews                              [11c]  built h2s6
 /dashboard/questions                    Buyer questions                       [1g]  built h5

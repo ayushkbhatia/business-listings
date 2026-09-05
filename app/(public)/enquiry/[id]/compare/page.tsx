@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/primitives";
@@ -8,6 +9,7 @@ import { getBuyerEnquiry, type BuyerQuote } from "@/lib/db/queries/enquiry";
 import { formatAED, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
+import { markQuotesRead } from "@/lib/messaging/receipts";
 import { resolveBuyerId, trackingTokenFor } from "../../_buyer";
 import { acceptQuoteAction } from "../../actions";
 import { acceptErrorMessage } from "../../_errors";
@@ -44,6 +46,18 @@ export default async function ComparePage({
   const token = await trackingTokenFor(buyerId);
   const quotes = enquiry.quotes.filter((q) => q.status !== "lost");
   if (quotes.length === 0) notFound();
+
+  /*
+     Board 11b §6, the buyer's half of the receipt. A read should not block on a
+     write, and `readAt` is not part of what this page renders — the seller's
+     inbox is where it surfaces.
+
+     This is the first writer the column has ever had. It was declared in the
+     init migration, set by the seed and read by the dashboard, so the seller's
+     "Buyer opened your quote" line was true on a seeded database and silently
+     false everywhere else.
+  */
+  after(() => markQuotesRead(id, buyerId));
 
   const error = acceptErrorMessage(one("error"));
   const accepted = enquiry.contactReleasedToBusinessId;

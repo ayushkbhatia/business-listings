@@ -31,7 +31,7 @@ export interface LeadRow {
   createdAt: Date;
   openedAt: Date | null;
   firstReplyAt: Date | null;
-  nudgedAt: Date | null;
+  sellerNudgedAt: Date | null;
   buyer: SellerVisibleBuyer;
   /** The seller's latest quote on this enquiry, if any. */
   latestQuote: { ref: string; revision: number; status: string; totalAed: string } | null;
@@ -56,7 +56,13 @@ export async function getLeadsForBusiness(businessId: string): Promise<LeadRow[]
           buyer: { select: { fullName: true } },
           lines: { select: { qty: true } },
           quotes: {
-            where: { businessId },
+            /*
+               Sent quotes only. `QuoteStatus.draft` gained its first writer with
+               board 3j's autosave, and a draft is the seller's own workings —
+               counting one here would put "r2 · AED 0.00" on a rail row for a
+               quote the buyer has never seen.
+            */
+            where: { businessId, status: { not: "draft" } },
             orderBy: { revision: "desc" },
             take: 1,
             select: {
@@ -87,7 +93,7 @@ export async function getLeadsForBusiness(businessId: string): Promise<LeadRow[]
       createdAt: e.createdAt,
       openedAt: r.openedAt,
       firstReplyAt: r.firstReplyAt,
-      nudgedAt: r.nudgedAt,
+      sellerNudgedAt: r.sellerNudgedAt,
       buyer: buyerForSeller(e.buyer, e.contactReleasedToBusinessId, businessId),
       latestQuote: quote
         ? {
@@ -128,6 +134,15 @@ export interface LeadDetail {
   createdAt: Date;
   openedAt: Date | null;
   firstReplyAt: Date | null;
+  /**
+   * When the buyer accepted, where they did.
+   *
+   * `Quote.acceptedAt` first, falling back to `Enquiry.contactReleasedAt` — the
+   * same pair the buyer's own side reads. The seller's screen used to render
+   * "accepted your quote on {when}" with the *enquiry's* creation date, which on
+   * a three-week enquiry was a fortnight out.
+   */
+  acceptedAt: Date | null;
   buyer: SellerVisibleBuyer;
   lines: LeadLine[];
   quotes: {
@@ -142,6 +157,13 @@ export interface LeadDetail {
     totalAed: string;
     lines: {
       id: string;
+      /**
+       * The buyer's line this one answered. Null on every quote line written
+       * before board 3j — the composer used to match on `description`, which is
+       * ambiguous on an enquiry carrying two lines of the same wording in
+       * different sizes.
+       */
+      enquiryLineId: string | null;
       productId: string | null;
       description: string;
       qty: number;
@@ -169,7 +191,7 @@ export async function getLeadDetail(
 
   const released = await prisma.enquiry.findUnique({
     where: { id: enquiryId },
-    select: { contactReleasedToBusinessId: true },
+    select: { contactReleasedToBusinessId: true, contactReleasedAt: true },
   });
   if (!released) return null;
 
@@ -188,10 +210,18 @@ export async function getLeadDetail(
       buyer: { select: buyerSelectFor(released.contactReleasedToBusinessId, businessId) },
       lines: { orderBy: { sortOrder: "asc" } },
       quotes: {
-        where: { businessId },
+        /*
+           Sent quotes only, for the same reason: the composer's eyebrow counts
+           these to name the next revision, and `SentQuotes` lists them under
+           "Sent already". With drafts included, opening a lead and typing one
+           price made the composer announce "Revision 2" of a quote nobody had
+           sent. The draft is read separately, by `findDraft`.
+        */
+        where: { status: { not: "draft" } },
         orderBy: { revision: "desc" },
         include: { lines: { orderBy: { sortOrder: "asc" } } },
       },
+      contactReleasedAt: true,
     },
   });
   if (!enquiry) return null;
@@ -214,6 +244,11 @@ export async function getLeadDetail(
     createdAt: enquiry.createdAt,
     openedAt: recipient.openedAt,
     firstReplyAt: recipient.firstReplyAt,
+    acceptedAt:
+      enquiry.contactReleasedToBusinessId === businessId
+        ? (enquiry.quotes.find((q) => q.acceptedAt !== null)?.acceptedAt ??
+          enquiry.contactReleasedAt)
+        : null,
     buyer: buyerForSeller(enquiry.buyer, enquiry.contactReleasedToBusinessId, businessId),
     lines: enquiry.lines.map((l, i) => ({
       id: l.id,
@@ -237,6 +272,7 @@ export async function getLeadDetail(
       totalAed: quoteTotalAed(q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
       lines: q.lines.map((l) => ({
         id: l.id,
+        enquiryLineId: l.enquiryLineId,
         productId: l.productId,
         description: l.description,
         qty: l.qty,
@@ -327,7 +363,13 @@ export interface QuoteRow {
 
 export async function getQuotesForBusiness(businessId: string): Promise<QuoteRow[]> {
   const quotes = await prisma.quote.findMany({
-    where: { businessId },
+    /*
+       Board 3k lists what has been *sent*. `QuoteStatus.draft` had no writer at
+       all until board 3j's autosave, so this filter was free to omit; it is not
+       any more, and a half-priced draft appearing in the quotes pipeline would
+       be a quote the buyer has never seen sitting in a list of ones they have.
+    */
+    where: { businessId, status: { not: "draft" } },
     orderBy: [{ createdAt: "desc" }],
     select: {
       id: true,

@@ -39,25 +39,25 @@ export async function nudge(input: {
       enquiryId: true,
       businessId: true,
       state: true,
-      nudgedAt: true,
+      buyerNudgedAt: true,
       createdAt: true,
       openedAt: true,
     },
   });
   if (!recipient) return { ok: false, error: "not_found" };
-  if (recipient.nudgedAt) return { ok: false, error: "already_nudged" };
+  if (recipient.buyerNudgedAt) return { ok: false, error: "already_nudged" };
   if (recipient.state !== "delivered") return { ok: false, error: "wrong_state" };
 
   /* The same predicate the button renders from. One rule, one place. */
   const asTracked = {
     state: recipient.state,
-    nudgedAt: recipient.nudgedAt,
+    buyerNudgedAt: recipient.buyerNudgedAt,
     deliveredAt: recipient.createdAt,
   } as TrackedRecipient;
   if (!canNudge(asTracked, now)) return { ok: false, error: "too_soon" };
 
   /*
-     Conditional on `nudgedAt` still being null, so two taps a second apart
+     Conditional on `buyerNudgedAt` still being null, so two taps a second apart
      cannot send two WhatsApps. `updateMany` returns a count rather than
      throwing, which is what makes the race visible instead of fatal.
   */
@@ -65,9 +65,9 @@ export async function nudge(input: {
     where: {
       enquiryId: recipient.enquiryId,
       businessId: recipient.businessId,
-      nudgedAt: null,
+      buyerNudgedAt: null,
     },
-    data: { nudgedAt: now },
+    data: { buyerNudgedAt: now },
   });
   if (count === 0) return { ok: false, error: "already_nudged" };
 

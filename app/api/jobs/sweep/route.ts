@@ -3,17 +3,24 @@ import { deliverQueued, flushDeferred } from "@/lib/notify/service";
 import { sweepAlerts } from "@/lib/alerts/service";
 import { pollDomains } from "@/lib/domains/service";
 import { sweepEscalations } from "@/lib/enquiry/escalation-job";
+import { sweepFollowUps } from "@/lib/messaging/follow-up";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
 
 /**
  * The hourly sweep — the jobs whose value is in being timely, and whose cost
  * does not grow with the directory.
  *
- * Three of them: releasing notifications held back for UAE quiet hours,
- * matching saved buyer alerts against newly listed products, and polling
- * custom-domain DNS. Each reads a bounded set — deferred deliveries, alerts
- * not yet notified, domains awaiting verification — so this run costs roughly
- * the same at five thousand listings as at five hundred.
+ * Escalating unanswered enquiries, sending the follow-ups sellers armed,
+ * releasing notifications held back for UAE quiet hours, matching saved buyer
+ * alerts against newly listed products, and polling custom-domain DNS. Each
+ * reads a bounded set — leads past their threshold, follow-ups due, deferred
+ * deliveries, alerts not yet notified, domains awaiting verification — so this
+ * run costs roughly the same at five thousand listings as at five hundred.
+ *
+ * The heading used to say "three of them" over a list that had grown to five.
+ * A count written into prose beside a list that grows is a number that goes
+ * wrong quietly, so this one no longer carries it — the same correction
+ * `/api/jobs/daily` records having made.
  *
  * That is the line between this route and `/api/jobs/daily`. Everything that
  * walks the whole directory to recompute a number went there; everything a
@@ -57,6 +64,17 @@ export async function GET(request: NextRequest) {
        a reply time it has itself made worse.
     */
     escalations: () => sweepEscalations(),
+    /*
+       The other half of the same clock. The escalation sweep chases a seller who
+       has not answered a buyer; this sends the one follow-up a seller armed for
+       a buyer who has gone quiet after a quote.
+
+       Second rather than first, and it matters: a lead that is about to escalate
+       has no first reply, so it cannot have a follow-up armed — but running them
+       in this order keeps the step somebody is waiting on at the front of the
+       run whatever the queue looks like.
+    */
+    followUps: () => sweepFollowUps(),
     async deferredNotifications() {
       let flushed = 0;
       let passes = 0;

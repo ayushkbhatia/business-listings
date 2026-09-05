@@ -54,9 +54,9 @@ export function BuyerThread({
       labels={labels}
       readOnly={readOnly}
       quickReplies={[
-        t("thread.chip.validity"),
-        t("thread.chip.datasheets"),
-        t("thread.chip.credit"),
+        { label: t("thread.chip.validity"), text: t("thread.chip.validity_text") },
+        { label: t("thread.chip.datasheets"), text: t("thread.chip.datasheets_text") },
+        { label: t("thread.chip.credit"), text: t("thread.chip.credit_text") },
       ]}
       busy={pending}
       {...(error ? { error } : {})}

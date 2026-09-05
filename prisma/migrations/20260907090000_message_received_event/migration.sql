@@ -1,0 +1,19 @@
+-- Board 11b: the buyer hears about a seller's message.
+--
+-- Alone in its own migration, and it has to be. Postgres cannot add a value to
+-- an enum and use it in the same transaction, and Prisma runs each migration as
+-- one transaction. `setup_nudge` and `subscription_renewed` were added the same
+-- way, for the same reason.
+--
+-- Why this event did not exist. Every notification the enquiry spine sends is
+-- about a *quote* — received, revised, accepted, expiring — and a message was
+-- assumed to be read where it was written. Board 11b's follow-up breaks that
+-- assumption: it is a message the seller sends to a buyer who has gone quiet,
+-- and a quiet buyer is by definition not looking at the thread. Without an
+-- event to carry it, the follow-up would reach nobody, which is the state the
+-- feature was already in — `nudge()` stamped a column and sent nothing.
+--
+-- `BEFORE 'weekly_digest'` keeps the declaration order matching the enum in
+-- prisma/schema.prisma. Order is cosmetic to Postgres and is not cosmetic to
+-- the next person diffing the two.
+ALTER TYPE "notification_event" ADD VALUE IF NOT EXISTS 'message_received' BEFORE 'weekly_digest';

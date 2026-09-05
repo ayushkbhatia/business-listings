@@ -754,11 +754,272 @@ async function main() {
   */
   await seedReviewDepth(prisma);
   await seedModerationQueue(prisma);
+  /*
+     Board 3j's four tabs, against rows that actually exist.
+
+     PRNG-free, and last among the fixture builders for the reason the comment
+     above `seedPumps` gives: it consumes no `rnd()` draw, so it renames nothing
+     and no test that pins a slug moves because of it.
+  */
+  await seedInboxStates(prisma);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
   // Last of all, because it reads the references every builder above it wrote.
   await advanceEnquiryRefSequence(prisma);
+}
+
+/**
+ * The states board 3j's rail has to render, and nothing in the seed produced.
+ *
+ * Before this the flagship seller's inbox was ten rows that all read the same:
+ * seven said `Quoted` with no quote behind them, there was not one `lost` quote
+ * in the entire file, no row carried a nudge, and no row carried an outcome or
+ * an assignee — the two columns board 3j adds. So `Won 0 · Lost 0` over two
+ * empty tabs, and no way to see an overdue band at all.
+ *
+ * Six leads, each one a state the screen claims to have:
+ *
+ *   1. breached — no reply, older than the escalation threshold
+ *   2. approaching — no reply, past half of it
+ *   3. waiting — answered, comfortably inside
+ *   4. won, marked by the seller
+ *   5. lost, marked by the seller, with a reason
+ *   6. quoted with a follow-up armed and due tomorrow
+ *
+ * PRNG-free: fixed strings, fixed quantities, `NOW`-relative dates. Nothing here
+ * draws from `rnd()` or `int()`, so it can sit at the end of `main` without
+ * renaming a single generated business — the hazard two other comments in this
+ * file already record paying for.
+ *
+ * Deliberately **not** the free seat. `seedAtMonthlyCap` throws if
+ * `al-manara-equipment-trading-llc` gains a recipient row dated in the current
+ * month, and `onlyOneSellerAtCap` deletes the oldest rows of any capped seller
+ * that reaches its cap. Both would make these fixtures depend on the day of the
+ * month the seed happened to run.
+ */
+async function seedInboxStates(db: Db) {
+  console.log("→ inbox states, for board 3j");
+
+  const seller = await db.business.findFirst({
+    where: { slug: "al-marwan-industrial-supplies-llc" },
+    select: { id: true, leadEscalationMinutes: true },
+  });
+  if (!seller) {
+    console.log("   skipped — the flagship seller is not in this seed");
+    return;
+  }
+
+  const owner = await db.user.findFirst({
+    where: { businessId: seller.id, roles: { has: "seller_owner" } },
+    select: { id: true },
+  });
+  const buyer = await db.user.findFirst({
+    where: { roles: { has: "buyer" } },
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
+  if (!owner || !buyer) {
+    console.log("   skipped — no seat or no buyer");
+    return;
+  }
+
+  /*
+     Measured from the supplier's own setting rather than a fixed number of
+     hours, so the fixtures land in the band they are named for whatever that
+     setting is. A seed that hard-coded "four hours old" would drift into the
+     wrong band the moment somebody changed the default.
+  */
+  const escalation = Math.max(5, seller.leadEscalationMinutes);
+
+  /*
+     Measured from the seed's own run instant, not from `NOW`.
+
+     Every other builder here dates from `NOW`, which is midday Dubai, because a
+     fixed instant is what makes a seeded database reproducible. These two rows
+     cannot use it: the waiting band is computed at render time against the real
+     clock, so a row placed ninety minutes before midday is four hours old by
+     the afternoon and renders `Overdue` when it was written to be `Due soon`.
+     The band fixtures were all reading red for exactly that reason.
+
+     So the two band-sensitive rows are relative to when the seed ran, which is
+     the closest a fixed row can get to a moving boundary. The dated fixtures
+     below — won, lost, the follow-up — stay on `NOW`, because days do not drift
+     within an afternoon.
+  */
+  const ranAt = new Date();
+  const minutesAgo = (m: number) => new Date(ranAt.getTime() - m * 60_000);
+
+  interface InboxFixture {
+    ref: string;
+    requirement: string;
+    area: string;
+    lines: { description: string; qty: number; size: string | null; target: string | null }[];
+    createdAt: Date;
+    state: "delivered" | "opened" | "quoted";
+    firstReplyAt: Date | null;
+    outcome?: "won" | "lost";
+    outcomeReason?: string;
+    followUp?: boolean;
+  }
+
+  const FIXTURES: InboxFixture[] = [
+    {
+      ref: "ENQ-9300",
+      requirement:
+        "Chilled water riser replacement at a hotel in Dubai Marina. UL/FM listed valves, Civil Defence acceptable. Delivery to site in two drops.",
+      area: "Dubai Marina",
+      lines: [
+        { description: "Grooved butterfly valve", qty: 40, size: "DN100", target: "210.00" },
+        { description: "Grooved rigid coupling", qty: 120, size: "4 inch", target: "52.00" },
+        { description: "Grooved gasket, EPDM", qty: 120, size: "4 inch", target: null },
+      ],
+      // Comfortably past the threshold: the red band, and the overdue pill.
+      createdAt: minutesAgo(escalation * 3),
+      state: "delivered",
+      firstReplyAt: null,
+    },
+    {
+      ref: "ENQ-9301",
+      requirement:
+        "Annual filter replacement across six towers in Business Bay. Quantities per the schedule; access out of hours only.",
+      area: "Business Bay",
+      lines: [{ description: "Panel filter, G4", qty: 480, size: "595x595", target: "18.00" }],
+      // Past half the window, inside the whole of it: the amber band.
+      createdAt: minutesAgo(Math.round(escalation * 0.75)),
+      state: "opened",
+      firstReplyAt: null,
+    },
+    {
+      ref: "ENQ-9302",
+      requirement: "Cold room repair at a retail unit in Al Furjan. Condenser fan and controls.",
+      area: "Al Furjan",
+      lines: [{ description: "Condenser fan motor", qty: 2, size: "450 mm", target: null }],
+      createdAt: minutesAgo(Math.round(escalation * 0.2)),
+      state: "opened",
+      firstReplyAt: minutesAgo(Math.round(escalation * 0.1)),
+    },
+    {
+      ref: "ENQ-9303",
+      requirement: "Ducting for a fit-out in Deira. Galvanised, to the drawings issued.",
+      area: "Deira",
+      lines: [{ description: "Galvanised duct, rectangular", qty: 220, size: "sqm", target: "95.00" }],
+      createdAt: minutesAgo(60 * 24 * 9),
+      state: "quoted",
+      firstReplyAt: minutesAgo(60 * 24 * 9 - 40),
+      outcome: "won",
+    },
+    {
+      ref: "ENQ-9304",
+      requirement: "Submittal pack and pricing for DN200 valves, district cooling plant.",
+      area: "Mussafah Industrial",
+      lines: [{ description: "Wafer butterfly valve, gear operated", qty: 18, size: "DN200", target: "870.00" }],
+      createdAt: minutesAgo(60 * 24 * 14),
+      state: "quoted",
+      firstReplyAt: minutesAgo(60 * 24 * 14 - 90),
+      outcome: "lost",
+      outcomeReason: "Lead time. They needed all eighteen inside a week.",
+    },
+    {
+      ref: "ENQ-9305",
+      requirement: "AMC for four chillers in Business Bay, including quarterly water treatment.",
+      area: "Business Bay",
+      lines: [{ description: "Chiller AMC, per unit per year", qty: 4, size: null, target: "21000.00" }],
+      createdAt: minutesAgo(60 * 30),
+      state: "quoted",
+      firstReplyAt: minutesAgo(60 * 28),
+      followUp: true,
+    },
+  ];
+
+  for (const fixture of FIXTURES) {
+    const enquiry = await db.enquiry.create({
+      data: {
+        ref: fixture.ref,
+        buyerId: buyer.id,
+        requirement: fixture.requirement,
+        deliverToArea: fixture.area,
+        termsWanted: "net_30",
+        neededBy: new Date(NOW.getTime() + 21 * 86_400_000),
+        closesAt: new Date(NOW.getTime() + 6 * 86_400_000),
+        createdAt: fixture.createdAt,
+        lines: {
+          create: fixture.lines.map((line, i) => ({
+            description: line.description,
+            qty: line.qty,
+            unit: "pcs",
+            size: line.size,
+            targetUnitPriceAed: line.target,
+            sortOrder: i,
+          })),
+        },
+      },
+      select: { id: true, lines: { select: { id: true }, orderBy: { sortOrder: "asc" } } },
+    });
+
+    await db.enquiryRecipient.create({
+      data: {
+        enquiryId: enquiry.id,
+        businessId: seller.id,
+        state: fixture.state,
+        openedAt: fixture.state === "delivered" ? null : fixture.createdAt,
+        firstReplyAt: fixture.firstReplyAt,
+        createdAt: fixture.createdAt,
+        // One assigned lead, so the scope filter and the rail's assignee line
+        // have a row to show. The rest are unassigned, which is the ordinary
+        // state under board 7d's `everyone` routing.
+        ...(fixture.ref === "ENQ-9301"
+          ? { assignedToId: owner.id, assignedAt: fixture.createdAt, assignedById: owner.id }
+          : {}),
+        ...(fixture.outcome
+          ? {
+              outcome: fixture.outcome,
+              outcomeAt: minutesAgo(60 * 24),
+              outcomeById: owner.id,
+              outcomeReason: fixture.outcomeReason ?? null,
+            }
+          : {}),
+        ...(fixture.followUp
+          ? {
+              nudgeDueAt: new Date(NOW.getTime() + 20 * 3_600_000),
+              nudgeBody:
+                "Following up on the AMC quote — happy to talk through the visit schedule if that helps.",
+            }
+          : {}),
+      },
+    });
+
+    // A quote on everything past `delivered`/`opened`, so `Quoted`, `Won` and
+    // `Lost` are not three tabs of rows with nothing behind them.
+    if (fixture.state === "quoted") {
+      await db.quote.create({
+        data: {
+          ref: `QT-${fixture.ref.replace("ENQ-", "")}-ALMR1`,
+          enquiryId: enquiry.id,
+          businessId: seller.id,
+          revision: 1,
+          validityDays: 14,
+          status: "sent",
+          note: "Ex-stock unless noted. Prices held for fourteen days.",
+          sentAt: fixture.firstReplyAt,
+          expiresAt: new Date(NOW.getTime() + 14 * 86_400_000),
+          createdAt: fixture.firstReplyAt ?? fixture.createdAt,
+          lines: {
+            create: fixture.lines.map((line, i) => ({
+              enquiryLineId: enquiry.lines[i]!.id,
+              description: line.description,
+              qty: line.qty,
+              unitPrice: line.target ?? "100.00",
+              leadTimeDays: i === 0 ? 0 : 7,
+              sortOrder: i,
+            })),
+          },
+        },
+      });
+    }
+  }
+
+  console.log(`   ${FIXTURES.length} leads across the four tabs`);
 }
 
 /**
@@ -4246,6 +4507,29 @@ const TEMPLATES: TemplateSeed[] = [
     actionPath: "/dashboard/billing",
     status: "live",
   },
+  /*
+     Board 11b's follow-up, and the only message-shaped notification in the
+     product. Everything else here is about a quote, because a message was
+     assumed to be read where it was written — the follow-up breaks that, since
+     it is aimed at a buyer who has gone quiet and is not looking at the thread.
+
+     In-app only. The seller gets exactly one follow-up because a second loses
+     more deals than it wins; putting that one on WhatsApp would make the cap a
+     formality, since the interruption is the part that costs the deal. A buyer
+     weighing four quotes reads it where they are already comparing them.
+
+     `preview` is the supplier's own words, truncated. We do not summarise them:
+     the rule on that screen is suggest the act and never the number, and a body
+     written on this side would be the platform speaking in a supplier's voice.
+  */
+  {
+    event: "message_received",
+    channel: "in_app",
+    body: "{businessName} followed up on your enquiry: \"{preview}\"",
+    actionLabel: "Open the conversation",
+    actionPath: "/enquiry/{enquiryId}",
+    status: "live",
+  },
   {
     event: "enquiry_received",
     channel: "whatsapp",
@@ -4254,7 +4538,7 @@ const TEMPLATES: TemplateSeed[] = [
     // and lands on the composer, not on a list.
     body: "New enquiry {ref} for {summary}. Needed by {neededBy} in {area}. {lineCount} lines. Quote before {closesAt}.",
     actionLabel: "Open and quote",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     metaTemplateName: "bl_enquiry_received_v1",
     status: "pending_meta",
   },
@@ -4263,7 +4547,7 @@ const TEMPLATES: TemplateSeed[] = [
     channel: "in_app",
     body: "New enquiry {ref} — {lineCount} lines for {area}, needed by {neededBy}.",
     actionLabel: "Open and quote",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {
@@ -4271,7 +4555,7 @@ const TEMPLATES: TemplateSeed[] = [
     channel: "whatsapp",
     body: "Enquiry {ref} is still unanswered after {hours} hours. It closes {closesAt}.",
     actionLabel: "Quote now",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     metaTemplateName: "bl_enquiry_unanswered_v1",
     status: "pending_meta",
   },
@@ -4281,7 +4565,7 @@ const TEMPLATES: TemplateSeed[] = [
     subject: "Enquiry {ref} has gone unanswered",
     body: "Enquiry {ref} reached your team {hours} hours ago and has no reply. It closes {closesAt}. Median reply time is part of how suppliers rank in search.",
     actionLabel: "Open the enquiry",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {
@@ -4291,14 +4575,14 @@ const TEMPLATES: TemplateSeed[] = [
     event: "enquiry_received",
     channel: "sms",
     body: "New enquiry {ref}, {lineCount} lines for {area}. Closes {closesAt}. Quote: {shortLink}",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {
     event: "quote_accepted",
     channel: "sms",
     body: "Quote {quoteRef} accepted, {amount}. Contact details are on the enquiry: {shortLink}",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {
@@ -4323,7 +4607,7 @@ const TEMPLATES: TemplateSeed[] = [
     // What happened, what it is worth, one action.
     body: "Your quote {quoteRef} was accepted, {amount}. The buyer's contact details are now on the enquiry.",
     actionLabel: "Open the accepted quote",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     metaTemplateName: "bl_quote_accepted_v1",
     status: "pending_meta",
   },
@@ -4333,7 +4617,7 @@ const TEMPLATES: TemplateSeed[] = [
     subject: "Quote {quoteRef} accepted — {amount}",
     body: "Your quote {quoteRef} for enquiry {ref} was accepted at {amount}. Contact details are on the enquiry page. Payment and delivery are between you and the buyer.",
     actionLabel: "Open the accepted quote",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {
@@ -4420,7 +4704,7 @@ const TEMPLATES: TemplateSeed[] = [
     channel: "in_app",
     body: "Enquiry {ref} reached your team {hours} hours ago and has no reply. It closes {closesAt}.",
     actionLabel: "Open the enquiry",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {
