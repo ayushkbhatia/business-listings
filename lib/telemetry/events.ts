@@ -59,6 +59,7 @@ export const EVENT_NAMES = [
   "revision_started",
   "requote_started",
   "pipeline_exported",
+  "unroutable_lead",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -394,6 +395,25 @@ export const EVENT_SPECS = {
     emitter: "server",
     session: "never",
     props: { tab: "string", rows: "number" },
+  },
+
+  /**
+   * Board 7d §9's number worth watching.
+   *
+   * "Every one of those is a lead that arrived and went nowhere until the owner
+   * picked it up, and it is the single measurement that tells you whether this
+   * pair of screens works." Server-side, because the router is the only thing
+   * that knows — the failure is invisible on both screens by construction, which
+   * is the whole reason boards 7d and 7e are one handoff.
+   *
+   * `routing_off` is deliberately not recorded: a seller who chose "everyone
+   * sees everything" has not suffered a routing failure, and counting it would
+   * drown the three reasons that are.
+   */
+  unroutable_lead: {
+    emitter: "server",
+    session: "never",
+    props: { reason: "string" },
   },
 } as const satisfies Record<EventName, EventDefinition>;
 

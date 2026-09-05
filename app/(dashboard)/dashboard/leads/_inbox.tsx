@@ -74,16 +74,29 @@ function parseTab(raw: string | undefined): LeadTab {
  * a sales seat opens on their own and can widen it.
  */
 function parseScope(raw: string | undefined, seat: SellerSeat): LeadScope {
-  if (raw === "all") return { kind: "all" };
-  if (raw === "mine") return { kind: "mine", userId: seat.actor.id };
-  if (raw === "unassigned") return { kind: "unassigned" };
+  /*
+     The widening scopes are a capability, not a query parameter.
+
+     This read the string and trusted it: a sales seat could type `?scope=all`
+     or `?scope=seat:<uuid>` and read the whole queue, or one colleague's. The
+     picker only *offered* those options to `routing.manage` holders, so the
+     fence was the UI — which is not a fence. Board 3j §1 makes the scope
+     "row visibility, not just a filter default", and 7d §6.1 says a seat's
+     numbers are not another seat's to see.
+  */
+  const mine: LeadScope = { kind: "mine", userId: seat.actor.id };
+  const wide = can(seat.actor, "routing.manage");
+
+  if (raw === "mine") return mine;
+  if (raw === "all") return wide ? { kind: "all" } : mine;
+  if (raw === "unassigned") return wide ? { kind: "unassigned" } : mine;
   if (raw?.startsWith("seat:")) {
+    if (!wide) return mine;
     const userId = raw.slice("seat:".length);
     return userId ? { kind: "seat", userId } : { kind: "all" };
   }
-  return can(seat.actor, "routing.manage")
-    ? { kind: "all" }
-    : { kind: "mine", userId: seat.actor.id };
+
+  return wide ? { kind: "all" } : mine;
 }
 
 export async function Inbox({ selectedId, search }: InboxProps) {

@@ -111,6 +111,8 @@ model User {
   leadsRouted             EnquiryRecipient[]       @relation("LeadAssigner")
   leadOutcomes            EnquiryRecipient[]       @relation("LeadOutcomeAuthor")
   quotesExtended          Quote[]                  @relation("QuoteExtender")
+  channels                SeatChannel[]
+  routingCursorFor        Business[]               @relation("RoutingCursor")
 
   @@index([businessId])
   @@map("user")
@@ -568,6 +570,16 @@ model Business {
   /// How an incoming enquiry is put in front of the team. Board 7d, and the
   /// setting that protects the response score.
   leadRouting           LeadRouting @default(everyone) @map("lead_routing")
+  /// Where round-robin got to.
+  ///
+  /// The last seat routed to rather than an index: 7d §8.3 requires the rotation
+  /// to survive a seat being removed mid-cycle, and an integer into a list that
+  /// just got shorter points at the wrong person. "The next eligible seat after
+  /// this one" degrades to "the first eligible seat" when the cursor's seat is
+  /// gone, which is the correct answer rather than an arbitrary one.
+  routingCursorId       String?     @map("routing_cursor_id") @db.Uuid
+  routingCursor         User?       @relation("RoutingCursor", fields: [routingCursorId], references: [id], onDelete: SetNull)
+  seatChannels          SeatChannel[]
   /// Minutes before an unanswered enquiry is escalated to the owner.
   leadEscalationMinutes Int         @default(120) @map("lead_escalation_minutes")
 
@@ -1962,6 +1974,14 @@ model EnquiryRecipient {
   assignedAt   DateTime? @map("assigned_at")
   assignedById String?   @map("assigned_by_id") @db.Uuid
 
+  /// When the router ran on this lead. Null on every row written before board
+  /// 7d, and on every lead that arrived while routing was off.
+  routedAt       DateTime?       @map("routed_at")
+  /// Set when the router ran and found nobody. Mutually exclusive with an
+  /// assignee, enforced by a check constraint — it cannot have both placed the
+  /// lead and failed to.
+  unroutedReason UnroutedReason? @map("unrouted_reason")
+
   /// What the SELLER says happened, which is not what the buyer's acceptance
   /// says.
   ///
@@ -1993,6 +2013,10 @@ model EnquiryRecipient {
   @@index([businessId, state])
   /// The rail's default read: this business, this tab, oldest first in a band.
   @@index([businessId, state, createdAt], map: "enquiry_recipient_inbox_idx")
+  /// Free to omit while nothing wrote an assignee. The first business to turn
+  /// routing on is the one that notices: the rail's scope filter, its five tab
+  /// counts, the quotes pipeline, the speed card and the CSV all filter on it.
+  @@index([assignedToId], map: "enquiry_recipient_assignee_idx")
   @@map("enquiry_recipient")
 }
 
@@ -3719,6 +3743,86 @@ model NotificationTemplate {
 }
 
 /// A seller's routing matrix, board 7e. One row per business.
+/// A channel a seat can be reached on, and whether anybody proved it.
+///
+/// Boards 7d and 7e. The rule that spans them — *a seat with no verified
+/// notification channel cannot be a routing target* — has four readers and had
+/// nothing to read: 7d's `REACHABLE ON` column, 7d §4's routing skip, 7e §3's
+/// reachability rail, and 7e's promise that an unverified number receives
+/// nothing.
+///
+/// ## Why not `User.phone` and `User.email`
+///
+/// Neither means what this needs. `createProvisionalIdentity` writes
+/// `User.phone` with `phone_confirm: false` and `addressFor` hands it straight
+/// to the carrier, so a non-null phone is false-positive for exactly the seats
+/// this column exists to catch. And `adoptProfile` writes phone *or* email with
+/// nothing ever adding the second, so "WhatsApp · email" cannot be true of
+/// anybody on that shape.
+///
+/// ## Why in-app is not a kind
+///
+/// It needs no address and no verification, and 7e §2 keeps it always on for
+/// anything with a deadline. A row for it would make every seat trivially
+/// reachable and the routing rule would mean nothing.
+model SeatChannel {
+  id String @id @default(cuid())
+  /// The seat. Cascades: a deleted account takes its channels with it.
+  userId     String @map("user_id") @db.Uuid
+  /// Denormalised from `User.businessId`. Every read on both boards is "the
+  /// channels for this business's seats", and the alternative is a join through
+  /// `user` on screens that already join it for names.
+  businessId String @map("business_id")
+  kind       SeatChannelKind
+  /// E.164 for a number, an address for email. Normalised by the service, so
+  /// the column holds one shape per kind.
+  address    String
+
+  /// The whole point of the table. Null means the seat typed a number and never
+  /// proved it: hidden from buyers, receives nothing, not a routing target.
+  verifiedAt      DateTime? @map("verified_at")
+  /// When a code last went out, for the resend throttle. Never the code itself
+  /// — `AuthAttempt` owns challenge history and this table holds no secret.
+  challengeSentAt DateTime? @map("challenge_sent_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  /// One address per kind per seat. Two WhatsApp numbers on one seat is a seller
+  /// who cannot say which routing should try, and 7e §3 renders the order they
+  /// are tried in rather than a set.
+  @@unique([userId, kind], map: "seat_channel_user_kind_key")
+  @@index([businessId, verifiedAt], map: "seat_channel_business_idx")
+  @@map("seat_channel")
+}
+
+enum SeatChannelKind {
+  whatsapp
+  sms
+  email
+
+  @@map("seat_channel_kind")
+}
+
+/// Why the router could not place a lead.
+///
+/// 7d §9 calls `unroutable_lead` the single measurement that says whether this
+/// pair of screens works, and `assigned_to_id IS NULL` cannot carry it: a lead
+/// under `everyone` routing is unassigned because nobody was meant to own it,
+/// and a lead the router tried to place and could not is a failure. Same null,
+/// opposite meanings.
+enum UnroutedReason {
+  no_reachable_seat
+  outside_hours
+  no_seat_in_branch
+  routing_off
+
+  @@map("unrouted_reason")
+}
+
 model NotificationPreference {
   id         String @id @default(cuid())
   businessId String @unique @map("business_id")

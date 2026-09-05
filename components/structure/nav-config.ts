@@ -142,7 +142,7 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
       { key: "billing", labelKey: "nav.billing", href: "/dashboard/billing", capability: "billing.manage" },
       { key: "domain", labelKey: "nav.domain", href: "/dashboard/domain", capability: "billing.manage" },
       { key: "team", labelKey: "nav.team", href: "/dashboard/team", capability: "team.manage" },
-      { key: "settings", labelKey: "nav.settings", href: "/dashboard/settings" },
+      { key: "settings", labelKey: "nav.settings", href: "/dashboard/settings", capability: "routing.manage" },
     ],
   },
 ];

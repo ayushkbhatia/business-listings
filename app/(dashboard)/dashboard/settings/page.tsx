@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+import { can } from "@/lib/auth/can";
 import { prisma } from "@/lib/db/client";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
@@ -37,6 +39,17 @@ const DEFAULTS: AlertsValue = {
 
 export default async function AlertsPage() {
   const seat = await requireSellerSeat();
+  /*
+     Board 7e §1: the matrix is business-wide policy, and only owner and manager
+     set it. A sales seat may edit its own channels — that surface arrives with
+     the rest of 7e — but it does not decide what the business is told about.
+
+     The route had no gate at all and the nav row carries no capability either,
+     so a sales or finance seat could tick a business-wide policy and only meet
+     the refusal at save. A control that accepts input and rejects it afterwards
+     teaches the seller nothing about why.
+  */
+  if (!can(seat.actor, "routing.manage")) notFound();
 
   const [preference, badges, pendingWhatsApp] = await Promise.all([
     prisma.notificationPreference.findUnique({ where: { businessId: seat.businessId } }),

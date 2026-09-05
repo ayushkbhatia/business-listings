@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { createProvisionalIdentity } from "@/lib/auth/flow";
 import { normaliseIdentifier } from "@/lib/auth/identity";
+import { routeLead } from "@/lib/leads/router";
 import { onEnquiryDelivered, onQuoteAccepted } from "@/lib/notify/events";
 import { quoteTotalAed } from "@/lib/quote/money";
 import type { Attribution } from "@/lib/campaign/attribution";
@@ -403,6 +404,29 @@ export async function createEnquiry(
 
     return created;
   });
+
+  /*
+   * Board 7d §4: route before anybody is told, so the notification can name the
+   * seat it went to.
+   *
+   * Outside the transaction, for the same reason the carrier call is. Routing
+   * reads, per recipient business, the mode, its eligible seats, their verified
+   * channels and its opening hours — up to eight businesses' worth of that, on
+   * an enquiry a buyer is waiting on.
+   *
+   * Each one is independent and each swallows its own failure: a business whose
+   * routing cannot be decided keeps an unassigned lead, which every inbox scope
+   * already renders, rather than costing the buyer the enquiry.
+   */
+  await Promise.all(
+    recipients.map(async (r) => {
+      try {
+        await routeLead({ enquiryId: enquiry.id, businessId: r.businessId });
+      } catch (cause) {
+        console.error("[routing] failed", { enquiryId: enquiry.id, businessId: r.businessId, cause });
+      }
+    }),
+  );
 
   /*
    * After the transaction, never inside it. A carrier being slow must not hold

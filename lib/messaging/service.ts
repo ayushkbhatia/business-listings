@@ -25,6 +25,13 @@ export interface PostMessageInput {
   senderId: string;
   sender: Sender;
   body: string;
+  /**
+   * Written by a schedule rather than typed.
+   *
+   * Tagged `AUTOMATIC` in the thread, and — the part that matters — it does not
+   * stamp `firstReplyAt`. See the guard below.
+   */
+  automatic?: boolean;
   /** Set when a seller posts a revised quote inline. */
   quoteRevisionId?: string | null;
 }
@@ -78,6 +85,7 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
         senderId: input.senderId,
         body: body.slice(0, MAX_BODY),
         quoteRevisionId: input.quoteRevisionId ?? null,
+        automatic: input.automatic ?? false,
         // On the record whether or not anybody is asked to look at it.
         flaggedAt: verdict.flag ? new Date() : null,
       },
@@ -88,8 +96,27 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
      * Response time is measured from the seller's first reply, whatever form
      * it takes. A message is a reply; sending a quote is too, and whichever
      * comes first stamps it. See lib/quote/send-quote.ts for the other half.
+     *
+     * ## Automatic messages are not replies
+     *
+     * Board 7e §4 calls this the most consequential correction in the pair, and
+     * the check belongs here rather than in the caller. An auto-reply fires
+     * *precisely* when `firstReplyAt` is null — that is its trigger — so without
+     * this line the acknowledgement would stamp the clock it exists to apologise
+     * for. Then:
+     *
+     *   - the median first reply buyers see as a band on 1b/1c measures a robot;
+     *   - the 18 of 100 ranking points for reply time are won by installing a
+     *     template;
+     *   - board 3a's median card, 3k's speed card and 7d's per-seat medians all
+     *     report a number no human produced.
+     *
+     * Every seller would switch it on for that reason alone and the metric would
+     * be worthless inside a month. Board 11b's follow-up escapes today only by
+     * bypassing this function entirely, and only because it fires after a human
+     * has already answered — it has never exercised the null case.
      */
-    if (input.sender === "seller" && recipient.firstReplyAt === null) {
+    if (input.sender === "seller" && !input.automatic && recipient.firstReplyAt === null) {
       await tx.enquiryRecipient.update({
         where: { enquiryId_businessId: { enquiryId: input.enquiryId, businessId: input.businessId } },
         data: { firstReplyAt: new Date(), state: "opened" },

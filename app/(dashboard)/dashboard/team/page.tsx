@@ -1,3 +1,5 @@
+import { notFound } from "next/navigation";
+import { can } from "@/lib/auth/can";
 import { prisma } from "@/lib/db/client";
 import { ESCALATION_CHOICES, pendingInvites, teamFor } from "@/lib/team/service";
 import { t } from "@/lib/i18n";
@@ -18,6 +20,16 @@ export const dynamic = "force-dynamic";
 
 export default async function TeamPage() {
   const seat = await requireSellerSeat();
+  /*
+     Board 7d §1: owner and manager only. The nav row has been gated on
+     `team.manage` since handoff 3, but the URL was not — so a sales or finance
+     seat that typed it read every colleague's median reply time, and after this
+     rebuild would read their branch scope and their phone numbers too.
+
+     `notFound` rather than a refusal page: a seat with no business here should
+     not learn that the screen exists.
+  */
+  if (!can(seat.actor, "team.manage")) notFound();
 
   const [business, seats, invites, badges] = await Promise.all([
     prisma.business.findUniqueOrThrow({
