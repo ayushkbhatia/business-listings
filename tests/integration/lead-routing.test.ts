@@ -51,8 +51,27 @@ const enquiries: string[] = [];
 const seats: string[] = [];
 
 beforeAll(async () => {
+  /*
+     Not the flagship.
+
+     `seedSeatsAndChannels` gives al-marwan a team with verified channels — which
+     is exactly what boards 7d and 7e need to render, and exactly what a routing
+     test must not have: every "no eligible seat" case would find Rajesh and
+     route to him. The first version of this file did borrow it, and four cases
+     went green-to-red the moment those fixtures landed.
+
+     Any other claimed supplier has an owner and no channels, so nobody is
+     routable until a test says so. Picked by slug order for determinism, and
+     asserted empty below rather than assumed.
+  */
   const business = await prisma.business.findFirstOrThrow({
-    where: { slug: "al-marwan-industrial-supplies-llc" },
+    where: {
+      claimStatus: "claimed",
+      slug: { not: "al-marwan-industrial-supplies-llc" },
+      locations: { some: { published: true } },
+      team: { some: { roles: { has: "seller_owner" } } },
+    },
+    orderBy: { slug: "asc" },
     select: { id: true },
   });
   businessId = business.id;
@@ -62,6 +81,14 @@ beforeAll(async () => {
     select: { id: true },
   });
   ownerId = owner.id;
+
+  // The premise, checked rather than assumed: if this supplier ever gains a
+  // verified channel in the seed, these tests must fail here and say so rather
+  // than fail four cases later for a reason that names none of this.
+  const alreadyRoutable = await routableSeats(businessId);
+  expect(alreadyRoutable, "the routing fixture business must start with no routable seat").toEqual(
+    [],
+  );
 
   const buyer = await prisma.user.findFirstOrThrow({
     where: { roles: { has: "buyer" } },

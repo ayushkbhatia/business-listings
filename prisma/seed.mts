@@ -762,6 +762,11 @@ async function main() {
      and no test that pins a slug moves because of it.
   */
   await seedInboxStates(prisma);
+  /*
+     Boards 7d and 7e. PRNG-free and after everything that creates a seat, so it
+     can add channels to the ones already there.
+  */
+  await seedSeatsAndChannels(prisma);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
@@ -1066,6 +1071,200 @@ async function seedInboxStates(db: Db) {
   }
 
   console.log(`   ${FIXTURES.length} leads across the four inbox tabs and the six pipeline ones`);
+}
+
+/**
+ * The team boards 7d and 7e are about, and the channels they are reachable on.
+ *
+ * Before this the flagship supplier had one owner and — on a third of accounts —
+ * one sales seat, no invites at all, nobody branch-scoped, and not a single
+ * `SeatChannel` row. So every state either screen exists to show was
+ * unreachable: `REACHABLE ON` had one value, round-robin had nothing to
+ * alternate between, the invited row never rendered, and the reachability rule
+ * that makes the pair one handoff could not fire in either direction.
+ *
+ * Six seats and four channel shapes, chosen so each screen has one row of every
+ * state it draws:
+ *
+ *   - **Rajesh**, sales, all branches, WhatsApp and email verified — the
+ *     ordinary case, and round-robin's other half.
+ *   - **Fatima**, sales, scoped to one branch, email verified and WhatsApp
+ *     entered but unproven. 7d renders her amber and 7e says verifying her
+ *     number is the fastest thing on the screen.
+ *   - **Priya**, manager, email verified.
+ *   - **Accounts**, finance, email verified — reachable, and never a lead
+ *     target, which is the distinction 7d §2 draws and the rail states.
+ *   - **A pending invite** to a second sales seat, so the invited row, its
+ *     expiry and the seat-cap arithmetic all have something to render.
+ *   - The **owner** gets WhatsApp and email, because a business whose owner is
+ *     unreachable cannot receive the fallback every unrouted lead depends on.
+ *
+ * ## Why the flagship and not the free seat
+ *
+ * `seedAtMonthlyCap` throws if `al-manara-equipment-trading-llc` gains a
+ * recipient row dated in the current month, and `onlyOneSellerAtCap` deletes the
+ * oldest rows of any capped seller. Neither is touched here — this writes seats
+ * and channels, no recipients — but the free seat is also on a two-seat plan and
+ * an invite would put it at its cap for every other test.
+ *
+ * ## Why the ids are fixed, and why they are not `uuid(n)`
+ *
+ * A browser test that needs Fatima's row needs to find it, so the ids are
+ * literals rather than `randomUUID`. They are **not** from `uuid(n)`: that
+ * counter is shared with every other seeded person and 900 already belonged to
+ * a seeded buyer, so the first version of this silently upserted nothing and
+ * attached two notification channels to somebody else's customer.
+ *
+ * `0000007d-…` is a namespace of its own, named for the board. And the writes
+ * are `create` rather than `upsert`, so a future collision throws in the seed
+ * rather than quietly producing a fixture that is not what it says it is.
+ */
+async function seedSeatsAndChannels(db: Db) {
+  console.log("→ seats and their channels, for boards 7d and 7e");
+
+  const seller = await db.business.findFirst({
+    where: { slug: "al-marwan-industrial-supplies-llc" },
+    select: {
+      id: true,
+      locations: { where: { published: true }, orderBy: { type: "asc" }, take: 1, select: { id: true } },
+    },
+  });
+  if (!seller) {
+    console.log("   skipped — the flagship seller is not in this seed");
+    return;
+  }
+
+  const owner = await db.user.findFirst({
+    where: { businessId: seller.id, roles: { has: "seller_owner" } },
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
+  if (!owner) {
+    console.log("   skipped — no owner seat");
+    return;
+  }
+
+  const branchId = seller.locations[0]?.id ?? null;
+
+  /** This board's own id namespace. See the note above. */
+  const seatId = (n: number) => `0000007d-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
+
+  const SEATS = [
+    {
+      id: seatId(0),
+      fullName: "Rajesh Nair",
+      email: "rajesh@almarwan.example",
+      roles: ["seller_sales"] as const,
+      branchId: null,
+      channels: [
+        { kind: "whatsapp" as const, address: "+971506412288", verified: true },
+        { kind: "email" as const, address: "rajesh@almarwan.example", verified: true },
+      ],
+    },
+    {
+      id: seatId(1),
+      fullName: "Fatima Al Suwaidi",
+      email: "fatima@almarwan.example",
+      roles: ["seller_sales"] as const,
+      // Board 7d shows Fatima scoped to one branch: every capability she has is
+      // limited to that branch's enquiries and locations.
+      branchId,
+      channels: [
+        { kind: "email" as const, address: "fatima@almarwan.example", verified: true },
+        // Entered and never proved. The amber row on both screens, and the seat
+        // routing would skip if this were her only channel.
+        { kind: "whatsapp" as const, address: "+971552200014", verified: false },
+      ],
+    },
+    {
+      id: seatId(2),
+      fullName: "Priya Menon",
+      email: "priya@almarwan.example",
+      roles: ["seller_manager"] as const,
+      branchId: null,
+      channels: [{ kind: "email" as const, address: "priya@almarwan.example", verified: true }],
+    },
+    {
+      id: seatId(3),
+      fullName: "Accounts",
+      email: "accounts@almarwan.example",
+      roles: ["seller_finance"] as const,
+      branchId: null,
+      // Reachable, and never a lead target. The two are different questions and
+      // 7e §3 renders this row as "Not a lead seat" for that reason.
+      channels: [{ kind: "email" as const, address: "accounts@almarwan.example", verified: true }],
+    },
+  ];
+
+  for (const person of SEATS) {
+    // `create`, not `upsert`: an id already taken is a fixture that would be
+    // silently wrong, and this is how that stops being possible.
+    await db.user.create({
+      data: {
+        id: person.id,
+        email: person.email,
+        fullName: person.fullName,
+        roles: [...person.roles],
+        businessId: seller.id,
+        ...(person.branchId ? { branchId: person.branchId } : {}),
+      },
+    });
+
+    for (const channel of person.channels) {
+      await db.seatChannel.create({
+        data: {
+          userId: person.id,
+          businessId: seller.id,
+          kind: channel.kind,
+          address: channel.address,
+          verifiedAt: channel.verified ? hours(-72) : null,
+        },
+      });
+    }
+  }
+
+  /*
+     The owner's own channels. A business whose owner cannot be reached has no
+     fallback, and every unrouted lead in board 7d §4 goes to the owner — so an
+     unreachable owner turns the last resort into the same dead end.
+  */
+  for (const channel of [
+    { kind: "whatsapp" as const, address: "+971506412288" },
+    { kind: "email" as const, address: "owner@almarwan.example" },
+  ]) {
+    await db.seatChannel.create({
+      data: {
+        userId: owner.id,
+        businessId: seller.id,
+        kind: channel.kind,
+        address: channel.address,
+        verifiedAt: hours(-72),
+      },
+    });
+  }
+
+  /*
+     One invitation outstanding.
+
+     An invite holds a seat — board 7d §3: without that a seller at the cap can
+     invite five more people and the cap means nothing. This is also the only
+     `TeamInvite` row in the seed, so it is what makes the invited row, its
+     expiry timer and the resend control renderable at all.
+  */
+  await db.teamInvite.create({
+    data: {
+      businessId: seller.id,
+      email: "warehouse@almarwan.example",
+      roles: ["seller_sales"],
+      token: "seedinvite7dpendingtoken00001",
+      invitedById: owner.id,
+      createdAt: hours(-48),
+      lastSentAt: hours(-48),
+      expiresAt: days(5),
+    },
+  });
+
+  console.log(`   ${SEATS.length} seats, one pending invite`);
 }
 
 /**
