@@ -74,6 +74,28 @@ async function removeFixtures(businessIds: string[]) {
   await prisma.business.deleteMany({ where: { planId: { startsWith: "test-dunning-" } } });
   await prisma.subscription.deleteMany({ where: { planId: { startsWith: "test-dunning-" } } });
   await prisma.plan.deleteMany({ where: { id: { startsWith: "test-dunning-" } } });
+
+  /*
+   * And the buyer, which the lines above cannot reach.
+   *
+   * A dunning enquiry hangs off its *buyer*, not off the listing it was sent
+   * to, so deleting the business took only the recipient row. The requirement
+   * survived — 49 of them after seven runs — and being newly created it is
+   * newer than everything the seed wrote. `readOpenRfqTeasers` reads the
+   * sixteen most recent open requests and these fill the window, so from the
+   * third consecutive run without a reseed the home panel came back empty and
+   * `home.test.ts` failed on a count, naming neither this file nor dunning.
+   *
+   * By buyer rather than by enquiry, because `Enquiry.buyer` is `Cascade`: one
+   * delete takes the requirement, its recipients, its lines and its review.
+   */
+  const dunning = await prisma.enquiry.findMany({
+    where: { ref: { startsWith: "ENQ-DUN-" } },
+    select: { buyerId: true },
+  });
+  if (dunning.length > 0) {
+    await prisma.user.deleteMany({ where: { id: { in: dunning.map((row) => row.buyerId) } } });
+  }
 }
 
 beforeAll(async () => {
