@@ -115,6 +115,7 @@ export async function sendFollowUpNow(input: {
     businessId: seat.businessId,
     senderId: seat.actor.id,
     body: input.body,
+    source: "thread",
   });
   if (!result.ok) return { ok: false, error: followUpError(result.error) };
 

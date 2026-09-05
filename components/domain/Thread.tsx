@@ -98,13 +98,18 @@ export interface ThreadProps {
   /** The board 11b warning, on the seller's side only. Never decorative. */
   notice?: React.ReactNode;
   /**
-   * A system note under the last message — a read receipt, a state change.
+   * System notes under the last message — a read receipt, a validity extension.
    *
    * Board 11b: centre-aligned, visually distinct from both parties, and never
-   * notified on. It is not a message and does not belong in the log, which is
-   * why it sits outside the list rather than as an entry in it.
+   * notified on. Not messages, and not entries in the log, which is why they sit
+   * outside the list rather than inside it.
+   *
+   * A list rather than one node since board 3k, which adds a second: extending a
+   * quote's window writes a line here saying what moved, by whom and to when.
+   * §5 is explicit that extending is silent — a line in the record is not a
+   * notification, and a `Message` row would have been both.
    */
-  systemNote?: React.ReactNode;
+  systemNotes?: readonly React.ReactNode[];
   onSend?: (body: string) => void | Promise<void>;
   busy?: boolean;
   error?: string;
@@ -117,7 +122,7 @@ export function Thread({
   labels,
   quickReplies = [],
   notice,
-  systemNote,
+  systemNotes = [],
   onSend,
   busy = false,
   error,
@@ -193,12 +198,16 @@ export function Thread({
         </ol>
       </div>
 
-      {systemNote ? (
-        <p className="flex justify-center">
-          <span className="rounded-pill border border-warn-line bg-warn-surface px-3 py-1.5 text-center text-caption text-warn-ink">
-            {systemNote}
-          </span>
-        </p>
+      {systemNotes.length > 0 ? (
+        <ul className="space-y-1.5">
+          {systemNotes.map((note, index) => (
+            <li key={index} className="flex justify-center">
+              <span className="rounded-pill border border-warn-line bg-warn-surface px-3 py-1.5 text-center text-caption text-warn-ink">
+                {note}
+              </span>
+            </li>
+          ))}
+        </ul>
       ) : null}
 
       {readOnly ? null : (

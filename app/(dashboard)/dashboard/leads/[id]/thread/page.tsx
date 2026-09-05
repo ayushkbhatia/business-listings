@@ -205,7 +205,7 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
               enquiryId={lead.enquiryId}
               buyerFirstName={lead.buyer.firstName}
               readOnly={readOnly}
-              receipt={receiptFor(latestQuote, now)}
+              notes={systemNotesFor(latestQuote, now)}
               messages={(messages ?? []).map((message) => {
                 const quote = message.quoteRevisionId
                   ? quoteViews.get(message.quoteRevisionId)
@@ -293,14 +293,47 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
  * lib/messaging/receipts.ts; before that this line would have said "not opened
  * yet" forever on every production row.
  */
-function receiptFor(
-  quote: { readAt?: Date | null; sentAt: Date | null } | undefined,
+function systemNotesFor(
+  quote:
+    | {
+        readAt?: Date | null;
+        sentAt: Date | null;
+        expiresAt: Date | null;
+        extensionCount?: number;
+        extendedByName?: string | null;
+      }
+    | undefined,
   now: Date,
-): string | null {
-  if (!quote?.sentAt) return null;
-  return quote.readAt
-    ? t("thread.receipt_read", { when: formatRelative(quote.readAt, { now }) })
-    : t("thread.receipt_unread");
+): string[] {
+  if (!quote?.sentAt) return [];
+
+  const notes = [
+    quote.readAt
+      ? t("thread.receipt_read", { when: formatRelative(quote.readAt, { now }) })
+      : t("thread.receipt_unread"),
+  ];
+
+  /*
+     Board 3k §5's audit line. Extending is silent — no message, no notification
+     — but it moves a date the buyer is holding, so it goes on the record where
+     both sides of a dispute can read it.
+
+     Derived from the quote's own columns rather than written as a row: a
+     `Message` would have been a notification, which is the one thing §5 says
+     this action is not.
+  */
+  if (quote.extensionCount && quote.extensionCount > 0 && quote.expiresAt) {
+    notes.push(
+      quote.extendedByName
+        ? t("quotes.extended_note", {
+            when: formatDate(quote.expiresAt),
+            name: quote.extendedByName,
+          })
+        : t("quotes.extended_note_unnamed", { when: formatDate(quote.expiresAt) }),
+    );
+  }
+
+  return notes;
 }
 
 interface BuyerHistory {

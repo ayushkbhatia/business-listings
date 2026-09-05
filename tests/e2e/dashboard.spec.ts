@@ -35,26 +35,17 @@ const THREAD = "seedenquiryprovisional0001";
    The rule-1 assertions it carried are kept and widened in the new file.
 */
 
-test.describe("board 3k — quotes sent", () => {
-  test("shows the pipeline with the hand-priced count", async ({ page }) => {
-    await page.goto("/dashboard/quotes");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Quotes sent");
-    await expect(page.getByRole("table", { name: /Quotes this business has sent/ })).toBeVisible();
-    await expect(page.getByText(/priced by hand/).first()).toBeVisible();
-  });
+/*
+   Board 3k moved to tests/e2e/dashboard-quotes-pipeline.spec.ts when the
+   pipeline was rebuilt.
 
-  test("labels every state from the enum, never falling back to Draft", async ({ page }) => {
-    await page.goto("/dashboard/quotes");
-    const body = (await page.textContent("main")) ?? "";
-    // A quote that is sent must not read as a draft — the bug this page had.
-    expect(body).toMatch(/Sent|Read|Accepted|Lost|Expired/);
-  });
-
-  test("says the value is self-reported", async ({ page }) => {
-    await page.goto("/dashboard/quotes");
-    await expect(page.getByText("Quoted value, self-reported.")).toBeVisible();
-  });
-});
+   What was here asserted a seven-column table of every quote row, a
+   hand-priced count in the Lines column, and the footer "Quoted value,
+   self-reported." All three are gone by design: the pipeline shows one row per
+   lead rather than one per revision, the hand-priced signal belongs with the
+   composer that produces it, and the self-reported caveat is now on the header
+   strip beside the figure it qualifies rather than under a table.
+*/
 
 test.describe("board 7e — alerts", () => {
   test("draws the matrix as a real table with both header directions", async ({ page }) => {

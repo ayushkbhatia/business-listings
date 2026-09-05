@@ -861,6 +861,15 @@ async function seedInboxStates(db: Db) {
     outcome?: "won" | "lost";
     outcomeReason?: string;
     followUp?: boolean;
+    /**
+     * Days from now the quote's window closes. Board 3k's pipeline is entirely
+     * about this number: negative is `Expired`, inside seven is `Expiring soon`,
+     * beyond it is plain `Awaiting decision`. Without a spread, every quote in
+     * the seed sat in one tab and three of the six rendered empty.
+     */
+    validForDays?: number;
+    /** Board 3k §5. A quote already pushed out, so the marker has a row. */
+    extendedTimes?: number;
   }
 
   const FIXTURES: InboxFixture[] = [
@@ -929,6 +938,34 @@ async function seedInboxStates(db: Db) {
       state: "quoted",
       firstReplyAt: minutesAgo(60 * 28),
       followUp: true,
+      // Inside seven days: the expiring card, and the amber window.
+      validForDays: 3,
+    },
+    {
+      ref: "ENQ-9306",
+      requirement:
+        "Brass ball valves for a plant room in Al Quoz. Twenty off, threaded, PN25.",
+      area: "Al Quoz Industrial 1",
+      lines: [{ description: "Brass ball valve, threaded", qty: 20, size: "1 inch", target: "61.00" }],
+      createdAt: minutesAgo(60 * 24 * 21),
+      state: "quoted",
+      firstReplyAt: minutesAgo(60 * 24 * 21 - 30),
+      // The window closed with nobody deciding. The enquiry is still open, so
+      // the row offers Re-quote rather than nothing.
+      validForDays: -6,
+    },
+    {
+      ref: "ENQ-9307",
+      requirement:
+        "Grooved couplings and gaskets for a riser replacement in Dubai Marina.",
+      area: "Dubai Marina",
+      lines: [{ description: "Grooved rigid coupling", qty: 140, size: "4 inch", target: "46.00" }],
+      createdAt: minutesAgo(60 * 24 * 11),
+      state: "quoted",
+      firstReplyAt: minutesAgo(60 * 24 * 11 - 45),
+      validForDays: 5,
+      // Twice already, which is exactly the signal §11 says is worth watching.
+      extendedTimes: 2,
     },
   ];
 
@@ -1002,7 +1039,16 @@ async function seedInboxStates(db: Db) {
           status: "sent",
           note: "Ex-stock unless noted. Prices held for fourteen days.",
           sentAt: fixture.firstReplyAt,
-          expiresAt: new Date(NOW.getTime() + 14 * 86_400_000),
+          expiresAt: new Date(
+            ranAt.getTime() + (fixture.validForDays ?? 14) * 86_400_000,
+          ),
+          ...(fixture.extendedTimes
+            ? {
+                extensionCount: fixture.extendedTimes,
+                lastExtendedAt: minutesAgo(60 * 24),
+                extendedById: owner.id,
+              }
+            : {}),
           createdAt: fixture.firstReplyAt ?? fixture.createdAt,
           lines: {
             create: fixture.lines.map((line, i) => ({
@@ -1019,7 +1065,7 @@ async function seedInboxStates(db: Db) {
     }
   }
 
-  console.log(`   ${FIXTURES.length} leads across the four tabs`);
+  console.log(`   ${FIXTURES.length} leads across the four inbox tabs and the six pipeline ones`);
 }
 
 /**
@@ -1988,6 +2034,7 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
       status: "sent",
       sentAt: hours(-44),
       readAt: hours(-41),
+      expiresAt: days(14),
       createdAt: hours(-45),
       lines: {
         create: [
@@ -2011,6 +2058,7 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
       status: "sent",
       sentAt: hours(-19),
       readAt: hours(-16),
+      expiresAt: days(10),
       createdAt: hours(-20),
       lines: {
         create: [
@@ -2034,6 +2082,7 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
       status: "read",
       sentAt: hours(-30),
       readAt: hours(-28),
+      expiresAt: days(21),
       createdAt: hours(-31),
       lines: {
         create: [

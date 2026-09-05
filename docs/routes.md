@@ -84,7 +84,10 @@ and it is the one that argues back.
 /dashboard/leads                        Leads & RFQ inbox                     [3j]  built h3 wave 1
 /dashboard/leads/:id                    One lead, and the quote composer      [3j]  built h3 wave 1
 /dashboard/leads/:id/thread             Seller message thread                [11b]  built h3 wave 1
-/dashboard/quotes                       Quotes sent pipeline                  [3k]  built h2s1
+/dashboard/quotes                       Quotes sent pipeline                  [3k]  built h3 wave 1
+/dashboard/quotes/:ref                  One quote, highlighted                [3k]  built h3 wave 1
+/dashboard/quotes/:ref/extend           …with the extend dialog open          [3k]  built h3 wave 1
+/dashboard/quotes/export                The pipeline as a CSV                 [3k]  built h3 wave 1
 /dashboard/reviews                      Reviews                              [11c]  built h2s6
 /dashboard/questions                    Buyer questions                       [1g]  built h5
 /dashboard/team                         Team, seats & lead routing            [7d]  built h4

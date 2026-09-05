@@ -110,6 +110,7 @@ model User {
   leadsAssigned           EnquiryRecipient[]       @relation("LeadAssignee")
   leadsRouted             EnquiryRecipient[]       @relation("LeadAssigner")
   leadOutcomes            EnquiryRecipient[]       @relation("LeadOutcomeAuthor")
+  quotesExtended          Quote[]                  @relation("QuoteExtender")
 
   @@index([businessId])
   @@map("user")
@@ -2027,14 +2028,29 @@ model Quote {
   /// `createdAt`, which is why the backfill could set it to exactly that.
   updatedAt       DateTime    @updatedAt @map("updated_at")
 
+  /// How many times the window has been pushed out. Board 3k §5.
+  ///
+  /// A count rather than a flag, because §11 names it the number worth
+  /// watching and it points somewhere else: quotes routinely extended twice
+  /// mean board 3j's default validity is too short, which is a fix in the
+  /// composer rather than here. `extended` alone cannot make that argument.
+  extensionCount Int       @default(0) @map("extension_count")
+  lastExtendedAt DateTime? @map("last_extended_at")
+  /// Who moved it, for the system line the thread renders.
+  extendedById   String?   @map("extended_by_id") @db.Uuid
+
   enquiry     Enquiry           @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   lines       QuoteLine[]
   messages    Message[]
   attachments QuoteAttachment[]
+  extendedBy  User?             @relation("QuoteExtender", fields: [extendedById], references: [id], onDelete: SetNull)
 
   @@unique([enquiryId, businessId, revision])
   @@index([businessId, status])
+  /// Board 3k's two live tabs: awaiting is a window in the future, expiring soon
+  /// is the next seven days of it.
+  @@index([businessId, expiresAt], map: "quote_window_idx")
   @@map("quote")
 }
 
