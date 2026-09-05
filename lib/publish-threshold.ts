@@ -169,7 +169,27 @@ export function holdFloor(
   thresholds: PublishThresholds = DEFAULT_THRESHOLDS,
 ): number {
   const { need } = listingsNeeded(input, thresholds);
-  return Math.max(1, Math.min(need, Math.ceil(need * thresholds.holdShare)));
+  return band(need, thresholds.holdShare);
+}
+
+/**
+ * The word floor a page that is already live keeps holding at.
+ *
+ * The same band as the listings floor, and it exists for the same reason: the
+ * word floor is one of the six controls on board 6f's rules panel, so raising
+ * it from 250 to 400 would otherwise take every 300-word page in the index dark
+ * in one keystroke. With the band those pages stay live and land in the
+ * `Live · thin copy` queue, which is the state the board describes and the
+ * queue content ops works.
+ *
+ * Deleting the intro is still immediate: nought words is below any band.
+ */
+export function holdWordFloor(thresholds: PublishThresholds = DEFAULT_THRESHOLDS): number {
+  return band(thresholds.minIntroWords, thresholds.holdShare);
+}
+
+function band(floor: number, share: number): number {
+  return Math.max(1, Math.min(floor, Math.ceil(floor * share)));
 }
 
 /**
@@ -194,18 +214,22 @@ export function evaluatePublish(
 /**
  * Whether a page that is already live may stay live.
  *
- * Identical to `evaluatePublish` but for the listings floor. The other three
- * conditions get no band on purpose: copy and questions do not decay on their
- * own — they change when an editor deletes them, and a page whose intro was
- * emptied should stop being served in that request, not after a grace. The
- * verified share is measured against the listings that are actually there, so
- * it moves with the same supply the band already covers.
+ * `evaluatePublish` with a band under the two floors a rules change can move
+ * beneath a live page: listings and words. The FAQ conditions get none — four
+ * questions is four questions, and a page whose questions were deleted is a
+ * page an editor emptied rather than one the world moved under. The verified
+ * share is measured against the listings that are there, so it already moves
+ * with the supply the listings band covers.
  */
 export function evaluateHold(
   input: PublishInput,
   thresholds: PublishThresholds = DEFAULT_THRESHOLDS,
 ): PublishDecision {
-  return decide(input, thresholds, { need: holdFloor(input, thresholds), basis: "hold" });
+  return decide(
+    input,
+    { ...thresholds, minIntroWords: holdWordFloor(thresholds) },
+    { need: holdFloor(input, thresholds), basis: "hold" },
+  );
 }
 
 function decide(

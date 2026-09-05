@@ -457,45 +457,15 @@ describe("the publish floor, per category", () => {
     expect(thin.decision.failures.map((f) => f.reason)).toContain("listings");
   });
 
-  it("lets an ops lead move the floor, and the decision moves with it", async () => {
-    const health = await categoryHealth();
-    const target = health[0]!;
+  /*
+     The threshold cases moved to tests/integration/publish-rules.test.ts.
 
-    const result = await editCategory({
-      actor: actor(opsLeadId, "staff_ops_lead"),
-      categoryId: target.id,
-      publishThreshold: 1,
-      verifiedShareMin: 0,
-      reason: "Opening this category for the launch cohort while supply builds.",
-    });
-    expect(result.ok).toBe(true);
-
-    const after = (await categoryHealth()).find((c) => c.id === target.id)!;
-    expect(after.publishThreshold).toBe(1);
-    if (after.listings >= 1) {
-      expect(after.decision.failures.map((f) => f.reason)).not.toContain("listings");
-    }
-
-    // Put it back, so the suite is idempotent.
-    await editCategory({
-      actor: actor(opsLeadId, "staff_ops_lead"),
-      categoryId: target.id,
-      publishThreshold: target.publishThreshold,
-      verifiedShareMin: target.verifiedShareMin,
-      reason: "Restoring the floor after the launch-cohort exception.",
-    });
-  });
-
-  it("refuses a share outside nought to one", async () => {
-    const health = await categoryHealth();
-    const result = await editCategory({
-      actor: actor(opsLeadId, "staff_ops_lead"),
-      categoryId: health[0]!.id,
-      verifiedShareMin: 30,
-      reason: "Thirty per cent, typed as thirty.",
-    });
-    expect(result).toMatchObject({ ok: false, error: "out_of_range" });
-  });
+     Board 6f took `publishThreshold` and `verifiedShareMin` off
+     `editCategory`: every rule that decides whether a page exists now goes
+     through an impact preview and a second approver, and a single-approver
+     path to the same two columns would have made that approver a formality.
+     The behaviour these covered is still covered, in the file that owns it.
+  */
 
   it("refuses a moderator", async () => {
     const health = await categoryHealth();
@@ -503,7 +473,7 @@ describe("the publish floor, per category", () => {
       editCategory({
         actor: actor(moderatorId, "staff_moderator"),
         categoryId: health[0]!.id,
-        publishThreshold: 10,
+        name: "Not mine to change",
         reason: "Not mine to change.",
       }),
     ).rejects.toBeInstanceOf(PermissionError);
