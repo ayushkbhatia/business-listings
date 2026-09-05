@@ -1,7 +1,11 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { countWords, evaluatePublish } from "@/lib/publish-threshold";
-import { thresholdsFor } from "@/lib/taxonomy/service";
+import {
+  CATEGORY_RULES_SELECT,
+  thresholdsFor,
+  type CategoryRules,
+} from "@/lib/taxonomy/service";
 import { VERIFIED_TIER } from "@/lib/verification";
 
 /**
@@ -60,14 +64,12 @@ async function counts(): Promise<Counted> {
   };
 }
 
-type Row = {
+type Row = CategoryRules & {
   id: string;
   slug: string;
   name: string;
   parentId: string | null;
   intro: string | null;
-  publishThreshold: number;
-  verifiedShareMin: number;
 };
 
 function node(row: Row, counted: Counted): TradeNode {
@@ -104,8 +106,7 @@ export async function categoryIndex(): Promise<SectorNode[]> {
         name: true,
         parentId: true,
         intro: true,
-        publishThreshold: true,
-        verifiedShareMin: true,
+        ...CATEGORY_RULES_SELECT,
       },
     }),
     counts(),
@@ -141,8 +142,7 @@ export async function isCategoryPublishable(categoryId: string): Promise<boolean
       name: true,
       parentId: true,
       intro: true,
-      publishThreshold: true,
-      verifiedShareMin: true,
+      ...CATEGORY_RULES_SELECT,
     },
   });
   if (!row) return false;

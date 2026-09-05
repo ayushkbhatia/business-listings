@@ -30,15 +30,13 @@ import { VERIFIED_TIER } from "@/lib/verification";
  * under it and every page built from it.
  */
 
-export interface CategoryHealth {
+export interface CategoryHealth extends CategoryRules {
   id: string;
   parentId: string | null;
   name: string;
   slug: string;
   code: string;
   synonyms: string[];
-  publishThreshold: number;
-  verifiedShareMin: number;
   /// Words in the landing page's own copy. Nought where there is none.
   introWords: number;
   /** Published listings whose primary category is this one. */
@@ -76,8 +74,7 @@ export async function categoryHealth(): Promise<CategoryHealth[]> {
         slug: true,
         code: true,
         synonyms: true,
-        publishThreshold: true,
-        verifiedShareMin: true,
+        ...CATEGORY_RULES_SELECT,
         intro: true,
       },
     }),
@@ -117,22 +114,48 @@ export async function categoryHealth(): Promise<CategoryHealth[]> {
   });
 }
 
-/** A category's own floor, which is what the columns are for. */
-export function thresholdsFor(category: {
+/**
+ * The columns that make up one category's publish rules — board 6f §5.
+ *
+ * Every field the rules panel edits, so a caller that reads a category for the
+ * gate is told by the compiler which columns it has to select.
+ */
+export interface CategoryRules {
   publishThreshold: number;
   verifiedShareMin: number;
-}): PublishThresholds {
+  demandPerThousand: number;
+  holdShare: number;
+  minIntroWords: number;
+  minLiveDays: number;
+  humanReviewRequired: boolean;
+}
+
+export const CATEGORY_RULES_SELECT = {
+  publishThreshold: true,
+  verifiedShareMin: true,
+  demandPerThousand: true,
+  holdShare: true,
+  minIntroWords: true,
+  minLiveDays: true,
+  humanReviewRequired: true,
+} as const;
+
+/** A category's own floors, which is what the columns are for. */
+export function thresholdsFor(category: CategoryRules): PublishThresholds {
   return {
     minListings: category.publishThreshold,
     minVerifiedShare: category.verifiedShareMin,
-    // Unchanged from the default: the word count is a property of the page's
-    // copy, not of the category, so board 6f owns it in step 7.
-    minIntroWords: DEFAULT_THRESHOLDS.minIntroWords,
-    // Likewise the FAQ counts. Board 6a states them as one rule for the whole
-    // page class rather than per trade, and only the two landing classes pass
-    // an FAQ count in for them to apply to at all.
+    // A column since board 6f, which put the word floor on the rules panel
+    // beside the other five. It read the module default until then, under a
+    // comment saying this board owned it.
+    minIntroWords: category.minIntroWords,
+    // The FAQ counts stay module-wide. Board 6a states them as one rule for the
+    // whole page class rather than per trade, and only the two landing classes
+    // pass an FAQ count in for them to apply to at all.
     minFaqRows: DEFAULT_THRESHOLDS.minFaqRows,
     minScopeSpecificFaqRows: DEFAULT_THRESHOLDS.minScopeSpecificFaqRows,
+    demandPerThousand: category.demandPerThousand,
+    holdShare: category.holdShare,
   };
 }
 

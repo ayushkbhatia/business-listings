@@ -92,6 +92,11 @@ model User {
   curatedListsEdited      CuratedList[]            @relation("CuratedListEditor")
   curatedAudits           CuratedListAudit[]       @relation("CuratedListAuditor")
   changesDecided          ListingChangeRequest[]   @relation("ChangeRequestDecider")
+  demandRecorded          ScopeDemand[]            @relation("ScopeDemandRecorder")
+  ruleChangesProposed     PublishRuleChange[]      @relation("RuleChangeProposer")
+  ruleChangesDecided      PublishRuleChange[]      @relation("RuleChangeDecider")
+  areaPagesHeld           AreaPage[]               @relation("AreaPageHolder")
+  emiratePagesHeld        EmiratePage[]            @relation("EmiratePageHolder")
   invitesSent             TeamInvite[]             @relation("InviteSender")
   claimsMade              ClaimSubmission[]        @relation("ClaimClaimant")
   onboardingDrafts        OnboardingDraft[]        @relation("OnboardingDraftUser")
@@ -218,13 +223,17 @@ model Area {
   isFreeZone  Boolean   @default(false) @map("is_free_zone")
   lat         Float?
   lng         Float?
-  /// Landing pages publish only above the board 6f thresholds. Enforced in the
-  /// service layer, and unpublished automatically when supply drops below them.
+  /// Unused. Handoff 0 intended an area-wide publish switch; board 6a put the
+  /// gate on `AreaPage` per (area, category) instead, and this column has had
+  /// no reader and no writer in application code since. It is always null.
+  /// Named here rather than dropped so nobody reaches for "the area's
+  /// published date" and gets a column that is never written.
   publishedAt DateTime? @map("published_at")
 
   locations Location[]
   pages     AreaPage[]
   lists     CuratedList[]
+  demand    ScopeDemand[]
 
   @@index([emirate])
   @@map("area")
@@ -232,19 +241,19 @@ model Area {
 
 /// Self-referencing tree, two levels in use.
 model Category {
-  id                 String   @id @default(cuid())
-  parentId           String?  @map("parent_id")
-  name               String
-  nameAr             String?  @map("name_ar")
-  slug               String   @unique
+  id                  String   @id @default(cuid())
+  parentId            String?  @map("parent_id")
+  name                String
+  nameAr              String?  @map("name_ar")
+  slug                String   @unique
   /// Two-letter mono mark, e.g. "IN".
-  code               String
+  code                String
   /// Query routing. Includes Arabic terms — صمامات must find valve suppliers.
-  synonyms           String[] @default([])
-  defaultTemplateId  String?  @map("default_template_id")
-  showOnHome         Boolean  @default(false) @map("show_on_home")
-  acceptsRfq         Boolean  @default(true) @map("accepts_rfq")
-  requiresExtraCheck Boolean  @default(false) @map("requires_extra_check")
+  synonyms            String[] @default([])
+  defaultTemplateId   String?  @map("default_template_id")
+  showOnHome          Boolean  @default(false) @map("show_on_home")
+  acceptsRfq          Boolean  @default(true) @map("accepts_rfq")
+  requiresExtraCheck  Boolean  @default(false) @map("requires_extra_check")
   /// The landing page's own copy.
   ///
   /// Board 6f: a category page with a heading and a grid of results is a page
@@ -254,12 +263,47 @@ model Category {
   ///
   /// Nullable, and most are null. That is the point of the matrix: it shows
   /// which pages have nothing to say yet.
-  intro              String?
+  intro               String?
   /// Listings needed before landing pages publish.
-  publishThreshold   Int      @default(60) @map("publish_threshold")
-  verifiedShareMin   Float    @default(0.30) @map("verified_share_min")
-  sortOrder          Int      @default(0) @map("sort_order")
-  createdAt          DateTime @default(now()) @map("created_at")
+  publishThreshold    Int      @default(60) @map("publish_threshold")
+  verifiedShareMin    Float    @default(0.30) @map("verified_share_min")
+  /// Listings required per 1,000 monthly searches — board 6f.
+  ///
+  /// The second half of the listings rule. A page needs the absolute floor
+  /// above or this figure applied to its recorded demand, whichever is higher,
+  /// so a trade nobody searches for publishes at 60 and one with four thousand
+  /// searches a month has to be worth arriving at. It bites only on scopes
+  /// somebody has recorded a `ScopeDemand` row for.
+  demandPerThousand   Int      @default(25) @map("demand_per_thousand")
+  /// The fraction of that need a page which is ALREADY live keeps holding at.
+  ///
+  /// Board 6f asks for hysteresis: publish at 60, unpublish at 48. Without a
+  /// band a scope sitting on the floor flaps, and every flap is a URL entering
+  /// and leaving the sitemap. A share rather than a second integer because the
+  /// need is no longer one number — at 0.8 it reproduces the board's 60 and 48
+  /// exactly and scales with a demand-raised floor.
+  holdShare           Float    @default(0.80) @map("hold_share")
+  /// Words of the page's own copy — board 6f's fourth control.
+  ///
+  /// A column rather than the module default it used to read, because §5 puts
+  /// the word floor on the rules panel beside the other five and every one of
+  /// them republishes the site. `thresholdsFor` pinned this to 250 with a
+  /// comment saying "board 6f owns it"; it does now.
+  minIntroWords       Int      @default(250) @map("min_intro_words")
+  /// Whether generated drafts must be read by a person before they publish.
+  ///
+  /// Board 6f §2: "Generate 38 drafts", not "Generate queued pages". A single
+  /// button that publishes 38 pages into a live index is a materially different
+  /// and worse button. On by default, and `generateDrafts` refuses to publish
+  /// anything while it is on.
+  humanReviewRequired Boolean  @default(true) @map("human_review_required")
+  /// Days a newly published page is protected from the sweep — board 6f.
+  ///
+  /// The sweep skips a page inside this window rather than the page staying
+  /// live while thin: see `AreaPage.firstPublishedAt`.
+  minLiveDays         Int      @default(30) @map("min_live_days")
+  sortOrder           Int      @default(0) @map("sort_order")
+  createdAt           DateTime @default(now()) @map("created_at")
 
   parent            Category?            @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   children          Category[]           @relation("CategoryTree")
@@ -277,6 +321,8 @@ model Category {
   guideCtas         Guide[]              @relation("GuideCtaCategory")
   areaPages         AreaPage[]
   emiratePages      EmiratePage[]
+  scopeDemand       ScopeDemand[]
+  ruleChanges       PublishRuleChange[]
   campaignCtas      Campaign[]           @relation("CampaignCtaCategory")
   productAlerts     ProductAlert[]
   curatedLists      CuratedList[]
@@ -576,7 +622,7 @@ model Business {
   /// comment used to say: there is no score in this product. What it moves is
   /// the median first reply, which is a weight in search ranking and the band a
   /// buyer reads on the listing. Both are measured; a score is not a thing.
-  leadRouting           LeadRouting @default(everyone) @map("lead_routing")
+  leadRouting           LeadRouting   @default(everyone) @map("lead_routing")
   /// Where round-robin got to.
   ///
   /// The last seat routed to rather than an index: 7d §8.3 requires the rotation
@@ -584,11 +630,11 @@ model Business {
   /// just got shorter points at the wrong person. "The next eligible seat after
   /// this one" degrades to "the first eligible seat" when the cursor's seat is
   /// gone, which is the correct answer rather than an arbitrary one.
-  routingCursorId       String?     @map("routing_cursor_id") @db.Uuid
-  routingCursor         User?       @relation("RoutingCursor", fields: [routingCursorId], references: [id], onDelete: SetNull)
+  routingCursorId       String?       @map("routing_cursor_id") @db.Uuid
+  routingCursor         User?         @relation("RoutingCursor", fields: [routingCursorId], references: [id], onDelete: SetNull)
   seatChannels          SeatChannel[]
   /// Minutes before an unanswered enquiry is escalated to the owner.
-  leadEscalationMinutes Int         @default(120) @map("lead_escalation_minutes")
+  leadEscalationMinutes Int           @default(120) @map("lead_escalation_minutes")
 
   /// Board 7e §4 — the acknowledgement sent when a lead arrives out of hours.
   ///
@@ -597,10 +643,10 @@ model Business {
   /// that refusal is what keeps the median honest: if a template could stamp it,
   /// the band every buyer reads and the 18 ranking points for reply time would
   /// both be won by switching this on, and every seller would.
-  autoReplyEnabled      Boolean     @default(false) @map("auto_reply_enabled")
+  autoReplyEnabled Boolean @default(false) @map("auto_reply_enabled")
   /// The seller's own words, with `{buyer_name}`, `{next_open_time}` and
   /// `{whatsapp_number}` filled in at send. Null falls back to the default copy.
-  autoReplyBody         String?     @map("auto_reply_body")
+  autoReplyBody    String? @map("auto_reply_body")
 
   themePreset String? @map("theme_preset")
   themeHex    String? @map("theme_hex")
@@ -1955,13 +2001,13 @@ enum LeadOutcome {
 }
 
 model EnquiryRecipient {
-  enquiryId    String         @map("enquiry_id")
-  businessId   String         @map("business_id")
-  state        RecipientState @default(delivered)
-  openedAt     DateTime?      @map("opened_at")
+  enquiryId      String         @map("enquiry_id")
+  businessId     String         @map("business_id")
+  state          RecipientState @default(delivered)
+  openedAt       DateTime?      @map("opened_at")
   /// Enquiry-to-first-reply is what response time is measured from. Never a
   /// seller-editable field.
-  firstReplyAt DateTime?      @map("first_reply_at")
+  firstReplyAt   DateTime?      @map("first_reply_at")
   /// The BUYER's one nudge — board 10g, a supplier who has not answered.
   ///
   /// Named for its actor since boards 3j/11b. It and the seller's follow-up
@@ -1970,21 +2016,21 @@ model EnquiryRecipient {
   /// same column for the opposite direction. A buyer prodding a silent supplier
   /// therefore spent the supplier's one-ever follow-up, and 11b's rail rendered
   /// "Follow-up sent" for a message nobody had sent.
-  buyerNudgedAt  DateTime? @map("nudged_at")
+  buyerNudgedAt  DateTime?      @map("nudged_at")
   /// The SELLER's one follow-up, 24 hours after their last message.
   ///
   /// Board 11b: a second loses more deals than it wins, so this is a timestamp
   /// rather than a count. The schema cannot express "three nudges", so no
   /// future screen can offer them.
-  sellerNudgedAt DateTime? @map("seller_nudged_at")
+  sellerNudgedAt DateTime?      @map("seller_nudged_at")
   /// When the scheduled follow-up is due, and the words it will carry.
   ///
   /// The body is stored rather than composed at send time because 11b requires
   /// the draft to be editable *before* it goes: text the job wrote at midnight
   /// is text the seller never saw. Null due date means nothing is scheduled,
   /// which is also what cancelling looks like.
-  nudgeDueAt     DateTime? @map("nudge_due_at")
-  nudgeBody      String?   @map("nudge_body")
+  nudgeDueAt     DateTime?      @map("nudge_due_at")
+  nudgeBody      String?        @map("nudge_body")
 
   /// The seat this lead is routed to. Null is the ordinary state.
   ///
@@ -2015,7 +2061,7 @@ model EnquiryRecipient {
   /// It carries no amount. Board 3j asks for a seller-reported figure; CLAUDE.md
   /// lists quoted value among the derived metrics that have no writable path,
   /// and `Business.quotedValueAed` is already a column nothing reads or writes.
-  outcome       LeadOutcome? 
+  outcome       LeadOutcome?
   outcomeAt     DateTime?    @map("outcome_at")
   outcomeById   String?      @map("outcome_by_id") @db.Uuid
   /// Only meaningful on a loss, and never required — a seller who does not know
@@ -2023,7 +2069,7 @@ model EnquiryRecipient {
   /// is answered with a full stop.
   outcomeReason String?      @map("outcome_reason")
 
-  createdAt    DateTime       @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   enquiry    Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
@@ -2116,12 +2162,12 @@ model QuoteLine {
   enquiryLineId String? @map("enquiry_line_id")
   /// Null means a free-text line, flagged for manual pricing.
   productId     String? @map("product_id")
-  description  String
-  qty          Int
+  description   String
+  qty           Int
   /// THE ONLY PRICE FIELD IN THE SCHEMA. Private to one buyer and one seller.
-  unitPrice    Decimal @map("unit_price") @db.Decimal(12, 2)
-  leadTimeDays Int?    @map("lead_time_days")
-  sortOrder    Int     @default(0) @map("sort_order")
+  unitPrice     Decimal @map("unit_price") @db.Decimal(12, 2)
+  leadTimeDays  Int?    @map("lead_time_days")
+  sortOrder     Int     @default(0) @map("sort_order")
 
   quote       Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   product     Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
@@ -2545,15 +2591,15 @@ enum MrrMovementKind {
 /// six named columns are six things a migration can change and a reviewer can
 /// read in a diff.
 model RankingWeights {
-  id               String   @id @default("current")
+  id               String @id @default("current")
   relevance        Int
-  verificationTier Int      @map("verification_tier")
-  responseTime     Int      @map("response_time")
-  specCompleteness Int      @map("spec_completeness")
+  verificationTier Int    @map("verification_tier")
+  responseTime     Int    @map("response_time")
+  specCompleteness Int    @map("spec_completeness")
   distance         Int
   /// Deliberately the smallest. A directory that sells its way to the top is a
   /// directory nobody comes back to.
-  planTier         Int      @map("plan_tier")
+  planTier         Int    @map("plan_tier")
 
   /// What `relevance` means on a page with no query — board 6a §Ranking.
   ///
@@ -2577,7 +2623,7 @@ model RankingWeights {
   /// have no query.
   browseRelevanceMode String @default("redistribute") @map("browse_relevance_mode")
 
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("ranking_weights")
 }
@@ -3120,11 +3166,33 @@ model AreaPage {
   /// the matrix and in the audit log rather than only in a render.
   publishedAt DateTime? @map("published_at")
 
+  /// The first time this page ever went live, and it is never cleared.
+  ///
+  /// Board 6f's minimum-live window needs something durable to measure from,
+  /// and `publishedAt` above is not it: both unpublish paths null it and a
+  /// republish stamps a fresh date, so a grace measured from it would reset
+  /// every time supply wobbled — the exact opposite of what a grace is for.
+  firstPublishedAt DateTime? @map("first_published_at")
+
+  /// "Do not publish this one" — board 6f's `Held · editorial`.
+  ///
+  /// Set by a person and never cleared automatically. The board's own words:
+  /// "There is currently no way to express 'do not publish this one' and there
+  /// will be a reason to at some point." It is stored state on a screen whose
+  /// governing rule is that nothing is stored — and it is the exception that
+  /// proves it, because a human decision is the one thing no query can
+  /// re-derive. A held page cannot be published by staff or by any job, and it
+  /// is unheld only by a person with a written reason.
+  heldAt     DateTime? @map("held_at")
+  heldReason String?   @map("held_reason")
+  heldById   String?   @map("held_by_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   area     Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  heldBy   User?    @relation("AreaPageHolder", fields: [heldById], references: [id], onDelete: SetNull)
 
   faq             LandingFaq[]
   relatedSearches LandingRelatedSearch[]
@@ -3152,6 +3220,123 @@ model AreaPage {
 /// Keyed on the enum rather than a relation. An emirate is a fixed list of
 /// seven in the schema, not a row somebody can add, so there is nothing to
 /// point a foreign key at.
+/// Searches a month for one landing scope — board 6f.
+///
+/// A table of its own rather than a column on `AreaPage`, and that is the whole
+/// point of it. An `AreaPage` row exists only once somebody has saved copy, so
+/// a column there could describe demand only for pages that already exist —
+/// while the state board 6f calls RECRUIT is precisely a scope with real demand
+/// and no page: 2,260 searches a month for AC repair in Jumeirah, two listings,
+/// nothing written. Those rows are the work. They have to be able to exist.
+///
+/// One row is one scope: (category, emirate) with `areaId` null is an emirate
+/// page, and with `areaId` set an area page.
+model ScopeDemand {
+  id         String  @id @default(cuid())
+  categoryId String  @map("category_id")
+  emirate    Emirate
+  /// Null means the emirate-wide page for this trade rather than one area.
+  areaId     String? @map("area_id")
+
+  /// The figure itself. Never defaulted, never zero-filled: an absent row means
+  /// the absolute floor alone, and a nought would make the demand-relative need
+  /// nought and pass every unmeasured page for the wrong reason.
+  monthlySearches Int @map("monthly_searches")
+
+  /// Where the number came from and when it was true, rendered beside it.
+  ///
+  /// Both required. A keyword volume is a third-party claim with a shelf life,
+  /// and a directory whose only asset is that its numbers are true cannot print
+  /// one without saying whose it is and how old it is. `Business.derivedAt` is
+  /// the counter-example this repo already carries: a vintage written by two
+  /// jobs and rendered nowhere.
+  source     String
+  capturedAt DateTime @map("captured_at")
+
+  /// Who entered it. Nullable only so a reseed's user truncation cannot take
+  /// the demand rows with it.
+  recordedById String? @map("recorded_by_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  area       Area?    @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  recordedBy User?    @relation("ScopeDemandRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  /// Covers the area rows. The emirate rows carry a null `areaId`, which
+  /// Postgres reads as distinct from every other null, so they are covered by a
+  /// partial unique index written by hand in the migration instead.
+  @@unique([categoryId, emirate, areaId])
+  @@index([categoryId])
+  @@index([areaId])
+  @@map("scope_demand")
+}
+
+/// A proposed change to a category's publish rules — board 6f.
+///
+/// Dual control, and the first of it in this codebase. A threshold decides
+/// whether hundreds of URLs exist; the board asks for a second person, and
+/// there is no rung above `staff_ops_lead` to escalate to, so the second person
+/// IS the escalation. `approved_by_id <> proposed_by_id` is a CHECK in the
+/// migration rather than an `if` a refactor can drop.
+///
+/// `impact` is written at propose time rather than recomputed at approval,
+/// following `TemplateVersion.storeCount`: the number is the decision. Recomputed
+/// later, the second approver would be approving a different change from the
+/// one they were shown.
+model PublishRuleChange {
+  id         String          @id @default(cuid())
+  categoryId String          @map("category_id")
+  /// The four threshold fields as they stood, and as proposed.
+  before     Json
+  after      Json
+  /// Which pages would start and stop publishing, counted when proposed.
+  impact     Json
+  state      RuleChangeState @default(proposed)
+
+  proposedById   String @map("proposed_by_id") @db.Uuid
+  proposedReason String @map("proposed_reason")
+
+  /// Who ended it, and why, whichever way it ended.
+  ///
+  /// `decidedBy`, not `approvedBy`. The second-approver CHECK applies to an
+  /// APPROVAL — a proposer rejecting or withdrawing their own proposal is not a
+  /// self-approval, and a constraint demanding a different person on every exit
+  /// from `proposed` would leave a mistyped proposal with no way out of the
+  /// queue but a second ops lead's signature.
+  ///
+  /// NOT NULL on decided rows with a written reason, enforced by a partial
+  /// CHECK in the migration — the shape `ListingChangeRequest.decisionReason`
+  /// uses.
+  decidedById   String?   @map("decided_by_id") @db.Uuid
+  decidedReason String?   @map("decided_reason")
+  decidedAt     DateTime? @map("decided_at")
+
+  /// When `impact` was counted, so the approver is told how old the number is.
+  ///
+  /// Supply moves nightly. "Publishes 214" computed on Monday and approved on
+  /// Thursday is a claim about Monday, and the panel recomputes beside it
+  /// rather than letting the stored figure stand in for the live one.
+  impactAt  DateTime @map("impact_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  proposedBy User     @relation("RuleChangeProposer", fields: [proposedById], references: [id], onDelete: Restrict)
+  decidedBy  User?    @relation("RuleChangeDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@index([state, createdAt])
+  @@index([categoryId, state])
+  @@map("publish_rule_change")
+}
+
+enum RuleChangeState {
+  proposed
+  approved
+  rejected
+  withdrawn
+}
+
 model EmiratePage {
   id         String  @id @default(cuid())
   emirate    Emirate
@@ -3177,10 +3362,19 @@ model EmiratePage {
   /// than when a job next runs.
   publishedAt DateTime? @map("published_at")
 
+  /// As on `AreaPage`, and for the same reason. Never cleared.
+  firstPublishedAt DateTime? @map("first_published_at")
+
+  /// `Held · editorial`, as on `AreaPage`. Same rule, same reason.
+  heldAt     DateTime? @map("held_at")
+  heldReason String?   @map("held_reason")
+  heldById   String?   @map("held_by_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  heldBy   User?    @relation("EmiratePageHolder", fields: [heldById], references: [id], onDelete: SetNull)
 
   faq             LandingFaq[]
   relatedSearches LandingRelatedSearch[]
@@ -3471,10 +3665,10 @@ model CuratedListAudit {
   id     String @id @default(cuid())
   listId String @map("list_id")
 
-  auditedAt       DateTime  @map("audited_at")
-  editorId        String?   @map("editor_id") @db.Uuid
-  consideredCount Int       @map("considered_count")
-  memberCount     Int       @map("member_count")
+  auditedAt       DateTime @map("audited_at")
+  editorId        String?  @map("editor_id") @db.Uuid
+  consideredCount Int      @map("considered_count")
+  memberCount     Int      @map("member_count")
 
   /// The full snapshot as it was written: per member the business, the metrics
   /// and the `BEST FOR:` assignment. Json because it is a frozen document
@@ -3821,9 +4015,9 @@ model Guide {
 /// leave a dangling reference in somebody else's rail — the failure a `String[]`
 /// of ids has no way to prevent.
 model GuideRelated {
-  id     String @id @default(cuid())
-  fromId String @map("from_id")
-  toId   String @map("to_id")
+  id       String @id @default(cuid())
+  fromId   String @map("from_id")
+  toId     String @map("to_id")
   /// Reading order in the rail. Three of them, and the order is the editor's.
   position Int
 
@@ -4214,13 +4408,13 @@ model NotificationTemplate {
 /// anything with a deadline. A row for it would make every seat trivially
 /// reachable and the routing rule would mean nothing.
 model SeatChannel {
-  id String @id @default(cuid())
+  id         String          @id @default(cuid())
   /// The seat. Cascades: a deleted account takes its channels with it.
-  userId     String @map("user_id") @db.Uuid
+  userId     String          @map("user_id") @db.Uuid
   /// Denormalised from `User.businessId`. Every read on both boards is "the
   /// channels for this business's seats", and the alternative is a join through
   /// `user` on screens that already join it for names.
-  businessId String @map("business_id")
+  businessId String          @map("business_id")
   kind       SeatChannelKind
   /// E.164 for a number, an address for email. Normalised by the service, so
   /// the column holds one shape per kind.
@@ -4238,8 +4432,8 @@ model SeatChannel {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business  Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business  Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
   challenge SeatChannelChallenge?
 
   /// One address per kind per seat. Two WhatsApp numbers on one seat is a seller
@@ -4260,11 +4454,11 @@ model SeatChannel {
 /// Two valid codes is a window that stays open as long as somebody keeps
 /// pressing the button — the same rule `inviteSeat` applies to its token.
 model SeatChannelChallenge {
-  id            String @id @default(cuid())
-  seatChannelId String @unique @map("seat_channel_id")
+  id            String   @id @default(cuid())
+  seatChannelId String   @unique @map("seat_channel_id")
   /// SHA-256 of the six digits. The code is sent and never stored, so a leaked
   /// backup of this table proves nothing on its own.
-  codeHash      String @map("code_hash")
+  codeHash      String   @map("code_hash")
   expiresAt     DateTime @map("expires_at")
   /// Wrong guesses against this one code. `lib/auth/throttle.ts` counts attempts
   /// per address across codes; this counts them per code, so asking for a new

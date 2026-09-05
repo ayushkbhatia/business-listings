@@ -2,9 +2,21 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_THRESHOLDS,
   countWords,
+  evaluateHold,
   evaluatePublish,
-  isPublishable,
+  holdFloor,
+  listingsNeeded,
 } from "./publish-threshold";
+
+/*
+   `isPublishable` is gone rather than updated. Its docblock called it a
+   convenience for the sitemap; app/sitemap.ts never imported it and its only
+   callers were the lines below. Board 6f makes "is this publishable" and "may
+   this stay live" two different questions, and a dead export answering the
+   first would have been picked up by a caller meaning the second.
+*/
+const publishable = (input: Parameters<typeof evaluatePublish>[0]) =>
+  evaluatePublish(input).publishable;
 
 /**
  * Board 6f, enforced in code rather than by editorial discipline. The tests
@@ -28,6 +40,10 @@ describe("the thresholds are the ones boards 6f and 6a state", () => {
       minIntroWords: 250,
       minFaqRows: 4,
       minScopeSpecificFaqRows: 2,
+      // Board 6f's two: 25 listings per 1,000 monthly searches, and a live
+      // page holds at four fifths of whatever that works out to.
+      demandPerThousand: 25,
+      holdShare: 0.8,
     });
   });
 });
@@ -40,7 +56,12 @@ describe("evaluatePublish", () => {
   it("holds a page back for too few listings, and says by how much", () => {
     const decision = evaluatePublish({ ...good, listings: 59, verified: 30 });
     expect(decision.publishable).toBe(false);
-    expect(decision.failures).toContainEqual({ reason: "listings", have: 59, need: 60 });
+    expect(decision.failures).toContainEqual({
+      reason: "listings",
+      have: 59,
+      need: 60,
+      basis: "absolute",
+    });
   });
 
   it("holds a page back on the verified share", () => {
@@ -51,10 +72,10 @@ describe("evaluatePublish", () => {
   });
 
   it("accepts exactly the floor, not one below it", () => {
-    expect(isPublishable({ listings: 60, verified: 18, introWords: 250 })).toBe(true);
-    expect(isPublishable({ listings: 60, verified: 17, introWords: 250 })).toBe(false);
-    expect(isPublishable({ listings: 59, verified: 60, introWords: 250 })).toBe(false);
-    expect(isPublishable({ listings: 60, verified: 18, introWords: 249 })).toBe(false);
+    expect(publishable({ listings: 60, verified: 18, introWords: 250 })).toBe(true);
+    expect(publishable({ listings: 60, verified: 17, introWords: 250 })).toBe(false);
+    expect(publishable({ listings: 59, verified: 60, introWords: 250 })).toBe(false);
+    expect(publishable({ listings: 60, verified: 18, introWords: 249 })).toBe(false);
   });
 
   it("holds a page back for thin intro copy", () => {
@@ -74,26 +95,43 @@ describe("evaluatePublish", () => {
 
   it("does not divide by zero on an empty area", () => {
     expect(() => evaluatePublish({ listings: 0, verified: 0, introWords: 0 })).not.toThrow();
-    expect(isPublishable({ listings: 0, verified: 0, introWords: 0 })).toBe(false);
+    expect(publishable({ listings: 0, verified: 0, introWords: 0 })).toBe(false);
   });
 
-  it("unpublishes as readily as it publishes", () => {
-    // Same function both ways: routes.md says a page auto-unpublishes when
-    // supply drops below the floor, so this cannot read a stored flag.
+  it("refuses a fresh publish inside the hysteresis band", () => {
+    // Board 6f. This used to read "unpublishes as readily as it publishes" and
+    // assert 61 true then 59 false through one function. There are two now,
+    // and a page at 52 is in between: too thin to be published today, thick
+    // enough that having published it we do not yank it.
     const launched = { listings: 61, verified: 20, introWords: 300 };
-    expect(isPublishable(launched)).toBe(true);
-    expect(isPublishable({ ...launched, listings: 59 })).toBe(false);
+    expect(publishable(launched)).toBe(true);
+    expect(publishable({ ...launched, listings: 52 })).toBe(false);
+    expect(evaluateHold({ ...launched, listings: 52 }).publishable).toBe(true);
+    expect(evaluateHold({ ...launched, listings: 47 }).publishable).toBe(false);
+  });
+
+  it("still reads the numbers rather than a stored flag", () => {
+    // routes.md says a page auto-unpublishes when supply drops. The band moved
+    // where that happens; it did not make the answer something we remember.
+    const launched = { listings: 61, verified: 20, introWords: 300 };
+    expect(evaluateHold(launched).publishable).toBe(true);
+    expect(evaluateHold({ ...launched, listings: 20 }).publishable).toBe(false);
   });
 
   it("takes a different threshold set without a code change", () => {
     expect(
-      isPublishable({ listings: 10, verified: 5, introWords: 20 }, {
-        minListings: 10,
-        minVerifiedShare: 0.5,
-        minIntroWords: 20,
-        minFaqRows: 1,
-        minScopeSpecificFaqRows: 1,
-      }),
+      evaluatePublish(
+        { listings: 10, verified: 5, introWords: 20 },
+        {
+          minListings: 10,
+          minVerifiedShare: 0.5,
+          minIntroWords: 20,
+          minFaqRows: 1,
+          minScopeSpecificFaqRows: 1,
+          demandPerThousand: 25,
+          holdShare: 0.8,
+        },
+      ).publishable,
     ).toBe(true);
   });
 });
@@ -113,7 +151,7 @@ describe("the FAQ condition", () => {
   const clears = { listings: 61, verified: 20, introWords: 300 };
 
   it("does not apply where the caller passes no FAQ count", () => {
-    expect(isPublishable(clears)).toBe(true);
+    expect(publishable(clears)).toBe(true);
     expect(evaluatePublish(clears).failures).toEqual([]);
   });
 
@@ -133,12 +171,71 @@ describe("the FAQ condition", () => {
   });
 
   it("passes at four questions with two of them specific", () => {
-    expect(isPublishable({ ...clears, faqRows: 4, scopeSpecificFaqRows: 2 })).toBe(true);
+    expect(publishable({ ...clears, faqRows: 4, scopeSpecificFaqRows: 2 })).toBe(true);
   });
 
   it("reads a missing scope-specific count as none", () => {
     const decision = evaluatePublish({ ...clears, faqRows: 6 });
     expect(decision.failures).toEqual([{ reason: "faq_scope_specific", have: 0, need: 2 }]);
+  });
+});
+
+/**
+ * Board 6f's second half of the listings condition.
+ *
+ *   need = max(60, 25 × monthlySearches / 1000)
+ *
+ * The board's own worked example: AC repair in Business Bay, 3,940 searches a
+ * month, needs 99 and has 78. It is opt-in exactly as the FAQ condition is —
+ * a `/c/:slug` category page has no place attached and no keyword figure to
+ * attach, and an absent figure is the absolute floor rather than a zero.
+ */
+describe("the demand condition", () => {
+  const clears = { listings: 80, verified: 30, introWords: 300 };
+
+  it("leaves a scope with no recorded demand on the absolute floor", () => {
+    expect(listingsNeeded({})).toEqual({ need: 60, basis: "absolute" });
+    expect(publishable({ ...clears, listings: 60 })).toBe(true);
+  });
+
+  it("does not read an absent figure as nought", () => {
+    // A zero would make the demand need 0 and every unmeasured page would pass
+    // the new condition for the wrong reason.
+    expect(listingsNeeded({ monthlySearches: 0 })).toEqual({ need: 60, basis: "absolute" });
+  });
+
+  it("raises the need where the searches are there", () => {
+    // 25 × 3,940 / 1,000 = 98.5, and a page cannot have half a listing.
+    expect(listingsNeeded({ monthlySearches: 3_940 })).toEqual({ need: 99, basis: "demand" });
+  });
+
+  it("keeps the absolute floor where demand asks for less", () => {
+    // 2,260 searches in Jumeirah: 56.5, which rounds to 57 and loses to 60.
+    expect(listingsNeeded({ monthlySearches: 2_260 })).toEqual({ need: 60, basis: "absolute" });
+  });
+
+  it("refuses the board's own example, and says which rule refused it", () => {
+    const decision = evaluatePublish({ ...clears, listings: 78, monthlySearches: 3_940 });
+    expect(decision.publishable).toBe(false);
+    expect(decision.failures).toContainEqual({
+      reason: "listings",
+      have: 78,
+      need: 99,
+      basis: "demand",
+    });
+  });
+
+  it("scales the hold floor with the need rather than pinning it at 48", () => {
+    // Otherwise a 50-listing page against 3,940 searches would stay live for
+    // ever on a band drawn for a floor of 60.
+    expect(holdFloor({})).toBe(48);
+    expect(holdFloor({ monthlySearches: 3_940 })).toBe(80);
+  });
+
+  it("never lets the hold floor fall below one listing", () => {
+    expect(
+      holdFloor({}, { ...DEFAULT_THRESHOLDS, minListings: 1, holdShare: 0 }),
+    ).toBe(1);
   });
 });
 

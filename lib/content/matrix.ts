@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { countWords, evaluatePublish, type PublishFailure } from "@/lib/publish-threshold";
-import { thresholdsFor } from "@/lib/taxonomy/service";
+import { CATEGORY_RULES_SELECT, thresholdsFor } from "@/lib/taxonomy/service";
 import { VERIFIED_TIER } from "@/lib/verification";
 
 /**
@@ -102,7 +102,7 @@ export async function pageMatrix(): Promise<Matrix> {
       orderBy: [{ parentId: { sort: "asc", nulls: "first" } }, { sortOrder: "asc" }],
       select: {
         id: true, name: true, slug: true, intro: true,
-        publishThreshold: true, verifiedShareMin: true,
+        ...CATEGORY_RULES_SELECT,
         parent: { select: { name: true, slug: true } },
       },
     }),
