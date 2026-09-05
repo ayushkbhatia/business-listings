@@ -10,6 +10,7 @@ import { measureResponseTimes } from "@/lib/metrics/job";
 import { measureProfileStrength } from "@/lib/metrics/strength-job";
 import { sweepAreaPages } from "@/lib/seo/area";
 import { sweepEmiratePages } from "@/lib/seo/emirate";
+import { sweepCuratedLists } from "@/lib/seo/curated";
 import { sweepExpiredLicences } from "@/lib/verification/expiry-job";
 import { sweepZeroQuoteEnquiries } from "@/lib/enquiry/zero-quote";
 import { pruneProductEvents } from "@/lib/telemetry/record";
@@ -201,6 +202,22 @@ export async function GET(request: NextRequest) {
        render, at `revalidate = 300`, with two crawlers racing for the same row.
     */
     emiratePages: () => sweepEmiratePages(),
+    /*
+       Board 6b §3. Live metrics against the snapshot each list publishes.
+
+       It changes almost nothing on purpose: drift goes to a queue a person
+       works, because the entries are hand-written and cross-reference each
+       other, so reordering or dropping a member automatically would make the
+       surrounding prose wrong. Two things do act — a lapsed licence, already
+       suppressed in the build, and a list past its re-audit SLA with drift
+       outstanding, which unpublishes rather than render a stale-data warning.
+
+       After `expiredLicences`, and that ordering is load-bearing for the same
+       reason `areaPages` is after it: this reads `verificationTier` to decide
+       what has lapsed, and running it first would read tiers that step is about
+       to invalidate.
+    */
+    curatedLists: () => sweepCuratedLists(),
     /*
        Team invitations that have run out of time.
 

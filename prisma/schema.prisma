@@ -88,6 +88,9 @@ model User {
   reviewRequests          ReviewRequest[]
   importRuns              ImportRun[]
   changeRequests          ListingChangeRequest[]   @relation("ChangeRequestActor")
+  /// Board 6b: who last audited a curated list, and every audit they signed.
+  curatedListsEdited      CuratedList[]            @relation("CuratedListEditor")
+  curatedAudits           CuratedListAudit[]       @relation("CuratedListAuditor")
   changesDecided          ListingChangeRequest[]   @relation("ChangeRequestDecider")
   invitesSent             TeamInvite[]             @relation("InviteSender")
   claimsMade              ClaimSubmission[]        @relation("ClaimClaimant")
@@ -641,6 +644,9 @@ model Business {
   viewDays               ListingViewDay[]
   productEvents          ProductEvent[]
   catalogueImports       CatalogueImportRequest[]
+  /// Board 6b. Membership of a curated list, and any drift against its snapshot.
+  curatedEntries         CuratedListMember[]
+  curatedDrift           CuratedListDrift[]
   claimSubmissions       ClaimSubmission[]
   setupBaseline          SetupBaseline?
   licenceImportRun       LicenceImportRun?        @relation(fields: [licenceImportRunId], references: [id], onDelete: SetNull)
@@ -3293,19 +3299,50 @@ model LandingRelatedSearch {
 // placement cannot be bought, and the cheapest way to guarantee that is to have
 // nowhere to put it.
 //
-// Membership is not stored either. It is computed from the rules on every read,
-// so a supplier whose reply time slips leaves the list without anybody running
-// anything — the same discipline `AreaPage` uses for the publishing floors.
+// Membership **is** stored, and this reversed a decision. It used to be computed
+// from the rules on every read, so a supplier whose reply time slipped left the
+// list without anybody running anything. Board 6b §3 says why that cannot work:
+//
+//   the entries are hand-written and they cross-reference each other. Entry 03
+//   reads "slower to reply than the two above"; the `BEST FOR:` lines are chosen
+//   so that twelve recommendations do not overlap; the rank numerals are
+//   editorial. **Automated reordering corrupts prose no automated process can
+//   rewrite.**
+//
+// So the page is a dated snapshot. Every figure a reader sees was measured on
+// the audit date and the page says so twice. A nightly job compares live data to
+// the snapshot and writes drift to an editorial queue rather than acting on it.
+// One failure is hard-suppressed in the build — a lapsed licence — because that
+// is the one that makes the page's central claim false rather than merely stale.
+//
+// What that costs is the guarantee the old model got for free. "Placement cannot
+// be bought" used to hold because there was no row to write; now there is, so the
+// bar moved into `lib/seo/curated/audit.ts`, which refuses to record a member who
+// does not pass the criteria at audit time and writes an audit row saying who
+// decided. The selection record is the evidence, and it is retained rather than
+// overwritten — the history is the point.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// An editorial list. What it is about and how it is framed; never who is on it.
+/// An editorial list. What it is about, how it is framed, and when it was last
+/// measured. Who is on it lives in `CuratedListMember`.
 model CuratedList {
   id    String @id @default(cuid())
   slug  String @unique
+  /// Board 6b Q1: the H1 carries the query and the year — "The 12 best HVAC
+  /// contractors in Al Quoz, 2026" — because this is the one page whose job is
+  /// acquisition, and the voice is worth less than the ranking. The editorial
+  /// voice moves to `standfirst`. Board 6a's READ NEXT card renders this same
+  /// field, so the two cannot say different things about one page.
   title String
 
-  /// The editorial framing — why this list exists and who it is for. Held to
-  /// the same word floor as every other landing page.
+  /// The hero standfirst: the criteria in a sentence, then "No one paid to be
+  /// here." Four words, own sentence, load-bearing — §2 says never soften it,
+  /// never merge it into the preceding clause, never move it below the fold.
+  standfirst String?
+
+  /// The editorial framing — why this list exists and who it is for. Rendered
+  /// as the last rail card, "Why we publish the criteria", which is the page
+  /// arguing for its own trustworthiness and should stay the last thing read.
   intro String?
 
   /// What the list is about. Required: a list of "the best suppliers" with no
@@ -3314,15 +3351,176 @@ model CuratedList {
   /// Optionally narrowed to one area.
   areaId     String? @map("area_id")
 
+  /// The criteria **this list** was chosen on, as `{key, kind}` rows.
+  ///
+  /// On the record rather than in a config file: §2 says the method panel is a
+  /// record of how *this* list was chosen, not a statement of general policy —
+  /// so two lists with different criteria render different panels (acceptance
+  /// 10). General policy lives on `/verification-policy`.
+  ///
+  /// It is not seller-editable and not per-list *negotiable*: the audit service
+  /// validates against whatever is recorded here, and a criterion nobody
+  /// enforced is a criterion nobody may publish.
+  criteria Json @default("[]")
+
+  /// When the figures on the page were measured. Not a publish date and not a
+  /// build date.
+  ///
+  /// A re-audit is the only thing that moves it — not a rebuild, not a review
+  /// landing, not a deploy. Same rule as `AreaPage.contentUpdatedAt` and for the
+  /// same reason: a date that tracks the build is a date that is always today
+  /// and therefore says nothing.
+  auditedAt DateTime? @map("audited_at")
+
+  /// Who audited it last. "No one paid to be here" is unfalsifiable without a
+  /// name against the decision.
+  editorId String? @map("editor_id") @db.Uuid
+
+  /// How many businesses were considered. Published as a number; the names are
+  /// not, and they are in `CuratedListAudit.record` for staff.
+  consideredCount Int @default(0) @map("considered_count")
+
+  /// When an entry was last dropped by the build for a lapsed licence.
+  ///
+  /// Rendered in the hero beside the audit date, deliberately ugly, so it pushes
+  /// editorial to re-audit rather than sit. §3, consequence 3.
+  entryRemovedAt DateTime? @map("entry_removed_at")
+
+  /// The re-audit SLA. Past this with unresolved drift, the list unpublishes
+  /// rather than degrade — an unaudited curated list is worth less than none.
+  reauditDueAt DateTime? @map("reaudit_due_at")
+
   publishedAt DateTime? @map("published_at")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   area     Area?    @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  editor   User?    @relation("CuratedListEditor", fields: [editorId], references: [id], onDelete: SetNull)
+
+  members CuratedListMember[]
+  audits  CuratedListAudit[]
+  drift   CuratedListDrift[]
 
   @@index([publishedAt])
+  @@index([reauditDueAt])
   @@map("curated_list")
+}
+
+/// One hand-written entry, and the figures as they stood on the audit date.
+///
+/// Every metric here is a **snapshot**, never a live read (acceptance 5). The
+/// columns are prefixed `snap` so that a future reader reaching for
+/// `business.responseTimeMedianMs` on this page has to notice they are leaving
+/// the model.
+model CuratedListMember {
+  id         String @id @default(cuid())
+  listId     String @map("list_id")
+  businessId String @map("business_id")
+
+  /// Editorial order. The rank numeral is decorative weight, not a score — §3
+  /// draws it in `--line-strong` for exactly that reason.
+  position Int
+
+  /// `BEST FOR: CHILLER AMC ON A TIGHT BUILDING`.
+  ///
+  /// Unique within a list, enforced here rather than in review: this line is
+  /// the actual product of the curation — it turns a ranked list into twelve
+  /// non-competing recommendations — and two entries sharing one is the list
+  /// failing at the thing it is for. Acceptance 16.
+  bestFor String @map("best_for")
+
+  /// Three or four sentences a person wrote after reading the reviews and the
+  /// quotes. Specific and checkable; no adjective that cannot be sourced.
+  prose String
+
+  /// The figures, as measured on `snapshotAt`.
+  snapshotAt          DateTime @map("snapshot_at")
+  snapRatingOverall   Float?   @map("snap_rating_overall")
+  snapReviewCount     Int      @map("snap_review_count")
+  snapResponseMs      Int      @map("snap_response_ms")
+  snapEstablishedYear Int?     @map("snap_established_year")
+
+  /// The metric strip's varying fourth cell — `CATALOGUE 312 products`,
+  /// `CALLOUT 24 hours`.
+  ///
+  /// Authored, and varying by entry on purpose: §3 says a fixed grid with
+  /// blanks would say less. Both null renders three cells, not an empty one.
+  extraLabel String? @map("extra_label")
+  extraValue String? @map("extra_value")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  list     CuratedList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  business Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([listId, position])
+  @@unique([listId, businessId])
+  @@unique([listId, bestFor])
+  @@index([businessId])
+  @@map("curated_list_member")
+}
+
+/// The selection record, retained.
+///
+/// "No one paid to be here" is unfalsifiable unless there is a record, and a
+/// record that is overwritten on every re-audit is not evidence — it is the
+/// current claim restated. One row per audit, kept.
+model CuratedListAudit {
+  id     String @id @default(cuid())
+  listId String @map("list_id")
+
+  auditedAt       DateTime  @map("audited_at")
+  editorId        String?   @map("editor_id") @db.Uuid
+  consideredCount Int       @map("considered_count")
+  memberCount     Int       @map("member_count")
+
+  /// The full snapshot as it was written: per member the business, the metrics
+  /// and the `BEST FOR:` assignment. Json because it is a frozen document
+  /// nobody queries across — the live shape is `CuratedListMember`.
+  record Json
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  list   CuratedList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  editor User?       @relation("CuratedListAuditor", fields: [editorId], references: [id], onDelete: SetNull)
+
+  @@index([listId, auditedAt])
+  @@map("curated_list_audit")
+}
+
+/// A member who no longer matches the snapshot the page publishes.
+///
+/// Written nightly, read by board 6f, and acted on by **a person**. The whole
+/// point of §3 is that this queue changes nothing the reader sees: reordering or
+/// dropping a member automatically would make the surrounding prose wrong.
+///
+/// The exception is a lapsed licence, which never reaches this table — it is
+/// suppressed in the build, because it is the one failure that makes the page's
+/// claim false rather than stale.
+model CuratedListDrift {
+  id         String @id @default(cuid())
+  listId     String @map("list_id")
+  businessId String @map("business_id")
+
+  /// `reply` or `reviews`. The criterion that moved.
+  criterion String
+
+  /// Both sides, as rendered strings — this is a queue a person reads, and
+  /// "4 h 10 min against 2 h 30 min at audit" is the whole content of the row.
+  snapshotValue String @map("snapshot_value")
+  liveValue     String @map("live_value")
+
+  detectedAt DateTime  @default(now()) @map("detected_at")
+  /// Cleared by a re-audit, which is the only thing that resolves drift.
+  resolvedAt DateTime? @map("resolved_at")
+
+  list     CuratedList @relation(fields: [listId], references: [id], onDelete: Cascade)
+  business Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([listId, resolvedAt])
+  @@map("curated_list_drift")
 }
 
 /// Criterion 8 — the zero-result alert, and the end of the flywheel.

@@ -53,7 +53,6 @@ export const SURFACE_GROUPS: readonly SurfaceGroup[] = [
       { href: "/dashboard/setup/photos", what: "Task 1, photos with guidance", board: "8b", planned: true },
       { href: "/dashboard/setup/products", what: "Task 2, template then first products", board: "8c", planned: true },
       { href: "/dashboard/setup/team", what: "Task 3, invite the team", board: "8d", planned: true },
-      { href: "/dashboard/setup/visit", what: "Task 4, request a site visit", board: "8e" },
     ],
   },
   {

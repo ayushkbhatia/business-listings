@@ -1174,7 +1174,7 @@ export function ModerationSpecimens() {
                 actorName="Omar Rahman"
                 actorRoleLabel="staff_ops_lead"
                 at="21 Aug 2026, 16:03"
-                reason="Site visit completed at the Al Quoz yard; stock and trade licence both matched the listing."
+                reason="Trade licence checked against the DED register and confirmed current; TRN matched the listing."
                 change={{ from: "tier 2", to: "tier 3" }}
               />
               <AuditRow
@@ -1234,7 +1234,7 @@ export function ModerationSpecimens() {
                   { label: "10 products", included: true },
                   { label: "1 location", included: true },
                   { label: "Your own web address", included: false },
-                  { label: "A verification site visit", included: false },
+                  { label: "A lift in search ranking", included: false },
                 ]}
               />
               <PlanCard
@@ -1270,7 +1270,7 @@ export function ModerationSpecimens() {
                   { label: "Unlimited products", included: true },
                   { label: "10 locations", included: true },
                   { label: "Your own web address", included: true },
-                  { label: "A verification site visit", included: true },
+                  { label: "A lift in search ranking", included: true },
                 ]}
                 action={
                   <Button size="sm" block variant="secondary">
@@ -1371,18 +1371,16 @@ const COMPARISON_ROWS = [
       { planId: "pro", label: "Included", state: "included" as const },
     ],
   },
-  {
-    key: "site_visit",
-    header: "Verified by a site visit",
-    note:
-      "Our team goes to the address and photographs it. The tier that follows is set by us and " +
-      "by nobody else, on this plan or any other.",
-    cells: [
-      { planId: "free", label: "Not included", state: "absent" as const },
-      { planId: "basic", label: "Not included", state: "absent" as const },
-      { planId: "pro", label: "Included", state: "included" as const },
-    ],
-  },
+  /*
+     There was a `site_visit` row here, selling "Verified by a site visit" as a
+     Pro benefit — "our team goes to the address and photographs it".
+
+     Deleted rather than reworded. Visits were withdrawn on 5 Sep and the
+     ladder now stops at licence verified, so the row described something
+     nobody does. It was also the wrong shape twice over: verification is
+     platform-owned and non-negotiable 2 says it is never a thing a plan
+     confers, so no verification row belongs in a plan comparison at all.
+  */
 ];
 
 /** Stateful, because an editor rendered with no state shows one frame of itself. */
