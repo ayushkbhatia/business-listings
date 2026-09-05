@@ -757,6 +757,52 @@ async function main() {
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
+  // Last of all, because it reads the references every builder above it wrote.
+  await advanceEnquiryRefSequence(prisma);
+}
+
+/**
+ * Push `enquiry_ref_seq` above every numeric reference the seed just inserted.
+ *
+ * The sequence starts at 8901 (migration 20260824170000) and this file writes
+ * references above it — `ENQ-9100` upwards in `seedOpenRequests`, among others.
+ * Nothing reconciled the two. `truncate … restart identity` at the top of `main`
+ * restarts sequences *owned by* a truncated table's column, and this one is
+ * standalone, so it survives every reseed while the rows it would have collided
+ * with do not.
+ *
+ * So the counter walks. Each integration run burns about fifteen `nextval`s,
+ * and after four or so runs against a database nobody reseeded, `createEnquiry`
+ * allocates `ENQ-9100` — which the seed already holds — and the insert fails on
+ * the unique index. The error names whichever suite was running, storefronts on
+ * the afternoon this was found, and says nothing about references at all, which
+ * is what made it expensive.
+ *
+ * CI never saw it: every job gets its own `supabase start` and reseeds (#62).
+ * It is local runs, against a database reused across an afternoon, that break.
+ *
+ * A `max` over the table rather than a constant, because a fixture added later
+ * would otherwise reintroduce this by picking a bigger number, and the seed has
+ * grown references in four separate ranges already. 8900 is the floor, which
+ * leaves the first allocation at `ENQ-8901` as the migration intends when no
+ * numeric reference was seeded at all. Non-numeric ones — `ENQ-BEST-1-0`,
+ * `ENQ-MOD-3`, `ENQ-CAP2` — cannot collide with `ENQ-${nextval}`, and the
+ * pattern excludes them rather than trying to parse them.
+ *
+ * A seed change, not a migration: `setval` is state, and the sequence's own
+ * definition is right as it stands.
+ */
+async function advanceEnquiryRefSequence(db: Db) {
+  const [row] = await db.$queryRaw<{ next: bigint }[]>`
+    select setval(
+      'enquiry_ref_seq',
+      greatest(
+        (select coalesce(max(substring("ref" from '^ENQ-([0-9]+)$')::bigint), 0) from "enquiry"),
+        8900
+      )
+    ) + 1 as next
+  `;
+  console.log(`   next enquiry reference is ENQ-${row!.next}`);
 }
 
 /**

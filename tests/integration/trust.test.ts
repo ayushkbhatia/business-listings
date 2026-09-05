@@ -38,10 +38,12 @@ let seq = 0;
  * saw it because each job gets its own `supabase start`; a local database is
  * shared with every other worktree and keeps what it is given.
  *
- * Order matters twice. `SiteVisitPhoto.media` is `Restrict`, so deleting the
- * business would try to cascade the photographs' `Media` out from under them —
- * the reports go first. And `SiteVisitRequest.requestedBy` is `Restrict` on
- * `User`, so the request goes before the seller who asked for it.
+ * This list used to open with three `SiteVisit*` deletes, ordered around two
+ * `Restrict` foreign keys. #97 withdrew site visits and dropped the tables, so
+ * `prisma.siteVisitPhoto` is `undefined` and the call threw — in `afterAll` on
+ * a first run, and in `beforeAll` on every run after it, which skipped all 13
+ * tests in this file. What remains needs ordering only for `AuditEvent`, whose
+ * `subject` is a string rather than a foreign key and so cascades from nothing.
  */
 async function removeFixtures() {
   const ours = await prisma.business.findMany({
@@ -68,11 +70,6 @@ async function removeFixtures() {
     },
   });
 
-  await prisma.siteVisitPhoto.deleteMany({
-    where: { report: { businessId: { in: ids } } },
-  });
-  await prisma.siteVisitReport.deleteMany({ where: { businessId: { in: ids } } });
-  await prisma.siteVisitRequest.deleteMany({ where: { businessId: { in: ids } } });
   await prisma.supplierReport.deleteMany({ where: { subjectBusinessId: { in: ids } } });
   // By business rather than by address: the seller this suite creates has no
   // email, and after the business goes its `businessId` is set null and the row
