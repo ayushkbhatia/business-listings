@@ -58,7 +58,15 @@ type Payload = {
   events: { name: EventName; props: Record<string, EventPropValue> }[];
 };
 
-function send(name: EventName, props: Record<string, EventPropValue>): void {
+/**
+ * Send one event now.
+ *
+ * Exported so a click handler can reach it — board 8e's two exits emit
+ * `setup_done_exit` on the way out, and a page leaving is exactly the case the
+ * beacon below exists for. A second copy of this function in a page component
+ * would be a second thing to get wrong about the Blob and the fallback.
+ */
+export function emitEvent(name: EventName, props: Record<string, EventPropValue>): void {
   const payload: Payload = { events: [{ name, props }] };
   // Minted only where the event declares it needs one. A storefront that emits
   // `listing_viewed` alone never creates an identifier at all — see
@@ -118,7 +126,7 @@ export function PageEvent({
 
     if (!firedRef.current) {
       firedRef.current = true;
-      send(name, withBusiness(props));
+      emitEvent(name, withBusiness(props));
     }
 
     if (!hiddenName) return;
@@ -136,7 +144,7 @@ export function PageEvent({
          house rules are about — that one is about *formatting* for render.
          Nothing here reaches the markup.
       */
-      send(hiddenName, { ...withBusiness(hiddenProps), msOnScreen: Date.now() - openedAt });
+      emitEvent(hiddenName, { ...withBusiness(hiddenProps), msOnScreen: Date.now() - openedAt });
     };
 
     const onVisibilityChange = () => {

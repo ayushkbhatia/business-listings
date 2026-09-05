@@ -610,6 +610,7 @@ model Business {
   productEvents          ProductEvent[]
   catalogueImports       CatalogueImportRequest[]
   claimSubmissions       ClaimSubmission[]
+  setupBaseline          SetupBaseline?
   licenceImportRun       LicenceImportRun?        @relation(fields: [licenceImportRunId], references: [id], onDelete: SetNull)
   mergedInto             Business?                @relation("BusinessMergedInto", fields: [mergedIntoId], references: [id], onDelete: SetNull)
   absorbed               Business[]               @relation("BusinessMergedInto")
@@ -897,10 +898,12 @@ enum MediaKind {
   product
   review
   storefront
-  /// A site-visit photograph. Evidence, not content: the object lives in the
-  /// private document bucket and is read through a signed URL, because
-  /// `lib/storefront/blocks.ts` renders `gallery` on the public storefront and
-  /// a verifier's photograph of somebody's warehouse is not theirs to publish.
+  /// Vestigial. It held site-visit photographs, and site visits were withdrawn
+  /// — nothing writes this kind and no surface renders it. The label survives
+  /// because Postgres cannot drop an enum value without recreating the type and
+  /// rewriting every row of `media`, which is a table rewrite in exchange for
+  /// tidiness. Do not reuse it for anything else; a kind that once meant
+  /// evidence in a private bucket is not a kind to hand new content.
   visit
 
   @@map("media_kind")
@@ -2525,6 +2528,51 @@ model ContactReveal {
 
   @@index([businessId, createdAt])
   @@map("contact_reveal")
+}
+
+/// The seller's first run through setup, as one row.
+///
+/// Board 8e's completion screen asserts two comparisons — "up from 62%" and "14
+/// spec filters you were invisible to this morning" — and neither can be
+/// computed from the present. A comparison needs a *before*, and nothing was
+/// storing one: the hub read the score every time it rendered and kept none of
+/// them.
+///
+/// One row per business, ever. The write is an upsert that inserts and never
+/// updates, so a second hub render cannot move the baseline the screen is about
+/// to compare against. A listing that never opens the hub has no row rather than
+/// five nulls on `business`, which matters when 41,000 imported listings will
+/// never claim.
+model SetupBaseline {
+  businessId String @id @map("business_id")
+
+  /// When the hub was first rendered. The denominator of §7's one number worth
+  /// watching: hours from first hub view to completion.
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+
+  /// `profileStrength` at that moment. Nullable because a listing can reach the
+  /// hub before `strength-job.ts` has ever run, and a baseline of 0 would be a
+  /// claim rather than an absence — §2 says drop the clause, not guess.
+  baselineScore Int? @map("baseline_score")
+
+  /// Distinct filterable (field, value) pairs the published catalogue carried
+  /// then. Without a before there is no delta, only a total, and §6 forbids a
+  /// total standing in for one.
+  baselineFacets Int? @map("baseline_facets")
+
+  /// When all three tasks first closed. Written by the hub on the transition,
+  /// because the hub is the only thing that knows the moment.
+  completedAt DateTime? @map("completed_at")
+
+  /// When `/dashboard/setup/done` was actually rendered. The once-only rule:
+  /// §1 says the seller reaches it exactly once, and a completion screen that
+  /// can be revisited is a stale dashboard. Null means it is still owed.
+  doneSeenAt DateTime? @map("done_seen_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([completedAt], map: "setup_baseline_completed_idx")
+  @@map("setup_baseline")
 }
 
 /// A buyer keeping a supplier for later. Board 8a's right rail counts these.

@@ -39,6 +39,10 @@ export const EVENT_NAMES = [
   "concierge_requested",
   "setup_nudge_sent",
   "setup_nudge_opened",
+  "setup_completed",
+  "setup_done_viewed",
+  "setup_done_exit",
+  "setup_done_redirected",
   "listing_viewed",
 ] as const;
 
@@ -129,6 +133,59 @@ export const EVENT_SPECS = {
     emitter: "server",
     session: "required",
     props: { channel: "string", task: "string?" },
+  },
+  /**
+   * Every setup task closed, for the first time. Board 8e §7.
+   *
+   * Server-emitted, because it is a state fact: the browser can say a screen was
+   * looked at and cannot say the work is finished. It is written where the
+   * transition is detected — the hub, on the render that finds nothing open —
+   * and the `completedAt` stamp beside it is what makes it once-only.
+   *
+   * `hours` is the number §7 says is worth watching: first hub view to
+   * completion. 8a estimates twenty minutes of work, so a median of four days
+   * says the tasks are not the problem and the nudge sequence is.
+   *
+   * The completion *order* is deliberately not carried here. `setup_task_completed`
+   * already writes one row per task with its own timestamp, so the order is a
+   * `GROUP BY` away — and a second copy of the same fact is a second thing to
+   * get wrong.
+   */
+  setup_completed: {
+    emitter: "server",
+    session: "required",
+    props: { hours: "number?", score: "number?" },
+  },
+  /** The completion screen was rendered. Attention, so the browser owns it. */
+  setup_done_viewed: {
+    emitter: "browser",
+    session: "required",
+    props: { score: "number?" },
+  },
+  /**
+   * Which way they left. §1 gives the screen two exits and they mean different
+   * things: the dashboard is "carry on", the storefront is "let me look at what
+   * I just built". Worth telling apart.
+   */
+  setup_done_exit: {
+    emitter: "browser",
+    session: "required",
+    props: { to: "string" },
+  },
+  /**
+   * Somebody reached `/dashboard/setup/done` and was sent away. The route knows
+   * why and no browser does, which is the whole reason this is server-emitted:
+   * `tasks_open` means the precondition failed, `already_seen` means the
+   * once-only rule fired, `suspended` means a completion screen was about to be
+   * rendered over a hidden listing.
+   *
+   * A rising `already_seen` is the signal that something is linking here —
+   * an email, a bookmark, a stale tab — which §1 says must not exist.
+   */
+  setup_done_redirected: {
+    emitter: "server",
+    session: "required",
+    props: { reason: "string" },
   },
   /**
    * A public storefront was looked at.
