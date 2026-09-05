@@ -4585,6 +4585,7 @@ export const en = {
   "matrix.gate.copy": "needs copy",
   "matrix.gate.listings": "too few listings",
   "matrix.gate.verified": "too few verified",
+  "matrix.gate.faq": "needs questions",
   "matrix.write": "Write the intro for {page}",
   "matrix.intro": "Intro",
   "matrix.intro_hint": "What this trade is, who buys it, and what a buyer should look for. 250 words is the floor, and it is a floor rather than a target — a paragraph that repeats the category name eight times clears it and helps nobody.",

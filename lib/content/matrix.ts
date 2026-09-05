@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { countWords, evaluatePublish } from "@/lib/publish-threshold";
+import { countWords, evaluatePublish, type PublishFailure } from "@/lib/publish-threshold";
 import { thresholdsFor } from "@/lib/taxonomy/service";
 import { VERIFIED_TIER } from "@/lib/verification";
 
@@ -23,6 +23,55 @@ import { VERIFIED_TIER } from "@/lib/verification";
  * today: a thin category cannot be fixed by wishing more suppliers into it.
  */
 
+/**
+ * The gates a row fails, in the order somebody would fix them.
+ *
+ * One vocabulary for all three tables on this screen. It was three: the
+ * category rows re-derived the comparisons by hand from the same numbers
+ * `evaluatePublish` had just compared — and disagreed with it whenever a
+ * category held no listings at all, because the hand-written guard read
+ * `total > 0` where the shared function divides by a guarded zero and refuses.
+ * The area rows mapped the real failures but the emirate rows joined the raw
+ * enum into a sentence, so two sibling tables told a reader "needs copy" and
+ * "intro_words" about the same condition, one of them untranslated.
+ *
+ * Copy first, because it is the only gate that is a decision rather than a
+ * wait: more listings and more verifications arrive on their own schedule.
+ */
+export type MatrixGate = "copy" | "listings" | "verified" | "faq";
+
+export function matrixGates(failures: readonly PublishFailure[]): MatrixGate[] {
+  const gates: MatrixGate[] = [];
+  if (failures.some((f) => f.reason === "intro_words")) gates.push("copy");
+  if (failures.some((f) => f.reason === "listings")) gates.push("listings");
+  if (failures.some((f) => f.reason === "verified_share")) gates.push("verified");
+  /*
+     Board 6a's fourth condition, as one label rather than two.
+
+     "4 rows, 2 of them local" is one thing to fix — a writer opens the panel
+     and writes questions. Splitting it into `faq` and `faq_local` would put two
+     chips on a row that describe the same afternoon's work, and `isCopyOnly`
+     would stop meaning what it says.
+  */
+  if (failures.some((f) => f.reason === "faq_rows" || f.reason === "faq_scope_specific")) {
+    gates.push("faq");
+  }
+  return gates;
+}
+
+/**
+ * Held back only by things a person can fix this afternoon.
+ *
+ * The paragraph and the questions both count, and this is the second sense the
+ * count has carried since board 6a — which the area rows did not honour: they
+ * asked for exactly `["copy"]`, so a page whose only outstanding gate was four
+ * missing questions was excluded from the number whose comment said it was
+ * included.
+ */
+export function isCopyOnly(gates: readonly MatrixGate[]): boolean {
+  return gates.length > 0 && gates.every((gate) => gate === "copy" || gate === "faq");
+}
+
 export interface MatrixRow {
   id: string;
   /** The path a visitor would type. */
@@ -37,7 +86,7 @@ export interface MatrixRow {
   intro: string | null;
   publishable: boolean;
   /** Which gates it fails, in the order somebody would fix them. */
-  failing: string[];
+  failing: MatrixGate[];
 }
 
 export interface Matrix {
@@ -87,17 +136,7 @@ export async function pageMatrix(): Promise<Matrix> {
       thresholds,
     );
 
-    /*
-     * Ordered by what somebody would do about it. Copy first: it is the only
-     * one of the three that is a decision rather than a wait — more listings
-     * and more verifications arrive on their own schedule.
-     */
-    const failing: string[] = [];
-    if (introWords < thresholds.minIntroWords) failing.push("copy");
-    if (total < thresholds.minListings) failing.push("listings");
-    if (total > 0 && verifiedTotal / total < thresholds.minVerifiedShare) {
-      failing.push("verified");
-    }
+    const failing = matrixGates(decision.failures);
 
     return {
       id: category.id,
@@ -119,15 +158,7 @@ export async function pageMatrix(): Promise<Matrix> {
     publishable: rows.filter((row) => row.publishable).length,
     // The number the screen exists for: pages that would publish today if
     // somebody wrote a paragraph.
-    /*
-       Copy, now in two senses: the paragraph and the questions. Both are things
-       a person can fix this afternoon, and neither is a wait for recruitment —
-       which is the distinction this number exists to draw.
-    */
-    copyOnly: rows.filter(
-      (row) =>
-        row.failing.length > 0 && row.failing.every((gate) => gate === "copy" || gate === "faq"),
-    ).length,
+    copyOnly: rows.filter((row) => isCopyOnly(row.failing)).length,
   };
 }
 
@@ -172,7 +203,7 @@ export interface AreaMatrixRow {
   published: boolean;
   /** Published and the four conditions currently hold. */
   live: boolean;
-  failing: string[];
+  failing: MatrixGate[];
 }
 
 export interface AreaMatrix {
@@ -211,23 +242,7 @@ export async function areaMatrix(): Promise<AreaMatrix> {
     const state = await areaPageState(page.areaId, page.categoryId);
     if (!state) continue;
 
-    // Same order as the category rows: copy first, because it is the only one
-    // of the three that is a decision rather than a wait.
-    const failing: string[] = [];
-    if (state.failing.some((f) => f.reason === "intro_words")) failing.push("copy");
-    if (state.failing.some((f) => f.reason === "listings")) failing.push("listings");
-    if (state.failing.some((f) => f.reason === "verified_share")) failing.push("verified");
-    /*
-       Board 6a's fourth condition, as one label rather than two.
-
-       "4 rows, 2 of them local" is one thing to fix — a writer opens the panel
-       and writes questions. Splitting it into `faq` and `faq_local` would put
-       two chips on a row that describe the same afternoon's work, and
-       `copyOnly` would stop meaning what it says.
-    */
-    if (state.failing.some((f) => f.reason === "faq_rows" || f.reason === "faq_scope_specific")) {
-      failing.push("faq");
-    }
+    const failing = matrixGates(state.failing);
 
     rows.push({
       areaId: page.areaId,
@@ -256,6 +271,6 @@ export async function areaMatrix(): Promise<AreaMatrix> {
   return {
     rows,
     live: rows.filter((row) => row.live).length,
-    copyOnly: rows.filter((row) => row.failing.length === 1 && row.failing[0] === "copy").length,
+    copyOnly: rows.filter((row) => isCopyOnly(row.failing)).length,
   };
 }

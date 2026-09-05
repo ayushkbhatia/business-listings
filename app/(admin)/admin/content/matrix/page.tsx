@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { Alert } from "@/components/display";
 import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
-import { areaMatrix, pageMatrix } from "@/lib/content/matrix";
+import { areaMatrix, matrixGates, pageMatrix } from "@/lib/content/matrix";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
@@ -89,7 +89,7 @@ export default async function MatrixPage() {
     published: row.publishedAt !== null,
     live: row.live,
     clearsFloors: row.clearsFloors,
-    failing: row.failing.map((failure) => failure.reason),
+    failing: matrixGates(row.failing),
     content: {
       metaDescription: row.metaDescription ?? "",
       faq: row.faq.map((item) => ({

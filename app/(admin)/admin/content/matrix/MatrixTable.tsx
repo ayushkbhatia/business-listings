@@ -6,6 +6,7 @@ import { Button, Label, Textarea } from "@/components/primitives";
 import { DataTable, Panel, type Column } from "@/components/structure";
 import { countWords } from "@/lib/publish-threshold";
 import { formatCount } from "@/lib/format";
+import type { MatrixGate } from "@/lib/content/matrix";
 import { t } from "@/lib/i18n";
 import type { ActionResult } from "./actions";
 
@@ -28,7 +29,7 @@ export interface MatrixRowView {
   introWords: number;
   intro: string | null;
   publishable: boolean;
-  failing: string[];
+  failing: MatrixGate[];
 }
 
 const MIN_REASON = 4;

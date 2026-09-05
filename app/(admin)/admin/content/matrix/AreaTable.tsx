@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Alert, StatusBadge } from "@/components/display";
 import { Button, Label, Textarea } from "@/components/primitives";
 import { DataTable, Panel, type Column } from "@/components/structure";
+import type { MatrixGate } from "@/lib/content/matrix";
 import { t } from "@/lib/i18n";
 import type { ActionResult } from "./actions";
 import {
@@ -34,7 +35,7 @@ export interface AreaRowView {
   published: boolean;
   live: boolean;
   clearsFloors: boolean;
-  failing: string[];
+  failing: MatrixGate[];
   /** Board 6a's other three content records, as stored. */
   content: LandingContentDraft;
 }
@@ -207,7 +208,15 @@ export function AreaTable({
 
           {!open.clearsFloors && (
             <p className="mt-3 max-w-prose text-caption text-muted">
-              {t("matrix.blocked_by", { gates: open.failing.join(", ") })}
+              {t("matrix.blocked_by", {
+                /*
+                   Translated, not joined raw. This printed the gate keys
+                   themselves — "copy, listings" here and "intro_words,
+                   faq_scope_specific" on the sibling table below, two
+                   vocabularies for one rule and neither of them English.
+                */
+                gates: open.failing.map((gate) => t(`matrix.gate.${gate}` as never)).join(", "),
+              })}
             </p>
           )}
         </Panel>
