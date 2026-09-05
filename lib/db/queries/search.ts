@@ -12,10 +12,12 @@ import {
   type QueryShape,
   type SortOrigin,
 } from "@/lib/search/origin";
-import { liveBoosts, liveWeights } from "@/lib/search/settings";
+import { liveBoosts, liveBrowseRelevanceMode, liveWeights } from "@/lib/search/settings";
 import {
   placeSponsored,
   rank,
+  weightsForBrowse,
+  type BrowseRelevanceMode,
   type RankingWeights,
 } from "@/lib/search/ranking";
 import {
@@ -279,9 +281,44 @@ export async function searchBusinesses(
     origin?: SortOrigin | null;
     /** Omit to read it from the catalogue. */
     shape?: QueryShape;
+    /**
+     * This is a landing page, not a search — board 6a §Ranking.
+     *
+     * There is no query box on `/dubai/al-quoz/hvac-refrigeration`, so the
+     * relevance weight has nothing to score against. Set this and the weights
+     * are put through `weightsForBrowse` in the mode staff chose on board 12c,
+     * and relevance is scored as category-match depth rather than as a text
+     * hit on an empty string.
+     *
+     * A flag rather than "we noticed the query was empty": an empty search box
+     * on `/search` is a buyer browsing everything, which is a different page
+     * with a different promise, and inferring the mode from `q === ""` would
+     * change that one too.
+     */
+    browse?: boolean;
+    /** Omit to read the stored mode. Only consulted when `browse` is set. */
+    browseMode?: BrowseRelevanceMode;
+    /**
+     * How exactly a listing's own trade matches the page's, 0..1.
+     *
+     * Only read under the `category_depth` mode. The page knows its own
+     * category and its subcategories; this function is handed the answer rather
+     * than working it out, because "primary category exact, sector-level half"
+     * is the page's rule about its own scope and not a property of search.
+     */
+    categoryDepth?: (businessId: string, primaryCategoryId: string) => number;
+    /**
+     * Rows per page. `PAGE_SIZE` where absent.
+     *
+     * Board 6a §4 draws ten, against the twenty a search returns, and the
+     * difference is deliberate on the board's side: a landing page is a
+     * recommendation of the ten best rather than a list to work through, and
+     * §SEO budgets the whole page at about fifty anchors.
+     */
+    pageSize?: number;
   } = {},
 ) {
-  const { categoryIds, sponsoredId = null } = options;
+  const { categoryIds, sponsoredId = null, browse = false } = options;
   /*
    * The stored weights, not the constant.
    *
@@ -291,11 +328,16 @@ export async function searchBusinesses(
    * here rather than at every call site, because a caller that forgot would
    * silently get the old ranking.
    */
-  const [storedWeights, boosts, origin, shape] = await Promise.all([
+  const [storedWeights, boosts, origin, shape, browseMode] = await Promise.all([
     options.weights ? Promise.resolve(options.weights) : liveWeights(),
     options.boosts ? Promise.resolve(options.boosts) : liveBoosts(),
     options.origin !== undefined ? Promise.resolve(options.origin) : resolveOrigin(query),
     options.shape ? Promise.resolve(options.shape) : shapeOf(query),
+    !browse
+      ? Promise.resolve(null)
+      : options.browseMode
+        ? Promise.resolve(options.browseMode)
+        : liveBrowseRelevanceMode(),
   ]);
 
   /*
@@ -306,7 +348,17 @@ export async function searchBusinesses(
      a search that quietly rewrote those would make the admin editor a
      suggestion rather than a setting.
   */
-  const weights = weightsForShape(storedWeights, shape);
+  /*
+     A landing page takes the browse mode; everything else takes the shape.
+
+     Never both. `weightsForShape` moves distance because the buyer *typed*
+     something that says how far they will travel, and there is nothing typed
+     here — running the two in sequence would have a page with no query
+     claiming to know that its absent search term was about a service.
+  */
+  const weights = browse
+    ? weightsForBrowse(storedWeights, browseMode ?? undefined)
+    : weightsForShape(storedWeights, shape);
   const where = businessWhere(query, categoryIds);
 
   const [candidates, total] = await Promise.all([
@@ -333,7 +385,18 @@ export async function searchBusinesses(
          match. The row that matched best was ranked as though it had barely
          matched at all.
       */
-      relevance: relevanceOf(`${business.displayName} ${business.searchText ?? ""}`, query.q),
+      /*
+         On a landing page this is category-match depth, not a text hit.
+
+         Under `redistribute` the weight is nought by then and the number is
+         unused, so the depth is computed either way rather than behind a
+         second branch: one place decides what relevance means here, and
+         switching the mode on board 12c changes the ranking without changing
+         which code path runs.
+      */
+      relevance: browse
+        ? (options.categoryDepth?.(business.id, business.primaryCategoryId) ?? 1)
+        : relevanceOf(`${business.displayName} ${business.searchText ?? ""}`, query.q),
       verificationTier: business.verificationTier,
       responseTimeMedianMs: business.responseTimeMedianMs,
       specCompleteness: business.specCompleteness,
@@ -366,9 +429,10 @@ export async function searchBusinesses(
     Boolean(query.tier),
   );
 
-  const from = (query.page - 1) * PAGE_SIZE;
+  const pageSize = options.pageSize ?? PAGE_SIZE;
+  const from = (query.page - 1) * pageSize;
   return {
-    rows: placed.rows.slice(from, from + PAGE_SIZE),
+    rows: placed.rows.slice(from, from + pageSize),
     total,
     sponsoredId: placed.sponsoredId,
     /*

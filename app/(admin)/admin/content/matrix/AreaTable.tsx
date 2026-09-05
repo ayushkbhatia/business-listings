@@ -6,6 +6,10 @@ import { Button, Label, Textarea } from "@/components/primitives";
 import { DataTable, Panel, type Column } from "@/components/structure";
 import { t } from "@/lib/i18n";
 import type { ActionResult } from "./actions";
+import {
+  LandingContentFields,
+  type LandingContentDraft,
+} from "./LandingContentFields";
 
 /**
  * Board 6a on board 6f's screen.
@@ -31,6 +35,8 @@ export interface AreaRowView {
   live: boolean;
   clearsFloors: boolean;
   failing: string[];
+  /** Board 6a's other three content records, as stored. */
+  content: LandingContentDraft;
 }
 
 export function AreaTable({
@@ -46,6 +52,11 @@ export function AreaTable({
 }) {
   const [open, setOpen] = useState<AreaRowView | null>(null);
   const [intro, setIntro] = useState("");
+  const [content, setContent] = useState<LandingContentDraft>({
+    metaDescription: "",
+    faq: [],
+    relatedSearches: [],
+  });
   const [reason, setReason] = useState("");
   const [result, setResult] = useState<ActionResult | null>(null);
   const [pending, setPending] = useState(false);
@@ -55,6 +66,7 @@ export function AreaTable({
   function edit(row: AreaRowView) {
     setOpen(row);
     setIntro(row.intro);
+    setContent(row.content);
     setReason("");
     setResult(null);
   }
@@ -66,6 +78,15 @@ export function AreaTable({
     form.set("categoryId", open.categoryId);
     form.set("path", open.path);
     form.set("intro", intro);
+    form.set("metaDescription", content.metaDescription);
+    /*
+       The repeatable rows as JSON in one field. A `FormData` cannot carry a
+       list of objects without either hand-parsed indexed keys or this, and one
+       parse behind a type guard on the server is the version where a malformed
+       submission is one refusal rather than a half-applied write.
+    */
+    form.set("faq", JSON.stringify(content.faq));
+    form.set("relatedSearches", JSON.stringify(content.relatedSearches));
     form.set("reason", reason);
 
     void (async () => {
@@ -143,7 +164,13 @@ export function AreaTable({
             <p className="mt-1 text-caption text-muted">{t("matrix.intro_hint")}</p>
           </div>
 
-          <div className="mt-4">
+          <LandingContentFields
+            draft={content}
+            onChange={setContent}
+            idPrefix={`area-${open.areaId}-${open.categoryId}`}
+          />
+
+          <div className="mt-6">
             <Label htmlFor="area-reason">{t("guide_admin.field.reason")}</Label>
             <Textarea
               id="area-reason"

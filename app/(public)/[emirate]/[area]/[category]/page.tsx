@@ -1,40 +1,43 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Tag } from "@/components/display";
-import { Breadcrumb, PublicShell } from "@/components/structure";
-import { prisma } from "@/lib/db/client";
-import { getCategoryBySlug } from "@/lib/db/queries";
-import { formatCount } from "@/lib/format";
-import { t } from "@/lib/i18n";
-import { parseSearchQuery, trayParams } from "@/lib/search/query";
-import { isFiltered } from "@/lib/seo/canonical";
 import {
-  areaPageState,
-  otherTradesHere,
-  sameTradeElsewhere,
-  type AreaPageState,
-} from "@/lib/seo/area";
-import { landingFacts } from "@/lib/seo/facts";
-import { faqJsonLd, landingFaq } from "@/lib/seo/faq";
-import { absoluteUrl } from "@/lib/site";
-import { VERIFIED_TIER } from "@/lib/verification";
-import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
-import { JsonLd } from "@/app/(public)/_json-ld";
-import { Results } from "@/app/(public)/_results/Results";
-import { EmirateBreakdown, Faq, Prose } from "@/app/(public)/_landing/Blocks";
-import { AreaMap } from "./AreaMap";
+  landingMetadata,
+  landingState,
+  resolveAreaScope,
+  subcategoryChips,
+} from "@/lib/seo/landing";
+import { countResults } from "@/lib/db/queries";
+import { LandingPage, RESULTS_PER_PAGE } from "@/app/(public)/_landing/LandingPage";
+import { parseSearchQuery } from "@/lib/search/query";
 
 /**
- * Board 6a — the area landing page, and the workhorse of the whole handoff.
+ * Board 6a — `/:emirate/:area/:category`, the workhorse template.
  *
- * 84 category×emirate combinations plus area-level depth. Everything on it is
- * derived except one paragraph, so adding an emirate or a trade adds pages and
- * touches no code — criterion 2.
+ * The area class. Its twin two segments up is `/:emirate/:category`, the 84
+ * pages board 6c's matrix links, and both render `LandingPage` from one scope
+ * object — §1: *"one template, one controller, one scope object"*.
  *
- * Criterion 1 lives here and in `lib/seo/area.ts`. `AreaPageState.live` is
- * staff intent AND the floors holding right now, so a page whose supply has
- * dropped stops being indexable in the same request rather than waiting for a
- * job. The sweep then clears the column and writes the numbers to the audit log.
+ * ## Unpublished means no URL
+ *
+ * §the-publish-gate, consequence 1:
+ *
+ *   *"An unpublished scope has no URL. It is not a thin page, not a `noindex`
+ *    page, not a redirect. It 404s and it is absent from the sitemap and from
+ *    every link block on every sibling page."*
+ *
+ * This route served a `noindex` page with a "held back, and here is the number"
+ * panel until board 6a landed, on the reasoning that a buyer following a link
+ * deserves to see the suppliers there are. The board overrules it, and the
+ * argument is arithmetic rather than taste: this template addresses a few
+ * hundred URLs, and a soft 404 on one of them teaches a crawler that guesses
+ * render. The recruiter-facing version of that information did not go anywhere
+ * — `/admin/content/matrix` shows every held scope and the number holding it.
+ *
+ * ## An unresolvable segment 404s
+ *
+ * Criterion 6, and never a redirect to the emirate page. Nothing here guesses:
+ * the emirate has to match the area's own, or two URLs address one page and the
+ * canonical becomes a coin toss.
  */
 
 export const revalidate = 300;
@@ -44,310 +47,52 @@ interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-interface Resolved {
-  area: { id: string; slug: string; name: string; emirate: string; lat: number | null; lng: number | null };
-  category: { id: string; slug: string; name: string; parentSlug: string | null };
-  state: AreaPageState;
-}
+/** Scope, state and the page count — everything both exports need, once. */
+async function load(
+  params: { emirate: string; area: string; category: string },
+  searchParams: Record<string, string | string[] | undefined>,
+) {
+  const scope = await resolveAreaScope(params);
+  if (!scope) return null;
 
-/**
- * The three segments, or nothing.
- *
- * The emirate has to match the area's own, or two URLs address one page and the
- * canonical is a guess — the same rule the subcategory route applies to its
- * parent.
- */
-async function resolve(params: { emirate: string; area: string; category: string }): Promise<Resolved | null> {
-  const [area, category] = await Promise.all([
-    prisma.area.findUnique({
-      where: { slug: params.area },
-      select: { id: true, slug: true, name: true, emirate: true, lat: true, lng: true },
-    }),
-    getCategoryBySlug(params.category),
-  ]);
-  if (!area || !category) return null;
-  if (area.emirate !== params.emirate) return null;
+  const state = await landingState(scope);
+  if (!state.live) return null;
 
-  const state = await areaPageState(area.id, category.id);
-  if (!state) return null;
+  const raw = Array.isArray(searchParams["sub"]) ? searchParams["sub"][0] : searchParams["sub"];
+  const chips = raw ? await subcategoryChips(scope) : [];
+  const chip = chips.find((entry) => entry.slug === raw) ?? null;
+  /*
+     A `?sub=` that names nothing is not a page. Left alone it would render the
+     unfiltered page at a second address, which is a duplicate with a query
+     string on the template that can least afford one.
+  */
+  if (raw && !chip) return null;
 
-  return {
-    area: { ...area, emirate: area.emirate as string },
-    category: {
-      id: category.id,
-      slug: category.slug,
-      name: category.name,
-      parentSlug: category.parent?.slug ?? null,
+  const page = Math.max(1, Number(Array.isArray(searchParams["page"]) ? searchParams["page"][0] : searchParams["page"] ?? 1) || 1);
+  const total = await countResults(
+    {
+      ...parseSearchQuery({}),
+      area: scope.area?.slug,
+      tab: "businesses",
     },
-    state,
-  };
+    chip ? [chip.id] : scope.categoryIds,
+  );
+  const pageCount = Math.max(1, Math.ceil(total / RESULTS_PER_PAGE));
+  // A page number past the end is not a page either.
+  if (page > pageCount) return null;
+
+  return { state, page, pageCount, filtered: chip !== null };
 }
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
-  const resolved = await resolve(await params);
-  if (!resolved) return {};
-  const sp = await searchParams;
-  const { area, category, state } = resolved;
-
-  return {
-    title: t("area.title", { category: category.name, area: area.name }),
-    description: t("area.meta_description", {
-      listings: formatCount(state.listings),
-      category: category.name.toLowerCase(),
-      area: area.name,
-      verified: formatCount(state.verified),
-    }),
-    alternates: { canonical: `/${area.emirate}/${area.slug}/${category.slug}` },
-    /*
-       The page is served either way. What the floors decide is whether we ask
-       for it to be indexed — a buyer following a link deserves to see the
-       suppliers there are, and a stranger who searched deserves not to land on
-       four of them. `follow` stays on: each listing is worth indexing itself.
-    */
-    /*
-       And `noindex` whenever anything is filtering, whatever the floors say.
-       This route renders the same filter rail as `/c/:category`, so it
-       addresses the same combinatorial URL space — see lib/seo/crawl-policy.ts.
-    */
-    ...(state.live && !isFiltered(sp)
-      ? {}
-      : { robots: { index: false, follow: true } }),
-  };
+  const loaded = await load(await params, await searchParams);
+  if (!loaded) return {};
+  return landingMetadata(loaded);
 }
 
 export default async function AreaLandingPage({ params, searchParams }: Props) {
-  const resolved = await resolve(await params);
-  if (!resolved) notFound();
-  const { area, category, state } = resolved;
-
   const sp = await searchParams;
-  // The area is fixed by the route, so it is not a facet a visitor can drop.
-  const query = { ...parseSearchQuery(sp), area: area.slug };
-  const trayRaw = Array.isArray(sp.compare) ? (sp.compare[0] ?? "") : (sp.compare ?? "");
-  const tray = trayRaw.split(",").filter(Boolean).slice(0, 4);
-  // Rebuilt from the parsed query rather than from the raw search params. The
-  // raw form carried anything a caller invented straight back into every tray
-  // link — see `trayParams`.
-  const search = trayParams(query, tray);
-
-  const basePath = `/${area.emirate}/${area.slug}/${category.slug}`;
-  const categoryIds = [category.id];
-
-  const [facts, elsewhere, otherTrades, locations, children] = await Promise.all([
-    landingFacts({ categoryIds, areaId: area.id }),
-    sameTradeElsewhere(category.id, area.id),
-    otherTradesHere(area.id, category.id),
-    /*
-       Every published location in the area for this trade, coordinates or not.
-       The `ItemList` is the suppliers; the map is the subset we can plot, and
-       tying the list to the map would have shrunk it to whoever happened to be
-       pinned.
-    */
-    prisma.location.findMany({
-      where: {
-        areaId: area.id,
-        published: true,
-        business: {
-          suspendedAt: null,
-          publishedAt: { not: null },
-          mergedIntoId: null,
-          primaryCategoryId: category.id,
-        },
-      },
-      select: {
-        id: true,
-        lat: true,
-        lng: true,
-        business: { select: { displayName: true, slug: true, verificationTier: true } },
-      },
-    }),
-    prisma.category.findMany({
-      where: { parentId: category.id },
-      orderBy: { sortOrder: "asc" },
-      select: { slug: true, name: true },
-    }),
-  ]);
-
-  // Coordinates are recorded per location and plenty are still missing, which
-  // the map says out loud rather than quietly plotting fewer.
-  const pinned = locations.filter((row) => row.lat !== null && row.lng !== null);
-
-  const faq = landingFaq(
-    { subject: t("area.title", { category: category.name, area: area.name }) },
-    facts,
-  );
-
-  const crumbs = [
-    { label: t("chrome.directory"), href: "/" },
-    { label: category.name, href: `/c/${category.parentSlug ?? category.slug}` },
-    { label: t("area.in_emirate", { area: area.name, emirate: t(`emirate.${area.emirate}` as never) }) },
-  ];
-
-  return (
-    <PublicShell
-      nav={<DirectoryNav />}
-      breadcrumb={<Breadcrumb label={t("gallery.breadcrumb_label")} items={crumbs} />}
-      footer={<DirectoryFooter />}
-    >
-      <JsonLd
-        data={{
-          "@context": "https://schema.org",
-          "@type": "BreadcrumbList",
-          itemListElement: crumbs.map((crumb, i) => ({
-            "@type": "ListItem",
-            position: i + 1,
-            name: crumb.label,
-            item: crumb.href,
-          })),
-        }}
-      />
-      {/*
-        `ItemList` of the suppliers, and only when the page is live. Marking up
-        a page we are asking not to index would be describing something to a
-        crawler and telling it to look away in the same breath.
-      */}
-      {state.live && locations.length > 0 && (
-        <JsonLd
-          data={{
-            "@context": "https://schema.org",
-            "@type": "ItemList",
-            name: t("area.title", { category: category.name, area: area.name }),
-            numberOfItems: locations.length,
-            itemListElement: locations.slice(0, 30).map((pin, i) => ({
-              "@type": "ListItem",
-              position: i + 1,
-              url: absoluteUrl(`/b/${pin.business.slug}`),
-              name: pin.business.displayName,
-            })),
-          }}
-        />
-      )}
-      {faq.length > 0 && <JsonLd data={faqJsonLd(faq)} />}
-
-      <header className="border-b border-line pb-4">
-        <h1 className="font-serif text-h1-serif text-ink">
-          {t("area.title", { category: category.name, area: area.name })}
-        </h1>
-        {state.listings > 0 && (
-          <p className="mt-2 font-mono text-eyebrow uppercase text-faint">
-            {t("landing.verified_share", {
-              verified: formatCount(state.verified),
-              listings: formatCount(state.listings),
-            })}
-          </p>
-        )}
-
-        {!state.live && (
-          /*
-            Said out loud rather than hidden. Staff and recruiters read these
-            pages too, and "held back, and here is the number that would change
-            it" is the sentence that turns a thin page into a call list.
-          */
-          <div className="mt-4 max-w-[var(--measure-prose)] rounded-card border border-line bg-card px-5 py-4">
-            <p className="text-body-sm text-ink">{t("area.held_back")}</p>
-            <p className="mt-1.5 text-body-sm text-prose">
-              {t("area.held_back_body", {
-                reason: state.failing
-                  .map((failure) =>
-                    failure.reason === "listings"
-                      ? `${formatCount(failure.have)} of ${formatCount(failure.need)} listings.`
-                      : failure.reason === "verified_share"
-                        ? `${Math.round(failure.have * 100)}% verified, against ${Math.round(failure.need * 100)}%.`
-                        : `${formatCount(failure.have)} of ${formatCount(failure.need)} words of intro.`,
-                  )
-                  .join(" "),
-              })}
-            </p>
-          </div>
-        )}
-
-        {state.intro && <Prose text={state.intro} />}
-
-        {children.length > 0 && (
-          <div className="mt-4">
-            <p className="font-mono text-eyebrow uppercase text-faint">
-              {t("area.subcategories", { category: category.name })}
-            </p>
-            <ul className="mt-1.5 flex flex-wrap gap-1.5">
-              {children.map((child) => (
-                <li key={child.slug}>
-                  <Tag href={`/c/${category.slug}/${child.slug}`}>{child.name}</Tag>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </header>
-
-      <div className="mt-5">
-        <Results
-          query={query}
-          basePath={basePath}
-          tray={tray}
-          search={search}
-          category={{
-            id: category.id,
-            slug: category.slug,
-            name: category.name,
-            ids: categoryIds,
-            templateIds: category.parentSlug ? undefined : categoryIds,
-          }}
-        />
-      </div>
-
-      <AreaMap
-        pins={pinned.map((pin) => ({
-          id: pin.id,
-          lat: pin.lat as number,
-          lng: pin.lng as number,
-          label: pin.business.displayName,
-          // Never a colour prop, and never a theme one: the pin treatment says
-          // what we checked, and it renders the same on every storefront.
-          kind: pin.business.verificationTier >= VERIFIED_TIER ? "verified" : "unverified",
-          href: `/b/${pin.business.slug}`,
-        }))}
-        title={t("area.map_title")}
-        label={t("area.map_title")}
-        excluded={locations.length - pinned.length}
-        excludedLabel={t("area.map_excluded", { count: locations.length - pinned.length })}
-      />
-
-      <EmirateBreakdown rows={facts.emirates} basePath={basePath} />
-      <Faq items={faq} />
-
-      {elsewhere.length > 0 && (
-        <section className="mt-8 border-t border-line pt-5">
-          <h2 className="font-mono text-eyebrow uppercase text-faint">
-            {t("area.same_trade_title", { category: category.name })}
-          </h2>
-          <ul className="mt-2 flex flex-wrap gap-1.5">
-            {elsewhere.map((link) => (
-              <li key={`${link.areaSlug}-${link.categorySlug}`}>
-                <Tag href={`/${link.emirate}/${link.areaSlug}/${link.categorySlug}`}>
-                  {t("area.link", { name: link.areaName, count: formatCount(link.listings) })}
-                </Tag>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {otherTrades.length > 0 && (
-        <section className="mt-8 border-t border-line pt-5">
-          <h2 className="font-mono text-eyebrow uppercase text-faint">
-            {t("area.other_trades_title", { area: area.name })}
-          </h2>
-          <ul className="mt-2 flex flex-wrap gap-1.5">
-            {otherTrades.map((link) => (
-              <li key={`${link.areaSlug}-${link.categorySlug}`}>
-                <Tag href={`/${link.emirate}/${link.areaSlug}/${link.categorySlug}`}>
-                  {t("area.link", { name: link.categoryName, count: formatCount(link.listings) })}
-                </Tag>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </PublicShell>
-  );
+  const loaded = await load(await params, sp);
+  if (!loaded) notFound();
+  return <LandingPage state={loaded.state} searchParams={sp} pageCount={loaded.pageCount} />;
 }

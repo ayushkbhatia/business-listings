@@ -6,9 +6,13 @@ import { areaMatrix, pageMatrix } from "@/lib/content/matrix";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
-import { publishArea, saveAreaCopy, saveIntro, unpublishArea ,
+import {
+  publishArea,
   publishEmirate,
-  saveEmirateCopy,
+  saveAreaContent,
+  saveEmirateContent,
+  saveIntro,
+  unpublishArea,
   unpublishEmirate,
 } from "./actions";
 import { AreaTable, type AreaRowView } from "./AreaTable";
@@ -64,6 +68,11 @@ export default async function MatrixPage() {
     live: row.live,
     clearsFloors: row.failing.length === 0,
     failing: row.failing,
+    content: {
+      metaDescription: row.metaDescription ?? "",
+      faq: row.faq,
+      relatedSearches: row.relatedSearches,
+    },
   }));
 
   const emirateRows: EmirateRowView[] = emirates.map((row) => ({
@@ -81,6 +90,19 @@ export default async function MatrixPage() {
     live: row.live,
     clearsFloors: row.clearsFloors,
     failing: row.failing.map((failure) => failure.reason),
+    content: {
+      metaDescription: row.metaDescription ?? "",
+      faq: row.faq.map((item) => ({
+        question: item.question,
+        answer: item.answer,
+        scopeSpecific: item.scopeSpecific,
+        liveToken: item.liveToken,
+      })),
+      relatedSearches: row.relatedSearches.map((item) => ({
+        label: item.label,
+        href: item.href,
+      })),
+    },
   }));
 
   return (
@@ -121,7 +143,7 @@ export default async function MatrixPage() {
       <h2 className="mt-[calc(var(--gutter)*2)] text-h2 text-ink">{t("matrix.area_tab")}</h2>
       <AreaTable
         rows={areaRows}
-        save={saveAreaCopy}
+        save={saveAreaContent}
         publish={publishArea}
         unpublish={unpublishArea}
       />
@@ -139,7 +161,7 @@ export default async function MatrixPage() {
       <h2 className="mt-[calc(var(--gutter)*2)] text-h2 text-ink">{t("matrix.emirate_tab")}</h2>
       <EmirateTable
         rows={emirateRows}
-        save={saveEmirateCopy}
+        save={saveEmirateContent}
         publish={publishEmirate}
         unpublish={unpublishEmirate}
       />

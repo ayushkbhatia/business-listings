@@ -6,6 +6,10 @@ import { Button, Label, Textarea } from "@/components/primitives";
 import { DataTable, Panel, type Column } from "@/components/structure";
 import { t } from "@/lib/i18n";
 import type { ActionResult } from "./actions";
+import {
+  LandingContentFields,
+  type LandingContentDraft,
+} from "./LandingContentFields";
 
 /**
  * Board 6c's emirate pages on board 6f's screen.
@@ -36,6 +40,8 @@ export interface EmirateRowView {
   live: boolean;
   clearsFloors: boolean;
   failing: string[];
+  /** Board 6a's other three content records, as stored. */
+  content: LandingContentDraft;
 }
 
 export function EmirateTable({
@@ -51,6 +57,11 @@ export function EmirateTable({
 }) {
   const [open, setOpen] = useState<EmirateRowView | null>(null);
   const [intro, setIntro] = useState("");
+  const [content, setContent] = useState<LandingContentDraft>({
+    metaDescription: "",
+    faq: [],
+    relatedSearches: [],
+  });
   const [reason, setReason] = useState("");
   const [result, setResult] = useState<ActionResult | null>(null);
   const [pending, setPending] = useState(false);
@@ -60,6 +71,7 @@ export function EmirateTable({
   function edit(row: EmirateRowView) {
     setOpen(row);
     setIntro(row.intro);
+    setContent(row.content);
     setReason("");
     setResult(null);
   }
@@ -71,6 +83,9 @@ export function EmirateTable({
     form.set("categoryId", open.categoryId);
     form.set("path", open.path);
     form.set("intro", intro);
+    form.set("metaDescription", content.metaDescription);
+    form.set("faq", JSON.stringify(content.faq));
+    form.set("relatedSearches", JSON.stringify(content.relatedSearches));
     form.set("reason", reason);
 
     void (async () => {
@@ -147,6 +162,12 @@ export function EmirateTable({
             />
             <p className="mt-1 text-caption text-muted">{t("matrix.intro_hint")}</p>
           </div>
+
+          <LandingContentFields
+            draft={content}
+            onChange={setContent}
+            idPrefix={`emirate-${open.emirate}-${open.categoryId}`}
+          />
 
           <div className="mt-4">
             <Label htmlFor="emirate-reason">{t("guide_admin.field.reason")}</Label>

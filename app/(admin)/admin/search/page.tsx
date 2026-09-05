@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
-import { boostList, liveWeights } from "@/lib/search/settings";
+import { boostList, liveBrowseRelevanceMode, liveWeights } from "@/lib/search/settings";
 import { formatCount, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
@@ -22,8 +22,9 @@ export default async function SearchPage() {
   const seat = await requireStaff();
   if (!can(seat.actor, "search.ranking.write")) notFound();
 
-  const [weights, boosts, badges] = await Promise.all([
+  const [weights, browseMode, boosts, badges] = await Promise.all([
     liveWeights(),
+    liveBrowseRelevanceMode(),
     boostList(),
     getAdminNavBadges(seat),
   ]);
@@ -55,6 +56,7 @@ export default async function SearchPage() {
     >
       <RankingEditor
         weights={weights as unknown as Record<string, number>}
+        browseMode={browseMode}
         boosts={rows}
         saveWeights={saveWeights}
         addBoost={addBoost}

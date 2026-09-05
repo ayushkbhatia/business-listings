@@ -100,7 +100,23 @@ export function SearchField({
         */
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded-tag bg-fill px-1.5 py-1 font-mono text-eyebrow uppercase tracking-[.06em] text-muted"
+          className={cn(
+            "pointer-events-none absolute right-2 top-1/2 -translate-y-1/2",
+            "rounded-tag bg-fill px-1.5 py-1 font-mono text-eyebrow uppercase tracking-[.06em] text-muted",
+            /*
+               Capped and truncated, because the pill is absolutely positioned
+               over the input and the padding reserved for it is fixed.
+
+               A short scope like `IN · DUBAI` never reached the edge of that
+               reserve, so nothing showed the problem until board 6a's landing
+               pages passed an area name — `AL QUOZ INDUSTRIAL 1` at 390px sat
+               straight on top of the placeholder. The caller cannot be trusted
+               to keep it short, so the field stops it: at most half the width,
+               and the rest elided.
+            */
+            "max-w-[50%] truncate",
+          )}
+          title={scope}
         >
           {scope}
         </span>

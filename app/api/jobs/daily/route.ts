@@ -9,6 +9,7 @@ import { DRAFT_KEEP_DAYS, pruneDrafts } from "@/lib/onboarding/draft";
 import { measureResponseTimes } from "@/lib/metrics/job";
 import { measureProfileStrength } from "@/lib/metrics/strength-job";
 import { sweepAreaPages } from "@/lib/seo/area";
+import { sweepEmiratePages } from "@/lib/seo/emirate";
 import { sweepExpiredLicences } from "@/lib/verification/expiry-job";
 import { sweepZeroQuoteEnquiries } from "@/lib/enquiry/zero-quote";
 import { pruneProductEvents } from "@/lib/telemetry/record";
@@ -190,6 +191,16 @@ export async function GET(request: NextRequest) {
        This only makes the stored column agree with what is already served.
     */
     areaPages: () => sweepAreaPages(),
+    /*
+       The same bookkeeping for the 84 emirate pages, which had none.
+
+       Both sweeps now also do board 6a's §Freshness work: recompute the supply
+       digest for each published scope and move `content_updated_at` only where
+       it actually changed. That is here rather than on the read path because
+       the read path is the busiest public template in the product — a write per
+       render, at `revalidate = 300`, with two crawlers racing for the same row.
+    */
+    emiratePages: () => sweepEmiratePages(),
     /*
        Team invitations that have run out of time.
 

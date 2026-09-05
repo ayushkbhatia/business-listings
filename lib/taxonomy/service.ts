@@ -5,6 +5,7 @@ import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
 import {
   countWords,
+  DEFAULT_THRESHOLDS,
   evaluatePublish,
   type PublishDecision,
   type PublishThresholds,
@@ -126,7 +127,12 @@ export function thresholdsFor(category: {
     minVerifiedShare: category.verifiedShareMin,
     // Unchanged from the default: the word count is a property of the page's
     // copy, not of the category, so board 6f owns it in step 7.
-    minIntroWords: 250,
+    minIntroWords: DEFAULT_THRESHOLDS.minIntroWords,
+    // Likewise the FAQ counts. Board 6a states them as one rule for the whole
+    // page class rather than per trade, and only the two landing classes pass
+    // an FAQ count in for them to apply to at all.
+    minFaqRows: DEFAULT_THRESHOLDS.minFaqRows,
+    minScopeSpecificFaqRows: DEFAULT_THRESHOLDS.minScopeSpecificFaqRows,
   };
 }
 
