@@ -265,6 +265,13 @@
     --t-h2:        17px; --lh-h2:      1.30; --ls-h2:      -.015em;
     --t-h3:      14.0px; --lh-h3:      1.35;
     --t-prose:   14.5px; --lh-prose:   1.65; --measure-prose: 640px;
+    /* Long-form reading, board 6d §4. Half a point above --t-prose and a looser
+       leading, because a guide is the page rather than a paragraph introducing
+       one — acceptance 15 sets 15px as a floor for the article column at every
+       breakpoint, where the rest of the site's prose floor is 14.5. The measure
+       is wider for the same reason: 760px at this size is about 78 characters,
+       the top of the comfortable range. */
+    --t-article: 15px;  --lh-article: 1.75; --measure-article: 760px;
     --t-body:    13.0px; --lh-body:    1.60;
     --t-body-sm: 12.5px; --lh-body-sm: 1.55;
     --t-caption: 11.5px; --lh-caption: 1.50;
@@ -566,6 +573,10 @@
 
   --text-prose:     var(--t-prose);
   --text-prose--line-height: var(--lh-prose);
+  /* No `--color-article`, deliberately: `text-article` must stay unambiguously
+     a size. See the warning on `--text-prose`, which is both and bit us. */
+  --text-article:   var(--t-article);
+  --text-article--line-height: var(--lh-article);
 
   --text-body:      var(--t-body);
   --text-body--line-height: var(--lh-body);

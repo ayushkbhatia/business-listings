@@ -3749,6 +3749,46 @@ model Guide {
   /// author pages, and a `User` relation would imply the author has a seat.
   byline String?
 
+  /// What the byline says the author does. "Verification lead", not a title.
+  ///
+  /// Board 6d Q1: an anonymous byline on an article instructing buyers about
+  /// licensing and VAT is a rankings cost as well as a trust one, and this is
+  /// the content type where a named, credentialed author moves rankings most.
+  /// Null renders the byline without a role rather than inventing one.
+  bylineRole String? @map("byline_role")
+
+  /// The mono kicker's middle term — `GUIDE · VERIFICATION · 6 MIN READ`.
+  ///
+  /// Not `ctaCategoryId`, which is a trade in the directory taxonomy. A guide
+  /// about payment terms belongs to no trade and still needs a kicker.
+  topic String?
+
+  /// The sentence Google shows and the one that decides whether the page is
+  /// read. §4: it states the problem, it does not summarise the article.
+  standfirst String?
+
+  /// When the external facts were last checked against the world.
+  ///
+  /// Guides make claims about a named authority, a VAT rate, a renewal cadence,
+  /// and those change. An article with a 2026 publication date and 2029 traffic
+  /// is a liability on a page whose subject is trustworthiness.
+  ///
+  /// `Article.dateModified` renders this and `datePublished` renders
+  /// `publishedAt`. Neither moves on a rebuild, a redeploy or a typo fix — the
+  /// same rule as `AreaPage.contentUpdatedAt` and `CuratedList.auditedAt`, for
+  /// the same reason.
+  regulatoryCheckedAt DateTime? @map("regulatory_checked_at")
+
+  /// How often the external facts need re-checking, in months. Null for an
+  /// article that makes no claim about the world.
+  ///
+  /// Per article, not per programme: a guide naming an authority or a tax rate
+  /// earns a six-month cadence, and one about how to write a good RFQ does not.
+  /// Overdue articles surface in the board 6f queue and **stay published** —
+  /// the deliberate difference from a curated list, where a stale page
+  /// misrepresents named sellers rather than merely being old.
+  reviewCadenceMonths Int? @map("review_cadence_months")
+
   /// Where the article sends the reader. Every guide ends in the directory —
   /// that is what they are for. Null means the index; a slug means that trade.
   ctaCategoryId String? @map("cta_category_id")
@@ -3759,10 +3799,41 @@ model Guide {
 
   ctaCategory Category? @relation("GuideCtaCategory", fields: [ctaCategoryId], references: [id], onDelete: SetNull)
 
+  related     GuideRelated[] @relation("GuideFrom")
+  relatedFrom GuideRelated[] @relation("GuideTo")
+
   /// The index reads published guides newest first, and the sitemap will read
   /// the same set.
   @@index([publishedAt])
+  @@index([regulatoryCheckedAt])
   @@map("guide")
+}
+
+/// Three related guides, chosen by an editor.
+///
+/// Board 6d §6: *"Chosen editorially per article, not by tag similarity."* And
+/// the reason is sharper than taste — *"A guide that covers a section this
+/// article does not must appear here."* That is how "Free zone vs mainland"
+/// resolved: it is a separate article, so it is a link rather than a heading,
+/// and two of our own pages never target one query.
+///
+/// A join table rather than an array of ids, so a guide that is deleted cannot
+/// leave a dangling reference in somebody else's rail — the failure a `String[]`
+/// of ids has no way to prevent.
+model GuideRelated {
+  id     String @id @default(cuid())
+  fromId String @map("from_id")
+  toId   String @map("to_id")
+  /// Reading order in the rail. Three of them, and the order is the editor's.
+  position Int
+
+  from Guide @relation("GuideFrom", fields: [fromId], references: [id], onDelete: Cascade)
+  to   Guide @relation("GuideTo", fields: [toId], references: [id], onDelete: Cascade)
+
+  @@unique([fromId, position])
+  @@unique([fromId, toId])
+  @@index([toId])
+  @@map("guide_related")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

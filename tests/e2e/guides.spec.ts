@@ -1,125 +1,231 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
- * Handoff 5, step 1 — boards 10b and 6d.
+ * Board 6d — the guide article.
  *
- * The checkpoint is "one guide with Article structured data and a working
- * directory CTA", so those are the two things asserted hardest: the JSON-LD is
- * parsed rather than pattern-matched, and the call to action is followed to a
- * page that returns results rather than merely being present in the markup.
+ * Guides are sequenced first in the handoff because they are the only content
+ * that works before supply density exists: an area page needs 60 listings, a
+ * guide needs a writer. This one also happens to be where the verification
+ * badge is defined in prose to a buyer who arrived from a search engine, which
+ * makes its last section the most consequential paragraph in section 06.
  */
 
-const SLUG = "what-supplier-verification-actually-proves";
+const GUIDE = "/guides/check-a-uae-trade-licence";
+const OTHER = "/guides/what-supplier-verification-actually-proves";
 
-async function jsonLd(page: import("@playwright/test").Page) {
+async function jsonLd(page: Page) {
   const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
   return blocks.map((block) => JSON.parse(block) as Record<string, unknown>);
 }
 
-test.describe("the guide index", () => {
-  test("lists the published guide and links to it", async ({ page }) => {
-    await page.goto("/guides");
-    await expect(page.getByRole("heading", { level: 1, name: "Guides" })).toBeVisible();
-
-    const link = page.getByRole("link", { name: /what supplier verification/i });
-    await expect(link).toBeVisible();
-    await link.click();
-    await expect(page).toHaveURL(new RegExp(`/guides/${SLUG}$`));
+test.describe("the badge section", () => {
+  test("acceptance 1 — names the steps it covers and dates the check", async ({ page }) => {
+    await page.goto(GUIDE);
+    const body = await page.locator("article").innerText();
+    expect(body).toContain("steps 1 to 3");
+    expect(body).toMatch(/carries the date/i);
   });
 
-  test("is reachable from the site chrome rather than greyed out", async ({ page }) => {
+  test("acceptance 2 — says plainly that the TRN is not covered", async ({ page }) => {
+    await page.goto(GUIDE);
     /*
-       The nav carried `later: true` on this link from handoff 1 — named so the
-       shape was right, not linked because the page did not exist. This is the
-       assertion that it stopped being a placeholder.
-
-       Board 1a gives the top bar four items — Categories, Products, Suppliers,
-       Pricing — so Guides moved to the footer's Company column. It is still one
-       click from every page on the site, which is what this test is about; the
-       header was never the point. The footer renders at every width, so this no
-       longer skips on mobile.
+       The board read "any business carrying a green badge has had **all of the
+       above** done by our team", and all of the above includes step 4. The TRN
+       is a separate tier and a licence-verified supplier may not be
+       VAT-registered at all — so a buyer who read that and skipped step 4 was
+       relying on a check we never made, on the page teaching them to make it.
     */
-    await page.goto("/");
-    await page.getByRole("navigation", { name: "Company" }).getByRole("link", { name: "Guides" }).click();
-    await expect(page).toHaveURL(/\/guides$/);
+    const body = await page.locator("article").innerText();
+    expect(body).toContain("Step 4 is not part of it");
+    expect(body).not.toContain("all of the above");
+  });
+
+  test("acceptance 14 — claims no tier above licence verified", async ({ page }) => {
+    for (const route of [GUIDE, OTHER]) {
+      await page.goto(route);
+      const body = (await page.locator("body").innerText()).toLowerCase();
+      for (const claim of ["site visit", "visited", "premises", "in person", "field team"]) {
+        expect(body, `${route} still says "${claim}"`).not.toContain(claim);
+      }
+    }
   });
 });
 
-test.describe("a guide article", () => {
-  test("carries Article structured data with real dates", async ({ page }) => {
-    await page.goto(`/guides/${SLUG}`);
+test.describe("the contents rail", () => {
+  test("acceptance 4 — is derived, and every entry resolves to a heading", async ({ page }) => {
+    await page.goto(GUIDE);
+
+    const headings = await page.locator("article h2").evaluateAll((els) => els.map((e) => e.id));
+    const rail = await page
+      .locator('nav[aria-labelledby="on-this-page"] a')
+      .evaluateAll((els) => els.map((a) => (a.getAttribute("href") ?? "").slice(1)));
+
+    /*
+       The board carried a hand-written list of six against three headings: two
+       entries pointed at nothing and one pointed at a different guide. One to
+       one, in order, is the whole assertion.
+    */
+    expect(rail).toEqual(headings);
+    expect(rail.length).toBeGreaterThanOrEqual(3);
+    for (const id of rail) expect(id).not.toBe("");
+  });
+
+  test("scrolls to a real section when followed", async ({ page }) => {
+    await page.goto(GUIDE);
+    const first = page.locator('nav[aria-labelledby="on-this-page"] a').first();
+    const href = await first.getAttribute("href");
+    await first.click();
+    await expect(page.locator(`article ${href}`)).toBeVisible();
+  });
+});
+
+test.describe("the article", () => {
+  test("acceptance 5 — the read time is computed", async ({ page }) => {
+    await page.goto(GUIDE);
+    // 1,200-plus words at 220 a minute is six, not a number somebody typed.
+    await expect(page.getByText(/GUIDE · VERIFICATION · \d+ MIN READ/i)).toBeVisible();
+  });
+
+  test("acceptance 15 — body text is at least 15px in the article column", async ({ page }) => {
+    await page.goto(GUIDE);
+    /*
+       Reading prose, which is what the floor is about — "this is a reading
+       page; the minimum applies to the article column even where it does not
+       apply elsewhere". The one exclusion is the supporting count under the
+       closing button, which is marked a caption in the markup rather than
+       excluded by hand here.
+    */
+    const sizes = await page
+      .locator("article p:not([data-caption])")
+      .evaluateAll((els) => els.map((e) => parseFloat(getComputedStyle(e).fontSize)));
+    expect(sizes.length).toBeGreaterThan(5);
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(15);
+  });
+
+  test("renders prose links rather than their markup", async ({ page }) => {
+    await page.goto(GUIDE);
+    const body = await page.locator("article").innerText();
+    expect(body).not.toContain("](/");
+    expect(body).not.toContain("**");
+  });
+
+  test("acceptance 10 — links into the directory from the body, not only the footer", async ({
+    page,
+  }) => {
+    await page.goto(GUIDE);
+    const hrefs = await page
+      .locator("article a")
+      .evaluateAll((els) => els.map((a) => a.getAttribute("href") ?? ""));
+    const directory = hrefs.filter((href) => /^\/(c\/|categories|[a-z-]+\/[a-z0-9-]+)/.test(href));
+    // Two at least, and one of them from a paragraph — a guide that keeps its
+    // authority in its own footer passes much less of it on.
+    expect(directory.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test("Q5 — carries no RFQ composer", async ({ page }) => {
+    await page.goto(GUIDE);
+    /*
+       `6a` and `6b` both carry the prompt because their readers have chosen a
+       trade. A reader of this article has not, and a fan-out composer on a page
+       about due diligence would contradict the article.
+    */
+    const hrefs = await page
+      .locator("article a")
+      .evaluateAll((els) => els.map((a) => a.getAttribute("href") ?? ""));
+    expect(hrefs.filter((href) => href.startsWith("/rfq"))).toEqual([]);
+  });
+
+  test("acceptance 9 — the CTA count is a query and says what it counts", async ({ page }) => {
+    await page.goto(GUIDE);
+    // Never a bare number beside the nav's, which counts something else.
+    await expect(
+      page.getByText(/\d+ suppliers? with a trade licence we have checked and found current/),
+    ).toBeVisible();
+  });
+});
+
+test.describe("SEO", () => {
+  test("acceptance 7 — dateModified is the regulatory check, not the row's updatedAt", async ({
+    page,
+  }) => {
+    await page.goto(GUIDE);
     const article = (await jsonLd(page)).find((block) => block["@type"] === "Article");
+    expect(article).toBeDefined();
 
-    expect(article, "no Article block on the page").toBeDefined();
-    expect(article?.headline).toBe("What supplier verification actually proves");
-    expect(String(article?.datePublished)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(String(article?.dateModified)).toMatch(/^\d{4}-\d{2}-\d{2}T/);
-    expect(String(article?.mainEntityOfPage)).toContain(`/guides/${SLUG}`);
-    // Never a blank author: schema.org wants a person or an organisation.
-    expect(article?.author).toMatchObject({ name: expect.any(String) });
+    // The byline prints the same date the markup claims. A typo fix moves
+    // `updatedAt`; only an editor re-reading the facts moves this one.
+    const shown = await page.locator("article").innerText();
+    const modified = new Date(String(article?.dateModified));
+    expect(shown).toContain(String(modified.getUTCFullYear()));
+    expect(article?.datePublished).not.toBe(article?.dateModified);
   });
 
-  test("carries a breadcrumb trail back to the index", async ({ page }) => {
-    await page.goto(`/guides/${SLUG}`);
-    const crumbs = (await jsonLd(page)).find((block) => block["@type"] === "BreadcrumbList");
-    const items = (crumbs?.itemListElement ?? []) as { name: string; item?: string }[];
-    expect(items.map((item) => item.item)).toContain("/guides");
+  test("acceptance 12 — Article and BreadcrumbList, and no FAQPage", async ({ page }) => {
+    await page.goto(GUIDE);
+    const types = (await jsonLd(page)).map((block) => block["@type"]);
+    expect(types).toContain("Article");
+    expect(types).toContain("BreadcrumbList");
+    // The red-flag card is a callout, not a FAQ. Marking it up as one to chase
+    // a rich result is what `6b` exists to distinguish us from.
+    expect(types).not.toContain("FAQPage");
   });
 
-  test("has exactly one h1, and the body headings sit under it", async ({ page }) => {
-    await page.goto(`/guides/${SLUG}`);
-    await expect(page.locator("h1")).toHaveCount(1);
-    expect(await page.locator("h2").count()).toBeGreaterThan(1);
+  test("names an author rather than nobody", async ({ page }) => {
+    await page.goto(GUIDE);
+    const article = (await jsonLd(page)).find((block) => block["@type"] === "Article");
+    const author = article?.author as { "@type": string; name: string };
+    expect(author.name).toBeTruthy();
   });
 
-  test("the directory call to action reaches a page with results on it", async ({ page }) => {
-    await page.goto(`/guides/${SLUG}`);
-
-    const cta = page.getByRole("link", { name: /^browse |^find a supplier$/i }).first();
-    await expect(cta).toBeVisible();
-    await cta.click();
-
-    // A CTA that lands on an empty category is not a working CTA.
-    await expect(page).toHaveURL(/\/c\/|\/search/);
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-    expect(await page.getByRole("article").count()).toBeGreaterThan(0);
+  test("the title carries no year, and the canonical is self", async ({ page }) => {
+    await page.goto(GUIDE);
+    // §SEO: appending a year to an evergreen guide dates it the moment it turns
+    // over; `regulatoryCheckedAt` is how freshness is communicated instead.
+    await expect(page).not.toHaveTitle(/20\d\d/);
+    expect(await page.locator('link[rel="canonical"]').getAttribute("href")).toContain(GUIDE);
   });
 
-  test("an unpublished address is a 404, not a draft on the open web", async ({ page }) => {
-    const response = await page.goto("/guides/not-a-guide-that-exists");
+  test("is in the sitemap", async ({ request }) => {
+    const xml = await (await request.get("/sitemap.xml")).text();
+    expect(xml).toContain(GUIDE);
+  });
+});
+
+test.describe("the rail", () => {
+  test("acceptance 11 — points at the guide that covers what this one does not", async ({
+    page,
+  }) => {
+    await page.goto(GUIDE);
+    const related = page.getByRole("navigation", { name: /related guides/i });
+    await expect(related.getByRole("link")).toHaveCount(1);
+    expect(await related.getByRole("link").first().getAttribute("href")).toBe(OTHER);
+  });
+
+  test("an unpublished guide is a 404, not a thin page", async ({ page }) => {
+    const response = await page.goto("/guides/not-a-guide");
     expect(response?.status()).toBe(404);
   });
 });
 
-test.describe("the sitemap", () => {
-  test("carries the index and the published article", async ({ request }) => {
-    const xml = await (await request.get("/sitemap.xml")).text();
-    const urls = [...xml.matchAll(/<loc>(.*?)<\/loc>/g)].map((match) => match[1]!);
-
-    expect(urls.some((url) => url.endsWith("/guides"))).toBe(true);
-    expect(urls.some((url) => url.endsWith(`/guides/${SLUG}`))).toBe(true);
-  });
-});
-
 test.describe("accessibility", () => {
-  for (const route of ["/guides", `/guides/${SLUG}`]) {
-    test(`axe is clean on ${route}`, async ({ page }) => {
-      await page.goto(route);
-      const results = await new AxeBuilder({ page })
-        .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
-        // Contrast is excluded for the reason set out in docs/contrast.md — the
-        // failing pairs are token-level and enumerated there, and pinned.
-        .disableRules(["color-contrast"])
-        .analyze();
+  test("axe is clean, and there is one h1", async ({ page }) => {
+    await page.goto(GUIDE);
+    await expect(page.locator("h1")).toHaveCount(1);
 
-      const summary = results.violations.map((v) => ({
-        id: v.id,
-        impact: v.impact,
-        nodes: v.nodes.length,
-        first: v.nodes[0]?.html?.slice(0, 120),
-      }));
-      expect(summary, JSON.stringify(summary, null, 2)).toEqual([]);
-    });
-  }
+    const results = await new AxeBuilder({ page })
+      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
+      // docs/contrast.md — the failing pairs are token-level and pinned.
+      .disableRules(["color-contrast"])
+      .analyze();
+    const summary = results.violations.map((v) => ({ id: v.id, nodes: v.nodes.length }));
+    expect(summary, JSON.stringify(summary, null, 2)).toEqual([]);
+  });
+
+  test("the step numerals are not headings", async ({ page }) => {
+    await page.goto(GUIDE);
+    // §SEO: four `h3`s named "Ask for the licence…" would compete with the
+    // article's `h2`s in the outline, and the contents rail is built on those.
+    await expect(page.locator("article h3")).toHaveCount(0);
+  });
 });

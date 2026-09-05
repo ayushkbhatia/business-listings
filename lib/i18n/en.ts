@@ -5569,6 +5569,26 @@ export const en = {
   "guides.updated": "Updated {date}",
   "guides.byline": "By {name}",
   "guides.read_next": "More guides",
+
+  // ── Board 6d, the article template ────────────────────────────────────────
+  "guides.on_this_page": "On this page",
+  // The kicker. `topic` is absent on a guide that belongs to no trade, and the
+  // second form is what renders then — never an empty middle term.
+  "guides.kicker": "Guide · {topic} · {minutes} min read",
+  "guides.kicker_untopiced": "Guide · {minutes} min read",
+  // Both dates, and the second is the point of the strip: the article names a
+  // specific authority and a specific VAT rate, and both change.
+  "guides.dates": "Published {published} · Regulatory detail last checked {checked}",
+  "guides.dates_unchecked": "Published {published}",
+  "guides.byline_role": "{name}, {role}",
+  "guides.related": "Related guides",
+  "guides.related_minutes": "{minutes} min",
+  "guides.why_title": "Why we write these",
+  "guides.why_body": "Guides bring in buyers who are not looking for a supplier yet, and they earn the links that make our area pages findable at all. Every one of them ends in the directory, because that is what they are for.",
+  // Acceptance 9: the count states what it counts. The nav counts listings plus
+  // catalogue products; this counts sellers whose licence is checked and
+  // current. The two are not comparable and nothing should invite the comparison.
+  "guides.cta_count": { one: "{count} supplier with a trade licence we have checked and found current", other: "{count} suppliers with a trade licence we have checked and found current" },
   "guides.cta_default": "Find a supplier",
   "guides.cta_category": "Browse {category}",
   "guides.cta_rfq": "Post a requirement",
@@ -5576,6 +5596,7 @@ export const en = {
 
   // The block vocabulary, named for the editor.
   "guide.block.heading": "Heading",
+  "guide.block.quote": "Pull quote",
   "guide.block.text": "Paragraph",
   "guide.block.list": "Bullets",
   "guide.block.steps": "Numbered steps",

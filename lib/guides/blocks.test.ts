@@ -3,7 +3,9 @@ import { DEFAULT_THRESHOLDS } from "@/lib/publish-threshold";
 import {
   blockItems,
   blockLine,
+  directoryLinks,
   guideBlockSpec,
+  guideHeadings,
   guideProse,
   guideWords,
   GUIDE_MIN_WORDS,
@@ -82,12 +84,86 @@ describe("the word count", () => {
 });
 
 describe("the publish floor", () => {
-  it("is the same number a landing page intro answers to", () => {
+  it("is 1,200, and deliberately not the landing-page intro floor", () => {
     /*
-       Not a coincidence and not a copy. Two 250s in the codebase drift the
-       first time somebody changes one of them.
+       It used to be `DEFAULT_THRESHOLDS.minIntroWords`, on the argument that
+       one number is better than two. That was right about landing pages and
+       wrong here: 250 is the floor for a *paragraph* introducing a page of
+       listings, and a guide is the page.
+
+       Board 6d, acceptance 13. The render shows structure at about 520 words
+       and the spec says plainly that it "would not rank for a query this
+       competitive". Two numbers because they measure two things.
     */
-    expect(GUIDE_MIN_WORDS).toBe(DEFAULT_THRESHOLDS.minIntroWords);
+    expect(GUIDE_MIN_WORDS).toBe(1_200);
+    expect(GUIDE_MIN_WORDS).toBeGreaterThan(DEFAULT_THRESHOLDS.minIntroWords);
+  });
+});
+
+describe("the contents rail", () => {
+  const heading = (id: string, text: string) => ({ id, kind: "heading" as const, values: { text } });
+
+  it("is derived from the headings, in order", () => {
+    // Acceptance 4. The board hand-wrote six entries against three headings:
+    // two pointed at nothing and one pointed at a different guide.
+    const blocks = [
+      heading("a", "What a licence tells you"),
+      { id: "p1", kind: "text" as const, values: { body: "Body." } },
+      heading("b", "How to check it"),
+    ];
+    expect(guideHeadings(blocks)).toEqual([
+      { id: "s-a", text: "What a licence tells you" },
+      { id: "s-b", text: "How to check it" },
+    ]);
+  });
+
+  it("anchors on the block id, not the text", () => {
+    /*
+       A slug of the heading would change the moment somebody rewrote it, and
+       every link anyone had shared into that section would break silently.
+    */
+    const before = guideHeadings([heading("a", "How to check it")]);
+    const after = guideHeadings([heading("a", "How to check a trade licence")]);
+    expect(after[0]?.id).toBe(before[0]?.id);
+  });
+
+  it("drops a heading with no text rather than rendering an empty anchor", () => {
+    expect(guideHeadings([heading("a", "   ")])).toEqual([]);
+  });
+});
+
+describe("links into the directory", () => {
+  it("finds them in a href field and in prose", () => {
+    /*
+       Acceptance 10 counts **body** links, not the closing CTA: a guide that
+       keeps all its earned authority in its own footer passes much less of it
+       to the area pages the guide exists to make rank.
+    */
+    const found = directoryLinks([
+      { id: "p1", kind: "text" as const, values: { body: "See [HVAC in Al Quoz](/dubai/al-quoz/hvac)." } },
+      { id: "c1", kind: "cta" as const, values: { href: "/c/valves-and-fittings" } },
+      { id: "p2", kind: "text" as const, values: { body: "And [a policy](/verification-policy)." } },
+    ]);
+    // The policy page is not the directory: it earns the guide nothing.
+    // Order is the order they appear in the article, which is what a reader
+    // and a crawler both see — so the assertion reads that way too.
+    expect(found).toEqual(["/dubai/al-quoz/hvac", "/c/valves-and-fittings"]);
+  });
+
+  it("counts the directory index, which is its front door", () => {
+    // `/categories` is board 6c's crawlable spine. The first version of the
+    // pattern required a second path segment and refused it.
+    expect(
+      directoryLinks([
+        { id: "p1", kind: "text" as const, values: { body: "The [directory](/categories)." } },
+      ]),
+    ).toEqual(["/categories"]);
+  });
+
+  it("finds none in an article that only links to itself", () => {
+    expect(
+      directoryLinks([{ id: "p1", kind: "text" as const, values: { body: "See [the index](/guides)." } }]),
+    ).toEqual([]);
   });
 });
 
