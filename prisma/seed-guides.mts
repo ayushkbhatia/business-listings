@@ -35,8 +35,7 @@ const BLOCKS = [
         "Not verified. Nothing on the listing has been checked by us. Most listings start here, because most are imported from public licence records before anybody claims them.",
         "Licence on file. A trade licence number has been recorded against the business. Recorded is not checked: at this rung we have a number and nothing else.",
         "Licence verified. The trade licence has been checked against the issuing authority — DED, or the relevant free zone. This is the first rung that counts as verified anywhere on the site.",
-        "Site visited. Somebody from our field team has been to the premises, seen the stock and met the staff. The badge carries the date of the visit, not the date of the licence check.",
-        "Audited. Premises visited and trading history audited. The smallest group on the platform by a wide margin.",
+        "Audited. Trading history and buyer outcomes checked by us — enquiries answered, quotes sent, reply times. All of it measured rather than claimed, which is what a top rung has to be. The smallest group on the platform by a wide margin.",
       ],
     },
   },
@@ -83,7 +82,7 @@ const BLOCKS = [
     values: {
       items: [
         "Filter to verified suppliers when the order matters more than the price. It removes the listings nobody has checked.",
-        "Read the date on the badge, not only its colour. A licence checked last month says more than a site visit three years ago.",
+        "Read the date on the badge, not only its colour. A licence checked last month says more than one checked three years ago.",
         "Check the response time beside it. That number is measured from real enquiries and their first replies, and no supplier can edit it.",
         "Send the same requirement to several suppliers at once. Comparing three quotes tells you more about a fair price than any badge can.",
       ],

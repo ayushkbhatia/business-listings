@@ -36,6 +36,96 @@ export const WEIGHT_KEYS = [
   "planTier",
 ] as const;
 
+/**
+ * What `relevance` means on a page with no query — board 6a §Ranking.
+ *
+ * The area and emirate landing pages rank on this same config, and they have no
+ * search box. `relevance` is the largest of the six weights and there is
+ * nothing on those pages for it to score against, so left alone it multiplies
+ * zero: staff move a 34-point slider on board 12c and nothing changes on the
+ * highest-traffic template in the product. That is worse than a wrong number,
+ * because it looks like it works.
+ *
+ *   `redistribute`    the 34 points spread across the other five in proportion
+ *                     to their own weights. Verification becomes the dominant
+ *                     signal at roughly 35 effective points, which is what the
+ *                     H2 on those pages promises the reader.
+ *   `category_depth`  relevance keeps its points, and the caller scores it as
+ *                     how exactly a listing's own trade matches the page's —
+ *                     primary category exact scores 1, a match at sector level
+ *                     scores half.
+ *
+ * A named mode on the same config row, never a constant in a route: the spec
+ * asks for the decision to be recorded where the weights are, so that whoever
+ * moves a weight can see what it does to the pages with no query.
+ */
+export const BROWSE_RELEVANCE_MODES = ["redistribute", "category_depth"] as const;
+export type BrowseRelevanceMode = (typeof BROWSE_RELEVANCE_MODES)[number];
+export const DEFAULT_BROWSE_RELEVANCE_MODE: BrowseRelevanceMode = "redistribute";
+
+export function isBrowseRelevanceMode(value: string): value is BrowseRelevanceMode {
+  return (BROWSE_RELEVANCE_MODES as readonly string[]).includes(value);
+}
+
+/**
+ * The weights a page with no query should rank on.
+ *
+ * Under `category_depth` nothing moves — the caller supplies a real relevance
+ * score and the config is used as staff set it.
+ *
+ * Under `redistribute` the relevance points are shared out in proportion to the
+ * other five, and relevance goes to zero. Two properties matter and both are
+ * asserted in the unit tests:
+ *
+ *   · the total stays the same, so a score from this page is on the same scale
+ *     as a score from a search and a boost's five points still mean five;
+ *   · a weight staff set to nought stays at nought. Redistributing *into* a
+ *     signal somebody deliberately switched off would make the admin editor a
+ *     suggestion, which is the same objection `weightsForShape` records.
+ *
+ * Rounding is by largest remainder rather than `Math.round` per weight, which
+ * loses or invents points depending on the numbers. With every other weight at
+ * zero there is nothing to redistribute into and the relevance points are
+ * dropped rather than parked somewhere arbitrary — a config of "relevance
+ * only" on a page with no query is a config with no ranking in it, and
+ * `setWeights` already refuses the all-zero case that would produce it.
+ */
+export function weightsForBrowse(
+  weights: RankingWeights,
+  mode: BrowseRelevanceMode = DEFAULT_BROWSE_RELEVANCE_MODE,
+): RankingWeights {
+  if (mode === "category_depth") return { ...weights };
+
+  const others = WEIGHT_KEYS.filter((key) => key !== "relevance");
+  const base = others.reduce((total, key) => total + weights[key], 0);
+  if (base === 0 || weights.relevance === 0) return { ...weights, relevance: 0 };
+
+  const exact = others.map((key) => ({
+    key,
+    share: (weights.relevance * weights[key]) / base,
+  }));
+  const shared = exact.map((entry) => ({ ...entry, whole: Math.floor(entry.share) }));
+  let left = weights.relevance - shared.reduce((total, entry) => total + entry.whole, 0);
+
+  // Largest remainder first, then the bigger weight, so the result does not
+  // depend on the order `WEIGHT_KEYS` happens to be written in.
+  const order = [...shared].sort(
+    (a, b) => (b.share - b.whole) - (a.share - a.whole) || weights[b.key] - weights[a.key],
+  );
+  const extra = new Map(order.map((entry) => [entry.key, 0]));
+  for (const entry of order) {
+    if (left <= 0) break;
+    extra.set(entry.key, 1);
+    left -= 1;
+  }
+
+  const next: RankingWeights = { ...weights, relevance: 0 };
+  for (const entry of shared) {
+    next[entry.key] = weights[entry.key] + entry.whole + (extra.get(entry.key) ?? 0);
+  }
+  return next;
+}
+
 /** Above this the results stop being useful and buyers notice inside a week. */
 export const PLAN_TIER_CEILING = 10;
 /** A boost bigger than this replaces the ranking rather than nudging it. */

@@ -121,6 +121,28 @@ export function guideWords(blocks: readonly GuideBlock[]): number {
 }
 
 /**
+ * Words per minute for the `GUIDE · 6 MIN` kicker board 6a §5 draws.
+ *
+ * 220 is the ordinary figure for adult reading of non-technical prose, and
+ * these are technical. It is deliberately not tuned: the kicker's job is to
+ * tell a reader whether they have time now, and being a minute out either way
+ * costs nothing while pretending to a precision we cannot have costs the same
+ * as every other invented number on this template.
+ */
+const WORDS_PER_MINUTE = 220;
+
+/**
+ * How long a guide takes to read, from its own body. Never below one.
+ *
+ * Derived rather than a column, for the reason every other number on the
+ * acquisition surfaces is derived: an editable `readMinutes` field is a claim
+ * the article can outgrow without anybody noticing.
+ */
+export function readingMinutes(body: unknown): number {
+  return Math.max(1, Math.round(guideWords(readGuideBlocks(body)) / WORDS_PER_MINUTE));
+}
+
+/**
  * The floor a guide publishes above.
  *
  * Read from `DEFAULT_THRESHOLDS` rather than restated. Guides are not governed

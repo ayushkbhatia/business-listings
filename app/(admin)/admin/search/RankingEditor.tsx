@@ -5,7 +5,15 @@ import { Alert, StatusBadge } from "@/components/display";
 import { Button, Input, Label, Textarea } from "@/components/primitives";
 import { DataTable, Panel, type Column } from "@/components/structure";
 // From `ranking.ts`, which is pure. `settings.ts` is server-only.
-import { PLAN_TIER_CEILING, WEIGHT_KEYS } from "@/lib/search/ranking";
+import {
+  BROWSE_RELEVANCE_MODES,
+  PLAN_TIER_CEILING,
+  WEIGHT_KEYS,
+  weightsForBrowse,
+  type BrowseRelevanceMode,
+  type RankingWeights,
+} from "@/lib/search/ranking";
+import { SegmentedControl } from "@/components/primitives";
 import { t } from "@/lib/i18n";
 import type { ActionResult } from "./actions";
 
@@ -30,11 +38,14 @@ const MIN_REASON = 4;
 
 export function RankingEditor({
   weights,
+  browseMode,
   boosts,
   saveWeights,
   addBoost,
 }: {
   weights: Record<string, number>;
+  /** Board 6a §Ranking — what relevance means on a page with no query. */
+  browseMode: BrowseRelevanceMode;
   boosts: readonly BoostRowView[];
   saveWeights: (formData: FormData) => Promise<ActionResult>;
   addBoost: (formData: FormData) => Promise<ActionResult>;
@@ -42,6 +53,7 @@ export function RankingEditor({
   const [values, setValues] = useState<Record<string, string>>(
     Object.fromEntries(WEIGHT_KEYS.map((key) => [key, String(weights[key] ?? 0)])),
   );
+  const [mode, setMode] = useState<BrowseRelevanceMode>(browseMode);
   const [reason, setReason] = useState("");
   const [businessId, setBusinessId] = useState("");
   const [points, setPoints] = useState("5");
@@ -140,10 +152,53 @@ export function RankingEditor({
           ))}
         </div>
 
+        {/*
+           Board 6a §Ranking, on the screen that owns the weights.
+
+           The landing pages rank on this same config and have no search box, so
+           the relevance weight above has nothing to score against. Left alone it
+           multiplies zero: somebody moves a 34-point slider and nothing changes
+           on a few hundred pages. The spec asks for the decision to be recorded
+           here rather than implied by a route.
+
+           The preview is the whole reason this control is here rather than in a
+           settings file. "Redistribute" is an abstraction until you see that
+           verification goes from 22 to 35, which is what makes the choice
+           arguable.
+        */}
+        <div className="mt-6 border-t border-line pt-4">
+          {/*
+             A `p`, not a `Label`. `SegmentedControl` names its own group and a
+             `label` pointing at a radio group is a label for one radio — which
+             is how a group ends up announced as its first option.
+          */}
+          <p className="text-caption font-medium text-ink">{t("ranking.browse_mode")}</p>
+          <p className="mt-0.5 text-caption text-muted">{t("ranking.browse_hint")}</p>
+          <div className="mt-2">
+            <SegmentedControl
+              label={t("ranking.browse_mode")}
+              value={mode}
+              onChange={(next) => setMode(next as BrowseRelevanceMode)}
+              options={BROWSE_RELEVANCE_MODES.map((option) => ({
+                value: option,
+                label: t(`ranking.browse.${option}` as never),
+              }))}
+            />
+          </div>
+          <p className="mt-2 max-w-prose text-caption text-muted">
+            {t("ranking.browse_preview", { preview: previewOf(values, mode) })}
+          </p>
+        </div>
+
         <div className="mt-4">
           <Button
             disabled={!ready || pending}
-            onClick={() => send(saveWeights, values as Record<string, string>)}
+            onClick={() =>
+              send(saveWeights, {
+                ...(values as Record<string, string>),
+                browseRelevanceMode: mode,
+              })
+            }
           >
             {t("ranking.save")}
           </Button>
@@ -209,4 +264,19 @@ export function RankingEditor({
       />
     </div>
   );
+}
+
+/**
+ * What the six weights become on a page with no query.
+ *
+ * Computed by the same pure function the ranking runs, not restated: a preview
+ * that agreed with the ranking only until somebody changed one of them would be
+ * worse than no preview, because it would be believed.
+ */
+function previewOf(values: Record<string, string>, mode: BrowseRelevanceMode): string {
+  const current = Object.fromEntries(
+    WEIGHT_KEYS.map((key) => [key, Number(values[key] ?? 0) || 0]),
+  ) as unknown as RankingWeights;
+  const next = weightsForBrowse(current, mode);
+  return WEIGHT_KEYS.map((key) => `${t(`ranking.weight.${key}` as never)} ${next[key]}`).join(" · ");
 }

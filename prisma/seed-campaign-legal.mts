@@ -115,11 +115,13 @@ because most are imported from public licence records before anybody claims them
 relevant DED or free zone. This is the first rung that counts as verified anywhere on the
 site, in a filter, in a count, or on a curated list.
 
-**Site visited.** Somebody from our field team has been to the premises. The badge carries the
-date of the visit, not the date of the licence check.
+**Audited.** Trading history and buyer outcomes checked by us — enquiries answered, quotes
+sent, reply times. Measured rather than claimed, which is what a top rung has to be. The
+smallest group by a wide margin.
 
-**Audited.** Premises visited and trading history audited. The smallest group by a wide
-margin.
+The ladder used to have a fifth rung above licence verified, resting on somebody from our
+field team standing in the building. We do not gather that evidence, so the rung is gone: a
+badge whose requirement nobody performs means whatever staff decide on the day.
 
 **Expiry.** A UAE trade licence is renewed annually. On the day one expires, that supplier's
 tier drops to licence verified — no grace period, no warning. It goes back up when the renewed

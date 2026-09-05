@@ -4,9 +4,15 @@ import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
 import type { SubjectRef } from "@/lib/audit/types";
-import { countWords, evaluatePublish, type PublishFailure } from "@/lib/publish-threshold";
-import { thresholdsFor } from "@/lib/taxonomy/service";
-import { VERIFIED_TIER } from "@/lib/verification";
+import { countWords, type PublishFailure } from "@/lib/publish-threshold";
+import {
+  landingState,
+  refreshFreshness,
+  scopeForArea,
+  type LandingFaqRow,
+  type LandingScope,
+  type LandingState,
+} from "@/lib/seo/landing";
 
 /**
  * Board 6a — area landing pages, and criterion 1.
@@ -30,8 +36,6 @@ import { VERIFIED_TIER } from "@/lib/verification";
  * on the job having run.
  */
 
-const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null }, mergedIntoId: null } as const;
-
 export interface AreaPageState {
   areaId: string;
   categoryId: string;
@@ -40,64 +44,52 @@ export interface AreaPageState {
   /** The one authored paragraph, as written. */
   intro: string | null;
   introWords: number;
+  /** The per-scope editorial questions. Four of them is the fourth condition. */
+  faq: LandingFaqRow[];
   /** Set by staff. Not the same thing as live. */
   publishedAt: Date | null;
-  /** Whether the floors hold right now. */
+  /** Whether all four conditions hold right now. */
   clearsFloors: boolean;
-  /** Intent and floors together. This is what the route and the sitemap read. */
+  /** Intent and conditions together. This is what the route and the sitemap read. */
   live: boolean;
   failing: PublishFailure[];
+  /** The scope object, so callers do not resolve it a second time. */
+  scope: LandingScope;
 }
 
-/** The listings in one trade in one area, counted the way every surface counts. */
-async function supply(areaId: string, categoryId: string) {
-  const where = {
-    ...PUBLIC_BUSINESS,
-    primaryCategoryId: categoryId,
-    locations: { some: { areaId, published: true } },
+function toAreaState(state: LandingState): AreaPageState {
+  return {
+    areaId: state.scope.area?.id as string,
+    categoryId: state.scope.category.id,
+    listings: state.listings,
+    verified: state.verified,
+    intro: state.intro,
+    introWords: state.introWords,
+    faq: state.faq,
+    publishedAt: state.publishedAt,
+    clearsFloors: state.clearsFloors,
+    live: state.live,
+    failing: [...state.failing],
+    scope: state.scope,
   };
-  const [listings, verified] = await Promise.all([
-    prisma.business.count({ where }),
-    prisma.business.count({ where: { ...where, verificationTier: { gte: VERIFIED_TIER } } }),
-  ]);
-  return { listings, verified };
 }
 
+/**
+ * The four conditions for one area page.
+ *
+ * A thin wrapper over `landingState` now rather than a second implementation.
+ * It was a second implementation until board 6a added the FAQ condition, at
+ * which point the area class and the emirate class would have had two publish
+ * gates that agreed until somebody changed one — the most repeated defect in
+ * this project, in the one place where the cost is the whole domain's standing.
+ */
 export async function areaPageState(
   areaId: string,
   categoryId: string,
 ): Promise<AreaPageState | null> {
-  const [category, page] = await Promise.all([
-    prisma.category.findUnique({
-      where: { id: categoryId },
-      select: { publishThreshold: true, verifiedShareMin: true },
-    }),
-    prisma.areaPage.findUnique({
-      where: { areaId_categoryId: { areaId, categoryId } },
-      select: { intro: true, publishedAt: true },
-    }),
-  ]);
-  if (!category) return null;
-
-  const { listings, verified } = await supply(areaId, categoryId);
-  const introWords = countWords(page?.intro);
-  const decision = evaluatePublish(
-    { listings, verified, introWords },
-    thresholdsFor(category),
-  );
-
-  return {
-    areaId,
-    categoryId,
-    listings,
-    verified,
-    intro: page?.intro ?? null,
-    introWords,
-    publishedAt: page?.publishedAt ?? null,
-    clearsFloors: decision.publishable,
-    live: page?.publishedAt != null && decision.publishable,
-    failing: decision.failures,
-  };
+  const scope = await scopeForArea(areaId, categoryId);
+  if (!scope) return null;
+  return toAreaState(await landingState(scope));
 }
 
 export type AreaPageRefusal = "not_found" | "below_floors" | "not_published";
@@ -123,6 +115,10 @@ function refusalMessage(failing: readonly PublishFailure[]): string {
           return `${Math.round(failure.have * 100)}% verified, and it publishes at ${Math.round(failure.need * 100)}%.`;
         case "intro_words":
           return `${failure.have} words of intro, and it publishes at ${failure.need}.`;
+        case "faq_rows":
+          return `${failure.have} questions in the FAQ, and it publishes at ${failure.need}.`;
+        case "faq_scope_specific":
+          return `${failure.have} of those questions are specific to this scope, and it publishes at ${failure.need}.`;
       }
     })
     .join(" ");
@@ -157,10 +153,22 @@ export async function saveAreaIntro(input: SaveIntroInput): Promise<AreaPageResu
           where: { areaId_categoryId: { areaId: input.areaId, categoryId: input.categoryId } },
           select: { intro: true },
         });
+        /*
+           The copy edit moves `contentUpdatedAt` — §Freshness names it as one
+           of the three reasons the date moves, and it is the only one a person
+           causes directly. The digest is left alone: supply has not changed,
+           and rewriting it here would tell the next sweep that it had.
+        */
+        const now = new Date();
         await tx.areaPage.upsert({
           where: { areaId_categoryId: { areaId: input.areaId, categoryId: input.categoryId } },
-          create: { areaId: input.areaId, categoryId: input.categoryId, intro: intro || null },
-          update: { intro: intro || null },
+          create: {
+            areaId: input.areaId,
+            categoryId: input.categoryId,
+            intro: intro || null,
+            contentUpdatedAt: now,
+          },
+          update: { intro: intro || null, contentUpdatedAt: now },
         });
         return {
           result: null,
@@ -272,6 +280,8 @@ export async function unpublishAreaPage(
 export interface SweepResult {
   checked: number;
   unpublished: { areaSlug: string; categorySlug: string; failing: PublishFailure[] }[];
+  /** How many pages had supply move under them, and so moved their `UPDATED` date. */
+  refreshed: number;
 }
 
 /**
@@ -306,10 +316,28 @@ export async function sweepAreaPages(): Promise<SweepResult> {
   });
 
   const unpublished: SweepResult["unpublished"] = [];
+  let refreshed = 0;
 
   for (const page of published) {
     const state = await areaPageState(page.areaId, page.categoryId);
-    if (!state || state.clearsFloors) continue;
+    if (!state) continue;
+
+    /*
+       §Freshness, and the reason it is here rather than on the read path.
+
+       `UPDATED` moves when a listing enters or leaves the scope or changes
+       verification tier. Recomputing that on every request would put a write
+       on the busiest public template in the product and have two crawlers race
+       each other for the same row; the sweep already walks exactly this set
+       once a night with the numbers in hand.
+
+       Before the unpublish check, so a page dropping out of the index still
+       records the change in supply that took it out.
+    */
+    const freshness = await refreshFreshness(state.scope);
+    if (freshness?.moved) refreshed += 1;
+
+    if (state.clearsFloors) continue;
 
     await prisma.areaPage.update({
       where: { areaId_categoryId: { areaId: page.areaId, categoryId: page.categoryId } },
@@ -323,7 +351,7 @@ export async function sweepAreaPages(): Promise<SweepResult> {
     });
   }
 
-  return { checked: published.length, unpublished };
+  return { checked: published.length, unpublished, refreshed };
 }
 
 /** Every live area page, for the sitemap and the cross-links. */
@@ -336,6 +364,7 @@ export async function livePages(): Promise<
       areaId: true,
       categoryId: true,
       updatedAt: true,
+      contentUpdatedAt: true,
       area: { select: { slug: true, emirate: true } },
       category: { select: { slug: true } },
     },
@@ -343,74 +372,39 @@ export async function livePages(): Promise<
 
   const live = [];
   for (const row of rows) {
-    // Intent is not enough. The floors are re-checked here so the sitemap can
-    // never contain a page the route would serve as thin.
+    // Intent is not enough. The conditions are re-checked here so the sitemap
+    // can never contain a page the route would serve as a 404.
     const state = await areaPageState(row.areaId, row.categoryId);
     if (!state?.live) continue;
     live.push({
       areaSlug: row.area.slug,
       emirate: row.area.emirate as string,
       categorySlug: row.category.slug,
-      updatedAt: row.updatedAt,
+      /*
+         `contentUpdatedAt`, the same date the page prints — §Freshness.
+
+         `updatedAt` moves whenever any column on the row is touched, including
+         the supply digest the sweep writes and the `publishedAt` a staff member
+         sets. A `lastmod` that moved for those would tell a crawler the content
+         changed when it did not, and a crawler that finds nothing changed
+         discounts the next one. Falls back only where a row predates the
+         column.
+      */
+      updatedAt: row.contentUpdatedAt ?? row.updatedAt,
     });
   }
   return live;
 }
 
-export interface CrossLink {
-  emirate: string;
-  areaSlug: string;
-  areaName: string;
-  categorySlug: string;
-  categoryName: string;
-  listings: number;
-}
+/*
+   The cross-link helpers that used to live here are gone.
 
-/**
- * The cross-links board 6a asks for: the same trade in other areas, and the
- * other trades in this one.
- *
- * Live pages only. Linking a good page to a thin one is the mistake the
- * homepage curation rule already forbids — and these pages are the ones with
- * the standing to lose.
- */
-async function crossLinks(where: { categoryId?: string; areaId?: string }, exclude: { areaId?: string; categoryId?: string }): Promise<CrossLink[]> {
-  const rows = await prisma.areaPage.findMany({
-    where: {
-      publishedAt: { not: null },
-      ...(where.categoryId ? { categoryId: where.categoryId } : {}),
-      ...(where.areaId ? { areaId: where.areaId } : {}),
-      ...(exclude.areaId ? { areaId: { not: exclude.areaId } } : {}),
-      ...(exclude.categoryId ? { categoryId: { not: exclude.categoryId } } : {}),
-    },
-    select: {
-      areaId: true,
-      categoryId: true,
-      area: { select: { slug: true, name: true, emirate: true } },
-      category: { select: { slug: true, name: true } },
-    },
-  });
+   `sameTradeElsewhere` and `otherTradesHere` answered two of board 6a §6's
+   three axes and knew nothing about the third — the same trade in the other
+   emirates, which is the `/:emirate/:category` class and the column that makes
+   the emirate pages reachable from the area pages at all. They also queried the
+   area class only, so an emirate page calling them got area links.
 
-  const links: CrossLink[] = [];
-  for (const row of rows) {
-    const state = await areaPageState(row.areaId, row.categoryId);
-    if (!state?.live) continue;
-    links.push({
-      emirate: row.area.emirate as string,
-      areaSlug: row.area.slug,
-      areaName: row.area.name,
-      categorySlug: row.category.slug,
-      categoryName: row.category.name,
-      listings: state.listings,
-    });
-  }
-  return links.sort((a, b) => b.listings - a.listings);
-}
-
-export function sameTradeElsewhere(categoryId: string, exceptAreaId: string) {
-  return crossLinks({ categoryId }, { areaId: exceptAreaId });
-}
-
-export function otherTradesHere(areaId: string, exceptCategoryId: string) {
-  return crossLinks({ areaId }, { categoryId: exceptCategoryId });
-}
+   `lib/seo/landing/links.ts` answers all three from one scope object, which is
+   what §1 means by one controller. Nothing else imported these.
+*/

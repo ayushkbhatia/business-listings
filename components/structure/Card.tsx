@@ -10,6 +10,12 @@ import { cn } from "@/lib/cn";
  *
  * `promoted` is one per screen. It is what marks the recommended plan or the
  * sponsored slot, and its meaning dies the moment there are two.
+ *
+ * `surface="paper"` is the inversion board 6a draws for its first result. A
+ * `--card` section is white, so a white card inside one is invisible; the row
+ * the page is recommending takes `--paper` and the stronger line instead. It is
+ * not the selection treatment — selection is moss, it means "you picked this",
+ * and rank 1 is the page's opinion rather than the reader's.
  */
 export type CardElevation = "flat" | "raised" | "promoted";
 
@@ -20,6 +26,13 @@ export interface CardProps
   as?: "div" | "article" | "li";
   /** Moss border and tint. The design system's selection treatment. */
   selected?: boolean;
+  /**
+   * `paper` for a card that has to read as raised against a `--card` section.
+   *
+   * Never a page background — `--card` remains the raised surface everywhere a
+   * card sits on paper, which is everywhere but this inversion.
+   */
+  surface?: "card" | "paper";
   interactive?: boolean;
   padded?: boolean;
 }
@@ -34,6 +47,7 @@ export function Card({
   elevation = "flat",
   as: Tag = "div",
   selected = false,
+  surface = "card",
   interactive = false,
   padded = true,
   children,
@@ -42,8 +56,9 @@ export function Card({
   return (
     <Tag
       className={cn(
-        "rounded-card border bg-card",
-        ELEVATION[elevation],
+        "rounded-card border",
+        surface === "paper" ? "border-line-strong bg-paper" : "bg-card",
+        surface === "card" && ELEVATION[elevation],
         padded && "p-4",
         selected && "border-[1.5px] border-moss bg-moss-wash",
         interactive &&

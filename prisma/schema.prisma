@@ -2548,6 +2548,29 @@ model RankingWeights {
   /// Deliberately the smallest. A directory that sells its way to the top is a
   /// directory nobody comes back to.
   planTier         Int      @map("plan_tier")
+
+  /// What `relevance` means on a page with no query — board 6a §Ranking.
+  ///
+  /// The landing pages rank the same config as search, and there is nothing on
+  /// them for a 34-point relevance weight to score against. Leaving it to
+  /// multiply zero is the version that looks like it works: the weight sits in
+  /// the admin editor, staff move it, and nothing on the highest-traffic
+  /// template in the product changes.
+  ///
+  ///   `redistribute`    the 34 points spread across the other five in
+  ///                     proportion, so verification becomes the dominant
+  ///                     signal — which is what the H2 on those pages promises.
+  ///   `category_depth`  relevance keeps its points and scores how exactly the
+  ///                     listing's own trade matches the page's: primary
+  ///                     category exact scores full, a match at sector level
+  ///                     scores half.
+  ///
+  /// A named mode in the config board 12c edits, not a constant in a route:
+  /// the spec asks for the decision to be written down where the weights are,
+  /// so that whoever moves a weight can see what happens to the pages that
+  /// have no query.
+  browseRelevanceMode String @default("redistribute") @map("browse_relevance_mode")
+
   updatedAt        DateTime @updatedAt @map("updated_at")
 
   @@map("ranking_weights")
@@ -3050,6 +3073,38 @@ model AreaPage {
   /// function.
   intro String?
 
+  /// The one written sentence board 6a §SEO asks for, 150-160 characters.
+  ///
+  /// Not generated. The title carries a live count and beats a competitor on
+  /// it; the description has to say something about *this* scope that a
+  /// substituted area name cannot, or it is the doorway text the whole gate
+  /// exists to keep out. Null falls back to a derived sentence and the page
+  /// still publishes — this is not a fifth floor, it is a quality field.
+  metaDescription String? @map("meta_description")
+
+  /// What `UPDATED 21 AUG 2026` prints — board 6a §Freshness.
+  ///
+  /// It moves for exactly three reasons: a listing enters or leaves the scope,
+  /// a listing in the scope changes verification tier, or the intro or FAQ is
+  /// edited. It does **not** move for a rebuild, a deploy, a ranking-weight
+  /// change or a review landing, which is why it is a column of its own rather
+  /// than `updatedAt` — Prisma moves that one whenever any field is touched,
+  /// including the digest below.
+  ///
+  /// If this tracked the build, every page on the domain would claim to have
+  /// been updated this morning. That is both false and trivially detected.
+  contentUpdatedAt DateTime? @map("content_updated_at")
+
+  /// How the sweep knows supply moved, without storing the membership.
+  ///
+  /// A hash over `businessId:tier` for every listing in the scope, sorted. Two
+  /// runs with the same set at the same tiers produce the same digest and
+  /// `contentUpdatedAt` stays where it is; a listing joining, leaving or
+  /// changing rung changes it and the date moves. Counting listings alone
+  /// would miss a swap of one supplier for another, which is exactly the
+  /// change a reader would call an update.
+  supplyDigest String? @map("supply_digest")
+
   /// Staff intent, not the live state.
   ///
   /// The page is live only if this is set *and* the board 6f floors currently
@@ -3064,6 +3119,9 @@ model AreaPage {
 
   area     Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  faq             LandingFaq[]
+  relatedSearches LandingRelatedSearch[]
 
   @@unique([areaId, categoryId])
   @@index([publishedAt])
@@ -3098,6 +3156,13 @@ model EmiratePage {
   /// landing page, by the same function.
   intro String?
 
+  /// The written sentence, as on `AreaPage`. Same rule, same 150-160.
+  metaDescription String? @map("meta_description")
+
+  /// Content freshness, as on `AreaPage`. Same three reasons, same sweep.
+  contentUpdatedAt DateTime? @map("content_updated_at")
+  supplyDigest     String?   @map("supply_digest")
+
   /// Staff intent, not the live state.
   ///
   /// The page is live only if this is set *and* the board 6f floors currently
@@ -3111,9 +3176,107 @@ model EmiratePage {
 
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
 
+  faq             LandingFaq[]
+  relatedSearches LandingRelatedSearch[]
+
   @@unique([emirate, categoryId])
   @@index([publishedAt])
   @@map("emirate_page")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Landing-page content records — board 6a §5
+//
+// The FAQ rows and the related searches are **content, not queries**. That is
+// the sentence in the spec's data table, and it is the whole difference between
+// this template and a doorway generator: the questions are per-scope editorial
+// and two of them must be answerable only for this scope. A shared list with
+// the area name substituted in is the thing being forbidden.
+//
+// Both tables hang off either landing class, because board 6a is one template
+// serving two of them and duplicating the tables would guarantee the emirate
+// pages drifted. Exactly one parent is set, enforced by a check constraint in
+// the migration rather than by hope — a row with neither is invisible content
+// and a row with both belongs to two pages at once.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One question and its answer, on one landing page.
+model LandingFaq {
+  id String @id @default(cuid())
+
+  /// Exactly one of these. `num_nonnulls(...) = 1`, in the migration.
+  areaPageId    String? @map("area_page_id")
+  emiratePageId String? @map("emirate_page_id")
+
+  /// Reading order. The board draws four; the gate asks for at least four.
+  position Int
+
+  question String
+  answer   String
+
+  /// Whether this one could only be asked about this scope.
+  ///
+  /// The fourth publish condition needs two of them, and it is the condition
+  /// that stops a writer clearing the gate with four generic questions and a
+  /// find-and-replace. Board 6a's own model is "Is Al Quoz the right area for
+  /// my job?" — it names the neighbourhoods this area serves and sends the
+  /// wrong buyer somewhere else, which nothing generic can do.
+  ///
+  /// Staff assert it. There is no way to measure it, and pretending otherwise
+  /// with a similarity heuristic would be a number nobody could argue with.
+  scopeSpecific Boolean @default(false) @map("scope_specific")
+
+  /// A number this answer needs, resolved at render.
+  ///
+  /// `quote_range` is the only one, and it is the reason the row is a content
+  /// record rather than a generated sentence: a person writes the sentence and
+  /// names where the number goes, and the number is measured. Below its
+  /// minimum sample the whole row does not render — it does not render a range
+  /// from four quotes and it does not say "not enough data".
+  liveToken String? @map("live_token")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  areaPage    AreaPage?    @relation(fields: [areaPageId], references: [id], onDelete: Cascade)
+  emiratePage EmiratePage? @relation(fields: [emiratePageId], references: [id], onDelete: Cascade)
+
+  @@unique([areaPageId, position])
+  @@unique([emiratePageId, position])
+  @@index([areaPageId])
+  @@index([emiratePageId])
+  @@map("landing_faq")
+}
+
+/// One curated link in the RELATED SEARCHES card. Capped at five in the service.
+///
+/// A link, not a query. The board asks for sibling scopes and adjacent
+/// categories chosen by somebody who knows what a buyer on this page asks next,
+/// and the nearest automatic version of that — "categories sharing a parent" —
+/// produces five links that are already in the sibling block at the bottom.
+model LandingRelatedSearch {
+  id String @id @default(cuid())
+
+  areaPageId    String? @map("area_page_id")
+  emiratePageId String? @map("emirate_page_id")
+
+  position Int
+  label    String
+  /// An internal path. Validated in the service: this card is five anchors on
+  /// the highest-authority template we own, and an external one spends that.
+  href     String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  areaPage    AreaPage?    @relation(fields: [areaPageId], references: [id], onDelete: Cascade)
+  emiratePage EmiratePage? @relation(fields: [emiratePageId], references: [id], onDelete: Cascade)
+
+  @@unique([areaPageId, position])
+  @@unique([emiratePageId, position])
+  @@index([areaPageId])
+  @@index([emiratePageId])
+  @@map("landing_related_search")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

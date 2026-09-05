@@ -48,6 +48,23 @@ export interface MapCanvasProps {
   excludedLabel?: string;
   selectedId?: string;
   onSelect?: (id: string) => void;
+  /**
+   * Off for a map that is orientation rather than a tool — board 6a §3.
+   *
+   * The hero card on a landing page shows where a trade sits and nothing else:
+   * no pan, no zoom, no marker interaction. The interactive map belongs to
+   * board 1c, where the buyer is filtering and the map is how they do it.
+   *
+   * This is a real difference and not a styling one. Interactive, the canvas is
+   * keyboard-pannable and every pin is a button, which puts twenty focus stops
+   * into the top of a page whose first job is to be read — and the `1c` map
+   * earns them because clicking a pin does something. Here it would not.
+   *
+   * The pins still render, and the `sr-only` list below is unchanged: a static
+   * map is still an image, and the information in it is still owed to a reader
+   * who cannot see it.
+   */
+  interactive?: boolean;
   /** Required: a map is an image and needs a name. */
   label: string;
   /** Falls back to fitting the pins. */
@@ -84,6 +101,7 @@ export function MapCanvas({
   emptyLabel,
   styleUrl = DEFAULT_STYLE,
   radii,
+  interactive = true,
 }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -163,6 +181,10 @@ export function MapCanvas({
         center: [center?.lng ?? pins[0]!.lng, center?.lat ?? pins[0]!.lat],
         zoom,
         attributionControl: { compact: true },
+        // Every handler in one flag: drag, scroll zoom, double-click, touch and
+        // the keyboard. A static map that still panned on a trackpad gesture
+        // would be a tool pretending not to be one.
+        interactive,
       });
       mapRef.current = map;
 
@@ -175,7 +197,14 @@ export function MapCanvas({
          name becomes this map's own.
       */
       map.getCanvas().setAttribute("aria-label", label);
-      map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
+      if (interactive) {
+        map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
+      } else {
+        // A canvas nobody can pan is not a control. Left focusable it is a tab
+        // stop that does nothing, which §09's keyboard rule counts as a trap of
+        // the quiet kind.
+        map.getCanvas().setAttribute("tabindex", "-1");
+      }
 
       map.on("load", () => {
         if (cancelled) return;
@@ -214,12 +243,21 @@ export function MapCanvas({
 
       const elements = new Map<string, { node: HTMLElement; kind: MapPin["kind"] }>();
       for (const pin of pins) {
-        const element = document.createElement("button");
-        element.type = "button";
-        element.setAttribute("aria-label", pin.label);
+        /*
+           A button where clicking one does something, a plain element where it
+           does not. The `sr-only` list below carries the names either way, so
+           nothing is lost by not making twenty decorative marks focusable.
+        */
+        const element = document.createElement(interactive ? "button" : "span");
+        if (interactive) {
+          (element as HTMLButtonElement).type = "button";
+          element.setAttribute("aria-label", pin.label);
+          element.addEventListener("click", () => onSelectRef.current?.(pin.id));
+        } else {
+          element.setAttribute("aria-hidden", "true");
+        }
         element.title = pin.label;
         element.className = pinClass(pin.kind, pin.id === selectedIdRef.current);
-        element.addEventListener("click", () => onSelectRef.current?.(pin.id));
         elements.set(pin.id, { node: element, kind: pin.kind });
         markersRef.current.push(
           new maplibre.Marker({ element }).setLngLat([pin.lng, pin.lat]).addTo(map),
@@ -253,7 +291,7 @@ export function MapCanvas({
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [visible, pins, styleUrl, center, zoom]);
+  }, [visible, pins, styleUrl, center, zoom, interactive, label]);
 
   /*
      Selection, applied to the markers already on the map.

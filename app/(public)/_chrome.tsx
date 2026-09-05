@@ -19,6 +19,18 @@ export interface DirectoryNavScope {
   label: string;
   /** "Search in HVAC & ventilation". */
   placeholder: string;
+  /**
+   * Facets carried into the search, as hidden fields.
+   *
+   * A GET form serialises its own fields and **discards the query string on its
+   * `action`** — so `action: "/search?area=al-quoz"` submits to `/search?q=…`
+   * with the area silently dropped. Board 6a §1 promises the opposite: *"A
+   * search from here starts pre-filtered to this scope and lands on `1c`."*
+   *
+   * A category page has no need of this because its scope is in the path it
+   * submits to. A landing page's scope is not, so it travels as fields.
+   */
+  hidden?: Record<string, string>;
 }
 
 export function DirectoryNav({
@@ -65,6 +77,10 @@ export function DirectoryNav({
             placeholder={scope?.placeholder ?? t("search.placeholder")}
             scope={scope?.label}
           />
+          {/* See `DirectoryNavScope.hidden`: a GET form drops its action's query. */}
+          {Object.entries(scope?.hidden ?? {}).map(([name, value]) => (
+            <input key={name} type="hidden" name={name} value={value} />
+          ))}
         </form>
       }
       laterLabel={t("chrome.later")}

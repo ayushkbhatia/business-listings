@@ -11,6 +11,15 @@ import {
   sweepAreaPages,
   unpublishAreaPage,
 } from "@/lib/seo/area";
+import {
+  refreshFreshness,
+  saveLandingFaq,
+  scopeForArea,
+  slugCollision,
+  slugCollisionMessage,
+  supplyDigest,
+  type LandingScope,
+} from "@/lib/seo/landing";
 import { areaMatrix } from "@/lib/content/matrix";
 import { VERIFIED_TIER } from "@/lib/verification";
 
@@ -44,6 +53,29 @@ const SHARE = DEFAULT_THRESHOLDS.minVerifiedShare;
 
 /** 250 words, built rather than pasted, for the reason the guide fixture is. */
 const INTRO = Array.from({ length: 60 }, () => "Al Quoz industrial supply for contractors.").join(" ");
+
+/**
+ * Board 6a's fourth condition: four questions, two of them scope-specific.
+ *
+ * Built rather than pasted for the same reason as the intro, and the split is
+ * the interesting part — three specific and one generic would pass, one
+ * specific and three generic would not, and the tests below walk both.
+ */
+const FAQ = [
+  { question: "One?", answer: "Yes.", scopeSpecific: true },
+  { question: "Two?", answer: "Yes.", scopeSpecific: true },
+  { question: "Three?", answer: "Yes.", scopeSpecific: false },
+  { question: "Four?", answer: "Yes.", scopeSpecific: false },
+];
+
+/** The scope, resolved once the fixtures exist. */
+let scope: LandingScope;
+
+/** Every condition but the one under test, satisfied. */
+async function writeCopy(reason: string) {
+  await saveAreaIntro({ actor: lead(), areaId, categoryId, intro: INTRO, reason });
+  await saveLandingFaq(lead(), scope, FAQ, reason);
+}
 
 function stamp() {
   seq += 1;
@@ -127,6 +159,8 @@ beforeAll(async () => {
     select: { id: true },
   });
   categoryId = category.id;
+
+  scope = (await scopeForArea(areaId, categoryId)) as LandingScope;
 }, 120_000);
 
 afterAll(async () => {
@@ -136,13 +170,9 @@ afterAll(async () => {
 
 describe("criterion 1 — a page below the floors cannot be published", () => {
   it("refuses on listings, and says how many are missing", async () => {
-    await saveAreaIntro({
-      actor: lead(),
-      areaId,
-      categoryId,
-      intro: INTRO,
-      reason: "Writing the intro before there is supply.",
-    });
+    // Copy first, so the refusal under test is the listing floor and not the
+    // two copy conditions arriving at the same time.
+    await writeCopy("Writing the copy before there is supply.");
     await addListings(10, 10);
 
     const result = await publishAreaPage(lead(), areaId, categoryId, "Trying it early.");
@@ -184,13 +214,7 @@ describe("criterion 1 — a page below the floors cannot be published", () => {
   }, 120_000);
 
   it("publishes once every floor is crossed, and the sitemap picks it up", async () => {
-    await saveAreaIntro({
-      actor: lead(),
-      areaId,
-      categoryId,
-      intro: INTRO,
-      reason: "The copy is written.",
-    });
+    await writeCopy("The copy is written.");
 
     const before = await areaPageState(areaId, categoryId);
     expect(before?.clearsFloors, JSON.stringify(before?.failing)).toBe(true);
@@ -272,6 +296,245 @@ describe("criterion 1 — a published page stops being live when supply drops", 
       ok: false,
       error: "not_published",
     });
+  }, 120_000);
+});
+
+/**
+ * Board 6a's fourth publish condition.
+ *
+ *   FAQ rows ≥ 4, at least 2 specific to this scope
+ *
+ * *"A scope can clear 60 listings and 30% verified and still not publish for
+ * want of 250 written words. That is deliberate: it is the whole difference
+ * between this template and a doorway generator."* The questions are the same
+ * argument one step further — four generic questions with the area name
+ * substituted in is the doorway page arriving through the part of the template
+ * nobody was counting.
+ *
+ * Runs after the blocks above, so supply is already over the floors and the
+ * only thing moving here is the copy.
+ */
+describe("the fourth condition — four questions, two of them local", () => {
+  it("blocks a page with supply and an intro but no questions", async () => {
+    await addListings(FLOOR, FLOOR);
+    await saveAreaIntro({
+      actor: lead(),
+      areaId,
+      categoryId,
+      intro: INTRO,
+      reason: "The paragraph, and nothing else.",
+    });
+    await saveLandingFaq(lead(), scope, [], "Clearing the questions.");
+
+    const result = await publishAreaPage(lead(), areaId, categoryId, "Trying it with no FAQ.");
+    expect(result).toMatchObject({ ok: false, error: "below_floors" });
+    if (result.ok) return;
+    expect(result.failing?.some((f) => f.reason === "faq_rows")).toBe(true);
+    // Say the number, as every other refusal on this screen does.
+    expect(result.message).toContain("4");
+  }, 120_000);
+
+  it("blocks four questions none of which is local", async () => {
+    await saveLandingFaq(
+      lead(),
+      scope,
+      FAQ.map((row) => ({ ...row, scopeSpecific: false })),
+      "Four questions, all of them generic.",
+    );
+
+    const result = await publishAreaPage(lead(), areaId, categoryId, "Trying it generic.");
+    expect(result).toMatchObject({ ok: false, error: "below_floors" });
+    if (result.ok) return;
+    expect(result.failing?.map((f) => f.reason)).toEqual(["faq_scope_specific"]);
+  }, 120_000);
+
+  it("publishes at four with two of them local", async () => {
+    await saveLandingFaq(lead(), scope, FAQ, "Two of them are about this area.");
+    expect((await publishAreaPage(lead(), areaId, categoryId, "All four conditions.")).ok).toBe(
+      true,
+    );
+    expect((await areaPageState(areaId, categoryId))?.live).toBe(true);
+  }, 120_000);
+
+  it("unpublishes a live page when its questions are taken away", async () => {
+    // The gate runs in both directions, as the supply floors do. A page that
+    // was published and then had its FAQ emptied is not grandfathered in.
+    await saveLandingFaq(lead(), scope, FAQ.slice(0, 2), "Cutting it to two.");
+    const state = await areaPageState(areaId, categoryId);
+    expect(state?.publishedAt).not.toBeNull();
+    expect(state?.live).toBe(false);
+    expect((await livePages()).some((page) => page.areaSlug === `${PREFIX}zone`)).toBe(false);
+
+    await saveLandingFaq(lead(), scope, FAQ, "Putting them back.");
+    expect((await areaPageState(areaId, categoryId))?.live).toBe(true);
+  }, 120_000);
+
+  it("writes an audit row naming what moved", async () => {
+    const audit = await prisma.auditEvent.findFirst({
+      where: { subject: `AreaPage:${PREFIX}zone/${PREFIX}trade` },
+      orderBy: { createdAt: "desc" },
+    });
+    expect(audit?.reason).toBeTruthy();
+    // The counts, not the prose. An audit row is a record of a decision, and
+    // pasting four paragraphs into it twice a week is not that.
+    expect(JSON.stringify(audit?.after ?? {})).toContain("rows");
+  }, 120_000);
+});
+
+/**
+ * Board 6a §Freshness — what `UPDATED 21 AUG 2026` means.
+ *
+ * Criterion 5 asks for both directions: *"`content_updated_at` does not change
+ * on a rebuild with no data or copy change; it does change when a listing
+ * enters or leaves the scope. Both directions tested."*
+ *
+ * The render deliberately still read 21 Aug although it was exported on 4 Sep.
+ * If the date tracked the build, every page on the domain would claim to have
+ * been updated this morning, which is both false and trivially detected.
+ */
+describe("criterion 5 — the UPDATED date moves for three reasons and no others", () => {
+  async function stamped(): Promise<Date | null> {
+    const row = await prisma.areaPage.findUnique({
+      where: { areaId_categoryId: { areaId, categoryId } },
+      select: { contentUpdatedAt: true },
+    });
+    return row?.contentUpdatedAt ?? null;
+  }
+
+  it("records the digest without moving the date on the first pass", async () => {
+    /*
+       The failure this guards against is a whole domain, not a page: a page
+       that has never been swept has no digest, and reading that as "different,
+       therefore changed" would move `content_updated_at` on every published
+       page the first night the sweep ran after the migration. §Freshness is
+       written against exactly that — every page claiming to have been updated
+       this morning, all of them moving together.
+    */
+    await prisma.areaPage.update({
+      where: { areaId_categoryId: { areaId, categoryId } },
+      data: { supplyDigest: null, contentUpdatedAt: new Date(Date.UTC(2026, 2, 3)) },
+    });
+
+    const result = await refreshFreshness(scope, new Date(Date.UTC(2026, 8, 9)));
+    expect(result?.moved).toBe(false);
+    expect((await stamped())?.toISOString()).toBe(new Date(Date.UTC(2026, 2, 3)).toISOString());
+
+    // And the digest is now recorded, so the next real change is seen.
+    const row = await prisma.areaPage.findUnique({
+      where: { areaId_categoryId: { areaId, categoryId } },
+      select: { supplyDigest: true },
+    });
+    expect(row?.supplyDigest).not.toBeNull();
+  }, 120_000);
+
+  /**
+   * A moment strictly after whatever is currently stamped.
+   *
+   * These tests run in order and each leaves the date where it put it, so a
+   * fixed calendar date in one of them can be *earlier* than the one the test
+   * above wrote — which fails on the assertion rather than on the behaviour.
+   * Relative to what is there, and the sweep's own `now` is a parameter for
+   * exactly this reason.
+   */
+  async function later(): Promise<Date> {
+    const current = await stamped();
+    return new Date((current?.getTime() ?? Date.now()) + 86_400_000);
+  }
+
+  it("moves when a listing enters the scope", async () => {
+    const before = await stamped();
+
+    await addListings(1, 1);
+    const result = await refreshFreshness(scope, await later());
+
+    expect(result?.moved).toBe(true);
+    expect((await stamped())?.getTime()).toBeGreaterThan((before as Date).getTime());
+  }, 120_000);
+
+  it("does not move on a rebuild with nothing changed", async () => {
+    const before = await stamped();
+    /*
+       The whole criterion. A second pass over the same supply is what a nightly
+       rebuild is, and it must leave the date exactly where it was — not "within
+       a second of", exactly.
+    */
+    const result = await refreshFreshness(scope, await later());
+    expect(result?.moved).toBe(false);
+    expect((await stamped())?.getTime()).toBe((before as Date).getTime());
+  }, 120_000);
+
+  it("moves when a listing in the scope changes verification tier", async () => {
+    // A count alone cannot see this: the same number of listings, one of them
+    // now checked. It is exactly the change a reader would call an update.
+    const before = await stamped();
+    const candidate = await prisma.business.findFirstOrThrow({
+      where: { slug: { startsWith: PREFIX }, primaryCategoryId: categoryId, verificationTier: 0 },
+      select: { id: true },
+    });
+    await prisma.business.update({
+      where: { id: candidate.id },
+      data: { verificationTier: VERIFIED_TIER, verifiedAt: new Date() },
+    });
+
+    const result = await refreshFreshness(scope, await later());
+    expect(result?.moved).toBe(true);
+    expect((await stamped())?.getTime()).toBeGreaterThan((before as Date).getTime());
+  }, 120_000);
+
+  it("moves when the copy is edited", async () => {
+    const before = await stamped();
+    await saveAreaIntro({
+      actor: lead(),
+      areaId,
+      categoryId,
+      intro: `${INTRO} One more sentence.`,
+      reason: "Adding a sentence.",
+    });
+    expect((await stamped())?.getTime()).toBeGreaterThan((before as Date).getTime());
+  }, 120_000);
+
+  it("digests the same supply to the same value", async () => {
+    // The property the whole mechanism rests on. If this were unstable — a
+    // `Set` iterated in insertion order, say — every page would claim to have
+    // been updated on every sweep.
+    expect(await supplyDigest(scope)).toBe(await supplyDigest(scope));
+  }, 120_000);
+});
+
+/**
+ * Criterion 7 — one namespace across areas and trades.
+ *
+ * The router flattened the emirate class to two segments, so no middle segment
+ * is ambiguous any more. What survives is the namespace: an area and a category
+ * sharing a slug would put `/dubai/foo` and `/dubai/foo/bar` in two classes
+ * reading two tables, and the first redirect or canonical written between them
+ * would be wrong.
+ */
+describe("criterion 7 — areas and trades share one slug namespace", () => {
+  it("refuses a trade slug that an area already holds", async () => {
+    const collision = await slugCollision(`${PREFIX}zone`, "category");
+    expect(collision).toMatchObject({ heldBy: "area" });
+    expect(slugCollisionMessage(collision!)).toContain(`${PREFIX}zone`);
+  }, 120_000);
+
+  it("refuses an area slug that a trade already holds", async () => {
+    const collision = await slugCollision(`${PREFIX}trade`, "area");
+    expect(collision).toMatchObject({ heldBy: "category" });
+  }, 120_000);
+
+  it("does not call a row a collision with itself", async () => {
+    // Renaming a category to the slug it already has is not a collision.
+    expect(await slugCollision(`${PREFIX}trade`, "area", { id: categoryId })).toBeNull();
+  }, 120_000);
+
+  it("the two namespaces are disjoint in the seeded data", async () => {
+    const [areas, categories] = await Promise.all([
+      prisma.area.findMany({ select: { slug: true } }),
+      prisma.category.findMany({ select: { slug: true } }),
+    ]);
+    const taken = new Set(areas.map((row) => row.slug));
+    const clashes = categories.map((row) => row.slug).filter((slug) => taken.has(slug));
+    expect(clashes).toEqual([]);
   }, 120_000);
 });
 

@@ -35,6 +35,7 @@ and it is the one that argues back.
 /guides/:slug                           Guide article                         [6d]  built h5s1
 /best/:slug                             Curated list                          [6b]  built h5s4
 /categories                             Category index                        [6c]  built h5s2
+/:emirate/:category                     Trade across one emirate — 84 of them [6a]  built h5s2
 /:emirate/:area/:category               Area landing page                     [6a]  built h5s3
 /lp/:campaign                           Campaign landing                     [10i]  built h5s5
 /report/:subject                        Report a listing (modal route)       [10j]

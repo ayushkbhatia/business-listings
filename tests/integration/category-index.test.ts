@@ -12,6 +12,22 @@ import {
 } from "@/lib/seo/emirate";
 import type { Actor } from "@/lib/auth/roles";
 import { VERIFIED_TIER } from "@/lib/verification";
+import { saveLandingFaq, scopeForEmirate } from "@/lib/seo/landing";
+
+/**
+ * Board 6a's fourth publish condition, as a fixture.
+ *
+ * Four questions with two of them answerable only about this scope. The
+ * emirate pages publish on the same four conditions as the area pages — one
+ * gate, one `landingState`, because two that agreed until somebody changed one
+ * is how the sitemap ends up carrying a URL that 404s.
+ */
+const FAQ = [
+  { question: "What is stocked here?", answer: "Most of it.", scopeSpecific: true },
+  { question: "Who delivers same day?", answer: "Several.", scopeSpecific: true },
+  { question: "Is a trade licence checked?", answer: "Against the issuing authority.", scopeSpecific: false },
+  { question: "How fast do they reply?", answer: "It is measured.", scopeSpecific: false },
+];
 
 /**
  * Board 6c's load-bearing logic, against a real database.
@@ -119,6 +135,21 @@ async function sectorWithSupply(options: {
       intro: intro(),
       reason: "Fixture for the category index tests.",
     });
+    /*
+       And the questions, which board 6a made the fourth publish condition and
+       applied to both landing classes — the 84 emirate pages this matrix links
+       included. `withIntro` now means "the copy is written", which is the two
+       of them: a paragraph and four questions, two of them local.
+    */
+    const scope = await scopeForEmirate(options.emirate, category.id);
+    if (scope) {
+      await saveLandingFaq(
+        await opsLead(),
+        scope,
+        FAQ,
+        "Fixture for the category index tests.",
+      );
+    }
   }
 
   for (let i = 0; i < options.listings; i += 1) {

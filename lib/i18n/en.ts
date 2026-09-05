@@ -131,6 +131,11 @@ export const en = {
   "action.duplicate": "Duplicate",
   "action.archive": "Archive",
   "action.delete": "Delete",
+  // Not "Delete". Taking a row out of a draft list is not a destructive action
+  // — nothing is written until Save — and §05's destructive grammar (a confirm
+  // dialog, or an Undo toast) would be ceremony over a row somebody can add
+  // back by typing it.
+  "action.remove": "Remove",
   "action.more": "More actions",
   "action.row_menu": "More actions for this row",
 
@@ -4418,6 +4423,12 @@ export const en = {
   "ranking.eyebrow": "Supply",
   "ranking.meta": "{live} live boosts, {expired} expired",
   "ranking.weights": "What decides the order",
+  // Board 6a §Ranking — the relevance weight on a page with no query.
+  "ranking.browse_mode": "Relevance on a page with no query",
+  "ranking.browse_hint": "The area and emirate landing pages rank on these weights and have no search box. Left alone, the relevance weight multiplies zero and this screen stops governing a few hundred pages.",
+  "ranking.browse.redistribute": "Share the points out",
+  "ranking.browse.category_depth": "Score category-match depth",
+  "ranking.browse_preview": "On a landing page: {preview}",
   "ranking.weights_hint": "Relative weights. What matters is the ratio between them, not the total.",
   "ranking.weight.relevance": "Text match",
   "ranking.weight.verificationTier": "Verification tier",
@@ -4979,7 +4990,83 @@ export const en = {
   "landing.verified_share": "{verified} of {listings} verified",
   "landing.no_facts": "Nothing is listed here yet, so there is nothing to summarise.",
 
-  // ── Area landing pages, board 6a ──────────────────────────────────────────
+  // ── Area and emirate landing pages, board 6a ──────────────────────────────
+  //
+  // One template, two page classes. The H1 pattern is `{Category} companies in
+  // {Area}, {Emirate}` — "companies" rather than "suppliers", which is the word
+  // the board draws and the word a buyer types into Google.
+  //
+  // Every count in here arrives as a formatted string from a query. Criterion 1
+  // is "no count is a constant, in the body, the title or the meta description",
+  // and a catalogue entry with a number written into it is exactly that.
+  "landing.h1_area": "{category} companies in {area}, {emirate}",
+  "landing.h1_emirate": "{category} companies in {emirate}",
+  // No "| Business Listings" suffix. The root layout's title template already
+  // appends " — Business Listings" to every page, and the board's title written
+  // out in full includes it — writing it here as well produced
+  // "… — 62 listed | Business Listings — Business Listings".
+  "landing.title": "{subject} — {listings} listed",
+  // The fallback only. §SEO asks for one written sentence per scope, which
+  // lives on the page row; this is what a page that clears all four conditions
+  // reads like before somebody has written one.
+  "landing.meta_fallback": "{listings} {category} companies in {place}, {verified} with a trade licence checked against the issuing authority. Compare reply times and send one enquiry.",
+  "landing.search_placeholder": "Search {category} suppliers in {place}",
+
+  // The stat line. "Open now" is absent, never nought, where nobody in the
+  // scope has hours on file — absent data is not evidence of a shut door.
+  // Pluralised on `count`, rendered from `display`. `t()` selects the form from
+  // a raw number and interpolates with `String(value)`, which would print 1204
+  // where the rest of the site prints 1,204 — so the number arrives twice, once
+  // to choose the words and once already formatted.
+  "landing.stat_listings": { one: "{display} company", other: "{display} companies" },
+  "landing.stat_verified": {
+    one: "{display} with a verified trade licence",
+    other: "{display} with verified trade licences",
+  },
+  "landing.stat_open": "{count} open now",
+  "landing.updated": "Updated {date}",
+
+  "landing.subcategories_label": "Narrow this page",
+  "landing.chip_all": "All {count}",
+
+  "landing.map_label": "Where these companies are in {place}",
+  "landing.nearby_areas": "Nearby areas",
+
+  "landing.results_heading": "Verified {category} companies in {place}",
+  // The board's fifth correction. "Ranked by verification, then response time"
+  // described a two-key sort we do not run: it is one weighted config, shared
+  // with boards 1b and 1c and edited on 12c, and on this page the relevance
+  // weight has no query to score against.
+  "landing.ranking_caption": "Ranked on the same config as search — verification, response time, completeness",
+  "landing.rfq_prompt": "Not sure which to call? Send one requirement and let them come to you.",
+  "landing.rfq_action": "Post an RFQ to {place} {category}",
+  "landing.show_all": "Show all {count} companies",
+  "landing.next": "Next",
+  "landing.previous": "Previous",
+  "landing.pagination_label": "More companies",
+
+  "landing.faq_heading": "Questions buyers ask about {place} {category}",
+  // The resolved live token. The sample and the window are in the sentence
+  // rather than behind it: a range drawn from 34 quotes and one drawn from 900
+  // are different facts, and a reader deciding whether to trust us is entitled
+  // to know which this is.
+  "landing.faq.quote_range": "AED {low} to AED {high}, across {sample} quotes sent through this platform in the last {months} months",
+
+  "landing.related_searches": "Related searches",
+  "landing.read_next": "Read next",
+  "landing.kicker_list": "Curated list",
+  "landing.kicker_guide": "Guide · {minutes} min",
+  "landing.claim_subject": "{category} company in {place}?",
+  // Claiming enters the ranking; it does not buy a position in it. The board's
+  // fourth correction: "claim it free and you'll appear above them" implied
+  // that claiming outranks the verified, which is not what the config does.
+  "landing.claim_body": "{listings} businesses are listed on this page and {unclaimed} of them are unclaimed. Unclaimed listings rank last here — claiming yours is free and puts it in the ranking, and verifying the licence is what lifts it.",
+  "landing.claim_action": "Claim your listing",
+
+  "landing.siblings_areas": "{category} in other {emirate} areas",
+  "landing.siblings_emirates": "{category} in other emirates",
+  "landing.siblings_trades": "Other trades in {place}",
+
   "area.title": "{category} suppliers in {area}",
   "area.meta_description": "{listings} {category} suppliers with premises in {area}, {verified} with a trade licence we have checked. Send one enquiry to up to eight of them.",
   "area.in_emirate": "{area}, {emirate}",
@@ -4995,6 +5082,25 @@ export const en = {
   "area.empty_body": "The directory covers the whole of the UAE, and the trade page will have suppliers on it.",
   "area.browse_trade": "Browse {category}",
 
+  // ── Board 6a's content records, on the matrix ─────────────────────────────
+  "matrix.not_here": "That page is not here.",
+  "matrix.meta_description": "Meta description",
+  "matrix.meta_hint": "{characters} of {max} characters. One written sentence about this scope — Google shows about 155. Leave it empty and the page falls back to a derived one.",
+  "matrix.faq": "Questions buyers ask",
+  // The gate, said while the writer is working rather than at the moment they
+  // press publish.
+  "matrix.faq_progress": "{rows} questions, {specific} of them specific to this scope. It publishes at 4 and 2.",
+  "matrix.faq_question": "Question {position}",
+  "matrix.faq_answer": "Answer",
+  "matrix.faq_scope_specific": "Only answerable about this scope",
+  "matrix.faq_quote_range": "Carries the quote range",
+  "matrix.faq_add": "Add a question",
+  "matrix.related": "Related searches",
+  "matrix.related_label": "Label",
+  "matrix.related_href": "Path",
+  "matrix.related_add": "Add a related search",
+  "matrix.related_hint": "Five at most, and every one a path of ours starting with a slash. This card is five anchors on the highest-authority template we own.",
+
   // ── Area pages on the admin matrix, board 6f ──────────────────────────────
   "matrix.area_tab": "Area pages",
   "matrix.area_caption": "Every trade in every area, and whether it publishes",
@@ -5009,7 +5115,7 @@ export const en = {
   "matrix.live_held": "Held",
   "matrix.area_published": "Published. It is live and in the sitemap on the next build.",
   "matrix.area_unpublished": "Unpublished. It stops being served as an indexable page immediately.",
-  "matrix.area_note": "An area page publishes above {listings} listings and {share}% verified, with {words} words of intro. A page that drops below the floor stops being served immediately and is unpublished by the next sweep, with the numbers in the audit log.",
+  "matrix.area_note": "An area page publishes above {listings} listings and {share}% verified, with {words} words of intro and four questions, two of them answerable only about this scope. A scope that fails any of the four has no URL at all — it is a 404, absent from the sitemap and from every link block on every sibling page. A page that drops below a floor stops being served immediately and is unpublished by the next sweep, with the numbers in the audit log.",
 
   // ── Curated lists, board 6b ───────────────────────────────────────────────
   //

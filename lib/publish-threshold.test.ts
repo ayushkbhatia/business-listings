@@ -13,12 +13,21 @@ import {
  */
 const good = { listings: 80, verified: 30, introWords: 300 };
 
-describe("the thresholds are the ones board 6f states", () => {
-  it("is 60 listings, 30 per cent verified, 250 words", () => {
+describe("the thresholds are the ones boards 6f and 6a state", () => {
+  it("is 60 listings, 30 per cent verified, 250 words, 4 questions of which 2 are local", () => {
+    // Board 6f stated the first three. Board 6a added the fourth and made all
+    // four apply to the area class as well:
+    //
+    //   listings        ≥ Category.publishThreshold      (60)
+    //   verified share  ≥ Category.verifiedShareMin      (30%)
+    //   intro copy      ≥ 250 words, human-written, unique to this scope
+    //   FAQ rows        ≥ 4, at least 2 specific to this scope
     expect(DEFAULT_THRESHOLDS).toEqual({
       minListings: 60,
       minVerifiedShare: 0.3,
       minIntroWords: 250,
+      minFaqRows: 4,
+      minScopeSpecificFaqRows: 2,
     });
   });
 });
@@ -82,8 +91,54 @@ describe("evaluatePublish", () => {
         minListings: 10,
         minVerifiedShare: 0.5,
         minIntroWords: 20,
+        minFaqRows: 1,
+        minScopeSpecificFaqRows: 1,
       }),
     ).toBe(true);
+  });
+});
+
+/**
+ * Board 6a's fourth condition.
+ *
+ *   FAQ rows ≥ 4, at least 2 specific to this scope
+ *
+ * The interesting property is that it is **opt-in**: the two landing classes
+ * pass an FAQ count and are gated on it, and the taxonomy matrix and the guides
+ * pass neither and keep the three conditions they have always had. An absent
+ * count is not a zero — if it were, board 6f's matrix would grey out every
+ * category on the site for want of a table nothing writes to.
+ */
+describe("the FAQ condition", () => {
+  const clears = { listings: 61, verified: 20, introWords: 300 };
+
+  it("does not apply where the caller passes no FAQ count", () => {
+    expect(isPublishable(clears)).toBe(true);
+    expect(evaluatePublish(clears).failures).toEqual([]);
+  });
+
+  it("blocks a page with fewer than four questions", () => {
+    const decision = evaluatePublish({ ...clears, faqRows: 3, scopeSpecificFaqRows: 3 });
+    expect(decision.publishable).toBe(false);
+    expect(decision.failures).toContainEqual({ reason: "faq_rows", have: 3, need: 4 });
+  });
+
+  it("blocks four generic questions, which is the whole point of it", () => {
+    // Four questions with the area name substituted in is the doorway page the
+    // other three conditions were written to stop, arriving through the one
+    // part of the template nobody was counting.
+    const decision = evaluatePublish({ ...clears, faqRows: 4, scopeSpecificFaqRows: 1 });
+    expect(decision.publishable).toBe(false);
+    expect(decision.failures).toEqual([{ reason: "faq_scope_specific", have: 1, need: 2 }]);
+  });
+
+  it("passes at four questions with two of them specific", () => {
+    expect(isPublishable({ ...clears, faqRows: 4, scopeSpecificFaqRows: 2 })).toBe(true);
+  });
+
+  it("reads a missing scope-specific count as none", () => {
+    const decision = evaluatePublish({ ...clears, faqRows: 6 });
+    expect(decision.failures).toEqual([{ reason: "faq_scope_specific", have: 0, need: 2 }]);
   });
 });
 

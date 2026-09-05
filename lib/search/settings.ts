@@ -4,11 +4,14 @@ import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
 import {
+  DEFAULT_BROWSE_RELEVANCE_MODE,
   DEFAULT_WEIGHTS,
+  isBrowseRelevanceMode,
   MAX_BOOST_DAYS,
   MAX_BOOST_POINTS,
   PLAN_TIER_CEILING,
   WEIGHT_KEYS,
+  type BrowseRelevanceMode,
   type RankingWeights,
 } from "./ranking";
 
@@ -35,7 +38,14 @@ import {
 // Re-exported so server callers have one import. The values live in
 // `ranking.ts`, which is pure — the editor is a client component and cannot
 // reach anything that touches Prisma.
-export { MAX_BOOST_DAYS, MAX_BOOST_POINTS, PLAN_TIER_CEILING, WEIGHT_KEYS } from "./ranking";
+export {
+  BROWSE_RELEVANCE_MODES,
+  MAX_BOOST_DAYS,
+  MAX_BOOST_POINTS,
+  PLAN_TIER_CEILING,
+  WEIGHT_KEYS,
+  type BrowseRelevanceMode,
+} from "./ranking";
 
 /**
  * The live weights.
@@ -57,7 +67,33 @@ export async function liveWeights(): Promise<RankingWeights> {
   };
 }
 
-export type WeightsRefusal = "out_of_range" | "all_zero" | "plan_tier_too_high" | "nothing_changed";
+/**
+ * The named mode for a page with no query — board 6a §Ranking.
+ *
+ * Read separately from the weights because the callers differ: every search
+ * reads the weights and only the landing templates read this. Falls back to the
+ * default on a missing row or an unrecognised string, for the reason
+ * `liveWeights` falls back — a landing page ranked by the recommendation is a
+ * better outcome than one that throws because a settings row is missing or
+ * because somebody wrote a mode into the column by hand.
+ */
+export async function liveBrowseRelevanceMode(): Promise<BrowseRelevanceMode> {
+  const row = await prisma.rankingWeights.findUnique({
+    where: { id: "current" },
+    select: { browseRelevanceMode: true },
+  });
+  if (!row || !isBrowseRelevanceMode(row.browseRelevanceMode)) {
+    return DEFAULT_BROWSE_RELEVANCE_MODE;
+  }
+  return row.browseRelevanceMode;
+}
+
+export type WeightsRefusal =
+  | "out_of_range"
+  | "all_zero"
+  | "plan_tier_too_high"
+  | "unknown_browse_mode"
+  | "nothing_changed";
 
 export type WeightsResult =
   | { ok: true }
@@ -67,6 +103,8 @@ const WEIGHT_MESSAGE: Record<WeightsRefusal, string> = {
   out_of_range: "Each weight is a whole number from 0 to 100.",
   all_zero: "They cannot all be nought. Everything would rank equally, which is no ranking at all.",
   plan_tier_too_high: `Plan tier stops at ${PLAN_TIER_CEILING}. Above that the results start reading as bought, and a directory that sells its way to the top is one nobody comes back to.`,
+  unknown_browse_mode:
+    "A page with no query either redistributes the relevance points or scores them as category-match depth. There is no third answer, and leaving the weight to multiply zero is not one of the two.",
   nothing_changed: "Those are the numbers it already has.",
 };
 
@@ -74,6 +112,15 @@ export async function setWeights(
   actor: Actor,
   next: RankingWeights,
   reason: string,
+  /**
+   * The browse mode, when the editor is submitting one.
+   *
+   * Optional so every existing caller and test keeps working; when it is
+   * absent the stored mode is left exactly where it is rather than reset to
+   * the default, which would silently undo a staff decision on every weight
+   * change.
+   */
+  browseMode?: string,
 ): Promise<WeightsResult> {
   for (const key of WEIGHT_KEYS) {
     const value = next[key];
@@ -91,10 +138,19 @@ export async function setWeights(
       message: WEIGHT_MESSAGE.plan_tier_too_high,
     };
   }
+  if (browseMode !== undefined && !isBrowseRelevanceMode(browseMode)) {
+    return {
+      ok: false,
+      error: "unknown_browse_mode",
+      message: WEIGHT_MESSAGE.unknown_browse_mode,
+    };
+  }
 
   const current = await liveWeights();
+  const currentMode = await liveBrowseRelevanceMode();
   const moved = WEIGHT_KEYS.filter((key) => current[key] !== next[key]);
-  if (moved.length === 0) {
+  const modeMoved = browseMode !== undefined && browseMode !== currentMode;
+  if (moved.length === 0 && !modeMoved) {
     return { ok: false, error: "nothing_changed", message: WEIGHT_MESSAGE.nothing_changed };
   }
 
@@ -108,15 +164,22 @@ export async function setWeights(
         tx,
       },
       async () => {
+        const mode = browseMode ?? currentMode;
         await tx.rankingWeights.upsert({
           where: { id: "current" },
-          create: { id: "current", ...next },
-          update: next,
+          create: { id: "current", ...next, browseRelevanceMode: mode },
+          update: { ...next, browseRelevanceMode: mode },
         });
         return {
           result: null,
-          before: Object.fromEntries(moved.map((key) => [key, current[key]])),
-          after: Object.fromEntries(moved.map((key) => [key, next[key]])),
+          before: {
+            ...Object.fromEntries(moved.map((key) => [key, current[key]])),
+            ...(modeMoved ? { browseRelevanceMode: currentMode } : {}),
+          },
+          after: {
+            ...Object.fromEntries(moved.map((key) => [key, next[key]])),
+            ...(modeMoved ? { browseRelevanceMode: browseMode } : {}),
+          },
         };
       },
     ),

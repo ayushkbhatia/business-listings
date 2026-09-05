@@ -156,9 +156,9 @@ page, no field in our system that could hold one, and no arrangement under which
 up. Two of the suppliers below are on paid subscriptions and two are not, and you cannot tell
 which from the order — because the order does not know.
 
-The one thing that lifts a supplier is a site visit: somebody from our field team standing in
-the building, seeing the stock and meeting the staff. That is expensive for us and impossible
-to fake, which is exactly why it is the only weighted rule.
+The one thing that lifts a supplier is a verified trade licence: the number on the listing
+checked against the issuing authority, DED or the relevant free zone, and re-checked when it
+expires. That check is ours, it is not for sale, and it is the only weighted rule.
 `.trim();
 
   await db.curatedList.upsert({

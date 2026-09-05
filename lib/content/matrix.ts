@@ -119,7 +119,15 @@ export async function pageMatrix(): Promise<Matrix> {
     publishable: rows.filter((row) => row.publishable).length,
     // The number the screen exists for: pages that would publish today if
     // somebody wrote a paragraph.
-    copyOnly: rows.filter((row) => row.failing.length === 1 && row.failing[0] === "copy").length,
+    /*
+       Copy, now in two senses: the paragraph and the questions. Both are things
+       a person can fix this afternoon, and neither is a wait for recruitment —
+       which is the distinction this number exists to draw.
+    */
+    copyOnly: rows.filter(
+      (row) =>
+        row.failing.length > 0 && row.failing.every((gate) => gate === "copy" || gate === "faq"),
+    ).length,
   };
 }
 
@@ -149,9 +157,20 @@ export interface AreaMatrixRow {
   introWords: number;
   /** The paragraph itself, so the editor opens with what is there. */
   intro: string | null;
+  /** The written sentence, board 6a §SEO. Null falls back to a derived one. */
+  metaDescription: string | null;
+  /** The per-scope questions — board 6a's fourth condition. */
+  faq: {
+    question: string;
+    answer: string;
+    scopeSpecific: boolean;
+    liveToken: string | null;
+  }[];
+  /** The RELATED SEARCHES card, capped at five. */
+  relatedSearches: { label: string; href: string }[];
   /** Staff have published it. Not the same as live. */
   published: boolean;
-  /** Published and the floors currently hold. */
+  /** Published and the four conditions currently hold. */
   live: boolean;
   failing: string[];
 }
@@ -171,8 +190,19 @@ export async function areaMatrix(): Promise<AreaMatrix> {
     select: {
       areaId: true,
       categoryId: true,
+      metaDescription: true,
       area: { select: { slug: true, name: true, emirate: true } },
       category: { select: { slug: true, name: true } },
+      /*
+         The content records the editor opens with. Read here rather than in a
+         second query per row that the editor fires on open: this screen already
+         walks every authored pair, and a panel that has to fetch before it can
+         show what is there is a panel that flashes empty.
+      */
+      relatedSearches: {
+        orderBy: { position: "asc" },
+        select: { label: true, href: true },
+      },
     },
   });
 
@@ -187,6 +217,17 @@ export async function areaMatrix(): Promise<AreaMatrix> {
     if (state.failing.some((f) => f.reason === "intro_words")) failing.push("copy");
     if (state.failing.some((f) => f.reason === "listings")) failing.push("listings");
     if (state.failing.some((f) => f.reason === "verified_share")) failing.push("verified");
+    /*
+       Board 6a's fourth condition, as one label rather than two.
+
+       "4 rows, 2 of them local" is one thing to fix — a writer opens the panel
+       and writes questions. Splitting it into `faq` and `faq_local` would put
+       two chips on a row that describe the same afternoon's work, and
+       `copyOnly` would stop meaning what it says.
+    */
+    if (state.failing.some((f) => f.reason === "faq_rows" || f.reason === "faq_scope_specific")) {
+      failing.push("faq");
+    }
 
     rows.push({
       areaId: page.areaId,
@@ -198,6 +239,14 @@ export async function areaMatrix(): Promise<AreaMatrix> {
       verified: state.verified,
       introWords: state.introWords,
       intro: state.intro,
+      metaDescription: page.metaDescription,
+      faq: state.faq.map((row) => ({
+        question: row.question,
+        answer: row.answer,
+        scopeSpecific: row.scopeSpecific,
+        liveToken: row.liveToken,
+      })),
+      relatedSearches: page.relatedSearches.map((row) => ({ label: row.label, href: row.href })),
       published: state.publishedAt !== null,
       live: state.live,
       failing,

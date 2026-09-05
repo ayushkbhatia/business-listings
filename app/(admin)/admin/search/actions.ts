@@ -30,12 +30,31 @@ export async function saveWeights(formData: FormData): Promise<ActionResult> {
       seat.actor,
       next,
       String(formData.get("reason") ?? ""),
+      /*
+         Board 6a §Ranking. The landing pages have no query, so the relevance
+         weight has nothing to score against; this is the named mode that says
+         what happens to its points, and it lives on the same audited row as the
+         weights themselves so that whoever moves a slider can see it.
+      */
+      String(formData.get("browseRelevanceMode") ?? ""),
     );
     if (!result.ok) return { ok: false, error: result.message };
 
     revalidatePath("/admin/search");
     // Search is cached. Without this the weights change and the results do not.
     revalidatePath("/search");
+    /*
+       And the landing pages, which rank on these weights through the browse
+       mode and cache for five minutes. Board 6a acceptance 8 asks that setting
+       a weight to nought measurably reorders one of them, which it cannot do
+       from behind a stale render.
+
+       `layout` because the two page classes are a few hundred URLs under one
+       dynamic segment and there is no list of them to walk here — `livePages()`
+       has one, but calling it from a mutation to revalidate three hundred paths
+       is a fan-out on a screen somebody uses twice a year.
+    */
+    revalidatePath("/[emirate]/[area]", "layout");
     /*
        Board 1l criterion 6: moving the plan-tier weight changes what `/pricing`
        claims a paid plan does to a supplier's ranking. That page reads the live

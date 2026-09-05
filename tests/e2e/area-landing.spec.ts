@@ -1,111 +1,241 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
- * Handoff 5, step 3 — board 6a, and criterion 1 as a person sees it.
+ * Board 6a — the area landing page, as a buyer and a crawler get it.
  *
- * The checkpoint the KICKOFF names: "show me a page blocked by the threshold
- * and the same page publishing once seed data crosses it." The seed builds both
- * — HVAC in Al Quoz over the floor, Safety & PPE in Ras Al Khor under it — and
- * everything below is one or the other.
+ * The seed builds all three states this spec needs: HVAC in Al Quoz over the
+ * floors, HVAC in Jebel Ali over them too so the link graph has somewhere to
+ * point, and Safety & PPE in Ras Al Khor under them.
  *
- * `tests/integration/area-pages.test.ts` proves the rule at the real numbers
- * with its own fixtures. This proves the page a buyer and a crawler get.
+ * ## What changed when board 6a landed
+ *
+ * This file used to assert that a held-back scope was **served** at 200 with a
+ * `noindex` tag and a panel naming the number holding it. §the-publish-gate
+ * overrules that:
+ *
+ *   *"An unpublished scope has no URL. It is not a thin page, not a `noindex`
+ *    page, not a redirect. It 404s and it is absent from the sitemap and from
+ *    every link block on every sibling page."*
+ *
+ * The reason is arithmetic rather than taste. This template addresses a few
+ * hundred URLs, and a soft 404 on one of them teaches a crawler that guesses
+ * render. The recruiter-facing information did not go anywhere — the admin
+ * matrix shows every held scope and the number holding it.
+ *
+ * `tests/integration/area-pages.test.ts` proves the four conditions at the real
+ * numbers with its own fixtures. This proves the page.
  */
 
 const LIVE = "/dubai/al-quoz-industrial-1/hvac-and-ventilation";
+const SIBLING = "/dubai/jebel-ali-free-zone/hvac-and-ventilation";
+const EMIRATE = "/dubai/hvac-and-ventilation";
 const HELD = "/dubai/ras-al-khor-industrial-2/safety-and-ppe";
 
-async function jsonLd(page: import("@playwright/test").Page) {
+async function jsonLd(page: Page) {
   const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
   return blocks.map((block) => JSON.parse(block) as Record<string, unknown>);
 }
 
-test.describe("a page that clears the floors", () => {
-  test("says the numbers and renders the authored intro as paragraphs", async ({ page }) => {
+test.describe("a scope that clears all four conditions", () => {
+  test("leads with the pattern, the live counts and the content date", async ({ page }) => {
     await page.goto(LIVE);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      "HVAC & ventilation suppliers in Al Quoz Industrial 1",
+
+    // §3's H1 pattern: `{Category} companies in {Area}, {Emirate}`. "companies",
+    // not "suppliers" — it is the word the board draws and the word a buyer types.
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "HVAC & ventilation companies in Al Quoz Industrial 1, Dubai",
     );
-    // Say the number, never "many suppliers".
-    await expect(page.getByText(/\d+ of \d+ verified/)).toBeVisible();
+    await expect(page.locator("h1")).toHaveCount(1);
+
+    // Criterion 1: every count is a query result. Say the number.
+    await expect(page.getByText(/^\d+ companies$/)).toBeVisible();
+    await expect(page.getByText(/^\d+ with verified trade licences?$/)).toBeVisible();
 
     /*
-       The 250-word floor exists so a human writes something. One `<p>` of 350
-       words is a wall nobody reads, which would defeat the point of insisting.
+       §Freshness. The seed writes 21 Aug 2026 and the page must print it
+       however many times the site is rebuilt — if the date tracked the build,
+       every page on the domain would claim to have been updated this morning.
     */
-    const paragraphs = page.locator("main p").filter({ hasText: /Al Quoz Industrial 1 is where/ });
-    await expect(paragraphs.first()).toBeVisible();
-    expect(await page.locator("main p").count()).toBeGreaterThan(3);
+    await expect(page.getByText(/UPDATED 21 AUG 2026/i)).toBeVisible();
   });
 
-  test("is asked to be indexed, and is in the sitemap", async ({ page, request }) => {
+  test("ranks ten suppliers, and shows a reply band only where one is measured", async ({
+    page,
+  }) => {
     await page.goto(LIVE);
-    expect(await page.locator('meta[name="robots"]').count()).toBe(0);
+    const rows = page.locator("ol > li").filter({ has: page.getByRole("article") });
+    await expect(rows).toHaveCount(10);
 
-    const xml = await (await request.get("/sitemap.xml")).text();
-    expect(xml).toContain(LIVE);
+    // §4: "A seller with no answered enquiries shows no band at all — never
+    // 'unknown', never a slow-looking placeholder."
+    await expect(page.getByText("unknown", { exact: false })).toHaveCount(0);
   });
 
-  test("carries ItemList, FAQPage and BreadcrumbList", async ({ page }) => {
+  test("says the ranking basis, and does not describe a sort we do not run", async ({ page }) => {
     await page.goto(LIVE);
-    const types = (await jsonLd(page)).map((block) => block["@type"]);
+    // The board's fifth correction. One weighted config shared with 1b and 1c.
+    await expect(page.getByText(/Ranked on the same config as search/)).toBeVisible();
+    await expect(page.getByText(/Ranked by verification, then/)).toHaveCount(0);
+  });
+
+  test("offers the compact enquiry verb, never a banned one", async ({ page }) => {
+    await page.goto(LIVE);
+    // CLAUDE.md's verb table: "Enquire" is the compact form on cards and rows.
+    await expect(page.getByRole("link", { name: "Enquire" }).first()).toBeVisible();
+    for (const banned of ["Get a quote", "Add to cart", "Buy now", "Price on request"]) {
+      await expect(page.getByText(banned, { exact: false })).toHaveCount(0);
+    }
+  });
+
+  test("carries BreadcrumbList, ItemList and FAQPage, and the breadcrumb matches", async ({
+    page,
+  }) => {
+    await page.goto(LIVE);
+    const blocks = await jsonLd(page);
+    const types = blocks.map((block) => block["@type"]);
     expect(types).toContain("BreadcrumbList");
-    expect(types).toContain("FAQPage");
     expect(types).toContain("ItemList");
+    expect(types).toContain("FAQPage");
 
-    const list = (await jsonLd(page)).find((block) => block["@type"] === "ItemList");
-    expect(Number(list?.numberOfItems)).toBeGreaterThan(0);
+    /*
+       §2: "Matches the BreadcrumbList JSON-LD exactly — same labels, same
+       order, same depth." Both are built from one array in the controller, and
+       this is what keeps that true.
+    */
+    const crumbs = blocks.find((block) => block["@type"] === "BreadcrumbList");
+    const marked = (crumbs?.itemListElement as { name: string }[]).map((entry) => entry.name);
+    expect(marked).toEqual(["Directory", "Dubai", "Al Quoz Industrial 1", "HVAC & ventilation"]);
+
+    const list = blocks.find((block) => block["@type"] === "ItemList");
+    expect(list?.numberOfItems).toBe(10);
   });
 
   test("the FAQ markup and the visible questions are the same list", async ({ page }) => {
     await page.goto(LIVE);
     const block = (await jsonLd(page)).find((entry) => entry["@type"] === "FAQPage");
     const marked = ((block?.mainEntity ?? []) as { name: string }[]).map((entry) => entry.name);
-    const visible = await page.locator("dl").last().locator("dt").allTextContents();
+
+    // Scoped to the FAQ section. `h3` is not unique to it — a rail card or a
+    // supplier row is entitled to one, and a bare selector would be testing the
+    // whole page's heading outline rather than the block under test.
+    const visible = await page
+      .locator('section[aria-labelledby="faq-heading"] h3')
+      .allTextContents();
     expect(visible).toEqual(marked);
+    // §SEO: FAQ questions are h3 inside the section, and the gate wants four.
+    expect(marked.length).toBeGreaterThanOrEqual(3);
   });
 
-  test("plots the suppliers it can and says how many it cannot", async ({ page }) => {
+  test("the quote-range row is absent while the aggregate is switched off", async ({ page }) => {
     await page.goto(LIVE);
-    await expect(page.getByRole("heading", { name: "Where they are" })).toBeVisible();
+    /*
+       Criterion 11, and open question 2. No seller has agreed to have their
+       quotes aggregated publicly, so `public_quote_aggregates` is off and the
+       row does not render. It does not render a range from four quotes and it
+       does not say "not enough data" — a missing question is honest, a hedged
+       one is not.
+    */
+    await expect(page.getByText(/What does a chiller AMC cost/)).toHaveCount(0);
+    await expect(page.getByText(/not enough data/i)).toHaveCount(0);
   });
 
-  test("has exactly one h1", async ({ page }) => {
+  test("is asked to be indexed and is in the sitemap", async ({ page, request }) => {
     await page.goto(LIVE);
+    expect(await page.locator('meta[name="robots"]').count()).toBe(0);
+    expect(await page.locator('link[rel="canonical"]').getAttribute("href")).toContain(LIVE);
+
+    const xml = await (await request.get("/sitemap.xml")).text();
+    expect(xml).toContain(LIVE);
+  });
+
+  test("the title carries the live count and the meta description is written", async ({ page }) => {
+    await page.goto(LIVE);
+    // §SEO: "The count is live and it is the reason the title beats a
+    // competitor's. Truncate the category name, never the count."
+    await expect(page).toHaveTitle(/HVAC & ventilation companies in Al Quoz Industrial 1, Dubai — \d+ listed/);
+
+    const description = await page
+      .locator('meta[name="description"]')
+      .getAttribute("content");
+    expect(description).toContain("Al Quoz Industrial 1");
+  });
+});
+
+test.describe("the link graph", () => {
+  test("points only at published pages, in both directions", async ({ page }) => {
+    await page.goto(LIVE);
+
+    // The sibling column and the nearby-areas card both reach the one other
+    // published area page, and neither renders anything for the held scope —
+    // "not greyed, not plain text", §6.
+    await expect(page.getByRole("link", { name: /Jebel Ali Free Zone/ }).first()).toBeVisible();
+
+    /*
+       Links, not text. The seeded FAQ names Ras Al Khor in prose — "for Deira
+       and Sharjah sites the travel time works against you and Ras Al Khor is
+       the closer cluster" — which is a writer telling the wrong buyer to go
+       somewhere else and is exactly what §5 asks a scope-specific question to
+       do. What must not exist is an **anchor** to a page that is not published.
+    */
+    const hrefs = await page.locator("a").evaluateAll((links) =>
+      links.map((link) => link.getAttribute("href") ?? ""),
+    );
+    expect(hrefs.filter((href) => href.includes("ras-al-khor"))).toEqual([]);
+    expect(hrefs.filter((href) => href.includes("safety-and-ppe"))).toEqual([]);
+  });
+
+  test("reaches the emirate class from the breadcrumb", async ({ page }) => {
+    await page.goto(LIVE);
+    await page.getByRole("link", { name: "Dubai", exact: true }).first().click();
+    await expect(page).toHaveURL(new RegExp(`${EMIRATE}$`));
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(
+      "HVAC & ventilation companies in Dubai",
+    );
+  });
+
+  test("the sibling page is a real page", async ({ page }) => {
+    const response = await page.goto(SIBLING);
+    expect(response?.status()).toBe(200);
     await expect(page.locator("h1")).toHaveCount(1);
   });
 });
 
-test.describe("a page held back by the floors", () => {
-  test("is served, and says which number is holding it", async ({ page }) => {
+test.describe("pagination stays on this page", () => {
+  test("shows all n, and page 2 is self-canonical with rel prev and next", async ({ page }) => {
+    await page.goto(LIVE);
+    await page.getByRole("link", { name: /Show all \d+ companies/ }).click();
+
     /*
-       Not a 404. A buyer following a link should see the suppliers there are —
-       there are simply not enough of them to put in front of a stranger who
-       searched. And the sentence names the gap, because staff and recruiters
-       read these pages too.
+       Criterion 10: "Show all" paginates in place. No path from this page
+       reaches a `1b` view that canonicalises back to it — `/c/:category`
+       already points emirate-filtered views here, so that link would be a
+       canonical round trip.
+    */
+    await expect(page).toHaveURL(new RegExp(`${LIVE.replace(/[/]/g, "\\/")}\\?page=2$`));
+    expect(await page.locator('link[rel="canonical"]').getAttribute("href")).toContain("page=2");
+    await expect(page.locator('link[rel="prev"]')).toHaveCount(1);
+  });
+
+  test("a page number past the end is not a page", async ({ page }) => {
+    const response = await page.goto(`${LIVE}?page=99`);
+    expect(response?.status()).toBe(404);
+  });
+});
+
+test.describe("a scope that fails a condition has no URL", () => {
+  test("404s, rather than serving a thin page with noindex on it", async ({ page }) => {
+    /*
+       §the-publish-gate consequence 1, and criterion 2. Not a redirect either:
+       a soft 404 on a template with this many URLs is expensive.
     */
     const response = await page.goto(HELD);
-    expect(response?.status()).toBe(200);
-
-    await expect(page.getByText("Not enough listed here yet")).toBeVisible();
-    await expect(page.getByText(/\d+ of \d+ listings/)).toBeVisible();
+    expect(response?.status()).toBe(404);
   });
 
-  test("is not asked to be indexed, and is not in the sitemap", async ({ page, request }) => {
-    await page.goto(HELD);
-    const robots = await page.locator('meta[name="robots"]').getAttribute("content");
-    expect(robots).toContain("noindex");
-    // `follow` stays on: each listing it links to is worth indexing itself.
-    expect(robots).toContain("follow");
-
+  test("is absent from the sitemap", async ({ request }) => {
     const xml = await (await request.get("/sitemap.xml")).text();
     expect(xml).not.toContain(HELD);
-  });
-
-  test("still shows the suppliers that are there", async ({ page }) => {
-    await page.goto(HELD);
-    expect(await page.getByRole("article").count()).toBeGreaterThan(0);
   });
 });
 
@@ -116,11 +246,14 @@ test.describe("the address itself", () => {
     expect(response?.status()).toBe(404);
   });
 
-  test("404s on an area or trade that is not here", async ({ page }) => {
+  test("404s on an area, trade or subcategory filter that is not here", async ({ page }) => {
+    // Criterion 6: an unresolvable segment 404s. It does not redirect and does
+    // not soft-404.
     for (const path of [
       "/dubai/not-an-area/hvac-and-ventilation",
       "/dubai/al-quoz-industrial-1/not-a-trade",
       "/nowhere/nothing/none",
+      `${LIVE}?sub=not-a-subcategory`,
     ]) {
       const response = await page.goto(path);
       expect(response?.status(), path).toBe(404);
@@ -133,15 +266,30 @@ test.describe("the address itself", () => {
        every three-segment path in the product passes near it. Static segments
        win in the matcher — but "should" and "does" are different words.
     */
-    for (const path of ["/c/valves-and-fittings/gate-valves", "/b/al-marwan-industrial-supplies-llc/products"]) {
+    for (const path of [
+      "/c/valves-and-fittings/gate-valves",
+      "/b/al-marwan-industrial-supplies-llc/products",
+    ]) {
       const response = await page.goto(path);
       expect(response?.status(), path).toBe(200);
     }
   });
 });
 
+test.describe("no text on the page claims more than we check", () => {
+  test("criterion 12 — no site visits, and no tier above licence verified", async ({ page }) => {
+    for (const route of [LIVE, EMIRATE]) {
+      await page.goto(route);
+      const body = (await page.locator("body").innerText()).toLowerCase();
+      for (const claim of ["site visit", "visited in person", "field team", "premises visited"]) {
+        expect(body, `${route} still says "${claim}"`).not.toContain(claim);
+      }
+    }
+  });
+});
+
 test.describe("accessibility", () => {
-  for (const route of [LIVE, HELD]) {
+  for (const route of [LIVE, EMIRATE]) {
     test(`axe is clean on ${route}`, async ({ page }) => {
       await page.goto(route);
       const results = await new AxeBuilder({ page })
@@ -153,4 +301,16 @@ test.describe("accessibility", () => {
       expect(summary, JSON.stringify(summary, null, 2)).toEqual([]);
     });
   }
+
+  test("the static map is not a keyboard trap and its pins are not tab stops", async ({ page }) => {
+    await page.goto(LIVE);
+    /*
+       §3: "no pan, no zoom, no marker interaction. It is orientation, not a
+       tool." A canvas nobody can pan left focusable is a tab stop that does
+       nothing, and twenty pins as buttons is twenty of them.
+    */
+    await expect(page.locator("canvas.maplibregl-canvas")).toHaveAttribute("tabindex", "-1");
+    await expect(page.locator(".maplibregl-ctrl-zoom-in")).toHaveCount(0);
+    await expect(page.locator("button.maplibregl-marker")).toHaveCount(0);
+  });
 });

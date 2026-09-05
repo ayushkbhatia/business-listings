@@ -17,6 +17,8 @@ import { tierSpec } from "./verification";
  *   search      a wide row in the results list
  *   map         a compact card beside or over the map
  *   grid        a tile on the home page and category pages
+ *   ranked      board 6a's landing-page row: rank disc, one line of what they
+ *               do, a meta strip, and the two stacked actions
  *   unclaimed   the licence-import composition, board 10g
  *
  * Tier 4 imports t() directly. Tiers 1 to 3 stay generic and take their strings
@@ -28,7 +30,7 @@ import { tierSpec } from "./verification";
  * and never invents hours, a rating or an empty star row. Roughly three in four
  * listings are unclaimed, so this is a large share of what Google sees.
  */
-export type ListingContext = "search" | "map" | "grid" | "unclaimed";
+export type ListingContext = "search" | "map" | "grid" | "ranked" | "unclaimed";
 
 export interface ListingCardBusiness {
   slug: string;
@@ -315,6 +317,171 @@ export function ListingCard({
             ) : (
               <ImagePlaceholder kind="empty" className="absolute inset-0 h-full w-full" />
             )}
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (context === "ranked") {
+    /*
+       Board 6a §4 — the row on an area landing page.
+
+       Narrower than `search` and arranged around a different question. A buyer
+       on `/c/hvac` is choosing what kind of supplier they want and gets a
+       photo; a buyer who arrived here from Google already knows, and what they
+       are deciding is *which of these ten*. So: the rank, who they are, one
+       line of what they do, and the four facts that separate them.
+
+       Rank 1 takes `--paper` and a `--line-strong` border, through `selected`.
+       Not a different component and not a badge — the first row is the one the
+       page is recommending, and the board says that with a fill rather than a
+       word. The moss selection treatment would be the wrong grammar: moss means
+       the reader chose it, and this is the page's own opinion.
+
+       No compare link and no photo. §SEO budgets this page at about fifty
+       anchors against `6c`'s hundred and fifty-six, on the grounds that it has
+       a buyer to convert rather than only a crawler to feed; the tray is
+       reachable from `1b` and `1c`, which is where a buyer building a shortlist
+       actually is.
+    */
+    return (
+      <Card as="article" elevation="flat" padded={false} surface={selected ? "paper" : "card"}>
+        {/*
+           The container and the thing it lays out are two elements, not one.
+
+           A container query cannot style the element that declares the
+           container — `@container/ranked` and `@xl/ranked:flex-row` on the same
+           div silently never fires, and the row renders with its two actions
+           wrapped under the description at every width. It builds, it lints, and
+           the only way to notice is to look at it.
+        */}
+        <div className="@container/ranked">
+          <div className="flex flex-col gap-4 p-4 @xl/ranked:flex-row @xl/ranked:items-center @xl/ranked:gap-5">
+            <div className="flex min-w-0 flex-1 items-start gap-3.5 @sm/ranked:gap-4">
+              {business.rank !== undefined && (
+                /*
+                   `aria-hidden`: the list is an `ol` and a screen reader already
+                   announces the position. The disc is for the eye reconciling
+                   "third result" with the page it lands on.
+                */
+                <span
+                  aria-hidden
+                  className={cn(
+                    "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-pill",
+                    "font-mono text-eyebrow tabular-nums",
+                    selected ? "bg-ink text-on-ink" : "bg-fill text-body",
+                  )}
+                >
+                  {business.rank}
+                </span>
+              )}
+
+              <LogoTile
+                src={business.logoUrl}
+                name={business.displayName}
+                categoryCode={business.categoryCode}
+                size="lg"
+              />
+
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="min-w-0 text-body font-medium text-ink">
+                    <a
+                      href={link}
+                      className={cn(
+                        "rounded-tag underline-offset-2 hover:underline",
+                        "focus-visible:outline-none focus-visible:shadow-focus",
+                      )}
+                    >
+                      {business.displayName}
+                    </a>
+                  </h3>
+                  {verification}
+                  {business.sponsored && sponsoredLabel && (
+                    <StatusBadge tone="warn" size="sm">
+                      {sponsoredLabel}
+                    </StatusBadge>
+                  )}
+                </div>
+
+                {business.description && (
+                  <p className="mt-1.5 line-clamp-2 text-caption leading-relaxed text-body">
+                    {business.description}
+                  </p>
+                )}
+
+                {/*
+                   The meta strip. Every entry is a measurement or it is absent —
+                   there is no "unknown", no empty star row and no slow-looking
+                   placeholder. §4: "A seller with no answered enquiries shows no
+                   band at all."
+                */}
+                <div className="mt-2 flex flex-wrap items-center gap-x-3.5 gap-y-1.5">
+                  {business.ratingOverall != null && (
+                    <span className="text-caption text-muted">
+                      <b className="font-medium tabular-nums text-ink">
+                        {business.ratingOverall.toFixed(1)}
+                      </b>{" "}
+                      {business.reviewCount
+                        ? t("listing.reviews", { count: business.reviewCount })
+                        : t("listing.no_reviews")}
+                    </span>
+                  )}
+                  {business.establishedYear && (
+                    <span className="text-caption text-muted">
+                      {t("listing.years", { year: business.establishedYear })}
+                    </span>
+                  )}
+                  {business.responseTimeMedianMs != null && (
+                    <ResponseTime
+                      size="sm"
+                      bare
+                      medianMs={business.responseTimeMedianMs}
+                      durationLabel={business.responseDurationLabel}
+                      unmeasuredLabel={t("response.unmeasured")}
+                    />
+                  )}
+                  {business.productCount !== undefined && business.productCount > 0 && (
+                    <span className="text-caption text-muted">
+                      {t("listing.products", { count: business.productCount })}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/*
+               Two actions, stacked on the board and side by side under `@xl`,
+               where the row is a phone's width and a stack costs the height of a
+               whole extra row per supplier.
+            */}
+            <div className="flex shrink-0 gap-2 @xl/ranked:w-[168px] @xl/ranked:flex-col">
+              <a
+                href={link}
+                className={cn(buttonClassName({ size: "sm", block: true }), "flex-1")}
+              >
+                {t("listing.view_storefront")}
+              </a>
+              {enquireHref ? (
+                <a
+                  href={enquireHref}
+                  rel={crawlRel(enquireHref)}
+                  className={cn(
+                    buttonClassName({ size: "sm", variant: "secondary", block: true }),
+                    "flex-1",
+                  )}
+                >
+                  {t("listing.enquire")}
+                </a>
+              ) : (
+                <span className="flex-1">
+                  <Button size="sm" variant="secondary" block disabled title={t("enquiry.disabled")}>
+                    {t("listing.enquire")}
+                  </Button>
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </Card>
