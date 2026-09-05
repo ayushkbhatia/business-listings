@@ -40,7 +40,7 @@ import { DEEP_SUBCATEGORIES } from "./seed-taxonomy-depth.mjs";
 import { seedGuides } from "./seed-guides.mjs";
 import { seedSubcategories } from "./seed-subcategories.mjs";
 import { seedAreaPages } from "./seed-area-pages.mjs";
-import { seedCurated } from "./seed-curated.mjs";
+import { auditCuratedLists, seedCurated } from "./seed-curated.mjs";
 import { seedCampaignLegal } from "./seed-campaign-legal.mjs";
 
 const prisma = new PrismaClient({
@@ -773,6 +773,17 @@ async function main() {
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
+  /*
+     After the medians, not before.
+
+     A curated list's three criteria include a measured reply time, and
+     `recomputeDerived` is what measures it. Audited in the same pass that wrote
+     the enquiries, every candidate was refused on "reply never measured" —
+     which is the gate working correctly against a fixture that had not yet
+     measured anything.
+  */
+  console.log("→ curated list audit");
+  await auditCuratedLists(prisma);
   // Last of all, because it reads the references every builder above it wrote.
   await advanceEnquiryRefSequence(prisma);
 }

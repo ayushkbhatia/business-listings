@@ -150,6 +150,13 @@
     --text-faint:   #A29D92;   /* labels, placeholders — 11.5px+ on paper only */
     --text-muted:   #7C776C;   /* secondary copy */
     --text-body:    #46433C;   /* body at small sizes */
+    /* ⚠ `--text-prose` is also a font size, below in @theme. That makes the
+       utility `text-prose` ambiguous — Tailwind matches it against both the
+       colour and the size namespace, and which one wins is not something the
+       class order in a `className` decides. On paper it resolves to this
+       colour and looks right by luck; on a dark surface it renders unreadable.
+       Pair it with `text-[color:var(--text-on-ink-muted)]` or similar when the
+       colour has to be something else. Worth renaming one of the two. */
     --text-prose:   #33302A;   /* long-form reading */
     --text-ink:     #211F1B;   /* headings */
     --text-on-ink:  #FAF9F6;
@@ -189,6 +196,13 @@
     --bad-line-strong: #D9A49C;
     --bad-disabled: #E8D5D1;
     --bad-disabled-text: #C99E97;
+    /* The bad tone on a dark surface — the counterpart to --moss-on-ink, and
+       it exists for the same reason: --bad measures 2.94:1 on --ink and fails
+       §09.2's floor, so a dark surface that needs to say "no" in colour has
+       nothing to say it with. 5.15:1. Board 6b's method panel is the first
+       caller: "Paid placement — Never" is the row a reader should find before
+       they find anything else, and it renders on ink. */
+    --bad-on-ink:   #E8685F;
 
     --info:         #3A5F8F;
     --info-ink:     #2F5A86;
@@ -441,6 +455,7 @@
   --color-moss-hover:        var(--moss-hover);
   --color-moss-wash:         var(--moss-wash);
   --color-moss-deep:         var(--moss-deep);
+  --color-bad-on-ink:        var(--bad-on-ink);
   --color-moss-on-ink:       var(--moss-on-ink);
   --color-moss-on-ink-hover: var(--moss-on-ink-hover);
   --color-moss-on-ink-text:  var(--moss-on-ink-text);

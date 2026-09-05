@@ -5121,25 +5121,55 @@ export const en = {
   //
   // The criteria are published on the page because every other "best of" list
   // in this market is sold and does not say so. Stating them is the product.
-  "best.criteria_title": "How this list is made",
-  "best.criteria_lede": "Every supplier below meets all three requirements. We check them on every page load, so a supplier who stops meeting one leaves the list without anybody deciding.",
-  "best.criterion.verified": "Trade licence checked against the issuing authority",
-  "best.criterion.reply": "Median first reply under {hours} hours, measured from real enquiries",
-  "best.criterion.reviews": "At least {count} reviews, each from a buyer who sent an enquiry through us",
+  // The method panel. Short labels, because the panel is a table of verdicts
+  // rather than a paragraph — §2 draws label left, verdict right.
+  "best.eyebrow": "Curated list · Audited {date}",
+  "best.how_we_chose": "How we chose",
+  "best.criterion.verified": "Licence verified",
+  "best.criterion.reply": "Median reply under {hours}h",
+  // "from enquiries" is the operative phrase and it is worth the extra three
+  // words: it is what makes 15 a meaningful number rather than a count of
+  // whatever anybody chose to submit.
+  "best.criterion.reviews": "{count}+ reviews from enquiries",
   "best.criterion.placement": "Paid placement",
   "best.kind.required": "Required",
-  "best.kind.weighted": "Ranks higher",
-  "best.kind.never": "Never a factor",
-  "best.considered": "{considered} suppliers in this trade were checked against these rules. {members} met all three.",
-  "best.no_purchase": "No supplier can pay to appear here, to move up, or to keep somebody else off. There is no field in the system for it — the order below is computed from the verification tier, the measured reply time and the number of reviews, and from nothing else.",
-  "best.rank": "{position}",
-  "best.reply": "Replies in {duration}",
+  "best.kind.never": "Never",
+  // §2: the panel states when the figures were measured. Every number on this
+  // page is from that day — nothing here is live.
+  "best.measured_on": "Every figure on this page was measured on {date}, the day the list was last audited.",
+  // §3, consequence 3. Deliberately ugly: it should push editorial to re-audit
+  // rather than sit.
+  "best.entry_removed": "One entry removed {date}",
+
+  "best.considered": "Chosen from {considered} listed companies on verified licence, quote-response time and review substance. No one paid to be here.",
+  "best.best_for": "Best for: {what}",
+  "best.metric.rating": "Rating",
+  "best.metric.replies": "Replies in",
+  "best.metric.established": "Established",
+  "best.rating_value": "{rating} from {count}",
   "best.reviews": { one: "{count} review", other: "{count} reviews" },
-  "best.rating": "{rating} out of 5",
+
+  // The 04–12 band. All twelve are in the DOM; this opens the rest in place.
+  "best.remaining": "{from} – {to}",
+  "best.remaining_body": "{count} more, each with what they are best for.",
+  "best.continue": "Continue the list",
+
+  // The RFQ card. The board said "all 12"; the engine caps at 8 and says so on
+  // screen, so the card says the number the engine will actually accept.
+  "best.rfq_title": "Shortcut the reading",
+  "best.rfq_body": "Describe the job once. The composer caps at {cap} recipients, so it goes to the {cap} on this list who reply fastest and can take an enquiry this month.",
+  "best.rfq_action": "Send one RFQ to {cap} of these {members}",
+  "best.in_this_list": "In this list",
+  "best.more": "+ {count} more",
+  "best.why_title": "Why we publish the criteria",
+
+  "best.list_heading": "The list",
+  "best.area_link": "All {count} {category} companies in {area}",
+  "best.category_link": "All {category} companies",
+
   "best.empty": "Nobody meets all three rules in this trade yet.",
   "best.empty_body": "That is the list working rather than failing. The directory has suppliers in this trade — they are on the trade page, with what we have checked shown on each.",
   "best.browse": "Browse {category}",
-  "best.updated": "Checked when this page was built, {date}",
 
   // ── Campaign landings, board 10i ──────────────────────────────────────────
   //

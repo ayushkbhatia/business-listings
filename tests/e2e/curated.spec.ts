@@ -1,140 +1,203 @@
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
- * Handoff 5, step 4 — board 6b, and criterion 4 as a reader sees it.
+ * Board 6b — the curated list, as a reader and a crawler get it.
  *
- * `tests/integration/curated.test.ts` proves the rules are enforced. What
- * matters here is that they are *stated*: the criteria block is the only thing
- * separating this page from every other "best of" in the market, all of which
- * are sold and none of which say so.
+ * The page's entire value rests on one claim about our own conduct being
+ * verifiable by a reader who assumes we are lying, so most of what is asserted
+ * here is about that claim rather than about layout.
  *
- * The seed builds the fixture that carries the point — `al-hvac-005` has the
- * top plan, a verified licence and fifteen reviews, and a median
- * reply of seven hours. It is not on the list.
+ * `tests/integration/curated.test.ts` proves the snapshot model at the service
+ * layer. This proves the page.
  */
 
 const LIST = "/best/hvac-suppliers-al-quoz";
-const TITLE = "HVAC suppliers in Al Quoz that answer quickly";
 
-/** The members, not the breadcrumb — which is an ordered list as well. */
-function members(page: import("@playwright/test").Page) {
-  return page.getByRole("list", { name: TITLE }).getByRole("listitem");
+async function jsonLd(page: Page) {
+  const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
+  return blocks.map((block) => JSON.parse(block) as Record<string, unknown>);
 }
 
-test.describe("the criteria are published above the names", () => {
-  test("states every rule, including the one that is never a factor", async ({ page }) => {
+test.describe("the claim the page is built on", () => {
+  test("prints the method in the hero, three required and one never", async ({ page }) => {
     await page.goto(LIST);
-    await expect(page.getByRole("heading", { name: "How this list is made" })).toBeVisible();
+    const panel = page.getByRole("complementary", { name: /how we chose/i });
 
-    const block = page
-      .locator("section")
-      .filter({ has: page.getByRole("heading", { name: "How this list is made" }) });
+    await expect(panel.getByText("Licence verified")).toBeVisible();
+    await expect(panel.getByText(/Median reply under 4h/)).toBeVisible();
+    await expect(panel.getByText(/reviews from enquiries/)).toBeVisible();
 
-    await expect(block.getByText(/Trade licence checked against the issuing authority/)).toBeVisible();
-    await expect(block.getByText(/Median first reply under 4 hours/)).toBeVisible();
-    await expect(block.getByText(/At least 15 reviews/)).toBeVisible();
-
-    // The one every competitor omits.
-    await expect(block.getByText("Paid placement")).toBeVisible();
-    await expect(block.getByText("Never a factor")).toBeVisible();
-    await expect(block.getByText(/No supplier can pay to appear here/)).toBeVisible();
+    // The row a reader most wants stated, and the one every competitor omits.
+    await expect(panel.getByText("Paid placement")).toBeVisible();
+    await expect(panel.getByText("Never", { exact: true })).toBeVisible();
+    await expect(panel.getByText("Required")).toHaveCount(3);
   });
 
-  test("sits above the list, not below it", async ({ page }) => {
-    /*
-       A reader who has scrolled past the names has already decided whether to
-       trust the page. The criteria are the reason to, so they come first.
-    */
+  test("says No one paid to be here, as its own sentence", async ({ page }) => {
     await page.goto(LIST);
-    const criteria = await page
-      .getByRole("heading", { name: "How this list is made" })
-      .boundingBox();
-    const first = await members(page).first().boundingBox();
-    expect(criteria!.y).toBeLessThan(first!.y);
-  });
-});
-
-test.describe("who is on it", () => {
-  test("lists the suppliers that meet every rule, in order", async ({ page }) => {
-    await page.goto(LIST);
-    const names = await members(page).getByRole("heading").allTextContents();
-    expect(names.length).toBeGreaterThan(1);
-    // The highest tier leads; the comparator reads it first.
-    expect(names[0]).toContain("001");
+    // §2: four words, own sentence, load-bearing. Never softened, never merged
+    // into the clause before it, never below the fold.
+    await expect(page.getByText("No one paid to be here.")).toBeVisible();
   });
 
-  test("the supplier with the top plan and a slow reply is not on it", async ({ page }) => {
-    /*
-       Criterion 4's second half, as a page. `al-hvac-005` is on Pro, is
-       verified and has fifteen reviews. Its median reply is seven hours, which
-       is measured and has no seller-writable field.
-    */
+  test("dates every figure, and says when they were measured", async ({ page }) => {
     await page.goto(LIST);
-    const names = await members(page).getByRole("heading").allTextContents();
-    expect(names.join(" ")).not.toContain("005");
-  });
-
-  test("says how many were considered against how many made it", async ({ page }) => {
-    await page.goto(LIST);
-    await expect(page.getByText(/\d+ suppliers in this trade were checked against these rules/)).toBeVisible();
-  });
-
-  test("each entry carries what was checked and when", async ({ page }) => {
-    /*
-       Criterion 8 has no exceptions, including on an editorial page: the badge
-       says what was checked and its date.
-
-       Deliberately not asserting a particular rung. A tier is staff-owned and
-       moves, and an earlier version of this test named "Licence verified" and
-       failed the first time another suite promoted the listing a rung. What
-       the criterion requires is the sentence, not the word.
-
-       The alternation is every label the ladder can render, from
-       `components/domain/verification.ts` — the compact badge shows the label
-       rather than the longer "what was checked" line. It used to include
-       "visited", which is what made it pass: the leading member was tier 3 and
-       tier 3 was "Site visited". With that rung withdrawn the top of this list
-       is "Licence verified", and a regex that still expected a visit would have
-       gone red for a reason nothing to do with criterion 8.
-    */
-    await page.goto(LIST);
-    const first = members(page).first();
+    // The audit date, twice: the hero eyebrow and the method panel.
+    await expect(page.getByText(/CURATED LIST · AUDITED \d+ \w+ \d{4}/i)).toBeVisible();
     await expect(
-      first.getByText(/not verified|licence on file|licence verified|audited/i).first(),
+      page.getByText(/Every figure on this page was measured on .*the day the list was last audited/),
     ).toBeVisible();
-    await expect(first.getByText(/^tier \d$/)).toBeVisible();
   });
 
-  test("carries ItemList structured data matching the visible order", async ({ page }) => {
+  test("acceptance 2 — no sponsored or promoted component anywhere under /best", async ({
+    page,
+  }) => {
     await page.goto(LIST);
-    const blocks = await page.locator('script[type="application/ld+json"]').allTextContents();
-    const list = blocks
-      .map((block) => JSON.parse(block) as Record<string, unknown>)
-      .find((block) => block["@type"] === "ItemList");
-
-    expect(list, "no ItemList on the page").toBeDefined();
-    const marked = ((list?.itemListElement ?? []) as { name: string }[]).map((entry) => entry.name);
-    const visible = await members(page).getByRole("heading").allTextContents();
-    expect(marked).toEqual(visible.map((name) => name.trim()));
+    /*
+       §5: "Those coexist only if the sponsored-slot component **cannot render
+       on this route**. Not 'is not configured to' — cannot." Asserted on the
+       rendered tree rather than by configuration, which is what the spec asks
+       for: this page composes no results surface, so there is no slot to fill.
+    */
+    const body = (await page.locator("body").innerText()).toLowerCase();
+    for (const word of ["sponsored", "promoted", "advertisement", "paid placement —"]) {
+      expect(body, `"${word}" appears on a page that publishes "paid placement: never"`).not.toContain(
+        word,
+      );
+    }
+    await expect(page.locator('[data-sponsored], [data-ad], .sponsored')).toHaveCount(0);
   });
 });
 
-test.describe("the address", () => {
-  test("is in the sitemap", async ({ request }) => {
+test.describe("the entries", () => {
+  test("each carries a rank, a BEST FOR line, prose and both actions", async ({ page }) => {
+    await page.goto(LIST);
+    const entries = page.locator("ol > li").filter({ has: page.locator("h3") });
+    expect(await entries.count()).toBeGreaterThanOrEqual(3);
+
+    const first = entries.first();
+    await expect(first.locator("h3")).toBeVisible();
+    await expect(first.getByText(/Best for:/i)).toBeVisible();
+    // Acceptance 13: every member links to its storefront and its composer.
+    await expect(first.getByRole("link", { name: "View storefront" })).toBeVisible();
+    await expect(first.getByRole("link", { name: "Enquire" })).toBeVisible();
+  });
+
+  test("acceptance 16 — no two entries are best for the same thing", async ({ page }) => {
+    await page.goto(LIST);
+    // Open the band, so all twelve are measured rather than the first three.
+    await page.getByRole("group").first().locator("summary").click();
+    const lines = await page.getByText(/^Best for:/i).allTextContents();
+    expect(lines.length).toBeGreaterThan(3);
+    expect(new Set(lines).size).toBe(lines.length);
+  });
+
+  test("the band expands in place rather than paginating", async ({ page }) => {
+    await page.goto(LIST);
+    const before = page.url();
+    await page.getByRole("group").first().locator("summary").click();
+    // §3: splitting a curated list across URLs halves the link equity that is
+    // the whole point of the page, and leaves the ItemList incomplete.
+    expect(page.url()).toBe(before);
+    await expect(page.getByRole("link", { name: "View storefront" }).nth(11)).toBeVisible();
+  });
+});
+
+test.describe("the RFQ shortcut", () => {
+  test("acceptance 1 — offers at most eight, and says so", async ({ page }) => {
+    await page.goto(LIST);
+    /*
+       The board read "Send one RFQ to all 12". The fan-out cap is 8, hard, and
+       `1h` states it on screen — the same error that removed "Post an RFQ to
+       1,842" from `1b`'s category header.
+    */
+    const action = page.getByRole("link", { name: /Send one RFQ to \d+ of these \d+/ });
+    await expect(action).toBeVisible();
+
+    const label = (await action.innerText()).match(/to (\d+) of these (\d+)/);
+    const recipients = Number(label?.[1]);
+    expect(recipients).toBeLessThanOrEqual(8);
+    await expect(page.getByText(/composer caps at 8 recipients/)).toBeVisible();
+  });
+});
+
+test.describe("SEO", () => {
+  test("acceptance 11 — ItemList covers every member, including the hidden ones", async ({
+    page,
+  }) => {
+    await page.goto(LIST);
+    const list = (await jsonLd(page)).find((block) => block["@type"] === "ItemList");
+    expect(list).toBeDefined();
+
+    /*
+       Counted from the DOM, not from the accessibility tree.
+
+       The nine behind "Continue the list" sit inside a closed `<details>`, so
+       `getByRole` does not see them — but a crawler does, which is the whole
+       reason §3 insists the band expands in place rather than paginating. This
+       assertion is the crawler's view: every member is in the markup whether or
+       not the band is open, and the `ItemList` describes exactly that set.
+    */
+    const inMarkup = await page
+      .locator('a[href^="/b/"]')
+      .evaluateAll((links) => new Set(links.map((a) => a.getAttribute("href"))).size);
+
+    expect(Number(list?.numberOfItems)).toBe(inMarkup);
+    expect(Number(list?.numberOfItems)).toBeGreaterThan(3);
+  });
+
+  test("acceptance 12 — no FAQPage, and no rating for the list itself", async ({ page }) => {
+    await page.goto(LIST);
+    const types = (await jsonLd(page)).map((block) => block["@type"]);
+    /*
+       The method panel is not a FAQ, and marking it up as one to chase a rich
+       result would be exactly the behaviour this page exists to distinguish us
+       from. The ratings belong to the members and are on their storefronts.
+    */
+    expect(types).not.toContain("FAQPage");
+    expect(types).not.toContain("AggregateRating");
+    expect(types).toContain("ItemList");
+    expect(types).toContain("BreadcrumbList");
+  });
+
+  test("canonical is self, absolute, with no query string", async ({ page }) => {
+    await page.goto(LIST);
+    const canonical = await page.locator('link[rel="canonical"]').getAttribute("href");
+    expect(canonical).toContain(LIST);
+    expect(canonical).not.toContain("?");
+  });
+
+  test("acceptance 14 — links back to the page it was drawn from", async ({ page }) => {
+    await page.goto(LIST);
+    // A curated list with no link to the underlying area page strands the
+    // reader who wants the other two hundred companies.
+    const back = page.getByRole("link", { name: /All \d+ .* in Al Quoz/ });
+    await expect(back).toBeVisible();
+    expect(await back.getAttribute("href")).toContain("/dubai/al-quoz-industrial-1/");
+  });
+
+  test("is in the sitemap while it is published", async ({ request }) => {
     const xml = await (await request.get("/sitemap.xml")).text();
     expect(xml).toContain(LIST);
   });
+});
 
-  test("404s on a list that is not here", async ({ page }) => {
-    const response = await page.goto("/best/not-a-list");
-    expect(response?.status()).toBe(404);
+test.describe("acceptance 15 — no claim above licence verified", () => {
+  test("says nothing about visits or premises", async ({ page }) => {
+    await page.goto(LIST);
+    const body = (await page.locator("body").innerText()).toLowerCase();
+    for (const claim of ["site visit", "visited", "premises", "in person", "field team"]) {
+      expect(body, `the page still says "${claim}"`).not.toContain(claim);
+    }
   });
 });
 
 test.describe("accessibility", () => {
-  test(`axe is clean on ${LIST}`, async ({ page }) => {
+  test("axe is clean, and there is one h1", async ({ page }) => {
     await page.goto(LIST);
+    await expect(page.locator("h1")).toHaveCount(1);
+
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "best-practice"])
       // docs/contrast.md — the failing pairs are token-level and pinned.
@@ -142,5 +205,13 @@ test.describe("accessibility", () => {
       .analyze();
     const summary = results.violations.map((v) => ({ id: v.id, nodes: v.nodes.length }));
     expect(summary, JSON.stringify(summary, null, 2)).toEqual([]);
+  });
+
+  test("the expanded band is reachable from the keyboard", async ({ page }) => {
+    await page.goto(LIST);
+    const summary = page.getByRole("group").first().locator("summary");
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("link", { name: "View storefront" }).nth(11)).toBeVisible();
   });
 });

@@ -131,4 +131,44 @@ else
   echo "   pass"
 fi
 
+echo "→ 6. the site visit, which was withdrawn and keeps coming back"
+# Site visits were cut on 5 Sep 2026. The cut has now been applied three times,
+# and twice it missed — because it was applied by searching for the phrase, and
+# the claim does not live in a phrase.
+#
+# Round 1 corrected the prose on 21 screens and left the badge. Round 2 found 24
+# references across 17 boards: a `Visited` pill, a criteria row reading "Site
+# visit by our team · Weighted", a tier name, a testimonial clause, an audit-log
+# line, and a plan-comparison row selling "Verified by a site visit" as a Pro
+# benefit. None of those contain the words "site visit" in a form a prose pass
+# would catch — `>Visited</span>` is one word inside a style attribute.
+#
+# So it is a scan now rather than a fourth careful reading. It covers the
+# catalogue and the JSX, because a badge label written straight into a component
+# is exactly the shape that survived the first two passes.
+#
+# Comments are stripped by both helpers, which matters here more than anywhere:
+# most of what is left in the codebase is a comment explaining that the rung is
+# gone and why, and those have to be allowed to name it.
+VISITS='\bsite[- ]visit|\bvisited by|verification (site )?visit|premises (have been |been )?visit|visited in person|\bfield team\b'
+# The seeds too, and that is not belt-and-braces: seed copy **is** public copy.
+# Round 2 of this cut found the claim living in a seeded curated-list intro, a
+# seeded guide and the seeded verification policy — three public pages whose
+# words never pass through the catalogue at all.
+seed_copy() {
+  perl -0777 -ne '
+      s{(/\*.*?\*/)}{ $1 =~ s/[^\n]//gr }gse;
+      s{^(\s*)//.*$}{$1}gm;
+      my @lines = split /\n/, $_, -1;
+      for my $i (0 .. $#lines) { printf "%s:%d:%s\n", $ARGV, $i + 1, $lines[$i]; }
+    ' prisma/*.mts
+}
+if { values; jsx_copy; seed_copy; } | grep -iE "$VISITS"; then
+  echo "   FAIL — visits were withdrawn on 5 Sep. The ladder stops at licence verified,"
+  echo "          and nothing above it is a thing this platform does."
+  fail=1
+else
+  echo "   pass"
+fi
+
 exit $fail

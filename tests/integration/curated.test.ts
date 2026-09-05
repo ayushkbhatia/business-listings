@@ -1,6 +1,18 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { CRITERIA, curatedList, liveLists, MAX_REPLY_MS, membersOf, MIN_REVIEWS } from "@/lib/seo/curated";
+import { PermissionError } from "@/lib/auth/errors";
+import type { Actor, Role } from "@/lib/auth/roles";
+import {
+  auditList,
+  curatedList,
+  DEFAULT_CRITERIA,
+  driftQueue,
+  liveLists,
+  MAX_REPLY_MS,
+  MIN_MEMBERS,
+  MIN_REVIEWS,
+  sweepCuratedLists,
+} from "@/lib/seo/curated";
 import { VERIFIED_TIER } from "@/lib/verification";
 
 /**
@@ -10,10 +22,18 @@ import { VERIFIED_TIER } from "@/lib/verification";
  *    business that fails them; placement cannot be bought into one — asserted
  *    by a test."
  *
- * The interesting half is the absence. So the fixtures below are five listings
- * that differ in exactly one thing each, and what is asserted is which one is
- * missing and why — including one that has bought everything the product sells
- * and is still not on the list.
+ * ## What changed under these tests
+ *
+ * Membership used to be computed on every read, and this file asserted which
+ * candidate was *missing* from the computed result. Board 6b §3 replaced that
+ * with a dated snapshot, because the entries are hand-written and cross-
+ * reference each other — automated reordering corrupts prose no automated
+ * process can rewrite.
+ *
+ * So the bar moved from the read path to `auditList`, and so did these tests.
+ * What is asserted now is that a member who fails cannot be **written**, that
+ * the page publishes the snapshot rather than live figures, and that the two
+ * things which still act automatically — a lapsed licence, and the SLA — act.
  */
 
 const PREFIX = "curated-test-";
@@ -126,6 +146,33 @@ beforeAll(async () => {
       select: { id: true },
     })
   ).id;
+  listId = (
+    await prisma.curatedList.create({
+      data: {
+        slug: `${PREFIX}list`,
+        title: "The best of the test trade",
+        // A check constraint refuses a published list with no intro.
+        intro: "Three rules, printed above the names rather than behind a sales team.",
+        criteria: DEFAULT_CRITERIA.map((c) => ({ key: c.key, kind: c.kind })),
+        categoryId,
+        areaId,
+      },
+      select: { id: true },
+    })
+  ).id;
+
+  opsLeadId = (
+    await prisma.user.findFirstOrThrow({
+      where: { roles: { has: "staff_ops_lead" } },
+      select: { id: true },
+    })
+  ).id;
+  moderatorId = (
+    await prisma.user.findFirstOrThrow({
+      where: { roles: { has: "staff_moderator" } },
+      select: { id: true },
+    })
+  ).id;
 }, 120_000);
 
 afterAll(async () => {
@@ -133,163 +180,296 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
-describe("criterion 4 — a business that fails a rule cannot be on the list", () => {
-  it("excludes on each required rule, one at a time", async () => {
-    const qualifies = await candidate({ name: "qualifies" });
+const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
+
+let opsLeadId: string;
+let moderatorId: string;
+let listId: string;
+
+/** Twelve non-competing recommendations need twelve distinct `BEST FOR:` lines. */
+function entry(businessId: string, n: number) {
+  return {
+    businessId,
+    bestFor: `Case ${n}`,
+    prose: `A paragraph a person wrote about candidate ${n}, specific enough to be checkable.`,
+  };
+}
+
+describe("criterion 4 — a business that fails a rule cannot be written to a list", () => {
+  it("refuses on each required rule, one at a time, and names which", async () => {
+    const good = await Promise.all(
+      Array.from({ length: MIN_MEMBERS }, (_, i) => candidate({ name: `ok${i}` })),
+    );
     const unverified = await candidate({ name: "unverified", tier: VERIFIED_TIER - 1 });
     const slow = await candidate({ name: "slow", replyMs: MAX_REPLY_MS + 60_000 });
     const unmeasured = await candidate({ name: "unmeasured", replyMs: null });
-    const fewReviews = await candidate({ name: "thin", reviews: MIN_REVIEWS - 1 });
+    const thin = await candidate({ name: "thin", reviews: MIN_REVIEWS - 1 });
 
-    const { members } = await membersOf({ categoryId });
-    const ids = members.map((member) => member.id);
-
-    expect(ids, "the one that meets every rule is missing").toContain(qualifies);
-    expect(ids, "an unverified licence got on the list").not.toContain(unverified);
-    expect(ids, "a slow replier got on the list").not.toContain(slow);
-    /*
-       Unmeasured is not fast. Non-negotiable 6 is why `responseTimeMedianMs`
-       is nullable, and a list that treated null as passing would be claiming
-       something nobody measured.
-    */
-    expect(ids, "an unmeasured reply time got on the list").not.toContain(unmeasured);
-    expect(ids, "too few reviews got on the list").not.toContain(fewReviews);
-  }, 180_000);
-
-  it("drops a supplier whose reviews are removed, without anything being run", async () => {
-    const id = await candidate({ name: "removed" });
-    expect((await membersOf({ categoryId })).members.map((m) => m.id)).toContain(id);
-
-    // A moderator removes one review. Membership is computed, so the next read
-    // is the whole of the mechanism.
-    const one = await prisma.review.findFirstOrThrow({
-      where: { businessId: id },
-      select: { id: true },
-    });
-    await prisma.review.update({
-      where: { id: one.id },
-      data: { removedAt: new Date(), removalReason: "Written by a competitor." },
-    });
-
-    expect((await membersOf({ categoryId })).members.map((m) => m.id)).not.toContain(id);
-  }, 180_000);
-});
-
-describe("criterion 4 — placement cannot be bought", () => {
-  it("keeps the best-paying supplier off the list when it fails a rule", async () => {
-    /*
-       The fixture that matters. This listing has everything the product sells —
-       the top plan, a verified licence, more reviews than the floor — and one
-       thing it cannot buy: a reply time under four hours,
-       which is measured from enquiry timestamps and has no seller-writable
-       field. It is not on the list, and no amount of money changes that.
-    */
-    const paid = await candidate({
-      name: "paid",
-      planId: "pro",
-      reviews: MIN_REVIEWS + 10,
-      replyMs: MAX_REPLY_MS + 1,
-    });
-
-    const { members } = await membersOf({ categoryId });
-    expect(members.map((member) => member.id)).not.toContain(paid);
-  }, 180_000);
-
-  it("does not order by anything a seller pays for", async () => {
-    /*
-       Two listings identical except that one is on Pro and one is on no plan
-       at all, and the free one sorts first on the tie-breaker. If plan tier
-       leaked into the comparator this would flip.
-    */
-    await prisma.business.deleteMany({ where: { slug: { startsWith: `${PREFIX}rank-` } } });
-
-    const free = await candidate({ name: "rank-a-free", replyMs: 60 * 60_000, planId: null });
-    const pro = await candidate({ name: "rank-b-pro", replyMs: 60 * 60_000, planId: "pro" });
-
-    const { members } = await membersOf({ categoryId });
-    const order = members.map((member) => member.id);
-    expect(order.indexOf(free)).toBeLessThan(order.indexOf(pro));
-  }, 180_000);
-
-  it("ranks a higher tier above a lower one that replies faster", async () => {
-    /*
-       This used to be about the site visit, which was the one weighted
-       criterion and which the seller could not buy. Visits were withdrawn and
-       nothing replaced the weight — the tier absorbed it, and the tier is the
-       same kind of signal: staff-written, no seller-writable field, and above
-       reply time in the comparator precisely so a fast typist cannot outrank a
-       checked company.
-    */
-    const audited = await candidate({ name: "audited", tier: 3, replyMs: 3 * 3_600_000 });
-    const quick = await candidate({ name: "quick", tier: VERIFIED_TIER, replyMs: 10 * 60_000 });
-
-    const order = (await membersOf({ categoryId })).members.map((member) => member.id);
-    expect(order.indexOf(audited)).toBeLessThan(order.indexOf(quick));
-  }, 180_000);
-
-  it("has no field anywhere on the model that could hold a bought position", async () => {
-    /*
-       The strongest form of the guarantee is structural. If somebody adds a
-       `featured`, `rank` or `sponsored` column to `CuratedList` later, this
-       fails and they have to argue for it in a review rather than in a migration.
-    */
-    const columns = await prisma.$queryRawUnsafe<{ column_name: string }[]>(
-      `select column_name from information_schema.columns where table_name = 'curated_list'`,
-    );
-    const names = columns.map((row) => row.column_name);
-    for (const forbidden of ["featured", "rank", "position", "sponsored", "placement", "boost"]) {
-      expect(names, `curated_list gained a ${forbidden} column`).not.toContain(forbidden);
+    for (const [name, id] of [
+      ["verified", unverified],
+      ["reply", slow],
+      ["reply", unmeasured],
+      ["reviews", thin],
+    ] as const) {
+      const result = await auditList({
+        actor: actor(opsLeadId, "staff_ops_lead"),
+        listId,
+        entries: [...good.map((businessId, i) => entry(businessId, i)), entry(id, 99)],
+        reason: `Trying to seat a candidate that fails ${name}.`,
+      });
+      expect(result, name).toMatchObject({ ok: false, error: "fails_criteria" });
+      if (result.ok) continue;
+      expect(result.rejected?.[0]?.businessId).toBe(id);
+      expect(result.rejected?.[0]?.failures.some((f) => f.key === name)).toBe(true);
     }
-  }, 60_000);
-});
+  }, 180_000);
 
-describe("the page states the rules it applies", () => {
-  it("publishes a criterion for every rule the service enforces", () => {
-    // The page renders `CRITERIA`; the service applies these three. A rule
-    // enforced and not stated is the thing every competitor does.
-    const required = CRITERIA.filter((c) => c.kind === "required").map((c) => c.key);
-    expect(required.sort()).toEqual(["reply", "reviews", "verified"]);
-    expect(CRITERIA.some((c) => c.key === "placement" && c.kind === "never")).toBe(true);
-    // No weighted criterion remains. The site visit was the only one, and a
-    // published list must not name a rule the comparator does not apply.
-    expect(CRITERIA.filter((c) => c.kind === "weighted")).toEqual([]);
-  });
-});
-
-describe("a list with nobody on it", () => {
-  it("resolves, says how many were considered, and stays out of the sitemap", async () => {
-    const emptyCategory = await prisma.category.create({
-      data: { name: "Curated Empty", slug: `${PREFIX}empty`, code: "CE", sortOrder: 99 },
-      select: { id: true },
+  it("does not care what a supplier has bought", async () => {
+    /*
+       The one that proves the rule. Everything the product sells, and one thing
+       it does not: a reply time under four hours. There is no field for that,
+       so this listing cannot be seated no matter what it pays.
+    */
+    const bought = await candidate({
+      name: "bought",
+      planId: "pro",
+      replyMs: MAX_REPLY_MS + 60_000,
     });
-    await prisma.curatedList.create({
+    const good = await Promise.all(
+      Array.from({ length: MIN_MEMBERS }, (_, i) => candidate({ name: `paid${i}` })),
+    );
+
+    const result = await auditList({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      listId,
+      entries: [...good.map((id, i) => entry(id, i)), entry(bought, 99)],
+      reason: "Trying to seat the supplier on the most expensive plan.",
+    });
+    expect(result).toMatchObject({ ok: false, error: "fails_criteria" });
+  }, 180_000);
+
+  it("refuses two entries that are best for the same thing", async () => {
+    // Acceptance 16, and the reason for it: the line is what turns a ranked
+    // list into recommendations that do not compete with each other.
+    const ids = await Promise.all(
+      Array.from({ length: MIN_MEMBERS }, (_, i) => candidate({ name: `dupe${i}` })),
+    );
+    const entries = ids.map((id, i) => entry(id, i));
+    entries[1] = { ...entries[1]!, bestFor: entries[0]!.bestFor };
+
+    const result = await auditList({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      listId,
+      entries,
+      reason: "Two entries with one recommendation between them.",
+    });
+    expect(result).toMatchObject({ ok: false, error: "duplicate_best_for" });
+  }, 180_000);
+
+  it("refuses a list below the floor rather than publishing a short one", async () => {
+    const ids = await Promise.all(
+      Array.from({ length: MIN_MEMBERS - 1 }, (_, i) => candidate({ name: `few${i}` })),
+    );
+    const result = await auditList({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      listId,
+      entries: ids.map((id, i) => entry(id, i)),
+      reason: "Publishing four.",
+    });
+    expect(result).toMatchObject({ ok: false, error: "too_few" });
+  }, 180_000);
+
+  it("is the only path, and it needs the capability and a reason", async () => {
+    const ids = await Promise.all(
+      Array.from({ length: MIN_MEMBERS }, (_, i) => candidate({ name: `perm${i}` })),
+    );
+    await expect(
+      auditList({
+        actor: actor(moderatorId, "staff_moderator"),
+        listId,
+        entries: ids.map((id, i) => entry(id, i)),
+        reason: "Not mine to do.",
+      }),
+    ).rejects.toBeInstanceOf(PermissionError);
+  }, 180_000);
+});
+
+describe("the page publishes a snapshot, not live figures", () => {
+  let members: string[];
+
+  beforeAll(async () => {
+    members = await Promise.all(
+      Array.from({ length: MIN_MEMBERS }, (_, i) => candidate({ name: `snap${i}` })),
+    );
+    const result = await auditList({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      listId,
+      entries: members.map((id, i) => entry(id, i)),
+      reason: "The launch audit.",
+    });
+    expect(result.ok, JSON.stringify(result)).toBe(true);
+    await prisma.curatedList.update({
+      where: { id: listId },
+      data: { publishedAt: new Date() },
+    });
+  }, 300_000);
+
+  it("writes the criteria it was judged against, and a retained record", async () => {
+    const audits = await prisma.curatedListAudit.findMany({ where: { listId } });
+    expect(audits.length).toBeGreaterThan(0);
+    expect(audits[0]?.memberCount).toBe(MIN_MEMBERS);
+    // "No one paid to be here" is unfalsifiable without a name on the decision.
+    expect(audits[0]?.editorId).toBe(opsLeadId);
+  }, 120_000);
+
+  it("acceptance 5 — a live metric change does not alter the page", async () => {
+    const before = await curatedList(`${PREFIX}list`);
+    const first = before?.members[0];
+    expect(first).toBeDefined();
+    const shown = first!.responseTimeMedianMs;
+
+    // The supplier gets slower. The page does not move: the figure it prints
+    // was measured on the audit date and says so.
+    await prisma.business.update({
+      where: { id: first!.businessId },
+      data: { responseTimeMedianMs: MAX_REPLY_MS + 3_600_000 },
+    });
+
+    const after = await curatedList(`${PREFIX}list`);
+    expect(after?.members[0]?.responseTimeMedianMs).toBe(shown);
+    expect(after?.members).toHaveLength(MIN_MEMBERS);
+
+    /*
+       Put it back. The next test re-audits, and a member whose live figure is
+       over the criterion cannot be seated — which is `auditList` working, and
+       is exactly the failure this line exists to keep out of a test about
+       something else.
+    */
+    await prisma.business.update({
+      where: { id: first!.businessId },
+      data: { responseTimeMedianMs: shown },
+    });
+  }, 120_000);
+
+  it("acceptance 6 — the audit date moves on a re-audit and on nothing else", async () => {
+    const before = (await curatedList(`${PREFIX}list`))?.auditedAt;
+    expect(before).toBeTruthy();
+
+    // A rebuild, a review landing, a sweep: none of them is a re-audit.
+    await sweepCuratedLists();
+    expect((await curatedList(`${PREFIX}list`))?.auditedAt?.getTime()).toBe(before?.getTime());
+
+    const reaudit = await auditList({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      listId,
+      entries: members.map((id, i) => entry(id, i)),
+      reason: "Re-audited, and this is the only thing that moves the date.",
+      now: new Date(before!.getTime() + 86_400_000),
+    });
+    expect(reaudit.ok, JSON.stringify(reaudit)).toBe(true);
+    const after = (await curatedList(`${PREFIX}list`))?.auditedAt;
+    expect(after!.getTime()).toBeGreaterThan(before!.getTime());
+
+    // And the previous snapshot is still there. A record overwritten on every
+    // re-audit is not evidence, it is the current claim restated.
+    expect(await prisma.curatedListAudit.count({ where: { listId } })).toBeGreaterThan(1);
+  }, 180_000);
+
+  it("acceptance 7 — a lapsed licence removes the entry in the build", async () => {
+    const before = await curatedList(`${PREFIX}list`);
+    const doomed = before!.members[1]!;
+
+    await prisma.business.update({
+      where: { id: doomed.businessId },
+      data: { verificationTier: VERIFIED_TIER - 1 },
+    });
+
+    const after = await curatedList(`${PREFIX}list`);
+    expect(after!.members.map((m) => m.businessId)).not.toContain(doomed.businessId);
+    // The numerals close up rather than leaving a gap where entry 02 was.
+    expect(after!.members.map((m) => m.rank)).toEqual(
+      after!.members.map((_, i) => i + 1),
+    );
+
+    // And the hero owes a removal date, which the sweep writes.
+    await sweepCuratedLists();
+    expect((await curatedList(`${PREFIX}list`))?.entryRemovedAt).not.toBeNull();
+
+    await prisma.business.update({
+      where: { id: doomed.businessId },
+      data: { verificationTier: VERIFIED_TIER },
+    });
+  }, 180_000);
+
+  it("soft drift goes to a queue and changes nothing the reader sees", async () => {
+    const before = await curatedList(`${PREFIX}list`);
+    const slipping = before!.members[2]!;
+
+    await prisma.business.update({
+      where: { id: slipping.businessId },
+      data: { responseTimeMedianMs: MAX_REPLY_MS + 2 * 3_600_000 },
+    });
+    const swept = await sweepCuratedLists();
+
+    expect(swept.drifted.some((row) => row.businessId === slipping.businessId)).toBe(true);
+    const queue = await driftQueue();
+    expect(queue.some((row) => row.criterion === "reply")).toBe(true);
+
+    // Still on the page, still at the same rank, still printing its snapshot.
+    const after = await curatedList(`${PREFIX}list`);
+    expect(after!.members.map((m) => m.businessId)).toContain(slipping.businessId);
+    expect(after!.members[2]?.responseTimeMedianMs).toBe(slipping.responseTimeMedianMs);
+  }, 180_000);
+
+  it("acceptance 8 — past the SLA with drift outstanding, the list unpublishes", async () => {
+    // Nothing renders a warning banner: a page saying "some of this may be out
+    // of date" is worse than absent.
+    await prisma.curatedList.update({
+      where: { id: listId },
+      data: { reauditDueAt: new Date(Date.now() - 86_400_000) },
+    });
+
+    const swept = await sweepCuratedLists();
+    expect(swept.unpublished.some((row) => row.slug === `${PREFIX}list`)).toBe(true);
+    expect(await curatedList(`${PREFIX}list`)).toBeNull();
+    expect((await liveLists()).some((row) => row.slug === `${PREFIX}list`)).toBe(false);
+  }, 180_000);
+});
+
+describe("acceptance 10 — the panel is the list's own record", () => {
+  it("renders whatever criteria the list carries, not a global constant", async () => {
+    const ids = await Promise.all(
+      Array.from({ length: MIN_MEMBERS }, (_, i) => candidate({ name: `panel${i}` })),
+    );
+    const other = await prisma.curatedList.create({
       data: {
-        slug: `${PREFIX}empty-list`,
-        title: "Nobody qualifies",
-        intro: "A list nobody is on yet.",
-        categoryId: emptyCategory.id,
+        slug: `${PREFIX}other`,
+        title: "A list with its own rules",
+        // A check constraint refuses a published list with no intro, and it is
+        // right to: the "why we publish the criteria" card is the page arguing
+        // for its own trustworthiness.
+        intro: "Two rules rather than three, and both of them printed above the names.",
+        // Two required, not three. A record of how *this* list was chosen.
+        criteria: [
+          { key: "verified", kind: "required" },
+          { key: "placement", kind: "never" },
+        ],
+        categoryId,
+        areaId,
         publishedAt: new Date(),
       },
+      select: { id: true },
     });
 
-    const view = await curatedList(`${PREFIX}empty-list`);
-    expect(view?.members).toEqual([]);
-    expect(view?.consideredCount).toBe(0);
-
-    const live = await liveLists();
-    expect(live.some((row) => row.slug === `${PREFIX}empty-list`)).toBe(false);
-  }, 120_000);
-
-  it("does not resolve a draft through the public read", async () => {
-    await prisma.curatedList.create({
-      data: {
-        slug: `${PREFIX}draft`,
-        title: "Not published",
-        categoryId,
-        intro: "A draft.",
-      },
+    await auditList({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      listId: other.id,
+      entries: ids.map((id, i) => entry(id, i)),
+      reason: "A list judged on two rules.",
     });
-    expect(await curatedList(`${PREFIX}draft`)).toBeNull();
-    expect(await curatedList(`${PREFIX}draft`, { includeDraft: true })).not.toBeNull();
-  }, 120_000);
+
+    const view = await curatedList(`${PREFIX}other`);
+    expect(view?.criteria.map((c) => c.key)).toEqual(["verified", "placement"]);
+    expect(view?.criteria).not.toEqual(DEFAULT_CRITERIA);
+  }, 180_000);
 });

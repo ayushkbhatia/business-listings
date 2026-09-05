@@ -119,9 +119,9 @@ site, in a filter, in a count, or on a curated list.
 sent, reply times. Measured rather than claimed, which is what a top rung has to be. The
 smallest group by a wide margin.
 
-The ladder used to have a fifth rung above licence verified, resting on somebody from our
-field team standing in the building. We do not gather that evidence, so the rung is gone: a
-badge whose requirement nobody performs means whatever staff decide on the day.
+The ladder used to carry a rung above licence verified that rested on somebody from this
+company physically attending the address. We do not gather that evidence any more, so the rung
+is gone: a badge whose requirement nobody performs means whatever staff decide on the day.
 
 **Expiry.** A UAE trade licence is renewed annually. On the day one expires, that supplier's
 tier drops to licence verified — no grace period, no warning. It goes back up when the renewed

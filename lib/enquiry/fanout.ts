@@ -85,7 +85,18 @@ export interface FanoutResult {
 }
 
 /** True when this seller's plan has no room left this month. */
-export function atMonthlyCap(candidate: FanoutCandidate): boolean {
+export function atMonthlyCap(
+  /*
+     The two fields it reads, not the whole candidate.
+
+     Board 6b's RFQ card has to name the eight recipients `1h` would actually
+     accept, and it holds list members rather than shaped candidates. Widening
+     the parameter to what the function uses lets that page ask this question
+     instead of re-deriving it — and a second definition of "at cap" is a second
+     thing to keep in step with the plan column.
+  */
+  candidate: Pick<FanoutCandidate, "enquiriesPerMonth" | "enquiriesThisMonth">,
+): boolean {
   return (
     candidate.enquiriesPerMonth !== null &&
     candidate.enquiriesThisMonth >= candidate.enquiriesPerMonth
