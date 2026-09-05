@@ -253,7 +253,6 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     labelKey: "nav.group.demand",
     items: [
       { key: "search", labelKey: "nav.search_ranking", href: "/admin/search", capability: "search.ranking.write" },
-      { key: "content", labelKey: "nav.content", href: "/admin/content/matrix", capability: "taxonomy.write" },
       {
         key: "storefront-templates",
         labelKey: "nav.storefront_templates",
@@ -274,17 +273,37 @@ export const ADMIN_NAV: readonly NavGroup[] = [
       { key: "tax", labelKey: "nav.tax", href: "/admin/tax", capability: "revenue.read" },
     ],
   },
+  /*
+     Board 6f §1. The page matrix was filed under DEMAND, between search
+     ranking and storefront templates, and the four screens that report into it
+     were scattered across two other groups — so the board that decides which
+     eight thousand pages exist was three headings away from the queues it
+     works. Four items, in the order the header's tabs list them.
+
+     The rest of what was one CONTENT group stays together as EDITORIAL:
+     notification templates, the string catalogue, attribution, homepage
+     curation and testimonials are not SEO, and folding them in would have made
+     an eight-row group whose heading was true of half of it.
+  */
+  {
+    key: "content-seo",
+    labelKey: "nav.group.content_seo",
+    items: [
+      { key: "content", labelKey: "nav.content", href: "/admin/content/matrix", capability: "taxonomy.write" },
+      { key: "content-lists", labelKey: "nav.content_lists", href: "/admin/content/lists", capability: "taxonomy.write" },
+      { key: "content-guides", labelKey: "nav.content_guides", href: "/admin/content/guides", capability: "taxonomy.write" },
+      { key: "content-redirects", labelKey: "nav.content_redirects", href: "/admin/content/redirects", capability: "taxonomy.write" },
+    ],
+  },
   {
     key: "content",
     labelKey: "nav.group.content",
     items: [
       { key: "notifications", labelKey: "nav.notifications", href: "/admin/notifications", capability: "taxonomy.write" },
       { key: "strings", labelKey: "nav.strings", href: "/admin/strings", capability: "taxonomy.write" },
-      { key: "content-guides", labelKey: "nav.content_guides", href: "/admin/content/guides", capability: "taxonomy.write" },
       { key: "content-attribution", labelKey: "nav.content_attribution", href: "/admin/content/attribution", capability: "taxonomy.write" },
       { key: "content-home", labelKey: "nav.content_home", href: "/admin/content/home", capability: "taxonomy.write" },
       { key: "content-testimonials", labelKey: "nav.content_testimonials", href: "/admin/content/testimonials", capability: "taxonomy.write" },
-      { key: "content-redirects", labelKey: "nav.content_redirects", href: "/admin/content/redirects", capability: "taxonomy.write" },
     ],
   },
   {

@@ -22,7 +22,19 @@ export default async function RedirectsPage() {
     id: row.id,
     fromPath: row.fromPath,
     toPath: row.toPath,
-    statusCode: String(row.statusCode),
+    /*
+       What goes on the wire, not what the column says.
+
+       `redirectIfMoved` calls Next's `permanentRedirect`, which emits 308. The
+       column has held 301 since handoff 0 because three writers store that
+       literal, and this table printed it — so the one screen in the product
+       that answers "what status does this address return" answered with a
+       number no request has ever received. 308 is the same instruction with the
+       method preserved; the column is left alone because rewriting stored rows
+       to match a renderer is the wrong direction, and the value it holds is the
+       intent rather than the response.
+    */
+    statusCode: "308",
     businessName: row.businessName ?? "—",
     added: formatDate(row.createdAt),
   }));

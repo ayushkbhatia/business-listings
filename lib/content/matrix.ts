@@ -96,6 +96,8 @@ export interface MatrixRow {
   introWords: number;
   intro: string | null;
   publishable: boolean;
+  /** This trade's own word floor, which the editor colours against. */
+  minWords: number;
   /** Which gates it fails, in the order somebody would fix them. */
   failing: MatrixGate[];
 }
@@ -160,6 +162,7 @@ export async function pageMatrix(): Promise<Matrix> {
       introWords,
       intro: category.intro,
       publishable: decision.publishable,
+      minWords: thresholds.minIntroWords,
       failing,
     };
   });

@@ -1,6 +1,6 @@
 import "server-only";
 import { areaMatrix } from "@/lib/content/matrix";
-import { driftQueue, reauditQueue } from "@/lib/seo/curated/compliance";
+import { driftQueue, reauditQueue } from "@/lib/seo/curated/queues";
 import { overdueGuides } from "@/lib/guides/service";
 
 /**

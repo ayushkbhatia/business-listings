@@ -9,7 +9,19 @@ import {
   saveEmirateIntro,
   unpublishEmiratePage,
 } from "@/lib/seo/emirate";
-import { editCategory } from "@/lib/taxonomy/service";
+import { editCategory, type CategoryRules } from "@/lib/taxonomy/service";
+import type { Actor } from "@/lib/auth/roles";
+import { recordScopeDemand } from "@/lib/content/demand";
+import { generateDrafts } from "@/lib/content/drafts";
+import { holdLandingPage, releaseLandingPage } from "@/lib/content/hold";
+import {
+  approveRuleChange,
+  closeRuleChange,
+  previewRuleChange,
+  proposeRuleChange,
+  RULE_FIELDS,
+  type RuleImpact,
+} from "@/lib/content/publish-rule";
 import {
   landingState,
   saveLandingFaq,
@@ -385,4 +397,184 @@ export async function saveEmirateContent(formData: FormData): Promise<ActionResu
   } catch (error) {
     return refusedBy(error);
   }
+}
+
+/*
+ * Board 6f §5 — the rules, under dual control.
+ *
+ * Four actions rather than one "save": a proposal, an approval, a rejection or
+ * withdrawal, and a preview that writes nothing. The service refuses a proposer
+ * who tries to approve their own change and a database CHECK refuses it again,
+ * so this layer is the wording rather than the rule.
+ */
+export type PreviewResult =
+  | { ok: true; impact: RuleImpact; before: CategoryRules; after: CategoryRules }
+  | { ok: false; error: string };
+
+export async function previewRules(formData: FormData): Promise<PreviewResult> {
+  const seat = await requireStaff();
+  const result = await previewRuleChange(
+    seat.actor,
+    String(formData.get("categoryId") ?? ""),
+    readRules(formData),
+  );
+  return result.ok
+    ? { ok: true, impact: result.impact, before: result.before, after: result.after }
+    : { ok: false, error: result.message };
+}
+
+export async function proposeRules(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const result = await proposeRuleChange(
+      seat.actor,
+      String(formData.get("categoryId") ?? ""),
+      readRules(formData),
+      String(formData.get("reason") ?? ""),
+    );
+    if (!result.ok) return { ok: false, error: result.message };
+    revalidatePath("/admin/content/matrix");
+    return { ok: true, message: t("rules.proposed") };
+  } catch (error) {
+    return refusedBy(error);
+  }
+}
+
+export async function approveRules(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const result = await approveRuleChange(
+      seat.actor,
+      String(formData.get("changeId") ?? ""),
+      String(formData.get("reason") ?? ""),
+    );
+    if (!result.ok) return { ok: false, error: result.message };
+    // Every landing page under this trade may have changed state, and so may
+    // the public index that counts them.
+    revalidatePath("/admin/content/matrix");
+    revalidatePath("/categories");
+    revalidatePath("/sitemap.xml");
+    return {
+      ok: true,
+      message: t("rules.approved", {
+        publishes: String(result.impact.publishes),
+        unpublishes: String(result.impact.unpublishes),
+      }),
+    };
+  } catch (error) {
+    return refusedBy(error);
+  }
+}
+
+export async function closeRules(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const result = await closeRuleChange(
+      seat.actor,
+      String(formData.get("changeId") ?? ""),
+      String(formData.get("reason") ?? ""),
+    );
+    if (!result.ok) return { ok: false, error: result.message };
+    revalidatePath("/admin/content/matrix");
+    return {
+      ok: true,
+      message: result.state === "withdrawn" ? t("rules.withdrawn") : t("rules.rejected"),
+    };
+  } catch (error) {
+    return refusedBy(error);
+  }
+}
+
+function readRules(formData: FormData): Partial<CategoryRules> {
+  const out: Partial<CategoryRules> = {};
+  for (const field of RULE_FIELDS) {
+    const raw = formData.get(field);
+    if (raw === null) continue;
+    if (field === "humanReviewRequired") {
+      out.humanReviewRequired = String(raw) === "true" || String(raw) === "on";
+      continue;
+    }
+    const value = Number(String(raw));
+    if (!Number.isFinite(value)) continue;
+    Object.assign(out, { [field]: value });
+  }
+  return out;
+}
+
+/** Board 6f §2 — drafts into the content-ops queue. Never a publish. */
+export async function generateDraftsAction(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const categoryId = String(formData.get("categoryId") ?? "");
+    const result = await generateDrafts(
+      seat.actor,
+      categoryId === "" ? undefined : categoryId,
+      String(formData.get("reason") ?? ""),
+    );
+    if (!result.ok) return { ok: false, error: result.message };
+    revalidatePath("/admin/content/matrix");
+    return { ok: true, message: t("matrix.drafts_made", { count: String(result.created) }) };
+  } catch (error) {
+    return refusedBy(error);
+  }
+}
+
+/** The recorded search volume for one scope, with its source and its vintage. */
+export async function saveDemand(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const areaId = String(formData.get("areaId") ?? "");
+    const captured = String(formData.get("capturedAt") ?? "");
+    const result = await recordScopeDemand({
+      actor: seat.actor,
+      categoryId: String(formData.get("categoryId") ?? ""),
+      emirate: String(formData.get("emirate") ?? ""),
+      areaId: areaId === "" ? null : areaId,
+      monthlySearches: Number(String(formData.get("monthlySearches") ?? "")),
+      source: String(formData.get("source") ?? ""),
+      capturedAt: captured === "" ? new Date() : new Date(captured),
+      reason: String(formData.get("reason") ?? ""),
+    });
+    if (!result.ok) return { ok: false, error: result.message };
+    areaPaths(formData);
+    return { ok: true, message: t("matrix.demand_saved") };
+  } catch (error) {
+    return refusedBy(error);
+  }
+}
+
+/** `Held · editorial`. A person's no, and only a person's yes takes it away. */
+export async function holdPage(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const result = await holdLandingPage(readHold(seat.actor, formData));
+    if (!result.ok) return { ok: false, error: result.message };
+    areaPaths(formData);
+    return { ok: true, message: t("matrix.held") };
+  } catch (error) {
+    return refusedBy(error);
+  }
+}
+
+export async function releasePage(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const result = await releaseLandingPage(readHold(seat.actor, formData));
+    if (!result.ok) return { ok: false, error: result.message };
+    areaPaths(formData);
+    return { ok: true, message: t("matrix.released") };
+  } catch (error) {
+    return refusedBy(error);
+  }
+}
+
+function readHold(actor: Actor, formData: FormData) {
+  const areaId = String(formData.get("areaId") ?? "");
+  const emirate = String(formData.get("emirate") ?? "");
+  return {
+    actor,
+    ...(areaId === "" ? { emirate } : { areaId }),
+    categoryId: String(formData.get("categoryId") ?? ""),
+    reason: String(formData.get("reason") ?? ""),
+  };
 }
