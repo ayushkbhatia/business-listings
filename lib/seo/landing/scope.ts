@@ -478,7 +478,7 @@ export async function landingState(scope: LandingScope, now = new Date()): Promi
     live:
       row?.publishedAt != null &&
       row.heldAt == null &&
-      (hold.publishable || (withinGrace && onlyListingsFailing(hold.failures))),
+      (hold.publishable || (withinGrace && onlySupplyFailing(hold.failures))),
     failing: decision.failures,
     holdFailing: hold.failures,
   };
@@ -486,6 +486,21 @@ export async function landingState(scope: LandingScope, now = new Date()): Promi
 
 const DAY_MS = 86_400_000;
 
-function onlyListingsFailing(failures: readonly PublishFailure[]): boolean {
-  return failures.length > 0 && failures.every((failure) => failure.reason === "listings");
+/**
+ * Whether the only thing wrong is supply.
+ *
+ * The minimum-live window covers the two conditions the world moves under a
+ * page — the listing count and the share of it that is verified, which is
+ * measured against that same count and slides with it. It does not cover the
+ * copy or the questions: those change when an editor changes them, and a page
+ * whose intro was emptied should stop being served in that request whatever its
+ * age. A grace period is for a wobble, not for a deletion.
+ */
+function onlySupplyFailing(failures: readonly PublishFailure[]): boolean {
+  return (
+    failures.length > 0 &&
+    failures.every(
+      (failure) => failure.reason === "listings" || failure.reason === "verified_share",
+    )
+  );
 }

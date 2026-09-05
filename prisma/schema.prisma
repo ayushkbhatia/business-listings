@@ -3335,6 +3335,8 @@ enum RuleChangeState {
   approved
   rejected
   withdrawn
+
+  @@map("rule_change_state")
 }
 
 model EmiratePage {

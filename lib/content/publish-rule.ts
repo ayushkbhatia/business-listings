@@ -48,6 +48,7 @@ const BOUNDS: Record<RuleField, { min: number; max: number; integer: boolean } |
 };
 
 export type RuleProposalRefusal =
+  | "not_yours"
   | "not_found"
   | "out_of_range"
   | "no_change"
@@ -92,11 +93,21 @@ export async function previewRuleChange(
      `can()`, so any staff seat — including a field verifier — can ask it how
      many addresses a rename would move. This one asks first: a preview of a
      threshold change is a map of the whole index's soft spots.
+
+     A refusal rather than a throw, because a preview is a read: the screen
+     shows the sentence. The three writers below throw `PermissionError` from
+     `staffMutation` like every other audited mutation in the product.
   */
   if (!can(actor, "taxonomy.write")) {
-    return { ok: false, error: "not_found", message: "That is not yours to change." };
+    return { ok: false, error: "not_yours", message: "That is not yours to change." };
   }
+  return buildChange(categoryId, next);
+}
 
+async function buildChange(
+  categoryId: string,
+  next: Partial<CategoryRules>,
+): Promise<RuleResult<{ impact: RuleImpact; before: CategoryRules; after: CategoryRules }>> {
   const category = await prisma.category.findUnique({
     where: { id: categoryId },
     select: CATEGORY_RULES_SELECT,
@@ -168,7 +179,15 @@ export async function proposeRuleChange(
   next: Partial<CategoryRules>,
   reason: string,
 ): Promise<RuleResult<{ id: string; impact: RuleImpact }>> {
-  const preview = await previewRuleChange(actor, categoryId, next);
+  /*
+     `buildChange`, not `previewRuleChange`.
+
+     The capability check belongs to `staffMutation` on this path, so a
+     moderator gets the `PermissionError` every other audited mutation in the
+     product throws rather than a soft "not yours" that reads like a missing
+     row. Going through the gated preview would have swallowed it.
+  */
+  const preview = await buildChange(categoryId, next);
   if (!preview.ok) return preview;
 
   const pending = await prisma.publishRuleChange.findFirst({
@@ -241,10 +260,6 @@ export async function approveRuleChange(
   changeId: string,
   reason: string,
 ): Promise<RuleResult<{ impact: RuleImpact }>> {
-  if (!can(actor, "taxonomy.write")) {
-    return { ok: false, error: "not_found", message: "That is not yours to change." };
-  }
-
   const change = await prisma.publishRuleChange.findUnique({
     where: { id: changeId },
     select: {
@@ -336,10 +351,6 @@ export async function closeRuleChange(
   changeId: string,
   reason: string,
 ): Promise<RuleResult<{ state: "rejected" | "withdrawn" }>> {
-  if (!can(actor, "taxonomy.write")) {
-    return { ok: false, error: "not_found", message: "That is not yours to change." };
-  }
-
   const change = await prisma.publishRuleChange.findUnique({
     where: { id: changeId },
     select: { id: true, categoryId: true, state: true, proposedById: true },

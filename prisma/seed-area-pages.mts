@@ -635,6 +635,69 @@ async function seedEmiratePage(db: PrismaClient) {
   );
 }
 
+/**
+ * Board 6f — recorded search volume, so the demand column is a number.
+ *
+ * Three rows, chosen so the seeded state shows three of the five statuses and
+ * moves none of the pages that are already published.
+ *
+ * The two published HVAC areas carry 62 and 61 listings, so their figures have
+ * to keep `25 × searches / 1000` under 60 or the flagship page in every
+ * acceptance test would unpublish itself the moment this seeded. 1,900 gives a
+ * demand need of 48, which loses to the absolute floor — the column is
+ * populated and the rule is unchanged, which is the honest demonstration.
+ *
+ * The third row carries the board's own worked figure — 3,940 searches a month,
+ * a need of 99 — against Al Quoz Industrial 3, which has a handful of HVAC
+ * listings. That is the `Recruit` state, and the row states a shortfall a
+ * recruiter can act on. The board names Business Bay; the seed has no such area
+ * because every seeded area is industrial, and inventing an office district to
+ * match a worked example would be a row that exists for a screenshot.
+ *
+ * The source is named and the date is real. A keyword figure with no provenance
+ * is a number nobody can check deciding which pages exist.
+ */
+const DEMAND = [
+  { areaSlug: "al-quoz-industrial-1", categorySlug: "hvac-and-ventilation", monthlySearches: 1_900 },
+  { areaSlug: "jebel-ali-free-zone", categorySlug: "hvac-and-ventilation", monthlySearches: 1_450 },
+  { areaSlug: "al-quoz-industrial-3", categorySlug: "hvac-and-ventilation", monthlySearches: 3_940 },
+] as const;
+
+const DEMAND_SOURCE = "Keyword export, UAE English + Arabic";
+const DEMAND_CAPTURED = new Date("2026-08-01T00:00:00.000Z");
+
+async function seedDemand(db: PrismaClient) {
+  for (const row of DEMAND) {
+    const area = await db.area.findUnique({
+      where: { slug: row.areaSlug },
+      select: { id: true, emirate: true },
+    });
+    const category = await db.category.findUnique({
+      where: { slug: row.categorySlug },
+      select: { id: true },
+    });
+    if (!area || !category) continue;
+
+    const existing = await db.scopeDemand.findFirst({
+      where: { categoryId: category.id, emirate: area.emirate, areaId: area.id },
+      select: { id: true },
+    });
+    const data = {
+      monthlySearches: row.monthlySearches,
+      source: DEMAND_SOURCE,
+      capturedAt: DEMAND_CAPTURED,
+    };
+    if (existing) {
+      await db.scopeDemand.update({ where: { id: existing.id }, data });
+    } else {
+      await db.scopeDemand.create({
+        data: { ...data, categoryId: category.id, emirate: area.emirate, areaId: area.id },
+      });
+    }
+    console.log(`   ${row.areaSlug}/${row.categorySlug}: ${row.monthlySearches} searches a month`);
+  }
+}
+
 export async function seedAreaPages(db: PrismaClient) {
   await recruit(db, {
     ...SECOND,
@@ -661,4 +724,5 @@ export async function seedAreaPages(db: PrismaClient) {
   });
   // Last, because it counts the listings the two published areas above created.
   await seedEmiratePage(db);
+  await seedDemand(db);
 }

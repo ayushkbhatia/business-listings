@@ -9,6 +9,7 @@ import {
   countWords,
   evaluateHold,
   evaluatePublish,
+  isSupply,
   listingsNeeded,
   type PublishFailure,
 } from "@/lib/publish-threshold";
@@ -94,6 +95,7 @@ export interface EmiratePageState extends LandingState {
 export async function emirateCategoryState(
   emirate: string,
   categoryId: string,
+  now = new Date(),
 ): Promise<EmiratePageState | null> {
   const category = await prisma.category.findUnique({
     where: { id: categoryId },
@@ -104,7 +106,7 @@ export async function emirateCategoryState(
   const scope = await resolveEmirateScope({ emirate, category: category.slug });
   if (!scope) return null;
 
-  const state = await landingState(scope);
+  const state = await landingState(scope, now);
   return { ...state, emirate, categoryId };
 }
 
@@ -318,10 +320,10 @@ export async function emirateMatrix(now = new Date()): Promise<MatrixRow[]> {
  * absent from both and a published one whose supply fell this morning leaves
  * both on the next read.
  */
-export async function liveEmiratePages(): Promise<
-  { emirate: string; categorySlug: string }[]
-> {
-  const matrix = await emirateMatrix();
+export async function liveEmiratePages(
+  now = new Date(),
+): Promise<{ emirate: string; categorySlug: string }[]> {
+  const matrix = await emirateMatrix(now);
   return matrix.flatMap((row) =>
     row.cells
       .filter((cell) => cell.live)
@@ -562,7 +564,7 @@ export interface EmirateSweepResult {
  * its own published rule has no actor, and `AuditEvent.actorId` is NOT NULL
  * because the log records decisions.
  */
-export async function sweepEmiratePages(): Promise<EmirateSweepResult> {
+export async function sweepEmiratePages(now = new Date()): Promise<EmirateSweepResult> {
   const published = await prisma.emiratePage.findMany({
     where: { publishedAt: { not: null } },
     select: { emirate: true, categoryId: true, category: { select: { slug: true } } },
@@ -573,7 +575,7 @@ export async function sweepEmiratePages(): Promise<EmirateSweepResult> {
   let held = 0;
 
   for (const page of published) {
-    const state = await emirateCategoryState(page.emirate, page.categoryId);
+    const state = await emirateCategoryState(page.emirate, page.categoryId, now);
     if (!state) continue;
 
     const freshness = await refreshFreshness(state.scope);
@@ -581,7 +583,7 @@ export async function sweepEmiratePages(): Promise<EmirateSweepResult> {
 
     // The band and the window, as on the area class — board 6f §6.
     if (state.holdsFloors) continue;
-    if (state.withinGrace && state.holdFailing.every((f) => f.reason === "listings")) {
+    if (state.withinGrace && state.holdFailing.every(isSupply)) {
       held += 1;
       continue;
     }
@@ -614,8 +616,8 @@ export interface EmiratePageRow extends EmiratePageState {
  * a screen that only listed authored pages would hide exactly the work that
  * needs doing.
  */
-export async function emiratePageRows(): Promise<EmiratePageRow[]> {
-  const matrix = await emirateMatrix();
+export async function emiratePageRows(now = new Date()): Promise<EmiratePageRow[]> {
+  const matrix = await emirateMatrix(now);
   const rows: EmiratePageRow[] = [];
 
   for (const sector of matrix) {

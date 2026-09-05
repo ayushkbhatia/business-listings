@@ -4,7 +4,7 @@ import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
 import type { SubjectRef } from "@/lib/audit/types";
-import { countWords, type PublishFailure } from "@/lib/publish-threshold";
+import { countWords, isSupply, type PublishFailure } from "@/lib/publish-threshold";
 import {
   landingState,
   refreshFreshness,
@@ -70,10 +70,11 @@ function toAreaState(state: LandingState): AreaPageState {
 export async function areaPageState(
   areaId: string,
   categoryId: string,
+  now = new Date(),
 ): Promise<AreaPageState | null> {
   const scope = await scopeForArea(areaId, categoryId);
   if (!scope) return null;
-  return toAreaState(await landingState(scope));
+  return toAreaState(await landingState(scope, now));
 }
 
 export type AreaPageRefusal = "not_found" | "below_floors" | "not_published" | "held";
@@ -336,7 +337,12 @@ export interface SweepResult {
  * a staff member reading the matrix is not told a page is published while the
  * page itself says it is held.
  */
-export async function sweepAreaPages(): Promise<SweepResult> {
+/*
+   `now` is injectable, and it has to be: board 6f's minimum-live window is the
+   one rule here that cannot be exercised without moving the clock, and a rule
+   that cannot be tested is a rule nobody knows works.
+*/
+export async function sweepAreaPages(now = new Date()): Promise<SweepResult> {
   const published = await prisma.areaPage.findMany({
     where: { publishedAt: { not: null } },
     select: {
@@ -352,7 +358,7 @@ export async function sweepAreaPages(): Promise<SweepResult> {
   let held = 0;
 
   for (const page of published) {
-    const state = await areaPageState(page.areaId, page.categoryId);
+    const state = await areaPageState(page.areaId, page.categoryId, now);
     if (!state) continue;
 
     /*
@@ -385,7 +391,7 @@ export async function sweepAreaPages(): Promise<SweepResult> {
        page skipped here is a page the site is still serving — the column and
        the site agree, which is the whole job of this sweep.
     */
-    if (state.withinGrace && state.holdFailing.every((f) => f.reason === "listings")) {
+    if (state.withinGrace && state.holdFailing.every(isSupply)) {
       held += 1;
       continue;
     }
@@ -406,9 +412,9 @@ export async function sweepAreaPages(): Promise<SweepResult> {
 }
 
 /** Every live area page, for the sitemap and the cross-links. */
-export async function livePages(): Promise<
-  { areaSlug: string; emirate: string; categorySlug: string; updatedAt: Date }[]
-> {
+export async function livePages(
+  now = new Date(),
+): Promise<{ areaSlug: string; emirate: string; categorySlug: string; updatedAt: Date }[]> {
   const rows = await prisma.areaPage.findMany({
     where: { publishedAt: { not: null } },
     select: {
@@ -425,7 +431,7 @@ export async function livePages(): Promise<
   for (const row of rows) {
     // Intent is not enough. The conditions are re-checked here so the sitemap
     // can never contain a page the route would serve as a 404.
-    const state = await areaPageState(row.areaId, row.categoryId);
+    const state = await areaPageState(row.areaId, row.categoryId, now);
     if (!state?.live) continue;
     live.push({
       areaSlug: row.area.slug,

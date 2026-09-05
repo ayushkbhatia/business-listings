@@ -276,7 +276,19 @@ export async function areaMatrix(
   const [categories, areas, supply, pages, demand] = await Promise.all([
     prisma.category.findMany({
       where: filter.categoryId ? { id: filter.categoryId } : {},
-      select: { id: true, name: true, slug: true, parentId: true, ...CATEGORY_RULES_SELECT },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        parentId: true,
+        // Whether anything already has a page under this trade. A subcategory
+        // is not part of the row set on its own, but one that somebody has
+        // written a page for has to be: board 6a criterion 12 asks the sitemap
+        // and this matrix to hold the same URLs, and a live page missing from
+        // here would be a page the matrix could not answer for.
+        _count: { select: { areaPages: true } },
+        ...CATEGORY_RULES_SELECT,
+      },
     }),
     prisma.area.findMany({
       where: filter.emirate ? { emirate: filter.emirate as never } : {},
@@ -364,10 +376,18 @@ export async function areaMatrix(
   const rows: AreaMatrixRow[] = [];
   for (const area of areas) {
     for (const category of categories) {
-      // Sectors only. A subcategory has no landing page of its own — board 6a
-      // routes `/:emirate/:area/:category` at the trade, and its children are
-      // chips on that page.
-      if (category.parentId !== null) continue;
+      /*
+         Sectors, and any subcategory somebody has already written a page for.
+
+         The row set is a demand-and-supply report on the trades a page could
+         exist for, and that is the sectors: a subcategory's supply is counted
+         into its parent, and listing every child would multiply the rows by
+         four to say the same thing. But a page that EXISTS has to appear here
+         whatever its category, or the sitemap holds a URL this screen cannot
+         explain — which is board 6a criterion 12, asserted in the integration
+         suite, and it is how this was found.
+      */
+      if (category.parentId !== null && category._count.areaPages === 0) continue;
 
       let listings = 0;
       let verified = 0;

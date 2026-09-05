@@ -56,7 +56,11 @@ beforeAll(async () => {
    * and does not remove a buyer's published words. This read `staff_moderator`
    * while the matrix was inferred.
    */
-  const staff = await prisma.user.findFirst({ where: { roles: { has: "staff_ops_lead" } }, select: { id: true } });
+  const staff = await prisma.user.findFirst({
+    where: { roles: { has: "staff_ops_lead" } },
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
   moderator = { id: staff?.id ?? buyerId, roles: ["staff_ops_lead"] };
   fieldStaff = { id: staff?.id ?? buyerId, roles: ["staff_field"] };
 });

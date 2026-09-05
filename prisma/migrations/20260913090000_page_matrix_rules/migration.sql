@@ -131,7 +131,7 @@ UPDATE "emirate_page" SET "first_published_at" = "published_at"
 CREATE TABLE IF NOT EXISTS "scope_demand" (
   "id"               TEXT NOT NULL,
   "category_id"      TEXT NOT NULL,
-  "emirate"          "Emirate" NOT NULL,
+  "emirate"          "emirate" NOT NULL,
   "area_id"          TEXT,
   "monthly_searches" INTEGER NOT NULL,
   "source"           TEXT NOT NULL,
@@ -198,7 +198,7 @@ END $$;
 
 DO $$
 BEGIN
-  CREATE TYPE "RuleChangeState" AS ENUM ('proposed', 'approved', 'rejected', 'withdrawn');
+  CREATE TYPE "rule_change_state" AS ENUM ('proposed', 'approved', 'rejected', 'withdrawn');
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -208,7 +208,7 @@ CREATE TABLE IF NOT EXISTS "publish_rule_change" (
   "before"          JSONB NOT NULL,
   "after"           JSONB NOT NULL,
   "impact"          JSONB NOT NULL,
-  "state"           "RuleChangeState" NOT NULL DEFAULT 'proposed',
+  "state"           "rule_change_state" NOT NULL DEFAULT 'proposed',
   "proposed_by_id"  UUID NOT NULL,
   "proposed_reason" TEXT NOT NULL,
   "decided_by_id"   UUID,

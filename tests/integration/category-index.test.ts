@@ -52,6 +52,10 @@ function stamp() {
 async function opsLead(): Promise<Actor> {
   const user = await prisma.user.findFirstOrThrow({
     where: { roles: { has: "staff_ops_lead" } },
+    // One of two seeded ops leads, and always the same one: board 6f
+    // needs a second for dual control, and `findFirst` has no defined
+    // order without this.
+    orderBy: { id: "asc" as const },
     select: { id: true, roles: true },
   });
   return { id: user.id, roles: user.roles as Actor["roles"] };
@@ -179,6 +183,9 @@ async function sectorWithSupply(options: {
 
   return category;
 }
+
+/** Past any minimum-live window, so a state is judged on supply alone. */
+const LATER = new Date(Date.now() + 400 * 86_400_000);
 
 describe("the threshold rule decides whether a cell is a link", () => {
   it("clears the floors on 60 listings, 30% verified and 250 words", async () => {
@@ -367,7 +374,7 @@ describe("criterion 4 — the page's links and the sitemap agree", () => {
     expect(fromMatrix.length).toBeGreaterThan(0);
   });
 
-  it("drops a cell from both the moment its supply falls", async () => {
+  it("drops a cell from both the moment its supply falls through the band", async () => {
     const category = await sectorWithSupply({
       listings: 60,
       verified: 20,
@@ -380,13 +387,26 @@ describe("criterion 4 — the page's links and the sitemap agree", () => {
     expect((await liveEmiratePages()).map((p) => emiratePagePath(p.emirate, p.categorySlug)))
       .toContain(path);
 
-    // One supplier suspended, and the cell is under the floor again.
-    const doomed = await prisma.business.findFirstOrThrow({
+    /*
+       Enough suspended to fall through the hysteresis band, not one.
+
+       Board 6f: a page publishes at 60 and holds down to 48, so suspending a
+       single supplier now proves the opposite of what this used to prove — the
+       page must NOT move. It is a real assertion either way, so both are here.
+    */
+    const doomed = await prisma.business.findMany({
       where: { primaryCategoryId: category.id },
       select: { id: true },
+      take: 20,
     });
     await prisma.business.update({
-      where: { id: doomed.id },
+      where: { id: doomed[0]!.id },
+      data: { suspendedAt: new Date() },
+    });
+    expect((await emirateCategoryState("sharjah", category.id))?.live).toBe(true);
+
+    await prisma.business.updateMany({
+      where: { id: { in: doomed.map((row) => row.id) } },
       data: { suspendedAt: new Date() },
     });
 
@@ -395,12 +415,15 @@ describe("criterion 4 — the page's links and the sitemap agree", () => {
        Nothing is cached between the two reads, and note that `publishedAt` is
        untouched — staff intent survives; it is the supply that failed, and it
        is re-checked on every read rather than trusted to a job having run.
+
+       `LATER` because board 6f gives a newly published page 30 days before an
+       automatic take-down, and this fixture published seconds ago.
     */
-    const state = await emirateCategoryState("sharjah", category.id);
+    const state = await emirateCategoryState("sharjah", category.id, LATER);
     expect(state?.publishedAt).not.toBeNull();
     expect(state?.clearsFloors).toBe(false);
     expect(state?.live).toBe(false);
-    expect((await liveEmiratePages()).map((p) => emiratePagePath(p.emirate, p.categorySlug)))
+    expect((await liveEmiratePages(LATER)).map((p) => emiratePagePath(p.emirate, p.categorySlug)))
       .not.toContain(path);
   });
 });

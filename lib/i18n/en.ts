@@ -2584,6 +2584,7 @@ export const en = {
   "dev.seat.kind.sales": "Sales",
   "dev.seat.kind.finance": "Finance",
   "dev.seat.kind.ops_lead": "Ops lead",
+  "dev.seat.kind.ops_lead_2": "Ops lead (second approver)",
   "dev.seat.kind.moderator": "Moderator",
   "dev.seat.kind.field": "Field verifier",
   "dev.seat.kind.staff_finance": "Platform finance",

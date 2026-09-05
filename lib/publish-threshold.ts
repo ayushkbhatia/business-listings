@@ -283,6 +283,17 @@ function decide(
   return { publishable: failures.length === 0, failures };
 }
 
+/**
+ * A failure the world caused, rather than one an editor did.
+ *
+ * Board 6f's minimum-live window covers exactly these two: a page holds through
+ * a supply wobble and never through a deleted paragraph. Exported so the two
+ * sweeps and `landingState` cannot answer it differently.
+ */
+export function isSupply(failure: PublishFailure): boolean {
+  return failure.reason === "listings" || failure.reason === "verified_share";
+}
+
 export function countWords(text: string | null | undefined): number {
   if (!text) return 0;
   return text.trim().split(/\s+/).filter(Boolean).length;
