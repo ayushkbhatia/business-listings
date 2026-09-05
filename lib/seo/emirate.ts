@@ -5,12 +5,19 @@ import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
 import type { SubjectRef } from "@/lib/audit/types";
 import { VERIFIED_TIER } from "@/lib/verification";
-import {
-  DEFAULT_THRESHOLDS,
-  evaluatePublish,
-  type PublishFailure,
-  type PublishThresholds,
-} from "@/lib/publish-threshold";
+import { countWords, evaluatePublish, type PublishFailure } from "@/lib/publish-threshold";
+/*
+   The one builder, imported rather than restated.
+
+   This file carried a private `thresholdsFor` and a private `countWords` whose
+   bodies were byte-identical to the exported pair — while its own docblock
+   below argued that "two gates that agree until somebody changes one is the
+   defect this project repeats most". Board 6f adds three columns to the
+   threshold bag, and a copy would have meant the 84 emirate pages publishing on
+   the old rule while the area pages under them published on the new one: a URL
+   in the sitemap that the route 404s.
+*/
+import { thresholdsFor } from "@/lib/taxonomy/service";
 import {
   landingState,
   refreshFreshness,
@@ -71,24 +78,6 @@ export interface EmiratePageState {
   failing: readonly PublishFailure[];
   /** The scope object, so callers do not resolve it a second time. */
   scope: LandingScope;
-}
-
-function countWords(text: string | null | undefined): number {
-  const trimmed = (text ?? "").trim();
-  return trimmed === "" ? 0 : trimmed.split(/\s+/).length;
-}
-
-function thresholdsFor(category: {
-  publishThreshold: number;
-  verifiedShareMin: number;
-}): PublishThresholds {
-  return {
-    minListings: category.publishThreshold,
-    minVerifiedShare: category.verifiedShareMin,
-    minIntroWords: DEFAULT_THRESHOLDS.minIntroWords,
-    minFaqRows: DEFAULT_THRESHOLDS.minFaqRows,
-    minScopeSpecificFaqRows: DEFAULT_THRESHOLDS.minScopeSpecificFaqRows,
-  };
 }
 
 /*
