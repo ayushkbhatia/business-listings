@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { approveChange, rejectChange, submissionFor } from "@/lib/moderation/service";
 import { requestModeratedChange } from "@/lib/listing/service";
@@ -15,12 +15,82 @@ import type { Actor, Role } from "@/lib/auth/roles";
  * one. That failure looks exactly like success from the console.
  */
 
+/**
+ * The slug is the slugified trade name, so the two move together — see
+ * `listingWithOwner`. Change one and the cleanup below stops matching.
+ */
+const TRADE_NAME = "Queue Test Trading LLC";
+const SLUG_PREFIX = "queue-test-trading-llc-";
+const ENQUIRY_PREFIX = "ENQ-M-";
+const OWNER_NAME = "Queue Owner";
+const BUYER_NAME = "Waiting Buyer";
+
 const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 
 let opsLeadId: string;
 let moderatorId: string;
 let fieldOfficerId: string;
 let seq = 0;
+
+/**
+ * Every row this suite writes.
+ *
+ * The listings are published, so a leaked one shows on the home page and in
+ * `/dev/seat`. CI never saw the accumulation because each job gets its own
+ * `supabase start`; a local database is shared with every sibling worktree and
+ * keeps what it is given.
+ *
+ * The slug prefix alone is not enough to find them. Half this file's point is
+ * that approving a trade-name change **renames the listing**, so a fixture that
+ * ends the run as `moved-address-trading-llc-…` or `renamed-supplies-llc-…` no
+ * longer matches what it was created as. The owner seat is the stable handle:
+ * `Queue Owner` carries `businessId` and no rename touches it.
+ *
+ * `ListingChangeRequest.actor` is `Restrict` on `User`, so the owner cannot go
+ * before the requests they filed. The business takes those with it — they
+ * cascade — which is why the owner is deleted afterwards and not before.
+ */
+async function removeFixtures() {
+  const [bySlug, byOwner] = await Promise.all([
+    prisma.business.findMany({
+      where: { slug: { startsWith: SLUG_PREFIX } },
+      select: { id: true, slug: true },
+    }),
+    prisma.user.findMany({
+      where: { fullName: OWNER_NAME, businessId: { not: null } },
+      select: { businessId: true },
+    }),
+  ]);
+  const ids = [
+    ...new Set([
+      ...bySlug.map((row) => row.id),
+      ...byOwner.flatMap((row) => (row.businessId ? [row.businessId] : [])),
+    ]),
+  ];
+
+  if (ids.length > 0) {
+    const [requests, moved] = await Promise.all([
+      prisma.listingChangeRequest.findMany({
+        where: { businessId: { in: ids } },
+        select: { id: true },
+      }),
+      // A rename leaves a 301 behind, and `Redirect.business` is `SetNull` —
+      // it survives the cascade as a redirect to nothing unless it is named.
+      prisma.redirect.findMany({ where: { businessId: { in: ids } }, select: { id: true } }),
+    ]);
+
+    // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
+    await prisma.auditEvent.deleteMany({
+      where: { subject: { in: requests.map((row) => `ListingChangeRequest:${row.id}`) } },
+    });
+    await prisma.redirect.deleteMany({ where: { id: { in: moved.map((row) => row.id) } } });
+    await prisma.business.deleteMany({ where: { id: { in: ids } } });
+  }
+
+  await prisma.redirect.deleteMany({ where: { fromPath: { startsWith: `/b/${SLUG_PREFIX}` } } });
+  await prisma.enquiry.deleteMany({ where: { ref: { startsWith: ENQUIRY_PREFIX } } });
+  await prisma.user.deleteMany({ where: { fullName: { in: [OWNER_NAME, BUYER_NAME] } } });
+}
 
 beforeAll(async () => {
   const staff = await prisma.user.findMany({
@@ -31,6 +101,12 @@ beforeAll(async () => {
   opsLeadId = byRole("staff_ops_lead");
   moderatorId = byRole("staff_moderator");
   fieldOfficerId = byRole("staff_field");
+
+  await removeFixtures();
+});
+
+afterAll(async () => {
+  await removeFixtures();
 });
 
 /** A published listing with an owner who can ask for a change. */
@@ -47,7 +123,7 @@ async function listingWithOwner() {
    * whose slug is unrelated to its name cannot collide with anything, which
    * quietly turned the slug-collision test into a test of nothing.
    */
-  const tradeName = `Queue Test Trading LLC ${stamp}`;
+  const tradeName = `${TRADE_NAME} ${stamp}`;
   const business = await prisma.business.create({
     data: {
       tradeName,
@@ -79,7 +155,7 @@ async function listingWithOwner() {
     data: {
       id: crypto.randomUUID(),
       phone: `+9715${stamp.slice(-9)}`,
-      fullName: "Queue Owner",
+      fullName: OWNER_NAME,
       roles: ["seller_owner"],
       businessId: business.id,
     },
@@ -328,12 +404,12 @@ describe("what the review screen puts in front of the decision", () => {
     const askedId = requested(await requestModeratedChange(ownerActor, business.id, "licence", "DED-700555"));
 
     const buyer = await prisma.user.create({
-      data: { id: crypto.randomUUID(), fullName: "Waiting Buyer", roles: ["buyer"] },
+      data: { id: crypto.randomUUID(), fullName: BUYER_NAME, roles: ["buyer"] },
       select: { id: true },
     });
     const enquiry = await prisma.enquiry.create({
       data: {
-        ref: `ENQ-M-${Date.now()}${seq}`,
+        ref: `${ENQUIRY_PREFIX}${Date.now()}${seq}`,
         buyerId: buyer.id,
         requirement: "Butterfly valves, DN80.",
         closesAt: new Date(Date.now() + 7 * 86_400_000),

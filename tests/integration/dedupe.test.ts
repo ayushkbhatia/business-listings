@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import {
   dismissCandidate,
@@ -24,6 +24,10 @@ import type { Actor, Role } from "@/lib/auth/roles";
  * would be reversibility of nothing.
  */
 
+const PREFIX = "dedupe-";
+const ENQUIRY_PREFIX = "ENQ-D-";
+const BUYER_NAME = "Dedupe Buyer";
+
 const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 
 let opsLeadId: string;
@@ -31,6 +35,44 @@ let moderatorId: string;
 let categoryId: string;
 let areaId: string;
 let seq = 0;
+
+/**
+ * Every row this suite writes, in the order the foreign keys allow.
+ *
+ * This file builds 27 published, tier-2 listings per run. Leaked, they show on
+ * the home page and in `/dev/seat`, and they move the SEO page matrix's
+ * verified share for a real category — the same crosstalk the `beforeAll`
+ * comment about undefined category ordering was written for. CI never saw it
+ * because each job gets its own `supabase start`; a local database is shared
+ * with every sibling worktree and keeps what it is given.
+ *
+ * `BusinessMerge.keep` and `.absorb` are `Restrict`, so a merge row outlives
+ * both listings and blocks the delete. It goes first. The 301 a merge leaves
+ * behind is `SetNull`, so it survives the cascade as a redirect to nothing and
+ * has to be named.
+ */
+async function removeFixtures() {
+  const ours = await prisma.business.findMany({
+    where: { slug: { startsWith: PREFIX } },
+    select: { id: true },
+  });
+  const ids = ours.map((row) => row.id);
+
+  if (ids.length > 0) {
+    // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
+    await prisma.auditEvent.deleteMany({
+      where: { subject: { in: ids.map((id) => `Business:${id}`) } },
+    });
+    await prisma.businessMerge.deleteMany({
+      where: { OR: [{ keepId: { in: ids } }, { absorbId: { in: ids } }] },
+    });
+    await prisma.business.deleteMany({ where: { slug: { startsWith: PREFIX } } });
+  }
+
+  await prisma.redirect.deleteMany({ where: { fromPath: { startsWith: `/b/${PREFIX}` } } });
+  await prisma.enquiry.deleteMany({ where: { ref: { startsWith: ENQUIRY_PREFIX } } });
+  await prisma.user.deleteMany({ where: { fullName: BUYER_NAME } });
+}
 
 beforeAll(async () => {
   opsLeadId = (
@@ -61,6 +103,12 @@ beforeAll(async () => {
     })
   ).id;
   areaId = (await prisma.area.findFirstOrThrow({ select: { id: true } })).id;
+
+  await removeFixtures();
+});
+
+afterAll(async () => {
+  await removeFixtures();
 });
 
 /** A published listing with a review, an enquiry and a product of its own. */
@@ -72,7 +120,7 @@ async function listingWithHistory(name: string) {
     data: {
       tradeName: `${name} ${stamp}`,
       displayName: `${name} ${stamp}`,
-      slug: `dedupe-${name.toLowerCase().replace(/\s+/g, "-")}-${stamp}`,
+      slug: `${PREFIX}${name.toLowerCase().replace(/\s+/g, "-")}-${stamp}`,
       licenceNumber: `DED-${stamp.slice(-6)}`,
       licenceAuthority: "DED",
       licenceExpiry: new Date(Date.now() + 300 * 86_400_000),
@@ -104,12 +152,12 @@ async function listingWithHistory(name: string) {
   });
 
   const buyer = await prisma.user.create({
-    data: { id: crypto.randomUUID(), fullName: "Dedupe Buyer", roles: ["buyer"] },
+    data: { id: crypto.randomUUID(), fullName: BUYER_NAME, roles: ["buyer"] },
     select: { id: true },
   });
   const enquiry = await prisma.enquiry.create({
     data: {
-      ref: `ENQ-D-${stamp}`,
+      ref: `${ENQUIRY_PREFIX}${stamp}`,
       buyerId: buyer.id,
       requirement: "Gate valves, DN100.",
       closesAt: new Date(Date.now() + 7 * 86_400_000),

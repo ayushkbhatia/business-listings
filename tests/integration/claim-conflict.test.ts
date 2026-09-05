@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { resolveConflict, openConflictIfContested, conflictFor } from "@/lib/onboarding/conflict";
 import { PermissionError } from "@/lib/auth/errors";
@@ -20,6 +20,9 @@ import type { Actor, Role } from "@/lib/auth/roles";
  * first fear on claiming is that claiming resets them.
  */
 
+const PREFIX = "conflict-";
+const ENQUIRY_PREFIX = "ENQ-C-";
+
 const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 
 let opsLeadId: string;
@@ -27,6 +30,66 @@ let moderatorId: string;
 let categoryId: string;
 let areaId: string;
 let seq = 0;
+
+/**
+ * Every row this suite writes, including the one it does not name.
+ *
+ * The contested listings are published, so a leaked one shows on the home page
+ * and in `/dev/seat`. CI never saw the accumulation because each job gets its
+ * own `supabase start`; a local database is shared with every sibling worktree
+ * and keeps what it is given.
+ *
+ * `split_into_two` produces a *second* business under its own slug —
+ * `second-company-trading-llc`, then `-2`, `-3` on each later run — which the
+ * prefix would never match. `ClaimConflict.producedBusinessId` is how it is
+ * found, and it has to be read before the conflict is cascaded away.
+ */
+async function removeFixtures() {
+  const ours = await prisma.business.findMany({
+    where: { slug: { startsWith: PREFIX } },
+    select: { id: true },
+  });
+  const ids = ours.map((row) => row.id);
+
+  if (ids.length > 0) {
+    const conflicts = await prisma.claimConflict.findMany({
+      where: { businessId: { in: ids } },
+      select: { id: true, producedBusinessId: true },
+    });
+    const businessIds = [
+      ...ids,
+      ...conflicts.flatMap((row) => (row.producedBusinessId ? [row.producedBusinessId] : [])),
+    ];
+
+    // The claimants and the buyer, gathered while the rows naming them stand.
+    const [submissions, reviews, seated] = await Promise.all([
+      prisma.claimSubmission.findMany({
+        where: { businessId: { in: ids } },
+        select: { claimantId: true },
+      }),
+      prisma.review.findMany({ where: { businessId: { in: ids } }, select: { buyerId: true } }),
+      prisma.user.findMany({ where: { businessId: { in: businessIds } }, select: { id: true } }),
+    ]);
+    const userIds = [
+      ...new Set([
+        ...submissions.map((row) => row.claimantId),
+        ...reviews.map((row) => row.buyerId),
+        ...seated.map((row) => row.id),
+      ]),
+    ];
+
+    // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
+    await prisma.auditEvent.deleteMany({
+      where: { subject: { in: conflicts.map((row) => `ClaimConflict:${row.id}`) } },
+    });
+    await prisma.business.deleteMany({ where: { id: { in: businessIds } } });
+    await prisma.user.deleteMany({ where: { id: { in: userIds } } });
+  }
+
+  // Outside the branch: an interrupted run can leave an enquiry whose business
+  // is already gone, and nothing else would ever collect it.
+  await prisma.enquiry.deleteMany({ where: { ref: { startsWith: ENQUIRY_PREFIX } } });
+}
 
 beforeAll(async () => {
   opsLeadId = (
@@ -48,6 +111,12 @@ beforeAll(async () => {
     })
   ).id;
   areaId = (await prisma.area.findFirstOrThrow({ select: { id: true } })).id;
+
+  await removeFixtures();
+});
+
+afterAll(async () => {
+  await removeFixtures();
 });
 
 /**
@@ -67,7 +136,7 @@ async function contestedListing(label: string) {
     data: {
       tradeName: `${label} Trading LLC ${stamp}`,
       displayName: `${label} Trading ${stamp}`,
-      slug: `conflict-${label.toLowerCase()}-${stamp}`,
+      slug: `${PREFIX}${label.toLowerCase()}-${stamp}`,
       licenceNumber: `DED-${stamp.slice(-6)}`,
       licenceAuthority: "DED",
       licenceExpiry: new Date(Date.now() + 200 * 86_400_000),
@@ -99,7 +168,7 @@ async function contestedListing(label: string) {
 
   const enquiry = await prisma.enquiry.create({
     data: {
-      ref: `ENQ-C-${stamp}`,
+      ref: `${ENQUIRY_PREFIX}${stamp}`,
       buyerId: buyer.id,
       requirement: "Gate valves, DN100, for a fit-out.",
       closesAt: new Date(Date.now() + 7 * 86_400_000),
