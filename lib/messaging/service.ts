@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { assertCan } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
+import { recordEvent } from "@/lib/telemetry/record";
 import { cancelFollowUp } from "./follow-up";
 import { describeVerdict, detectOffPlatform, type Verdict } from "./off-platform";
 
@@ -122,7 +123,23 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
      and nothing to roll back if it finds none.
   */
   if (input.sender === "buyer") {
-    await cancelFollowUp(input.enquiryId, input.businessId);
+    await cancelFollowUp(input.enquiryId, input.businessId, "buyer_replied");
+  }
+
+  /*
+     Only the seller's. A buyer's message is not this business's telemetry, and
+     `product_event` is keyed by business — a row counting what a buyer wrote
+     would sit in a supplier's own numbers describing somebody else.
+
+     Length rather than the words. Nothing here is a place to store a message.
+  */
+  if (input.sender === "seller") {
+    await recordEvent({
+      name: "message_sent",
+      businessId: input.businessId,
+      actorId: input.senderId,
+      props: { length: body.length, flagged: verdict.flag },
+    });
   }
 
   return { ok: true, ...result, flagged: verdict.flag };
@@ -165,6 +182,8 @@ export interface ThreadMessage {
   /** True when the sender is the business on this thread. */
   fromSeller: boolean;
   flagged: boolean;
+  /** Written by the follow-up schedule rather than typed. Tagged on screen. */
+  automatic: boolean;
   quoteRevisionId: string | null;
   createdAt: Date;
 }
@@ -193,6 +212,7 @@ export async function getThread(
       body: true,
       senderId: true,
       flaggedAt: true,
+      automatic: true,
       quoteRevisionId: true,
       createdAt: true,
       sender: { select: { businessId: true } },
@@ -205,6 +225,7 @@ export async function getThread(
     senderId: m.senderId,
     fromSeller: m.sender.businessId === businessId,
     flagged: m.flaggedAt !== null,
+    automatic: m.automatic,
     quoteRevisionId: m.quoteRevisionId,
     createdAt: m.createdAt,
   }));

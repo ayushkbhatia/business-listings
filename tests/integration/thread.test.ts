@@ -1,6 +1,7 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { getThread, nudge, postMessage } from "@/lib/messaging/service";
+import { getThread, postMessage } from "@/lib/messaging/service";
+import { cancelFollowUp, scheduleFollowUp, sendFollowUp } from "@/lib/messaging/follow-up";
 import { sendQuoteForBusiness } from "@/lib/quote/send-quote";
 import { getBuyerEnquiry } from "@/lib/db/queries/enquiry";
 import { delta, parseAedToFils } from "@/lib/quote/money";
@@ -248,15 +249,41 @@ describe("criterion 4 — a revision is a new row", () => {
   });
 });
 
-describe("the one nudge", () => {
-  it("is allowed once, and only after a quote has gone out", async () => {
-    const first = await nudge(ENQUIRY_ID, businessId);
-    expect(first.ok).toBe(true);
+describe("the one follow-up", () => {
+  /**
+   * The seller's follow-up, which until board 11b stamped a column and sent
+   * nothing. These assert what a buyer actually receives, not what a timestamp
+   * says happened.
+   */
+  async function sellerSeatId(): Promise<string> {
+    const seat = await prisma.user.findFirstOrThrow({
+      where: { businessId },
+      select: { id: true },
+    });
+    return seat.id;
+  }
+
+  it("writes a message the buyer can read, tagged as automatic", async () => {
+    const result = await sendFollowUp({
+      enquiryId: ENQUIRY_ID,
+      businessId,
+      senderId: await sellerSeatId(),
+      body: "Following up on the quote — happy to talk through the dates.",
+    });
+    expect(result.ok).toBe(true);
+
+    const thread = await getThread(ENQUIRY_ID, businessId);
+    const last = thread?.at(-1);
+    expect(last?.fromSeller).toBe(true);
+    expect(last?.automatic).toBe(true);
   });
 
   it("is refused the second time, because a second loses more deals than it wins", async () => {
-    await nudge(ENQUIRY_ID, businessId);
-    expect(await nudge(ENQUIRY_ID, businessId)).toEqual({ ok: false, error: "already_nudged" });
+    const senderId = await sellerSeatId();
+    await sendFollowUp({ enquiryId: ENQUIRY_ID, businessId, senderId, body: "First." });
+    expect(
+      await sendFollowUp({ enquiryId: ENQUIRY_ID, businessId, senderId, body: "Second." }),
+    ).toEqual({ ok: false, error: "already_nudged" });
   });
 
   it("is refused before there is anything to follow up on", async () => {
@@ -264,10 +291,71 @@ describe("the one nudge", () => {
       where: { enquiryId: ENQUIRY_ID, state: { not: "quoted" } },
       select: { businessId: true },
     });
-    expect(await nudge(ENQUIRY_ID, unquoted.businessId)).toEqual({
-      ok: false,
-      error: "no_reply_needed",
+    expect(
+      await scheduleFollowUp({
+        enquiryId: ENQUIRY_ID,
+        businessId: unquoted.businessId,
+        body: "Anything?",
+      }),
+    ).toEqual({ ok: false, error: "no_quote_yet" });
+  });
+
+  it("refuses to send words the seller did not write", async () => {
+    // Board 11b: we suggest the act, never the number, and we do not draft a
+    // commercial commitment on a supplier's behalf. An empty body is refused
+    // rather than filled in.
+    expect(
+      await scheduleFollowUp({ enquiryId: ENQUIRY_ID, businessId, body: "   " }),
+    ).toEqual({ ok: false, error: "empty" });
+  });
+
+  it("is cancelled when the buyer replies", async () => {
+    const armed = await scheduleFollowUp({
+      enquiryId: ENQUIRY_ID,
+      businessId,
+      body: "Any thoughts on the revised dates?",
     });
+    expect(armed.ok).toBe(true);
+
+    const enquiry = await prisma.enquiry.findUniqueOrThrow({
+      where: { id: ENQUIRY_ID },
+      select: { buyerId: true },
+    });
+    await postMessage({
+      enquiryId: ENQUIRY_ID,
+      businessId,
+      senderId: enquiry.buyerId,
+      sender: "buyer",
+      body: "Yes — send the revision.",
+    });
+
+    const row = await prisma.enquiryRecipient.findUniqueOrThrow({
+      where: { enquiryId_businessId: { enquiryId: ENQUIRY_ID, businessId } },
+      select: { nudgeDueAt: true, nudgeBody: true },
+    });
+    expect(row.nudgeDueAt).toBeNull();
+    expect(row.nudgeBody).toBeNull();
+  });
+
+  it("keeps the buyer's own nudge out of the seller's allowance", async () => {
+    /*
+       The defect this split fixes. `nudgedAt` was written by both sides:
+       lib/enquiry/nudge.ts when a BUYER prods a silent supplier, and the
+       seller's follow-up. So a buyer's nudge spent the seller's one chance, and
+       11b's rail then said "Follow-up sent" for a message nobody had sent.
+    */
+    await prisma.enquiryRecipient.update({
+      where: { enquiryId_businessId: { enquiryId: ENQUIRY_ID, businessId } },
+      data: { buyerNudgedAt: new Date() },
+    });
+
+    const result = await sendFollowUp({
+      enquiryId: ENQUIRY_ID,
+      businessId,
+      senderId: await sellerSeatId(),
+      body: "Still happy to talk this through.",
+    });
+    expect(result.ok).toBe(true);
   });
 
   it("cannot be counted past one, because the column is a timestamp", async () => {
@@ -275,7 +363,17 @@ describe("the one nudge", () => {
     // them. That is the point of the column's type.
     const column = await prisma.$queryRaw<{ data_type: string }[]>`
       SELECT data_type FROM information_schema.columns
-      WHERE table_name = 'enquiry_recipient' AND column_name = 'nudged_at'`;
+      WHERE table_name = 'enquiry_recipient' AND column_name = 'seller_nudged_at'`;
     expect(column[0]?.data_type).toMatch(/timestamp/);
+  });
+
+  afterEach(async () => {
+    // Each case arms or spends the one follow-up, so the next starts clean.
+    await cancelFollowUp(ENQUIRY_ID, businessId);
+    await prisma.enquiryRecipient.updateMany({
+      where: { enquiryId: ENQUIRY_ID, businessId },
+      data: { sellerNudgedAt: null, buyerNudgedAt: null },
+    });
+    await prisma.message.deleteMany({ where: { enquiryId: ENQUIRY_ID, businessId, automatic: true } });
   });
 });

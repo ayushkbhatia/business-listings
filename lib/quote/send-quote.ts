@@ -6,6 +6,7 @@ import { parseAedToFils } from "@/lib/quote/money";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { onQuoteSent } from "@/lib/notify/events";
+import { recordEvent } from "@/lib/telemetry/record";
 import { findDraft, nextRevisionFor } from "./draft";
 
 /**
@@ -54,11 +55,12 @@ export async function sendQuoteForBusiness(
 
   const recipient = await prisma.enquiryRecipient.findUnique({
     where: { enquiryId_businessId: { enquiryId: input.enquiryId, businessId } },
-    select: { firstReplyAt: true },
+    select: { firstReplyAt: true, createdAt: true },
   });
   // Not a recipient and no such enquiry give the same answer, so the endpoint
   // cannot be used to find out which enquiries exist.
   if (!recipient) return { ok: false, error: t("quote.error.not_your_enquiry") };
+  const receivedAt = recipient.createdAt;
 
   const enquiry = await prisma.enquiry.findUnique({
     where: { id: input.enquiryId },
@@ -222,6 +224,26 @@ export async function sendQuoteForBusiness(
 
   // Outside the transaction: a carrier being slow must not hold one open.
   await onQuoteSent({ enquiryId: input.enquiryId, businessId, revision: sent.revision });
+
+  /*
+     A state fact, so the server records it. `hoursSinceReceipt` is the figure
+     board 3a's median is built from, kept per quote so a slow week can be read
+     without recomputing a median over the window.
+  */
+  await recordEvent({
+    name: "quote_sent",
+    businessId,
+    actorId: actor.id,
+    props: {
+      lines: input.lines.length,
+      revision: sent.revision,
+      validityDays,
+      handPriced: input.lines.filter((l) => l.productId === null).length,
+      ...(receivedAt
+        ? { hoursSinceReceipt: Math.round((now.getTime() - receivedAt.getTime()) / 3_600_000) }
+        : {}),
+    },
+  });
 
   return sent;
 }

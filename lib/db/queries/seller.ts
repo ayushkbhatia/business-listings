@@ -128,6 +128,15 @@ export interface LeadDetail {
   createdAt: Date;
   openedAt: Date | null;
   firstReplyAt: Date | null;
+  /**
+   * When the buyer accepted, where they did.
+   *
+   * `Quote.acceptedAt` first, falling back to `Enquiry.contactReleasedAt` — the
+   * same pair the buyer's own side reads. The seller's screen used to render
+   * "accepted your quote on {when}" with the *enquiry's* creation date, which on
+   * a three-week enquiry was a fortnight out.
+   */
+  acceptedAt: Date | null;
   buyer: SellerVisibleBuyer;
   lines: LeadLine[];
   quotes: {
@@ -142,6 +151,13 @@ export interface LeadDetail {
     totalAed: string;
     lines: {
       id: string;
+      /**
+       * The buyer's line this one answered. Null on every quote line written
+       * before board 3j — the composer used to match on `description`, which is
+       * ambiguous on an enquiry carrying two lines of the same wording in
+       * different sizes.
+       */
+      enquiryLineId: string | null;
       productId: string | null;
       description: string;
       qty: number;
@@ -169,7 +185,7 @@ export async function getLeadDetail(
 
   const released = await prisma.enquiry.findUnique({
     where: { id: enquiryId },
-    select: { contactReleasedToBusinessId: true },
+    select: { contactReleasedToBusinessId: true, contactReleasedAt: true },
   });
   if (!released) return null;
 
@@ -192,6 +208,7 @@ export async function getLeadDetail(
         orderBy: { revision: "desc" },
         include: { lines: { orderBy: { sortOrder: "asc" } } },
       },
+      contactReleasedAt: true,
     },
   });
   if (!enquiry) return null;
@@ -214,6 +231,11 @@ export async function getLeadDetail(
     createdAt: enquiry.createdAt,
     openedAt: recipient.openedAt,
     firstReplyAt: recipient.firstReplyAt,
+    acceptedAt:
+      enquiry.contactReleasedToBusinessId === businessId
+        ? (enquiry.quotes.find((q) => q.acceptedAt !== null)?.acceptedAt ??
+          enquiry.contactReleasedAt)
+        : null,
     buyer: buyerForSeller(enquiry.buyer, enquiry.contactReleasedToBusinessId, businessId),
     lines: enquiry.lines.map((l, i) => ({
       id: l.id,
@@ -237,6 +259,7 @@ export async function getLeadDetail(
       totalAed: quoteTotalAed(q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
       lines: q.lines.map((l) => ({
         id: l.id,
+        enquiryLineId: l.enquiryLineId,
         productId: l.productId,
         description: l.description,
         qty: l.qty,

@@ -2,70 +2,83 @@ import { after } from "next/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { StatusBadge } from "@/components/display/StatusBadge";
-import { Card, KeyValuePanel, Panel } from "@/components/structure";
-import type { MatchReason, QuoteLineDraft } from "@/components/domain/QuoteLineEditor";
-import { getLeadDetail, type LeadDetail } from "@/lib/db/queries/seller";
+import { Card } from "@/components/structure";
+import { PageEvent } from "@/components/telemetry";
+import { buttonClassName } from "@/components/primitives";
+import { prisma } from "@/lib/db/client";
+import { markLeadOpened } from "@/lib/db/mutations/lead";
+import { getLeadDetail } from "@/lib/db/queries/seller";
 import {
   formatAED,
   formatCount,
   formatCountdown,
   formatDate,
   formatDateTime,
+  formatMonth,
   formatRelative,
   isWithinRelativeWindow,
 } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { getNavBadges, requireSellerSeat, SellerPage } from "../../../_shell";
-import { markLeadOpened } from "@/lib/db/mutations/lead";
-import { prisma } from "@/lib/db/client";
 import { getThread } from "@/lib/messaging/service";
 import { toThreadQuotes } from "@/lib/messaging/thread-view";
+import { getNavBadges, requireSellerSeat, SellerPage } from "../../../_shell";
+import { FollowUp } from "./FollowUp";
 import { SellerThread } from "./SellerThread";
-import { QuoteComposer } from "./QuoteComposer";
 
 /**
- * Board 11b — the seller's view of one enquiry, and the quote composer on it.
+ * Board 11b — the seller's view of one conversation.
  *
- * Two halves. The quote composer came first in step 1, because the quote model
- * is far easier to get right while the enquiry is a fixture; the thread lands
- * here in step 4 beside it. They share a page because a seller pricing a line
- * and a seller answering a question about it are the same person in the same
- * minute.
+ * The composer moved to `/dashboard/leads/:id` with board 3j, which is the
+ * two-composer model §2 locks: an `RFQ` is priced on the inbox, an `ENQ` is
+ * answered here, and both exits exist on both screens so a seller who decides a
+ * quote needs a question first is never stuck.
+ *
+ * That move is also what makes the right rail possible. The previous version of
+ * this page carried a note against a two-column layout — "the unit price column
+ * fell off the end of a 1280 laptop and had to be scrolled to, and the price
+ * field is the one thing a seller came here to fill in". True while the price
+ * column was on this page; it no longer is, and a thread has no column to lose.
  */
 export const dynamic = "force-dynamic";
-
-const AVAILABILITY_LABEL = {
-  in_stock: "availability.in_stock",
-  made_to_order: "availability.made_to_order",
-  indent: "availability.indent",
-  out_of_stock: "availability.out_of_stock",
-} as const;
 
 export default async function LeadThreadPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const seat = await requireSellerSeat();
+
   const [lead, badges, messages, recipient] = await Promise.all([
     getLeadDetail(seat.businessId, id),
     getNavBadges(seat.businessId),
     getThread(id, seat.businessId),
     prisma.enquiryRecipient.findUnique({
       where: { enquiryId_businessId: { enquiryId: id, businessId: seat.businessId } },
-      select: { sellerNudgedAt: true, state: true },
+      select: {
+        state: true,
+        sellerNudgedAt: true,
+        nudgeDueAt: true,
+        outcome: true,
+        enquiry: {
+          select: {
+            contactReleasedToBusinessId: true,
+            _count: { select: { recipients: true } },
+          },
+        },
+      },
     }),
   ]);
-  if (!lead) notFound();
+  if (!lead || !recipient) notFound();
 
   // A read should not block on a write. `openedAt` feeds the buyer's tracking
   // page and is not part of what this page renders.
   after(() => markLeadOpened(id, seat.businessId));
 
-  const nextRevision = (lead.quotes[0]?.revision ?? 0) + 1;
-  // Read once, at the top, rather than during render. Every relative label on
-  // this page then measures from the same instant.
+  // Read once, at the top, so every relative label measures from one instant.
   const now = new Date();
 
-  // Every revision this seller has sent, so the thread can strike the previous
-  // total through. Computed by the same helper the buyer's side uses.
+  const [buyerHistory, seatNames] = await Promise.all([
+    buyerPanelFor(seat.businessId, id),
+    sendersFor(messages ?? []),
+  ]);
+
   const quoteViews = toThreadQuotes(
     lead.quotes.map((q) => ({
       id: q.id,
@@ -82,12 +95,32 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
   );
 
   /*
-   * A closed enquiry still lets the accepted pair talk: that is delivery being
-   * arranged, and cutting it off pushes exactly the conversation this platform
-   * wants on the record onto WhatsApp.
-   */
-  const closedToUs =
-    lead.closesAt.getTime() < now.getTime() && lead.state !== "quoted";
+     Read-only exactly where `postMessage` refuses.
+
+     The previous version computed `closesAt < now && state !== "quoted"` while
+     the service refused on `closed && not the accepted pair`, so a seller who
+     quoted and did not win a closed enquiry met an enabled composer and got
+     "closed" back on submit. One rule, in one place, and the screen follows it.
+  */
+  const closed = lead.closesAt.getTime() < now.getTime();
+  const isAcceptedPair = recipient.enquiry.contactReleasedToBusinessId === seat.businessId;
+  const readOnly = closed && !isAcceptedPair;
+
+  const latestQuote = lead.quotes[0];
+  const competing = recipient.enquiry._count.recipients;
+
+  /*
+     Buyer messages since the seller last wrote. Counted here from the thread
+     already in hand rather than queried again — the rail computes the same
+     number for its badge, and two queries for one fact is how the badge and the
+     screen come to disagree.
+  */
+  const lastSellerAt = (messages ?? [])
+    .filter((m) => m.fromSeller)
+    .reduce<number>((latest, m) => Math.max(latest, m.createdAt.getTime()), 0);
+  const unreadCount = (messages ?? []).filter(
+    (m) => !m.fromSeller && m.createdAt.getTime() > lastSellerAt,
+  ).length;
 
   return (
     <SellerPage
@@ -95,14 +128,32 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
       badges={badges}
       activeHref="/dashboard/leads"
       eyebrow={t("lead.eyebrow", { ref: lead.ref })}
-      title={lead.requirement.split(".")[0] ?? lead.ref}
+      title={
+        lead.buyer.released && lead.buyer.companyName
+          ? lead.buyer.companyName
+          : lead.buyer.firstName
+      }
       meta={
         <span className="flex flex-wrap items-center gap-2">
-          <StatusBadge tone={lead.state === "quoted" ? "ok" : "info"} size="sm" shape="chip">
-            {t(`leads.state.${lead.state}` as "leads.state.delivered")}
+          <StatusBadge tone={recipient.state === "quoted" ? "ok" : "info"} size="sm" shape="chip">
+            {recipient.outcome === "won"
+              ? t("thread.state.won")
+              : recipient.outcome === "lost"
+                ? t("thread.state.lost")
+                : recipient.state === "quoted"
+                  ? t("thread.state.quoted")
+                  : t("thread.state.open")}
           </StatusBadge>
+          {competing > 1 ? (
+            <span className="text-caption text-muted">
+              {t("thread.competing", {
+                count: competing - 1,
+                formatted: formatCount(competing - 1),
+              })}
+            </span>
+          ) : null}
           <span className="text-caption text-muted">
-            {lead.closesAt.getTime() <= now.getTime()
+            {closed
               ? t("leads.closed")
               : isWithinRelativeWindow(lead.closesAt, { now })
                 ? t("leads.closes_in", { duration: formatCountdown(lead.closesAt, { now }) })
@@ -112,206 +163,291 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
       }
       breadcrumb={
         <Link
-          href="/dashboard/leads"
+          href={`/dashboard/leads/${lead.enquiryId}`}
           className="rounded-tag text-caption text-muted underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
         >
-          {t("lead.back_to_leads")}
+          {t("thread.back_to_inbox")}
+        </Link>
+      }
+      actions={
+        /*
+           §2's other exit. This screen carries the way back into the composer,
+           and the inbox carries the way in here. The label changes with what
+           exists: there is nothing to revise before a first quote.
+        */
+        <Link
+          href={`/dashboard/leads/${lead.enquiryId}`}
+          className={buttonClassName({ variant: "secondary", size: "sm" })}
+        >
+          {latestQuote ? t("thread.revise_quote") : t("thread.send_quote")}
         </Link>
       }
     >
       {/*
-        * The composer takes the full width. In a two-column layout the unit
-        * price column fell off the end of a 1280 laptop and had to be scrolled
-        * to — and the price field is the one thing a seller came here to fill
-        * in. The enquiry facts read fine underneath; the price does not read
-        * fine sideways.
-        */}
-      <div className="space-y-[var(--gutter)]">
-        <ContactNotice lead={lead} />
+         An attention fact. `unread` is what makes it useful: a thread opened
+         with three buyer messages waiting is a different event from one opened
+         to write into.
+      */}
+      <PageEvent
+        name="thread_viewed"
+        props={{
+          state: recipient.outcome ?? recipient.state,
+          messages: (messages ?? []).length,
+          unread: unreadCount,
+        }}
+      />
 
-        <Panel
-          title={t("lead.compose_title")}
-          description={t("lead.compose_description")}
-          eyebrow={nextRevision > 1 ? t("lead.revision_title", { revision: nextRevision }) : undefined}
-        >
-          <QuoteComposer enquiryId={lead.enquiryId} lines={toDrafts(lead)} />
-        </Panel>
-
-        <Panel title={t("thread.heading")}>
-          <SellerThread
-            enquiryId={lead.enquiryId}
-            buyerFirstName={lead.buyer.firstName}
-            readOnly={closedToUs}
-            canNudge={recipient?.state === "quoted" && !recipient.sellerNudgedAt}
-            nudgedLabel={
-              recipient?.sellerNudgedAt
-                ? t("thread.nudge_sent", { when: formatRelative(recipient.sellerNudgedAt, { now }) })
-                : null
-            }
-            messages={(messages ?? []).map((message) => {
-              const quote = message.quoteRevisionId
-                ? quoteViews.get(message.quoteRevisionId)
-                : undefined;
-              return {
-                id: message.id,
-                body: message.body,
-                fromMe: message.fromSeller,
-                senderLabel: message.fromSeller
-                  ? seat.businessName
-                  : lead.buyer.firstName,
-                at: formatDateTime(message.createdAt),
-                flagged: message.flagged,
-                ...(quote ? { quote } : {}),
-              };
-            })}
-          />
-        </Panel>
-
-        <div className="grid gap-[var(--gutter)] md:grid-cols-2 xl:grid-cols-3">
-          <Panel title={t("lead.requirement")}>
-            <p className="text-body-sm text-prose">{lead.requirement}</p>
-          </Panel>
-
-          <Panel title={t("term.enquiry")}>
-            <KeyValuePanel
-              columns={1}
-              notProvidedLabel={t("table.not_provided")}
-              entries={[
-                { key: "buyer", label: t("lead.buyer"), value: lead.buyer.firstName },
-                { key: "area", label: t("lead.deliver_to"), value: lead.deliverToArea ?? undefined },
-                {
-                  key: "needed",
-                  label: t("lead.needed_by"),
-                  value: lead.neededBy ? formatDate(lead.neededBy) : undefined,
-                },
-                {
-                  key: "terms",
-                  label: t("lead.terms_wanted"),
-                  value: lead.termsWanted ? t(`terms.${lead.termsWanted}` as "terms.net_30") : undefined,
-                },
-                { key: "received", label: t("lead.received"), value: formatRelative(lead.createdAt, { now }) },
-                { key: "closes", label: t("lead.closes"), value: formatDate(lead.closesAt) },
-              ]}
+      <div className="flex flex-col gap-[var(--gutter)] xl:flex-row">
+        <div className="min-w-0 flex-1">
+          <Card padded>
+            <SellerThread
+              enquiryId={lead.enquiryId}
+              buyerFirstName={lead.buyer.firstName}
+              readOnly={readOnly}
+              receipt={receiptFor(latestQuote, now)}
+              messages={(messages ?? []).map((message) => {
+                const quote = message.quoteRevisionId
+                  ? quoteViews.get(message.quoteRevisionId)
+                  : undefined;
+                return {
+                  id: message.id,
+                  body: message.body,
+                  fromMe: message.fromSeller,
+                  /*
+                     Which seat sent it, not the company name. Board 11b: a
+                     shared inbox with anonymous replies makes a two-person
+                     business unmanageable, and the previous version labelled
+                     every seller message with the business.
+                  */
+                  senderLabel: message.fromSeller
+                    ? (seatNames.get(message.senderId) ?? seat.businessName)
+                    : lead.buyer.firstName,
+                  at: formatDateTime(message.createdAt),
+                  flagged: message.flagged,
+                  automatic: message.automatic,
+                  ...(quote ? { quote } : {}),
+                };
+              })}
             />
-          </Panel>
-
-          {lead.quotes.length > 0 ? <PreviousQuotes lead={lead} now={now} /> : null}
+          </Card>
         </div>
+
+        <aside className="w-full shrink-0 space-y-[var(--gutter)] xl:w-[326px]">
+          <Card padded>
+            <FollowUp
+              enquiryId={lead.enquiryId}
+              state={
+                recipient.sellerNudgedAt
+                  ? "sent"
+                  : recipient.state !== "quoted"
+                    ? "too_early"
+                    : recipient.nudgeDueAt
+                      ? "scheduled"
+                      : "available"
+              }
+              sentLabel={
+                recipient.sellerNudgedAt
+                  ? t("thread.nudge_sent", {
+                      when: formatRelative(recipient.sellerNudgedAt, { now }),
+                    })
+                  : null
+              }
+              scheduledLabel={
+                recipient.nudgeDueAt
+                  ? t("thread.nudge_scheduled", {
+                      when: formatRelative(recipient.nudgeDueAt, { now }),
+                    })
+                  : null
+              }
+            />
+          </Card>
+
+          <Card padded>
+            <BuyerPanel history={buyerHistory} termsWanted={lead.termsWanted} />
+          </Card>
+
+          {/*
+            Already on screen before anybody tries. The enforcement path belongs
+            to admin (board 4h); the detector behind it is real —
+            lib/messaging/off-platform.ts raises a SupplierReport on an IBAN or a
+            "transfer to", which is why this sentence is not a bluff.
+          */}
+          <div className="rounded-card border border-bad-line bg-bad-surface px-3 py-2.5">
+            <p className="text-body-sm text-bad-ink">{t("thread.offplatform_title")}</p>
+            <p className="mt-1 max-w-[var(--measure-prose)] text-caption text-bad-ink">
+              {t("thread.offplatform_body")}
+            </p>
+          </div>
+        </aside>
       </div>
     </SellerPage>
   );
 }
 
 /**
- * Rule 1, stated to the seller rather than merely enforced behind them.
+ * The read receipt, or nothing.
  *
- * A seller who does not know why there is no phone number assumes the platform
- * is broken. A seller who knows the number arrives on acceptance has a reason
- * to quote well.
+ * Board 11b §6, and it says both directions out loud because a one-way receipt
+ * is surveillance the buyer will discover. `Quote.readAt` had no writer until
+ * lib/messaging/receipts.ts; before that this line would have said "not opened
+ * yet" forever on every production row.
  */
-function ContactNotice({ lead }: { lead: LeadDetail }) {
-  if (lead.buyer.released) {
-    return (
-      <Card padded>
-        <h2 className="text-body-sm text-ink">{t("contact.released_title")}</h2>
-        <p className="mt-1 text-caption text-muted">
-          {t("contact.released_body", {
-            name: lead.buyer.firstName,
-            when: formatDate(lead.createdAt),
-          })}
-        </p>
-        <dl className="mt-3 space-y-1 text-body-sm">
-          {lead.buyer.companyName ? <dd className="text-ink">{lead.buyer.companyName}</dd> : null}
-          {lead.buyer.phone ? <dd className="font-mono text-ink">{lead.buyer.phone}</dd> : null}
-          {lead.buyer.email ? <dd className="text-ink">{lead.buyer.email}</dd> : null}
-        </dl>
-      </Card>
-    );
-  }
-
-  return (
-    <Card padded>
-      <h2 className="text-body-sm text-ink">{t("contact.withheld_title")}</h2>
-      <p className="mt-1 text-caption text-muted">
-        {t("contact.withheld_body", { name: lead.buyer.firstName })}
-      </p>
-    </Card>
-  );
+function receiptFor(
+  quote: { readAt?: Date | null; sentAt: Date | null } | undefined,
+  now: Date,
+): string | null {
+  if (!quote?.sentAt) return null;
+  return quote.readAt
+    ? t("thread.receipt_read", { when: formatRelative(quote.readAt, { now }) })
+    : t("thread.receipt_unread");
 }
 
-function PreviousQuotes({ lead, now }: { lead: LeadDetail; now: Date }) {
-  return (
-    <Panel title={t("lead.previous_quotes")}>
-      <ul className="space-y-2">
-        {lead.quotes.map((quote) => (
-          <li key={quote.id} className="flex flex-wrap items-baseline justify-between gap-2">
-            <span className="font-mono text-body-sm text-ink">{quote.ref}</span>
-            <span className="text-caption text-muted">
-              {quote.sentAt ? t("lead.quote_sent_at", { when: formatRelative(quote.sentAt, { now }) }) : ""}
-            </span>
-            <span className="font-mono tabular-nums text-body-sm text-ink">
-              {formatAED(quote.totalAed)}
-            </span>
-          </li>
-        ))}
-      </ul>
-    </Panel>
-  );
+interface BuyerHistory {
+  won: number;
+  lastWonAt: Date | null;
+  enquiries: number;
+  firstAt: Date | null;
 }
 
-function toDrafts(lead: LeadDetail): QuoteLineDraft[] {
-  // A revision starts from what was last sent, matched by enquiry line where
-  // the previous quote recorded one.
-  const last = lead.quotes[0];
-
-  return lead.lines.map((line) => {
-    const previous = last?.lines.find((l) => l.description === line.description);
-    return {
-      key: line.id,
-      description: line.description,
-      qty: line.qty,
-      unit: line.unit,
-      size: line.size,
-      targetUnitPriceAed: line.targetUnitPriceAed,
-      suggested: line.match.best
-        ? {
-            productId: line.match.best.product.id,
-            name: line.match.best.product.name,
-            sku: line.match.best.product.sku,
-            availabilityLabel: t(
-              AVAILABILITY_LABEL[line.match.best.product.availability as keyof typeof AVAILABILITY_LABEL] ??
-                "availability.in_stock",
-            ),
-            stockLabel:
-              line.match.best.product.stockQty !== null
-                ? t("product.in_stock_qty", { qty: formatCount(line.match.best.product.stockQty) })
-                : null,
-            leadTimeDays: line.match.best.product.leadTimeDays,
-            reasons: line.match.best.reasons as MatchReason[],
-          }
-        : null,
-      alternatives: line.match.alternatives.map((alt) => ({
-        productId: alt.product.id,
-        name: alt.product.name,
-        sku: alt.product.sku,
-        availabilityLabel: t(
-          AVAILABILITY_LABEL[alt.product.availability as keyof typeof AVAILABILITY_LABEL] ??
-            "availability.in_stock",
-        ),
-        stockLabel:
-          alt.product.stockQty !== null
-            ? t("product.in_stock_qty", { qty: formatCount(alt.product.stockQty) })
-            : null,
-        leadTimeDays: alt.product.leadTimeDays,
-        reasons: alt.reasons as MatchReason[],
-      })),
-      ...(previous
-        ? {
-            initialUnitPrice: previous.unitPrice,
-            initialLeadTimeDays: previous.leadTimeDays,
-            initialProductId: previous.productId,
-          }
-        : {}),
-    };
+/**
+ * This seller's own history with this buyer. Nothing else.
+ *
+ * Board 11b §5 cut two claims from the board: *"Pays on 30-day terms, on time"*
+ * — we never take payment and never see an invoice, so it is unknowable — and
+ * *"Accepts quotes 62% of the time"*, which aggregated the buyer's behaviour
+ * across other suppliers inside a card whose own footer promised not to.
+ *
+ * Every figure below is scoped to `businessId`. The buyer's id is resolved and
+ * used server-side and never leaves this function: lib/db/queries/
+ * seller-visibility.ts is written so a seller surface cannot select it.
+ */
+async function buyerPanelFor(businessId: string, enquiryId: string): Promise<BuyerHistory> {
+  const enquiry = await prisma.enquiry.findUnique({
+    where: { id: enquiryId },
+    select: { buyerId: true },
   });
+  if (!enquiry) return { won: 0, lastWonAt: null, enquiries: 0, firstAt: null };
+
+  const [won, lastWon, enquiries, first] = await Promise.all([
+    prisma.enquiryRecipient.count({
+      where: { businessId, outcome: "won", enquiry: { buyerId: enquiry.buyerId } },
+    }),
+    prisma.enquiryRecipient.findFirst({
+      where: { businessId, outcome: "won", enquiry: { buyerId: enquiry.buyerId } },
+      orderBy: { outcomeAt: "desc" },
+      select: { outcomeAt: true },
+    }),
+    prisma.enquiryRecipient.count({
+      where: { businessId, enquiry: { buyerId: enquiry.buyerId } },
+    }),
+    prisma.enquiryRecipient.findFirst({
+      where: { businessId, enquiry: { buyerId: enquiry.buyerId } },
+      orderBy: { createdAt: "asc" },
+      select: { createdAt: true },
+    }),
+  ]);
+
+  return {
+    won,
+    lastWonAt: lastWon?.outcomeAt ?? null,
+    enquiries,
+    firstAt: first?.createdAt ?? null,
+  };
+}
+
+function BuyerPanel({
+  history,
+  termsWanted,
+}: {
+  history: BuyerHistory;
+  termsWanted: string | null;
+}) {
+  const rows: { key: string; label: string; value: string }[] = [
+    { key: "won", label: t("thread.buyer_won"), value: formatCount(history.won) },
+    ...(history.lastWonAt
+      ? [
+          {
+            key: "last",
+            label: t("thread.buyer_last_won"),
+            value: formatMonth(history.lastWonAt),
+          },
+        ]
+      : []),
+    {
+      key: "enquiries",
+      label: t("thread.buyer_enquiries"),
+      value: formatCount(history.enquiries),
+    },
+    ...(history.firstAt
+      ? [
+          {
+            key: "first",
+            label: t("thread.buyer_first_seen"),
+            value: formatMonth(history.firstAt),
+          },
+        ]
+      : []),
+    ...(termsWanted
+      ? [
+          {
+            key: "terms",
+            label: t("thread.buyer_terms"),
+            value: t(`terms.${termsWanted}` as "terms.net_30"),
+          },
+        ]
+      : []),
+  ];
+
+  return (
+    <section aria-labelledby="buyer-panel" className="space-y-2.5">
+      <h2
+        id="buyer-panel"
+        className="font-mono text-eyebrow uppercase tracking-wide text-muted"
+      >
+        {t("thread.buyer_heading")}
+      </h2>
+
+      {history.enquiries <= 1 && history.won === 0 ? (
+        <p className="text-body-sm text-muted">{t("thread.buyer_new")}</p>
+      ) : null}
+
+      <dl className="space-y-1.5">
+        {rows.map((row) => (
+          <div key={row.key} className="flex items-baseline justify-between gap-3">
+            <dt className="text-caption text-muted">{row.label}</dt>
+            <dd className="font-mono text-body-sm tabular-nums text-ink">{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {/* Load-bearing copy. Board 11b §5 keeps this sentence verbatim. */}
+      <p className="max-w-[var(--measure-prose)] text-caption text-faint">
+        {t("thread.buyer_footer")}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * Which seat wrote each message.
+ *
+ * Board 11b: seller messages name the person, because a shared inbox with
+ * anonymous replies makes a two-person business unmanageable. Only first names —
+ * these are colleagues on one account, and the full name is not what a thread
+ * needs.
+ */
+async function sendersFor(
+  messages: readonly { senderId: string; fromSeller: boolean }[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(messages.filter((m) => m.fromSeller).map((m) => m.senderId))];
+  if (ids.length === 0) return new Map();
+
+  const users = await prisma.user.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, fullName: true },
+  });
+
+  return new Map(
+    users.map((user) => [user.id, (user.fullName ?? "").trim().split(/\s+/)[0] ?? ""]),
+  );
 }

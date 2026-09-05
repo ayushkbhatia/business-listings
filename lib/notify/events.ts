@@ -65,7 +65,9 @@ async function safely(what: string, run: () => Promise<unknown>): Promise<void> 
  *
  * One per recipient, to the owner seat. The whole point of the WhatsApp
  * template is two taps from here to a quote in progress, so the deep link
- * lands on the composer.
+ * lands on the composer — which moved to `/dashboard/leads/:id` with board 3j.
+ * It pointed at `/thread` for as long as the composer lived there; the sentence
+ * and the destination move together or one of them becomes untrue.
  */
 export async function onEnquiryDelivered(input: {
   enquiryId: string;
@@ -108,7 +110,7 @@ export async function onEnquiryDelivered(input: {
           area: enquiry.deliverToArea ?? "the UAE",
           lineCount: enquiry._count.lines,
           enquiryId: enquiry.id,
-          shortLink: absoluteUrl(`/dashboard/leads/${enquiry.id}/thread`),
+          shortLink: absoluteUrl(`/dashboard/leads/${enquiry.id}`),
         }),
       });
     }
@@ -154,7 +156,7 @@ export async function onQuoteAccepted(input: {
         quoteRef: input.quoteRef,
         amount: formatAED(input.totalAed),
         enquiryId: input.enquiryId,
-        shortLink: absoluteUrl(`/dashboard/leads/${input.enquiryId}/thread`),
+        shortLink: absoluteUrl(`/dashboard/leads/${input.enquiryId}`),
       }),
     });
   });

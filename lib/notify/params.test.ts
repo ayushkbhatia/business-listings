@@ -64,6 +64,11 @@ describe("what an event supplies", () => {
     expect([...emitted].sort()).toEqual([
       "enquiry_escalated",
       "enquiry_received",
+      // Board 11b's follow-up. The first message-shaped notification in the
+      // product: everything else here is about a quote, because a message was
+      // assumed to be read where it was written — and a buyer who has gone
+      // quiet is by definition not looking at the thread.
+      "message_received",
       "quote_accepted",
       "quote_received",
       "quote_revised",
@@ -75,7 +80,7 @@ describe("what an event supplies", () => {
   it("covers every event in the enum, so none is missing a row", () => {
     // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
     // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(14);
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(15);
   });
 
   it("does not claim to emit the alert it only records", () => {

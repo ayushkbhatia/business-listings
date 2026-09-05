@@ -4246,6 +4246,29 @@ const TEMPLATES: TemplateSeed[] = [
     actionPath: "/dashboard/billing",
     status: "live",
   },
+  /*
+     Board 11b's follow-up, and the only message-shaped notification in the
+     product. Everything else here is about a quote, because a message was
+     assumed to be read where it was written — the follow-up breaks that, since
+     it is aimed at a buyer who has gone quiet and is not looking at the thread.
+
+     In-app only. The seller gets exactly one follow-up because a second loses
+     more deals than it wins; putting that one on WhatsApp would make the cap a
+     formality, since the interruption is the part that costs the deal. A buyer
+     weighing four quotes reads it where they are already comparing them.
+
+     `preview` is the supplier's own words, truncated. We do not summarise them:
+     the rule on that screen is suggest the act and never the number, and a body
+     written on this side would be the platform speaking in a supplier's voice.
+  */
+  {
+    event: "message_received",
+    channel: "in_app",
+    body: "{businessName} followed up on your enquiry: \"{preview}\"",
+    actionLabel: "Open the conversation",
+    actionPath: "/enquiry/{enquiryId}",
+    status: "live",
+  },
   {
     event: "enquiry_received",
     channel: "whatsapp",
@@ -4254,7 +4277,7 @@ const TEMPLATES: TemplateSeed[] = [
     // and lands on the composer, not on a list.
     body: "New enquiry {ref} for {summary}. Needed by {neededBy} in {area}. {lineCount} lines. Quote before {closesAt}.",
     actionLabel: "Open and quote",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     metaTemplateName: "bl_enquiry_received_v1",
     status: "pending_meta",
   },
@@ -4263,7 +4286,7 @@ const TEMPLATES: TemplateSeed[] = [
     channel: "in_app",
     body: "New enquiry {ref} — {lineCount} lines for {area}, needed by {neededBy}.",
     actionLabel: "Open and quote",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {
@@ -4271,7 +4294,7 @@ const TEMPLATES: TemplateSeed[] = [
     channel: "whatsapp",
     body: "Enquiry {ref} is still unanswered after {hours} hours. It closes {closesAt}.",
     actionLabel: "Quote now",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     metaTemplateName: "bl_enquiry_unanswered_v1",
     status: "pending_meta",
   },
@@ -4281,7 +4304,7 @@ const TEMPLATES: TemplateSeed[] = [
     subject: "Enquiry {ref} has gone unanswered",
     body: "Enquiry {ref} reached your team {hours} hours ago and has no reply. It closes {closesAt}. Median reply time is part of how suppliers rank in search.",
     actionLabel: "Open the enquiry",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {
@@ -4291,14 +4314,14 @@ const TEMPLATES: TemplateSeed[] = [
     event: "enquiry_received",
     channel: "sms",
     body: "New enquiry {ref}, {lineCount} lines for {area}. Closes {closesAt}. Quote: {shortLink}",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {
     event: "quote_accepted",
     channel: "sms",
     body: "Quote {quoteRef} accepted, {amount}. Contact details are on the enquiry: {shortLink}",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {
@@ -4323,7 +4346,7 @@ const TEMPLATES: TemplateSeed[] = [
     // What happened, what it is worth, one action.
     body: "Your quote {quoteRef} was accepted, {amount}. The buyer's contact details are now on the enquiry.",
     actionLabel: "Open the accepted quote",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     metaTemplateName: "bl_quote_accepted_v1",
     status: "pending_meta",
   },
@@ -4333,7 +4356,7 @@ const TEMPLATES: TemplateSeed[] = [
     subject: "Quote {quoteRef} accepted — {amount}",
     body: "Your quote {quoteRef} for enquiry {ref} was accepted at {amount}. Contact details are on the enquiry page. Payment and delivery are between you and the buyer.",
     actionLabel: "Open the accepted quote",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {
@@ -4420,7 +4443,7 @@ const TEMPLATES: TemplateSeed[] = [
     channel: "in_app",
     body: "Enquiry {ref} reached your team {hours} hours ago and has no reply. It closes {closesAt}.",
     actionLabel: "Open the enquiry",
-    actionPath: "/dashboard/leads/{enquiryId}/thread",
+    actionPath: "/dashboard/leads/{enquiryId}",
     status: "live",
   },
   {

@@ -1337,6 +1337,100 @@ export const en = {
   "leads.open_named": "Open enquiry {ref}",
   "leads.empty_title": "No open enquiries",
   "leads.empty_body": "Enquiries matched to your categories, emirate and stock arrive here. Listing more products with full specifications is what gets you matched.",
+
+  /* ── Board 3j: the tabs ──
+
+     Defined by what has happened rather than by a column, because two of them
+     are things the BUYER decided. Open means unquoted, not untouched: a lead in
+     conversation is still open, since a message is not a quote.
+  */
+  "leads.tabs_label": "Which leads to show",
+  "leads.tab.open": "Open",
+  "leads.tab.quoted": "Quoted",
+  "leads.tab.won": "Won",
+  "leads.tab.lost": "Lost",
+
+  /* ── The scope filter ──
+
+     An owner defaulted to their own assignments cannot see the queue they are
+     answerable for, so the default is everything and the narrowing is a choice.
+  */
+  "leads.scope_label": "Whose leads",
+  "leads.scope.all": "All enquiries",
+  "leads.scope.mine": "Assigned to me",
+  "leads.scope.unassigned": "Unassigned",
+
+  /* ── The two header figures ──
+
+     Both read the same numbers as the dashboard overview. A pill quoting a
+     different median from the card one screen away is the disagreement that
+     makes a seller stop believing either.
+  */
+  "leads.overdue_pill": { one: "{count} overdue", other: "{count} overdue" },
+  "leads.none_overdue": "Nothing overdue",
+  "leads.median_reply": "Median reply {duration}",
+  "leads.median_unmeasured": "Not enough replies to measure yet",
+
+  /* ── The rail ──
+
+     The footer states what is shown against what exists, because a list that
+     silently stops at twenty-five is a list a seller believes is complete.
+  */
+  "leads.rail_label": "Leads, oldest waiting first",
+  "leads.rail_footer": "{shown} of {total} shown · oldest first within each overdue band",
+  "leads.rail_all_shown": { one: "{count} lead", other: "{count} leads" },
+  "leads.rail_more": "Show more",
+
+  /* ── The waiting bands ──
+
+     Measured against this supplier's own escalation setting, which is the only
+     definition of late the product already publishes to them — the hourly sweep
+     emails the owner on exactly this predicate. A second threshold on the rail
+     would put a red row beside an email saying the lead is fine.
+
+     Each band carries a word. Colour alone is not a status.
+  */
+  "leads.band.breached": "Overdue",
+  "leads.band.approaching": "Due soon",
+  "leads.band.waiting": "Waiting",
+  "leads.band.answered": "Answered",
+  "leads.waiting_for": "Waiting {duration}",
+  "leads.answered_in": "Answered in {duration}",
+  "leads.band_explained": "Overdue means past the {duration} you set for escalation.",
+
+  /* ── What a rail row carries ──
+
+     `leads.budget` is the buyer's own figure, summed from the lines that carry
+     one, and it says so. It is not an estimate of the deal: `targetUnitPriceAed`
+     is what the buyer hopes to pay, and calling it a value would turn a budget
+     into a deal size. A row where no line carries one shows nothing.
+  */
+  "leads.budget": "Buyer's budget {amount}",
+  "leads.competing": { one: "{count} supplier competing", other: "{count} suppliers competing" },
+  "leads.unread": { one: "{count} new message", other: "{count} new messages" },
+  "leads.assigned_to": "Assigned to {name}",
+  "leads.unassigned": "Unassigned",
+
+  /* ── Empty states, one per tab ──
+
+     Four different things, per the design system: this is filtered-to-zero, not
+     first-run. Each says what would put a row here.
+  */
+  "leads.empty.open": "Nothing waiting on you",
+  "leads.empty.open_body": "Every enquiry that has reached you has a quote against it. New ones arrive here.",
+  "leads.empty.quoted": "No quotes waiting on a decision",
+  "leads.empty.quoted_body": "Quotes you have sent that the buyer has not decided on appear here.",
+  "leads.empty.won": "Nothing marked won yet",
+  "leads.empty.won_body": "A lead lands here when a buyer accepts your quote, or when you mark it won yourself.",
+  "leads.empty.lost": "Nothing marked lost",
+  "leads.empty.lost_body": "A lead lands here when a buyer accepts another supplier, or when you mark it lost yourself.",
+  "leads.empty.scope": "No leads assigned to you",
+  "leads.empty.scope_body": "Switch to all enquiries to see the rest of the queue.",
+
+  "leads.suspended_title": "This listing is suspended",
+  "leads.suspended_body": "New enquiries have stopped arriving and quotes cannot be sent. The thread stays readable. Your verification page says what is needed.",
+  "leads.select_prompt": "Pick a lead",
+  "leads.select_body": "Choose an enquiry from the list to read what the buyer asked for and price it.",
   "leads.state.delivered": "New",
   "leads.state.opened": "Opened",
   "leads.state.quoted": "Quoted",
@@ -1362,6 +1456,68 @@ export const en = {
   "lead.revision_title": "Revision {revision}",
   "lead.previous_quotes": "Sent already",
   "lead.quote_sent_at": "Sent {when}",
+  /* ── Board 3j: the request header ──
+
+     Everything the buyer supplied, above the composer, so the seller never
+     scrolls to reach the price field.
+  */
+  "lead.buyer_words": "What the buyer asked for",
+  "lead.buyer_words_note": "The buyer's own words, as submitted. Sellers price off details a summary would lose.",
+  "lead.attachment": "Attachment",
+  "lead.closes_label": "Closes",
+  "lead.type.rfq": "RFQ · line-item composer",
+  "lead.type.enq": "Enquiry · message",
+  "lead.no_lines_title": "Nothing to price on this one",
+  "lead.no_lines_body": "The buyer asked a question rather than for quantities. Answer it in the thread.",
+
+  /* ── The three header actions, and the one that bridges to 11b ──
+
+     "Message the buyer", not "chat with the seller": the person reading this
+     screen IS the seller, and buyer/seller is load-bearing vocabulary here.
+  */
+  "lead.assign": "Assign",
+  "lead.assign_label": "Assign this lead to a seat",
+  "lead.assign_nobody": "Nobody",
+  "lead.assign_self": "{name} (you)",
+  "lead.assign_unnamed": "A seat with no name yet",
+  "lead.assign_saved": "Assigned to {name}",
+  "lead.assign_cleared": "Assignment cleared",
+  "lead.message_buyer": "Message the buyer",
+  "lead.message_buyer_unread": "Message the buyer · {count} new",
+  "lead.mark_won": "Mark won",
+  "lead.mark_lost": "Mark lost",
+  "lead.reopen": "Clear the outcome",
+  "lead.outcome.won": "You marked this won",
+  "lead.outcome.lost": "You marked this lost",
+  "lead.outcome.observed_won": "The buyer accepted your quote",
+  "lead.outcome.observed_lost": "The buyer accepted another supplier",
+  "lead.outcome_marked_by": "Marked by {name}, {when}",
+  "lead.lost_reason_label": "Why, in a few words",
+  "lead.lost_reason_placeholder": "Price, lead time, no answer — whatever it was.",
+  "lead.lost_reason_optional": "Optional. Nobody outside your team reads it.",
+  "lead.lost_confirm": "Mark it lost",
+  "lead.cancel": "Cancel",
+  "lead.outcome_no_value": "No amount is recorded. Quoted value is the sum of accepted quotes, so it stays a measurement rather than a figure anyone types.",
+
+  /* Refusals, said in full rather than as a code. */
+  "lead.error.not_yours": "This enquiry is not one of yours.",
+  "lead.error.not_yours_to_mark": "Only the seat this lead is assigned to, or a manager, can mark an outcome.",
+  "lead.error.buyer_decided": "The buyer has accepted your quote on this one, so it cannot be marked lost.",
+  "lead.error.not_quoted": "Send a quote first. There is nothing to win or lose yet.",
+  "lead.error.decided": "This lead has an outcome. Clear it first to change anything.",
+  "lead.error.not_your_seat": "That person is not on your team.",
+
+  /* Why the composer is read-only, said rather than left to be worked out. */
+  "lead.readonly_outcome": "This lead has an outcome. Clear it to quote again.",
+  "lead.readonly_closed": "The enquiry has closed, so no further quote can be sent. The thread stays open.",
+  "lead.readonly_suspended": "Quotes cannot be sent while the listing is suspended.",
+
+  /* ── The composer's autosave ── */
+  "lead.draft_saved": "Saved {when}",
+  "lead.draft_saving": "Saving",
+  "lead.draft_restored": "Picked up where you left off. Nothing is sent until you send it.",
+  "lead.draft_discard": "Start again",
+
   "lead.not_found_title": "This enquiry is not one of yours",
   "lead.not_found_body": "It was either sent to another supplier or the reference is wrong. Your open enquiries are on the leads page.",
   "lead.back_to_leads": "Back to leads",
@@ -1371,6 +1527,8 @@ export const en = {
   "contact.withheld_body": "You see {name} and the requirement. The phone number, email and company name are released to you alone if {name} accepts your quote.",
   "contact.released_title": "Contact released",
   "contact.released_body": "{name} accepted your quote on {when}.",
+  /* No date rather than today's, where the row never recorded one. */
+  "contact.released_undated": "{name} accepted your quote.",
 
   // ── Quote line editor [3k] ──
   "quote.editor.form": "Quote lines and terms",
@@ -1664,6 +1822,10 @@ export const en = {
   "thread.buyer_footer": "Your own history with this buyer, nothing more. We never take payment, so we cannot tell you whether they pay on time — and we do not aggregate their behaviour with other suppliers.",
 
   "thread.competing": { one: "Competing with {count} other supplier", other: "Competing with {count} other suppliers" },
+  /* Already on screen before anybody tries it, and not a bluff: the detector in
+     lib/messaging/off-platform.ts raises a report on an IBAN or a "transfer to". */
+  "thread.offplatform_title": "Do not ask for payment here",
+  "thread.offplatform_body": "Sharing bank details, or asking to settle away from the platform, is detected and reviewed by a person. Quotes and payment terms are what this thread is for.",
   "thread.state.quoted": "Quoted · awaiting decision",
   "thread.state.open": "Not quoted yet",
   "thread.state.won": "You marked this won",
@@ -1673,10 +1835,18 @@ export const en = {
   "thread.send_quote": "Send a quote",
   "thread.back_to_inbox": "Back to the inbox",
 
-  // Board 10h, buyer side.
-  "thread.chip.validity": "Can you hold this price a little longer?",
-  "thread.chip.datasheets": "Could you send datasheets for these?",
-  "thread.chip.credit": "What credit terms can you offer?",
+  /* ── Board 10h, buyer side ──
+
+     Same shape as the seller's since board 11b: the chip names the act and the
+     text is what lands in the box, editable before it sends. A buyer's chips ask
+     rather than promise, so nothing here commits anybody to anything.
+  */
+  "thread.chip.validity": "Ask about the price hold",
+  "thread.chip.validity_text": "Can you hold this price a little longer?",
+  "thread.chip.datasheets": "Ask for datasheets",
+  "thread.chip.datasheets_text": "Could you send datasheets for these?",
+  "thread.chip.credit": "Ask about credit terms",
+  "thread.chip.credit_text": "What credit terms can you offer?",
   /* ── Board 11b, seller side: suggest the act, never the number ──
 
      These were three sentences that committed the supplier to terms nobody had

@@ -39,7 +39,30 @@ export interface ThreadMessageView {
   at: string;
   /** Detected as an attempt to move the deal off the record. */
   flagged: boolean;
+  /**
+   * Written by a schedule rather than typed.
+   *
+   * Board 11b tags the follow-up on screen. A buyer replying to what they think
+   * is a person deserves to know when it was not one, and a seller looking back
+   * at the thread needs to tell their own words from the reminder.
+   */
+  automatic?: boolean;
   quote?: ThreadQuoteView;
+}
+
+/**
+ * A canned opener.
+ *
+ * The label and the text are separate because board 11b §3 requires it: the
+ * chip says *"Extend the price hold"* and drops in wording the seller finishes,
+ * rather than a sentence committing them to a number nobody typed. The board
+ * shipped three chips that each made a commitment, one of them to a 21-day hold
+ * against a quote whose validity said fourteen.
+ */
+export interface ThreadChip {
+  label: string;
+  /** What lands in the box. Editable before it sends; it never sends itself. */
+  text: string;
 }
 
 export interface ThreadLabels {
@@ -60,6 +83,9 @@ export interface ThreadLabels {
   quickRepliesLabel: string;
   flagged: string;
   flaggedExplain: string;
+  /** The tag on a scheduled follow-up, and the sentence explaining it. */
+  automatic?: string;
+  automaticExplain?: string;
   revisionOf: (revision: number) => string;
   wasLabel: string;
 }
@@ -68,9 +94,17 @@ export interface ThreadProps {
   messages: readonly ThreadMessageView[];
   labels: ThreadLabels;
   /** Canned openers. Board 10h and 11b both draw them, with different text. */
-  quickReplies?: readonly string[];
+  quickReplies?: readonly ThreadChip[];
   /** The board 11b warning, on the seller's side only. Never decorative. */
   notice?: React.ReactNode;
+  /**
+   * A system note under the last message — a read receipt, a state change.
+   *
+   * Board 11b: centre-aligned, visually distinct from both parties, and never
+   * notified on. It is not a message and does not belong in the log, which is
+   * why it sits outside the list rather than as an entry in it.
+   */
+  systemNote?: React.ReactNode;
   onSend?: (body: string) => void | Promise<void>;
   busy?: boolean;
   error?: string;
@@ -83,6 +117,7 @@ export function Thread({
   labels,
   quickReplies = [],
   notice,
+  systemNote,
   onSend,
   busy = false,
   error,
@@ -129,6 +164,17 @@ export function Thread({
 
                   {message.quote ? <QuoteInline quote={message.quote} labels={labels} /> : null}
 
+                  {message.automatic && labels.automatic ? (
+                    <p className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <StatusBadge tone="info" size="sm" shape="chip">
+                        {labels.automatic}
+                      </StatusBadge>
+                      {labels.automaticExplain ? (
+                        <span className="text-caption text-muted">{labels.automaticExplain}</span>
+                      ) : null}
+                    </p>
+                  ) : null}
+
                   {message.flagged ? (
                     <p className="mt-2 flex flex-wrap items-center gap-1.5">
                       <StatusBadge tone="warn" size="sm" shape="chip">
@@ -147,6 +193,14 @@ export function Thread({
         </ol>
       </div>
 
+      {systemNote ? (
+        <p className="flex justify-center">
+          <span className="rounded-pill border border-warn-line bg-warn-surface px-3 py-1.5 text-center text-caption text-warn-ink">
+            {systemNote}
+          </span>
+        </p>
+      ) : null}
+
       {readOnly ? null : (
         <form onSubmit={send} aria-label={labels.formLabel} className="space-y-2">
           {quickReplies.length > 0 ? (
@@ -155,16 +209,20 @@ export function Thread({
               <div className="flex flex-wrap gap-1.5">
                 {quickReplies.map((reply) => (
                   <button
-                    key={reply}
+                    key={reply.label}
                     type="button"
-                    onClick={() => setBody((prev) => (prev ? `${prev.trimEnd()} ${reply}` : reply))}
+                    onClick={() =>
+                      setBody((prev) =>
+                        prev ? `${prev.trimEnd()} ${reply.text}` : reply.text,
+                      )
+                    }
                     className={cn(
                       "rounded-pill border border-line-strong bg-card px-3 py-1.5 text-caption text-body",
                       "transition-colors duration-120 ease-out hover:border-moss hover:text-ink",
                       "focus-visible:shadow-focus focus-visible:outline-none",
                     )}
                   >
-                    {reply}
+                    {reply.label}
                   </button>
                 ))}
               </div>

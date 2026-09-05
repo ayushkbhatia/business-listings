@@ -937,7 +937,10 @@ export function ThreadSpecimens() {
           <Thread
             messages={THREAD_MESSAGES}
             labels={{ ...THREAD_LABELS, logLabel: "Messages — revision", formLabel: "Reply — revision" }}
-            quickReplies={[t("thread.chip.validity"), t("thread.chip.datasheets")]}
+            quickReplies={[
+              { label: t("thread.chip.validity"), text: t("thread.chip.validity_text") },
+              { label: t("thread.chip.datasheets"), text: t("thread.chip.datasheets_text") },
+            ]}
           />
         </Frame>
       </States>
@@ -946,7 +949,10 @@ export function ThreadSpecimens() {
         <Frame width="34rem">
           <Thread
             labels={{ ...THREAD_LABELS, logLabel: "Messages — flagged", formLabel: "Reply — flagged" }}
-            quickReplies={[t("thread.chip.hold_price"), t("thread.chip.site_survey")]}
+            quickReplies={[
+              { label: t("thread.chip.hold_price"), text: t("thread.chip.hold_price_text") },
+              { label: t("thread.chip.site_survey"), text: t("thread.chip.site_survey_text") },
+            ]}
             notice={
               <div className="rounded-ctl border border-line bg-paper-sunk px-3 py-2.5">
                 <p className="text-body-sm text-ink">{t("thread.seller_warning_title")}</p>

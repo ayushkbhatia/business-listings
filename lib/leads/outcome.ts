@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { assertCan, can } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import { cancelFollowUp } from "@/lib/messaging/follow-up";
+import { recordEvent } from "@/lib/telemetry/record";
 
 /**
  * Board 3j — `Mark won` and `Mark lost`.
@@ -109,7 +110,18 @@ export async function markOutcome(
 
   // Board 11b §4: an outcome cancels the follow-up. Chasing a buyer about a
   // deal the seller has already closed is the most avoidable message we send.
-  await cancelFollowUp(input.enquiryId, businessId);
+  await cancelFollowUp(input.enquiryId, businessId, "outcome_marked");
+
+  await recordEvent({
+    name: "outcome_marked",
+    businessId,
+    actorId: actor.id,
+    props: {
+      outcome: input.outcome,
+      hadQuote: recipient.state === "quoted",
+      hasReason: reason !== null,
+    },
+  });
 
   return { ok: true, outcome: input.outcome };
 }

@@ -44,6 +44,15 @@ export const EVENT_NAMES = [
   "setup_done_exit",
   "setup_done_redirected",
   "listing_viewed",
+  "inbox_viewed",
+  "lead_opened",
+  "quote_sent",
+  "outcome_marked",
+  "thread_viewed",
+  "message_sent",
+  "follow_up_scheduled",
+  "follow_up_sent",
+  "follow_up_cancelled",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -200,6 +209,113 @@ export const EVENT_SPECS = {
     emitter: "browser",
     session: "never",
     props: { businessId: "string" },
+  },
+
+  /* ── Boards 3j and 11b ──
+
+     Nine, not the eighteen the two specs between them list. Each of these
+     answers a question somebody will actually ask; the rest were left out for
+     stated reasons, and the reasons are here rather than in a document nobody
+     opens:
+
+     - `composer_opened` / `composer_switched`. 3j §9 calls the second "the
+       number worth watching" — whether sellers routinely turn an RFQ into a
+       message, which would mean the type rule is wrong. It cannot be measured
+       yet: `createEnquiry` refuses an enquiry with no lines and has one caller,
+       so every enquiry is an RFQ and there is nothing to switch *from*. An
+       event that can only ever report one value is a column you cannot group by.
+     - `quote_line_added` and `sku_match_rate`. Both are already answerable from
+       the rows — `QuoteLine.productId` being null *is* the hand-priced line —
+       and a derived number measured twice is a number that will disagree.
+     - `read_receipt_shown`. The useful figure is whether the buyer opened it,
+       which is `Quote.readAt`. A browser event saying we drew the line adds a
+       second, weaker source for a fact the database already holds.
+     - `escalation_fired`. lib/enquiry/escalation-job.ts already writes a
+       `NotificationDelivery` row per escalation, which is the record.
+  */
+
+  /** The inbox was rendered. `scope` and `tab` are what the funnel groups by. */
+  inbox_viewed: {
+    emitter: "browser",
+    session: "never",
+    props: { tab: "string", scope: "string", open: "number?", overdue: "number?" },
+  },
+  /**
+   * A lead was opened from the rail.
+   *
+   * `band` and `position` together answer the question the ordering exists for:
+   * do sellers work down the list, or do they skip the overdue rows at the top?
+   */
+  lead_opened: {
+    emitter: "browser",
+    session: "never",
+    props: { band: "string", position: "number?", quoted: "boolean?" },
+  },
+  /**
+   * A quote left the composer. Server: a browser saying a quote was sent is the
+   * browser's word for it, and this one has a row behind it.
+   *
+   * `hoursSinceReceipt` is the number 3a's median is built from, recorded here
+   * per quote so a slow week can be read without recomputing the median.
+   */
+  quote_sent: {
+    emitter: "server",
+    session: "never",
+    props: {
+      lines: "number",
+      revision: "number",
+      validityDays: "number",
+      hoursSinceReceipt: "number?",
+      handPriced: "number?",
+    },
+  },
+  /**
+   * A seller closed a lead.
+   *
+   * No amount, and there will not be one: quoted value is derived from accepted
+   * quotes, and an event carrying a seller-typed figure would be the writable
+   * path CLAUDE.md refuses, one layer down.
+   */
+  outcome_marked: {
+    emitter: "server",
+    session: "never",
+    props: { outcome: "string", hadQuote: "boolean?", hasReason: "boolean?" },
+  },
+  /** One conversation was opened. */
+  thread_viewed: {
+    emitter: "browser",
+    session: "never",
+    props: { state: "string", messages: "number?", unread: "number?" },
+  },
+  /** A message was written by a person on the seller's side. */
+  message_sent: {
+    emitter: "server",
+    session: "never",
+    props: { length: "number", flagged: "boolean?" },
+  },
+  /**
+   * The follow-up, in three parts.
+   *
+   * Board 11b names the reply rate as the number worth watching: the rail
+   * asserts that a second nudge loses more than it wins, and if the *first*
+   * one's reply rate is poor the feature is noise and should go rather than
+   * double. These three are what that rate is computed from — armed, sent, and
+   * the cancellations that mean the buyer answered before it had to.
+   */
+  follow_up_scheduled: {
+    emitter: "server",
+    session: "never",
+    props: { hours: "number" },
+  },
+  follow_up_sent: {
+    emitter: "server",
+    session: "never",
+    props: { scheduled: "boolean", hoursWaited: "number?" },
+  },
+  follow_up_cancelled: {
+    emitter: "server",
+    session: "never",
+    props: { reason: "string" },
   },
 } as const satisfies Record<EventName, EventDefinition>;
 

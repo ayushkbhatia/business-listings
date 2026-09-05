@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { onSellerMessage } from "@/lib/notify/events";
+import { recordEvent } from "@/lib/telemetry/record";
 import { detectOffPlatform, describeVerdict } from "./off-platform";
 
 /**
@@ -83,6 +84,12 @@ export async function scheduleFollowUp(input: {
     data: { nudgeDueAt: dueAt, nudgeBody: body },
   });
 
+  await recordEvent({
+    name: "follow_up_scheduled",
+    businessId: input.businessId,
+    props: { hours },
+  });
+
   return { ok: true, dueAt };
 }
 
@@ -98,11 +105,26 @@ export async function scheduleFollowUp(input: {
  * caller is a side effect of something else succeeding, and none of them should
  * fail because there was no reminder to cancel.
  */
-export async function cancelFollowUp(enquiryId: string, businessId: string): Promise<void> {
-  await prisma.enquiryRecipient.updateMany({
+export async function cancelFollowUp(
+  enquiryId: string,
+  businessId: string,
+  reason: "buyer_replied" | "outcome_marked" | "closed" | "seller_cancelled" = "seller_cancelled",
+): Promise<void> {
+  const { count } = await prisma.enquiryRecipient.updateMany({
     where: { enquiryId, businessId, nudgeDueAt: { not: null } },
     data: { nudgeDueAt: null, nudgeBody: null },
   });
+
+  /*
+     Only when something was actually disarmed. Board 11b's number worth
+     watching is the follow-up's reply rate, and a cancellation because the
+     buyer answered first is a *success* of the feature rather than a use of it
+     — so it has to be countable, and a row written every time nothing happened
+     would drown it.
+  */
+  if (count > 0) {
+    await recordEvent({ name: "follow_up_cancelled", businessId, props: { reason } });
+  }
 }
 
 export type SendResult =
@@ -145,7 +167,7 @@ export async function sendFollowUp(input: {
   if (!body) return { ok: false, error: "empty" };
 
   if (await buyerHasRepliedSince(input.enquiryId, input.businessId)) {
-    await cancelFollowUp(input.enquiryId, input.businessId);
+    await cancelFollowUp(input.enquiryId, input.businessId, "buyer_replied");
     return { ok: false, error: "replied" };
   }
 
@@ -204,6 +226,17 @@ export async function sendFollowUp(input: {
     enquiryId: input.enquiryId,
     businessId: input.businessId,
     body,
+  });
+
+  await recordEvent({
+    name: "follow_up_sent",
+    businessId: input.businessId,
+    actorId: input.senderId,
+    props: {
+      // Whether the schedule sent it or the seller pressed the button. The two
+      // are the same row and the same tag; only this tells them apart.
+      scheduled: input.body === undefined,
+    },
   });
 
   return { ok: true, messageId: sent };
@@ -284,7 +317,7 @@ export async function sweepFollowUps(now: Date = new Date()): Promise<FollowUpSw
        accepted pair — a message the thread will not take is not a message.
     */
     if (row.enquiry.closesAt.getTime() < now.getTime()) {
-      await cancelFollowUp(row.enquiryId, row.businessId);
+      await cancelFollowUp(row.enquiryId, row.businessId, "closed");
       dropped += 1;
       continue;
     }
