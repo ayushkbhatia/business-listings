@@ -56,7 +56,13 @@ export async function getLeadsForBusiness(businessId: string): Promise<LeadRow[]
           buyer: { select: { fullName: true } },
           lines: { select: { qty: true } },
           quotes: {
-            where: { businessId },
+            /*
+               Sent quotes only. `QuoteStatus.draft` gained its first writer with
+               board 3j's autosave, and a draft is the seller's own workings —
+               counting one here would put "r2 · AED 0.00" on a rail row for a
+               quote the buyer has never seen.
+            */
+            where: { businessId, status: { not: "draft" } },
             orderBy: { revision: "desc" },
             take: 1,
             select: {
@@ -204,7 +210,14 @@ export async function getLeadDetail(
       buyer: { select: buyerSelectFor(released.contactReleasedToBusinessId, businessId) },
       lines: { orderBy: { sortOrder: "asc" } },
       quotes: {
-        where: { businessId },
+        /*
+           Sent quotes only, for the same reason: the composer's eyebrow counts
+           these to name the next revision, and `SentQuotes` lists them under
+           "Sent already". With drafts included, opening a lead and typing one
+           price made the composer announce "Revision 2" of a quote nobody had
+           sent. The draft is read separately, by `findDraft`.
+        */
+        where: { status: { not: "draft" } },
         orderBy: { revision: "desc" },
         include: { lines: { orderBy: { sortOrder: "asc" } } },
       },
@@ -350,7 +363,13 @@ export interface QuoteRow {
 
 export async function getQuotesForBusiness(businessId: string): Promise<QuoteRow[]> {
   const quotes = await prisma.quote.findMany({
-    where: { businessId },
+    /*
+       Board 3k lists what has been *sent*. `QuoteStatus.draft` had no writer at
+       all until board 3j's autosave, so this filter was free to omit; it is not
+       any more, and a half-priced draft appearing in the quotes pipeline would
+       be a quote the buyer has never seen sitting in a list of ones they have.
+    */
+    where: { businessId, status: { not: "draft" } },
     orderBy: [{ createdAt: "desc" }],
     select: {
       id: true,
