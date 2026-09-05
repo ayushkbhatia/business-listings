@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { channelOf, contactLabel } from "./contact";
 import { sendInvite } from "./invite-email";
 import { repairClaims } from "@/lib/auth/flow";
+import { can } from "@/lib/auth/can";
 import { assertCanManageTeam } from "@/lib/auth/guards";
 import { SELLER_ROLES, type Actor, type Role } from "@/lib/auth/roles";
 import { t, type MessageKey } from "@/lib/i18n";
@@ -413,7 +414,22 @@ export async function expireInvites(now: Date = new Date()): Promise<number> {
 
 // ── Removing ────────────────────────────────────────────────────────────────
 
-export type RemoveResult = { ok: true; name: string } | { ok: false; error: string };
+export type RemoveResult =
+  | { ok: true; name: string; movedLeads: number; movedTo: string | null }
+  | { ok: false; error: string };
+
+/** Where the leaver's open leads go. 7d §6.3 — a choice, never a default. */
+export interface RemoveOptions {
+  /**
+   * The seat that takes their open leads, or `null` for the unassigned queue.
+   *
+   * There is no third option. "Leave them where they are" would point every one
+   * of those leads at somebody with no business id, which is a lead assigned to
+   * nobody that does not appear in the unassigned scope either — the orphan 7d
+   * §6.3 calls the same failure as an unroutable lead.
+   */
+  reassignToId: string | null;
+}
 
 /**
  * Take a seat back. The inverse docs/permissions.md has always named.
@@ -441,8 +457,21 @@ export type RemoveResult = { ok: true; name: string } | { ok: false; error: stri
  * only their own messages, and the response times measured from those replies
  * would silently change. `Message.businessId` is its own column, so the
  * supplier keeps the thread either way.
+ *
+ * **Their open leads move first.** 7d §6.3: "not remove a seat with open leads
+ * silently — removal reassigns first: pick a seat or send them to the
+ * unassigned queue. An orphaned lead is the same failure as an unroutable one."
+ * Both writes are one transaction, because the half-done version is the failure
+ * it is guarding against: a seat cleared while its leads still point at it
+ * leaves them assigned to somebody with no business, which is invisible in
+ * every scope board 3j offers — not `mine`, not `unassigned`, not the seat
+ * filter, since the seat is gone from it.
  */
-export async function removeSeat(actor: Actor, userId: string): Promise<RemoveResult> {
+export async function removeSeat(
+  actor: Actor,
+  userId: string,
+  options: RemoveOptions = { reassignToId: null },
+): Promise<RemoveResult> {
   assertCanManageTeam(actor);
 
   if (userId === actor.id) {
@@ -477,13 +506,94 @@ export async function removeSeat(actor: Actor, userId: string): Promise<RemoveRe
     (role): role is Role => !(SELLER_ROLES as readonly string[]).includes(role),
   );
 
-  await prisma.user.update({
-    where: { id: userId },
-    // The branch goes with the seat. A cleared `businessId` and a surviving
-    // `branchId` would leave a pointer at a location belonging to a business
-    // this person is no longer on — and the next seat they take somewhere else
-    // would start already scoped to a stranger's branch.
-    data: { businessId: null, roles: nextRoles, branchId: null },
+  const businessId = actor.businessId;
+
+  /*
+     Checked before the transaction opens, and checked against this team.
+
+     A posted id is a suggestion. Without this a seller could hand their whole
+     inbox to a stranger's user id, and the recipient rows carry no second
+     check — `EnquiryRecipient.assignedToId` has no constraint tying it to the
+     business the enquiry was fanned out to.
+  */
+  if (options.reassignToId !== null) {
+    if (options.reassignToId === userId) {
+      return { ok: false, error: t("team.reassign_to_leaver") };
+    }
+    const taker = await prisma.user.findUnique({
+      where: { id: options.reassignToId },
+      select: { businessId: true, roles: true, suspendedAt: true },
+    });
+    if (!taker || taker.businessId !== businessId) {
+      return { ok: false, error: t("team.reassign_unknown") };
+    }
+    /*
+       A lead handed to a seat that cannot open it is the orphan again, one door
+       along: `enquiry.respond` is what board 3j's inbox is gated on, so a
+       finance seat holding twelve leads is twelve leads nobody can answer.
+    */
+    if (
+      taker.suspendedAt !== null ||
+      !can({ id: options.reassignToId, roles: taker.roles, businessId }, "enquiry.respond")
+    ) {
+      return { ok: false, error: t("team.reassign_cannot_reply") };
+    }
+  }
+
+  const now = new Date();
+
+  const movedLeads = await prisma.$transaction(async (tx) => {
+    /*
+       Every lead they hold, not only the open ones.
+
+       The rule is about open leads and the count on the confirmation is the
+       open count, because that is what the seller is deciding about. The write
+       is wider on purpose: a won lead still assigned to somebody with no
+       business id is an outcome attributed to a seat that is no longer on the
+       team, and board 3j's `Won` tab would render an assignee it cannot name.
+    */
+    const { count } = await tx.enquiryRecipient.updateMany({
+      where: { businessId, assignedToId: userId },
+      data:
+        options.reassignToId === null
+          ? { assignedToId: null, assignedAt: null }
+          : {
+              assignedToId: options.reassignToId,
+              assignedAt: now,
+              assignedById: actor.id,
+              // The constraint refuses a routed-nowhere reason on an assigned
+              // row, and it is right to: the lead has somewhere to be now.
+              unroutedReason: null,
+            },
+    });
+
+    /*
+       7d §8.3 — "round-robin state must survive a seat being removed
+       mid-rotation". `nextAfter` already restarts the rotation when the cursor
+       names nobody eligible, so this is not what makes it survive; it is what
+       stops the column pointing at a person who is not on the team, which the
+       next reader of it would have to guess about.
+    */
+    await tx.business.updateMany({
+      where: { id: businessId, routingCursorId: userId },
+      data: { routingCursorId: null },
+    });
+
+    // The seat's own channels go with the seat. They are addresses for a
+    // business this person is no longer on, and leaving them would keep
+    // `reachabilityFor` answering about somebody who cannot open a lead.
+    await tx.seatChannel.deleteMany({ where: { userId } });
+
+    await tx.user.update({
+      where: { id: userId },
+      // The branch goes with the seat. A cleared `businessId` and a surviving
+      // `branchId` would leave a pointer at a location belonging to a business
+      // this person is no longer on — and the next seat they take somewhere else
+      // would start already scoped to a stranger's branch.
+      data: { businessId: null, roles: nextRoles, branchId: null },
+    });
+
+    return count;
   });
 
   // Same reason as acceptInvite: the claim is what `getActor` reads first, and
@@ -491,7 +601,12 @@ export async function removeSeat(actor: Actor, userId: string): Promise<RemoveRe
   // still open the dashboard until the session is rebuilt.
   await repairClaims(userId, nextRoles, null);
 
-  return { ok: true, name: target.fullName ?? target.email ?? "" };
+  return {
+    ok: true,
+    name: target.fullName ?? target.email ?? "",
+    movedLeads,
+    movedTo: options.reassignToId,
+  };
 }
 
 /** Board 8d §6: once an hour, per invitation, enforced here and not in the UI. */

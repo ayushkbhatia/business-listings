@@ -59,6 +59,21 @@ export const EVENT_NAMES = [
   "revision_started",
   "requote_started",
   "pipeline_exported",
+  "unroutable_lead",
+  "team_viewed",
+  "invite_sent",
+  "invite_resent",
+  "seat_removed",
+  "routing_mode_changed",
+  "escalation_interval_changed",
+  "cap_reached_invite_blocked",
+  "settings_viewed",
+  "notification_toggled",
+  "channel_verified",
+  "channel_verification_failed",
+  "autoreply_toggled",
+  "quiet_hours_changed",
+  "fallback_to_owner",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -394,6 +409,151 @@ export const EVENT_SPECS = {
     emitter: "server",
     session: "never",
     props: { tab: "string", rows: "number" },
+  },
+
+  /**
+   * Board 7d §9's number worth watching.
+   *
+   * "Every one of those is a lead that arrived and went nowhere until the owner
+   * picked it up, and it is the single measurement that tells you whether this
+   * pair of screens works." Server-side, because the router is the only thing
+   * that knows — the failure is invisible on both screens by construction, which
+   * is the whole reason boards 7d and 7e are one handoff.
+   *
+   * `routing_off` is deliberately not recorded: a seller who chose "everyone
+   * sees everything" has not suffered a routing failure, and counting it would
+   * drown the three reasons that are.
+   */
+  unroutable_lead: {
+    emitter: "server",
+    session: "never",
+    props: { reason: "string" },
+  },
+
+  // ── Board 7d, the team screen ─────────────────────────────────────────────
+
+  /**
+   * The screen was looked at, with the two counts that say what it showed.
+   *
+   * `unreachable` is the one to group by. A team where it is never zero is a
+   * team whose routing is quietly skipping people, and this is the only place
+   * that number is visible before it turns into an `unroutable_lead`.
+   */
+  team_viewed: {
+    emitter: "browser",
+    session: "required",
+    props: { seats: "number?", invites: "number?", unreachable: "number?" },
+  },
+  /** An invitation left. `scoped` is 7d §9's "branch scope", as a boolean. */
+  invite_sent: {
+    emitter: "server",
+    session: "never",
+    props: { role: "string", scoped: "boolean" },
+  },
+  /** The same offer, again. Distinct from a first send: it counts a delivery
+   * that did not arrive, which is what the resend control exists for. */
+  invite_resent: {
+    emitter: "server",
+    session: "never",
+    props: { expired: "boolean" },
+  },
+  /**
+   * A seat taken back, and what happened to what it was holding.
+   *
+   * `openLeads` is the count that moved and `movedTo` says where — `seat` or
+   * `queue`. 7d §9 asks for "open leads reassigned to", and the id of a
+   * colleague is not a dimension anything can group by, so it is the shape of
+   * the destination rather than the person.
+   */
+  seat_removed: {
+    emitter: "server",
+    session: "never",
+    props: { openLeads: "number", movedTo: "string" },
+  },
+  /** From and to, because the interesting question is which way sellers move. */
+  routing_mode_changed: {
+    emitter: "server",
+    session: "never",
+    props: { from: "string", to: "string" },
+  },
+  escalation_interval_changed: {
+    emitter: "server",
+    session: "never",
+    props: { fromMinutes: "number", toMinutes: "number" },
+  },
+  /**
+   * The invitation the plan refused.
+   *
+   * Not a funnel step — it is the measurement of a wall a paying seller walked
+   * into, and 7d §3 makes the wall a designed state precisely so this is rare.
+   * If it is common the cap is wrong, not the seller.
+   */
+  cap_reached_invite_blocked: {
+    emitter: "server",
+    session: "never",
+    props: { plan: "string", cap: "number" },
+  },
+
+  // ── Board 7e, the alerts screen ───────────────────────────────────────────
+
+  /** Which tab was looked at, and how many seats could not be reached from it. */
+  settings_viewed: {
+    emitter: "browser",
+    session: "required",
+    props: { tab: "string", unreachable: "number?" },
+  },
+  /**
+   * One cell of the matrix moved.
+   *
+   * Per cell rather than per save, because "which channel do sellers turn off
+   * first" is the question, and a save event answers none of it. Written on the
+   * server from a diff of what was stored against what arrived, so it counts a
+   * change rather than a form submission.
+   */
+  notification_toggled: {
+    emitter: "server",
+    session: "never",
+    props: { event: "string", channel: "string", on: "boolean" },
+  },
+  /** A channel was proven. The event that turns an amber row green on 7d. */
+  channel_verified: {
+    emitter: "server",
+    session: "never",
+    props: { channel: "string" },
+  },
+  /** A code was refused. `reason` separates a typo from an expired code. */
+  channel_verification_failed: {
+    emitter: "server",
+    session: "never",
+    props: { channel: "string", reason: "string" },
+  },
+  autoreply_toggled: {
+    emitter: "server",
+    session: "never",
+    props: { on: "boolean" },
+  },
+  quiet_hours_changed: {
+    emitter: "server",
+    session: "never",
+    props: { on: "boolean" },
+  },
+  /**
+   * A lead reached the owner because it could not reach anybody else.
+   *
+   * §9 pairs this with board 7d's `unroutable_lead`: "together they are the only
+   * evidence that a lead arrived and nobody heard it." The two reasons are
+   * different problems and lead to different screens — `unassigned` is a routing
+   * question, `unreachable` is a channel one.
+   *
+   * `notification_send_failed` is deliberately absent from this list.
+   * `NotificationDelivery` already writes one row per channel per send carrying
+   * the status and the reason, which is strictly more than an event could hold,
+   * and two records of one fact is how they come to disagree.
+   */
+  fallback_to_owner: {
+    emitter: "server",
+    session: "never",
+    props: { reason: "string" },
   },
 } as const satisfies Record<EventName, EventDefinition>;
 

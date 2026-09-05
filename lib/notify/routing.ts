@@ -45,11 +45,27 @@ export const INTERRUPTING_CHANNELS: readonly NotificationChannel[] = ["whatsapp"
 
 export interface QuietHours {
   enabled: boolean;
-  /** Local hour the quiet window opens, e.g. 21. */
+  /** Local hour the quiet window opens, e.g. 21. The fallback, see below. */
   fromHour: number;
   /** Local hour it closes, e.g. 7. Wraps midnight when from > to. */
   toHour: number;
   onSunday: boolean;
+  /**
+   * The seller's own counter, from the Hours page.
+   *
+   * Board 7e §5 names one source for quiet hours, the auto-reply and board 7d's
+   * routing skip: "the Hours page. Same source… One copy." A second working
+   * week stored on the alerts screen is the contradiction that surfaces first
+   * during Ramadan — quiet hours running to 07:00 while the counter opened at
+   * 09:00 and the routing skip agreed with neither.
+   *
+   * Null where nobody has published hours. That is not "always open" and not
+   * "always shut" — it is a business with no week — and the stored window above
+   * is what is left until the Hours page is filled in. It is the same rule
+   * `lib/leads/router.ts` applies to the routing skip, written once in each
+   * place because the two decide different things from the same fact.
+   */
+  hours?: { closedNow: boolean; opensAt: Date | null } | null;
 }
 
 export interface RoutingPreference {
@@ -95,6 +111,10 @@ export function localParts(now: Date, timeZone = UAE): { hour: number; weekday: 
 /** Is `now` inside the seller's quiet window? */
 export function inQuietHours(quiet: QuietHours, now: Date, timeZone = UAE): boolean {
   if (!quiet.enabled) return false;
+  // The counter decides where there is one. Everything below is the fallback
+  // for a supplier who has not published hours anywhere.
+  if (quiet.hours) return quiet.hours.closedNow;
+
   const { hour, weekday } = localParts(now, timeZone);
 
   // The UAE weekend is Saturday and Sunday; board 7e names Sunday because that
@@ -115,6 +135,14 @@ export function inQuietHours(quiet: QuietHours, now: Date, timeZone = UAE): bool
  * for that is where the off-by-one lives. A day of hours is 24 iterations.
  */
 export function quietLiftsAt(quiet: QuietHours, now: Date, timeZone = UAE): Date {
+  /*
+     When the counter opens, where the counter is the source. `opensAt` is null
+     for a business whose published week never opens again inside eight days,
+     which is a supplier who has closed rather than one who is asleep — sending
+     now beats never sending, and the delivery row records that it was held.
+  */
+  if (quiet.hours) return quiet.hours.opensAt ?? now;
+
   const HOUR = 3_600_000;
   let cursor = new Date(Math.ceil(now.getTime() / HOUR) * HOUR);
   for (let i = 0; i < 24 * 8; i += 1) {

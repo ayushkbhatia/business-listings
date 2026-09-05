@@ -18,6 +18,8 @@ import { render } from "./render";
 import { resolveNotificationSenders } from "./senders";
 import { absoluteUrl } from "@/lib/site";
 import { withParams } from "./params";
+import { reachabilityOf } from "@/lib/team/reachability";
+import { recordEvent } from "@/lib/telemetry/record";
 
 /**
  * The events, wired to the things that cause them.
@@ -63,11 +65,25 @@ async function safely(what: string, run: () => Promise<unknown>): Promise<void> 
 /**
  * A new enquiry reached a supplier.
  *
- * One per recipient, to the owner seat. The whole point of the WhatsApp
- * template is two taps from here to a quote in progress, so the deep link
- * lands on the composer — which moved to `/dashboard/leads/:id` with board 3j.
- * It pointed at `/thread` for as long as the composer lived there; the sentence
- * and the destination move together or one of them becomes untrue.
+ * One per recipient, and — since board 7e — to the seat the router chose rather
+ * than always to the owner. The whole point of the WhatsApp template is two taps
+ * from here to a quote in progress, so the deep link lands on the composer,
+ * which moved to `/dashboard/leads/:id` with board 3j. It pointed at `/thread`
+ * for as long as the composer lived there; the sentence and the destination move
+ * together or one of them becomes untrue.
+ *
+ * ## Nothing is dropped
+ *
+ * 7e §2.1, and it is the rule that makes the `GOES TO` column mean anything:
+ * "if nobody is assigned, or the assigned seat has no verified channel, the
+ * event goes to the owner." Both halves happen here, and both are counted —
+ * `fallback_to_owner` with `reason: unassigned | unreachable` is one of the two
+ * numbers §9 says are the only evidence that a lead arrived and nobody heard it.
+ *
+ * A business whose owner is themselves unreachable still gets the notification
+ * written: `notify` records a skipped delivery per channel with the reason, and
+ * in-app is never suppressed, so the lead appears in the list either way. The
+ * dead end this pair of screens closes is silence, not the absence of a buzz.
  */
 export async function onEnquiryDelivered(input: {
   enquiryId: string;
@@ -89,17 +105,34 @@ export async function onEnquiryDelivered(input: {
     });
     if (!enquiry) return;
 
-    const owners = await prisma.user.findMany({
-      where: { businessId: { in: [...input.businessIds] }, roles: { has: "seller_owner" } },
-      select: { id: true, businessId: true },
-    });
+    const [owners, recipients] = await Promise.all([
+      prisma.user.findMany({
+        where: { businessId: { in: [...input.businessIds] }, roles: { has: "seller_owner" } },
+        select: { id: true, businessId: true },
+      }),
+      /*
+         Read after routing, which is where `lib/enquiry/service.ts` calls this
+         from — assign, then notify. Reading it before would find every row
+         unassigned and send every lead to the owner, which is what this
+         function did before board 7e and why the `GOES TO` column had nothing
+         behind it.
+      */
+      prisma.enquiryRecipient.findMany({
+        where: { enquiryId: input.enquiryId, businessId: { in: [...input.businessIds] } },
+        select: { businessId: true, assignedToId: true },
+      }),
+    ]);
+
+    const assignee = new Map(recipients.map((row) => [row.businessId, row.assignedToId]));
 
     for (const owner of owners) {
       if (!owner.businessId) continue;
+      const target = await recipientFor(owner.businessId, assignee.get(owner.businessId) ?? null, owner.id);
+
       await notify({
         event: "enquiry_received",
         businessId: owner.businessId,
-        recipientUserId: owner.id,
+        recipientUserId: target,
         enquiryId: enquiry.id,
         ...(input.valueAed === undefined ? {} : { valueAed: input.valueAed }),
         params: withParams("enquiry_received", {
@@ -115,6 +148,99 @@ export async function onEnquiryDelivered(input: {
       });
     }
   });
+}
+
+/**
+ * A quote is about to run out of time. Board 7e §2, added.
+ *
+ * "3k ships the expiry window and had nothing notifying it" — the pipeline draws
+ * an `Expiring soon` tab and an extend action, and until now the only way a
+ * seller met either was by opening the screen. A quote that lapses unnoticed is
+ * a deal that ended because nobody looked.
+ *
+ * To the seat that owns the lead, through the same fallback as a new enquiry:
+ * a notification about a quote is useless to somebody who cannot open it.
+ *
+ * Once per quote, guarded by the caller in `lib/quotes/expiry-job.ts` —
+ * `notify()` deduplicates nothing, and a daily sweep would otherwise send this
+ * every day of the window.
+ */
+export async function onQuoteExpiring(input: {
+  enquiryId: string;
+  businessId: string;
+  quoteRef: string;
+  expiresAt: Date;
+}): Promise<void> {
+  await safely("quote_expiring", async () => {
+    const [owner, recipient] = await Promise.all([
+      prisma.user.findFirst({
+        where: { businessId: input.businessId, roles: { has: "seller_owner" } },
+        select: { id: true },
+      }),
+      prisma.enquiryRecipient.findUnique({
+        where: { enquiryId_businessId: { enquiryId: input.enquiryId, businessId: input.businessId } },
+        select: { assignedToId: true },
+      }),
+    ]);
+    if (!owner) return;
+
+    await notify({
+      event: "quote_expiring",
+      businessId: input.businessId,
+      enquiryId: input.enquiryId,
+      recipientUserId: await recipientFor(
+        input.businessId,
+        recipient?.assignedToId ?? null,
+        owner.id,
+      ),
+      params: withParams("quote_expiring", {
+        quoteRef: input.quoteRef,
+        expiresAt: formatDate(input.expiresAt),
+      }),
+    });
+  });
+}
+
+/**
+ * Who actually hears about this lead. Board 7e §2.1.
+ *
+ * The assigned seat where there is one and it can be reached; the owner
+ * otherwise, with the reason recorded. The two reasons are different problems —
+ * `unassigned` is a routing question and `unreachable` is a channel question —
+ * and a seller looking at a rising count needs to know which screen to open.
+ */
+async function recipientFor(
+  businessId: string,
+  assignedToId: string | null,
+  ownerId: string,
+): Promise<string> {
+  if (assignedToId === null) {
+    /*
+       Not a failure under `everyone`, which is the default mode and what most
+       suppliers run — the lead was never meant to have an owner. It is still
+       counted, because the same null under round-robin means the router looked
+       and found nobody, and `EnquiryRecipient.unroutedReason` is what tells the
+       two apart for anybody reading the rows.
+    */
+    await countFallback(businessId, "unassigned");
+    return ownerId;
+  }
+  if (assignedToId === ownerId) return ownerId;
+
+  const reach = await reachabilityOf(businessId, assignedToId);
+  if (reach?.reachable) return assignedToId;
+
+  await countFallback(businessId, "unreachable");
+  return ownerId;
+}
+
+async function countFallback(businessId: string, reason: "unassigned" | "unreachable"): Promise<void> {
+  try {
+    await recordEvent({ name: "fallback_to_owner", businessId, props: { reason } });
+  } catch (cause) {
+    // A telemetry write must never cost a notification.
+    console.error("[notify] fallback_to_owner failed", { cause });
+  }
 }
 
 /** A buyer accepted a quote. The one event a seller most wants to hear. */

@@ -70,7 +70,24 @@ test.describe("board 11f — cancel", () => {
   });
 });
 
-test.describe("board 7d — team and routing", () => {
+/*
+   Board 7d's own screen moved to tests/e2e/dashboard-team.spec.ts when the
+   screen was rebuilt: the seat table, the capability matrix, the routing card
+   and the per-seat panel are a board's worth of assertions and they belong in
+   one file with the board's number on it.
+
+   Three of what was here are gone by design rather than untested.
+   `Median reply time` is no longer a column — §3's six are `PERSON · ROLE ·
+   BRANCH SCOPE · OPEN · REACHABLE ON · STATUS`, and the medians moved to the
+   thirty-day panel where the window can be stated. `what protects your reply
+   time` was cut with the response score it named (§8). The rest of what stood
+   here is asserted in the new file, against the board that asks for it.
+
+   What stays: the two facts about a seat that are this file's subject rather
+   than 7d's — what a sales seat cannot do, and that an invitation cannot make
+   an owner.
+*/
+test.describe("board 7d — the seat, from the account side", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/dashboard/team");
   });
@@ -79,19 +96,12 @@ test.describe("board 7d — team and routing", () => {
     await expect(page.getByText(/cannot see invoices, change the plan or touch licence details/)).toBeVisible();
   });
 
-  test("measures each person, including the owner", async ({ page }) => {
+  test("measures the owner too, and says so where the medians are", async ({ page }) => {
     // A dashboard that measures everybody except the person reading it is a
-    // dashboard nobody trusts about anything else either.
-    const table = page.getByRole("table");
-    await expect(table.getByRole("columnheader", { name: "Median reply time" })).toBeVisible();
-    await expect(table.getByRole("rowheader", { name: /Owner/ })).toBeVisible();
-  });
-
-  test("offers the three routing modes with what each does", async ({ page }) => {
-    await expect(page.getByRole("radio", { name: /Everyone sees everything/ })).toBeVisible();
-    await expect(page.getByRole("radio", { name: /Round-robin/ })).toBeVisible();
-    await expect(page.getByRole("radio", { name: /By branch/ })).toBeVisible();
-    await expect(page.getByText(/what protects your reply time/)).toBeVisible();
+    // dashboard nobody trusts about anything else either. The measurement moved
+    // to the thirty-day panel; that it includes the owner did not.
+    await expect(page.getByRole("heading", { name: /Last 30 days by seat/ })).toBeVisible();
+    await expect(page.getByRole("row").filter({ hasText: "YOU" })).toBeVisible();
   });
 
   test("cannot invite somebody as an owner", async ({ page }) => {

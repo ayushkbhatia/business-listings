@@ -2,6 +2,8 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { createProvisionalIdentity } from "@/lib/auth/flow";
 import { normaliseIdentifier } from "@/lib/auth/identity";
+import { routeLead } from "@/lib/leads/router";
+import { sendAutoReplies } from "@/lib/messaging/auto-reply";
 import { onEnquiryDelivered, onQuoteAccepted } from "@/lib/notify/events";
 import { quoteTotalAed } from "@/lib/quote/money";
 import type { Attribution } from "@/lib/campaign/attribution";
@@ -405,14 +407,52 @@ export async function createEnquiry(
   });
 
   /*
+   * Board 7d §4: route before anybody is told, so the notification can name the
+   * seat it went to.
+   *
+   * Outside the transaction, for the same reason the carrier call is. Routing
+   * reads, per recipient business, the mode, its eligible seats, their verified
+   * channels and its opening hours — up to eight businesses' worth of that, on
+   * an enquiry a buyer is waiting on.
+   *
+   * Each one is independent and each swallows its own failure: a business whose
+   * routing cannot be decided keeps an unassigned lead, which every inbox scope
+   * already renders, rather than costing the buyer the enquiry.
+   */
+  await Promise.all(
+    recipients.map(async (r) => {
+      try {
+        await routeLead({ enquiryId: enquiry.id, businessId: r.businessId });
+      } catch (cause) {
+        console.error("[routing] failed", { enquiryId: enquiry.id, businessId: r.businessId, cause });
+      }
+    }),
+  );
+
+  /*
    * After the transaction, never inside it. A carrier being slow must not hold
    * a database transaction open, and a carrier being down must not roll back
    * an enquiry that was successfully delivered to eight inboxes.
+   *
+   * After routing too, and that ordering is load-bearing since board 7e: the
+   * notification goes to the seat the router chose, and reading the assignment
+   * before it was written would send every lead to the owner.
    */
   await onEnquiryDelivered({
     enquiryId: enquiry.id,
     businessIds: recipients.map((r) => r.businessId),
     valueAed: estimatedValueAed(input.lines),
+  });
+
+  /*
+     Board 7e §4. The buyer hears something from a supplier whose counter is
+     shut, inside the sixty seconds the board asks for, and the clock keeps
+     running: `sendAutoReply` posts with `automatic: true`, which
+     `lib/messaging/service.ts` refuses to let stamp `firstReplyAt`.
+  */
+  await sendAutoReplies({
+    enquiryId: enquiry.id,
+    businessIds: recipients.map((r) => r.businessId),
   });
 
   return { ok: true, enquiryId: enquiry.id, ref: enquiry.ref, recipients, skipped, claimToken };
