@@ -1609,6 +1609,143 @@ export const en = {
   "quotes.open_named": "Open quote {ref}",
   "quotes.value_note": "Quoted value, self-reported.",
 
+  /* ── Board 3k: the pipeline ──
+
+     One row per lead, showing its latest revision. A revision is a version of
+     one quote rather than a second row, so the tabs count leads that carry a
+     quote — which is the same 41 board 3j's inbox reconciles against.
+  */
+  "quotes.pipeline_subtitle": { one: "{count} awaiting a decision", other: "{count} awaiting a decision" },
+  "quotes.tabs_label": "Which quotes to show",
+  "quotes.tab.all": "All",
+  "quotes.tab.awaiting": "Awaiting decision",
+  "quotes.tab.expiring": "Expiring soon",
+  "quotes.tab.won": "Won",
+  "quotes.tab.lost": "Lost",
+  "quotes.tab.expired": "Expired",
+
+  /* The strip names its denominator. A percentage without one is a number
+     nobody can check — §8.2, and the board's own `34% won` had none. */
+  "quotes.strip": "{total} quoted across {count} sent",
+  "quotes.strip_won": "{won} of {count} marked won",
+  "quotes.strip_caveat": "Outcomes as you marked them",
+
+  "quotes.col.requirement": "Buyer and requirement",
+  "quotes.col.quoted": "Quoted (AED)",
+  "quotes.col.valid_until": "Valid until",
+  "quotes.col.status": "Status",
+  "quotes.col.actions": "What you can do",
+
+  "quotes.state.awaiting": "Awaiting decision",
+  "quotes.state.won": "Won",
+  /* Prefixed wherever the text is the seller's own record, per §4. */
+  "quotes.marked_won": "You marked this won",
+  "quotes.marked_lost": "You marked this lost",
+  "quotes.observed_won": "The buyer accepted your quote",
+  "quotes.observed_lost": "The buyer accepted another supplier",
+  "quotes.you_marked": "You marked: {reason}",
+
+  "quotes.valid_days": { one: "{when} · {count} day", other: "{when} · {count} days" },
+  "quotes.valid_none": "—",
+  /* A quote sent before validity was a field. `sendQuoteForBusiness` has always
+     set one since, so this is history rather than a state anything can reach —
+     and history with no date is better said than guessed at. */
+  "quotes.valid_unknown": "No window recorded",
+  "quotes.extended_once": "Extended once",
+  "quotes.extended_times": { one: "Extended {count} time", other: "Extended {count} times" },
+
+  "quotes.action.extend": "Extend",
+  "quotes.action.nudge": "Nudge",
+  "quotes.action.revise": "Revise",
+  "quotes.action.view": "View",
+  "quotes.action.requote": "Re-quote",
+  "quotes.action_for": "{action} {ref}",
+
+  /* ── Extend ──
+
+     The two facts a seller needs before touching it, said before they do:
+     it moves the date the buyer already holds, and it sends them nothing.
+  */
+  "quotes.extend.title": "Extend {ref}",
+  "quotes.extend.body": "This moves the date on the quote the buyer already holds. It does not message them — if you want them to know, send the follow-up instead.",
+  "quotes.extend.current": "Valid until {when}",
+  "quotes.extend.preset": "Add {count} days",
+  "quotes.extend.pick": "Or pick a date",
+  "quotes.extend.pick_label": "New expiry date",
+  "quotes.extend.ceiling": "The furthest you can push this is {when}, sixty days from when you sent it. Past that, send a fresh quote rather than holding an old price.",
+  "quotes.extend.confirm": "Extend it",
+  "quotes.extend.cancel": "Cancel",
+  "quotes.extend.close": "Close",
+  "quotes.extend.done": "Now valid until {when}",
+  "quotes.extend.count_note": { one: "Extended {count} time already", other: "Extended {count} times already" },
+
+  "quotes.error.not_your_quote": "That quote is not one of yours.",
+  "quotes.error.not_yours_to_extend": "Only the seat this lead is assigned to, or a manager, can move its date.",
+  "quotes.error.expired": "The window has already closed. Send a fresh quote instead — the old price is a different commitment now.",
+  "quotes.error.decided": "This one has an outcome, so the date no longer matters.",
+  "quotes.error.too_far": "That is more than sixty days from when you sent it. Send a fresh quote instead.",
+  "quotes.error.backwards": "Pick a date after the one the buyer already has. This screen extends a window; it does not shorten one.",
+  "quotes.error.suspended": "Quotes cannot be changed while the listing is suspended.",
+
+  /* The follow-up, reached from the pipeline. Same act, same cap, same words as
+     the thread's — only the surface differs. */
+  "quotes.nudge.title": "Follow up on {ref}",
+  "quotes.nudge.body": "This goes to the buyer as a message on the thread, tagged as automatic.",
+  "quotes.nudge.label": "What the follow-up will say",
+  "quotes.nudge.placeholder": "Following up on the quote — happy to talk through the dates.",
+  "quotes.nudge.confirm": "Send it",
+  "quotes.nudge.cap": "One follow-up per lead. A second loses more deals than it wins, so we do not offer one.",
+
+  /* ── The two cards ── */
+  "quotes.speed.heading": "Your reply speed and your outcomes",
+  "quotes.speed.fast": "Quoted within {count} hours",
+  "quotes.speed.slow": "Quoted after {count} hours",
+  "quotes.speed.won_of": "{won} of {count} won",
+  /* An empty bucket has no record to read back. Saying "0 of 0 won" would be a
+     measurement nobody took. */
+  "quotes.speed.unmeasured": "Nothing resolved in this band yet",
+  "quotes.speed.counts_note": "Counts, not rates — too few resolved quotes to state as a percentage. Win and loss are as you marked them, so this reads your own record back to you: we never see the order.",
+  "quotes.speed.expired_read": { one: "{late} of your {count} expired quote was sent more than a day after the enquiry landed.", other: "{late} of your {count} expired quotes were sent more than a day after the enquiry landed." },
+  "quotes.speed.empty": "Nothing resolved yet. Once buyers start deciding, this reads your own record back to you.",
+
+  "quotes.expiring.heading": { one: "{count} quote expires this week", other: "{count} quotes expire this week" },
+  "quotes.expiring.none": "Nothing expires in the next seven days.",
+  "quotes.expiring.days": { one: "{count} day", other: "{count} days" },
+  "quotes.expiring.note": "Extending changes the date the buyer sees. It does not message them — and each lead gets one follow-up, so spend it deliberately.",
+
+  /* ── Export ── */
+  "quotes.export.action": "Export pipeline",
+  "quotes.export.caveat": "Won and lost are as the supplier marked them. This platform takes no payment and never sees the order.",
+  /* The table's head combines the two into one cell; the file keeps them apart,
+     so it needs its own word rather than borrowing the column's. */
+  "quotes.export.requirement_head": "Requirement",
+  "quotes.export.total_head": "Quoted (AED)",
+  "quotes.export.extended_head": "Times extended",
+  "quotes.export.reason_head": "Reason you gave",
+
+  /* ── States ── */
+  "quotes.footer": "{shown} of {total} shown · newest sent first",
+  "quotes.footer_all": { one: "{count} quote", other: "{count} quotes" },
+  "quotes.more": "Show more",
+  "quotes.empty.awaiting": "Nothing waiting on a buyer",
+  "quotes.empty.awaiting_body": "Quotes you have sent that nobody has decided on appear here, with the date each one runs out.",
+  "quotes.empty.expiring": "Nothing expires this week",
+  "quotes.empty.expiring_body": "A quote whose window closes in the next seven days appears here so you can extend it or follow it up.",
+  "quotes.empty.won": "Nothing marked won yet",
+  "quotes.empty.won_body": "A quote lands here when a buyer accepts it, or when you mark it won yourself.",
+  "quotes.empty.lost": "Nothing marked lost",
+  "quotes.empty.lost_body": "A quote lands here when a buyer accepts another supplier, or when you mark it lost yourself.",
+  "quotes.empty.expired": "No windows have closed unanswered",
+  "quotes.empty.expired_body": "A quote whose validity ran out with no decision appears here, ready to re-quote.",
+  "quotes.empty.inbox_link": "Go to your leads",
+  "quotes.suspended_title": "This listing is suspended",
+  "quotes.suspended_body": "Quotes cannot be extended or followed up while it is. The pipeline stays readable.",
+
+  /* The thread's system line for an extension. Not a message — §5 is explicit
+     that extending is silent, and a line in the record is not a notification. */
+  "quotes.extended_note": "Validity extended to {when} by {name}.",
+  "quotes.extended_note_unnamed": "Validity extended to {when}.",
+
   // ── Buyer: the enquiry composer [1d] [1e] [1h] ──
   /* Board 1h — /rfq/new, the fan-out. Header copy the spec sets word for word. */
   "rfq.h1": "Request a quote",

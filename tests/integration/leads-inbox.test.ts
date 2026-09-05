@@ -120,6 +120,38 @@ async function lead(label: string, options: LeadOptions = {}): Promise<string> {
   });
   created.push(enquiry.id);
 
+  /*
+     A quoted lead carries a quote.
+
+     `sendQuoteForBusiness` sets `state = "quoted"` when it writes one, so a row
+     in that state with nothing behind it is a row the application cannot
+     produce — and since the tabs are defined by the quote rather than by the
+     state column, a fixture without one lands in `Open`, correctly.
+  */
+  if ((options.state ?? "delivered") === "quoted") {
+    await prisma.quote.create({
+      data: {
+        ref: `QT-${PREFIX}-${label}`,
+        enquiryId: enquiry.id,
+        businessId,
+        revision: 1,
+        status: "sent",
+        sentAt: options.replied ? new Date(at.getTime() + 60_000) : at,
+        expiresAt: new Date(Date.now() + 14 * 86_400_000),
+        lines: {
+          create: [
+            {
+              description: `${PREFIX} gate valve`,
+              qty: 4,
+              unitPrice: "500.00",
+              sortOrder: 0,
+            },
+          ],
+        },
+      },
+    });
+  }
+
   await prisma.enquiryRecipient.create({
     data: {
       enquiryId: enquiry.id,

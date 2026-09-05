@@ -28,14 +28,17 @@ export function SellerThread({
   buyerFirstName,
   messages,
   readOnly,
-  receipt,
+  notes,
 }: {
   enquiryId: string;
   buyerFirstName: string;
   messages: readonly ThreadMessageView[];
   readOnly: boolean;
-  /** The read receipt, already worded. Null when there is no quote to have read. */
-  receipt: string | null;
+  /**
+   * The system lines under the thread, already worded: the read receipt, and
+   * since board 3k a line for every extension of the quote's window.
+   */
+  notes: readonly string[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -69,7 +72,7 @@ export function SellerThread({
         { label: t("thread.chip.site_survey"), text: t("thread.chip.site_survey_text") },
         { label: t("thread.chip.certificate"), text: t("thread.chip.certificate_text") },
       ]}
-      {...(receipt ? { systemNote: receipt } : {})}
+      systemNotes={notes}
       notice={
         <div className="rounded-ctl border border-line bg-paper-sunk px-3 py-2.5">
           <p className="text-body-sm text-ink">{t("thread.seller_warning_title")}</p>

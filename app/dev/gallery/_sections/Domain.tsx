@@ -975,7 +975,10 @@ export function ThreadSpecimens() {
               logLabel: "Messages — follow-up",
               formLabel: "Reply — follow-up",
             }}
-            systemNote={t("thread.receipt_read", { when: "12 minutes ago" })}
+            systemNotes={[
+              t("thread.receipt_read", { when: "12 minutes ago" }),
+              t("quotes.extended_note", { when: "12 Sep", name: "Rajesh" }),
+            ]}
             quickReplies={[
               { label: t("thread.chip.hold_price"), text: t("thread.chip.hold_price_text") },
             ]}

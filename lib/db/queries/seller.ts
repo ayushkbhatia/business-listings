@@ -154,6 +154,11 @@ export interface LeadDetail {
     validityDays: number;
     sentAt: Date | null;
     expiresAt: Date | null;
+    /** Board 3k. Non-zero puts a system line in the thread saying what moved. */
+    extensionCount: number;
+    lastExtendedAt: Date | null;
+    /** First name of the seat that moved it. Null once that seat is removed. */
+    extendedByName: string | null;
     totalAed: string;
     lines: {
       id: string;
@@ -219,7 +224,10 @@ export async function getLeadDetail(
         */
         where: { status: { not: "draft" } },
         orderBy: { revision: "desc" },
-        include: { lines: { orderBy: { sortOrder: "asc" } } },
+        include: {
+          lines: { orderBy: { sortOrder: "asc" } },
+          extendedBy: { select: { fullName: true } },
+        },
       },
       contactReleasedAt: true,
     },
@@ -269,6 +277,11 @@ export async function getLeadDetail(
       validityDays: q.validityDays,
       sentAt: q.sentAt,
       expiresAt: q.expiresAt,
+      extensionCount: q.extensionCount,
+      lastExtendedAt: q.lastExtendedAt,
+      // A first name. Colleagues on one account, and the thread is a
+      // conversation rather than a directory.
+      extendedByName: (q.extendedBy?.fullName ?? "").trim().split(/\s+/)[0] || null,
       totalAed: quoteTotalAed(q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
       lines: q.lines.map((l) => ({
         id: l.id,

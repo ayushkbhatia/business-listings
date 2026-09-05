@@ -157,17 +157,47 @@ export function tabWhere(
       ],
     },
   };
-  /** No outcome from the seller, and the buyer has not chosen us. */
+  /**
+   * Nobody has decided this one.
+   *
+   * All three conditions, and the third is the one that was missing: a lead the
+   * buyer gave to another supplier is decided, even though this seller never
+   * marked it. While `open` was defined by `state IN (delivered, opened)` the
+   * exclusion came for free; once both open tabs were defined by the quote
+   * instead, a declined lead qualified as unmarked and appeared twice — once in
+   * Open and once in Lost — and the four tabs stopped summing.
+   */
   const unmarked: Prisma.EnquiryRecipientWhereInput = {
-    AND: [{ outcome: null }, notAcceptedByUs],
+    AND: [{ outcome: null }, notAcceptedByUs, { state: { not: "declined" } }],
+  };
+
+  /*
+     Whether a quote actually exists, rather than what the state column says.
+
+     §3 defines the two tabs by the quote — "no quote sent yet" and "quote sent"
+     — and `EnquiryRecipient.state` is a second, weaker answer to the same
+     question. `sendQuoteForBusiness` sets `state = "quoted"` when it writes one,
+     so in production the two agree; they disagree wherever a row was written by
+     anything else, and the seed has several.
+
+     Reading the quote directly is also what makes board 3k's reconciliation
+     hold by construction: its `All` is the leads that carry a quote, and this
+     screen's `Quoted` is that same set minus the decided ones. Two screens
+     counting one population, which is what the 3j amendment asks for.
+  */
+  const hasQuote: Prisma.EnquiryRecipientWhereInput = {
+    enquiry: { quotes: { some: { businessId, status: { not: "draft" } } } },
+  };
+  const noQuote: Prisma.EnquiryRecipientWhereInput = {
+    enquiry: { quotes: { none: { businessId, status: { not: "draft" } } } },
   };
 
   const byTab: Record<LeadTab, Prisma.EnquiryRecipientWhereInput> = {
     // No quote sent yet. Includes leads already in conversation — a message is
     // not a quote, and §3 is explicit that Open means unquoted rather than
     // untouched.
-    open: { AND: [unmarked, { state: { in: ["delivered", "opened"] } }] },
-    quoted: { AND: [unmarked, { state: "quoted" }] },
+    open: { AND: [unmarked, noQuote] },
+    quoted: { AND: [unmarked, hasQuote] },
     // The seller's word first, the buyer's acceptance second. A lead the seller
     // marked won is won whatever the enquiry says; one they have not marked is
     // won when the buyer accepted them.

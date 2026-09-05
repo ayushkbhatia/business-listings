@@ -151,6 +151,13 @@ export async function sendFollowUp(input: {
   businessId: string;
   senderId: string;
   body?: string;
+  /**
+   * Which surface sent it. Board 3k reaches this from the pipeline as well as
+   * from the thread, and it is the same act — one message, one tag, one cap. A
+   * second service for the second surface is how one feature becomes two that
+   * disagree about the cap.
+   */
+  source?: "thread" | "pipeline" | "sweep";
   now?: Date;
 }): Promise<SendResult> {
   const now = input.now ?? new Date();
@@ -236,6 +243,7 @@ export async function sendFollowUp(input: {
       // Whether the schedule sent it or the seller pressed the button. The two
       // are the same row and the same tag; only this tells them apart.
       scheduled: input.body === undefined,
+      source: input.source ?? (input.body === undefined ? "sweep" : "thread"),
     },
   });
 
@@ -342,6 +350,7 @@ export async function sweepFollowUps(now: Date = new Date()): Promise<FollowUpSw
         enquiryId: row.enquiryId,
         businessId: row.businessId,
         senderId: owner.id,
+        source: "sweep",
         now,
       });
       if (result.ok) sent += 1;

@@ -53,6 +53,12 @@ export const EVENT_NAMES = [
   "follow_up_scheduled",
   "follow_up_sent",
   "follow_up_cancelled",
+  "pipeline_viewed",
+  "quote_extended",
+  "extend_opened_from",
+  "revision_started",
+  "requote_started",
+  "pipeline_exported",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -279,7 +285,7 @@ export const EVENT_SPECS = {
   outcome_marked: {
     emitter: "server",
     session: "never",
-    props: { outcome: "string", hadQuote: "boolean?", hasReason: "boolean?" },
+    props: { outcome: "string", hadQuote: "boolean?", hasReason: "boolean?", source: "string?" },
   },
   /** One conversation was opened. */
   thread_viewed: {
@@ -310,12 +316,84 @@ export const EVENT_SPECS = {
   follow_up_sent: {
     emitter: "server",
     session: "never",
-    props: { scheduled: "boolean", hoursWaited: "number?" },
+    // `source` since board 3k: the same follow-up can be sent from the thread or
+    // from the pipeline, and a second event name for one act would make the
+    // reply rate 11b watches disagree with itself.
+    props: { scheduled: "boolean", hoursWaited: "number?", source: "string?" },
   },
   follow_up_cancelled: {
     emitter: "server",
     session: "never",
     props: { reason: "string" },
+  },
+
+  /* ── Board 3k ──
+
+     Six, and two props added to events board 3j already registered rather than
+     a second name for the same act: a follow-up sent from the pipeline is the
+     same follow-up, and `source` is what tells the two surfaces apart. Two more
+     the spec lists were left out, with reasons:
+
+     - `tab_changed`. The tabs are links, so changing one is a navigation and
+       `pipeline_viewed` fires again carrying the new tab. A second event would
+       double-count every tab change and disagree with the first about how many
+       there were.
+     - `row_opened`. A row's ref links into the thread, which already emits
+       `thread_viewed`. Recording the click as well would make one arrival look
+       like two.
+  */
+
+  /** The pipeline was rendered. `tab` and the two live counts group the funnel. */
+  pipeline_viewed: {
+    emitter: "browser",
+    session: "never",
+    props: { tab: "string", awaiting: "number?", expiring: "number?", all: "number?" },
+  },
+  /**
+   * A window was pushed out.
+   *
+   * `timesPreviouslyExtended` is §11's number worth watching, and it points at
+   * another screen: quotes routinely extended twice mean board 3j's default
+   * validity is too short, and the fix belongs in the composer rather than here.
+   */
+  quote_extended: {
+    emitter: "server",
+    session: "never",
+    props: {
+      daysAdded: "number",
+      daysRemaining: "number",
+      timesPreviouslyExtended: "number",
+    },
+  },
+  /**
+   * Which surface the extend dialog was opened from.
+   *
+   * The expiring card exists as the replacement for a bulk follow-up button, so
+   * whether anybody uses it is the question that decides if the card earns its
+   * place. `queue` is board 3a's row action, which deep-links here.
+   */
+  extend_opened_from: {
+    emitter: "browser",
+    session: "never",
+    props: { source: "string", daysRemaining: "number?" },
+  },
+  /** `Revise` — the pipeline handing back to board 3j's composer. */
+  revision_started: {
+    emitter: "browser",
+    session: "never",
+    props: { source: "string" },
+  },
+  /** `Re-quote` on an expired window. How long it sat dead is the interesting half. */
+  requote_started: {
+    emitter: "browser",
+    session: "never",
+    props: { daysSinceExpiry: "number?" },
+  },
+  /** A CSV left the account. Row count, so an empty export is visible as one. */
+  pipeline_exported: {
+    emitter: "server",
+    session: "never",
+    props: { tab: "string", rows: "number" },
   },
 } as const satisfies Record<EventName, EventDefinition>;
 
