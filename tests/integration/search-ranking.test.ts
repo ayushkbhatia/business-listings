@@ -1,7 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { searchBusinesses } from "@/lib/db/queries";
-import { boostList, boostListing, liveWeights, setWeights, MAX_BOOST_DAYS } from "@/lib/search/settings";
+import {
+  boostList,
+  boostListing,
+  liveBrowseRelevanceMode,
+  liveWeights,
+  setWeights,
+  MAX_BOOST_DAYS,
+} from "@/lib/search/settings";
 import { DEFAULT_WEIGHTS } from "@/lib/search/ranking";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
@@ -118,6 +125,68 @@ describe("criterion 5 — weights reorder live results", () => {
     const first = byTier.rows.map((row) => row.id);
     const second = bySpeed.rows.map((row) => row.id);
     expect(first).not.toEqual(second);
+  }, 120_000);
+
+  /**
+   * Board 6a acceptance 8, and the reason the browse mode exists.
+   *
+   *   *"Ranking reads the shared config; the relevance-mode decision is
+   *    recorded in that config, and setting a weight to 0 measurably reorders
+   *    this page in a test."*
+   *
+   * A landing page has no query, so the largest of the six weights has nothing
+   * to score against. Before the mode it multiplied zero: staff moved a
+   * 34-point slider and the highest-traffic template in the product did not
+   * change. This is that being false.
+   */
+  it("a page with no query reorders when a weight moves", async () => {
+    await setWeights(
+      actor(opsLeadId, "staff_ops_lead"),
+      { relevance: 34, verificationTier: 60, responseTime: 0, specCompleteness: 0, distance: 0, planTier: 0 },
+      "Verification above everything on the landing pages.",
+      "redistribute",
+    );
+    const byTier = await searchBusinesses(query, { browse: true });
+
+    await setWeights(
+      actor(opsLeadId, "staff_ops_lead"),
+      { relevance: 34, verificationTier: 0, responseTime: 60, specCompleteness: 0, distance: 0, planTier: 0 },
+      "Reply speed above everything on the landing pages.",
+      "redistribute",
+    );
+    const bySpeed = await searchBusinesses(query, { browse: true });
+
+    expect(byTier.rows.length).toBeGreaterThan(1);
+    expect(byTier.rows.map((row) => row.id)).not.toEqual(bySpeed.rows.map((row) => row.id));
+  }, 120_000);
+
+  it("records the browse mode on the same audited row as the weights", async () => {
+    const lead = actor(opsLeadId, "staff_ops_lead");
+    expect(
+      await setWeights(lead, await liveWeights(), "Switching how relevance is read.", "category_depth"),
+    ).toMatchObject({ ok: true });
+    expect(await liveBrowseRelevanceMode()).toBe("category_depth");
+
+    // Not a third answer. Leaving the weight to multiply zero is not one of the
+    // two, and neither is anything somebody types into the column by hand.
+    expect(
+      await setWeights(lead, await liveWeights(), "Trying a mode that does not exist.", "whatever"),
+    ).toMatchObject({ ok: false, error: "unknown_browse_mode" });
+
+    /*
+       An omitted mode leaves the stored one alone rather than resetting it —
+       every existing caller of `setWeights` passes none, and a silent reset to
+       the default on each weight change would undo a staff decision nobody
+       would think to look for.
+    */
+    await setWeights(
+      lead,
+      { ...(await liveWeights()), specCompleteness: 11 },
+      "Moving a weight without touching the mode.",
+    );
+    expect(await liveBrowseRelevanceMode()).toBe("category_depth");
+
+    await setWeights(lead, await liveWeights(), "Back to the recommendation.", "redistribute");
   }, 120_000);
 
   it("refuses a set that would rank everything equally", async () => {

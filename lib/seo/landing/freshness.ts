@@ -64,6 +64,25 @@ export interface FreshnessResult {
 }
 
 /**
+ * The first pass records the digest and moves nothing.
+ *
+ * A page that has never been swept has `supply_digest = NULL`, and the obvious
+ * reading — "the digest is different, so supply changed" — would move
+ * `content_updated_at` on **every published page** the first night this ran.
+ * That is the exact failure §Freshness is written against: every page on the
+ * domain claiming to have been updated this morning, which is both false and a
+ * pattern that is trivially detected when a few hundred URLs move together.
+ *
+ * Null is not a previous state. It means we have never looked, and the honest
+ * answer to "did supply change since we last looked" is that there is no last
+ * look to compare against. The migration backfills the date from `updated_at`
+ * so there is something true to print in the meantime.
+ *
+ * Caught by an end-to-end test asserting the seeded date after a run of the
+ * integration suite — which sweeps — had quietly moved it to today.
+ */
+
+/**
  * Recompute the digest and move the date only if it changed.
  *
  * Returns what it decided so the sweep can report it and a test can assert
@@ -87,12 +106,18 @@ export async function refreshFreshness(
     if (row.supplyDigest === digest) {
       return { digest, moved: false, contentUpdatedAt: row.contentUpdatedAt ?? now };
     }
+    // Never looked before: record what is there, move nothing. See above.
+    const first = row.supplyDigest === null;
     const next = await prisma.areaPage.update({
       where: key,
-      data: { supplyDigest: digest, contentUpdatedAt: now },
+      data: { supplyDigest: digest, ...(first ? {} : { contentUpdatedAt: now }) },
       select: { contentUpdatedAt: true },
     });
-    return { digest, moved: true, contentUpdatedAt: next.contentUpdatedAt as Date };
+    return {
+      digest,
+      moved: !first,
+      contentUpdatedAt: (next.contentUpdatedAt as Date | null) ?? now,
+    };
   }
 
   const key = { emirate_categoryId: { emirate: scope.emirate, categoryId: scope.category.id } };
@@ -104,10 +129,15 @@ export async function refreshFreshness(
   if (row.supplyDigest === digest) {
     return { digest, moved: false, contentUpdatedAt: row.contentUpdatedAt ?? now };
   }
+  const first = row.supplyDigest === null;
   const next = await prisma.emiratePage.update({
     where: key,
-    data: { supplyDigest: digest, contentUpdatedAt: now },
+    data: { supplyDigest: digest, ...(first ? {} : { contentUpdatedAt: now }) },
     select: { contentUpdatedAt: true },
   });
-  return { digest, moved: true, contentUpdatedAt: next.contentUpdatedAt as Date };
+  return {
+    digest,
+    moved: !first,
+    contentUpdatedAt: (next.contentUpdatedAt as Date | null) ?? now,
+  };
 }

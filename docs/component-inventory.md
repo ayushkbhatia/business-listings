@@ -4,7 +4,8 @@ The authoritative list. 64 components in four tiers, plus the four approved addi
 so **68 today**. **Variants are props on one component, never separate components** — one
 `Button` with a `variant` prop, not five.
 
-The 64 count treats `ListingCard` as one component with a `context` prop (four contexts) and
+The 64 count treats `ListingCard` as one component with a `context` prop (five contexts since
+board 6a added the ranked landing-page row) and
 `Button` as one component with five variants. If you have built more files than the running
 total, check whether you split a variant into its own component.
 
@@ -47,7 +48,7 @@ which left the gallery reading 15 over a table holding 16 for a whole handoff.
 | 21 | `SelectionBar` | ink bar replacing the toolbar when rows are selected |
 | 22 | `Pagination` | above 50 rows; never infinite scroll on a work surface |
 | 23 | `KeyValuePanel` | two-column, alternating tint by row |
-| 24 | `Card` | flat default, raised, promoted |
+| 24 | `Card` | flat default, raised, promoted; `surface="paper"` for board 6a's rank-1 row inside a `--card` section |
 | 25 | `Panel` | 12px radius, section container |
 | 26 | `Tabs` | 1.5px ink underline, with optional count |
 | 27 | `Breadcrumb` | mono caps, last crumb ink and not a link |
@@ -102,7 +103,7 @@ map on the platform renders a blank rectangle with working controls.
 |---|---|---|
 | 51 | `VerificationBadge` | handoff 1 |
 | 52 | `VerificationLadder` | handoff 1 (read-only), writable in 4 |
-| 53 | `ListingCard` | handoff 1 — one component, `context` prop: search row, map result, grid, unclaimed |
+| 53 | `ListingCard` | handoff 1 — one component, `context` prop: search row, map result, grid, ranked (board 6a), unclaimed |
 | 54 | `ProductCard` | handoff 1 — availability-led, no price |
 | 55 | `SpecTable` | handoff 1 |
 | 56 | `CompletenessMeter` | handoff 1 |

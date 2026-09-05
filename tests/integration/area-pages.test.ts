@@ -401,12 +401,51 @@ describe("criterion 5 — the UPDATED date moves for three reasons and no others
     return row?.contentUpdatedAt ?? null;
   }
 
+  it("records the digest without moving the date on the first pass", async () => {
+    /*
+       The failure this guards against is a whole domain, not a page: a page
+       that has never been swept has no digest, and reading that as "different,
+       therefore changed" would move `content_updated_at` on every published
+       page the first night the sweep ran after the migration. §Freshness is
+       written against exactly that — every page claiming to have been updated
+       this morning, all of them moving together.
+    */
+    await prisma.areaPage.update({
+      where: { areaId_categoryId: { areaId, categoryId } },
+      data: { supplyDigest: null, contentUpdatedAt: new Date(Date.UTC(2026, 2, 3)) },
+    });
+
+    const result = await refreshFreshness(scope, new Date(Date.UTC(2026, 8, 9)));
+    expect(result?.moved).toBe(false);
+    expect((await stamped())?.toISOString()).toBe(new Date(Date.UTC(2026, 2, 3)).toISOString());
+
+    // And the digest is now recorded, so the next real change is seen.
+    const row = await prisma.areaPage.findUnique({
+      where: { areaId_categoryId: { areaId, categoryId } },
+      select: { supplyDigest: true },
+    });
+    expect(row?.supplyDigest).not.toBeNull();
+  }, 120_000);
+
+  /**
+   * A moment strictly after whatever is currently stamped.
+   *
+   * These tests run in order and each leaves the date where it put it, so a
+   * fixed calendar date in one of them can be *earlier* than the one the test
+   * above wrote — which fails on the assertion rather than on the behaviour.
+   * Relative to what is there, and the sweep's own `now` is a parameter for
+   * exactly this reason.
+   */
+  async function later(): Promise<Date> {
+    const current = await stamped();
+    return new Date((current?.getTime() ?? Date.now()) + 86_400_000);
+  }
+
   it("moves when a listing enters the scope", async () => {
-    await refreshFreshness(scope, new Date(Date.UTC(2026, 0, 1)));
     const before = await stamped();
 
     await addListings(1, 1);
-    const result = await refreshFreshness(scope, new Date(Date.UTC(2026, 0, 2)));
+    const result = await refreshFreshness(scope, await later());
 
     expect(result?.moved).toBe(true);
     expect((await stamped())?.getTime()).toBeGreaterThan((before as Date).getTime());
@@ -419,7 +458,7 @@ describe("criterion 5 — the UPDATED date moves for three reasons and no others
        rebuild is, and it must leave the date exactly where it was — not "within
        a second of", exactly.
     */
-    const result = await refreshFreshness(scope, new Date(Date.UTC(2026, 5, 5)));
+    const result = await refreshFreshness(scope, await later());
     expect(result?.moved).toBe(false);
     expect((await stamped())?.getTime()).toBe((before as Date).getTime());
   }, 120_000);
@@ -437,7 +476,7 @@ describe("criterion 5 — the UPDATED date moves for three reasons and no others
       data: { verificationTier: VERIFIED_TIER, verifiedAt: new Date() },
     });
 
-    const result = await refreshFreshness(scope, new Date(Date.UTC(2026, 6, 7)));
+    const result = await refreshFreshness(scope, await later());
     expect(result?.moved).toBe(true);
     expect((await stamped())?.getTime()).toBeGreaterThan((before as Date).getTime());
   }, 120_000);

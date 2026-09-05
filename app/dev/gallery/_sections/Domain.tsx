@@ -40,6 +40,16 @@ import { formatAED, formatDate, formatDuration, formatSize } from "@/lib/format"
 import { t } from "@/lib/i18n";
 import { Frame, Section, Specimen, States } from "../_kit";
 
+/**
+ * The rungs the ladder draws, from `TIERS` rather than a literal.
+ *
+ * Tier 0 is "not verified" and has no requirement to state — a rung is
+ * something a supplier can reach, and nobody reaches nought. Everything above
+ * it comes from the shipped ladder, so withdrawing a rung takes it out of the
+ * gallery in the same commit instead of leaving a key nothing answers.
+ */
+const LADDER_RUNGS = TIERS.map((spec) => spec.tier).filter((tier) => tier > 0);
+
 const THEMES = ["default", "industrial", "trade", "mono", "clinic", "salon"] as const;
 
 const BUSINESS: ListingCardBusiness = {
@@ -154,13 +164,27 @@ export function Domain() {
         title="VerificationLadder"
         note="shows the rungs above as well as below — that is the mechanism, not decoration"
       >
+        {/*
+           Three rungs, not four.
+
+           This block walked `[1, 2, 3, 4]` and asked for
+           `verify.requirement.t4`, which the site-visit cut deleted along with
+           the rung it described — so every render of the gallery threw
+           `[i18n] Unknown key "verify.requirement.t4"` and the whole page
+           500'd. It has been down since that cut, which is worth saying out
+           loud: the gallery is where the shipped states are checked, and a
+           gallery nobody can open is a checklist item nobody can complete.
+
+           `TIERS` rather than a literal, so the next change to the ladder moves
+           this with it instead of breaking it again.
+        */}
         <States label="at tier 2" stack>
           <Frame width="34rem">
             <VerificationLadder
               label={`${t("verify.ladder")} — at tier 2`}
               reachedLabel={t("verify.reached")}
               current={2}
-              rungs={[1, 2, 3, 4].map((tier) => ({
+              rungs={LADDER_RUNGS.map((tier) => ({
                 tier,
                 label: t(tierSpec(tier).labelKey as never),
                 requirement: t(`verify.requirement.t${tier}` as never),
@@ -169,13 +193,13 @@ export function Domain() {
             />
           </Frame>
         </States>
-        <States label="at tier 4" stack>
+        <States label="at the top rung" stack>
           <Frame width="34rem">
             <VerificationLadder
-              label={`${t("verify.ladder")} — at tier 4`}
+              label={`${t("verify.ladder")} — at the top rung`}
               reachedLabel={t("verify.reached")}
-              current={4}
-              rungs={[1, 2, 3, 4].map((tier) => ({
+              current={LADDER_RUNGS[LADDER_RUNGS.length - 1] as number}
+              rungs={LADDER_RUNGS.map((tier) => ({
                 tier,
                 label: t(tierSpec(tier).labelKey as never),
                 requirement: t(`verify.requirement.t${tier}` as never),
@@ -272,9 +296,9 @@ export function Domain() {
       <Section
         id="listing-card"
         title="ListingCard"
-        note="four contexts, one component — a context prop, never four components"
+        note="five contexts, one component — a context prop, never five components"
       >
-        {(["search", "grid", "map"] as ListingContext[]).map((context) => (
+        {(["search", "grid", "map", "ranked"] as ListingContext[]).map((context) => (
           <States key={context} label={context} stack>
             <div className={context === "map" ? "w-80" : "w-full max-w-2xl"}>
               <ListingCard business={BUSINESS} context={context} />
@@ -298,6 +322,44 @@ export function Domain() {
         <States label="selected" stack>
           <div className="w-80">
             <ListingCard business={BUSINESS} context="map" selected />
+          </div>
+        </States>
+        {/*
+           Board 6a's rank-1 row. `selected` means something different in this
+           context and the two are shown together on purpose: on the map row it
+           is moss, because the reader picked it; here it is paper and a
+           stronger line, because the page is recommending it.
+        */}
+        <States label="ranked, rank 1" stack>
+          <div className="w-full max-w-3xl">
+            <ListingCard
+              business={{ ...BUSINESS, rank: 1 }}
+              context="ranked"
+              selected
+              enquireHref="/rfq/new?to=example"
+            />
+          </div>
+        </States>
+        {/*
+           The state §4 is most specific about: "A seller with no answered
+           enquiries shows no band at all — never 'unknown', never a
+           slow-looking placeholder." Nor a rating nobody has given, nor a
+           product count on an empty catalogue.
+        */}
+        <States label="ranked, nothing measured yet" stack>
+          <div className="w-full max-w-3xl">
+            <ListingCard
+              business={{
+                ...BUSINESS,
+                rank: 4,
+                responseTimeMedianMs: null,
+                ratingOverall: null,
+                reviewCount: 0,
+                productCount: 0,
+              }}
+              context="ranked"
+              enquireHref="/rfq/new?to=example"
+            />
           </div>
         </States>
       </Section>
