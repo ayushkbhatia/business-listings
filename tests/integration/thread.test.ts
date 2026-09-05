@@ -317,17 +317,15 @@ describe("the one follow-up", () => {
     });
     expect(armed.ok).toBe(true);
 
-    const enquiry = await prisma.enquiry.findUniqueOrThrow({
-      where: { id: ENQUIRY_ID },
-      select: { buyerId: true },
-    });
-    await postMessage({
-      enquiryId: ENQUIRY_ID,
-      businessId,
-      senderId: enquiry.buyerId,
-      sender: "buyer",
-      body: "Yes — send the revision.",
-    });
+    /*
+       Through the file's own helper, which records the id for the top-level
+       `afterEach`. An earlier version called `postMessage` directly and left the
+       buyer's reply on the shared thread, so the first test in this file started
+       seeing four messages where it asserts two — a red test in a block that had
+       not changed, which is the failure tests/integration/attribution.test.ts
+       documents for exactly this database.
+    */
+    await post("buyer", "Yes — send the revision.");
 
     const row = await prisma.enquiryRecipient.findUniqueOrThrow({
       where: { enquiryId_businessId: { enquiryId: ENQUIRY_ID, businessId } },

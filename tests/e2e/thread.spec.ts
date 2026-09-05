@@ -28,15 +28,23 @@ test.describe("the buyer's side", () => {
   test("names the supplier and offers the chips board 10h draws", async ({ page }) => {
     await page.goto(buyerThread);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Al Marwan");
-    await expect(page.getByRole("button", { name: /hold this price a little longer/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /send datasheets/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /credit terms/i })).toBeVisible();
+    /*
+       The chip's label names the act; the text it drops in is the question.
+       They stopped being the same string with board 11b, whose §3 needed a
+       seller's chip to say "Extend the price hold" and insert wording that
+       commits to no number — and `Thread` is one component for both sides, so
+       the buyer's chips took the same shape.
+    */
+    await expect(page.getByRole("button", { name: "Ask about the price hold" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ask for datasheets" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ask about credit terms" })).toBeVisible();
   });
 
   test("a chip fills the box rather than sending on its own", async ({ page }) => {
     // A chip that sends immediately is a chip somebody presses by accident.
     await page.goto(buyerThread);
-    await page.getByRole("button", { name: /send datasheets/i }).click();
+    await page.getByRole("button", { name: "Ask for datasheets" }).click();
+    // What lands is the question, not the label.
     await expect(page.getByLabel("Write a message")).toHaveValue(/datasheets/i);
   });
 

@@ -1497,6 +1497,10 @@ export const en = {
   "lead.lost_reason_optional": "Optional. Nobody outside your team reads it.",
   "lead.lost_confirm": "Mark it lost",
   "lead.cancel": "Cancel",
+  /* The dialog's own dismiss, distinct from the Cancel button beside Confirm.
+     Two controls reading "Cancel" is two controls a screen reader cannot tell
+     apart, and they do different things. */
+  "lead.close": "Close",
   "lead.outcome_no_value": "No amount is recorded. Quoted value is the sum of accepted quotes, so it stays a measurement rather than a figure anyone types.",
 
   /* Refusals, said in full rather than as a code. */

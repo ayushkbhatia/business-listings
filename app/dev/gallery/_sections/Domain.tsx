@@ -788,6 +788,8 @@ const THREAD_LABELS: ThreadLabels = {
   quickRepliesLabel: t("thread.quick_replies"),
   flagged: t("thread.flagged"),
   flaggedExplain: t("thread.flagged_explain"),
+  automatic: t("thread.automatic"),
+  automaticExplain: t("thread.automatic_explain"),
   revisionOf: (revision) => t("thread.revision_of", { revision }),
   wasLabel: t("thread.was"),
 };
@@ -940,6 +942,42 @@ export function ThreadSpecimens() {
             quickReplies={[
               { label: t("thread.chip.validity"), text: t("thread.chip.validity_text") },
               { label: t("thread.chip.datasheets"), text: t("thread.chip.datasheets_text") },
+            ]}
+          />
+        </Frame>
+      </States>
+
+      {/*
+         Board 11b's two additions, which the buyer's side never renders: the
+         follow-up the schedule wrote, and the receipt under the last message.
+
+         Both are here because the alternative is a state only reachable by
+         waiting a day on a real thread — and a state nobody can look at is a
+         state that drifts.
+      */}
+      <States label="a scheduled follow-up, and the receipt beneath it" stack>
+        <Frame width="34rem">
+          <Thread
+            messages={[
+              ...THREAD_MESSAGES,
+              {
+                id: "m3",
+                body: "Following up on the quote — happy to talk through the delivery dates.",
+                fromMe: true,
+                senderLabel: "Rajesh",
+                at: "24 Aug 2026, 09:14",
+                flagged: false,
+                automatic: true,
+              },
+            ]}
+            labels={{
+              ...THREAD_LABELS,
+              logLabel: "Messages — follow-up",
+              formLabel: "Reply — follow-up",
+            }}
+            systemNote={t("thread.receipt_read", { when: "12 minutes ago" })}
+            quickReplies={[
+              { label: t("thread.chip.hold_price"), text: t("thread.chip.hold_price_text") },
             ]}
           />
         </Frame>

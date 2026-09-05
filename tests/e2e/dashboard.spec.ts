@@ -18,82 +18,22 @@ import { t } from "@/lib/i18n";
  */
 const THREAD = "seedenquiryprovisional0001";
 
-test.describe("board 3j — leads and RFQ", () => {
-  test("lists the open enquiries with a first name and no more", async ({ page }) => {
-    await page.goto("/dashboard/leads");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Leads");
+/*
+   Boards 3j and 11b moved to their own files when the inbox was rebuilt:
+   tests/e2e/dashboard-leads-inbox.spec.ts and
+   tests/e2e/dashboard-lead-thread.spec.ts.
 
-    const table = page.getByRole("table", { name: /Enquiries sent to this business/ });
-    await expect(table).toBeVisible();
+   Both names still match the seller project's filename regex, which is what
+   decides whether a spec runs signed in — `leads.spec.ts` would have run
+   signed *out*, in chromium and mobile, and failed on a redirect.
 
-    /*
-     * Rule 1, on the screen rather than only in the query layer. The seeded
-     * buyers are Rashid Al Hameli and Khalid Al Nuaimi; a surname or a number
-     * appearing here is a leak whatever the tests below the UI say.
-     */
-    const body = (await page.textContent("main")) ?? "";
-    expect(body).not.toContain("Al Hameli");
-    expect(body).not.toContain("Al Nuaimi");
-    expect(body).not.toMatch(/\+971|\b0\d{2}[\s-]?\d{3}[\s-]?\d{4}\b/);
-    expect(body).not.toMatch(/[\w.-]+@[\w.-]+\.\w+/);
-  });
-
-  test("shows the real count in the sidebar, not a placeholder", async ({ page }) => {
-    await page.goto("/dashboard/leads");
-    const rows = await page.getByRole("table").getByRole("row").count();
-    const badge = await page.getByRole("link", { name: /Leads & RFQ/ }).textContent();
-    // The header row is not a lead.
-    expect(badge).toContain(String(rows - 1));
-  });
-});
-
-test.describe("board 11b — one lead, the composer and the thread", () => {
-  test("flags a line no catalogue can match, and never leaves it blank", async ({ page }) => {
-    await page.goto("/dashboard/leads");
-    await page.getByRole("link", { name: /Open enquiry ENQ-/ }).first().click();
-    await page.waitForURL("**/thread");
-
-    await expect(page.getByRole("table", { name: /Quote lines/ })).toBeVisible();
-    // The price box on a hand-priced line starts empty, with no placeholder
-    // that could be mistaken for a value.
-    const prices = page.getByLabel(/^Unit price for/);
-    await expect(prices.first()).toHaveValue("");
-    await expect(prices.first()).toHaveAttribute("placeholder", "");
-  });
-
-  test("states rule 1 to the seller rather than only enforcing it", async ({ page }) => {
-    await page.goto(`/dashboard/leads/${THREAD}/thread`);
-    await expect(
-      page.getByText("Contact details are released when a quote is accepted"),
-    ).toBeVisible();
-  });
-
-  test("carries the board 11b warning, on the page and not in a comment", async ({ page }) => {
-    await page.goto(`/dashboard/leads/${THREAD}/thread`);
-    await expect(page.getByText("Everything here is the record")).toBeVisible();
-    await expect(page.getByText(/flagged automatically and reviewed by a person/)).toBeVisible();
-  });
-
-  test("offers the seller's own quick replies, not the buyer's", async ({ page }) => {
-    await page.goto(`/dashboard/leads/${THREAD}/thread`);
-    await expect(page.getByRole("button", { name: /hold this price for 21 days/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /free site survey/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /CD certificate/i })).toBeVisible();
-    // The buyer's chips belong to the buyer.
-    await expect(page.getByRole("button", { name: /request datasheets/i })).toHaveCount(0);
-  });
-
-  test("offers one follow-up and says why there is only one", async ({ page }) => {
-    await page.goto(`/dashboard/leads/${THREAD}/thread`);
-    const nudge = page.getByRole("button", { name: "Send one follow-up" });
-    const alreadySent = page.getByText(/Follow-up sent/);
-    const notYet = page.getByText(/Send a quote first/);
-    // One of the three states, and the copy explains the rule in all of them.
-    expect(
-      (await nudge.count()) + (await alreadySent.count()) + (await notYet.count()),
-    ).toBeGreaterThan(0);
-  });
-});
+   What was here asserted a seven-column table, a row link that landed on
+   the thread route, and a sidebar badge equal to the table's row count minus one.
+   The first two are gone by design — the rail is a list and the composer is on
+   the lead — and the third encoded the badge counting delivered, opened *and*
+   quoted, which is a different population from the Open tab it now sits above.
+   The rule-1 assertions it carried are kept and widened in the new file.
+*/
 
 test.describe("board 3k — quotes sent", () => {
   test("shows the pipeline with the hand-priced count", async ({ page }) => {

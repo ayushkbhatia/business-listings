@@ -422,7 +422,7 @@ function BuyerPanel({
       </dl>
 
       {/* Load-bearing copy. Board 11b §5 keeps this sentence verbatim. */}
-      <p className="max-w-[var(--measure-prose)] text-caption text-faint">
+      <p className="max-w-[var(--measure-prose)] text-caption text-muted">
         {t("thread.buyer_footer")}
       </p>
     </section>

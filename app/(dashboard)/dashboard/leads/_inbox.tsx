@@ -498,7 +498,7 @@ function RequestHeader({
             lostReasonOptional: t("lead.lost_reason_optional"),
             lostConfirm: t("lead.lost_confirm"),
             cancel: t("lead.cancel"),
-            closeLabel: t("lead.cancel"),
+            closeLabel: t("lead.close"),
             noValueNote: t("lead.outcome_no_value"),
           }}
         />
@@ -550,7 +550,7 @@ function RequestHeader({
 
       <ContactBlock lead={lead} />
 
-      <p className="mt-2 flex flex-wrap items-center gap-2 text-caption text-faint">
+      <p className="mt-2 flex flex-wrap items-center gap-2 text-caption text-muted">
         <span>{t("lead.buyer_words_note")}</span>
         <Link
           href={railHref({ tab, scope })}

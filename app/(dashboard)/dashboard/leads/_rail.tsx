@@ -276,7 +276,7 @@ function RailRow({
         </span>
 
         {row.assignedTo ? (
-          <span className="mt-1 block truncate text-caption text-faint">
+          <span className="mt-1 block truncate text-caption text-muted">
             {t("leads.assigned_to", { name: row.assignedTo.name || t("lead.assign_unnamed") })}
           </span>
         ) : null}

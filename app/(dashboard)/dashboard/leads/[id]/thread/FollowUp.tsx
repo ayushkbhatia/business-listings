@@ -135,7 +135,7 @@ export function FollowUp({
         {t("thread.nudge_help")}
       </p>
       {state === "scheduled" || state === "available" ? (
-        <p className="max-w-[var(--measure-prose)] text-caption text-faint">
+        <p className="max-w-[var(--measure-prose)] text-caption text-muted">
           {t("thread.nudge_schedule_hint")}
         </p>
       ) : null}
