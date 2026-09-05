@@ -8,7 +8,6 @@ import { VERIFIED_TIER } from "@/lib/verification";
 import {
   countWords,
   evaluateHold,
-  evaluatePublish,
   isSupply,
   listingsNeeded,
   type PublishFailure,
@@ -29,9 +28,6 @@ import {
   landingState,
   refreshFreshness,
   resolveEmirateScope,
-  type LandingFaqRow,
-  type LandingRelatedRow,
-  type LandingScope,
   type LandingState,
 } from "@/lib/seo/landing";
 

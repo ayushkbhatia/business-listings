@@ -77,8 +77,8 @@ beforeAll(async () => {
       humanReviewRequired: true,
     },
   });
-  categoryId = category.id;
-  const { id: _id, ...values } = category;
+  const { id, ...values } = category;
+  categoryId = id;
   restore = values;
 });
 

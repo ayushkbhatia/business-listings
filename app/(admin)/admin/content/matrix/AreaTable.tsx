@@ -241,7 +241,9 @@ export function AreaTable({
     },
     {
       key: "act",
-      header: t("matrix.col.state"),
+      // Not "State": the row already carries one, three columns to the left.
+      // This one holds a button.
+      header: t("matrix.col.edit"),
       render: (row) => (
         <Button variant="ghost" size="sm" onClick={() => edit(row)}>
           {t("matrix.write", { page: `${row.categoryName}, ${row.areaName}` })}

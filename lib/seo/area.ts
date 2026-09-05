@@ -9,8 +9,6 @@ import {
   landingState,
   refreshFreshness,
   scopeForArea,
-  type LandingFaqRow,
-  type LandingScope,
   type LandingState,
 } from "@/lib/seo/landing";
 

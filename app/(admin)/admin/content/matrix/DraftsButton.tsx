@@ -38,11 +38,11 @@ export function DraftsButton({
       <Button size="sm" onClick={() => setOpen(true)} disabled={count === 0}>
         {count === 0
           ? t("matrix.generate_none")
-          : t("matrix.generate_drafts", { count: String(count) })}
+          : t("matrix.generate_drafts", { count })}
       </Button>
 
       {open && (
-        <Panel title={t("matrix.generate_drafts", { count: String(count) })}>
+        <Panel title={t("matrix.generate_drafts", { count })}>
           <p className="max-w-prose text-caption text-muted">{t("matrix.generate_hint")}</p>
 
           <div className="mt-3">

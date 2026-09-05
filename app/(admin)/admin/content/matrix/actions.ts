@@ -513,7 +513,7 @@ export async function generateDraftsAction(formData: FormData): Promise<ActionRe
     );
     if (!result.ok) return { ok: false, error: result.message };
     revalidatePath("/admin/content/matrix");
-    return { ok: true, message: t("matrix.drafts_made", { count: String(result.created) }) };
+    return { ok: true, message: t("matrix.drafts_made", { count: result.created }) };
   } catch (error) {
     return refusedBy(error);
   }

@@ -319,12 +319,28 @@ async function recruit(db: PrismaClient, spec: Recruit) {
       metaDescription: spec.metaDescription ?? null,
       contentUpdatedAt: new Date(Date.UTC(2026, 7, 21)),
       publishedAt: spec.publish ? new Date(Date.UTC(2026, 6, 1)) : null,
+      /*
+         Board 6f's minimum-live window measures from here, and it is never
+         cleared. The seed writes the row directly rather than through
+         `publishAreaPage`, so without this every seeded page had a null first
+         date: the window never applied to them, and a withdrawn one 404'd
+         instead of redirecting to its parent. Found by withdrawing one.
+      */
+      firstPublishedAt: spec.publish ? new Date(Date.UTC(2026, 6, 1)) : null,
     },
     update: {
       intro: spec.intro,
       metaDescription: spec.metaDescription ?? null,
       contentUpdatedAt: new Date(Date.UTC(2026, 7, 21)),
       publishedAt: spec.publish ? new Date(Date.UTC(2026, 6, 1)) : null,
+      /*
+         Board 6f's minimum-live window measures from here, and it is never
+         cleared. The seed writes the row directly rather than through
+         `publishAreaPage`, so without this every seeded page had a null first
+         date: the window never applied to them, and a withdrawn one 404'd
+         instead of redirecting to its parent. Found by withdrawing one.
+      */
+      firstPublishedAt: spec.publish ? new Date(Date.UTC(2026, 6, 1)) : null,
     },
     select: { id: true },
   });
@@ -606,12 +622,14 @@ async function seedEmiratePage(db: PrismaClient) {
       metaDescription: EMIRATE_META,
       contentUpdatedAt: new Date(Date.UTC(2026, 7, 21)),
       publishedAt: new Date(Date.UTC(2026, 6, 1)),
+      firstPublishedAt: new Date(Date.UTC(2026, 6, 1)),
     },
     update: {
       intro: EMIRATE_INTRO,
       metaDescription: EMIRATE_META,
       contentUpdatedAt: new Date(Date.UTC(2026, 7, 21)),
       publishedAt: new Date(Date.UTC(2026, 6, 1)),
+      firstPublishedAt: new Date(Date.UTC(2026, 6, 1)),
     },
     select: { id: true },
   });

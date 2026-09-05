@@ -58,12 +58,25 @@ export interface RulesPanelProps {
   close: (formData: FormData) => Promise<ActionResult>;
 }
 
+/*
+   `step="any"` on the two fractions, and it is not cosmetic.
+
+   `step` is a constraint the browser enforces before a form submits, measured
+   from `min` — so `min="0.01" step="0.05"` made 0.8, the shipped default, an
+   invalid value. The panel loaded with it in the box, every submit was blocked
+   by constraint validation, and because the message belongs to a field nobody
+   had touched there was nothing on screen to explain why the button did
+   nothing. Found by clicking it.
+
+   The real bounds are enforced twice regardless: `validate()` in the service
+   refuses anything outside them, and a CHECK constraint refuses it again.
+*/
 const NUMERIC = [
   { key: "publishThreshold", step: "1", min: "1", max: "5000" },
   { key: "demandPerThousand", step: "1", min: "0", max: "5000" },
-  { key: "verifiedShareMin", step: "0.01", min: "0", max: "1" },
-  { key: "minIntroWords", step: "10", min: "0", max: "5000" },
-  { key: "holdShare", step: "0.05", min: "0.01", max: "1" },
+  { key: "verifiedShareMin", step: "any", min: "0", max: "1" },
+  { key: "minIntroWords", step: "1", min: "0", max: "5000" },
+  { key: "holdShare", step: "any", min: "0.01", max: "1" },
   { key: "minLiveDays", step: "1", min: "0", max: "365" },
 ] as const;
 
@@ -76,14 +89,36 @@ export function RulesPanel(props: RulesPanelProps) {
   const [review, setReview] = useState(props.values.humanReviewRequired);
   const [pending, startTransition] = useTransition();
 
+  /**
+   * The form's fields **and the button that submitted it**.
+   *
+   * `new FormData(form)` leaves the submitter's own name and value out — which
+   * is correct per the spec and was silently wrong here: the decision form
+   * reads `decision`, found nothing, and ran the reject branch when somebody
+   * pressed Approve. It applied no rule change, so nothing was lost; it also
+   * told the second approver they had rejected a proposal they had just
+   * approved. Found by pressing the button.
+   */
   function form(event: React.FormEvent<HTMLFormElement>): FormData {
-    return new FormData(event.currentTarget);
+    return new FormData(event.currentTarget, (event.nativeEvent as SubmitEvent).submitter);
   }
 
   const proposal = props.pending;
 
   return (
-    <Panel title={t("rules.title")} description={t("rules.subtitle")} eyebrow={props.categoryName}>
+    /*
+       The trade is in the description, not only in the eyebrow.
+
+       With no filter the matrix shows every trade and this panel opens on the
+       first sector — so a reader looking at HVAC rows could change Valves &
+       fittings' floor without noticing which trade the form belonged to. A
+       9.5px mono eyebrow is not enough to carry that.
+    */
+    <Panel
+      title={t("rules.title")}
+      description={t("rules.subtitle", { trade: props.categoryName })}
+      eyebrow={props.categoryName}
+    >
       {proposal && (
         <div className="mb-[var(--gutter)] rounded-card border border-line bg-card p-3.5">
           <p className="text-body-sm text-ink">{t("rules.pending")}</p>
@@ -105,13 +140,13 @@ export function RulesPanel(props: RulesPanelProps) {
             <thead>
               <tr>
                 <th scope="col" className="text-left font-mono text-eyebrow uppercase text-muted">
-                  {t("rules.title")}
+                  {t("rules.col.rule")}
                 </th>
                 <th scope="col" className="text-right font-mono text-eyebrow uppercase text-muted">
-                  {t("matrix.filter.all")}
+                  {t("rules.col.live")}
                 </th>
                 <th scope="col" className="text-right font-mono text-eyebrow uppercase text-muted">
-                  {t("rules.propose")}
+                  {t("rules.col.proposed")}
                 </th>
               </tr>
             </thead>
@@ -189,8 +224,7 @@ export function RulesPanel(props: RulesPanelProps) {
         onSubmit={(event) => {
           event.preventDefault();
           const data = form(event);
-          const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
-          if (submitter?.value === "propose") {
+          if (String(data.get("intent")) === "propose") {
             startTransition(async () => {
               const outcome = await props.propose(data);
               setResult(outcome);

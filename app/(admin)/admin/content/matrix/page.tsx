@@ -375,10 +375,16 @@ export default async function MatrixPage({ searchParams }: Props) {
           */}
           <div className="mt-[var(--gutter)] flex flex-wrap items-center justify-between gap-3">
             <p className="text-caption text-muted">
+              {/*
+                 `count` as well as `total`: the key is pluralised, and t()
+                 selects on a numeric `count` rather than on the formatted
+                 string the sentence prints.
+              */}
               {t("matrix.page_of", {
                 page: String(page),
                 pages: String(pages),
                 total: formatCount(areas.total),
+                count: areas.total,
               })}
             </p>
             <span className="flex gap-2">
