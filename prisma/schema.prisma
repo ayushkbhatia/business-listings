@@ -567,8 +567,12 @@ model Business {
   /// Storefront theme preset, or a validated custom hex. Recolours the header,
   /// headings, buttons, links and form focus only. Never a verification badge,
   /// never a status tone, never platform chrome.
-  /// How an incoming enquiry is put in front of the team. Board 7d, and the
-  /// setting that protects the response score.
+  /// How an incoming enquiry is put in front of the team. Board 7d.
+  ///
+  /// Not "the setting that protects the response score", which is what this
+  /// comment used to say: there is no score in this product. What it moves is
+  /// the median first reply, which is a weight in search ranking and the band a
+  /// buyer reads on the listing. Both are measured; a score is not a thing.
   leadRouting           LeadRouting @default(everyone) @map("lead_routing")
   /// Where round-robin got to.
   ///
@@ -582,6 +586,18 @@ model Business {
   seatChannels          SeatChannel[]
   /// Minutes before an unanswered enquiry is escalated to the owner.
   leadEscalationMinutes Int         @default(120) @map("lead_escalation_minutes")
+
+  /// Board 7e §4 — the acknowledgement sent when a lead arrives out of hours.
+  ///
+  /// An acknowledgement and never a reply. `lib/messaging/service.ts` refuses to
+  /// stamp `EnquiryRecipient.firstReplyAt` for a message marked `automatic`, and
+  /// that refusal is what keeps the median honest: if a template could stamp it,
+  /// the band every buyer reads and the 18 ranking points for reply time would
+  /// both be won by switching this on, and every seller would.
+  autoReplyEnabled      Boolean     @default(false) @map("auto_reply_enabled")
+  /// The seller's own words, with `{buyer_name}`, `{next_open_time}` and
+  /// `{whatsapp_number}` filled in at send. Null falls back to the default copy.
+  autoReplyBody         String?     @map("auto_reply_body")
 
   themePreset String? @map("theme_preset")
   themeHex    String? @map("theme_hex")
@@ -3781,15 +3797,18 @@ model SeatChannel {
   /// The whole point of the table. Null means the seat typed a number and never
   /// proved it: hidden from buyers, receives nothing, not a routing target.
   verifiedAt      DateTime? @map("verified_at")
-  /// When a code last went out, for the resend throttle. Never the code itself
-  /// — `AuthAttempt` owns challenge history and this table holds no secret.
+  /// When a code last went out, for the resend throttle. Never the code itself:
+  /// `AuthAttempt` owns the attempt history, `SeatChannelChallenge` holds the
+  /// hash, and this table — which four screens read and the roster joins — holds
+  /// no secret at all.
   challengeSentAt DateTime? @map("challenge_sent_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user      User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  business  Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  challenge SeatChannelChallenge?
 
   /// One address per kind per seat. Two WhatsApp numbers on one seat is a seller
   /// who cannot say which routing should try, and 7e §3 renders the order they
@@ -3797,6 +3816,33 @@ model SeatChannel {
   @@unique([userId, kind], map: "seat_channel_user_kind_key")
   @@index([businessId, verifiedAt], map: "seat_channel_business_idx")
   @@map("seat_channel")
+}
+
+/// The code that proves a channel. Board 7e §8.1.
+///
+/// Its own table because `SeatChannel` is read by four surfaces and joined into
+/// the team roster, and a hashed secret has no business travelling with it.
+///
+/// One live challenge per channel: asking again replaces it rather than stacking
+/// a second, so the code in the most recent message is the only one that works.
+/// Two valid codes is a window that stays open as long as somebody keeps
+/// pressing the button — the same rule `inviteSeat` applies to its token.
+model SeatChannelChallenge {
+  id            String @id @default(cuid())
+  seatChannelId String @unique @map("seat_channel_id")
+  /// SHA-256 of the six digits. The code is sent and never stored, so a leaked
+  /// backup of this table proves nothing on its own.
+  codeHash      String @map("code_hash")
+  expiresAt     DateTime @map("expires_at")
+  /// Wrong guesses against this one code. `lib/auth/throttle.ts` counts attempts
+  /// per address across codes; this counts them per code, so asking for a new
+  /// one is a fresh five rather than an escape from the last five.
+  attempts      Int      @default(0)
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  channel SeatChannel @relation(fields: [seatChannelId], references: [id], onDelete: Cascade)
+
+  @@map("seat_channel_challenge")
 }
 
 enum SeatChannelKind {

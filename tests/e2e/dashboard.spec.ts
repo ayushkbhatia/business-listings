@@ -47,31 +47,31 @@ const THREAD = "seedenquiryprovisional0001";
    strip beside the figure it qualifies rather than under a table.
 */
 
-test.describe("board 7e — alerts", () => {
-  test("draws the matrix as a real table with both header directions", async ({ page }) => {
-    await page.goto("/dashboard/settings");
-    const table = page.getByRole("table", { name: /Notification channels by event/ });
-    await expect(table).toBeVisible();
-    // Events down, channels across.
-    await expect(table.getByRole("columnheader")).toHaveCount(5);
-    await expect(table.getByRole("rowheader").first()).toBeVisible();
-  });
+/*
+   Board 7e's own screen moved to tests/e2e/dashboard-settings.spec.ts when it
+   was rebuilt: the matrix, the reachability rail, the channel verification and
+   the acknowledgement are a board's worth of assertions and they belong in one
+   file with the board's number on it.
 
-  test("names every cell, so forty checkboxes are not forty 'checkbox'", async ({ page }) => {
-    await page.goto("/dashboard/settings");
-    await expect(
-      page.getByRole("checkbox", { name: "WhatsApp for A new enquiry arrives" }),
-    ).toBeVisible();
-  });
+   Two of what was here are gone by design rather than untested. The matrix has
+   six columns now, not five — §2 adds `GOES TO`, because a row of ticks with no
+   statement of whose handset they reach is a control with an unanswered
+   question in it. And quiet hours no longer name a window: §5 makes the Hours
+   page the one source for them, the acknowledgement and board 7d's routing
+   skip, so the label is "outside your working hours" rather than "overnight".
 
+   What stays: the one fact about this screen that is this file's subject rather
+   than 7e's — that a channel waiting on a carrier says so instead of looking
+   broken.
+*/
+test.describe("board 7e — alerts, from the dashboard side", () => {
   test("says WhatsApp is waiting on Meta rather than looking broken", async ({ page }) => {
     await page.goto("/dashboard/settings");
     await expect(page.getByText(/waiting on Meta to approve/)).toBeVisible();
   });
 
-  test("carries quiet hours and the high-value override", async ({ page }) => {
+  test("carries the high-value override", async ({ page }) => {
     await page.goto("/dashboard/settings");
-    await expect(page.getByLabel("Hold WhatsApp and SMS overnight")).toBeVisible();
     await expect(page.getByLabel("Enquiry value, in AED")).toBeVisible();
   });
 });

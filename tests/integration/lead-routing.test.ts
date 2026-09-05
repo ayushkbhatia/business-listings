@@ -49,6 +49,16 @@ let buyerId: string;
 
 const enquiries: string[] = [];
 const seats: string[] = [];
+/** The fixture business's own channels, lifted for the run and put back after. */
+let borrowedChannels: {
+  id: string;
+  userId: string;
+  businessId: string;
+  kind: "whatsapp" | "sms" | "email";
+  address: string;
+  verifiedAt: Date | null;
+  challengeSentAt: Date | null;
+}[] = [];
 
 beforeAll(async () => {
   /*
@@ -59,10 +69,6 @@ beforeAll(async () => {
      test must not have: every "no eligible seat" case would find Rajesh and
      route to him. The first version of this file did borrow it, and four cases
      went green-to-red the moment those fixtures landed.
-
-     Any other claimed supplier has an owner and no channels, so nobody is
-     routable until a test says so. Picked by slug order for determinism, and
-     asserted empty below rather than assumed.
   */
   const business = await prisma.business.findFirstOrThrow({
     where: {
@@ -82,9 +88,35 @@ beforeAll(async () => {
   });
   ownerId = owner.id;
 
-  // The premise, checked rather than assumed: if this supplier ever gains a
-  // verified channel in the seed, these tests must fail here and say so rather
-  // than fail four cases later for a reason that names none of this.
+  /*
+     The premise, built rather than borrowed.
+
+     Board 7e's backfill gives every existing seat a verified channel from the
+     address it already signs in with, which is the right answer for the product
+     and leaves no supplier in the seed with nobody routable. So this file makes
+     its own: the chosen business's channels are lifted for the duration and put
+     back in `afterAll`, and every case below starts from "nobody can be reached"
+     because that is what it just arranged.
+
+     Borrowed premises are how the previous version of this went red — twice.
+  */
+  borrowedChannels = await prisma.seatChannel.findMany({
+    where: { businessId },
+    select: {
+      id: true,
+      userId: true,
+      businessId: true,
+      kind: true,
+      address: true,
+      verifiedAt: true,
+      challengeSentAt: true,
+    },
+  });
+  await prisma.seatChannel.deleteMany({ where: { businessId } });
+
+  // Checked rather than assumed: if the seed ever gives this supplier a channel
+  // some other way, these tests fail here and say so rather than fail four
+  // cases later for a reason that names none of this.
   const alreadyRoutable = await routableSeats(businessId);
   expect(alreadyRoutable, "the routing fixture business must start with no routable seat").toEqual(
     [],
@@ -116,6 +148,11 @@ afterEach(async () => {
 
 afterAll(async () => {
   await prisma.enquiry.deleteMany({ where: { requirement: { contains: PREFIX } } });
+  // Exactly as they were, ids included, so nothing downstream can tell this
+  // file ran.
+  if (borrowedChannels.length > 0) {
+    await prisma.seatChannel.createMany({ data: borrowedChannels, skipDuplicates: true });
+  }
   await prisma.$disconnect();
 });
 

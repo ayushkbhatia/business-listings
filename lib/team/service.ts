@@ -6,6 +6,7 @@ import type { Actor, Role } from "@/lib/auth/roles";
 import { allowance, type PlanCaps } from "@/lib/plan/entitlements";
 import { medianResponseMs, windowStart } from "@/lib/metrics/response-time";
 import { readContact } from "./contact";
+import { ESCALATION_CHOICES } from "./escalation";
 import { inviteUrl, sendInvite } from "./invite-email";
 
 /**
@@ -23,8 +24,12 @@ const INVITE_DAYS = 7;
 export const ROUTING = ["everyone", "round_robin", "by_branch"] as const;
 export type LeadRouting = (typeof ROUTING)[number];
 
-/** Offered in the interval a supplier actually thinks in. */
-export const ESCALATION_CHOICES = [30, 60, 120, 240, 480] as const;
+/**
+ * Re-exported so a server caller has one import. The list lives in
+ * `./escalation.ts`, which is pure — board 7e's alerts form is a client
+ * component and cannot import this module at all.
+ */
+export { ESCALATION_CHOICES } from "./escalation";
 
 export type TeamResult = { ok: true } | { ok: false; error: string };
 

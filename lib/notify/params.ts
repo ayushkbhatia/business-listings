@@ -71,7 +71,16 @@ export const EVENT_PARAMS = {
   */
   setup_nudge: ["taskList", "minutes"],
 
-  // Declared, seeded, and emitted by nothing yet.
+  /*
+     Declared, seeded, and emitted by nothing.
+
+     Board 7e §2 lists one row for this — "Lead unanswered after 2h → Owner. The
+     escalation job" — and that job emits `enquiry_escalated`. Two events for one
+     thing is a matrix that lies about what the seller controls, so the alerts
+     screen shows the one that fires. This stays in the union because the seeded
+     template row still names it and `NotificationDelivery.event` is a string
+     column with history in it.
+  */
   enquiry_unanswered: [],
   /*
      Board 8d §8 gave this its first emitter. The four are exactly what the
@@ -80,7 +89,13 @@ export const EVENT_PARAMS = {
      params do not carry, in a cron where nobody is watching.
   */
   enquiry_escalated: ["ref", "hours", "closesAt", "enquiryId"],
-  quote_expiring: [],
+  /*
+     Board 7e §2 adds this row: "3k ships the expiry window and had nothing
+     notifying it." The two placeholders are what the seeded template already
+     interpolates — `render` throws on a placeholder the params do not carry,
+     and this one sends from a cron where nobody is watching.
+  */
+  quote_expiring: ["quoteRef", "expiresAt"],
   /*
      Board 11b's follow-up, and the first message-shaped notification in the
      product. Everything the enquiry spine sends is about a *quote* — received,

@@ -14,6 +14,7 @@ import { sweepZeroQuoteEnquiries } from "@/lib/enquiry/zero-quote";
 import { pruneProductEvents } from "@/lib/telemetry/record";
 import { expireInvites } from "@/lib/team/invite";
 import { sweepSetupNudges } from "@/lib/setup/nudge-job";
+import { sweepExpiringQuotes } from "@/lib/quotes/expiry-job";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
 
 /**
@@ -215,6 +216,13 @@ export async function GET(request: NextRequest) {
        do rather than being trusted not to run.
     */
     setupNudges: () => sweepSetupNudges(),
+    /*
+       Board 7e §2's added row, and it sits beside the nudge for the same
+       reason: it hands a message to a carrier. Idempotent the same way —
+       `sweepExpiringQuotes` skips any quote that already has a `quote_expiring`
+       delivery row, so a retry caused by a step above it finds nothing to do.
+    */
+    expiringQuotes: () => sweepExpiringQuotes(),
   });
 
   console.info("[jobs] daily", outcome.steps);

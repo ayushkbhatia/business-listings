@@ -38,32 +38,41 @@ test.describe("board 7d — the seat table", () => {
        disagree, one of the screens is lying and the seller will find out." The
        board summed 21 against an inbox of 12.
 
-       Read off the rendered cells rather than from the service, and against the
-       sidebar badge, which is board 3j's own count through `tabWhere`.
+       Read off the rendered cells rather than from the service. The column
+       index is found from the headers rather than counted by hand — the branch
+       column is hidden entirely on a single-branch business (8d §2), so a fixed
+       index reads a different column depending on the supplier.
     */
     const table = page.getByRole("table", { name: "Your team" });
+    const headers = await table.getByRole("columnheader").allTextContents();
+    // The row header is the person, so the cells start one column in.
+    const openAt = headers.findIndex((head) => head.trim() === "Open") - 1;
+    expect(openAt).toBeGreaterThanOrEqual(0);
+
     const rows = table.getByRole("row");
     const count = await rows.count();
-
     let column = 0;
     for (let i = 1; i < count; i += 1) {
-      const cell = rows.nth(i).getByRole("cell").nth(2);
-      const text = (await cell.textContent())?.trim() ?? "";
+      const text = ((await rows.nth(i).getByRole("cell").nth(openAt).textContent()) ?? "").trim();
       if (/^\d+$/.test(text)) column += Number(text);
     }
 
-    const stated = (await page.getByText(/open leads? here, the same/).textContent()) ?? "";
-    const total = Number(stated.replace(/\D/g, "").slice(0, 3));
+    /*
+       The first number in each sentence, not every digit in it. "14 open leads
+       here, the same 14 your inbox shows" stripped of non-digits is 1414, which
+       is how the first version of this test asserted 141.
+    */
+    const first = (text: string): number => Number(/\d+/.exec(text)?.[0] ?? "0");
 
-    const unassigned = (await page.getByText(/not assigned to anybody/).count())
-      ? Number(
-          ((await page.getByText(/not assigned to anybody/).textContent()) ?? "").replace(
-            /\D/g,
-            "",
-          ),
-        )
+    const stated = await page.getByText(/open leads? here, the same/).textContent();
+    const total = first(stated ?? "");
+
+    const unassignedLine = page.getByText(/not assigned to anybody/);
+    const unassigned = (await unassignedLine.count())
+      ? first((await unassignedLine.textContent()) ?? "")
       : 0;
 
+    expect(total).toBeGreaterThan(0);
     expect(column + unassigned).toBe(total);
   });
 

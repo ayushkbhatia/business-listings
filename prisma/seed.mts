@@ -767,6 +767,9 @@ async function main() {
      can add channels to the ones already there.
   */
   await seedSeatsAndChannels(prisma);
+  // After the named fixtures, so an unverified channel written above is not
+  // overwritten by the backfill's verified one.
+  await backfillSeatChannels(prisma);
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);
@@ -1149,7 +1152,14 @@ async function seedSeatsAndChannels(db: Db) {
   /** This board's own id namespace. See the note above. */
   const seatId = (n: number) => `0000007d-0000-4000-8000-${n.toString(16).padStart(12, "0")}`;
 
-  const SEATS = [
+  const SEATS: {
+    id: string;
+    fullName: string;
+    email: string | null;
+    roles: readonly string[];
+    branchId: string | null;
+    channels: { kind: "whatsapp" | "email"; address: string; verified: boolean }[];
+  }[] = [
     {
       id: seatId(0),
       fullName: "Rajesh Nair",
@@ -1177,12 +1187,15 @@ async function seedSeatsAndChannels(db: Db) {
       ],
     },
     {
-      id: seatId(2),
-      fullName: "Priya Menon",
-      email: "priya@almarwan.example",
-      roles: ["seller_manager"] as const,
+      id: seatId(4),
+      fullName: "Yusuf Rahman",
+      // No address of any kind, so the backfill has nothing to write and this
+      // seat stays the one board 7d §7 needs: reachable on nothing, skipped by
+      // routing, and the reason the routing card's warning ever renders.
+      email: null,
+      roles: ["seller_sales"] as const,
       branchId: null,
-      channels: [{ kind: "email" as const, address: "priya@almarwan.example", verified: true }],
+      channels: [],
     },
     {
       id: seatId(3),
@@ -1202,9 +1215,9 @@ async function seedSeatsAndChannels(db: Db) {
     await db.user.create({
       data: {
         id: person.id,
-        email: person.email,
+        ...(person.email ? { email: person.email } : {}),
         fullName: person.fullName,
-        roles: [...person.roles],
+        roles: [...person.roles] as never,
         businessId: seller.id,
         ...(person.branchId ? { branchId: person.branchId } : {}),
       },
@@ -1265,6 +1278,53 @@ async function seedSeatsAndChannels(db: Db) {
   });
 
   console.log(`   ${SEATS.length} seats, one pending invite`);
+}
+
+/**
+ * The same backfill migration 20260910090000 runs, so local matches production.
+ *
+ * Board 7e §3 makes a verified channel the condition for receiving anything, and
+ * `lib/notify/service.ts` now enforces it. On a fresh database the migration
+ * runs before the seed writes a single user, so it backfills nothing — and
+ * without this the seeded world would be the one world where no seller can be
+ * notified at all. Every notification integration test would go dark, and the
+ * failure would look like the rule being wrong rather than the fixtures being
+ * absent.
+ *
+ * The addresses are proven: `lib/auth/flow.ts` signs a seat in by OTP to that
+ * phone or that address, and `acceptInvite` binds a seat to the contact the
+ * invitation went to. This records what was already true rather than inventing
+ * a verification.
+ *
+ * SMS is left out, matching the migration and 7e §10.3 — every SMS is billed per
+ * message and duplicates WhatsApp for most sellers.
+ *
+ * `skipDuplicates` rather than `upsert`: `seedSeatsAndChannels` runs first and
+ * Fatima's unverified WhatsApp is a fixture both boards draw, so this must not
+ * quietly prove it.
+ */
+async function backfillSeatChannels(db: Db) {
+  console.log("→ backfilling seat channels from seat addresses");
+
+  const seats = await db.user.findMany({
+    where: { businessId: { not: null }, isProvisional: false },
+    select: { id: true, businessId: true, phone: true, email: true },
+  });
+
+  const rows = seats.flatMap((seat) => {
+    const businessId = seat.businessId as string;
+    const out: { userId: string; businessId: string; kind: "whatsapp" | "email"; address: string; verifiedAt: Date }[] = [];
+    if (seat.phone) {
+      out.push({ userId: seat.id, businessId, kind: "whatsapp", address: seat.phone, verifiedAt: hours(-72) });
+    }
+    if (seat.email) {
+      out.push({ userId: seat.id, businessId, kind: "email", address: seat.email.toLowerCase(), verifiedAt: hours(-72) });
+    }
+    return out;
+  });
+
+  const { count } = await db.seatChannel.createMany({ data: rows, skipDuplicates: true });
+  console.log(`   ${count} channels across ${seats.length} seats`);
 }
 
 /**

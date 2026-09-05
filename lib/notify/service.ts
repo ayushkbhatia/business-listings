@@ -9,6 +9,9 @@ import {
   type RoutingPreference,
 } from "./routing";
 import { resolveNotificationSenders } from "./senders";
+import { openNow } from "@/lib/trade/open-now";
+import type { RamadanHours, WeekHours } from "@/lib/trade/hours";
+import { readRamadanCalendar } from "@/lib/trade/ramadan-calendar";
 
 /**
  * Sending a notification.
@@ -52,16 +55,41 @@ export interface NotifyOutcome {
 const NO_TEMPLATE = "no_live_template";
 const NO_SENDER = "no_carrier_configured";
 const NO_ADDRESS = "recipient_has_no_address_for_this_channel";
+/**
+ * Board 7e §3, the half the board left out.
+ *
+ * "An unverified number is hidden from buyers **and receives nothing**. Both
+ * halves matter: an unverified number that still received alerts would make
+ * reachability a lie, and the routing rule in 7d §4 depends on it being true."
+ *
+ * Recorded as its own reason rather than folded into `NO_ADDRESS`, because the
+ * two send a seller to different places: no address is "add one", unverified is
+ * "finish the one you added".
+ */
+const NOT_VERIFIED = "channel_entered_but_not_verified";
 
 export async function notify(input: NotifyInput): Promise<NotifyOutcome[]> {
   const now = input.now ?? new Date();
 
-  const [preference, recipient] = await Promise.all([
+  const [preference, recipient, channels, hours] = await Promise.all([
     prisma.notificationPreference.findUnique({ where: { businessId: input.businessId } }),
     prisma.user.findUnique({
       where: { id: input.recipientUserId },
-      select: { id: true, phone: true, email: true },
+      select: { id: true },
     }),
+    /*
+       Where this notification is actually allowed to go.
+
+       Verified rows only. Before board 7e this read `user.phone` and
+       `user.email` straight off the seat, which made "reachable on" a label
+       rather than a rule — a seat could sit amber on two screens and still
+       receive on the channel both screens said it could not.
+    */
+    prisma.seatChannel.findMany({
+      where: { userId: input.recipientUserId, businessId: input.businessId, verifiedAt: { not: null } },
+      select: { kind: true, address: true },
+    }),
+    quietFromHours(input.businessId, now),
   ]);
   if (!preference || !recipient) return [];
 
@@ -72,6 +100,13 @@ export async function notify(input: NotifyInput): Promise<NotifyOutcome[]> {
       fromHour: preference.quietFromHour,
       toHour: preference.quietToHour,
       onSunday: preference.quietOnSunday,
+      /*
+         7e §5: "Source — the Hours page. Same source as the auto-reply and as
+         7d's routing skip. One copy." Null where the supplier has published no
+         hours at all, and then the stored window applies — which is the only
+         thing it can mean for a business with no week to be outside of.
+      */
+      hours,
     },
     highValueOverrideAed: preference.highValueOverrideAed,
   };
@@ -140,9 +175,31 @@ export async function notify(input: NotifyInput): Promise<NotifyOutcome[]> {
       continue;
     }
 
-    const to = addressFor(decision.channel, recipient);
+    const to = addressFor(decision.channel, recipient.id, channels);
     if (!to) {
-      outcomes.push(await record(input, decision.channel, template.id, "skipped", NO_ADDRESS, now));
+      /*
+         Unverified and absent are different facts and the log says which. A
+         seller asking "why did I not hear about that enquiry" is owed the
+         answer, and the two answers are different actions.
+      */
+      const entered = await prisma.seatChannel.count({
+        where: {
+          userId: input.recipientUserId,
+          businessId: input.businessId,
+          kind: decision.channel === "in_app" ? undefined : decision.channel,
+          verifiedAt: null,
+        },
+      });
+      outcomes.push(
+        await record(
+          input,
+          decision.channel,
+          template.id,
+          "skipped",
+          entered > 0 ? NOT_VERIFIED : NO_ADDRESS,
+          now,
+        ),
+      );
       continue;
     }
 
@@ -221,19 +278,97 @@ async function liveTemplates(
   return byChannel;
 }
 
+/**
+ * Where this channel actually delivers, or nothing.
+ *
+ * In-app needs no address and no proof — 7e §2 keeps it always on for anything
+ * with a deadline, so a seller who has verified nothing still has a place the
+ * work appears. Everything else comes from a verified `SeatChannel` row and
+ * from nowhere else: an address on the `User` row is how somebody signs in, and
+ * it stopped being how they are notified the moment "reachable on" became a
+ * column two screens make promises about.
+ */
 function addressFor(
   channel: NotificationChannel,
-  recipient: { id: string; phone: string | null; email: string | null },
+  recipientId: string,
+  channels: readonly { kind: string; address: string }[],
 ): string | null {
-  switch (channel) {
-    case "whatsapp":
-    case "sms":
-      return recipient.phone;
-    case "email":
-      return recipient.email;
-    case "in_app":
-      return recipient.id;
+  if (channel === "in_app") return recipientId;
+  return channels.find((row) => row.kind === channel)?.address ?? null;
+}
+
+/**
+ * Whether the seller's own counter is shut, and when it next opens.
+ *
+ * The same `openNow` the storefront's badge reads, over the same published
+ * hours, Ramadan and all. 7e §5 and 7d §4 both insist on one copy of the working
+ * week, and a second one on the alerts screen is the contradiction that would
+ * surface first during Ramadan — quiet hours running to 07:00 while the counter
+ * opened at 09:00 and the routing skip agreed with neither.
+ *
+ * Null when nobody has published hours. That is not "always open" and not
+ * "always shut": it is "this business has no week", and the stored 21:00–07:00
+ * window is what the seller is left with until the Hours page is filled in.
+ */
+async function quietFromHours(
+  businessId: string,
+  now: Date,
+): Promise<{ closedNow: boolean; opensAt: Date | null } | null> {
+  const [locations, ramadan] = await Promise.all([
+    prisma.location.findMany({
+      where: { businessId, published: true },
+      select: { hours: true, ramadanHours: true },
+    }),
+    readRamadanCalendar(),
+  ]);
+  if (locations.length === 0) return null;
+
+  const states = locations.map((location) =>
+    openNow(
+      location.hours as WeekHours | null,
+      location.ramadanHours as RamadanHours | null,
+      now,
+      ramadan,
+    ),
+  );
+  const known = states.filter((state) => state.state !== "unknown");
+  if (known.length === 0) return null;
+
+  if (known.some((state) => state.state === "open")) return { closedNow: false, opensAt: null };
+  return { closedNow: true, opensAt: nextOpeningAt(businessId, locations, ramadan, now) };
+}
+
+/**
+ * The next instant any branch opens, walked hour by hour.
+ *
+ * The same shape `quietLiftsAt` uses and for the same reason: a wrapping window
+ * crossed with a Ramadan block and a branch that trades Saturdays is two
+ * overlapping rules, and the arithmetic for that is where the off-by-one lives.
+ * A week of hours is 168 iterations and this runs once per notification on a
+ * business that is shut.
+ */
+function nextOpeningAt(
+  _businessId: string,
+  locations: readonly { hours: unknown; ramadanHours: unknown }[],
+  ramadan: Awaited<ReturnType<typeof readRamadanCalendar>>,
+  now: Date,
+): Date | null {
+  const HOUR = 3_600_000;
+  let cursor = new Date(Math.ceil(now.getTime() / HOUR) * HOUR);
+  for (let i = 0; i < 24 * 8; i += 1) {
+    const open = locations.some(
+      (location) =>
+        openNow(
+          location.hours as WeekHours | null,
+          location.ramadanHours as RamadanHours | null,
+          cursor,
+          ramadan,
+        ).state === "open",
+    );
+    if (open) return cursor;
+    cursor = new Date(cursor.getTime() + HOUR);
   }
+  return null;
 }
 
 /** Never throws. A delivery log that takes the send down is worse than no log. */
@@ -360,14 +495,23 @@ export async function deliverQueued(limit = 200): Promise<DeliverQueuedResult> {
      user rather than owning one — so the lookup is explicit.
   */
   const ids = [...new Set(due.map((row) => row.recipientUserId).filter((id): id is string => !!id))];
-  const people = new Map(
-    (
-      await prisma.user.findMany({
-        where: { id: { in: ids } },
-        select: { id: true, phone: true, email: true },
-      })
-    ).map((user) => [user.id, user]),
-  );
+  /*
+     Verified channels, the same rule the live path applies.
+
+     A message held overnight is sent in the morning against whatever is proven
+     then — so a seat whose WhatsApp was revoked or never verified while the
+     message waited does not receive it at dawn on a channel two screens say it
+     cannot be reached on.
+  */
+  const channelsByUser = new Map<string, { kind: string; address: string }[]>();
+  for (const row of await prisma.seatChannel.findMany({
+    where: { userId: { in: ids }, verifiedAt: { not: null } },
+    select: { userId: true, kind: true, address: true },
+  })) {
+    const list = channelsByUser.get(row.userId) ?? [];
+    list.push({ kind: row.kind, address: row.address });
+    channelsByUser.set(row.userId, list);
+  }
 
   const senders = resolveNotificationSenders();
   let sent = 0;
@@ -377,8 +521,9 @@ export async function deliverQueued(limit = 200): Promise<DeliverQueuedResult> {
   for (const row of due) {
     const payload = readHeldPayload(row.payload);
     const sender = senders[row.channel];
-    const person = row.recipientUserId ? people.get(row.recipientUserId) : undefined;
-    const to = person ? addressFor(row.channel, person) : null;
+    const to = row.recipientUserId
+      ? addressFor(row.channel, row.recipientUserId, channelsByUser.get(row.recipientUserId) ?? [])
+      : null;
 
     /*
        No payload, no carrier, or no address. Marked failed with the reason

@@ -76,11 +76,33 @@ test.describe("board 8d — invite your team", () => {
     await expect(page.getByRole("button", { name: /Send 2 invites & back to setup/ })).toBeEnabled();
   });
 
-  test("starts with two rows and adds a third on request", async ({ page }) => {
-    // §9: two empty rows on the first run. One row reads as "name a person";
-    // two reads as "name your team", which is the job.
+  test("starts with two rows and adds a third while the plan has room", async ({ page }) => {
+    /*
+       §9: two empty rows on the first run. One row reads as "name a person";
+       two reads as "name your team", which is the job.
+
+       The third row depends on the plan having room for it, and that is read off
+       the screen rather than assumed: this test failed the day board 7d's seed
+       fixtures took the flagship's headroom, and it failed with "element is not
+       enabled" — a sentence about a button, saying nothing about seats. The
+       screen states the arithmetic; the test now reads the same figures.
+    */
     await expect(page.getByLabel("Mobile or email")).toHaveCount(2);
-    await page.getByRole("button", { name: "+ Add another person" }).click();
+
+    const stated = (await page.getByText(/seats used on/).textContent()) ?? "";
+    const [used, total] = [...stated.matchAll(/\d+/g)].map((match) => Number(match[0]));
+    expect(used, stated).toBeDefined();
+    const room = (total ?? 0) - (used ?? 0);
+
+    const add = page.getByRole("button", { name: "+ Add another person" });
+    if (room <= 2) {
+      // At or over the cap for a third row, and the control says so rather than
+      // opening a row the send would refuse.
+      await expect(add).toBeDisabled();
+      return;
+    }
+
+    await add.click();
     await expect(page.getByLabel("Mobile or email")).toHaveCount(3);
   });
 

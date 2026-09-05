@@ -142,7 +142,15 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
       { key: "billing", labelKey: "nav.billing", href: "/dashboard/billing", capability: "billing.manage" },
       { key: "domain", labelKey: "nav.domain", href: "/dashboard/domain", capability: "billing.manage" },
       { key: "team", labelKey: "nav.team", href: "/dashboard/team", capability: "team.manage" },
-      { key: "settings", labelKey: "nav.settings", href: "/dashboard/settings", capability: "routing.manage" },
+      /*
+         No capability. Board 7e §1 gives every seat its own contact channels
+         here, and a sales seat that cannot reach the screen can never verify a
+         number — which makes it permanently unroutable, and the routing rule on
+         board 7d permanently unfixable from the seat it applies to. The
+         business-wide half of the screen is gated inside it, and `saveAlerts`
+         asserts `routing.manage` again, because a server action is a URL.
+      */
+      { key: "settings", labelKey: "nav.settings", href: "/dashboard/settings" },
     ],
   },
 ];

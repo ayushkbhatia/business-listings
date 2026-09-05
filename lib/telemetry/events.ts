@@ -67,6 +67,13 @@ export const EVENT_NAMES = [
   "routing_mode_changed",
   "escalation_interval_changed",
   "cap_reached_invite_blocked",
+  "settings_viewed",
+  "notification_toggled",
+  "channel_verified",
+  "channel_verification_failed",
+  "autoreply_toggled",
+  "quiet_hours_changed",
+  "fallback_to_owner",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -485,6 +492,68 @@ export const EVENT_SPECS = {
     emitter: "server",
     session: "never",
     props: { plan: "string", cap: "number" },
+  },
+
+  // ── Board 7e, the alerts screen ───────────────────────────────────────────
+
+  /** Which tab was looked at, and how many seats could not be reached from it. */
+  settings_viewed: {
+    emitter: "browser",
+    session: "required",
+    props: { tab: "string", unreachable: "number?" },
+  },
+  /**
+   * One cell of the matrix moved.
+   *
+   * Per cell rather than per save, because "which channel do sellers turn off
+   * first" is the question, and a save event answers none of it. Written on the
+   * server from a diff of what was stored against what arrived, so it counts a
+   * change rather than a form submission.
+   */
+  notification_toggled: {
+    emitter: "server",
+    session: "never",
+    props: { event: "string", channel: "string", on: "boolean" },
+  },
+  /** A channel was proven. The event that turns an amber row green on 7d. */
+  channel_verified: {
+    emitter: "server",
+    session: "never",
+    props: { channel: "string" },
+  },
+  /** A code was refused. `reason` separates a typo from an expired code. */
+  channel_verification_failed: {
+    emitter: "server",
+    session: "never",
+    props: { channel: "string", reason: "string" },
+  },
+  autoreply_toggled: {
+    emitter: "server",
+    session: "never",
+    props: { on: "boolean" },
+  },
+  quiet_hours_changed: {
+    emitter: "server",
+    session: "never",
+    props: { on: "boolean" },
+  },
+  /**
+   * A lead reached the owner because it could not reach anybody else.
+   *
+   * §9 pairs this with board 7d's `unroutable_lead`: "together they are the only
+   * evidence that a lead arrived and nobody heard it." The two reasons are
+   * different problems and lead to different screens — `unassigned` is a routing
+   * question, `unreachable` is a channel one.
+   *
+   * `notification_send_failed` is deliberately absent from this list.
+   * `NotificationDelivery` already writes one row per channel per send carrying
+   * the status and the reason, which is strictly more than an event could hold,
+   * and two records of one fact is how they come to disagree.
+   */
+  fallback_to_owner: {
+    emitter: "server",
+    session: "never",
+    props: { reason: "string" },
   },
 } as const satisfies Record<EventName, EventDefinition>;
 

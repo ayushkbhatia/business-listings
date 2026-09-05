@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db/client";
 import { t } from "@/lib/i18n";
 import { liveWeights } from "@/lib/search/settings";
 import { rosterFor, type RosterSeat } from "@/lib/team/roster";
-import { ESCALATION_CHOICES } from "@/lib/team/service";
+import { escalationOptions } from "@/lib/team/escalation";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 import { CapabilityMatrix } from "./_matrix";
 import { SeatPerformancePanel } from "./_performance";
@@ -212,13 +212,7 @@ export default async function TeamPage() {
             label: t(`routing.${mode}` as "routing.everyone"),
             hint: t(`routing.${mode}_hint` as "routing.everyone_hint"),
           }))}
-          escalationChoices={ESCALATION_CHOICES.map((minutes) => ({
-            value: String(minutes),
-            label:
-              minutes < 60
-                ? t("routing.minutes", { count: minutes })
-                : t("routing.hours", { count: minutes / 60 }),
-          }))}
+          escalationChoices={escalationOptions()}
           lede={t("routing.lede", {
             points: String(weights.responseTime),
             total: String(

@@ -46,9 +46,9 @@ describe("what an event supplies", () => {
 
   it("knows which events nothing emits yet", () => {
     /*
-     * Seven of fourteen are emitted. The rest are declared in the enum, seeded
-     * with templates, and sent by nothing — which is not a bug, but staff
-     * should know before spending an afternoon on the copy.
+     * The rest are declared in the enum, seeded with templates, and sent by
+     * nothing — which is not a bug, but staff should know before spending an
+     * afternoon on the copy.
      *
      * `subscription_renewed`, `setup_nudge` and `enquiry_escalated` are the
      * three sent from a schedule rather than from a request. Every other
@@ -70,6 +70,16 @@ describe("what an event supplies", () => {
       // quiet is by definition not looking at the thread.
       "message_received",
       "quote_accepted",
+      /*
+         Board 7e §2's added row, and the fourth event sent from a schedule.
+         Board 3k shipped the expiry window, the `Expiring soon` tab and the
+         extend action with nothing notifying any of it, so the only way a
+         seller met a deadline was by opening the screen — which means the
+         quotes that lapsed belonged to the sellers who were busy.
+         `lib/quotes/expiry-job.ts` carries its own exactly-once guard, like the
+         other three, because `notify()` deduplicates nothing.
+      */
+      "quote_expiring",
       "quote_received",
       "quote_revised",
       "setup_nudge",
