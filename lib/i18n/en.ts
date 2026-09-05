@@ -3314,6 +3314,80 @@ export const en = {
     "Your listing is live and already being seen. These are what turn a view into an enquiry, and you can do them in any order.",
   "setup.live_pill": "Listing already live",
   "setup.leave_note": "You can leave and come back. Nothing is lost.",
+
+  // ── Board 8e — setup complete ────────────────────────────────────────────
+  //
+  // The terminal state of the first run. Every figure here is asserted to a
+  // seller who has just finished the work and is entitled to believe it, so
+  // each clause is separately droppable — see lib/setup/complete.ts.
+  "setup_done.eyebrow": "Finish setting up",
+  "setup_done.progress": { one: "{formatted} of {total} done", other: "{formatted} of {total} done" },
+  "setup_done.pill": "Setup complete",
+  "setup_done.title": "Your storefront is working properly now.",
+  "setup_done.intro":
+    "Nothing else is waiting on you. From here the listing changes because buyers use it, not because you fill anything in.",
+
+  "setup_done.strength": "Profile strength",
+  // Only where a baseline was stored and the score is a full hundred. A missing
+  // snapshot drops the clause rather than guessing where the seller started.
+  "setup_done.strength_rose": "Up from {from}% this morning — every setup task complete",
+  "setup_done.strength_rose_partial": "Up from {from}% this morning",
+  "setup_done.strength_complete": "Every setup task complete",
+
+  "setup_done.tick.photos": {
+    one: "{formatted} photo live, cover set",
+    other: "{formatted} photos live, cover set",
+  },
+  "setup_done.tick.photos_no_cover": {
+    one: "{formatted} photo live",
+    other: "{formatted} photos live",
+  },
+  "setup_done.tick.products": {
+    one: "{formatted} product indexed on its own page",
+    other: "{formatted} products indexed on their own pages",
+  },
+  "setup_done.tick.team": {
+    one: "{formatted} colleague on the enquiry inbox",
+    other: "{formatted} colleagues on the enquiry inbox",
+  },
+
+  // Hidden entirely when the delta is unavailable. §6: a total must not stand
+  // in for a comparison.
+  "setup_done.filters": {
+    one: "You now appear in {formatted} spec filter you were invisible to this morning.",
+    other: "You now appear in {formatted} spec filters you were invisible to this morning.",
+  },
+
+  "setup_done.to_dashboard": "Go to my dashboard",
+  "setup_done.to_storefront": "View my public storefront",
+
+  "setup_done.changes_eyebrow": "WHAT CHANGES NOW",
+  "setup_done.changes_products":
+    "Each product has its own page and can be found on its specs, not only your company name.",
+  "setup_done.changes_routing":
+    "New enquiries follow the routing you set, escalating to you if nobody replies.",
+  "setup_done.changes_reply":
+    "Your reply time starts being measured from the first enquiry, and buyers see it as a band on every card.",
+
+  // §4. The card that stops a full green meter reading as "you now rank first".
+  "setup_done.rank_title": "100% is complete, not first",
+  "setup_done.rank_body":
+    "Profile strength measures your listing, not your position. {count} things decide where you appear:",
+  "setup_done.rank_note":
+    "The two you moved this session are marked. Response time is the one you can still change, and it is the one you change by replying.",
+  "setup_done.rank.relevance": "Relevance",
+  "setup_done.rank.verificationTier": "Verification",
+  "setup_done.rank.responseTime": "Response time",
+  "setup_done.rank.specCompleteness": "Spec completeness",
+  "setup_done.rank.distance": "Distance",
+  "setup_done.rank.planTier": "Plan",
+  "setup_done.rank_moved": "moved by this session",
+  "setup_done.rank_open": "still yours to change",
+
+  "setup_done.once_eyebrow": "YOU WON'T SEE THIS AGAIN",
+  "setup_done.once_body":
+    "Setup is a first-run flow. Coming back to it sends you to the dashboard instead — everything here stays editable from Listing and Team.",
+
   "setup.now": "Now",
   // Measured where the cohort is big enough, and the mechanism where it is not.
   // Never one standing in for the other — the same rule board 2c set.

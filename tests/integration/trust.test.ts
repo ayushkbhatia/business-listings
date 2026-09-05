@@ -68,11 +68,6 @@ async function removeFixtures() {
     },
   });
 
-  await prisma.siteVisitPhoto.deleteMany({
-    where: { report: { businessId: { in: ids } } },
-  });
-  await prisma.siteVisitReport.deleteMany({ where: { businessId: { in: ids } } });
-  await prisma.siteVisitRequest.deleteMany({ where: { businessId: { in: ids } } });
   await prisma.supplierReport.deleteMany({ where: { subjectBusinessId: { in: ids } } });
   // By business rather than by address: the seller this suite creates has no
   // email, and after the business goes its `businessId` is set null and the row

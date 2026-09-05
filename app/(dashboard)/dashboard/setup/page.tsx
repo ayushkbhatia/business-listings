@@ -10,6 +10,7 @@ import {
   CONCIERGE_PRODUCT_LIMIT,
   MAX_CATALOGUE_BYTES,
 } from "@/lib/catalogue-import/pricing";
+import { noteCompleted, noteFirstHubView, readBaseline } from "@/lib/setup/baseline";
 import { setupHubState, type SetupHubState } from "@/lib/setup/service";
 import type { SetupTaskId, SetupTaskRow } from "@/lib/setup/tasks";
 import { cn } from "@/lib/cn";
@@ -128,11 +129,38 @@ export default async function SetupPage({
   if (!state.live) redirect("/onboarding/locations");
 
   /*
-     Everything done. The route stops existing rather than rendering a page
-     congratulating somebody for reading it, and the flash carries the number
-     so the overview says what changed.
+     Where this seller started, captured on the first render and never again.
+
+     Board 8e asserts "up from 62%" and "14 spec filters you were invisible to
+     this morning", and neither can be computed from the present — a comparison
+     needs a before, and nothing was storing one. It has to be written here
+     rather than at go-live because §2 says the baseline is "the score at first
+     entry to the hub", and here is that entry.
+
+     Awaited rather than fired and forgotten: a seller who lands on the hub with
+     every task already done — rare, but a re-imported listing does it — is one
+     line below from being sent to the completion screen, and a baseline written
+     after that redirect is a baseline written too late to be read.
+
+     It swallows its own failures, so this cannot be why the hub 500s.
+  */
+  await noteFirstHubView(seat.businessId, state.strength);
+
+  /*
+     Everything done, so this route stops existing rather than rendering a page
+     congratulating somebody for reading it.
+
+     Where it forwards to is board 8e's once-only rule. The completion screen is
+     owed exactly once, on the transition, and the hub is the only thing that
+     knows a transition happened: no task screen can tell whether the task it
+     just closed was the last one. So the hub stamps the moment and forwards,
+     and every arrival after `doneSeenAt` is set goes to the dashboard with the
+     flash instead.
   */
   if (state.openCount === 0) {
+    await noteCompleted(seat.businessId);
+    const baseline = await readBaseline(seat.businessId);
+    if (!baseline?.doneSeenAt) redirect("/dashboard/setup/done");
     redirect(`/dashboard?notice=setup_complete&strength=${state.strength}`);
   }
 

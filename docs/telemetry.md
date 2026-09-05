@@ -76,8 +76,8 @@ difference between a measurement and a claim.
 
 | Emitter | Events | Because |
 |---|---|---|
-| `browser` | `setup_hub_viewed`, `setup_task_started`, `setup_hub_abandoned`, `listing_viewed` | Attention facts. A screen was looked at, a task was opened, a tab went away. The server cannot know any of them. |
-| `server` | `setup_task_completed`, `concierge_requested`, `setup_nudge_sent`, `setup_nudge_opened` | State facts. A task actually completed, a request row exists, a nudge went out, its link was followed. |
+| `browser` | `setup_hub_viewed`, `setup_task_started`, `setup_hub_abandoned`, `setup_done_viewed`, `setup_done_exit`, `listing_viewed` | Attention facts. A screen was looked at, a task was opened, a tab went away, one of two exits was taken. The server cannot know any of them. |
+| `server` | `setup_task_completed`, `setup_completed`, `setup_done_redirected`, `concierge_requested`, `setup_nudge_sent`, `setup_nudge_opened` | State facts. A task actually completed, every task completed, a route turned somebody away and knows why, a request row exists, a nudge went out, its link was followed. |
 
 `/api/events` drops anything marked `server`. A browser asserting a state fact
 is the browser's word for it, and CLAUDE.md's rule is that these numbers are
@@ -220,3 +220,21 @@ you went live" is in Al Quoz. This is the decision `lib/format/date.ts` and
 A rename is not free: old rows keep the old name, and a query that groups on the
 new one will show a cliff on the day of the deploy. Prefer adding the new name
 and leaving the old one in the list until it has aged past the retention window.
+
+## Board 8e's four, and the one number worth watching
+
+`setup_completed` carries `hours` — first hub view to the last task closing,
+from `SetupBaseline.firstSeenAt`. Board 8a estimates twenty minutes of work; if
+the median is four days, the tasks are not the problem and the nudge sequence
+is. That is the whole reason the baseline row exists.
+
+The completion **order** is deliberately not on it. `setup_task_completed`
+already writes one row per task with its own timestamp, so the order is a
+`GROUP BY` away, and a second copy of the same fact is a second thing to get
+wrong.
+
+`setup_done_redirected` carries a reason — `tasks_open`, `already_seen` or
+`suspended`. A rising `already_seen` is the signal that something is linking
+into a screen board 8e §1 says must be reachable exactly once, on the
+transition: an email, a bookmark, a stale tab. There is nothing to fix on the
+day it is zero and something to find on the day it is not.

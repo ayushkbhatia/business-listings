@@ -3004,3 +3004,83 @@ and the tests that used the tier row to exercise that guard use it instead.
 - **Curated lists lost their only weighted criterion** and nothing replaced it. Inventing a
   new weight to fill the slot would change who leads a published list for a reason no
   reader was told about; the tier absorbs it, which is what the visited rung fed anyway.
+
+## Board 8e — setup complete, rescoped
+
+The terminal state of the first run, at `/dashboard/setup/done`. The board was
+half a screen beside a site-visit booking form; the form is gone and the done
+state is the whole thing.
+
+### The score table is rejected for the third time, on two of the same grounds
+
+§3 draws profile strength as six components summing to 100 — profile 18,
+locations 14, verification 24, photos 16, products 18, team 10. The handoff
+before it drew seven. `lib/metrics/profile-strength.ts` ships five, and they
+stay: identity 35, photos 20, catalogue 20, filterable specs 15, team 10.
+
+Two of the three reasons recorded against the seven-component table still hold
+against this one. A **location is a publish gate**, not a lever — `goLive`
+refuses without one, so a listing that is live has already earned those 14 and a
+listing that is not cannot be looking at this screen. The **verification tier is
+platform-owned**, CLAUDE.md non-negotiable 2, and more so since site visits were
+withdrawn made it ops-lead-only: a seller waiting on staff would be 24 points
+short with nothing they can do about it. The third objection — the site visit's
+points being plan-gated — is the one §3 fixed, by removing the row.
+
+§3's *conclusion* is right and survives: **100 is reachable on every plan.**
+Free carries 30 photographs against a target of 10, 10 products against a target
+of 10, and since board 8d two seats against a target of two. Nothing on the
+shipped meter is gated.
+
+### Every clause on the screen drops on its own
+
+§2 sets the rule for the baseline — "if that snapshot is missing, drop the clause
+rather than guess a baseline" — and it is applied to all four comparisons rather
+than only that one. No clause substitutes a zero, because a zero is a number and
+a seller reads it as one:
+
+- **"Up from 62%"** needs `SetupBaseline.baselineScore`, written on the hub's
+  first render and never again. It also needs the score to have actually *risen*
+  — see below.
+- **"14 spec filters"** needs both a facet baseline and a positive delta. §5:
+  never render "0 spec filters".
+- **"every setup task complete"** needs a full hundred. §5's fifth row: a seat
+  removed after completing leaves three ticks over a score of 96, and the screen
+  shows 96 without the clause rather than rounding up.
+
+### The search-volume half of the callout is dropped, not approximated
+
+§2's last row wants "412 searches last month" for a named facet combination.
+`SearchQueryLog` records the text a buyer typed and how many results came back;
+it carries no facet dimension. `ZeroResultQuery.filters` does hold facet values
+and is the opposite population — searches that found nobody.
+
+So there is no honest source for it. The gain is rendered and the volume clause
+is not, which is §2's own rule for a missing sub-figure rather than a new one.
+
+### The score is read live, because the column is a cache
+
+§2 says the meter reads `profile_score` on the business row. It does not: the
+hub computes the score live from `profileStrength(facts)` and the column is a
+cache `strength-job.ts` refreshes on a schedule.
+
+Reading the column here put **"60%" under "Up from 70% this morning"** on the
+first browser run — a fall, printed in a sentence whose grammar promises a rise,
+because the two figures came from two places. The hub's own figure is passed
+down instead, and the clause is dropped whenever the score has not risen above
+the baseline. Equal drops too: "up from 70%" over 70% is an empty sentence.
+
+### Found in passing
+
+- **`main` did not typecheck.** #98 added teardown for `siteVisitPhoto`,
+  `siteVisitReport` and `siteVisitRequest` — three tables #97 had dropped an hour
+  earlier. It was authored against a checkout that still had them and merged
+  after, and with GitHub Actions billing-blocked nothing caught it. Three lines,
+  removed here because this branch could not run its own gates until they were.
+- **The `visit` media kind's doc comment described a feature that no longer
+  exists.** The enum label survives — Postgres cannot drop one without rewriting
+  every row of `media` — but it now says so, and says not to reuse it.
+- **`emitEvent` is exported from the telemetry tier.** The two exits need to
+  beacon on click, and that is exactly the case `PageEvent`'s `sendBeacon` path
+  was written for; a second copy of it in a page component would be a second
+  thing to get wrong about the Blob and the fallback.
