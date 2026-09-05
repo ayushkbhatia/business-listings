@@ -60,6 +60,13 @@ export const EVENT_NAMES = [
   "requote_started",
   "pipeline_exported",
   "unroutable_lead",
+  "team_viewed",
+  "invite_sent",
+  "invite_resent",
+  "seat_removed",
+  "routing_mode_changed",
+  "escalation_interval_changed",
+  "cap_reached_invite_blocked",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -414,6 +421,70 @@ export const EVENT_SPECS = {
     emitter: "server",
     session: "never",
     props: { reason: "string" },
+  },
+
+  // ── Board 7d, the team screen ─────────────────────────────────────────────
+
+  /**
+   * The screen was looked at, with the two counts that say what it showed.
+   *
+   * `unreachable` is the one to group by. A team where it is never zero is a
+   * team whose routing is quietly skipping people, and this is the only place
+   * that number is visible before it turns into an `unroutable_lead`.
+   */
+  team_viewed: {
+    emitter: "browser",
+    session: "required",
+    props: { seats: "number?", invites: "number?", unreachable: "number?" },
+  },
+  /** An invitation left. `scoped` is 7d §9's "branch scope", as a boolean. */
+  invite_sent: {
+    emitter: "server",
+    session: "never",
+    props: { role: "string", scoped: "boolean" },
+  },
+  /** The same offer, again. Distinct from a first send: it counts a delivery
+   * that did not arrive, which is what the resend control exists for. */
+  invite_resent: {
+    emitter: "server",
+    session: "never",
+    props: { expired: "boolean" },
+  },
+  /**
+   * A seat taken back, and what happened to what it was holding.
+   *
+   * `openLeads` is the count that moved and `movedTo` says where — `seat` or
+   * `queue`. 7d §9 asks for "open leads reassigned to", and the id of a
+   * colleague is not a dimension anything can group by, so it is the shape of
+   * the destination rather than the person.
+   */
+  seat_removed: {
+    emitter: "server",
+    session: "never",
+    props: { openLeads: "number", movedTo: "string" },
+  },
+  /** From and to, because the interesting question is which way sellers move. */
+  routing_mode_changed: {
+    emitter: "server",
+    session: "never",
+    props: { from: "string", to: "string" },
+  },
+  escalation_interval_changed: {
+    emitter: "server",
+    session: "never",
+    props: { fromMinutes: "number", toMinutes: "number" },
+  },
+  /**
+   * The invitation the plan refused.
+   *
+   * Not a funnel step — it is the measurement of a wall a paying seller walked
+   * into, and 7d §3 makes the wall a designed state precisely so this is rare.
+   * If it is common the cap is wrong, not the seller.
+   */
+  cap_reached_invite_blocked: {
+    emitter: "server",
+    session: "never",
+    props: { plan: "string", cap: "number" },
   },
 } as const satisfies Record<EventName, EventDefinition>;
 

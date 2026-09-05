@@ -380,6 +380,6 @@ export async function saveRouting(
  * the three share the roles ceiling and the claim repair, not because a team
  * screen needs them separated.
  */
-export { acceptInvite, expireInvites, readInvite, removeSeat } from "./invite";
-export type { AcceptResult, InviteView, RemoveResult } from "./invite";
+export { acceptInvite, expireInvites, readInvite, removeSeat, resendInvite } from "./invite";
+export type { AcceptResult, InviteView, RemoveOptions, RemoveResult, ResendResult } from "./invite";
 export { inviteUrl } from "./invite-email";

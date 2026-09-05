@@ -55,6 +55,8 @@ export interface SeatReachability {
   slowOnly: boolean;
   /** False for Finance and for anybody who cannot reply. Never a lead target. */
   canTakeLeads: boolean;
+  /** Staff took the account away. Keeps history, receives nothing (7d §7). */
+  suspended: boolean;
 }
 
 /**
@@ -70,7 +72,7 @@ export async function reachabilityFor(
   const [seats, channels] = await Promise.all([
     prisma.user.findMany({
       where: { businessId },
-      select: { id: true, roles: true },
+      select: { id: true, roles: true, suspendedAt: true },
     }),
     prisma.seatChannel.findMany({
       where: { businessId },
@@ -96,13 +98,25 @@ export async function reachabilityFor(
     const verified = CHANNEL_ORDER.filter((kind) => entry.verified.includes(kind));
     const unverified = CHANNEL_ORDER.filter((kind) => entry.unverified.includes(kind));
 
+    /*
+       A suspended account is not a routing target, and the reason is the same
+       dead end as an unverified channel by a different door: `getSellerSeat`
+       refuses a suspended user, so a lead routed to one is a lead nobody can
+       open. There is no seller-facing control that sets this — `suspendedAt` is
+       a staff column with an audit contract behind it — but staff can set it
+       under an owner whose router would otherwise keep dealing them leads.
+    */
+    const suspended = seat.suspendedAt !== null;
+
     out.set(seat.id, {
       userId: seat.id,
       verified,
       unverified,
       reachable: verified.length > 0,
       slowOnly: verified.length === 1 && verified[0] === "email",
-      canTakeLeads: can({ id: seat.id, roles: seat.roles, businessId }, "enquiry.respond"),
+      canTakeLeads:
+        !suspended && can({ id: seat.id, roles: seat.roles, businessId }, "enquiry.respond"),
+      suspended,
     });
   }
 
