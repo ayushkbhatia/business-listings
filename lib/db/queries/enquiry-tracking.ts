@@ -63,7 +63,7 @@ export async function getTrackingByRef(
           businessId: true,
           state: true,
           openedAt: true,
-          nudgedAt: true,
+          buyerNudgedAt: true,
           createdAt: true,
           business: { select: { slug: true, displayName: true } },
         },
@@ -108,7 +108,7 @@ export async function getTrackingByRef(
       displayName: recipient.business.displayName,
       state: recipient.state,
       openedAt: recipient.openedAt,
-      nudgedAt: recipient.nudgedAt,
+      buyerNudgedAt: recipient.buyerNudgedAt,
       /*
          Delivery is the recipient row's own creation. `EnquiryRecipient` is
          written in the same transaction as the enquiry, so this is the moment

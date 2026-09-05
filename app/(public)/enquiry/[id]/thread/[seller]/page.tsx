@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Panel, PublicShell } from "@/components/structure";
@@ -8,6 +9,7 @@ import { getThread } from "@/lib/messaging/service";
 import { toThreadQuotes } from "@/lib/messaging/thread-view";
 import { formatAED, formatDateTime } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { markSellerQuotesRead } from "@/lib/messaging/receipts";
 import { resolveBuyerId, trackingTokenFor } from "../../../_buyer";
 import { BuyerThread } from "./ThreadClient";
 
@@ -57,6 +59,14 @@ export default async function BuyerThreadPage({
     }),
   ]);
   if (!messages) notFound();
+
+  /*
+     Board 11b §6. Scoped to this supplier: opening one conversation is evidence
+     about their revisions and no others, and stamping the three competing quotes
+     the buyer has not looked at would make the seller's receipt a lie in the
+     other direction.
+  */
+  after(() => markSellerQuotesRead(id, business.id, buyerId));
 
   const quoteViews = toThreadQuotes(
     quotes.map((q) => ({

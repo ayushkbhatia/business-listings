@@ -38,6 +38,14 @@ const BUYER_DEFAULT: RoutingPreference = {
     quote_received: ["whatsapp", "in_app"],
     quote_revised: ["in_app"],
     quote_expiring: ["in_app"],
+    /*
+       In-app only, deliberately. Board 11b caps the seller at one follow-up
+       because a second loses more deals than it wins; putting that one on
+       WhatsApp would make the cap a formality — the interruption is the part
+       that costs the deal, not the message. A buyer weighing four quotes gets
+       it where they are already comparing them.
+    */
+    message_received: ["in_app"],
   },
   quiet: { enabled: true, fromHour: 21, toHour: 7, onSunday: true },
   highValueOverrideAed: null,
@@ -220,6 +228,99 @@ export async function onQuoteSent(input: {
       });
     }
   });
+}
+
+/**
+ * A seller's follow-up reached a buyer who had gone quiet.
+ *
+ * The only message-shaped notification in the product, and it exists because
+ * board 11b's follow-up is aimed at somebody who by definition is not looking at
+ * the thread. Every other notification here is about a quote.
+ *
+ * Buyer-side, so it routes through BUYER_DEFAULT like `onQuoteSent` — a buyer
+ * has no `NotificationPreference` row to read.
+ *
+ * `preview` is the seller's own words, truncated. Nothing here summarises them:
+ * 11b's rule is that we suggest the act and never the number, and a body
+ * composed on this side would be the platform writing a commitment on a carrier
+ * the supplier cannot see.
+ */
+export async function onSellerMessage(input: {
+  enquiryId: string;
+  businessId: string;
+  body: string;
+}): Promise<void> {
+  await safely("message_received", async () => {
+    const enquiry = await prisma.enquiry.findUnique({
+      where: { id: input.enquiryId },
+      select: { id: true, buyer: { select: { id: true, phone: true, email: true } } },
+    });
+    const business = await prisma.business.findUnique({
+      where: { id: input.businessId },
+      select: { displayName: true, slug: true },
+    });
+    if (!enquiry || !business) return;
+
+    const event = "message_received" as const;
+    const decisions = route(BUYER_DEFAULT, { event, now: new Date() });
+    const senders = resolveNotificationSenders();
+
+    for (const decision of decisions) {
+      const template = await prisma.notificationTemplate.findFirst({
+        where: { event, channel: decision.channel, status: "live", locale: "en" },
+        orderBy: { version: "desc" },
+      });
+      if (!template) continue;
+
+      const rendered = render(
+        template,
+        withParams(event, {
+          businessName: business.displayName,
+          preview: preview(input.body),
+          enquiryId: enquiry.id,
+          shortLink: absoluteUrl(`/enquiry/${enquiry.id}/thread/${business.slug}`),
+        }),
+      );
+
+      const status =
+        decision.action !== "send"
+          ? decision.action === "defer"
+            ? "deferred"
+            : "skipped"
+          : await deliver(decision.channel, senders, rendered, enquiry.buyer);
+
+      await prisma.notificationDelivery.create({
+        data: {
+          templateId: template.id,
+          event,
+          channel: decision.channel,
+          status,
+          recipientUserId: enquiry.buyer.id,
+          enquiryId: enquiry.id,
+          reason: decision.action === "send" ? null : decision.reason,
+          scheduledFor: decision.action === "defer" ? decision.at : null,
+          sentAt: status === "sent" ? new Date() : null,
+        },
+      });
+    }
+  });
+}
+
+/**
+ * Enough of a message to decide whether to open it, and no more.
+ *
+ * Cut on a word boundary rather than mid-syllable, and never padded — a preview
+ * shorter than the limit is the whole message and gets no ellipsis, so a buyer
+ * can tell a complete short note from a truncated long one.
+ */
+const PREVIEW_CHARS = 140;
+
+function preview(body: string): string {
+  const flat = body.replace(/\s+/g, " ").trim();
+  if (flat.length <= PREVIEW_CHARS) return flat;
+  const cut = flat.slice(0, PREVIEW_CHARS);
+  const lastSpace = cut.lastIndexOf(" ");
+  return `${(lastSpace > PREVIEW_CHARS * 0.6 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
 }
 
 /**

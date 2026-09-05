@@ -107,6 +107,9 @@ model User {
   boostsCreated           ListingBoost[]
   settingsWritten         PlatformSetting[]        @relation("SettingWriter")
   askedQuestions          ProductQuestion[]
+  leadsAssigned           EnquiryRecipient[]       @relation("LeadAssignee")
+  leadsRouted             EnquiryRecipient[]       @relation("LeadAssigner")
+  leadOutcomes            EnquiryRecipient[]       @relation("LeadOutcomeAuthor")
 
   @@index([businessId])
   @@map("user")
@@ -1016,6 +1019,7 @@ model Document {
   enquiry          Enquiry?                 @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   claims           ClaimSubmission[]
   catalogueImports CatalogueImportRequest[]
+  quoteAttachments QuoteAttachment[]
 
   @@index([businessId])
   @@index([productId])
@@ -1147,10 +1151,11 @@ model EnquiryLine {
   size               String?
   sortOrder          Int      @default(0) @map("sort_order")
 
-  enquiry Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  enquiry    Enquiry     @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   /// `SetNull`, not `Cascade`. A seller deleting a product must not delete the
   /// buyer's enquiry line — what they asked for still happened.
-  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  product    Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  quoteLines QuoteLine[]
 
   @@index([enquiryId])
   @@index([productId], map: "enquiry_line_product_idx")
@@ -1903,6 +1908,17 @@ enum SkipReason {
   @@map("skip_reason")
 }
 
+/// What the seller says happened to a lead. Board 3j's `Mark won` / `Mark lost`.
+///
+/// Two members and no `open`: absence is open, so a lead cannot be in an
+/// outcome state and an open one at the same time.
+enum LeadOutcome {
+  won
+  lost
+
+  @@map("lead_outcome")
+}
+
 model EnquiryRecipient {
   enquiryId    String         @map("enquiry_id")
   businessId   String         @map("business_id")
@@ -1911,17 +1927,71 @@ model EnquiryRecipient {
   /// Enquiry-to-first-reply is what response time is measured from. Never a
   /// seller-editable field.
   firstReplyAt DateTime?      @map("first_reply_at")
-  /// One follow-up nudge, ever. Board 11b: a second loses more deals than it
-  /// wins, so the column is a timestamp rather than a count and the UI does
-  /// not offer a second.
-  nudgedAt     DateTime?      @map("nudged_at")
+  /// The BUYER's one nudge — board 10g, a supplier who has not answered.
+  ///
+  /// Named for its actor since boards 3j/11b. It and the seller's follow-up
+  /// shared one column, through two services that could not see each other:
+  /// lib/enquiry/nudge.ts writes this one, lib/messaging/service.ts wrote the
+  /// same column for the opposite direction. A buyer prodding a silent supplier
+  /// therefore spent the supplier's one-ever follow-up, and 11b's rail rendered
+  /// "Follow-up sent" for a message nobody had sent.
+  buyerNudgedAt  DateTime? @map("nudged_at")
+  /// The SELLER's one follow-up, 24 hours after their last message.
+  ///
+  /// Board 11b: a second loses more deals than it wins, so this is a timestamp
+  /// rather than a count. The schema cannot express "three nudges", so no
+  /// future screen can offer them.
+  sellerNudgedAt DateTime? @map("seller_nudged_at")
+  /// When the scheduled follow-up is due, and the words it will carry.
+  ///
+  /// The body is stored rather than composed at send time because 11b requires
+  /// the draft to be editable *before* it goes: text the job wrote at midnight
+  /// is text the seller never saw. Null due date means nothing is scheduled,
+  /// which is also what cancelling looks like.
+  nudgeDueAt     DateTime? @map("nudge_due_at")
+  nudgeBody      String?   @map("nudge_body")
+
+  /// The seat this lead is routed to. Null is the ordinary state.
+  ///
+  /// `Business.leadRouting` has been stored since the init migration and applied
+  /// nowhere, because there was no column to route *to*. Board 7d's `everyone`
+  /// mode means unassigned, and a default assignee would quietly make one seat
+  /// answerable for a queue the whole team is meant to see.
+  assignedToId String?   @map("assigned_to_id") @db.Uuid
+  assignedAt   DateTime? @map("assigned_at")
+  assignedById String?   @map("assigned_by_id") @db.Uuid
+
+  /// What the SELLER says happened, which is not what the buyer's acceptance
+  /// says.
+  ///
+  /// `Quote.status` accepted/lost and `state = declined` are all written by the
+  /// buyer accepting somebody. A seller marking a lead lost must not write a
+  /// status the buyer's tracking page reads as "this supplier was beaten", and
+  /// marking one won must not imply a contact release that never happened.
+  ///
+  /// It carries no amount. Board 3j asks for a seller-reported figure; CLAUDE.md
+  /// lists quoted value among the derived metrics that have no writable path,
+  /// and `Business.quotedValueAed` is already a column nothing reads or writes.
+  outcome       LeadOutcome? 
+  outcomeAt     DateTime?    @map("outcome_at")
+  outcomeById   String?      @map("outcome_by_id") @db.Uuid
+  /// Only meaningful on a loss, and never required — a seller who does not know
+  /// why they lost must still be able to close the row, and a mandatory reason
+  /// is answered with a full stop.
+  outcomeReason String?      @map("outcome_reason")
+
   createdAt    DateTime       @default(now()) @map("created_at")
 
-  enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  enquiry    Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  assignedTo User?    @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  assignedBy User?    @relation("LeadAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  outcomeBy  User?    @relation("LeadOutcomeAuthor", fields: [outcomeById], references: [id], onDelete: SetNull)
 
   @@id([enquiryId, businessId])
   @@index([businessId, state])
+  /// The rail's default read: this business, this tab, oldest first in a band.
+  @@index([businessId, state, createdAt], map: "enquiry_recipient_inbox_idx")
   @@map("enquiry_recipient")
 }
 
@@ -1952,11 +2022,16 @@ model Quote {
   /// The enquiry revision this quote was priced against.
   againstRevision Int         @default(1) @map("against_revision")
   createdAt       DateTime    @default(now()) @map("created_at")
+  /// When the draft was last autosaved. A sent quote never moves it — a revision
+  /// is a new row rather than an edit — so on everything but a draft it equals
+  /// `createdAt`, which is why the backfill could set it to exactly that.
+  updatedAt       DateTime    @updatedAt @map("updated_at")
 
-  enquiry  Enquiry     @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
-  business Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  lines    QuoteLine[]
-  messages Message[]
+  enquiry     Enquiry           @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  business    Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  lines       QuoteLine[]
+  messages    Message[]
+  attachments QuoteAttachment[]
 
   @@unique([enquiryId, businessId, revision])
   @@index([businessId, status])
@@ -1964,10 +2039,21 @@ model Quote {
 }
 
 model QuoteLine {
-  id           String  @id @default(cuid())
-  quoteId      String  @map("quote_id")
+  id            String  @id @default(cuid())
+  quoteId       String  @map("quote_id")
+  /// The buyer's line this one answers.
+  ///
+  /// The composer used to match a revision's lines back onto the enquiry by
+  /// comparing `description`, which is ambiguous on exactly the enquiries this
+  /// product is for — ENQ-8841 carries two lines reading "Resilient seated gate
+  /// valve, flanged", separated only by `size`.
+  ///
+  /// Nullable because every line written before board 3j has no answer, and
+  /// inventing one by matching descriptions would bake that ambiguity into the
+  /// column.
+  enquiryLineId String? @map("enquiry_line_id")
   /// Null means a free-text line, flagged for manual pricing.
-  productId    String? @map("product_id")
+  productId     String? @map("product_id")
   description  String
   qty          Int
   /// THE ONLY PRICE FIELD IN THE SCHEMA. Private to one buyer and one seller.
@@ -1975,11 +2061,35 @@ model QuoteLine {
   leadTimeDays Int?    @map("lead_time_days")
   sortOrder    Int     @default(0) @map("sort_order")
 
-  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  quote       Quote        @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product     Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
+  /// `SetNull`. Deleting a buyer's line must not delete the price a supplier
+  /// quoted for it — what they quoted still happened.
+  enquiryLine EnquiryLine? @relation(fields: [enquiryLineId], references: [id], onDelete: SetNull)
 
   @@index([quoteId])
+  @@index([enquiryLineId], map: "quote_line_enquiry_line_idx")
   @@map("quote_line")
+}
+
+/// A document cited by a quote.
+///
+/// Board 3j §5: the composer's chips pull from the catalogue's datasheets and
+/// the licence documents. A join rather than a `quoteId` on `Document`, because
+/// attaching is *referencing* — the same datasheet hangs off a product and off
+/// every quote that cites it, and an owning column would force a copy per quote
+/// and leave one storage object with two owners.
+model QuoteAttachment {
+  quoteId    String   @map("quote_id")
+  documentId String   @map("document_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  quote    Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([quoteId, documentId])
+  @@index([documentId], map: "quote_attachment_document_idx")
+  @@map("quote_attachment")
 }
 
 /// Belongs to an Enquiry + Business pair. Off-platform payment detection runs on
@@ -1991,6 +2101,12 @@ model Message {
   businessId      String    @map("business_id")
   senderId        String    @map("sender_id") @db.Uuid
   body            String
+  /// Written by the follow-up schedule rather than typed.
+  ///
+  /// It is still a seller message — it is what the buyer receives, and the
+  /// thread is the record — but board 11b tags it `AUTOMATIC` on screen, because
+  /// a buyer replying to a person deserves to know when they did not get one.
+  automatic       Boolean   @default(false)
   /// A revised quote appears inline in the thread.
   quoteRevisionId String?   @map("quote_revision_id")
   flaggedAt       DateTime? @map("flagged_at")
@@ -3530,6 +3646,9 @@ enum NotificationEvent {
   /// open. Exactly one, ever — the panel on the hub says so out loud, so the
   /// job has to honour it. See lib/setup/nudge-job.ts.
   setup_nudge
+  /// Board 11b's follow-up. A buyer who has gone quiet is by definition not
+  /// looking at the thread, so a message to them needs a carrier.
+  message_received
   weekly_digest
 
   @@map("notification_event")

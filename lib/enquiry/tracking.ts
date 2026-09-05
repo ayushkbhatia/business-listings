@@ -18,7 +18,7 @@ export interface TrackedRecipient {
   displayName: string;
   state: RecipientState;
   openedAt: Date | null;
-  nudgedAt: Date | null;
+  buyerNudgedAt: Date | null;
   deliveredAt: Date;
   /** Null unless they have quoted. */
   quotedAt: Date | null;
@@ -148,7 +148,7 @@ export const NUDGE_AFTER_MS = 24 * 60 * 60 * 1000;
  */
 export function canNudge(row: TrackedRecipient, now: Date): boolean {
   if (row.state !== "delivered") return false;
-  if (row.nudgedAt) return false;
+  if (row.buyerNudgedAt) return false;
   return now.getTime() - row.deliveredAt.getTime() >= NUDGE_AFTER_MS;
 }
 

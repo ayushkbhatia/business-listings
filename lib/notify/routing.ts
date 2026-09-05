@@ -36,6 +36,8 @@ export type NotificationEvent =
   | "subscription_renewed"
   /// Board 8a's one nudge, 72 hours after go-live. Exactly one, ever.
   | "setup_nudge"
+  /// Board 11b's follow-up, to a buyer who has gone quiet after a quote.
+  | "message_received"
   | "weekly_digest";
 
 /** The channels quiet hours actually silence. */

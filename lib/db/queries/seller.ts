@@ -31,7 +31,7 @@ export interface LeadRow {
   createdAt: Date;
   openedAt: Date | null;
   firstReplyAt: Date | null;
-  nudgedAt: Date | null;
+  sellerNudgedAt: Date | null;
   buyer: SellerVisibleBuyer;
   /** The seller's latest quote on this enquiry, if any. */
   latestQuote: { ref: string; revision: number; status: string; totalAed: string } | null;
@@ -87,7 +87,7 @@ export async function getLeadsForBusiness(businessId: string): Promise<LeadRow[]
       createdAt: e.createdAt,
       openedAt: r.openedAt,
       firstReplyAt: r.firstReplyAt,
-      nudgedAt: r.nudgedAt,
+      sellerNudgedAt: r.sellerNudgedAt,
       buyer: buyerForSeller(e.buyer, e.contactReleasedToBusinessId, businessId),
       latestQuote: quote
         ? {

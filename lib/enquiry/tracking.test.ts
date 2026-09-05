@@ -29,7 +29,7 @@ function row(over: Partial<TrackedRecipient> = {}): TrackedRecipient {
     displayName: "Supplier One",
     state: "delivered",
     openedAt: null,
-    nudgedAt: null,
+    buyerNudgedAt: null,
     deliveredAt: DELIVERED,
     quotedAt: null,
     quotedLines: 0,
@@ -156,7 +156,7 @@ describe("nudge is one per recipient, and not straight away", () => {
   });
 
   it("is spent once used", () => {
-    expect(canNudge(row({ nudgedAt: NOW }), NOW)).toBe(false);
+    expect(canNudge(row({ buyerNudgedAt: NOW }), NOW)).toBe(false);
   });
 
   it("is only for a supplier who has not opened it", () => {

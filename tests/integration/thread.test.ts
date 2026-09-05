@@ -52,7 +52,7 @@ afterEach(async () => {
   await prisma.quote.deleteMany({ where: { id: { in: createdQuoteIds.splice(0) } } });
   await prisma.enquiryRecipient.update({
     where: { enquiryId_businessId: { enquiryId: ENQUIRY_ID, businessId } },
-    data: { nudgedAt: null },
+    data: { sellerNudgedAt: null },
   });
 });
 

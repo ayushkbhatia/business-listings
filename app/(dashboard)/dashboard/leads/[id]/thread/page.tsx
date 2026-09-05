@@ -50,7 +50,7 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
     getThread(id, seat.businessId),
     prisma.enquiryRecipient.findUnique({
       where: { enquiryId_businessId: { enquiryId: id, businessId: seat.businessId } },
-      select: { nudgedAt: true, state: true },
+      select: { sellerNudgedAt: true, state: true },
     }),
   ]);
   if (!lead) notFound();
@@ -142,10 +142,10 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
             enquiryId={lead.enquiryId}
             buyerFirstName={lead.buyer.firstName}
             readOnly={closedToUs}
-            canNudge={recipient?.state === "quoted" && !recipient.nudgedAt}
+            canNudge={recipient?.state === "quoted" && !recipient.sellerNudgedAt}
             nudgedLabel={
-              recipient?.nudgedAt
-                ? t("thread.nudge_sent", { when: formatRelative(recipient.nudgedAt, { now }) })
+              recipient?.sellerNudgedAt
+                ? t("thread.nudge_sent", { when: formatRelative(recipient.sellerNudgedAt, { now }) })
                 : null
             }
             messages={(messages ?? []).map((message) => {

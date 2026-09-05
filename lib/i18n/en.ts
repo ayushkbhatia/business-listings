@@ -1612,19 +1612,85 @@ export const en = {
   "thread.seller_warning_title": "Everything here is the record",
   "thread.seller_warning_body": "If this deal goes wrong, this thread is the evidence — for you as much as for the buyer. Asking for payment to a bank account before a quote is accepted is flagged automatically and reviewed by a person.",
 
+  /* ── Board 11b: the one follow-up, and the schedule behind it ──
+
+     The rail states the cap in plain words and keeps stating it. A seller who
+     is told "one only" once, at the moment they use it, reads it as a limit
+     they have hit; a seller who is told before they arm it reads it as a
+     decision the product has made on their behalf, which is what it is.
+  */
+  "thread.followup_heading": "Follow-up",
   "thread.nudge": "Send one follow-up",
+  "thread.nudge_sending": "Sending",
   "thread.nudge_sent": "Follow-up sent {when}",
-  "thread.nudge_help": "One only. A second follow-up loses more deals than it wins.",
+  "thread.nudge_help": "One only. A second follow-up loses more deals than it wins, so we do not offer one.",
   "thread.nudge_not_yet": "Send a quote first. There is nothing to follow up on yet.",
+  "thread.nudge_empty": "Write the message first. We do not send a follow-up we wrote for you.",
+  "thread.nudge_replied": "The buyer has replied since, so the follow-up was cancelled.",
+  "thread.nudge_toggle": "Send it automatically",
+  "thread.nudge_scheduled": "Sends {when} unless the buyer replies first",
+  "thread.nudge_schedule_hint": "Cancelled on its own if the buyer replies, if the enquiry closes, or once you mark an outcome.",
+  "thread.nudge_body_label": "What the follow-up will say",
+  "thread.nudge_body_placeholder": "Following up on the quote — happy to talk through the delivery dates.",
+  "thread.nudge_send_now": "Send it now",
+  "thread.nudge_cancel": "Cancel the follow-up",
+  /* The tag on the message itself. A buyer replying to a person deserves to
+     know when they did not get one. */
+  "thread.automatic": "Automatic",
+  "thread.automatic_explain": "Sent by a schedule the supplier set, not typed at this moment.",
+
+  /* ── Read receipts, both directions or neither ──
+
+     Board 11b §6: a one-way receipt is surveillance, and the buyer finds out the
+     first time a seller mentions it. The buyer has always seen when a supplier
+     opened their enquiry; this is the other half, and the sentence says so.
+  */
+  "thread.receipt_read": "Buyer opened your quote {when}. They see when you open theirs.",
+  "thread.receipt_unread": "The buyer has not opened this quote yet. They see when you open theirs.",
+
+  /* ── The buyer panel ──
+
+     What this seller has seen for themselves, and what the buyer told us.
+     Nothing aggregated across suppliers, and nothing inferred about payment —
+     we take none, so we cannot know. The footer is load-bearing copy.
+  */
+  "thread.buyer_heading": "This buyer",
+  "thread.buyer_won": "Quotes you marked won",
+  "thread.buyer_last_won": "Last one",
+  "thread.buyer_enquiries": "Enquiries sent you",
+  "thread.buyer_terms": "Terms they asked for",
+  "thread.buyer_first_seen": "First enquiry to you",
+  "thread.buyer_new": "First time this buyer has sent you anything.",
+  "thread.buyer_footer": "Your own history with this buyer, nothing more. We never take payment, so we cannot tell you whether they pay on time — and we do not aggregate their behaviour with other suppliers.",
+
+  "thread.competing": { one: "Competing with {count} other supplier", other: "Competing with {count} other suppliers" },
+  "thread.state.quoted": "Quoted · awaiting decision",
+  "thread.state.open": "Not quoted yet",
+  "thread.state.won": "You marked this won",
+  "thread.state.lost": "You marked this lost",
+  "thread.outcome_by": "Marked {outcome} by {name}, {when}",
+  "thread.revise_quote": "Revise the quote",
+  "thread.send_quote": "Send a quote",
+  "thread.back_to_inbox": "Back to the inbox",
 
   // Board 10h, buyer side.
   "thread.chip.validity": "Can you hold this price a little longer?",
   "thread.chip.datasheets": "Could you send datasheets for these?",
   "thread.chip.credit": "What credit terms can you offer?",
-  // Board 11b, seller side.
-  "thread.chip.hold_price": "We can hold this price for 21 days.",
-  "thread.chip.site_survey": "We can do a free site survey before you decide.",
-  "thread.chip.certificate": "We can attach the CD certificate.",
+  /* ── Board 11b, seller side: suggest the act, never the number ──
+
+     These were three sentences that committed the supplier to terms nobody had
+     typed — one of them to a 21-day price hold, on a screen whose own validity
+     field said fourteen and whose picker offers seven values. The label names
+     the act; the text it drops into the box is a question the seller finishes.
+     Anything with a number in it is theirs to write.
+  */
+  "thread.chip.hold_price": "Extend the price hold",
+  "thread.chip.hold_price_text": "We can look at holding this price longer if that helps — how long do you need?",
+  "thread.chip.site_survey": "Offer a site survey",
+  "thread.chip.site_survey_text": "We can come and look at the site before you decide, at no charge.",
+  "thread.chip.certificate": "Attach a certificate",
+  "thread.chip.certificate_text": "I can attach the Civil Defence certificate for these — say the word.",
 
   // ── Buyer: tracking an enquiry [1i] [1n] [7c] [10e] ──
   /* Board 1i — the buyer's home for one enquiry. */
