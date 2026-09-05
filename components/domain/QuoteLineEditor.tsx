@@ -241,18 +241,28 @@ export function QuoteLineEditor({
   );
 
   /*
-     Skip the first run. Mounting is not an edit, and firing here would save a
-     draft for every lead a seller merely clicked into — including the ones they
-     looked at and left, which would then read as work in progress.
+     Fires on a change, and a mount is not one.
+
+     The obvious guard — a ref set on the first effect run — does not hold:
+     React re-invokes effects on a StrictMode remount, so the second run sees
+     the ref already set and reports an edit nobody made. Opening a lead and
+     touching nothing wrote a draft, which then read as work in progress on a
+     quote the seller had only glanced at.
+
+     Comparing against the value the form opened with holds in both modes and
+     however many times the effect runs. It also covers the case the ref never
+     could: typing a price and deleting it again is not an edit either.
   */
-  const mounted = useRef(false);
+  const opened = useRef<string | null>(null);
+  const snapshot = JSON.stringify(currentValue);
   useEffect(() => {
-    if (!mounted.current) {
-      mounted.current = true;
+    if (opened.current === null) {
+      opened.current = snapshot;
       return;
     }
+    if (snapshot === opened.current) return;
     onChange?.(currentValue);
-  }, [currentValue, onChange]);
+  }, [snapshot, currentValue, onChange]);
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();

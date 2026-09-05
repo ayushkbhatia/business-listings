@@ -233,9 +233,19 @@ function RailRow({
             <StatusBadge tone={BAND_TONE[band]} size="sm" shape="chip">
               {t(BAND_LABEL[band])}
             </StatusBadge>
+            {/*
+              An answered row keeps a time too. It is the reply latency rather
+              than a wait, and a row with a band and no number reads as one the
+              product forgot to measure — on a screen whose whole argument is
+              that its figures are real.
+            */}
             {row.waitingMs !== null ? (
               <span className="font-mono text-eyebrow uppercase tabular-nums text-muted">
                 {formatDuration(row.waitingMs)}
+              </span>
+            ) : row.answeredInMs !== null ? (
+              <span className="font-mono text-eyebrow uppercase tabular-nums text-muted">
+                {formatDuration(row.answeredInMs)}
               </span>
             ) : null}
           </span>

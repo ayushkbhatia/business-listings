@@ -2,14 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "profile-dev",
-      "runtimeExecutable": "pnpm",
+      "name": "leads-inbox",
+      "runtimeExecutable": "bash",
       "runtimeArgs": [
-        "dev",
-        "--port",
-        "3214"
+        "-c",
+        "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/leads_inbox_check DIRECT_URL=postgresql://postgres:postgres@127.0.0.1:54322/leads_inbox_check DEV_SELLER_SLUG=al-marwan-industrial-supplies-llc pnpm dev -p 3311"
       ],
-      "port": 3214
+      "port": 3311
     }
   ]
 }

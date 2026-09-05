@@ -74,6 +74,8 @@ export interface LeadRailRow {
   band: WaitBand;
   /** Milliseconds the buyer has been waiting. Null once answered. */
   waitingMs: number | null;
+  /** How long the first reply took. Null until there is one. */
+  answeredInMs: number | null;
   buyer: SellerVisibleBuyer;
   lineCount: number;
   /**
@@ -131,23 +133,51 @@ export function tabWhere(
   tab: LeadTab,
   scope: LeadScope,
 ): Prisma.EnquiryRecipientWhereInput {
-  const won: Prisma.EnquiryRecipientWhereInput = {
-    OR: [{ outcome: "won" }, { enquiry: { contactReleasedToBusinessId: businessId } }],
+  /*
+     Written out rather than negated, and that is not a style choice.
+
+     The first version expressed the open tabs as `NOT (won OR lost)`, which
+     Postgres turns into `NOT (enquiry.contact_released_to_business_id = $1)`.
+     That column is null on every enquiry nobody has accepted — which is nearly
+     all of them — and `NOT (NULL = $1)` is NULL, not true. So the row matched
+     nothing, and a rail over twenty-one leads rendered `Open 0 · Quoted 0`
+     while `Won 2` worked, because the won clause never negates anything.
+
+     Every comparison below is either an equality or an explicit `IS NULL`, and
+     the four are mutually exclusive by construction rather than by subtraction.
+  */
+  const acceptedByUs: Prisma.EnquiryRecipientWhereInput = {
+    enquiry: { contactReleasedToBusinessId: businessId },
   };
-  const lost: Prisma.EnquiryRecipientWhereInput = {
-    NOT: won,
-    OR: [{ outcome: "lost" }, { state: "declined" }],
+  const notAcceptedByUs: Prisma.EnquiryRecipientWhereInput = {
+    enquiry: {
+      OR: [
+        { contactReleasedToBusinessId: null },
+        { contactReleasedToBusinessId: { not: businessId } },
+      ],
+    },
   };
-  const undecided: Prisma.EnquiryRecipientWhereInput = { NOT: { OR: [won, lost] } };
+  /** No outcome from the seller, and the buyer has not chosen us. */
+  const unmarked: Prisma.EnquiryRecipientWhereInput = {
+    AND: [{ outcome: null }, notAcceptedByUs],
+  };
 
   const byTab: Record<LeadTab, Prisma.EnquiryRecipientWhereInput> = {
     // No quote sent yet. Includes leads already in conversation — a message is
     // not a quote, and §3 is explicit that Open means unquoted rather than
     // untouched.
-    open: { AND: [undecided, { state: { in: ["delivered", "opened"] } }] },
-    quoted: { AND: [undecided, { state: "quoted" }] },
-    won,
-    lost,
+    open: { AND: [unmarked, { state: { in: ["delivered", "opened"] } }] },
+    quoted: { AND: [unmarked, { state: "quoted" }] },
+    // The seller's word first, the buyer's acceptance second. A lead the seller
+    // marked won is won whatever the enquiry says; one they have not marked is
+    // won when the buyer accepted them.
+    won: { OR: [{ outcome: "won" }, { AND: [{ outcome: null }, acceptedByUs] }] },
+    lost: {
+      OR: [
+        { outcome: "lost" },
+        { AND: [{ outcome: null }, notAcceptedByUs, { state: "declined" }] },
+      ],
+    },
   };
 
   return { businessId, ...scopeWhere(scope), AND: [byTab[tab]] };
@@ -310,6 +340,9 @@ export async function getInbox(input: {
       firstReplyAt: r.firstReplyAt,
       band,
       waitingMs: r.firstReplyAt ? null : now.getTime() - r.createdAt.getTime(),
+      answeredInMs: r.firstReplyAt
+        ? Math.max(0, r.firstReplyAt.getTime() - r.createdAt.getTime())
+        : null,
       buyer: buyerForSeller(e.buyer, e.contactReleasedToBusinessId, input.businessId),
       lineCount: e.lines.length,
       buyerBudgetAed: budgetOf(e.lines),

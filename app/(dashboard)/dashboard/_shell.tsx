@@ -9,6 +9,7 @@ import { getActor } from "@/lib/auth/session";
 import { currentSession, minutesLeft } from "@/lib/support/view-as";
 import { isStaff, type Actor } from "@/lib/auth/roles";
 import { setupChrome, type SetupChrome } from "@/lib/setup/service";
+import { tabWhere } from "@/lib/leads/inbox";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
@@ -172,9 +173,16 @@ export async function requireSellerSeat(): Promise<SellerSeat> {
  */
 export async function getNavBadges(businessId: string): Promise<Record<string, number>> {
   const [leads, quotes] = await Promise.all([
-    prisma.enquiryRecipient.count({
-      where: { businessId, state: { in: ["delivered", "opened", "quoted"] } },
-    }),
+    /*
+       The same population as board 3j's `Open` tab, through the same function.
+
+       It used to count delivered, opened *and* quoted, which is a different
+       number from the one the inbox now shows above the rail — and a sidebar
+       saying twenty over a list saying nine is the disagreement CLAUDE.md's
+       "every number is a query" rule exists to prevent. `tabWhere` is the one
+       definition; this reads it rather than restating it.
+    */
+    prisma.enquiryRecipient.count({ where: tabWhere(businessId, "open", { kind: "all" }) }),
     prisma.quote.count({ where: { businessId, status: { in: ["sent", "read"] } } }),
   ]);
   return { leads, quotes };
