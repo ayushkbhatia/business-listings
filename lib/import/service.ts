@@ -13,6 +13,9 @@ import {
 import { columnValues, parseCsv, type ParsedCsv } from "./csv";
 import { buildProductSearchText } from "@/lib/search/index-text";
 import { reindexBusiness } from "@/lib/search/reindex";
+import { effectiveFor } from "@/lib/billing/entitlements-service";
+import { allowance } from "@/lib/plan/entitlements";
+import { t } from "@/lib/i18n";
 
 /**
  * Applying a mapping, and undoing it.
@@ -160,6 +163,33 @@ export async function applyImport(actor: Actor, input: ApplyImportInput): Promis
     ).map((p) => p.slug),
   );
 
+  /*
+     The plan's product cap, which this path did not read.
+
+     `saveRow` refuses at the cap one product at a time — `board.atCap` in
+     lib/products/service.ts — and this wrote with `createMany` and no check at
+     all, so a Free listing capped at ten could import five hundred through the
+     same screen's other door. The cap was enforced against the slow way of
+     adding products and not against the fast one.
+
+     Read once here rather than per row: the count cannot move inside a request,
+     and `effectiveFor` is the entitlement snapshot rather than the `Plan` row,
+     so a grandfathered seller is measured against what they signed up on.
+  */
+  const caps = await effectiveFor(input.businessId);
+  /*
+     Counted here, before the loop below starts adding to `existing`.
+
+     That set is doing two jobs — the catalogue's slugs, and the slugs this file
+     has already used, so a file that repeats a row does not collide with
+     itself. Reading `.size` after the loop therefore returns the catalogue plus
+     the file, and measuring the file against that refuses imports that fit: a
+     seller with 7 of 10 uploading 2 products was told they had 9 and had room
+     for 1. The browser said "add 12 products to the 19 you have" over a
+     catalogue of 7, which is how this was caught.
+  */
+  const ownedBefore = existing.size;
+
   const skipped: { row: number; why: string }[] = [];
   const toCreate: {
     name: string;
@@ -211,6 +241,33 @@ export async function applyImport(actor: Actor, input: ApplyImportInput): Promis
 
   if (toCreate.length === 0) {
     return { ok: false, error: "No rows in that file could be imported. Nothing has changed." };
+  }
+
+  /*
+     Refused whole, never truncated.
+
+     `assertNoPriceEscapes` above makes the same choice for the same reason:
+     "there is no partial success worth having." An import cut off at the cap
+     hands a seller an arbitrary slice of their own catalogue — arbitrary
+     because it is whatever order the spreadsheet happened to be in — and the
+     rows that did not arrive are the ones nobody would think to look for.
+
+     Counted against the rows this file would actually add, not its length: a
+     file whose every row is a duplicate slug adds nothing and is not blocked.
+  */
+  if (caps) {
+    const room = allowance(caps, "products", ownedBefore);
+    if (room.cap !== null && toCreate.length > room.remaining!) {
+      return {
+        ok: false,
+        error: t("import.over_cap", {
+          adding: String(toCreate.length),
+          have: String(ownedBefore),
+          cap: String(room.cap),
+          plan: caps.name,
+        }),
+      };
+    }
   }
 
   /*

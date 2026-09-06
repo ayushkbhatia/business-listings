@@ -41,6 +41,16 @@ export interface SpecFieldChoice {
 export interface ImportWizardProps {
   categoryId: string;
   specFields: readonly SpecFieldChoice[];
+  /**
+   * How many products the plan still has room for, and the sentence saying so.
+   *
+   * Pre-resolved on the server: `room` is what the file is measured against and
+   * `roomLabel` is what the seller reads. A cap the screen states before the
+   * upload is a cap the seller can act on — 7d §3's rule, one screen over.
+   * `null` room is an uncapped plan.
+   */
+  room: number | null;
+  roomLabel: string;
   previewAction: (formData: FormData) => Promise<PreviewResult>;
   runAction: (formData: FormData) => Promise<RunImportResult>;
   undoAction: (formData: FormData) => Promise<UndoResult>;
@@ -51,6 +61,8 @@ type Stage = "upload" | "map" | "done";
 export function ImportWizard({
   categoryId,
   specFields,
+  room,
+  roomLabel,
   previewAction,
   runAction,
   undoAction,
@@ -158,14 +170,27 @@ export function ImportWizard({
         )}
 
         {stage === "upload" && (
-          <FileDrop
-            idleLabel={t("import.upload_label")}
-            idleHint={t("import.upload_hint")}
-            accept=".csv,text/csv"
-            state={pending ? "uploading" : "idle"}
-            uploadingLabel={t("import.upload_action")}
-            onSelect={onFile}
-          />
+          <div className="flex flex-col gap-3">
+            {/*
+              Said before the upload, not after the mapping.
+
+              `applyImport` refuses an over-cap file outright, and meeting that
+              refusal at the end — after mapping every column — is the "form
+              that opens and fails on submit" board 7d §3 rules out. A seller
+              with no room needs to know before they pick a file.
+            */}
+            <p className={room === 0 ? "text-caption text-warn-ink" : "text-caption text-muted"}>
+              {roomLabel}
+            </p>
+            <FileDrop
+              idleLabel={t("import.upload_label")}
+              idleHint={t("import.upload_hint")}
+              accept=".csv,text/csv"
+              state={pending ? "uploading" : "idle"}
+              uploadingLabel={t("import.upload_action")}
+              onSelect={onFile}
+            />
+          </div>
         )}
 
         {stage === "map" && preview && (
@@ -177,6 +202,21 @@ export function ImportWizard({
               })}
               {preview.raggedRows.length > 0 ? ` ${t("import.ragged", { count: formatCount(preview.raggedRows.length) })}` : ""}
             </p>
+
+            {/*
+              The file against the room, once both are known. It counts rows
+              rather than the products that will actually be created — a
+              duplicate slug is skipped and the server measures the real number
+              — so this warns where it might be tight and the server decides.
+            */}
+            {room !== null && preview.rowCount > room && (
+              <Alert tone="warn">
+                {t("import.may_exceed", {
+                  rows: formatCount(preview.rowCount),
+                  room: formatCount(room),
+                })}
+              </Alert>
+            )}
 
             {preview.truncated > 0 && (
               <Alert
