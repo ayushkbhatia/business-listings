@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { Button } from "@/components/primitives";
 import { formatPhone } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import type { RevealSurface } from "@/lib/audit/contact-reveal";
 import { revealContact } from "./reveal-actions";
 
 /**
@@ -31,8 +32,8 @@ export function RevealWhatsApp({
 }: {
   businessId: string;
   whatsapp: string | null;
-  /** Where the reveal happened, for the record. */
-  surface: string;
+  /** Where the reveal happened, for the record. A closed set, never a path. */
+  surface: RevealSurface;
 }) {
   const [revealed, setRevealed] = useState(false);
   const [pending, startTransition] = useTransition();

@@ -53,7 +53,9 @@ export function ContactCard({
   function reveal(channel: "phone" | "whatsapp") {
     setRevealed(true);
     startTransition(async () => {
-      await revealContact({ businessId, channel, surface: `/b/${businessSlug}` });
+      // The surface, not this listing's address. One row per storefront is a
+      // dimension nothing can aggregate.
+      await revealContact({ businessId, channel, surface: "storefront" });
     });
   }
 
