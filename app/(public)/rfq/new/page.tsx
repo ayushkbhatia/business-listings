@@ -32,7 +32,7 @@ import type { RfqLine } from "../rfq-state";
  * separate "add items" route to send them through.
  */
 export const metadata = {
-  title: "Request a quote",
+  title: t("rfq.h1"),
   /*
      A composer has nothing to index and a crawler filling it wastes budget.
      `follow`, because the links out of it are worth crawling.

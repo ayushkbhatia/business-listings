@@ -19,7 +19,7 @@ import { signUpAction } from "../actions";
  * submit with neither. Landing a supplier on a form pre-ticked "buying" is the
  * kind of small wrongness that makes a person distrust the rest of the page.
  */
-export const metadata = { title: "Create an account" };
+export const metadata = { title: t("auth.signup.title") };
 
 export default async function SignUpPage({
   searchParams,

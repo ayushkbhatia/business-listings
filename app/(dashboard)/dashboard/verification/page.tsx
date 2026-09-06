@@ -19,7 +19,7 @@ import { DocumentUpload } from "./DocumentUpload";
  * silent about it — a seller who cannot find the control looks for it, and the
  * sentence is the answer.
  */
-export const metadata = { title: "Verification" };
+export const metadata = { title: t("verify_listing.title") };
 export const dynamic = "force-dynamic";
 
 export default async function VerificationPage() {

@@ -1,4 +1,5 @@
 import { Inbox } from "./_inbox";
+import { t } from "@/lib/i18n";
 
 /**
  * Board 3j — the leads and RFQ inbox.
@@ -11,7 +12,7 @@ import { Inbox } from "./_inbox";
  * `force-dynamic` because the waiting bands are measured from now, and a lead
  * cached for sixty seconds is a lead whose overdue badge is sixty seconds wrong.
  */
-export const metadata = { title: "Leads & RFQ" };
+export const metadata = { title: t("leads.title") };
 export const dynamic = "force-dynamic";
 
 export default async function LeadsPage({

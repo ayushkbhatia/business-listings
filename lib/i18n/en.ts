@@ -2202,6 +2202,7 @@ export const en = {
   "track.send_more": { one: "Send to {count} more supplier", other: "Send to {count} more suppliers" },
   "track.closed_no_quotes": "This enquiry closed without a quote. Nobody we could reach stocks it at the moment — sending it wider usually finds somebody.",
   "track.new_quote_announced": { one: "{count} new quote has arrived.", other: "{count} new quotes have arrived." },
+  "track.meta_title": "Your enquiry",
 
   "enquiry.ref": "Enquiry {ref}",
   "enquiry.sent_title": "Enquiry sent",
@@ -2368,6 +2369,8 @@ export const en = {
   "entry.supplier.fact_enquiries": "Enquiries sent in {days} days",
   "entry.supplier.fact_buyers": "Buyers who sent them",
   "entry.supplier.fact_verified": "Suppliers carrying a checked badge",
+  "entry.buyers_meta_title": "For buyers",
+  "entry.suppliers_meta_title": "List your business",
 
   // ── Entry page quotes — /admin/content/testimonials ───────────────────────────────
   "testimonial.title": "Entry page quotes",
@@ -2445,6 +2448,7 @@ export const en = {
   "review.error.invalid_ratings": "Rate every line from one to five. A blank line is not a low score.",
   "review.error.empty_body": "Add a sentence or two. Twenty characters at least — a number with no words tells nobody anything.",
   "review.error.window_closed": "The fourteen days for changing this review have passed. It stays as the record now.",
+  "review.meta_title": "Write a review",
 
   // ── Seller: reviews [11c] ──
   "reviews.title": "Reviews",
@@ -3766,6 +3770,7 @@ export const en = {
   "onboarding.saved_at": "Saved {when}",
   "onboarding.have_account": "Already have an account?",
   "onboarding.sign_in": "Sign in",
+  "onboarding.locations_meta_title": "Where buyers find you",
 
   // ── 2a · Find or add your business ────────────────────────────────────────
   "claim.title": "Is your business already listed?",
@@ -3819,6 +3824,7 @@ export const en = {
 
   // A seller already holding a claimed listing. Stated, not silent.
   "claim.already_yours": "You are already set up with a listing. Claiming a second business is not something this flow can do yet — write to us and we will attach it to your account.",
+  "claim.meta_title": "Find your business",
 
   // ── 2b · Prove ownership ──────────────────────────────────────────────────
   // The h1 names the licensed entity, which is why it takes the legal name.
@@ -3910,6 +3916,7 @@ export const en = {
 
   "verify.conflict_heading": "Someone else claimed it?",
   "verify.conflict_body": "Submit your licence anyway. Where two claims conflict, our team asks both parties for the licence and decides in 48 hours.",
+  "verify.meta_title": "Prove ownership",
 
   // ── 2c · Profile basics, with live preview ────────────────────────────────
   "profile_step.title": "Tell buyers what you do",
@@ -3991,6 +3998,7 @@ export const en = {
   "profile_step.error.established_out_of_range": "Enter the year the business started, from 1960 onwards.",
   "profile_step.error.unknown_team_size": "Pick one of the bands.",
   "profile_step.error.required": "Add a display name, a primary category and a description before you carry on.",
+  "profile_step.meta_title": "Your profile",
 
   // ── Board 2d, locations and hours ─────────────────────────────────────────
   "locations_step.title": "Where can buyers find you?",
@@ -4141,6 +4149,7 @@ export const en = {
   "plan_step.pro_searches": "You see what buyers searched before they called.",
   "plan_step.no_lockin": "No lock-in",
   "plan_step.no_lockin_body": "Cancel any month and drop to Free. Your products stay saved — hidden, not deleted.",
+  "plan_step.meta_title": "Pick a plan",
 
   // ── Setup hub, boards 8a to 8e ────────────────────────────────────────────
   "setup.title": "Finish setting up",
@@ -4337,6 +4346,7 @@ export const en = {
   "products.change_sheet_row": "{label} — on {formatted} products",
   "products.change_sheet_confirm": "Change the sheet",
   "products.change_sheet_cancel": "Keep the one I have",
+  "products.meta_title": "First products",
 
   "photos.works_eyebrow": "WHAT WORKS",
   "photos.works.stock": "Stock on shelves — proves you hold inventory",
@@ -4347,6 +4357,7 @@ export const en = {
   "photos.where_title": "Where these appear",
   "photos.where_body":
     "Your cover sits behind the logo on the storefront, and the first image shows in every search result. Both are replaceable later.",
+  "photos.meta_title": "Photos",
 
   // The hero counts what is actually left, so it cannot say "four" over three
   // cards. `formatted` is the count already run through formatCount.
@@ -4431,6 +4442,7 @@ export const en = {
   "setup_done.once_eyebrow": "YOU WON'T SEE THIS AGAIN",
   "setup_done.once_body":
     "Setup is a first-run flow. Coming back to it sends you to the dashboard instead — everything here stays editable from Listing and Team.",
+  "setup_done.meta_title": "Setup complete",
 
   "setup.now": "Now",
   // Measured where the cohort is big enough, and the mechanism where it is not.
@@ -4686,6 +4698,7 @@ export const en = {
   "team_setup.money_title": "Sales cannot touch the money",
   "team_setup.money_body":
     "A sales seat replies to enquiries and sends quotes. It cannot see invoices, change the plan or edit your licence details.",
+  "team_setup.meta_title": "Invite your team",
 
   "invite.remove_seat": "Remove the seat",
   "invite.remove_confirm": "Remove {name} from the team?",
@@ -4694,6 +4707,7 @@ export const en = {
   "invite.removed": "{name} no longer has a seat.",
   "invite.cannot_remove_owner": "The owner's seat cannot be removed here.",
   "invite.cannot_remove_self": "You cannot remove your own seat.",
+  "invite.meta_title": "Team invitation",
 
   // ── The concierge catalogue queue, /admin/catalogue-imports ──────────────
   "admin.catalogue_imports.title": "Catalogue loads",
@@ -5306,6 +5320,7 @@ export const en = {
   "domain.error.taken": "Another business is already using that address.",
   "domain.error.already": "You already have one. Give that one up first.",
   "domain.locked": "Your own web address is part of Pro.",
+  "domain.meta_title": "Web address",
 
   // ── Themes, board 5b ──────────────────────────────────────────────────────
   "theme.title": "Theme",

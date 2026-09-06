@@ -15,7 +15,7 @@ import { AskRow, ReviewCard, type AskableBuyer, type SellerReviewView } from "./
  * hiding it would look like the review had never existed — which is the thing
  * a removal must never resemble.
  */
-export const metadata = { title: "Reviews" };
+export const metadata = { title: t("reviews.title") };
 export const dynamic = "force-dynamic";
 
 const DIMENSIONS = [

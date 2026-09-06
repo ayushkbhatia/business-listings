@@ -35,7 +35,7 @@ import { LocationsWorkspace } from "./LocationsWorkspace";
  * receiving enquiries up to the Free cap.
  */
 export const metadata: Metadata = {
-  title: "Where buyers find you",
+  title: t("onboarding.locations_meta_title"),
   robots: { index: false, follow: true },
 };
 

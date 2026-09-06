@@ -39,7 +39,7 @@ import { SellerThread } from "./SellerThread";
  * field is the one thing a seller came here to fill in". True while the price
  * column was on this page; it no longer is, and a thread has no column to lose.
  */
-export const metadata = { title: "Messages" };
+export const metadata = { title: t("thread.heading") };
 export const dynamic = "force-dynamic";
 
 export default async function LeadThreadPage({ params }: { params: Promise<{ id: string }> }) {

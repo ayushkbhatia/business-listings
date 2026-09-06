@@ -42,7 +42,7 @@ import {
  * cloning already exists: `cloneTemplate` is wired to `/dashboard/templates`
  * and has been since handoff 3.
  */
-export const metadata = { title: "First products" };
+export const metadata = { title: t("products.meta_title") };
 export const dynamic = "force-dynamic";
 
 /** Board 8c §1: owner and manager, like the hub and like 8b. */

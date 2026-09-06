@@ -30,7 +30,7 @@ import { SavedIndicator, SavedProvider } from "../_saved";
  * afterwards, from the same config.
  */
 export const metadata: Metadata = {
-  title: "Your profile",
+  title: t("profile_step.meta_title"),
   robots: { index: false, follow: true },
 };
 

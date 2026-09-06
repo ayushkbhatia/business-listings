@@ -26,7 +26,7 @@ import { CountedFacts, Testimonials, type CountedFact } from "../_entry/Evidence
  * hardcoded into this one.
  */
 export const metadata: Metadata = {
-  title: "List your business",
+  title: t("entry.suppliers_meta_title"),
   description:
     "Put your UAE trade licence in front of buyers who are already sending enquiries, and answer them faster than the supplier next door.",
   alternates: { canonical: "/list-your-business" },

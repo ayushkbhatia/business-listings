@@ -19,7 +19,7 @@ import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
  * comes from lib/auth/subject.ts so this screen and any later one narrow the
  * same way.
  */
-export const metadata = { title: "Analytics" };
+export const metadata = { title: t("analytics.title") };
 export const dynamic = "force-dynamic";
 
 export default async function AnalyticsPage() {

@@ -6,7 +6,7 @@ import { AuthFailure } from "../_components/failures";
 import { signInAction } from "../actions";
 
 /** Board 7a, state one. */
-export const metadata = { title: "Sign in" };
+export const metadata = { title: t("auth.signin.title") };
 
 export default async function SignInPage({
   searchParams,

@@ -1,4 +1,5 @@
 import { Inbox } from "../_inbox";
+import { t } from "@/lib/i18n";
 
 /**
  * Board 3j — one lead selected, and the quote composer on it.
@@ -10,7 +11,7 @@ import { Inbox } from "../_inbox";
  * URL to the colleague they are asking about a price, and a master-detail pane
  * whose selection lives in component state gives them nothing to send.
  */
-export const metadata = { title: "Leads & RFQ" };
+export const metadata = { title: t("leads.title") };
 export const dynamic = "force-dynamic";
 
 export default async function LeadPage({

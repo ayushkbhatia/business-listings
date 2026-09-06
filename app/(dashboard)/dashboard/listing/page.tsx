@@ -12,7 +12,7 @@ import { ListingForm } from "./ListingForm";
  * moderated half assumes everything waits and stops editing, so the instant
  * half is above it and says so in a heading.
  */
-export const metadata = { title: "Listing profile" };
+export const metadata = { title: t("listing.title") };
 export const dynamic = "force-dynamic";
 
 export default async function ListingPage() {
