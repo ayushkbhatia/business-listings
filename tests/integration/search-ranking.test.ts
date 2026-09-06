@@ -62,6 +62,19 @@ afterAll(async () => {
    ever have reordered anything. The tests here are the ones that caught it, and
    this stays uncast-and-incomplete so they keep catching it.
 */
+/*
+   Deliberately not a whole `SearchQuery`.
+
+   The cast is the subject: these tests are about what a caller that *omits* a
+   field gets, and `sort` is required on the type, so a valid object could not
+   ask the question. Every field left out here is one a real caller has left out.
+
+   It does mean `businessWhere` meets a query missing fields the type promises,
+   which is how a spec-facet branch reading `query.spec` came to throw on the
+   busiest public route in the product. That is guarded there with `?? {}`
+   rather than papered over here — the search page must narrow nothing rather
+   than 500 when a caller is incomplete.
+*/
 const query = { q: "", page: 1 } as Parameters<typeof searchBusinesses>[0];
 
 describe("an absent sort is the ranking, never a different order", () => {
