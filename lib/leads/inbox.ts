@@ -369,7 +369,26 @@ export async function getInbox(input: {
       closesAt: e.closesAt,
       firstReplyAt: r.firstReplyAt,
       band,
-      waitingMs: r.firstReplyAt ? null : now.getTime() - r.createdAt.getTime(),
+      /*
+         Clamped, like `answeredInMs` on the line below it always was.
+
+         A recipient row stamped ahead of `now` gives a negative wait, and
+         `formatDuration` throws on one rather than rendering it — which takes
+         the whole inbox to a 500, not just the cell. That is reachable without
+         anything being wrong with the data: clock skew between an app server
+         and the database, or a row written a moment ahead by a job, is enough.
+
+         Found by a seeded database. The seed dates rows from its own fixed
+         midday, so running the suite before noon puts every recipient row in
+         the future — `-2633768` was forty-four minutes of it — and every
+         seller-facing Playwright project failed at sign-in because
+         `/dashboard/leads` would not render at all.
+
+         Zero is the honest answer for a lead that has not arrived yet: it has
+         been waiting for no time. `bandOf` already reads the same subtraction
+         and lands on `waiting`, which agrees.
+      */
+      waitingMs: r.firstReplyAt ? null : Math.max(0, now.getTime() - r.createdAt.getTime()),
       answeredInMs: r.firstReplyAt
         ? Math.max(0, r.firstReplyAt.getTime() - r.createdAt.getTime())
         : null,
