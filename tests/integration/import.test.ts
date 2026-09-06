@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { applyImport, revertableRuns, revertImport, REVERSIBLE_FOR_MS } from "@/lib/import/service";
 import { PriceColumnError, type ColumnPlan } from "@/lib/import/columns";
+import { Prisma } from "@/lib/db/generated/client";
 import type { Actor } from "@/lib/auth/roles";
 
 /**
@@ -14,6 +15,8 @@ import type { Actor } from "@/lib/auth/roles";
  */
 
 const SLUG = "al-marwan-industrial-supplies-llc";
+/** Fixtures carry this and are deleted by it. The database is shared. */
+const PREFIX = "IMPORT-CAP-FIXTURE";
 
 let actor: Actor;
 let businessId: string;
@@ -274,5 +277,170 @@ describe("a mapping saved for next month", () => {
     // Kept, not dropped: reusing this mapping next month has to refuse the
     // same column again without re-deriving why.
     expect(price?.target.kind).toBe("blocked");
+  });
+});
+
+/**
+ * The other door onto the product cap.
+ *
+ * `saveRow` in lib/products/service.ts refuses at the limit one product at a
+ * time — `board.atCap` — and this path wrote with `createMany` and no check at
+ * all. So the cap was enforced against the slow way of adding products and not
+ * against the fast one, through the same screen. A Free listing capped at ten
+ * could import five hundred.
+ */
+describe("the plan's product cap", () => {
+  /*
+     Enough rows to overrun any plan the seed sells.
+
+     Two columns, not one: `parseCsv` refuses a file whose header row has fewer
+     than two named columns, on the grounds that it does not look like column
+     headings at all. A one-column fixture fails for that reason and proves
+     nothing about the cap.
+  */
+  const MANY = [
+    "Item Name,Part No",
+    ...Array.from({ length: 40 }, (_, i) => `${PREFIX} valve ${i},${PREFIX}-${i}`),
+  ].join("\n");
+
+  const NAME_ONLY_PLAN: ColumnPlan = {
+    columns: [
+      { header: "Item Name", target: { kind: "name" } },
+      { header: "Part No", target: { kind: "sku" } },
+    ],
+  };
+
+  let planId: string;
+  let originalLimit: number | null;
+  let originalSnapshot: unknown;
+
+  beforeAll(async () => {
+    const business = await prisma.business.findUniqueOrThrow({
+      where: { id: businessId },
+      select: {
+        planId: true,
+        plan: { select: { productLimit: true } },
+        subscription: { select: { entitlementSnapshot: true } },
+      },
+    });
+    planId = business.planId!;
+    originalLimit = business.plan?.productLimit ?? null;
+    originalSnapshot = business.subscription?.entitlementSnapshot ?? null;
+
+    /*
+       The snapshot has to go, not just the plan row.
+
+       `effectiveFor` prefers `Subscription.entitlementSnapshot` — that is board
+       12e's grandfathering, and it is why the first version of this test
+       imported forty products against a limit of five and reported success:
+       the seeded snapshot still said Pro's `productLimit: null`, so the plan
+       edit was correctly ignored. Clearing it makes the live plan row apply,
+       which is what these cases are about.
+    */
+    await prisma.subscription.updateMany({
+      where: { businessId },
+      data: { entitlementSnapshot: Prisma.DbNull },
+    });
+  });
+
+  afterAll(async () => {
+    await prisma.plan.update({
+      where: { id: planId },
+      data: { productLimit: originalLimit },
+    });
+    await prisma.subscription.updateMany({
+      where: { businessId },
+      data: {
+        entitlementSnapshot:
+          originalSnapshot === null ? Prisma.DbNull : (originalSnapshot as never),
+      },
+    });
+    await prisma.product.deleteMany({ where: { businessId, name: { startsWith: PREFIX } } });
+  });
+
+  it("refuses the whole file rather than importing up to the limit", async () => {
+    /*
+       Whole, never truncated — the same choice `assertNoPriceEscapes` makes:
+       "there is no partial success worth having." A file cut off at the cap
+       hands a seller an arbitrary slice of their catalogue, arbitrary because
+       it is whatever order the spreadsheet happened to be in, and the rows that
+       did not arrive are the ones nobody would think to look for.
+    */
+    const used = await prisma.product.count({ where: { businessId } });
+    await prisma.plan.update({
+      where: { id: planId },
+      data: { productLimit: used + 5 },
+    });
+
+    const before = await prisma.product.count({ where: { businessId } });
+    const result = await applyImport(actor, {
+      businessId,
+      categoryId,
+      filename: "big.csv",
+      text: MANY,
+      plan: NAME_ONLY_PLAN,
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toMatch(/allows/);
+    // Nothing written, and no run row left behind to undo.
+    expect(await prisma.product.count({ where: { businessId } })).toBe(before);
+  });
+
+  it("imports a file that fits exactly", async () => {
+    /*
+       Exactly, not comfortably.
+
+       `existing` is doing two jobs inside the row loop — the catalogue's slugs
+       and the ones this file has already used — so reading its size after the
+       loop counts the catalogue plus the file. The first version of this check
+       did, and refused imports that fit; the first version of this test gave
+       itself a hundred rows of headroom and passed anyway. The limit is now set
+       to the exact total, so a double-count fails here.
+    */
+    const used = await prisma.product.count({ where: { businessId } });
+    const rows = MANY.split("\n").length - 1;
+    await prisma.plan.update({
+      where: { id: planId },
+      data: { productLimit: used + rows },
+    });
+
+    const result = await applyImport(actor, {
+      businessId,
+      categoryId,
+      filename: "small.csv",
+      text: MANY,
+      plan: NAME_ONLY_PLAN,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    runIds.push(result.importRunId);
+    expect(result.created).toBeGreaterThan(0);
+  });
+
+  it("does not block a file whose rows all duplicate what is already there", async () => {
+    /*
+       Counted against the rows that would actually be created, not the file's
+       length. A seller re-uploading last month's export adds nothing, and
+       refusing that on row count would refuse an import that writes no rows.
+    */
+    const used = await prisma.product.count({ where: { businessId } });
+    await prisma.plan.update({ where: { id: planId }, data: { productLimit: used } });
+
+    const result = await applyImport(actor, {
+      businessId,
+      categoryId,
+      filename: "again.csv",
+      text: MANY,
+      plan: NAME_ONLY_PLAN,
+    });
+
+    // Every row is a duplicate slug, so `toCreate` is empty and the file is
+    // refused for having nothing to import — not for the cap.
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).not.toMatch(/allows/);
   });
 });
