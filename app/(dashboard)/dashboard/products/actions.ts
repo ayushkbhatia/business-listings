@@ -7,6 +7,7 @@ import { assertCanEditProduct } from "@/lib/auth/guards";
 import { applyImport, previewImport, revertImport, type ImportPreview } from "@/lib/import/service";
 import { getSpecFieldOptions } from "@/lib/db/queries/catalogue";
 import type { ColumnPlan } from "@/lib/import/columns";
+import { missingRequired, templateForCategory } from "@/lib/catalogue/template";
 import { mergeSpecValues } from "@/lib/products/spec-values";
 import { reindexBusiness, reindexProduct } from "@/lib/search/reindex";
 import { t } from "@/lib/i18n";
@@ -226,6 +227,24 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
     posted,
     known: new Set(fields.map((field) => field.id)),
   });
+
+  /*
+     Board 3h §5's teeth. A requirement never delists a live product; it blocks
+     that product's next save until the field is filled, and holds a new one at
+     its first. Nothing enforced this before — `SpecField.required` was read by
+     the completeness job and by ranking, and by no writer at all, so a product
+     with entirely empty specs could be saved `live`.
+
+     The labels in the refusal are the seller's own, so it names the box they
+     are looking at rather than the platform's word for it.
+  */
+  const template = await templateForCategory(seat.businessId, existing.categoryId);
+  if (template) {
+    const check = missingRequired(template, specValues);
+    if (!check.ok) {
+      return { ok: false, error: t("product.missing_required", { fields: check.missing.join(", ") }) };
+    }
+  }
 
   await prisma.product.update({
     where: { id },

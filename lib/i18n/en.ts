@@ -2778,6 +2778,8 @@ export const en = {
   "product.not_found": "That product cannot be found.",
 
   // ── Spec template, board 3h ───────────────────────────────────────────────
+  "product.missing_required": "Fill {fields} before saving. Your template requires it — the products already saved without it stay live, and this one needs it now.",
+
   "template.title": "Spec templates",
   "template.eyebrow": "Catalogue",
   "template.intro": "The fields your products are described by. What they are called and the order buyers read them in are yours; which fields buyers can filter on is set once for everyone in the category.",

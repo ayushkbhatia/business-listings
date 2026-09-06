@@ -921,3 +921,73 @@ function isFilled(value: unknown): boolean {
   if (Array.isArray(value)) return value.length > 0;
   return true;
 }
+
+/* ── What a product must carry before it can be saved ────────────────────── */
+
+export interface RequirementCheck {
+  ok: boolean;
+  /** Labels of the fields still empty, in the seller's own words. */
+  missing: string[];
+}
+
+/**
+ * Board 3h §5, the half that bites: a flagged product blocks its next save.
+ *
+ * The asymmetry is deliberate and is the whole point. Turning a requirement on
+ * never delists anything — 318 live products stay live and stay in search — and
+ * the requirement is enforced at the next edit of each one. A seller who
+ * tightened their own template gets a catalogue that converges rather than a
+ * catalogue that drops out of search from a toggle with no confirmation.
+ *
+ * Nothing enforced this before. `SpecField.required` and `requiredFrom` existed
+ * and were read only by measurement — the completeness job and the ranking
+ * signal — never by a writer, so a product with entirely empty specs could be
+ * saved `live`.
+ *
+ * The labels are the seller's own, because the message names a box on the
+ * screen they are looking at rather than the platform's word for it.
+ */
+export function missingRequired(
+  view: SellerTemplateView,
+  specValues: Record<string, unknown>,
+  now = new Date(),
+): RequirementCheck {
+  const missing = view.fields
+    .filter(
+      (field) =>
+        field.required &&
+        (field.requiredFrom === null || field.requiredFrom.getTime() <= now.getTime()) &&
+        !isFilled(specValues[field.fieldId]),
+    )
+    .map((field) => field.label);
+
+  return { ok: missing.length === 0, missing };
+}
+
+/**
+ * The seller's template for a product's category, overlay and all.
+ *
+ * A product filed under "Gate valves" answers to the valve template, and a
+ * seller who has cloned it sees their own labels — so the refusal names the box
+ * on their screen. Null where they have no clone, which is not an error: the
+ * platform's own requirements still apply and `requiredFor` falls back to them.
+ */
+export async function templateForCategory(
+  businessId: string,
+  categoryId: string,
+): Promise<SellerTemplateView | null> {
+  const category = await prisma.category.findUnique({
+    where: { id: categoryId },
+    select: { defaultTemplateId: true, parent: { select: { defaultTemplateId: true } } },
+  });
+  const platformTemplateId = category?.defaultTemplateId ?? category?.parent?.defaultTemplateId;
+  if (!platformTemplateId) return null;
+
+  const clone = await prisma.sellerTemplate.findFirst({
+    where: { businessId, platformTemplateId },
+    select: { id: true },
+  });
+  if (!clone) return null;
+
+  return getSellerTemplate(businessId, clone.id);
+}

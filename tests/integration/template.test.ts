@@ -6,6 +6,8 @@ import {
   discardDraft,
   fillFor,
   getSellerTemplate,
+  missingRequired,
+  templateForCategory,
   getSellerTemplateBySlug,
   pendingChanges,
   revisionsFor,
@@ -409,27 +411,43 @@ describe("criterion 9 and 10 — nothing applies without review, and it can be u
 
 describe("criterion 11 — every count is a query", () => {
   it("counts filled per field over the seller's own products", async () => {
+    /*
+       Measured as a delta, because the count spans the template's category and
+       its children — a product filed under "Gate valves" answers to the valve
+       template — and the fixture business already carries some.
+    */
     const view = await clone();
     const [a, b] = view.fields;
+    const before = await fillFor(businessId, view);
 
     await product("ONE", { [a!.fieldId]: "DN50", [b!.fieldId]: "Cast iron" });
     await product("TWO", { [a!.fieldId]: "DN80" });
     await product("THREE", {});
 
-    const fill = await fillFor(businessId, view);
-    expect(fill.total).toBe(3);
-    expect(fill.byField.get(a!.fieldId)!.filled).toBe(2);
-    expect(fill.byField.get(b!.fieldId)!.filled).toBe(1);
+    const after = await fillFor(businessId, view);
+    expect(after.total).toBe(before.total + 3);
+    expect(after.byField.get(a!.fieldId)!.filled).toBe(
+      before.byField.get(a!.fieldId)!.filled + 2,
+    );
+    expect(after.byField.get(b!.fieldId)!.filled).toBe(
+      before.byField.get(b!.fieldId)!.filled + 1,
+    );
   });
 
   it("treats an empty string and an empty array as unfilled", async () => {
     const view = await clone();
     const field = view.fields[0]!;
+    const before = await fillFor(businessId, view);
+
     await product("BLANK", { [field.fieldId]: "   " });
     await product("EMPTYARR", { [field.fieldId]: [] });
 
-    const fill = await fillFor(businessId, view);
-    expect(fill.byField.get(field.fieldId)!.filled).toBe(0);
+    const after = await fillFor(businessId, view);
+    expect(after.total).toBe(before.total + 2);
+    // Neither counts, so the filled figure has not moved.
+    expect(after.byField.get(field.fieldId)!.filled).toBe(
+      before.byField.get(field.fieldId)!.filled,
+    );
   });
 });
 
@@ -473,11 +491,14 @@ describe("the seller's own fields", () => {
       ],
     });
     await applyDraft(actorFor(), businessId, view.id);
+    const before = await fillFor(businessId, (await getSellerTemplate(businessId, view.id))!);
     await product("OWNVAL", { "own-lead": "21" });
 
     const after = await getSellerTemplate(businessId, view.id);
     const fill = await fillFor(businessId, after!);
-    expect(fill.byField.get("own-lead")!.filled).toBe(1);
+    expect(fill.byField.get("own-lead")!.filled).toBe(
+      (before.byField.get("own-lead")?.filled ?? 0) + 1,
+    );
   });
 });
 
@@ -503,7 +524,9 @@ describe("the rail and the route", () => {
 
     const rail = await templatesFor(businessId);
     const row = rail.find((entry) => entry.slug === view.slug)!;
-    expect(row.products).toBe(1);
+    // At least the one this test filed. The rail counts the template's category
+    // and its children, and the fixture business already carries some.
+    expect(row.products).toBeGreaterThanOrEqual(1);
     expect(row.pendingChanges).toBe(0);
   });
 
@@ -515,5 +538,75 @@ describe("the rail and the route", () => {
     const first = await clone();
     const second = await cloneTemplate(actorFor(), businessId, platformTemplateId);
     expect(second.id).toBe(first.id);
+  });
+});
+
+describe("criteria 6 and 7 — the requirement bites at the next save", () => {
+  it("refuses a save that leaves a required field empty", async () => {
+    const view = await clone();
+    const field = view.fields.find((f) => !f.platformRequired && !f.own)!;
+
+    await saveDraft(actorFor(), businessId, view.id, {
+      mappings: { [field.fieldId]: { required: true } },
+      ownFields: [],
+    });
+    await applyDraft(actorFor(), businessId, view.id);
+
+    const after = await getSellerTemplate(businessId, view.id);
+    const check = missingRequired(after!, {});
+
+    expect(check.ok).toBe(false);
+    // The seller's own label, so the refusal names the box on their screen.
+    expect(check.missing).toContain(field.label);
+  });
+
+  it("passes a save that fills it", async () => {
+    const view = await clone();
+    const field = view.fields.find((f) => !f.platformRequired && !f.own)!;
+
+    await saveDraft(actorFor(), businessId, view.id, {
+      mappings: { [field.fieldId]: { required: true } },
+      ownFields: [],
+    });
+    await applyDraft(actorFor(), businessId, view.id);
+
+    const after = await getSellerTemplate(businessId, view.id);
+    /*
+       Every required field, not only the one this test added. The platform
+       template requires others, and a product missing any of them is still
+       missing one — which is the behaviour, and is why the first version of
+       this test filled one box and expected a pass.
+    */
+    const filled = Object.fromEntries(
+      after!.fields.filter((f) => f.required).map((f) => [f.fieldId, "Cast iron"]),
+    );
+    expect(missingRequired(after!, filled).ok).toBe(true);
+  });
+
+  it("does not bite before a platform grace period has passed", async () => {
+    const view = await clone();
+    const field = view.fields.find((f) => !f.platformRequired && !f.own)!;
+
+    await prisma.specField.update({
+      where: { id: field.platformFieldId! },
+      data: { required: true, requiredFrom: new Date(Date.now() + 30 * 86_400_000) },
+    });
+    try {
+      const after = await getSellerTemplate(businessId, view.id);
+      expect(missingRequired(after!, {}).missing).not.toContain(field.label);
+    } finally {
+      await prisma.specField.update({
+        where: { id: field.platformFieldId! },
+        data: { required: false, requiredFrom: null },
+      });
+    }
+  });
+
+  it("resolves a seller's template from a product's category", async () => {
+    // A product filed under a subcategory answers to the parent's template,
+    // which is what makes the refusal reach the right screen's labels.
+    const view = await clone();
+    const resolved = await templateForCategory(businessId, categoryId);
+    expect(resolved?.id).toBe(view.id);
   });
 });

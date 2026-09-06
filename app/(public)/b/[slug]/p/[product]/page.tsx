@@ -15,7 +15,8 @@ import { formatBytes, formatCount, formatDate, formatDuration } from "@/lib/form
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
-import { countFilled, primarySize, toSpecRows } from "@/lib/spec";
+import { applyOverlay, countFilled, primarySize, toSpecRows } from "@/lib/spec";
+import { getSellerOverlay } from "@/lib/db/queries/storefront-catalogue";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { EMIRATES } from "@/lib/uae";
@@ -123,12 +124,26 @@ export default async function ProductPage({ params }: Params) {
   }
 
   const business = product.business;
-  const [template, actor] = await Promise.all([
+  const [template, actor, overlay] = await Promise.all([
     getSpecTemplate(product.categoryId),
     // Only to decide whether the composer asks for a phone number.
     getActor(),
+    /*
+       This seller's own labels and order.
+
+       Board 3h §"The ownership split": what a field is called and the order a
+       buyer reads it in are the seller's. `SellerTemplate.fieldMappings` has
+       supported both since the initial migration and reached no public surface
+       — a seller renamed a field on a screen whose own copy promised buyers
+       would see it, and none did.
+
+       Only the label and the order move. The key is untouched, so comparison
+       still matches across sellers and the facet rail is unaffected: both read
+       the platform field, which is why a rename is safe.
+    */
+    getSellerOverlay(product.businessId, product.categoryId),
   ]);
-  const fields = template?.fields ?? [];
+  const fields = applyOverlay(template?.fields ?? [], overlay);
   const rows = toSpecRows(fields, product.specValues);
   const filled = countFilled(fields, product.specValues);
   const sizeLabel = primarySize(fields, product.specValues);
