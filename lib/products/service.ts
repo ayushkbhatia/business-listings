@@ -5,6 +5,7 @@ import { assertCanEditProduct } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
 import { allowance } from "@/lib/plan/entitlements";
+import { slugForTemplate } from "@/lib/catalogue/template";
 import { WEIGHTS } from "@/lib/metrics/profile-strength";
 import { buildProductSearchText } from "@/lib/search/index-text";
 import {
@@ -331,21 +332,32 @@ export async function chooseSheet(
   });
   if (!template) return { ok: false, error: "That spec sheet cannot be found." };
 
-  const existing = await prisma.sellerTemplate.findFirst({
-    where: { businessId },
-    select: { id: true },
-  });
+  /*
+     Find or create the clone for THIS sheet, rather than repointing the one row
+     the business had.
 
-  if (existing) {
-    await prisma.sellerTemplate.update({
-      where: { id: existing.id },
-      data: { platformTemplateId: template.id, name: template.name },
-    });
-  } else {
-    await prisma.sellerTemplate.create({
-      data: { businessId, platformTemplateId: template.id, name: template.name },
-    });
-  }
+     Repointing kept `fieldMappings` — a map keyed by the previous template's
+     field ids — against a template whose fields have different ids entirely.
+     The keys were inert only because the resolver iterates the platform's
+     fields rather than the mapping's, so a seller who switched sheets lost
+     every label they had written and could not get them back by switching
+     again. Now each sheet keeps its own overlay, and switching back returns the
+     seller to their own words.
+
+     It is also what board 3h's templates rail is: a business may hold several,
+     and `@@unique([businessId, platformTemplateId])` is what stops it holding
+     two of the same one.
+  */
+  await prisma.sellerTemplate.upsert({
+    where: { businessId_platformTemplateId: { businessId, platformTemplateId: template.id } },
+    create: {
+      businessId,
+      platformTemplateId: template.id,
+      name: template.name,
+      slug: (await slugForTemplate(businessId, template.name)) ?? `t-${template.id}`,
+    },
+    update: {},
+  });
 
   return { ok: true, id: template.id };
 }

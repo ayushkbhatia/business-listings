@@ -57,14 +57,20 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
            lib/catalogue/template.ts — and the editor shows the whole template,
            which is also what "unfilled data stays visible" asks for.
         */
+        /*
+           `fieldId`, not `platformFieldId`. A field the seller invented has no
+           platform id and is still a field they fill in, and `specValues` keys
+           both the same way — which is the contract that lets this screen not
+           care which kind it is rendering.
+        */
         .map((field) => ({
-          id: field.platformFieldId,
+          id: field.fieldId,
           label: field.label,
           unit: field.unit,
           type: field.type,
           options: field.options,
           isFilterable: field.isFilterable,
-          value: String(values[field.platformFieldId] ?? ""),
+          value: String(values[field.fieldId] ?? ""),
         }))
     : (
         await prisma.specField.findMany({

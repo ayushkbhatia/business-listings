@@ -7,7 +7,6 @@ import { assertCanEditProduct } from "@/lib/auth/guards";
 import { applyImport, previewImport, revertImport, type ImportPreview } from "@/lib/import/service";
 import { getSpecFieldOptions } from "@/lib/db/queries/catalogue";
 import type { ColumnPlan } from "@/lib/import/columns";
-import { cloneTemplate, saveTemplateEdits, type FieldEdit } from "@/lib/catalogue/template";
 import { mergeSpecValues } from "@/lib/products/spec-values";
 import { reindexBusiness, reindexProduct } from "@/lib/search/reindex";
 import { t } from "@/lib/i18n";
@@ -263,48 +262,13 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
   return { ok: true };
 }
 
-/* ── Board 3h — the seller's own template ────────────────────────────────── */
+/*
+   Board 3h's own writes moved to app/(dashboard)/dashboard/templates/actions.ts
+   when the screen was rebuilt. `saveTemplate` wrote the live overlay directly;
+   every edit now stages a draft and applying it is a separate, confirmed act
+   against a list stating each change's blast radius — §8, and the reason the
+   board's single `Save & apply to 318` was wrong.
 
-export type SaveTemplateActionResult =
-  | { ok: true; renamed: number }
-  | { ok: false; error: string };
-
-export async function saveTemplate(formData: FormData): Promise<SaveTemplateActionResult> {
-  const seat = await getSellerSeat();
-  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
-
-  const sellerTemplateId = String(formData.get("sellerTemplateId") ?? "");
-  const fieldIds = formData.getAll("fieldId").map(String);
-
-  const edits: FieldEdit[] = fieldIds.map((platformFieldId, index) => ({
-    platformFieldId,
-    label: String(formData.get(`label.${platformFieldId}`) ?? "").trim(),
-    sortOrder: index,
-  }));
-
-  const result = await saveTemplateEdits(seat.actor, seat.businessId, sellerTemplateId, edits);
-  if (!result.ok) return result;
-
-  revalidatePath("/dashboard/templates");
-  revalidatePath("/dashboard/products");
-  return { ok: true, renamed: result.renamed.length };
-}
-
-export type CloneResult = { ok: true; id: string } | { ok: false; error: string };
-
-export async function setUpTemplate(formData: FormData): Promise<CloneResult> {
-  const seat = await getSellerSeat();
-  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
-
-  try {
-    const view = await cloneTemplate(
-      seat.actor,
-      seat.businessId,
-      String(formData.get("platformTemplateId") ?? ""),
-    );
-    revalidatePath("/dashboard/templates");
-    return { ok: true, id: view.id };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : t("template.none") };
-  }
-}
+   `setUpTemplate` moved with it: cloning is the templates rail's job now, and
+   the index route redirects to the clone it creates.
+*/

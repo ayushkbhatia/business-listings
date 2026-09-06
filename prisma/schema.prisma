@@ -112,6 +112,7 @@ model User {
   candidatesDismissed     MergeCandidate[]         @relation("CandidateDismissedBy")
   proposalsDecided        SpecFieldProposal[]      @relation("ProposalDecidedBy")
   templateVersions        TemplateVersion[]
+  specRevisions           SellerTemplateRevision[] @relation("TemplateRevisionAuthor")
   boostsCreated           ListingBoost[]
   settingsWritten         PlatformSetting[]        @relation("SettingWriter")
   askedQuestions          ProductQuestion[]
@@ -416,14 +417,72 @@ model SellerTemplate {
   businessId         String   @map("business_id")
   platformTemplateId String   @map("platform_template_id")
   name               String
+  /// `/dashboard/templates/:slug`. Unique per business, not globally — two
+  /// suppliers both calling a template "Valves" is not a collision.
+  slug               String
+  /// What products and buyers read. Keyed by platform `SpecField.id`; see
+  /// lib/catalogue/template.ts for the shape and why it stores only overrides.
   fieldMappings      Json     @default("{}") @map("field_mappings")
+  /// What the seller has been editing and has not applied. Null means nothing
+  /// is pending, which is why it is nullable rather than defaulted: board 3h
+  /// makes the primary action absent with none pending rather than disabled.
+  draftMappings      Json?    @map("draft_mappings")
+  draftOwnFields     Json?    @map("draft_own_fields")
+  /// The seller's own extra fields — warranty, lead time, whatever they compete
+  /// on. Here rather than as `SpecField` rows, because a `SpecField` belongs to
+  /// a platform template every seller in the category shares: one seller's
+  /// warranty column would appear in everyone's editor and in the facet rail.
+  /// Never a facet and never in comparison; board 3h renders them `YOURS ONLY`.
+  ownFields          Json     @default("[]") @map("own_fields")
+  /// How many times this seller has applied changes. Board 3h's `YOUR REV 7`.
+  revision           Int      @default(1)
+  /// Which platform version this copy has been reconciled against. The board
+  /// showed one number and offered to compare the seller against it, which
+  /// cannot both hold — these are two counters, not one.
+  tracksVersion      Int      @default(1) @map("tracks_version")
   createdAt          DateTime @default(now()) @map("created_at")
 
-  business         Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  platformTemplate SpecTemplate @relation(fields: [platformTemplateId], references: [id], onDelete: Restrict)
+  business         Business                 @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  platformTemplate SpecTemplate             @relation(fields: [platformTemplateId], references: [id], onDelete: Restrict)
+  revisions        SellerTemplateRevision[]
 
+  /// One clone per business per platform template. Without it, five readers
+  /// resolve "the seller's template" differently and a second row makes them
+  /// disagree about which labels a seller has — silently, because each returns
+  /// a valid-looking answer.
+  @@unique([businessId, platformTemplateId], map: "seller_template_business_platform_key")
+  @@unique([businessId, slug], map: "seller_template_business_slug_key")
   @@index([businessId])
   @@map("seller_template")
+}
+
+/// One row per apply. Board 3h's `Revision history`.
+///
+/// A snapshot of the whole overlay rather than a diff: rolling back has to
+/// restore field order and options exactly, and replaying a chain of diffs to
+/// get there is a second implementation of the overlay that can disagree with
+/// the first.
+model SellerTemplateRevision {
+  id               String   @id @default(cuid())
+  sellerTemplateId String   @map("seller_template_id")
+  revision         Int
+  name             String
+  fieldMappings    Json     @default("{}") @map("field_mappings")
+  ownFields        Json     @default("[]") @map("own_fields")
+  /// What changed in this apply, so the history can say "renamed Size to
+  /// Nominal size" without re-deriving it from two snapshots.
+  summary          Json     @default("[]")
+  /// Nullable: `removeSeat` nulls a departed seat's business rather than
+  /// deleting the person, and a revision with no author is still a revision.
+  createdById      String?  @map("created_by_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  template  SellerTemplate @relation(fields: [sellerTemplateId], references: [id], onDelete: Cascade)
+  createdBy User?          @relation("TemplateRevisionAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([sellerTemplateId, revision], map: "seller_template_revision_key")
+  @@index([sellerTemplateId, createdAt(sort: Desc)], map: "seller_template_revision_recent_idx")
+  @@map("seller_template_revision")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

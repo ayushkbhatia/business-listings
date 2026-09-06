@@ -2278,6 +2278,7 @@ async function seedProducts(
           businessId: b.id,
           platformTemplateId: templateId,
           name: "Our valve spec",
+          slug: "our-valve-spec",
           fieldMappings: {
             [fieldId("nominal_diameter")]: { label: "Bore size", sortOrder: 0 },
             [fieldId("pressure_rating")]: { label: "Working pressure" },

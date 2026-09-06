@@ -99,7 +99,12 @@ async function addProduct(businessId: string, specValues: Prisma.InputJsonValue)
 
 async function useTemplate(businessId: string) {
   await prisma.sellerTemplate.create({
-    data: { businessId, platformTemplateId: templateId, name: "Setup done sheet" },
+    data: {
+      businessId,
+      platformTemplateId: templateId,
+      name: "Setup done sheet",
+      slug: `setup-done-${businessId.slice(0, 8)}`,
+    },
   });
 }
 
