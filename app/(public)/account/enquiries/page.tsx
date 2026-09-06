@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { Card, PublicShell } from "@/components/structure";
 import { StatusBadge, type StatusTone } from "@/components/display/StatusBadge";
-import { getActor } from "@/lib/auth/session";
+import { requireBuyerSeat } from "@/lib/auth/buyer";
 import { getBuyerEnquiries } from "@/lib/db/queries/enquiry";
 import { formatDate, formatRelative } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
-import { redirect } from "next/navigation";
 
 /**
  * Board 10e — the buyer's enquiry inbox.
@@ -15,12 +14,11 @@ import { redirect } from "next/navigation";
  * they were given; a list of everything they have ever sent needs an identity
  * that survives a browser, which is what an account is for.
  */
-export const metadata = { title: "Your enquiries" };
+export const metadata = { title: t("account.enquiries.title") };
 export const dynamic = "force-dynamic";
 
 export default async function AccountEnquiriesPage() {
-  const actor = await getActor();
-  if (!actor) redirect("/signin?next=%2Faccount%2Fenquiries");
+  const { actor } = await requireBuyerSeat("/account/enquiries");
 
   const enquiries = await getBuyerEnquiries(actor.id);
   const now = new Date();

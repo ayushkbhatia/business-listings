@@ -60,8 +60,15 @@ export async function getActor(): Promise<Actor | null> {
        and read by `withinScope()` and `analyticsScopeFor()` ever since — with
        nothing ever setting it, so every branch-scoping check in the product
        returned true and board 7d's branch-scoped sales seat scoped nothing.
+
+       `buyerCompanyId` ahead of board 7b, and it is read here rather than from
+       a claim on purpose. Everything above about a cache on an ownership
+       boundary applies to it word for word, and the lookup it would save is
+       this one — already unconditional. A second claim would be a second thing
+       that can point at a company the record no longer agrees with, bought for
+       nothing.
     */
-    select: { roles: true, businessId: true, branchId: true },
+    select: { roles: true, businessId: true, branchId: true, buyerCompanyId: true },
   });
 
   /*
@@ -99,6 +106,10 @@ export async function getActor(): Promise<Actor | null> {
     // `withinScope` reads the absence that way, so it must stay absent rather
     // than becoming null.
     ...(profile?.branchId ? { branchId: profile.branchId } : {}),
+    // Absent for every buyer who has not been attached to a company, which is
+    // all of them until board 7b ships the screen that attaches them. Absent,
+    // not null, for the same reason as `branchId`: a check reads the absence.
+    ...(profile?.buyerCompanyId ? { buyerCompanyId: profile.buyerCompanyId } : {}),
   };
 }
 

@@ -8,6 +8,7 @@ import { checkThrottle, recordAttempt } from "./attempts";
 import { maskIdentifier, normaliseIdentifier, type Identifier } from "./identity";
 import { retryAfterSeconds } from "./throttle";
 import type { Role } from "./roles";
+import { isSafeNext } from "./next-path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -582,12 +583,13 @@ export function destinationFor(
   return "/";
 }
 
-/**
- * A `next` from a query string is attacker-controlled. Same-origin absolute
- * paths only: no scheme, no host, and no `//host` which a browser reads as
- * protocol-relative and follows off-site.
- */
-export function isSafeNext(next: string): boolean {
-  return next.startsWith("/") && !next.startsWith("//") && !next.includes("\\");
-}
+/*
+   `isSafeNext` moved to ./next-path.ts and is re-exported here.
+
+   This file is `server-only` — it imports Prisma and the Supabase admin client
+   — and a same-origin path check is string work that both sides of the boundary
+   need. Re-exported rather than relocated with a find-and-replace so the seven
+   modules that already import it from here are untouched by that move.
+*/
+export { isSafeNext, signInHref } from "./next-path";
 

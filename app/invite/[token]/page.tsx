@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Button, buttonClassName } from "@/components/primitives";
 import { Card } from "@/components/structure";
-import { isSafeNext } from "@/lib/auth/flow";
+import { signInHref } from "@/lib/auth/next-path";
 import { getActor } from "@/lib/auth/session";
 import { describeRoles, readInvite, seatOf } from "@/lib/team/invite";
 import { t } from "@/lib/i18n";
@@ -133,8 +133,8 @@ export default async function InvitePage({ params, searchParams }: Props) {
 
      `destinationFor` returns `next` ahead of everything else when it is safe,
      and `isSafeNext` is what decides that — a same-origin path, no scheme, no
-     `//host`. The token is encoded before it goes in, for the same reason the
-     action encodes it.
+     `//host`. `signInHref` applies both that check and the encoding, for the
+     same reason the action uses it.
   */
   if (!actor || !holder) {
     const next = `/invite/${encodeURIComponent(token)}`;
@@ -150,7 +150,7 @@ export default async function InvitePage({ params, searchParams }: Props) {
             </p>
           ) : null}
           <Link
-            href={`/signin?next=${encodeURIComponent(isSafeNext(next) ? next : "/")}`}
+            href={signInHref(next)}
             className={buttonClassName({ block: true })}
           >
             {t("invite.sign_in")}

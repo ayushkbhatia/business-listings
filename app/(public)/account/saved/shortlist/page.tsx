@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Breadcrumb, Card, PublicShell } from "@/components/structure";
 import { Eyebrow } from "@/components/display";
 import { VerificationBadge, tierSpec } from "@/components/domain";
-import { getActor } from "@/lib/auth/session";
+import { requireBuyerSeat } from "@/lib/auth/buyer";
 import { formatCount, formatDate, formatRelative } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { shortlistFor } from "@/lib/shortlist/service";
@@ -29,14 +28,13 @@ import { removeFromShortlist } from "@/app/(public)/_shortlist";
 
 export const dynamic = "force-dynamic";
 
+// `robots` is inherited from ../../layout.tsx, which owns it for the subtree.
 export const metadata: Metadata = {
   title: t("shortlist.title"),
-  robots: { index: false, follow: false },
 };
 
 export default async function SavedSuppliersPage() {
-  const actor = await getActor();
-  if (!actor) redirect("/signin?next=%2Faccount%2Fsaved%2Fshortlist");
+  const { actor } = await requireBuyerSeat("/account/saved/shortlist");
 
   const suppliers = await shortlistFor(actor.id);
   const now = new Date();
