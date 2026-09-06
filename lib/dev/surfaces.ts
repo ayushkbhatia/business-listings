@@ -67,7 +67,7 @@ export const SURFACE_GROUPS: readonly SurfaceGroup[] = [
       { href: "/dashboard/verification", what: "Trade licence and tier" },
       { href: "/dashboard/products", what: "Catalogue", board: "3f" },
       { href: "/dashboard/products/import", what: "Spreadsheet import" },
-      { href: "/dashboard/templates", what: "Spec templates" },
+      { href: "/dashboard/templates", what: "Spec templates", board: "3h" },
       { href: "/dashboard/media", what: "Media library", board: "3i" },
       { href: "/dashboard/leads", what: "Enquiries and RFQs", board: "3d" },
       { href: "/dashboard/quotes", what: "Quotes sent" },

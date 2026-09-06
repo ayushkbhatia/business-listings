@@ -74,6 +74,11 @@ export const EVENT_NAMES = [
   "autoreply_toggled",
   "quiet_hours_changed",
   "fallback_to_owner",
+  "template_viewed",
+  "template_cloned",
+  "template_revision_applied",
+  "template_revision_restored",
+  "template_field_detached",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -554,6 +559,55 @@ export const EVENT_SPECS = {
     emitter: "server",
     session: "never",
     props: { reason: "string" },
+  },
+
+  // ── Board 3h, the spec template builder ───────────────────────────────────
+
+  /**
+   * The screen was looked at, with the two numbers it turns on.
+   *
+   * `gaps` is the count of products missing a field their own template requires
+   * — §5's flag-not-delist population. A team where it never falls is a seller
+   * who set a requirement and never went back, which is the state open question
+   * 2 says to accept and watch.
+   */
+  template_viewed: {
+    emitter: "browser",
+    session: "required",
+    props: { fields: "number?", pending: "number?", gaps: "number?" },
+  },
+  template_cloned: {
+    emitter: "server",
+    session: "never",
+    props: { platformTemplateId: "string" },
+  },
+  /**
+   * A draft was applied. `flagging` counts the changes whose blast radius is a
+   * flag rather than a repaint — the only kind with a consequence the seller
+   * cannot see from this screen.
+   */
+  template_revision_applied: {
+    emitter: "server",
+    session: "never",
+    props: { revision: "number", changes: "number", flagging: "number" },
+  },
+  template_revision_restored: {
+    emitter: "server",
+    session: "never",
+    props: { revision: "number" },
+  },
+  /**
+   * A field left the platform mapping.
+   *
+   * Worth watching on its own rather than inside `template_revision_applied`:
+   * it is the one seller action that removes a field from cross-seller
+   * comparison, and a category where it is common is a category whose platform
+   * field means something the trade does not.
+   */
+  template_field_detached: {
+    emitter: "server",
+    session: "never",
+    props: { key: "string" },
   },
 } as const satisfies Record<EventName, EventDefinition>;
 

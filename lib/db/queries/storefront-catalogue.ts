@@ -1,6 +1,8 @@
 import "server-only";
+import { cache } from "react";
 import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
+import { readMappings } from "@/lib/catalogue/overlay";
 import { isCode, matchNeedle } from "@/lib/search/index-text";
 
 /**
@@ -400,11 +402,14 @@ async function suggestDrop(
  * candidates come from `SpecField.isFilterable` rather than from anything the
  * seller controls.
  *
- * A seller's `hidden` flag is deliberately **not** consulted. Hiding is about
- * how their own spec table reads; letting it remove a filter would make two
- * sellers' rails differ, which is the same incomparability criterion 5 forbids
- * for labels. A field with nothing behind it drops out anyway, because a filter
- * with one option is not a choice.
+ * A seller's overlay is deliberately **not** consulted. Their labels and order
+ * reach their own product pages — see `getSellerOverlay` below — and letting
+ * them reach the rail would make two sellers' filters differ, which is the same
+ * incomparability criterion 5 forbids. A field with nothing behind it drops out
+ * anyway, because a filter with one option is not a choice.
+ *
+ * (The `hidden` flag this used to mention is gone. It deleted product data one
+ * screen over; see migration `20260914090000_drop_field_hidden`.)
  */
 async function getSpecFilters(
   businessId: string,
@@ -579,3 +584,40 @@ function toCatalogueProduct(
     ...(row._count ? { watchers: row._count.watches } : {}),
   };
 }
+
+
+/**
+ * One seller's label-and-order overrides for a product's category.
+ *
+ * Board 3h §"The ownership split", reaching a buyer for the first time. Only
+ * the label and the position: the key is untouched, so `Product.specValues`
+ * still resolves, cross-seller comparison still matches, and the filter rail
+ * above is unaffected — all three read the platform field, which is the whole
+ * reason a rename cannot break them.
+ *
+ * Null where this seller has no clone, which is most of them. The platform's
+ * own labels and order are then what a buyer reads, unchanged.
+ */
+export const getSellerOverlay = cache(
+  async (
+    businessId: string,
+    categoryId: string,
+  ): Promise<Record<string, { label?: string; sortOrder?: number }> | null> => {
+    const category = await prisma.category.findUnique({
+      where: { id: categoryId },
+      select: { defaultTemplateId: true, parent: { select: { defaultTemplateId: true } } },
+    });
+    const platformTemplateId = category?.defaultTemplateId ?? category?.parent?.defaultTemplateId;
+    if (!platformTemplateId) return null;
+
+    const clone = await prisma.sellerTemplate.findFirst({
+      where: { businessId, platformTemplateId },
+      select: { fieldMappings: true },
+    });
+    if (!clone) return null;
+
+    // `readMappings` drops the shapes that have been in this column and are not
+    // overrides — the seed's old inverted mapping, and the `hidden` flag.
+    return readMappings(clone.fieldMappings);
+  },
+);

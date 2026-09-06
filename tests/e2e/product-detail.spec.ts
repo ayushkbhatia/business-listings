@@ -94,7 +94,16 @@ test.describe("the spec table", () => {
     const [, filled, total] = /(\d+) OF (\d+) FIELDS FILLED/.exec(meta) ?? [];
     expect(filled).toBeTruthy();
 
-    const specTable = page.locator("table").filter({ hasText: "Nominal diameter" });
+    /*
+       By its caption, not by a field label.
+
+       Board 3h put a seller's own labels on their own product page — the field
+       the platform calls "Nominal diameter" reads "Bore size" for a seller who
+       renamed it, which is the point of the ownership split. Filtering by a
+       platform label meant this test asserted a table that only existed for
+       sellers who had never touched their template.
+    */
+    const specTable = page.getByRole("table", { name: /^Specification for /i });
     const rows = specTable.locator("tbody tr");
     await expect(rows).toHaveCount(Number(total));
 
@@ -170,8 +179,9 @@ test.describe("accessibility and structure", () => {
     await page.goto(URL);
     await expect(page.locator("h1")).toHaveCount(1);
 
-    // Non-negotiable 4: a real table with scoped headers, not divs.
-    const specTable = page.locator("table").filter({ hasText: "Nominal diameter" });
+    // Non-negotiable 4: a real table with scoped headers, not divs. Found by
+    // its caption rather than a field label — see the note above.
+    const specTable = page.getByRole("table", { name: /^Specification for /i });
     await expect(specTable.locator("th[scope]").first()).toBeVisible();
 
     /*

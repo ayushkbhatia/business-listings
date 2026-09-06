@@ -80,7 +80,9 @@ and it is the one that argues back.
 /dashboard/products                     Catalogue                             [3f]
 /dashboard/products/:sku                Product editor                        [3g]
 /dashboard/products/import              CSV import mapper                    [11d]
-/dashboard/templates                    Spec templates                        [3h]
+/dashboard/templates                    Spec templates                        [3h]  built h3 wave 2
+/dashboard/templates/:slug              One template, fields and settings      [3h]  built h3 wave 2
+/dashboard/templates/:slug/history      Revision history and rollback         [3h]  built h3 wave 2
 /dashboard/media                        Media library                         [3i]
 /dashboard/leads                        Leads & RFQ inbox                     [3j]  built h3 wave 1
 /dashboard/leads/:id                    One lead, and the quote composer      [3j]  built h3 wave 1

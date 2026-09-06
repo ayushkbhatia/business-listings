@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
+import type { Prisma } from "@/lib/db/generated/client";
 import { assertCanEditProduct } from "@/lib/auth/guards";
 import { applyImport, previewImport, revertImport, type ImportPreview } from "@/lib/import/service";
 import { getSpecFieldOptions } from "@/lib/db/queries/catalogue";
 import type { ColumnPlan } from "@/lib/import/columns";
-import { cloneTemplate, saveTemplateEdits, type FieldEdit } from "@/lib/catalogue/template";
+import { missingRequired, templateForCategory } from "@/lib/catalogue/template";
+import { mergeSpecValues } from "@/lib/products/spec-values";
 import { reindexBusiness, reindexProduct } from "@/lib/search/reindex";
 import { t } from "@/lib/i18n";
 import { getSellerSeat } from "../_shell";
@@ -190,7 +192,7 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
   const id = String(formData.get("id") ?? "");
   const existing = await prisma.product.findUnique({
     where: { id },
-    select: { businessId: true, categoryId: true },
+    select: { businessId: true, categoryId: true, specValues: true },
   });
   // Someone else's product and one that does not exist give the same answer.
   if (!existing || existing.businessId !== seat.businessId) {
@@ -203,17 +205,45 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
   const availability = String(formData.get("availability") ?? "in_stock");
   const status = String(formData.get("status") ?? "draft");
 
-  // The template's own fields, so a posted key that is not one of them is
-  // simply not stored rather than becoming a spec value nothing can read.
+  /*
+     Merged over what is stored, never rebuilt from the form.
+
+     The decision is in `lib/products/spec-values.ts`, with the failure it
+     prevents written out beside it: a value can only be cleared by a form that
+     was showing its field.
+  */
   const fields = await prisma.specField.findMany({
     where: { template: { defaultForCategories: { some: { id: existing.categoryId } } } },
     select: { id: true },
   });
 
-  const specValues: Record<string, string> = {};
-  for (const field of fields) {
-    const value = String(formData.get(`spec.${field.id}`) ?? "").trim();
-    if (value !== "") specValues[field.id] = value;
+  const presented = formData.getAll("spec.present").map(String);
+  const posted: Record<string, string> = {};
+  for (const fieldId of presented) posted[fieldId] = String(formData.get(`spec.${fieldId}`) ?? "");
+
+  const specValues = mergeSpecValues({
+    stored: (existing.specValues ?? {}) as Record<string, unknown>,
+    presented,
+    posted,
+    known: new Set(fields.map((field) => field.id)),
+  });
+
+  /*
+     Board 3h §5's teeth. A requirement never delists a live product; it blocks
+     that product's next save until the field is filled, and holds a new one at
+     its first. Nothing enforced this before — `SpecField.required` was read by
+     the completeness job and by ranking, and by no writer at all, so a product
+     with entirely empty specs could be saved `live`.
+
+     The labels in the refusal are the seller's own, so it names the box they
+     are looking at rather than the platform's word for it.
+  */
+  const template = await templateForCategory(seat.businessId, existing.categoryId);
+  if (template) {
+    const check = missingRequired(template, specValues);
+    if (!check.ok) {
+      return { ok: false, error: t("product.missing_required", { fields: check.missing.join(", ") }) };
+    }
   }
 
   await prisma.product.update({
@@ -231,7 +261,7 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
       stockQty: readOptionalInt(formData.get("stockQty")),
       leadTimeDays: readOptionalInt(formData.get("leadTimeDays")),
       minOrderQty: readOptionalInt(formData.get("minOrderQty")),
-      specValues,
+      specValues: specValues as Prisma.InputJsonValue,
     },
   });
 
@@ -251,49 +281,13 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
   return { ok: true };
 }
 
-/* ── Board 3h — the seller's own template ────────────────────────────────── */
+/*
+   Board 3h's own writes moved to app/(dashboard)/dashboard/templates/actions.ts
+   when the screen was rebuilt. `saveTemplate` wrote the live overlay directly;
+   every edit now stages a draft and applying it is a separate, confirmed act
+   against a list stating each change's blast radius — §8, and the reason the
+   board's single `Save & apply to 318` was wrong.
 
-export type SaveTemplateActionResult =
-  | { ok: true; renamed: number }
-  | { ok: false; error: string };
-
-export async function saveTemplate(formData: FormData): Promise<SaveTemplateActionResult> {
-  const seat = await getSellerSeat();
-  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
-
-  const sellerTemplateId = String(formData.get("sellerTemplateId") ?? "");
-  const fieldIds = formData.getAll("fieldId").map(String);
-
-  const edits: FieldEdit[] = fieldIds.map((platformFieldId, index) => ({
-    platformFieldId,
-    label: String(formData.get(`label.${platformFieldId}`) ?? "").trim(),
-    hidden: formData.get(`hidden.${platformFieldId}`) === "on",
-    sortOrder: index,
-  }));
-
-  const result = await saveTemplateEdits(seat.actor, seat.businessId, sellerTemplateId, edits);
-  if (!result.ok) return result;
-
-  revalidatePath("/dashboard/templates");
-  revalidatePath("/dashboard/products");
-  return { ok: true, renamed: result.renamed.length };
-}
-
-export type CloneResult = { ok: true; id: string } | { ok: false; error: string };
-
-export async function setUpTemplate(formData: FormData): Promise<CloneResult> {
-  const seat = await getSellerSeat();
-  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
-
-  try {
-    const view = await cloneTemplate(
-      seat.actor,
-      seat.businessId,
-      String(formData.get("platformTemplateId") ?? ""),
-    );
-    revalidatePath("/dashboard/templates");
-    return { ok: true, id: view.id };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : t("template.none") };
-  }
-}
+   `setUpTemplate` moved with it: cloning is the templates rail's job now, and
+   the index route redirects to the clone it creates.
+*/

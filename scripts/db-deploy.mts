@@ -101,5 +101,22 @@ if (!assumeYes) {
 }
 
 console.log("");
-const child = spawnSync("pnpm", ["exec", "prisma", "migrate", "deploy"], { stdio: "inherit" });
+/*
+   The token that lets the CLI reach a database that is not loopback.
+
+   `prisma.config.ts` refuses a remote target unless this is set, so
+   `pnpm exec prisma migrate deploy` typed by hand cannot reach production —
+   only this script can, and only after the report above has been printed and
+   answered. It is passed to the child rather than exported, so it exists for
+   one command and not for the shell that ran it.
+
+   Added after a session applied two migrations to production by typing the raw
+   Prisma command out of habit, in a worktree whose `.env.local` pointed at the
+   hosted database rather than at a throwaway. The review step existed; nothing
+   made it the only way through.
+*/
+const child = spawnSync("pnpm", ["exec", "prisma", "migrate", "deploy"], {
+  stdio: "inherit",
+  env: { ...process.env, PRISMA_MIGRATE_REVIEWED: "1" },
+});
 process.exit(child.status ?? 1);

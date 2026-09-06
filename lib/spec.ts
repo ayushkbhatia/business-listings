@@ -75,3 +75,41 @@ export function primarySize(
   if (!field) return undefined;
   return renderValue(field, values[field.id]) ?? undefined;
 }
+
+/**
+ * The seller's own labels and order, over the platform's fields.
+ *
+ * Board 3h §"The ownership split": what a field is called and the order buyers
+ * read it in are the seller's. Until now `SellerTemplate.fieldMappings`
+ * supported both and reached no public surface at all — a seller renamed a
+ * field on a screen whose own copy said "these are the fields buyers see on your
+ * products", and no buyer ever saw it.
+ *
+ * ## What does not move
+ *
+ * The **key** is untouched, so `specValues` still resolves, comparison still
+ * matches across sellers, and the facet rail is unaffected — those read the
+ * platform field, and that is the whole reason a rename is safe.
+ *
+ * Board 3h's open question 5, answered as recommended: the seller's order on
+ * their own product page, the platform's in any multi-seller comparison.
+ * Otherwise a side-by-side has its rows in a different sequence per column.
+ */
+export function applyOverlay(
+  fields: readonly TemplateField[],
+  overlay: Record<string, { label?: string; sortOrder?: number }> | null | undefined,
+): TemplateField[] {
+  if (!overlay) return [...fields];
+
+  const withOrder = fields.map((field, index) => {
+    const override = overlay[field.id] ?? {};
+    return {
+      field: { ...field, label: override.label ?? field.label },
+      // The platform's order is the fallback, and the array arrives in it.
+      order: override.sortOrder ?? index,
+    };
+  });
+
+  withOrder.sort((a, b) => a.order - b.order);
+  return withOrder.map((entry) => entry.field);
+}
