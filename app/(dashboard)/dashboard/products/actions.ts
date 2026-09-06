@@ -5,6 +5,11 @@ import { prisma } from "@/lib/db/client";
 import type { Prisma } from "@/lib/db/generated/client";
 import { assertCanEditProduct } from "@/lib/auth/guards";
 import { applyImport, previewImport, revertImport, type ImportPreview } from "@/lib/import/service";
+import { effectiveFor } from "@/lib/billing/entitlements-service";
+import { allowance } from "@/lib/plan/entitlements";
+import { refusesPublish, roomLeft } from "@/lib/products/catalogue-query";
+import { previewMove, type MovePreview } from "@/lib/products/move-category";
+import { createWithUniqueSlug } from "@/lib/products/service";
 import { getSpecFieldOptions } from "@/lib/db/queries/catalogue";
 import type { ColumnPlan } from "@/lib/import/columns";
 import { missingFrom } from "@/lib/catalogue/overlay";
@@ -55,7 +60,10 @@ export async function previewImportFile(formData: FormData): Promise<PreviewResu
   }
 }
 
-export type BulkResult = { ok: true; changed: number } | { ok: false; error: string };
+export type BulkResult =
+  | { ok: true; changed: number }
+  /** The plan's product cap refused a publish. `room` is what is left. */
+  | { ok: false; error: string; atCap?: true; room?: number }
 
 const BULK_ACTIONS = ["publish", "draft", "out_of_stock", "delete"] as const;
 type BulkAction = (typeof BULK_ACTIONS)[number];
@@ -64,6 +72,22 @@ function isBulkAction(value: string): value is BulkAction {
   return (BULK_ACTIONS as readonly string[]).includes(value);
 }
 
+/**
+ * Board 3f's bulk status actions.
+ *
+ * `publish` is the one with a fence on it. Every other path into `live` already
+ * respects the plan's product cap — the CSV importer refuses an over-cap file,
+ * the onboarding sheet returns `at_cap` — and a bulk publish that did not would
+ * be the widest hole in the ladder, reachable in two clicks from a screen that
+ * shows the cap in its own header.
+ *
+ * `draft` is what board 3f calls `Unpublish…`. The confirmation naming the
+ * count and the redirect lives on the screen; this is the write, and the
+ * redirect is not something it has to arrange: an unpublished product's URL
+ * already 301s to the storefront, because `getProductBySlug` excludes a draft
+ * and the page permanently-redirects rather than 404ing when the business is
+ * still there. Board 6f's rule, already load-bearing.
+ */
 export async function bulkUpdateProducts(formData: FormData): Promise<BulkResult> {
   const seat = await getSellerSeat();
   if (!seat) return { ok: false, error: t("dev.no_seat_title") };
@@ -86,8 +110,15 @@ export async function bulkUpdateProducts(formData: FormData): Promise<BulkResult
     // below do not need this: a draft is still something the supplier carries,
     // so it stays in their surface either way.
     if (changed > 0) await reindexBusiness(seat.businessId);
+  } else if (action === "publish") {
+    const refusal = await refuseOverCap(seat.businessId, where);
+    if (refusal) return refusal;
+    ({ count: changed } = await prisma.product.updateMany({
+      where,
+      data: { status: "live" },
+    }));
   } else {
-    const status = action === "publish" ? "live" : action === "draft" ? "draft" : "out_of_stock";
+    const status = action === "draft" ? "draft" : "out_of_stock";
     ({ count: changed } = await prisma.product.updateMany({
       where,
       data: { status, ...(status === "out_of_stock" ? { availability: "out_of_stock" } : {}) },
@@ -96,6 +127,111 @@ export async function bulkUpdateProducts(formData: FormData): Promise<BulkResult
 
   revalidatePath("/dashboard/products");
   return { ok: true, changed };
+}
+
+/**
+ * Whether publishing this selection would take the seller past their cap.
+ *
+ * Counts only the rows that are not already live: republishing something that
+ * is already listed costs no room, and refusing it would make the action look
+ * broken to a seller who selected a whole page.
+ */
+async function refuseOverCap(
+  businessId: string,
+  where: { id: { in: string[] }; businessId: string },
+): Promise<{ ok: false; error: string; atCap: true; room: number } | null> {
+  const caps = await effectiveFor(businessId);
+  if (!caps) return null;
+
+  const [listed, adding] = await Promise.all([
+    prisma.product.count({ where: { businessId, status: "live" } }),
+    prisma.product.count({ where: { ...where, status: { not: "live" } } }),
+  ]);
+
+  const cap = allowance(caps, "products", listed).cap;
+  const room = { cap, listed, adding };
+  if (!refusesPublish(room)) return null;
+
+  const left = roomLeft(room) ?? 0;
+  return {
+    ok: false,
+    error: t("catalogue.cap.refused", {
+      adding: String(adding),
+      room: String(left),
+      cap: String(cap ?? 0),
+    }),
+    atCap: true,
+    room: left,
+  };
+}
+
+export type MovePreviewResult =
+  | { ok: true; preview: MovePreview }
+  | { ok: false; error: string };
+
+/**
+ * What `Move category…` would cost, before it runs.
+ *
+ * Reads only. Board 3f criterion 6: no value is discarded without being named,
+ * and in bulk that means naming them in aggregate — how many products, how many
+ * values, and the fields they came from.
+ */
+export async function previewMoveCategory(formData: FormData): Promise<MovePreviewResult> {
+  const seat = await getSellerSeat();
+  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
+  assertCanEditProduct(seat.actor);
+
+  const ids = formData.getAll("id").map(String).filter(Boolean);
+  const targetCategoryId = String(formData.get("categoryId") ?? "");
+  if (ids.length === 0 || !targetCategoryId) {
+    return { ok: false, error: t("catalogue.move.no_target") };
+  }
+
+  const preview = await previewMove(seat.businessId, ids, targetCategoryId);
+  if (!preview) return { ok: false, error: t("catalogue.move.no_target") };
+  return { ok: true, preview };
+}
+
+/**
+ * Refile a selection under another category.
+ *
+ * Which is also what changes their template — a product has no template pointer,
+ * and the template is resolved through the category. Board 3f asks for two
+ * actions; the data model has one write, and two buttons for it would be a lie
+ * about what the seller is doing. See lib/products/move-category.ts.
+ *
+ * The spec values are left exactly where they are. A value whose field does not
+ * exist in the target is unreadable rather than deleted, and moving back
+ * restores it — which is the same never-destroy rule the rest of the wave
+ * follows, and the reason the preview counts values rather than deleting them.
+ */
+export async function bulkMoveCategory(formData: FormData): Promise<BulkResult> {
+  const seat = await getSellerSeat();
+  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
+  assertCanEditProduct(seat.actor);
+
+  const ids = formData.getAll("id").map(String).filter(Boolean);
+  const categoryId = String(formData.get("categoryId") ?? "");
+  if (ids.length === 0 || !categoryId) {
+    return { ok: false, error: t("catalogue.move.no_target") };
+  }
+
+  const { count } = await prisma.product.updateMany({
+    where: { id: { in: ids }, businessId: seat.businessId },
+    data: { categoryId },
+  });
+
+  /*
+     The match surface, and the business's own.
+
+     A product's category name is part of what it is findable by, and moving it
+     changes which facets apply — so the index has to be rebuilt or the old
+     category's words keep matching it.
+  */
+  if (count > 0) await reindexBusiness(seat.businessId);
+
+  revalidatePath("/dashboard/products");
+  return { ok: true, changed: count };
 }
 
 export type RunImportResult =
@@ -353,3 +489,46 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
    `setUpTemplate` moved with it: cloning is the templates rail's job now, and
    the index route redirects to the clone it creates.
 */
+
+/* ── Board 3f — one new product ──────────────────────────────────────────── */
+
+export type CreateProductResult = { ok: true; id: string } | { ok: false; error: string };
+
+/**
+ * A blank product, filed under the seller's primary category.
+ *
+ * The category is what decides the template, and the template is what board 3g
+ * renders — so a product created without one would open an editor with no
+ * fields. The primary category is the honest default and 3g's own category
+ * control is where it gets changed.
+ *
+ * It starts as a **draft**, which is what makes this safe at the plan's cap:
+ * the cap is on what is *listed*, not on what is stored, and every rule in this
+ * wave says a record is never destroyed or refused for a billing reason. A
+ * seller at their limit can still write the product down; publishing it is what
+ * needs room, and `bulkUpdateProducts` is where that is refused.
+ */
+export async function createProduct(formData: FormData): Promise<CreateProductResult> {
+  const seat = await getSellerSeat();
+  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
+  assertCanEditProduct(seat.actor);
+
+  const name = String(formData.get("name") ?? "").trim();
+  if (name === "") return { ok: false, error: t("product.name_required") };
+
+  const business = await prisma.business.findUnique({
+    where: { id: seat.businessId },
+    select: { primaryCategoryId: true },
+  });
+  if (!business) return { ok: false, error: t("product.not_found") };
+
+  const id = await createWithUniqueSlug(seat.businessId, business.primaryCategoryId, {
+    name,
+    availability: "in_stock",
+    specValues: {},
+    live: false,
+  });
+
+  revalidatePath("/dashboard/products");
+  return { ok: true, id };
+}

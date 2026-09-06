@@ -143,7 +143,7 @@ const TIER_4 = [
    that lives beside one route has no row in it — but the pre-flight list still
    asks for every documented state to render somewhere clickable.
 */
-const UNLISTED = ["plan-comparison", "spec-field-row"] as const;
+const UNLISTED = ["plan-comparison", "spec-field-row", "specs-cell"] as const;
 
 export default function Gallery() {
   return (

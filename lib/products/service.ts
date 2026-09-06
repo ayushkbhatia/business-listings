@@ -498,12 +498,17 @@ interface CreateInput {
 /**
  * Insert, retrying the slug rather than guessing at it.
  *
+ * Exported because board 3f's `New product` needs the same minter: `slug` is
+ * NOT NULL under `@@unique([businessId, slug])`, so any second path that
+ * invented its own would be a constraint violation waiting for a supplier with
+ * two products of the same name.
+ *
  * `@@unique([businessId, slug])` is the only thing that knows whether a slug is
  * taken, and a read-then-write would still race two tabs. Two suffixed attempts
  * cover the realistic case — a supplier with two products of the same name —
  * and the third falls back to the row's own randomness.
  */
-async function createWithUniqueSlug(
+export async function createWithUniqueSlug(
   businessId: string,
   categoryId: string,
   input: CreateInput,

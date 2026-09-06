@@ -11,159 +11,16 @@ import type { SpecFieldOption } from "@/lib/import/columns";
  * the id in the URL gets a 404 rather than somebody else's catalogue.
  */
 
-export interface CatalogueRow {
-  id: string;
-  name: string;
-  slug: string;
-  sku: string | null;
-  status: string;
-  availability: string;
-  stockQty: number | null;
-  leadTimeDays: number | null;
-  categoryName: string;
-  /** How many of the template's filterable fields this product has filled. */
-  filterableFilled: number;
-  filterableTotal: number;
-  photoCount: number;
-  updatedAt: Date;
-  /** Set when a CSV created this row and the run can still be undone. */
-  fromImport: boolean;
-  /**
-   * Buyers waiting for this line to come back into stock.
-   *
-   * Board 1e's "Notify me" creates one of these, and this is where the seller
-   * meets it: on the row they would edit to fix it, rather than on a screen
-   * they have to remember to visit. A count on an out-of-stock line is the
-   * clearest argument the directory makes for restocking something.
-   */
-  watchers: number;
-}
+/*
+   `getCatalogue` and its row type lived here and are gone.
 
-export interface CatalogueView {
-  rows: CatalogueRow[];
-  total: number;
-  /** Products with no filterable spec at all — the number board 11e argues from. */
-  missingFilterableSpecs: number;
-  draftCount: number;
-}
-
-export async function getCatalogue(businessId: string): Promise<CatalogueView> {
-  const products = await prisma.product.findMany({
-    where: { businessId },
-    orderBy: [{ updatedAt: "desc" }],
-    select: {
-      id: true,
-      name: true,
-      slug: true,
-      sku: true,
-      status: true,
-      availability: true,
-      stockQty: true,
-      leadTimeDays: true,
-      specValues: true,
-      importRunId: true,
-      updatedAt: true,
-      category: {
-        select: {
-          id: true,
-          name: true,
-          /*
-             The parent's template counts too.
-
-             A template belongs to the trade, not the niche: the seeded one sits
-             on "Valves & fittings" and there is none on "Ball valves". This
-             read only the product's own category, so every product filed under
-             a subcategory came back with no filterable fields — which the table
-             rendered as "No template" and `missingFilterableSpecs` excluded
-             from its own count, because a product with nothing to fill cannot
-             be missing anything. Two screens agreeing on a number neither had
-             measured.
-
-             Resolved below in one pass rather than per row: see `templateIdFor`.
-          */
-          defaultTemplateId: true,
-          parent: { select: { defaultTemplateId: true } },
-        },
-      },
-      _count: {
-        select: {
-          media: true,
-          // Open watches only. A fired one has already done its job.
-          watches: { where: { notifiedAt: null } },
-        },
-      },
-    },
-  });
-
-  /*
-     Two queries for every template on the page, not two per product.
-
-     The rows share a handful of categories between them, so the filterable
-     fields are fetched once per distinct template and looked up per row. Doing
-     the hop inside the map would be one `category.findUnique` plus one
-     `specField.findMany` per product — 128 round trips on a 64-product
-     catalogue, for a figure the previous version got wrong for free.
-  */
-  const templateIds = [
-    ...new Set(
-      products
-        .map((p) => p.category.defaultTemplateId ?? p.category.parent?.defaultTemplateId)
-        .filter((id): id is string => id !== null && id !== undefined),
-    ),
-  ];
-  const filterableFields =
-    templateIds.length > 0
-      ? await prisma.specField.findMany({
-          where: { templateId: { in: templateIds }, isFilterable: true },
-          select: { id: true, templateId: true },
-        })
-      : [];
-  const filterableByTemplate = new Map<string, string[]>();
-  for (const field of filterableFields) {
-    const list = filterableByTemplate.get(field.templateId);
-    if (list) list.push(field.id);
-    else filterableByTemplate.set(field.templateId, [field.id]);
-  }
-
-  const rows: CatalogueRow[] = products.map((product) => {
-    const templateId =
-      product.category.defaultTemplateId ?? product.category.parent?.defaultTemplateId ?? null;
-    const filterable = (templateId ? filterableByTemplate.get(templateId) : undefined) ?? [];
-    const values = (product.specValues ?? {}) as Record<string, unknown>;
-    const filled = filterable.filter((fieldId) => {
-      const value = values[fieldId];
-      return value !== undefined && value !== null && value !== "";
-    }).length;
-
-    return {
-      id: product.id,
-      name: product.name,
-      slug: product.slug,
-      sku: product.sku,
-      status: product.status,
-      availability: product.availability,
-      stockQty: product.stockQty,
-      leadTimeDays: product.leadTimeDays,
-      categoryName: product.category.name,
-      filterableFilled: filled,
-      filterableTotal: filterable.length,
-      photoCount: product._count.media,
-      updatedAt: product.updatedAt,
-      fromImport: product.importRunId !== null,
-      watchers: product._count.watches,
-    };
-  });
-
-  return {
-    rows,
-    total: rows.length,
-    // Counted the way board 11e phrases it: "62 products are missing filterable
-    // specs" means none at all, not merely incomplete.
-    missingFilterableSpecs: rows.filter((r) => r.filterableTotal > 0 && r.filterableFilled === 0)
-      .length,
-    draftCount: rows.filter((r) => r.status === "draft").length,
-  };
-}
+   Board 3f reads `lib/products/catalogue.ts` now, because the two counts that
+   screen exists for — blocked on save, missing a filter value — are spec values
+   judged against a template's required flags and facet set, and none of that is
+   a `where` clause. Keeping a second, thinner catalogue query beside it would be
+   a second answer to the same question, which is the defect board 3g was built
+   to close.
+*/
 
 /** The platform template for a category, as the import mapper needs it. */
 /**

@@ -40,6 +40,8 @@ import { formatAED, formatDate, formatDuration, formatSize } from "@/lib/format"
 import { t } from "@/lib/i18n";
 import { Frame, Section, Specimen, States } from "../_kit";
 import { SpecGridStates } from "./SpecGridStates";
+import { SPECS_CELL_STATES } from "./SpecsCellStates";
+import { SpecsCell } from "@/app/(dashboard)/dashboard/products/CatalogueTable";
 
 /**
  * The rungs the ladder draws, from `TIERS` rather than a literal.
@@ -307,6 +309,36 @@ export function Domain() {
       >
         <Frame width="46rem">
           <SpecGridStates />
+        </Frame>
+      </Section>
+
+      {/*
+        Board 3f's SPECS cell. Page-local, like board 3g's grid row above it,
+        but the four states are the whole argument of that screen and a
+        reviewer meeting `Live` beside `SAVE BLOCKED` needs somewhere to see
+        that it is deliberate.
+      */}
+      <Section
+        id="specs-cell"
+        title="SpecsCell (board 3f)"
+        note="the ratio is context; the line beneath it is what the gap costs — and a row can be blocked and unfindable at once"
+      >
+        <Frame width="26rem">
+          <table className="w-full border-collapse text-left">
+            <caption className="sr-only">{t("catalogue.col.specs")}</caption>
+            <tbody>
+              {SPECS_CELL_STATES.map((state) => (
+                <tr key={state.caption} className="border-b border-line last:border-b-0">
+                  <th scope="row" className="w-1/2 py-2 pe-3 text-caption font-normal text-muted">
+                    {state.caption}
+                  </th>
+                  <td className="py-2">
+                    <SpecsCell row={state.row} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </Frame>
       </Section>
 
