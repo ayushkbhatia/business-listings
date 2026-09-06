@@ -304,6 +304,22 @@ test.describe("accessibility", () => {
 
   test("the static map is not a keyboard trap and its pins are not tab stops", async ({ page }) => {
     await page.goto(LIVE);
+
+    /*
+       The map has to be brought into view before there is a map to assert on.
+
+       `MapCanvas` will not load MapLibre until its frame intersects — 800 KB
+       and a tile stream, deliberately not paid for above the fold. In the
+       one-column layout below `lg` the card sits about 1,600px down, far
+       outside the 200px `rootMargin`, so nothing ever mounted and this failed
+       on the mobile project against a canvas that was never going to exist. It
+       passed on a desktop only because the card happens to load in the top
+       viewport there, which made the whole assertion a race the wide project
+       won.
+    */
+    const map = page.getByRole("group", { name: /Where these companies are/ });
+    await map.scrollIntoViewIfNeeded();
+
     /*
        §3: "no pan, no zoom, no marker interaction. It is orientation, not a
        tool." A canvas nobody can pan left focusable is a tab stop that does

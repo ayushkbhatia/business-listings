@@ -54,28 +54,40 @@ export function Contents({ headings }: { headings: readonly GuideHeading[] }) {
  * §Responsive: *"contents rail becomes a collapsed 'On this page' disclosure
  * above the standfirst, closed by default."* One list in the markup either way
  * would have been better still, but a sticky rail and a disclosure are
- * different elements and CSS cannot turn one into the other — so both render
- * and the one that does not apply is hidden, which is what the breakpoints in
- * `className` say.
+ * different elements and CSS cannot turn one into the other without a client
+ * boundary — `LegalSectionNav` spends one on `matchMedia` to keep a single
+ * list, and this page will not, because being a static article is the whole of
+ * its value. So both render and the one that does not apply is hidden, which is
+ * what the breakpoints in `className` say.
+ *
+ * ## Still a navigation landmark
+ *
+ * The rail above is a named `nav`; this was a bare `details`, so the same
+ * in-page navigation announced itself on a desktop and was anonymous on a
+ * phone. `lg:hidden` sits on the `nav` rather than on the `details` — on the
+ * inner element the landmark would survive its own contents above `lg` and be
+ * a second empty "On this page" navigation next to the rail's.
  */
 export function ContentsDisclosure({ headings }: { headings: readonly GuideHeading[] }) {
   return (
-    <details className="rounded-card border border-line bg-card px-4 py-3 lg:hidden">
-      <summary className="cursor-pointer font-mono text-eyebrow uppercase text-muted marker:content-none [&::-webkit-details-marker]:hidden">
-        {t("guides.on_this_page")}
-      </summary>
-      <ol className="mt-3 flex flex-col gap-2.5">
-        {headings.map((heading) => (
-          <li key={heading.id}>
-            <a
-              href={`#${heading.id}`}
-              className="rounded-tag text-caption leading-snug text-body underline-offset-2 hover:text-ink hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-            >
-              {heading.text}
-            </a>
-          </li>
-        ))}
-      </ol>
-    </details>
+    <nav aria-label={t("guides.on_this_page")} className="lg:hidden">
+      <details className="rounded-card border border-line bg-card px-4 py-3">
+        <summary className="cursor-pointer font-mono text-eyebrow uppercase text-muted marker:content-none [&::-webkit-details-marker]:hidden">
+          {t("guides.on_this_page")}
+        </summary>
+        <ol className="mt-3 flex flex-col gap-2.5">
+          {headings.map((heading) => (
+            <li key={heading.id}>
+              <a
+                href={`#${heading.id}`}
+                className="rounded-tag text-caption leading-snug text-body underline-offset-2 hover:text-ink hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+              >
+                {heading.text}
+              </a>
+            </li>
+          ))}
+        </ol>
+      </details>
+    </nav>
   );
 }

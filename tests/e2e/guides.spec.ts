@@ -73,10 +73,41 @@ test.describe("the contents rail", () => {
 
   test("scrolls to a real section when followed", async ({ page }) => {
     await page.goto(GUIDE);
-    const first = page.locator('nav[aria-labelledby="on-this-page"] a').first();
+
+    /*
+       One locator at both widths.
+
+       Two controls carry the same derived list and CSS picks one: the sticky
+       rail from `lg` up, a disclosure closed by default below it. This followed
+       `nav[aria-labelledby="on-this-page"]` at every width, which on a phone is
+       the rail — `display:none`, so the click waited 30s on an element that
+       never becomes visible, and the disclosure, a second copy of the list in
+       the markup, was followed by nothing. `getByRole` sees only what is in the
+       accessibility tree, so it resolves to whichever control this viewport
+       actually shows.
+    */
+    const contents = page.getByRole("navigation", { name: "On this page" });
+    const summary = contents.locator("summary");
+    if (await summary.count()) await summary.click();
+
+    const first = contents.getByRole("link").first();
     const href = await first.getAttribute("href");
     await first.click();
-    await expect(page.locator(`article ${href}`)).toBeVisible();
+
+    const section = page.locator(`article ${href}`);
+    await expect(section).toBeVisible();
+
+    /*
+       "Scrolls to" is the assertion, and visible is not it: a heading behind
+       the sticky bar has a box and passes `toBeVisible`. The bar is 68px on one
+       row and 112px once it wraps below `sm`, and the headings carried a flat
+       96px `scroll-mt` — so on a phone the section a reader followed landed
+       17px underneath the bar, and only this comparison catches it.
+    */
+    const bar = (await page.getByRole("banner").boundingBox())?.height ?? 0;
+    const top = (await section.boundingBox())?.y ?? 0;
+    expect(bar).toBeGreaterThan(0);
+    expect(top).toBeGreaterThanOrEqual(bar);
   });
 });
 

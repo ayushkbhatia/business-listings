@@ -86,7 +86,23 @@ export function GuideBody({ blocks, cta, verifiedCount }: GuideBodyProps) {
                  slug of the text: renaming a heading would change its anchor
                  and break every link anybody had shared into that section.
               */
-              <h2 id={`s-${block.id}`} key={block.id} className="mt-4 scroll-mt-24 text-h2 text-ink">
+              /*
+                 The offset is the site bar, and the site bar has two heights.
+
+                 `PublicNav` states its own arithmetic: 68px while it is one row
+                 and 112px once it wraps, which it does below `sm` because the
+                 search field cannot share a row with the wordmark and the
+                 action button on a phone. With the bottom border that is 69px
+                 and 113px. A flat `scroll-mt-24` was 96px — 27px of clearance
+                 over the one-row bar, and 17px *underneath* the wrapped one, so
+                 following a contents entry on a phone landed the heading behind
+                 the bar. 140px keeps the same 27px on the taller bar.
+              */
+              <h2
+                id={`s-${block.id}`}
+                key={block.id}
+                className="mt-4 scroll-mt-35 text-h2 text-ink sm:scroll-mt-24"
+              >
                 {blockLine(block, "text")}
               </h2>
             );
