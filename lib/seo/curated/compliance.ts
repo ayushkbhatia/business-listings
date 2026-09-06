@@ -49,15 +49,20 @@ export async function sweepCuratedLists(now = new Date()): Promise<ComplianceRes
     select: {
       id: true,
       slug: true,
-      reauditDueAt: true,
       entryRemovedAt: true,
+      title: true,
+      reauditDueAt: true,
+      publishedAt: true,
       members: {
+        orderBy: { position: "asc" },
         select: {
           businessId: true,
+          position: true,
           snapResponseMs: true,
           snapReviewCount: true,
           business: {
             select: {
+              displayName: true,
               verificationTier: true,
               responseTimeMedianMs: true,
               reviews: { where: { removedAt: null, heldAt: null }, select: { id: true } },
@@ -125,6 +130,38 @@ export async function sweepCuratedLists(now = new Date()): Promise<ComplianceRes
       }
     }
 
+    /*
+       Board 6f criterion 13 — the computed order has left the written one.
+
+       `6b`'s prose is frozen: "slower to reply than the two above" is a
+       sentence about position, and the ranking behind it recomputes nightly.
+       When a supplier overtakes the one written above them the sentence becomes
+       false, and the only two ways out are to rewrite it or to flag it. This
+       flags it. Nothing here reorders a list or touches a word of it — a
+       machine rewriting a human's editorial judgement is the failure `6b`'s
+       whole snapshot model was built to avoid.
+
+       Compared on reply time, because that is what the prose is about. Ties
+       keep their audited order, so an unmeasured pair never reports a move.
+    */
+    const ranked = [...list.members].sort(
+      (a, b) =>
+        (a.business.responseTimeMedianMs ?? Number.MAX_SAFE_INTEGER) -
+          (b.business.responseTimeMedianMs ?? Number.MAX_SAFE_INTEGER) || a.position - b.position,
+    );
+    for (const [index, member] of ranked.entries()) {
+      if (index === member.position) continue;
+      openDrift += 1;
+      if (
+        await record(list.id, member.businessId, "order", {
+          snapshot: `${member.position + 1}`,
+          live: `${index + 1}`,
+        })
+      ) {
+        result.drifted.push({ slug: list.slug, businessId: member.businessId, criterion: "order" });
+      }
+    }
+
     if (lapsed && list.entryRemovedAt === null) {
       await prisma.curatedList.update({
         where: { id: list.id },
@@ -187,40 +224,4 @@ async function record(
     },
   });
   return true;
-}
-
-/** The open queue, for board 6f. Oldest first — that is the order to work it. */
-export async function driftQueue(): Promise<
-  {
-    listSlug: string;
-    listTitle: string;
-    displayName: string;
-    criterion: string;
-    snapshotValue: string;
-    liveValue: string;
-    detectedAt: Date;
-  }[]
-> {
-  const rows = await prisma.curatedListDrift.findMany({
-    where: { resolvedAt: null },
-    orderBy: { detectedAt: "asc" },
-    select: {
-      criterion: true,
-      snapshotValue: true,
-      liveValue: true,
-      detectedAt: true,
-      list: { select: { slug: true, title: true } },
-      business: { select: { displayName: true } },
-    },
-  });
-
-  return rows.map((row) => ({
-    listSlug: row.list.slug,
-    listTitle: row.list.title,
-    displayName: row.business.displayName,
-    criterion: row.criterion,
-    snapshotValue: row.snapshotValue,
-    liveValue: row.liveValue,
-    detectedAt: row.detectedAt,
-  }));
 }

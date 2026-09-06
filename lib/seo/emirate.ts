@@ -6,18 +6,29 @@ import type { Actor } from "@/lib/auth/roles";
 import type { SubjectRef } from "@/lib/audit/types";
 import { VERIFIED_TIER } from "@/lib/verification";
 import {
-  DEFAULT_THRESHOLDS,
-  evaluatePublish,
+  countWords,
+  evaluateHold,
+  isSupply,
+  listingsNeeded,
   type PublishFailure,
-  type PublishThresholds,
 } from "@/lib/publish-threshold";
+/*
+   The one builder, imported rather than restated.
+
+   This file carried a private `thresholdsFor` and a private `countWords` whose
+   bodies were byte-identical to the exported pair — while its own docblock
+   below argued that "two gates that agree until somebody changes one is the
+   defect this project repeats most". Board 6f adds three columns to the
+   threshold bag, and a copy would have meant the 84 emirate pages publishing on
+   the old rule while the area pages under them published on the new one: a URL
+   in the sitemap that the route 404s.
+*/
+import { CATEGORY_RULES_SELECT, thresholdsFor } from "@/lib/taxonomy/service";
 import {
   landingState,
   refreshFreshness,
   resolveEmirateScope,
-  type LandingFaqRow,
-  type LandingRelatedRow,
-  type LandingScope,
+  type LandingState,
 } from "@/lib/seo/landing";
 
 /**
@@ -49,46 +60,16 @@ import {
  * the sitemap all call in here, so they cannot disagree.
  */
 
-export interface EmiratePageState {
+/**
+ * One emirate page's state — `landingState` plus the two keys callers use.
+ *
+ * A superset rather than a hand-written projection, for the reason the file
+ * argues about everything else here: the projection listed fifteen fields, and
+ * board 6f added seven that it would have silently dropped.
+ */
+export interface EmiratePageState extends LandingState {
   emirate: string;
   categoryId: string;
-  listings: number;
-  verified: number;
-  intro: string | null;
-  introWords: number;
-  /** The written sentence, board 6a §SEO. Null falls back to a derived one. */
-  metaDescription: string | null;
-  /** The RELATED SEARCHES card, capped at five. */
-  relatedSearches: LandingRelatedRow[];
-  /** The per-scope editorial questions — board 6a's fourth condition. */
-  faq: LandingFaqRow[];
-  /** Staff intent. Not the live state on its own. */
-  publishedAt: Date | null;
-  /** All four conditions hold right now, whatever staff have decided. */
-  clearsFloors: boolean;
-  /** Published *and* clearing them. The only thing that has a URL. */
-  live: boolean;
-  failing: readonly PublishFailure[];
-  /** The scope object, so callers do not resolve it a second time. */
-  scope: LandingScope;
-}
-
-function countWords(text: string | null | undefined): number {
-  const trimmed = (text ?? "").trim();
-  return trimmed === "" ? 0 : trimmed.split(/\s+/).length;
-}
-
-function thresholdsFor(category: {
-  publishThreshold: number;
-  verifiedShareMin: number;
-}): PublishThresholds {
-  return {
-    minListings: category.publishThreshold,
-    minVerifiedShare: category.verifiedShareMin,
-    minIntroWords: DEFAULT_THRESHOLDS.minIntroWords,
-    minFaqRows: DEFAULT_THRESHOLDS.minFaqRows,
-    minScopeSpecificFaqRows: DEFAULT_THRESHOLDS.minScopeSpecificFaqRows,
-  };
 }
 
 /*
@@ -110,6 +91,7 @@ function thresholdsFor(category: {
 export async function emirateCategoryState(
   emirate: string,
   categoryId: string,
+  now = new Date(),
 ): Promise<EmiratePageState | null> {
   const category = await prisma.category.findUnique({
     where: { id: categoryId },
@@ -120,23 +102,8 @@ export async function emirateCategoryState(
   const scope = await resolveEmirateScope({ emirate, category: category.slug });
   if (!scope) return null;
 
-  const state = await landingState(scope);
-  return {
-    emirate,
-    categoryId,
-    listings: state.listings,
-    verified: state.verified,
-    intro: state.intro,
-    introWords: state.introWords,
-    metaDescription: state.metaDescription,
-    relatedSearches: state.relatedSearches,
-    faq: state.faq,
-    publishedAt: state.publishedAt,
-    clearsFloors: state.clearsFloors,
-    live: state.live,
-    failing: state.failing,
-    scope,
-  };
+  const state = await landingState(scope, now);
+  return { ...state, emirate, categoryId };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,6 +113,8 @@ export async function emirateCategoryState(
 export interface MatrixCell {
   emirate: string;
   listings: number;
+  /** The floor this cell is measured against — board 6f's `have / need`. */
+  need: number;
   /** Live means indexable: the count is a link and the URL is in the sitemap. */
   live: boolean;
 }
@@ -189,8 +158,10 @@ interface SupplyRow {
  * walk per cell. Counting `DISTINCT b.id` because a business with three
  * published locations in Dubai is one Dubai supplier, not three.
  */
-export async function emirateMatrix(): Promise<MatrixRow[]> {
-  const [sectors, rows, pages] = await Promise.all([
+const DAY_MS = 86_400_000;
+
+export async function emirateMatrix(now = new Date()): Promise<MatrixRow[]> {
+  const [sectors, rows, pages, demand] = await Promise.all([
     prisma.category.findMany({
       where: { parentId: null },
       select: {
@@ -198,8 +169,7 @@ export async function emirateMatrix(): Promise<MatrixRow[]> {
         slug: true,
         name: true,
         code: true,
-        publishThreshold: true,
-        verifiedShareMin: true,
+        ...CATEGORY_RULES_SELECT,
       },
     }),
     prisma.$queryRaw<SupplyRow[]>`
@@ -237,13 +207,32 @@ export async function emirateMatrix(): Promise<MatrixRow[]> {
            that 404s, which is criterion 13 failing in the expensive direction.
         */
         faq: { select: { scopeSpecific: true } },
+        /*
+           Board 6f. `cell.live` is what the sitemap and `/categories` read, so
+           it has to answer the same question `landingState` answers on the page
+           itself — which since 6f is the hysteresis band, the minimum-live
+           window and the editorial hold, not the publish floor. Left on
+           `decision.publishable` this function would have kept the sitemap on
+           the old rule while the route served the new one.
+        */
+        firstPublishedAt: true,
+        heldAt: true,
       },
+    }),
+    /*
+       Recorded demand for the emirate-wide scopes, in one read. `areaId: null`
+       is the emirate page's row; the area rows belong to a different matrix.
+    */
+    prisma.scopeDemand.findMany({
+      where: { areaId: null },
+      select: { categoryId: true, emirate: true, monthlySearches: true, capturedAt: true },
     }),
   ]);
 
   const pageFor = new Map(
     pages.map((page) => [`${page.categoryId}:${page.emirate}`, page]),
   );
+  const demandFor = new Map(demand.map((row) => [`${row.categoryId}:${row.emirate}`, row]));
 
   const bySector = new Map<string, Map<string, { listings: number; verified: number }>>();
   for (const row of rows) {
@@ -263,27 +252,40 @@ export async function emirateMatrix(): Promise<MatrixRow[]> {
       const cells = MATRIX_EMIRATES.map((emirate) => {
         const found = perEmirate.get(emirate) ?? { listings: 0, verified: 0 };
         const page = pageFor.get(`${sector.id}:${emirate}`);
-        const decision = evaluatePublish(
-          {
-            listings: found.listings,
-            verified: found.verified,
-            // Each cell's own paragraph now, not the sector's one shared one.
-            introWords: countWords(page?.intro),
-            /*
-               Absent where no row exists yet, which reads as nought once the
-               row does. A cell with no `EmiratePage` at all fails on copy
-               anyway, so the distinction never decides a cell — it keeps the
-               shape honest for a reader.
-            */
-            faqRows: page?.faq.length ?? 0,
-            scopeSpecificFaqRows: (page?.faq ?? []).filter((row) => row.scopeSpecific).length,
-          },
-          thresholds,
-        );
+        const searches = demandFor.get(`${sector.id}:${emirate}`)?.monthlySearches;
+        const input = {
+          listings: found.listings,
+          verified: found.verified,
+          // Each cell's own paragraph now, not the sector's one shared one.
+          introWords: countWords(page?.intro),
+          /*
+             Absent where no row exists yet, which reads as nought once the
+             row does. A cell with no `EmiratePage` at all fails on copy
+             anyway, so the distinction never decides a cell — it keeps the
+             shape honest for a reader.
+          */
+          faqRows: page?.faq.length ?? 0,
+          scopeSpecificFaqRows: (page?.faq ?? []).filter((row) => row.scopeSpecific).length,
+          // Never `?? 0`: absent demand is the absolute floor.
+          monthlySearches: searches ?? undefined,
+        };
+        const hold = evaluateHold(input, thresholds);
+        const withinGrace =
+          page?.firstPublishedAt != null &&
+          now.getTime() - page.firstPublishedAt.getTime() < sector.minLiveDays * DAY_MS;
         return {
           emirate,
           listings: found.listings,
-          live: page?.publishedAt != null && decision.publishable,
+          need: listingsNeeded(input, thresholds).need,
+          /*
+             The same three clauses `landingState` applies, in the same order.
+             If these two ever disagree the sitemap contains a URL that 404s.
+          */
+          live:
+            page?.publishedAt != null &&
+            page.heldAt == null &&
+            (hold.publishable ||
+              (withinGrace && hold.failures.every((f) => f.reason === "listings"))),
         };
       });
 
@@ -314,10 +316,10 @@ export async function emirateMatrix(): Promise<MatrixRow[]> {
  * absent from both and a published one whose supply fell this morning leaves
  * both on the next read.
  */
-export async function liveEmiratePages(): Promise<
-  { emirate: string; categorySlug: string }[]
-> {
-  const matrix = await emirateMatrix();
+export async function liveEmiratePages(
+  now = new Date(),
+): Promise<{ emirate: string; categorySlug: string }[]> {
+  const matrix = await emirateMatrix(now);
   return matrix.flatMap((row) =>
     row.cells
       .filter((cell) => cell.live)
@@ -338,7 +340,7 @@ export function emiratePagePath(emirate: string, categorySlug: string): string {
 // a state change somebody should be able to look up in six months.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export type EmiratePageRefusal = "not_found" | "below_floors" | "not_published";
+export type EmiratePageRefusal = "not_found" | "below_floors" | "not_published" | "held";
 
 export type EmiratePageResult<T = unknown> =
   | ({ ok: true } & T)
@@ -449,6 +451,16 @@ export async function publishEmiratePage(
   const state = await emirateCategoryState(emirate, categoryId);
   if (!state) return { ok: false, error: "not_found", message: "That trade is not here." };
 
+  // `Held · editorial`, as on the area class. A person's decision, checked
+  // before the arithmetic so the refusal states the true reason.
+  if (state.heldAt) {
+    return {
+      ok: false,
+      error: "held",
+      message: `Held by a person on ${state.heldAt.toISOString().slice(0, 10)}: ${state.heldReason ?? ""}`.trim(),
+    };
+  }
+
   if (!state.clearsFloors) {
     return {
       ok: false,
@@ -461,13 +473,21 @@ export async function publishEmiratePage(
   const key = { emirate: emirate as never, categoryId };
   const subject = await subjectFor(emirate, categoryId);
 
+  const now = new Date();
   const publishedAt = await prisma.$transaction(async (tx) =>
     staffMutation({ actor, capability: "taxonomy.write", subject, reason, tx }, async () => {
       const row = await tx.emiratePage.update({
         where: { emirate_categoryId: key },
         // An already-published page keeps its original date: `lastmod` is a
         // claim about when the content changed, not when somebody clicked.
-        data: { publishedAt: state.publishedAt ?? new Date() },
+        //
+        // `firstPublishedAt` is stamped once and never again, so board 6f's
+        // minimum-live window measures from the first time this page was live
+        // rather than restarting on every republish.
+        data: {
+          publishedAt: state.publishedAt ?? now,
+          firstPublishedAt: state.firstPublishedAt ?? now,
+        },
         select: { publishedAt: true },
       });
       return {
@@ -519,6 +539,8 @@ export interface EmirateSweepResult {
   unpublished: { emirate: string; categorySlug: string; failing: PublishFailure[] }[];
   /** How many had supply move under them, and so moved their `UPDATED` date. */
   refreshed: number;
+  /** Below the band but inside their minimum-live window — board 6f §6. */
+  heldByGrace: number;
 }
 
 /**
@@ -538,7 +560,7 @@ export interface EmirateSweepResult {
  * its own published rule has no actor, and `AuditEvent.actorId` is NOT NULL
  * because the log records decisions.
  */
-export async function sweepEmiratePages(): Promise<EmirateSweepResult> {
+export async function sweepEmiratePages(now = new Date()): Promise<EmirateSweepResult> {
   const published = await prisma.emiratePage.findMany({
     where: { publishedAt: { not: null } },
     select: { emirate: true, categoryId: true, category: { select: { slug: true } } },
@@ -546,15 +568,21 @@ export async function sweepEmiratePages(): Promise<EmirateSweepResult> {
 
   const unpublished: EmirateSweepResult["unpublished"] = [];
   let refreshed = 0;
+  let held = 0;
 
   for (const page of published) {
-    const state = await emirateCategoryState(page.emirate, page.categoryId);
+    const state = await emirateCategoryState(page.emirate, page.categoryId, now);
     if (!state) continue;
 
     const freshness = await refreshFreshness(state.scope);
     if (freshness?.moved) refreshed += 1;
 
-    if (state.clearsFloors) continue;
+    // The band and the window, as on the area class — board 6f §6.
+    if (state.holdsFloors) continue;
+    if (state.withinGrace && state.holdFailing.every(isSupply)) {
+      held += 1;
+      continue;
+    }
 
     await prisma.emiratePage.update({
       where: { emirate_categoryId: { emirate: page.emirate, categoryId: page.categoryId } },
@@ -563,11 +591,11 @@ export async function sweepEmiratePages(): Promise<EmirateSweepResult> {
     unpublished.push({
       emirate: page.emirate,
       categorySlug: page.category.slug,
-      failing: [...state.failing],
+      failing: [...state.holdFailing],
     });
   }
 
-  return { checked: published.length, unpublished, refreshed };
+  return { checked: published.length, unpublished, refreshed, heldByGrace: held };
 }
 
 export interface EmiratePageRow extends EmiratePageState {
@@ -584,8 +612,8 @@ export interface EmiratePageRow extends EmiratePageState {
  * a screen that only listed authored pages would hide exactly the work that
  * needs doing.
  */
-export async function emiratePageRows(): Promise<EmiratePageRow[]> {
-  const matrix = await emirateMatrix();
+export async function emiratePageRows(now = new Date()): Promise<EmiratePageRow[]> {
+  const matrix = await emirateMatrix(now);
   const rows: EmiratePageRow[] = [];
 
   for (const sector of matrix) {

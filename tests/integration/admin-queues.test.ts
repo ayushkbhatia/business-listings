@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { ACTION_FOR_CAPABILITY } from "@/lib/audit/types";
+import { ACTION_FOR_CAPABILITY, PAIRED_ACTIONS } from "@/lib/audit/types";
 import { CAPABILITIES } from "@/lib/auth/capabilities";
 
 /**
@@ -180,12 +180,21 @@ describe("the audit rows those decisions owe", () => {
   it("are written by an actor who holds the capability", async () => {
     // The map is the same one lib/audit/staff-mutation.ts uses, so this reads
     // the production wiring rather than a copy of it.
+    //
+    // `PAIRED_ACTIONS` as well as the default, because a capability whose
+    // control has more than one outcome names them there: `review.hold` writes
+    // a hold and a release, and `taxonomy.write` writes the four halves of
+    // board 6f's rule flow. Reading only the defaults left every paired action
+    // with no capability behind it, which this asserts is a hole.
     const roleFor = new Map<string, ReadonlySet<string>>();
     for (const [capability, action] of Object.entries(ACTION_FOR_CAPABILITY)) {
-      roleFor.set(
-        action,
-        new Set(CAPABILITIES[capability as keyof typeof CAPABILITIES].roles),
+      const roles = new Set<string>(
+        CAPABILITIES[capability as keyof typeof CAPABILITIES].roles,
       );
+      roleFor.set(action, roles);
+      for (const paired of PAIRED_ACTIONS[capability as keyof typeof PAIRED_ACTIONS] ?? []) {
+        roleFor.set(paired, roles);
+      }
     }
 
     const events = await prisma.auditEvent.findMany({

@@ -1,4 +1,4 @@
-import { countWords, DEFAULT_THRESHOLDS } from "@/lib/publish-threshold";
+import { countWords } from "@/lib/publish-threshold";
 
 /**
  * The block vocabulary for a guide — boards 10b and 6d.
@@ -13,7 +13,14 @@ import { countWords, DEFAULT_THRESHOLDS } from "@/lib/publish-threshold";
  * writes; nothing reads the catalogue.
  */
 
-export type GuideBlockKind = "heading" | "text" | "list" | "steps" | "callout" | "cta";
+export type GuideBlockKind =
+  | "heading"
+  | "text"
+  | "list"
+  | "steps"
+  | "quote"
+  | "callout"
+  | "cta";
 
 export interface GuideBlockSpec {
   kind: GuideBlockKind;
@@ -29,6 +36,13 @@ export interface GuideBlockSpec {
 export const GUIDE_BLOCK_SPECS: readonly GuideBlockSpec[] = [
   { kind: "heading", labelKey: "guide.block.heading", fields: [{ key: "text", type: "line" }] },
   { kind: "text", labelKey: "guide.block.text", fields: [{ key: "body", type: "text" }] },
+  /*
+     Board 6d §4: "One per article at most. It is for the one sentence a reader
+     should leave with, not for decoration." Not enforced in the schema — a
+     writer who wants two has an editor to argue with, and a refusal here would
+     be the tool having an opinion about prose.
+  */
+  { kind: "quote", labelKey: "guide.block.quote", fields: [{ key: "body", type: "text" }] },
   { kind: "list", labelKey: "guide.block.list", fields: [{ key: "items", type: "items" }] },
   { kind: "steps", labelKey: "guide.block.steps", fields: [{ key: "items", type: "items" }] },
   {
@@ -120,6 +134,93 @@ export function guideWords(blocks: readonly GuideBlock[]): number {
   return countWords(guideProse(blocks));
 }
 
+export interface GuideHeading {
+  /** The anchor. Stable across edits to the text, because it is the block id. */
+  id: string;
+  text: string;
+}
+
+/**
+ * The contents rail — board 6d §3, acceptance 4.
+ *
+ * *"Generated from the article's `h2` elements, never authored separately."*
+ * The board had a hand-written list of six against an article with three: two
+ * entries pointed at nothing and one pointed at a different guide entirely.
+ *
+ * A hand-maintained list drifts from the article on the first edit, and every
+ * entry is an anchor — so drift means broken in-page navigation on the page
+ * class we most want crawled. Deriving it means adding, renaming or removing a
+ * heading changes the rail with no second edit and no way to disagree.
+ *
+ * The anchor is the **block id**, not a slug of the text. Renaming a heading
+ * would otherwise change its anchor and break every link anyone had shared.
+ */
+export function guideHeadings(blocks: readonly GuideBlock[]): GuideHeading[] {
+  return blocks
+    .filter((block) => block.kind === "heading")
+    .map((block) => ({ id: `s-${block.id}`, text: blockLine(block, "text") }))
+    .filter((heading) => heading.text.trim() !== "");
+}
+
+/**
+ * Below this there is no rail and the article column widens — §3 and §States.
+ *
+ * Three headings is the point at which a contents list is worth the 262px it
+ * costs; two is a list of the page you can already see.
+ */
+export const MIN_HEADINGS_FOR_CONTENTS = 3;
+
+/**
+ * Links from the body into the directory — acceptance 10.
+ *
+ * *"Every guide links into the directory at least twice: the closing CTA, and
+ * at least one in-body link to a relevant category or area page. The in-body
+ * link is what makes the guide's earned authority flow to the pages that need
+ * it — a guide that only links out from its footer passes much less."*
+ *
+ * So the CTA is not enough on its own, and this counts only the body. A guide
+ * is written to earn links for the 84 area pages; one that keeps all of that
+ * authority in its own footer has done the expensive half of the job and
+ * skipped the cheap half.
+ */
+/*
+   What counts as "into the directory".
+
+   `/categories` is board 6c's crawlable spine and the index every area page
+   hangs off, so a guide pointing there is pointing into the directory — it was
+   missing from the first version of this pattern, which required a second path
+   segment and therefore refused the one URL that is the directory's front door.
+
+   `/search` is deliberately absent: it carries `noindex` and passes nothing on.
+   So is `/rfq/new` — board 6d Q5 keeps the composer off guides entirely.
+*/
+const DIRECTORY_HREF = /^\/(categories$|categories\/|c\/|best\/|[a-z-]+\/[a-z0-9-]+)/;
+
+export function directoryLinks(blocks: readonly GuideBlock[]): string[] {
+  const found: string[] = [];
+  for (const block of blocks) {
+    for (const key of ["href", "ctaHref", "link"]) {
+      const value = block.values[key];
+      if (typeof value === "string" && DIRECTORY_HREF.test(value)) found.push(value);
+    }
+    /*
+       Markdown-style links inside prose, which is how a writer actually puts
+       one in a paragraph. Counting only a `href` field would mean the rule
+       could be satisfied by a block type nobody uses and missed by the one
+       everybody does.
+    */
+    for (const key of ["text", "body"]) {
+      const value = block.values[key];
+      if (typeof value !== "string") continue;
+      for (const match of value.matchAll(/\]\((\/[^)\s]+)\)/g)) {
+        const href = match[1] as string;
+        if (DIRECTORY_HREF.test(href)) found.push(href);
+      }
+    }
+  }
+  return found;
+}
+
 /**
  * Words per minute for the `GUIDE · 6 MIN` kicker board 6a §5 draws.
  *
@@ -143,11 +244,15 @@ export function readingMinutes(body: unknown): number {
 }
 
 /**
- * The floor a guide publishes above.
+ * The floor a guide publishes above — board 6d, acceptance 13.
  *
- * Read from `DEFAULT_THRESHOLDS` rather than restated. Guides are not governed
- * by the board 6f matrix — that gate counts listings and verified share, and a
- * guide about payment terms has neither — but the reason for the 250 is the
- * same one, and two numbers drift.
+ * **1,200, not 250.** It borrowed `DEFAULT_THRESHOLDS.minIntroWords` on the
+ * argument that one number is better than two, which was right about landing
+ * pages and wrong here: 250 words is the floor for a *paragraph* introducing a
+ * page of listings, and a guide is the page. §What-this-page-is-for is blunt
+ * about the consequence — the render shows structure at about 520 words and
+ * "would not rank for a query this competitive".
+ *
+ * The two numbers measure different things, which is why they are now two.
  */
-export const GUIDE_MIN_WORDS = DEFAULT_THRESHOLDS.minIntroWords;
+export const GUIDE_MIN_WORDS = 1_200;

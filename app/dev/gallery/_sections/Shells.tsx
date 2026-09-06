@@ -135,10 +135,24 @@ export function Shells() {
               <AppSidebar
                 label={`${t("nav.label.admin")} — staff_ops_lead`}
                 groups={resolveNav(ADMIN_NAV, (key) => t(key as never))}
-                activeHref="/admin/audit"
+                activeHref="/admin/content/matrix"
                 actor={OPS}
                 lockedLabel={t("nav.locked")}
                 laterLabel={t("nav.later")}
+                /*
+                   The pinned account footer — board 6f §1. The slot has existed
+                   since this component did and nothing ever passed one, so the
+                   state was undrawn here and unrendered in the console. The item
+                   list above it is the scroll region.
+                */
+                footer={
+                  <div className="flex flex-col gap-0.5">
+                    <span className="truncate text-caption text-on-ink">Ops Lead</span>
+                    <span className="font-mono text-eyebrow uppercase text-on-ink-muted">
+                      {t("staff.role.staff_ops_lead")}
+                    </span>
+                  </div>
+                }
                 mark={
                   <span className="flex items-center gap-2">
                     <span className="rounded-tag bg-moss-on-ink px-1.5 py-px font-mono text-eyebrow uppercase text-moss-on-ink-text">

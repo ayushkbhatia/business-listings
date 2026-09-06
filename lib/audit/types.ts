@@ -25,7 +25,17 @@ export type AuditAction =
   | "entitlements_changed"
   | "ranking_changed"
   | "storefront_template_changed"
-  | "cross_business_read";
+  | "cross_business_read"
+  /*
+     Board 6f's dual control over the publish rules. Four names rather than one
+     "rule_changed", because the log has to say which of the four happened: a
+     proposal nobody approved and an approval are different rows, and the whole
+     point of the table is that they were made by different people.
+  */
+  | "rule_proposed"
+  | "rule_approved"
+  | "rule_rejected"
+  | "rule_withdrawn";
 
 /**
  * Every audited capability maps to exactly one action, so a staff mutation
@@ -67,16 +77,30 @@ export const ACTION_FOR_CAPABILITY = {
 export type AuditedCapability = keyof typeof ACTION_FOR_CAPABILITY;
 
 /**
- * The capabilities that cover a reversible pair, and the two actions each may
- * log. Everything absent from here logs exactly the action
+ * The capabilities whose control has more than one outcome, and the actions
+ * each may log. Everything absent from here logs exactly the action
  * `ACTION_FOR_CAPABILITY` names for it and nothing else.
  *
- * One entry, deliberately. Board 1m's held state is a pause a moderator can
- * undo, and the log has to distinguish the pause from the release; every other
- * audited capability makes a change that is not un-made by the same control.
+ * Two entries. Board 1m's held state is a pause a moderator can undo, and the
+ * log has to distinguish the pause from the release. Board 6f's publish rules
+ * are the second: a change is proposed by one ops lead and approved, rejected
+ * or withdrawn by another, and four rows under one `taxonomy_changed` label
+ * would hide the one fact the table exists to record — that two different
+ * people were involved.
+ *
+ * The default is unchanged in both cases. A caller that names no action still
+ * logs `ACTION_FOR_CAPABILITY`'s, so every existing `taxonomy.write` mutation
+ * files under `taxonomy_changed` exactly as before.
  */
 export const PAIRED_ACTIONS = {
   "review.hold": ["review_held", "review_released"],
+  "taxonomy.write": [
+    "taxonomy_changed",
+    "rule_proposed",
+    "rule_approved",
+    "rule_rejected",
+    "rule_withdrawn",
+  ],
 } as const satisfies Partial<Record<AuditedCapability, readonly AuditAction[]>>;
 
 export type PairedAction<C extends AuditedCapability> = C extends keyof typeof PAIRED_ACTIONS

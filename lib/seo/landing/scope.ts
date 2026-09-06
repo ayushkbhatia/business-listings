@@ -1,7 +1,18 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { countWords, evaluatePublish, type PublishFailure } from "@/lib/publish-threshold";
-import { thresholdsFor } from "@/lib/taxonomy/service";
+import {
+  countWords,
+  evaluateHold,
+  evaluatePublish,
+  holdFloor,
+  listingsNeeded,
+  type PublishFailure,
+} from "@/lib/publish-threshold";
+import {
+  CATEGORY_RULES_SELECT,
+  thresholdsFor,
+  type CategoryRules,
+} from "@/lib/taxonomy/service";
 import { VERIFIED_TIER } from "@/lib/verification";
 import type { Emirate } from "@/lib/db/generated/enums";
 
@@ -50,7 +61,7 @@ export const PUBLIC_BUSINESS = {
   mergedIntoId: null,
 } as const;
 
-export interface LandingCategory {
+export interface LandingCategory extends CategoryRules {
   id: string;
   slug: string;
   /**
@@ -65,8 +76,6 @@ export interface LandingCategory {
   parentId: string | null;
   parentSlug: string | null;
   parentName: string | null;
-  publishThreshold: number;
-  verifiedShareMin: number;
 }
 
 export interface LandingArea {
@@ -99,29 +108,31 @@ const CATEGORY_SELECT = {
   slug: true,
   name: true,
   parentId: true,
-  publishThreshold: true,
-  verifiedShareMin: true,
+  ...CATEGORY_RULES_SELECT,
   parent: { select: { slug: true, name: true } },
 } as const;
 
-function toCategory(row: {
-  id: string;
-  slug: string;
-  name: string;
-  parentId: string | null;
-  publishThreshold: number;
-  verifiedShareMin: number;
-  parent: { slug: string; name: string } | null;
-}): LandingCategory {
+/**
+ * One category row to the shape the gate reads.
+ *
+ * Exported so `links.ts` builds its scopes through the same mapper rather than
+ * restating the field list — it restated it, and the two lists went out of step
+ * the moment board 6f added five rule columns.
+ */
+export function toLandingCategory(
+  row: CategoryRules & {
+    id: string;
+    slug: string;
+    name: string;
+    parentId: string | null;
+    parent: { slug: string; name: string } | null;
+  },
+): LandingCategory {
+  const { parent, ...rest } = row;
   return {
-    id: row.id,
-    slug: row.slug,
-    name: row.name,
-    parentId: row.parentId,
-    parentSlug: row.parent?.slug ?? null,
-    parentName: row.parent?.name ?? null,
-    publishThreshold: row.publishThreshold,
-    verifiedShareMin: row.verifiedShareMin,
+    ...rest,
+    parentSlug: parent?.slug ?? null,
+    parentName: parent?.name ?? null,
   };
 }
 
@@ -159,7 +170,7 @@ export async function resolveAreaScope(params: {
     kind: "area",
     emirate: area.emirate,
     area: { id: area.id, slug: area.slug, name: area.name, lat: area.lat, lng: area.lng },
-    category: toCategory(category),
+    category: toLandingCategory(category),
     categoryIds: [category.id, ...(await childIds(category.id))],
     path: `/${area.emirate}/${area.slug}/${category.slug}`,
   };
@@ -203,7 +214,7 @@ export async function resolveEmirateScope(params: {
     kind: "emirate",
     emirate: params.emirate,
     area: null,
-    category: toCategory(category),
+    category: toLandingCategory(category),
     categoryIds: [category.id, ...(await childIds(category.id))],
     path: `/${params.emirate}/${category.slug}`,
   };
@@ -248,6 +259,52 @@ export interface LandingState {
   /** All four conditions hold right now, whatever staff have decided. */
   clearsFloors: boolean;
   /**
+   * The listings floor this scope is measured against, and which rule set it.
+   *
+   * Board 6f §the-publish-threshold-is-demand-relative: the higher of the
+   * absolute floor and 25 per 1,000 monthly searches. The matrix prints
+   * `have / need` from this so the arithmetic is visible rather than implied.
+   */
+  need: number;
+  needBasis: "absolute" | "demand";
+  /** Searches a month for this scope. Null where nobody has recorded one. */
+  monthlySearches: number | null;
+  demandSource: string | null;
+  /** When the figure was true. Rendered beside it — board 6f criterion 16. */
+  demandCapturedAt: Date | null;
+  /**
+   * The four conditions with the listings floor at the hysteresis band.
+   *
+   * What decides whether a page that is already live stays live. Board 6f §6:
+   * publish at 60, unpublish below 48, because a page at exactly the floor that
+   * gains and loses one listing a day publishes and unpublishes daily and every
+   * cycle emits a sitemap change.
+   */
+  holdsFloors: boolean;
+  /** The floor `holdsFloors` used, for the matrix and the refusal. */
+  holdFloor: number;
+  /** The first time this page went live, ever. Never cleared. */
+  firstPublishedAt: Date | null;
+  /**
+   * Inside the minimum-live window — board 6f §6, "minimum 30 days live".
+   *
+   * A page here stays live even below the hold floor. That is the criterion as
+   * written, and it is the only reading that keeps the matrix and the site
+   * agreeing: gating the sweep's write alone would leave `publishedAt` set on a
+   * page the route already 404s, which is precisely the divergence
+   * `sweepEmiratePages` exists to close.
+   */
+  withinGrace: boolean;
+  /**
+   * A person said not to publish this one — board 6f §States.
+   *
+   * Stored state on a screen whose rule is that nothing is stored, and the
+   * exception that proves it: a human decision is the one thing no query can
+   * re-derive. Never cleared automatically.
+   */
+  heldAt: Date | null;
+  heldReason: string | null;
+  /**
    * Intent AND conditions. The only thing that has a URL.
    *
    * §the-publish-gate consequence 1: an unpublished scope is not a thin page
@@ -256,6 +313,8 @@ export interface LandingState {
    */
   live: boolean;
   failing: readonly PublishFailure[];
+  /** Why it would not hold, when it does not. Measured at the band. */
+  holdFailing: readonly PublishFailure[];
 }
 
 /** The listings in one trade in one place, counted the way every surface counts. */
@@ -296,9 +355,31 @@ const PAGE_SELECT = {
   contentUpdatedAt: true,
   supplyDigest: true,
   publishedAt: true,
+  firstPublishedAt: true,
+  heldAt: true,
+  heldReason: true,
   faq: { select: FAQ_SELECT, orderBy: { position: "asc" } },
   relatedSearches: { select: RELATED_SELECT, orderBy: { position: "asc" } },
 } as const;
+
+/**
+ * The recorded search volume for one scope, or null.
+ *
+ * A table of its own — `ScopeDemand` — because the state board 6f calls
+ * `Recruit` is a scope with real demand and NO page row, so a column on
+ * `AreaPage` could not describe it. Absent means the absolute floor alone;
+ * it is never read as nought.
+ */
+export async function scopeDemand(scope: LandingScope) {
+  return prisma.scopeDemand.findFirst({
+    where: {
+      categoryId: scope.category.id,
+      emirate: scope.emirate,
+      areaId: scope.area?.id ?? null,
+    },
+    select: { monthlySearches: true, source: true, capturedAt: true },
+  });
+}
 
 /** The stored row for either class, or null before anybody has written one. */
 export async function landingPageRow(scope: LandingScope) {
@@ -330,21 +411,35 @@ export async function landingPageRow(scope: LandingScope) {
  * afterwards so the matrix agrees with what the site serves, but nothing on the
  * read path waits for it.
  */
-export async function landingState(scope: LandingScope): Promise<LandingState> {
-  const [row, counts] = await Promise.all([landingPageRow(scope), supply(scope)]);
+export async function landingState(scope: LandingScope, now = new Date()): Promise<LandingState> {
+  const [row, counts, demand] = await Promise.all([
+    landingPageRow(scope),
+    supply(scope),
+    scopeDemand(scope),
+  ]);
 
   const introWords = countWords(row?.intro);
   const faq = row?.faq ?? [];
-  const decision = evaluatePublish(
-    {
-      listings: counts.listings,
-      verified: counts.verified,
-      introWords,
-      faqRows: faq.length,
-      scopeSpecificFaqRows: faq.filter((item) => item.scopeSpecific).length,
-    },
-    thresholdsFor(scope.category),
-  );
+  const thresholds = thresholdsFor(scope.category);
+  const input = {
+    listings: counts.listings,
+    verified: counts.verified,
+    introWords,
+    faqRows: faq.length,
+    scopeSpecificFaqRows: faq.filter((item) => item.scopeSpecific).length,
+    // `?? undefined`, never `?? 0`. An absent figure is the absolute floor;
+    // a nought would make the demand-relative need nought and pass every
+    // unmeasured page for the wrong reason.
+    monthlySearches: demand?.monthlySearches ?? undefined,
+  };
+  const decision = evaluatePublish(input, thresholds);
+  const hold = evaluateHold(input, thresholds);
+  const { need, basis } = listingsNeeded(input, thresholds);
+
+  const firstPublishedAt = row?.firstPublishedAt ?? null;
+  const withinGrace =
+    firstPublishedAt !== null &&
+    now.getTime() - firstPublishedAt.getTime() < scope.category.minLiveDays * DAY_MS;
 
   return {
     scope,
@@ -360,7 +455,52 @@ export async function landingState(scope: LandingScope): Promise<LandingState> {
     supplyDigest: row?.supplyDigest ?? null,
     publishedAt: row?.publishedAt ?? null,
     clearsFloors: decision.publishable,
-    live: row?.publishedAt != null && decision.publishable,
+    need,
+    needBasis: basis,
+    monthlySearches: demand?.monthlySearches ?? null,
+    demandSource: demand?.source ?? null,
+    demandCapturedAt: demand?.capturedAt ?? null,
+    holdsFloors: hold.publishable,
+    holdFloor: holdFloor(input, thresholds),
+    firstPublishedAt,
+    withinGrace,
+    heldAt: row?.heldAt ?? null,
+    heldReason: row?.heldReason ?? null,
+    /*
+       Published, not held by a person, and either holding the band or inside
+       the minimum-live window.
+
+       The grace covers only the listings floor, because that is the only one
+       that moves on its own: `evaluateHold` leaves the copy and question
+       conditions exactly where they were, so an intro somebody emptied takes
+       the page down in that request whatever its age.
+    */
+    live:
+      row?.publishedAt != null &&
+      row.heldAt == null &&
+      (hold.publishable || (withinGrace && onlySupplyFailing(hold.failures))),
     failing: decision.failures,
+    holdFailing: hold.failures,
   };
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * Whether the only thing wrong is supply.
+ *
+ * The minimum-live window covers the two conditions the world moves under a
+ * page — the listing count and the share of it that is verified, which is
+ * measured against that same count and slides with it. It does not cover the
+ * copy or the questions: those change when an editor changes them, and a page
+ * whose intro was emptied should stop being served in that request whatever its
+ * age. A grace period is for a wobble, not for a deletion.
+ */
+function onlySupplyFailing(failures: readonly PublishFailure[]): boolean {
+  return (
+    failures.length > 0 &&
+    failures.every(
+      (failure) => failure.reason === "listings" || failure.reason === "verified_share",
+    )
+  );
 }

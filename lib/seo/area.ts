@@ -4,13 +4,11 @@ import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
 import type { SubjectRef } from "@/lib/audit/types";
-import { countWords, type PublishFailure } from "@/lib/publish-threshold";
+import { countWords, isSupply, type PublishFailure } from "@/lib/publish-threshold";
 import {
   landingState,
   refreshFreshness,
   scopeForArea,
-  type LandingFaqRow,
-  type LandingScope,
   type LandingState,
 } from "@/lib/seo/landing";
 
@@ -36,41 +34,25 @@ import {
  * on the job having run.
  */
 
-export interface AreaPageState {
+/**
+ * One area page's state — `landingState` plus the two ids callers key on.
+ *
+ * A superset rather than a projection. It was a hand-written subset of fifteen
+ * fields, and board 6f added seven more to `LandingState` that the projection
+ * silently dropped: the sweep would have kept reading the publish floor while
+ * the route read the band. Everything the shared computation knows reaches
+ * every caller of this one.
+ */
+export interface AreaPageState extends LandingState {
   areaId: string;
   categoryId: string;
-  listings: number;
-  verified: number;
-  /** The one authored paragraph, as written. */
-  intro: string | null;
-  introWords: number;
-  /** The per-scope editorial questions. Four of them is the fourth condition. */
-  faq: LandingFaqRow[];
-  /** Set by staff. Not the same thing as live. */
-  publishedAt: Date | null;
-  /** Whether all four conditions hold right now. */
-  clearsFloors: boolean;
-  /** Intent and conditions together. This is what the route and the sitemap read. */
-  live: boolean;
-  failing: PublishFailure[];
-  /** The scope object, so callers do not resolve it a second time. */
-  scope: LandingScope;
 }
 
 function toAreaState(state: LandingState): AreaPageState {
   return {
+    ...state,
     areaId: state.scope.area?.id as string,
     categoryId: state.scope.category.id,
-    listings: state.listings,
-    verified: state.verified,
-    intro: state.intro,
-    introWords: state.introWords,
-    faq: state.faq,
-    publishedAt: state.publishedAt,
-    clearsFloors: state.clearsFloors,
-    live: state.live,
-    failing: [...state.failing],
-    scope: state.scope,
   };
 }
 
@@ -86,17 +68,18 @@ function toAreaState(state: LandingState): AreaPageState {
 export async function areaPageState(
   areaId: string,
   categoryId: string,
+  now = new Date(),
 ): Promise<AreaPageState | null> {
   const scope = await scopeForArea(areaId, categoryId);
   if (!scope) return null;
-  return toAreaState(await landingState(scope));
+  return toAreaState(await landingState(scope, now));
 }
 
-export type AreaPageRefusal = "not_found" | "below_floors" | "not_published";
+export type AreaPageRefusal = "not_found" | "below_floors" | "not_published" | "held";
 
 export type AreaPageResult<T = unknown> =
   | ({ ok: true } & T)
-  | { ok: false; error: AreaPageRefusal; message: string; failing?: PublishFailure[] };
+  | { ok: false; error: AreaPageRefusal; message: string; failing?: readonly PublishFailure[] };
 
 /**
  * The refusal, in the numbers somebody can act on.
@@ -110,7 +93,21 @@ function refusalMessage(failing: readonly PublishFailure[]): string {
     .map((failure) => {
       switch (failure.reason) {
         case "listings":
-          return `${failure.have} listings, and it publishes at ${failure.need}.`;
+          /*
+             Which of the three rules produced the number, because a recruiter
+             reading "publishes at 99" against a matrix column reading 60 has
+             no way to reconcile the two. `hold` is the band, and it says
+             "stays live at" rather than "publishes at" — a hold floor stated
+             as a publish threshold is a wrong number on a screen.
+          */
+          switch (failure.basis) {
+            case "demand":
+              return `${failure.have} listings, and it publishes at ${failure.need} for the searches this scope gets.`;
+            case "hold":
+              return `${failure.have} listings, and it stays live at ${failure.need}.`;
+            case "absolute":
+              return `${failure.have} listings, and it publishes at ${failure.need}.`;
+          }
         case "verified_share":
           return `${Math.round(failure.have * 100)}% verified, and it publishes at ${Math.round(failure.need * 100)}%.`;
         case "intro_words":
@@ -198,6 +195,20 @@ export async function publishAreaPage(
   const state = await areaPageState(areaId, categoryId);
   if (!state) return { ok: false, error: "not_found", message: "That trade is not here." };
 
+  /*
+     `Held · editorial` — board 6f §States. A person said not to publish this
+     one, and nothing but a person clears it. Checked before the floors so the
+     refusal says the true reason rather than an arithmetic one it also happens
+     to fail.
+  */
+  if (state.heldAt) {
+    return {
+      ok: false,
+      error: "held",
+      message: `Held by a person on ${state.heldAt.toISOString().slice(0, 10)}: ${state.heldReason ?? ""}`.trim(),
+    };
+  }
+
   if (!state.clearsFloors) {
     return {
       ok: false,
@@ -213,6 +224,7 @@ export async function publishAreaPage(
   ]);
   const subject: SubjectRef = `AreaPage:${area.slug}/${category.slug}`;
 
+  const now = new Date();
   const publishedAt = await prisma.$transaction(async (tx) =>
     staffMutation(
       { actor, capability: "taxonomy.write", subject, reason, tx },
@@ -221,7 +233,14 @@ export async function publishAreaPage(
           where: { areaId_categoryId: { areaId, categoryId } },
           // An already-published page keeps its original date, for the same
           // reason a guide does: `lastmod` should say when the content changed.
-          data: { publishedAt: state.publishedAt ?? new Date() },
+          //
+          // `firstPublishedAt` is stamped once and never again — board 6f's
+          // minimum-live window measures from the first time this page was ever
+          // live, and a republish after a dip must not restart the clock.
+          data: {
+            publishedAt: state.publishedAt ?? now,
+            firstPublishedAt: state.firstPublishedAt ?? now,
+          },
           select: { publishedAt: true },
         });
         return {
@@ -279,9 +298,21 @@ export async function unpublishAreaPage(
 
 export interface SweepResult {
   checked: number;
-  unpublished: { areaSlug: string; categorySlug: string; failing: PublishFailure[] }[];
+  unpublished: {
+    areaSlug: string;
+    categorySlug: string;
+    failing: readonly PublishFailure[];
+  }[];
   /** How many pages had supply move under them, and so moved their `UPDATED` date. */
   refreshed: number;
+  /**
+   * Pages below the band but inside their minimum-live window.
+   *
+   * Reported rather than silent: a nightly job that walks 400 pages and takes
+   * none of them down should be able to say whether that is because nothing
+   * fell or because the grace caught them.
+   */
+  heldByGrace: number;
 }
 
 /**
@@ -304,7 +335,12 @@ export interface SweepResult {
  * a staff member reading the matrix is not told a page is published while the
  * page itself says it is held.
  */
-export async function sweepAreaPages(): Promise<SweepResult> {
+/*
+   `now` is injectable, and it has to be: board 6f's minimum-live window is the
+   one rule here that cannot be exercised without moving the clock, and a rule
+   that cannot be tested is a rule nobody knows works.
+*/
+export async function sweepAreaPages(now = new Date()): Promise<SweepResult> {
   const published = await prisma.areaPage.findMany({
     where: { publishedAt: { not: null } },
     select: {
@@ -317,9 +353,10 @@ export async function sweepAreaPages(): Promise<SweepResult> {
 
   const unpublished: SweepResult["unpublished"] = [];
   let refreshed = 0;
+  let held = 0;
 
   for (const page of published) {
-    const state = await areaPageState(page.areaId, page.categoryId);
+    const state = await areaPageState(page.areaId, page.categoryId, now);
     if (!state) continue;
 
     /*
@@ -337,7 +374,25 @@ export async function sweepAreaPages(): Promise<SweepResult> {
     const freshness = await refreshFreshness(state.scope);
     if (freshness?.moved) refreshed += 1;
 
-    if (state.clearsFloors) continue;
+    /*
+       The band, not the publish floor — board 6f §6.
+
+       A page publishes at 60 and is taken down below 48, so one sitting on the
+       floor that gains and loses a listing a day no longer publishes and
+       unpublishes daily. `holdsFloors` relaxes only the listings condition:
+       copy somebody deleted still takes the page down tonight.
+    */
+    if (state.holdsFloors) continue;
+
+    /*
+       Minimum 30 days live. `state.live` already honours the same window, so a
+       page skipped here is a page the site is still serving — the column and
+       the site agree, which is the whole job of this sweep.
+    */
+    if (state.withinGrace && state.holdFailing.every(isSupply)) {
+      held += 1;
+      continue;
+    }
 
     await prisma.areaPage.update({
       where: { areaId_categoryId: { areaId: page.areaId, categoryId: page.categoryId } },
@@ -347,17 +402,17 @@ export async function sweepAreaPages(): Promise<SweepResult> {
     unpublished.push({
       areaSlug: page.area.slug,
       categorySlug: page.category.slug,
-      failing: state.failing,
+      failing: state.holdFailing,
     });
   }
 
-  return { checked: published.length, unpublished, refreshed };
+  return { checked: published.length, unpublished, refreshed, heldByGrace: held };
 }
 
 /** Every live area page, for the sitemap and the cross-links. */
-export async function livePages(): Promise<
-  { areaSlug: string; emirate: string; categorySlug: string; updatedAt: Date }[]
-> {
+export async function livePages(
+  now = new Date(),
+): Promise<{ areaSlug: string; emirate: string; categorySlug: string; updatedAt: Date }[]> {
   const rows = await prisma.areaPage.findMany({
     where: { publishedAt: { not: null } },
     select: {
@@ -374,7 +429,7 @@ export async function livePages(): Promise<
   for (const row of rows) {
     // Intent is not enough. The conditions are re-checked here so the sitemap
     // can never contain a page the route would serve as a 404.
-    const state = await areaPageState(row.areaId, row.categoryId);
+    const state = await areaPageState(row.areaId, row.categoryId, now);
     if (!state?.live) continue;
     live.push({
       areaSlug: row.area.slug,

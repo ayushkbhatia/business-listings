@@ -2,11 +2,14 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 /**
- * Board 6f — the SEO page matrix.
+ * Board 6f — the page matrix and content operations.
  *
- * The gate this screen adds is the intro word count, which sat in
- * `thresholdsFor` from handoff 0 and passed vacuously the whole time because
- * there was nowhere for a category's copy to live.
+ * The screen where somebody decides which of roughly eight thousand category ×
+ * area pages exist. What is asserted here is the arithmetic being visible and
+ * the vocabulary being honest: `have / need` in one column, five statuses that
+ * route to different teams, a demand figure that renders an em dash rather than
+ * a nought when nobody has recorded one, and two metric cards that say they are
+ * not recorded rather than showing a plausible number.
  */
 
 test.describe("board 6f — the page matrix", () => {
@@ -14,14 +17,93 @@ test.describe("board 6f — the page matrix", () => {
     await page.goto("/admin/content/matrix");
   });
 
-  test("says how many pages publish and how many wait only on a paragraph", async ({ page }) => {
+  test("shows the arithmetic rather than implying it", async ({ page }) => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Page matrix");
-    const header = page.getByRole("banner").or(page.locator("header")).first();
-    await expect(header).toContainText(/\d+ of \d+ pages publish/);
-    await expect(header).toContainText(/waiting only on copy/);
+
+    const table = page.getByRole("table", { name: /Every area in this emirate/ });
+    await expect(table).toBeVisible();
+    // `have / need` in one column, so a reader can see which number is which.
+    await expect(table.getByText(/^\d+ \/ \d+$/).first()).toBeVisible();
+    // The seeded flagship pair.
+    await expect(
+      table.getByText("/dubai/al-quoz-industrial-1/hvac-and-ventilation"),
+    ).toBeVisible();
   });
 
-  test("lists every landing page with the address a visitor would type", async ({ page }) => {
+  test("says which figures it does not have, rather than showing one", async ({ page }) => {
+    // Two of the five cards have no source in this product. A plausible number
+    // would be the most quietly damaging thing on the screen.
+    await expect(page.getByText("Not recorded").first()).toBeVisible();
+    await expect(page.getByText(/No analytics or Search Console import/).first()).toBeVisible();
+    // And a scope with no recorded volume renders an em dash, never a nought.
+    const table = page.getByRole("table", { name: /Every area in this emirate/ });
+    await expect(table.getByText("—").first()).toBeVisible();
+  });
+
+  test("separates the two states the board called Queued", async ({ page }) => {
+    // Supply without copy and demand without supply route to different teams.
+    const table = page.getByRole("table", { name: /Every area in this emirate/ });
+    await expect(table.getByText(/Held · thin supply|Recruit ·|Queued · copy/).first()).toBeVisible();
+  });
+
+  test("states the top opportunity and defines the metric", async ({ page }) => {
+    await expect(page.getByText(/Opportunity is monthly searches divided by/)).toBeVisible();
+  });
+
+  test("names the trade the rules panel edits", async ({ page }) => {
+    // With no filter the panel opens on the first sector while the matrix shows
+    // every trade, so the trade has to be in the sentence and not only in a
+    // 9.5px eyebrow above it.
+    await expect(page.getByText(/Six numbers that decide which .+ pages exist/)).toBeVisible();
+    await expect(page.getByText(/A rule change takes two ops leads/).first()).toBeVisible();
+  });
+
+  test("carries all five queues with a count and a named owner", async ({ page }) => {
+    const queues = page.getByRole("region", { name: /Editorial queues/ }).or(page.locator("section"));
+    await expect(page.getByRole("heading", { name: "Editorial queues" })).toBeVisible();
+    for (const label of [
+      "Area pages awaiting copy",
+      "Live pages under the word floor",
+      "Curated lists due a re-audit",
+      "Lists where the ranking left the prose",
+      "Guides overdue a regulatory re-check",
+    ]) {
+      await expect(queues.getByText(label).first()).toBeVisible();
+    }
+    await expect(page.getByText(/OWNER:/i).first()).toBeVisible();
+  });
+
+  test("counts words against this trade's own floor as staff type", async ({ page }) => {
+    // The count is live, because a count that only appears after saving is a
+    // count nobody uses.
+    await page.getByRole("button", { name: /Write the intro for/ }).first().click();
+    const field = page.getByRole("textbox", { name: "Intro" });
+    await expect(field).toBeVisible();
+
+    await field.fill("Three words only");
+    await expect(page.getByText("3 words")).toBeVisible();
+  });
+
+  test("will not write anything without a reason", async ({ page }) => {
+    await page.getByRole("button", { name: /Write the intro for/ }).first().click();
+    const save = page.getByRole("button", { name: "Save", exact: true });
+    await expect(save).toBeDisabled();
+    await page.getByLabel("Why").first().fill("Writing the intro for this scope.");
+    await expect(save).toBeEnabled();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+test.describe("board 6f — the category table below the matrix", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/admin/content/matrix");
+  });
+
+  test("lists every category page with the address a visitor would type", async ({ page }) => {
     const table = page.getByRole("table", { name: /Every landing page/ });
     await expect(table).toBeVisible();
     await expect(table.getByText("/c/valves-and-fittings", { exact: true })).toBeVisible();
@@ -31,35 +113,19 @@ test.describe("board 6f — the page matrix", () => {
     const table = page.getByRole("table", { name: /Every landing page/ });
     await expect(table.getByText("needs copy").first()).toBeVisible();
   });
+});
 
-  test("counts words against the floor as staff type", async ({ page }) => {
-    /*
-     * Criterion-adjacent: the floor is 250 and the count is live, because a
-     * count that only appears after saving is a count nobody uses.
-     */
-    await page.getByRole("button", { name: /Write the intro for/ }).first().click();
-    // By role: the panel's own name also contains "Intro".
-    const field = page.getByRole("textbox", { name: "Intro" });
-    await expect(field).toBeVisible();
-
-    await field.fill("Three words only");
-    await expect(page.getByText("3 words")).toBeVisible();
-  });
-
-  test("will not save a paragraph without a reason", async ({ page }) => {
-    await page.getByRole("button", { name: /Write the intro for/ }).first().click();
-    const save = page.getByRole("button", { name: "Save the intro" });
-    await expect(save).toBeDisabled();
-    await page.getByLabel("Why").fill("Writing the intro for this trade.");
-    await expect(save).toBeEnabled();
-  });
-
-  test("says the floor is a floor, not a target", async ({ page }) => {
-    await page.getByRole("button", { name: /Write the intro for/ }).first().click();
-    await expect(page.getByText(/repeats the category name eight times/)).toBeVisible();
+test.describe("board 6f — the curated-list index a queue row opens", () => {
+  test("lists every list with when it was audited and when it is due", async ({ page }) => {
+    await page.goto("/admin/content/lists");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Curated lists");
+    const table = page.getByRole("table", { name: /when it was last audited/ });
+    await expect(table).toBeVisible();
+    await expect(table.getByText(/Re-audit due|Published|Not published/).first()).toBeVisible();
   });
 
   test("is axe clean", async ({ page }) => {
+    await page.goto("/admin/content/lists");
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
   });

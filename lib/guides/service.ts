@@ -3,7 +3,13 @@ import { prisma } from "@/lib/db/client";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
-import { GUIDE_MIN_WORDS, guideWords, readGuideBlocks, type GuideBlock } from "./blocks";
+import {
+  directoryLinks,
+  GUIDE_MIN_WORDS,
+  guideWords,
+  readGuideBlocks,
+  type GuideBlock,
+} from "./blocks";
 
 /**
  * Boards 10b and 6d — guide authoring.
@@ -31,6 +37,7 @@ export type GuideRefusal =
   | "slug_frozen"
   | "too_thin"
   | "no_summary"
+  | "no_directory_link"
   | "still_published";
 
 export type GuideResult<T = unknown> =
@@ -45,6 +52,14 @@ const MESSAGE: Record<GuideRefusal, string> = {
     "This guide is published, so its address is fixed. Unpublish it to move it, and add a redirect from the old address.",
   too_thin: "",
   no_summary: "A summary of at least 20 characters. It is the index card and the meta description.",
+  /*
+     Acceptance 10, and the reason is the whole point of the programme. Guides
+     exist to earn the links that make the 84 area pages rank; one that keeps
+     all of that authority in its own footer has done the expensive half of the
+     job and skipped the cheap half.
+  */
+  no_directory_link:
+    "No link from the body into the directory. The closing call to action is not enough — a category or area page named in a paragraph is what passes this guide's authority to the pages that need it.",
   still_published: "Unpublish it first. A published address that disappears is a 404 somebody has linked to.",
 };
 
@@ -228,9 +243,16 @@ export async function publishGuide(
   });
   if (!guide) return refuse("not_found");
 
-  const words = guideWords(readGuideBlocks(guide.body));
+  const blocks = readGuideBlocks(guide.body);
+  const words = guideWords(blocks);
   if (words < GUIDE_MIN_WORDS) {
     return refuse("too_thin", { have: words, need: GUIDE_MIN_WORDS });
+  }
+
+  // Acceptance 10. Body links only — the CTA is guaranteed by the template and
+  // is not what carries authority to an area page.
+  if (directoryLinks(blocks).length === 0) {
+    return refuse("no_directory_link");
   }
 
   const publishedAt = await prisma.$transaction(async (tx) =>
@@ -324,4 +346,118 @@ export async function deleteGuide(actor: Actor, id: string, reason: string): Pro
   );
 
   return { ok: true };
+}
+
+/**
+ * Board 6d §Evergreen — the regulatory re-check, and the queue it feeds.
+ *
+ * Guides make factual claims about the world: a named authority, a VAT rate, a
+ * renewal cadence. Those change, and an article with a 2026 publication date
+ * and 2029 traffic is a liability on a page whose subject is trustworthiness.
+ *
+ * ## Overdue does not unpublish
+ *
+ * The deliberate difference from a curated list, and the reason is worth
+ * keeping in one sentence: a stale list misrepresents named sellers, while a
+ * stale guide is merely old. So `6b`'s SLA takes a list down and this one does
+ * not — overdue articles stay live and surface in the editorial queue, and if a
+ * specific claim is found wrong the fix is an edit and a new check date rather
+ * than a takedown.
+ *
+ * ## Why a re-check is its own mutation
+ *
+ * `regulatoryCheckedAt` is the one field an editor moves without touching a
+ * word of the article, and moving it is a claim: somebody read the external
+ * facts again and they still hold. That is a decision with an actor, so it
+ * writes an audit row with a written reason like every other one.
+ *
+ * It is deliberately not a side effect of saving the body. A typo fix is not a
+ * regulatory check, and a field that moved whenever anybody touched the article
+ * would make the date meaningless in exactly the way `updatedAt` already is.
+ */
+export async function recordRegulatoryCheck(
+  actor: Actor,
+  id: string,
+  reason: string,
+  now = new Date(),
+): Promise<GuideResult<{ checkedAt: Date }>> {
+  const guide = await prisma.guide.findUnique({
+    where: { id },
+    select: { id: true, slug: true, regulatoryCheckedAt: true },
+  });
+  if (!guide) return refuse("not_found");
+
+  await prisma.$transaction(async (tx) =>
+    staffMutation(
+      { actor, capability: "taxonomy.write", subject: `Guide:${guide.slug}`, reason, tx },
+      async () => {
+        await tx.guide.update({ where: { id: guide.id }, data: { regulatoryCheckedAt: now } });
+        return {
+          result: null,
+          before: { regulatoryCheckedAt: guide.regulatoryCheckedAt },
+          after: { regulatoryCheckedAt: now },
+        };
+      },
+    ),
+  );
+
+  return { ok: true, checkedAt: now };
+}
+
+export interface OverdueGuide {
+  id: string;
+  slug: string;
+  title: string;
+  checkedAt: Date | null;
+  dueAt: Date;
+  cadenceMonths: number;
+}
+
+/**
+ * Articles whose external facts are past their cadence — the board 6f queue.
+ *
+ * Only articles that carry a cadence: one about how to write a good RFQ makes
+ * no claim about the world and is never overdue. Published only, because an
+ * unpublished draft is nobody's deadline.
+ *
+ * Oldest first, which is the order to work it.
+ */
+export async function overdueGuides(now = new Date()): Promise<OverdueGuide[]> {
+  const rows = await prisma.guide.findMany({
+    where: { publishedAt: { not: null }, reviewCadenceMonths: { not: null } },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      publishedAt: true,
+      regulatoryCheckedAt: true,
+      reviewCadenceMonths: true,
+    },
+  });
+
+  const overdue: OverdueGuide[] = [];
+  for (const row of rows) {
+    const cadence = row.reviewCadenceMonths as number;
+    /*
+       An article never re-checked is measured from publication. On the day it
+       went out its facts had just been read, which is the honest baseline —
+       and treating "never checked" as infinitely overdue would put every new
+       article in the queue the moment it published.
+    */
+    const from = row.regulatoryCheckedAt ?? (row.publishedAt as Date);
+    const due = new Date(from);
+    due.setMonth(due.getMonth() + cadence);
+    if (due > now) continue;
+
+    overdue.push({
+      id: row.id,
+      slug: row.slug,
+      title: row.title,
+      checkedAt: row.regulatoryCheckedAt,
+      dueAt: due,
+      cadenceMonths: cadence,
+    });
+  }
+
+  return overdue.sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime());
 }

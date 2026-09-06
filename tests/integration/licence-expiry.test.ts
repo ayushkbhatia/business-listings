@@ -297,6 +297,10 @@ describe("staff cannot raise a tier the sweep would take back", () => {
   beforeAll(async () => {
     const lead = await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_ops_lead" } },
+      // One of two seeded ops leads, and always the same one: board 6f
+      // needs a second for dual control, and `findFirst` has no defined
+      // order without this.
+      orderBy: { id: "asc" as const },
       select: { id: true },
     });
     opsLeadId = lead.id;

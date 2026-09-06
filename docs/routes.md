@@ -131,7 +131,8 @@ and it is the one that argues back.
 /admin/support                          Support desk & view-as               [12f]  built h4s4
 /admin/notifications                    Notification templates              [12g]  built h4s7
 /admin/strings                          Localisation                         [12g]  built h4s7
-/admin/content/matrix                   SEO page matrix                       [6f]  built h4s7
+/admin/content/matrix                   Page matrix & content ops             [6f]  built h5s2
+/admin/content/lists                    Curated lists index               [6b, 6f]  built h5s2
 /admin/content/guides                   Guides                          [10b, 6d]  built h5s1
 /admin/content/guides/:id               One guide, or new               [10b, 6d]  built h5s1
 /admin/content/attribution              Enquiry attribution                  [10i]  built h5s5
@@ -243,6 +244,18 @@ does not exist should not have a URL that renders.
 Slugs are immutable once published. Renaming a category or merging two listings creates a
 301 automatically; deleting a page without one is blocked at the service layer.
 
-Area landing pages and subcategory pages publish only above the thresholds in board 6f:
-60 listings, 30% verified, 250 words of intro copy. They auto-unpublish if supply drops
-below the floor. This is enforced in code, not by editorial discipline.
+Area landing pages and subcategory pages publish only above the thresholds in board 6f, and
+the rule is per trade rather than one set of numbers: a page needs its **need** in listings —
+the higher of the category's own floor and 25 listings per 1,000 monthly searches for that
+scope — with 30% of them verified, the category's word floor of intro copy, and four FAQ
+rows of which two are answerable only about that scope.
+
+A page that publishes stays live down to four fifths of its need, and for its first 30 days
+it stays live below that too. Those two rules exist because a single threshold used in both
+directions makes a page at exactly the floor publish and unpublish daily, and every cycle is
+a sitemap change. A scope that has never published has no URL and 404s; one that was live and
+came down redirects permanently to the emirate page for that trade, because the address has
+accumulated ranking a 404 would discard.
+
+All of it is enforced in code, not by editorial discipline, and the numbers are edited on
+`/admin/content/matrix` behind an impact preview and a second approver.

@@ -6,7 +6,9 @@ import {
   deleteGuide,
   guideById,
   guideList,
+  overdueGuides,
   publishGuide,
+  recordRegulatoryCheck,
   saveGuide,
   unpublishGuide,
 } from "@/lib/guides/service";
@@ -40,16 +42,33 @@ function slug(name: string) {
 }
 
 /**
- * A body over the floor.
+ * A body over the floor, whatever the floor is.
  *
- * Built rather than pasted: the floor is 250 words and a fixture that reached
- * it by literal prose would be 250 words of test file that nobody reads and
- * that silently stops meeting the floor if the number ever changes.
+ * Built rather than pasted, and the paragraph count is **derived** from
+ * `GUIDE_MIN_WORDS` rather than written down. The previous version looped a
+ * literal 30 times against a 250-word floor, with a comment warning that it
+ * "silently stops meeting the floor if the number ever changes" — and then
+ * board 6d moved the floor to 1,200 and six tests failed on the fixture rather
+ * than on the thing they were testing. The comment was right and the code did
+ * not act on it.
+ *
+ * It also carries a link into the directory, because publishing needs one:
+ * acceptance 10 refuses a guide that keeps all its earned authority in its own
+ * footer.
  */
 function longBody(): GuideBlock[] {
   const sentence = "A trade licence check is not a guarantee of price or delivery.";
-  const paragraphs: GuideBlock[] = [];
-  for (let i = 0; i < 30; i += 1) {
+  const perParagraph = sentence.split(/\s+/).length;
+  const paragraphs: GuideBlock[] = [
+    {
+      id: "link",
+      kind: "text",
+      values: { body: "Start from the [directory](/categories) if you would rather not." },
+    },
+  ];
+  // One more than the floor needs, so a fixture is never exactly at the edge.
+  const wanted = Math.ceil(GUIDE_MIN_WORDS / perParagraph) + 1;
+  for (let i = 0; i < wanted; i += 1) {
     paragraphs.push({ id: `p${i}`, kind: "text", values: { body: sentence } });
   }
   return paragraphs;
@@ -67,6 +86,10 @@ beforeAll(async () => {
   opsLeadId = (
     await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_ops_lead" } },
+      // One of two seeded ops leads, and always the same one: board 6f
+      // needs a second for dual control, and `findFirst` has no defined
+      // order without this.
+      orderBy: { id: "asc" as const },
       select: { id: true },
     })
   ).id;
@@ -87,6 +110,30 @@ afterAll(async () => {
 });
 
 const lead = () => actor(opsLeadId, "staff_ops_lead");
+
+/**
+ * A draft that clears every gate but the one under test.
+ *
+ * Module scope rather than inside one `describe`: the two-dates suite needs the
+ * same fixture, and a second copy of it is a second place for the publish gates
+ * to be satisfied differently.
+ */
+async function draft(name: string, blocks: GuideBlock[]) {
+  const address = slug(name);
+  const result = await saveGuide({
+    actor: lead(),
+    slug: address,
+    title: "What verification proves",
+    summary: "Four rungs and what each one checks against.",
+    byline: null,
+    ctaCategoryId: null,
+    blocks,
+    reason: "Drafting.",
+  });
+  if (!result.ok) throw new Error(`fixture failed: ${result.message}`);
+  return { id: result.id, slug: address };
+}
+
 
 describe("the fixture body is over the floor", () => {
   it("has enough words that the floor is what the test is measuring", async () => {
@@ -219,22 +266,6 @@ describe("saving", () => {
 });
 
 describe("publishing", () => {
-  async function draft(name: string, blocks: GuideBlock[]) {
-    const address = slug(name);
-    const result = await saveGuide({
-      actor: lead(),
-      slug: address,
-      title: "What verification proves",
-      summary: "Five rungs and what each one checks against.",
-      byline: null,
-      ctaCategoryId: null,
-      blocks,
-      reason: "Drafting.",
-    });
-    if (!result.ok) throw new Error(`fixture failed: ${result.message}`);
-    return { id: result.id, slug: address };
-  }
-
   it("refuses below the word floor and says the number", async () => {
     const guide = await draft("thin", shortBody());
     const result = await publishGuide(lead(), guide.id, "Publishing the thin one.");
@@ -373,4 +404,103 @@ describe("the list", () => {
       expect(lastDraft).toBeLessThan(firstPublished);
     }
   }, 60_000);
+});
+
+
+/**
+ * Board 6d §Evergreen — the two dates, and the difference from a curated list.
+ *
+ * Acceptance 6: *"`published_at` never changes after publication.
+ * `regulatory_checked_at` changes only on an editor re-check — not on rebuild,
+ * deploy or copy fix. Tested both directions."*
+ */
+describe("the two dates", () => {
+  it("moves the check date only on a re-check, and never the publication date", async () => {
+    const guide = await draft("dates", longBody());
+    const published = await publishGuide(lead(), guide.id, "Checked and ready.");
+    expect(published.ok, JSON.stringify(published)).toBe(true);
+
+    const after = await prisma.guide.findUniqueOrThrow({
+      where: { id: guide.id },
+      select: { publishedAt: true, regulatoryCheckedAt: true },
+    });
+    expect(after.publishedAt).not.toBeNull();
+
+    /*
+       A copy fix. It moves `updatedAt`, which is what that column is for, and
+       it must not move either of the dates the article publishes — a crawler
+       told the content changed with nothing to show for it discounts the next
+       signal, on a page whose subject is trustworthiness.
+    */
+    await saveGuide({
+      actor: lead(),
+      id: guide.id,
+      slug: guide.slug,
+      title: "A typo fixed",
+      summary: "The same article with one word corrected, which is not a re-check.",
+      byline: null,
+      ctaCategoryId: null,
+      blocks: longBody(),
+      reason: "Fixing a typo.",
+    });
+
+    const afterEdit = await prisma.guide.findUniqueOrThrow({
+      where: { id: guide.id },
+      select: { publishedAt: true, regulatoryCheckedAt: true },
+    });
+    expect(afterEdit.publishedAt?.getTime()).toBe(after.publishedAt?.getTime());
+    expect(afterEdit.regulatoryCheckedAt?.getTime()).toBe(after.regulatoryCheckedAt?.getTime());
+
+    // And a re-check moves one of them, and only one.
+    const checkedAt = new Date(Date.UTC(2027, 0, 15));
+    const recheck = await recordRegulatoryCheck(lead(), guide.id, "Read the DED page again.", checkedAt);
+    expect(recheck.ok).toBe(true);
+
+    const afterCheck = await prisma.guide.findUniqueOrThrow({
+      where: { id: guide.id },
+      select: { publishedAt: true, regulatoryCheckedAt: true },
+    });
+    expect(afterCheck.regulatoryCheckedAt?.getTime()).toBe(checkedAt.getTime());
+    expect(afterCheck.publishedAt?.getTime()).toBe(after.publishedAt?.getTime());
+  }, 120_000);
+
+  it("queues an article past its cadence, and leaves it published", async () => {
+    const guide = await draft("overdue", longBody());
+    const published = await publishGuide(lead(), guide.id, "Published.");
+    expect(published.ok, JSON.stringify(published)).toBe(true);
+    await prisma.guide.update({
+      where: { id: guide.id },
+      data: {
+        reviewCadenceMonths: 6,
+        regulatoryCheckedAt: new Date(Date.UTC(2020, 0, 1)),
+      },
+    });
+
+    const overdue = await overdueGuides();
+    expect(overdue.some((row) => row.id === guide.id)).toBe(true);
+
+    /*
+       The deliberate difference from board 6b: a stale curated list
+       misrepresents named sellers and comes down; a stale guide is merely old
+       and stays up. Overdue is a queue, not a takedown.
+    */
+    expect(
+      (await prisma.guide.findUniqueOrThrow({
+        where: { id: guide.id },
+        select: { publishedAt: true },
+      })).publishedAt,
+    ).not.toBeNull();
+  }, 120_000);
+
+  it("does not queue an article that makes no claim about the world", async () => {
+    // No cadence: a guide about how to write a good RFQ names no authority and
+    // no tax rate, so there is nothing to go out of date.
+    const guide = await draft("evergreen", longBody());
+    expect((await publishGuide(lead(), guide.id, "Published.")).ok).toBe(true);
+    await prisma.guide.update({
+      where: { id: guide.id },
+      data: { reviewCadenceMonths: null, regulatoryCheckedAt: new Date(Date.UTC(2019, 0, 1)) },
+    });
+    expect((await overdueGuides()).some((row) => row.id === guide.id)).toBe(false);
+  }, 120_000);
 });
