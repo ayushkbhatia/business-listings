@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { GUIDE_MIN_WORDS } from "@/lib/guides/blocks";
 
 /**
  * Board 6f — the page matrix and content operations.
@@ -85,10 +86,27 @@ test.describe("board 6f — the page matrix", () => {
   });
 
   test("will not write anything without a reason", async ({ page }) => {
-    await page.getByRole("button", { name: /Write the intro for/ }).first().click();
-    const save = page.getByRole("button", { name: "Save", exact: true });
+    /*
+       Scoped to the editor this opened, not to the page.
+
+       There are three intro editors and a rules panel on this screen, each with
+       its own reason field and its own Save. Unscoped, `getByLabel("Why")`
+       filled the rules panel's field while `getByRole("button", { name: "Save" })`
+       watched a different table's button — so the test typed into one control
+       and waited on another, and reported the product broken when what was
+       broken was the locator.
+
+       The editor is a named region: the row action reads "Write the intro for
+       X" and the panel it opens is titled "X".
+    */
+    const trigger = page.getByRole("button", { name: /Write the intro for/ }).first();
+    const scope = ((await trigger.textContent()) ?? "").replace(/^Write the intro for\s*/, "").trim();
+    await trigger.click();
+
+    const editor = page.getByRole("region", { name: scope });
+    const save = editor.getByRole("button", { name: "Save", exact: true });
     await expect(save).toBeDisabled();
-    await page.getByLabel("Why").first().fill("Writing the intro for this scope.");
+    await editor.getByLabel("Why").fill("Writing the intro for this scope.");
     await expect(save).toBeEnabled();
   });
 
@@ -371,8 +389,20 @@ test.describe("boards 10b and 6d — guides", () => {
     const table = page.getByRole("table", { name: /Every guide/ });
     await expect(table).toBeVisible();
     await expect(table.getByText("/guides/what-supplier-verification-actually-proves")).toBeVisible();
-    // The number, not a tick — how much writing is left is the actionable part.
-    await expect(table.getByText(/\d+ of 250 words/).first()).toBeVisible();
+    /*
+       The number, not a tick — how much writing is left is the actionable part.
+
+       Read from `GUIDE_MIN_WORDS` rather than written out. This assertion said
+       `of 250 words` from the day it was written in August, and board 6d raised
+       the floor to 1,200 — deliberately, with its own note: "250 words is the
+       floor for a *paragraph* introducing a page", which is
+       `DEFAULT_THRESHOLDS.minIntroWords` and was the wrong constant to borrow
+       for an article. The product moved and the test did not, so it failed on
+       main naming a number nothing uses.
+    */
+    await expect(
+      table.getByText(new RegExp(`\\d+ of ${GUIDE_MIN_WORDS} words`)).first(),
+    ).toBeVisible();
   });
 
   test("refuses to publish a draft under the floor, and names the number", async ({ page }) => {
