@@ -279,6 +279,34 @@ describe("the waiting bands", () => {
     ).toBe("answered");
   });
 
+  it("never reports a negative wait, however the clock lands", async () => {
+    /*
+       `formatDuration` throws on a negative rather than rendering one, so a
+       recipient row stamped ahead of `now` did not misprint a cell — it took
+       `/dashboard/leads` to a 500.
+
+       Reachable without anything being wrong: clock skew between an app server
+       and the database, or a row written a moment ahead by a job. Found on a
+       seeded database, whose rows are dated from a fixed midday — running the
+       suite before noon put every recipient in the future, and every
+       seller-facing Playwright project failed at sign-in because the inbox
+       would not render at all.
+
+       `answeredInMs` beside it has always clamped; this asserts the pair agree.
+    */
+    const ahead = await lead("AHEAD", { minutesAgo: -45 });
+
+    const page = await getInbox({ businessId, tab: "open", scope: { kind: "all" } });
+    const row = page.rows.find((r) => r.enquiryId === ahead);
+    expect(row, "the future-dated lead is in the open tab").toBeTruthy();
+    expect(row!.waitingMs).toBe(0);
+
+    for (const each of page.rows) {
+      expect(each.waitingMs ?? 0).toBeGreaterThanOrEqual(0);
+      expect(each.answeredInMs ?? 0).toBeGreaterThanOrEqual(0);
+    }
+  });
+
   it("honours the five-minute floor the sweep applies", () => {
     // A threshold nobody meant to set. The job clamps it; so does the rail, or
     // the two disagree about a supplier who typed 1.
