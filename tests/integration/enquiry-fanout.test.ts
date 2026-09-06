@@ -180,15 +180,46 @@ describe("criterion 6 — a capped seller is not offered", () => {
       lineCount: 2,
       want: 8,
     });
-    const free = candidates.find((c) => c.enquiriesPerMonth !== null);
-    expect(free, "the seed needs at least one capped plan for this to prove anything").toBeDefined();
+    /*
+       A capped candidate with **room left**, not simply the first capped one.
+
+       The test filled a seller's month and then asserted they dropped out of
+       the list, which only proves anything if there was room to fill. It took
+       the first capped candidate in ranking order, and the seed gives at least
+       one capped supplier three enquiries already — so whether this test proved
+       its criterion or asserted `0 > 0` depended on which supplier happened to
+       rank first. It broke the day `lib/search/ranking.ts` and
+       `lib/enquiry/fanout.ts` stopped dividing the verification tier by a
+       ceiling the ladder no longer has, which reordered them.
+
+       Chosen by headroom, so the fixture is the one the criterion needs.
+    */
+    const since = monthStart(new Date());
+    const capped = candidates.filter((c) => c.enquiriesPerMonth !== null);
+    expect(
+      capped.length,
+      "the seed needs at least one capped plan for this to prove anything",
+    ).toBeGreaterThan(0);
+
+    let free: (typeof capped)[number] | undefined;
+    let already = 0;
+    for (const candidate of capped) {
+      const used = await prisma.enquiryRecipient.count({
+        where: { businessId: candidate.businessId, createdAt: { gte: since } },
+      });
+      if (used < candidate.enquiriesPerMonth!) {
+        free = candidate;
+        already = used;
+        break;
+      }
+    }
+    expect(
+      free,
+      "every capped supplier in this category has already used its month; the seed needs one with room",
+    ).toBeDefined();
 
     // Fill their month.
     const filler: string[] = [];
-    const since = monthStart(new Date());
-    const already = await prisma.enquiryRecipient.count({
-      where: { businessId: free!.businessId, createdAt: { gte: since } },
-    });
     for (let i = already; i < free!.enquiriesPerMonth!; i += 1) {
       const made = await createEnquiry({
         buyerId,

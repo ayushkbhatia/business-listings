@@ -5,6 +5,7 @@ import { StepHeader } from "@/components/structure";
 import { Button, Checkbox, IconButton, Input } from "@/components/primitives";
 import { EnquiryComposer, type EnquiryComposerValue, type RecipientPreview } from "@/components/domain";
 import { cn } from "@/lib/cn";
+import { isVerified } from "@/lib/verification";
 import { enquiryLabels, rfqLabels } from "./_labels";
 import { previewRecipients, sendEnquiry, routeUnmatched } from "./actions";
 import { clearDraft, draftServerSnapshot, draftSnapshot, saveDraft, subscribeDraft } from "./rfq-draft";
@@ -66,6 +67,8 @@ export interface RfqComposerLabels {
   recipientsMore: (count: number) => string;
   recipientsAddAll: string;
   recipientPick: (name: string) => string;
+  /** The mono mark on a recipient row: what the platform has checked. */
+  recipientVerified: string;
   fromPage: string;
   capNote: string;
   onlyOneMatch: string;
@@ -581,7 +584,23 @@ export function RfqComposer({
                         }
                       />
                       <p className="ml-7 font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
-                        {recipient.verificationTier >= 3 ? "VISITED · " : ""}
+                        {/*
+                           Board 1h's recipient row, and it read `VISITED · ` —
+                           a raw English literal, keyed off tier 3, for a rung
+                           that was site visits and no longer exists. The cut of
+                           5 Sep caught the phrase everywhere a scan could read
+                           it; this survived because the word sits alone inside
+                           a component rather than in the catalogue.
+
+                           Two corrections. The word is `LICENCE`, through the
+                           labels prop like everything else on this screen. And
+                           the threshold is `isVerified` — the shared definition
+                           of "carries the badge" — instead of a literal 3,
+                           which since the ladder shortened has meant a reserved
+                           rung nothing can reach, so this line rendered for
+                           nobody at all.
+                        */}
+                        {isVerified(recipient.verificationTier) ? `${labels.recipientVerified} · ` : ""}
                         {recipient.responseLabel}
                       </p>
                     </li>

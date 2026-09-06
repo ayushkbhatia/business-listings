@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { allowance, monthStart, type Metered, type PlanCaps } from "@/lib/plan/entitlements";
+import { daysUntil, licenceStage, type LicenceStage } from "@/lib/verification";
 
 /**
  * The two overview boards, 3a and 11a, read from one place.
@@ -53,6 +54,19 @@ export interface Overview {
   profileStrength: number | null;
   responseTimeMedianMs: number | null;
   verificationTier: number;
+  /**
+   * The licence, and where it sits in board 3e's expiry sequence.
+   *
+   * Board 3a §2 gives the queue a `LICENCE` row that "always surfaces above
+   * nothing" from sixty days out, because the drop costs the badge on every
+   * public card and the ranking weight behind it. The row states the
+   * consequence rather than the date — "expires 12 Oct" reads as
+   * administrative and the loss does not — and its `Renew` action deep-links
+   * to board 3e with the licence row focused.
+   */
+  licenceExpiry: Date;
+  licenceStage: LicenceStage;
+  daysToLicenceExpiry: number;
 }
 
 const PLAN_SELECT = {
@@ -85,6 +99,7 @@ export async function getOverview(businessId: string, now = new Date()): Promise
         profileStrength: true,
         responseTimeMedianMs: true,
         verificationTier: true,
+        licenceExpiry: true,
         plan: { select: PLAN_SELECT },
       },
     }),
@@ -173,6 +188,9 @@ export async function getOverview(businessId: string, now = new Date()): Promise
     profileStrength: business.profileStrength,
     responseTimeMedianMs: business.responseTimeMedianMs,
     verificationTier: business.verificationTier,
+    licenceExpiry: business.licenceExpiry,
+    licenceStage: licenceStage(business.licenceExpiry, now),
+    daysToLicenceExpiry: daysUntil(business.licenceExpiry, now),
   };
 }
 

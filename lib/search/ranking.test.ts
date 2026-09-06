@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { TOP_ACHIEVABLE_TIER } from "@/lib/verification";
 import {
   DEFAULT_WEIGHTS,
   placeSponsored,
@@ -33,8 +34,11 @@ describe("the weights are the config board 12c specifies", () => {
 });
 
 describe("acceptance criterion 5 — the weights are a config object", () => {
-  const free = { id: "free", signals: signals({ verificationTier: 3, planMultiplier: 1 }) };
-  const pro = { id: "pro", signals: signals({ verificationTier: 3, planMultiplier: 1.35 }) };
+  // Tier 2, the top rung anybody can reach. It read 3, which is now trade
+  // references — reserved and unbuilt — so the fixture described a supplier
+  // that cannot exist.
+  const free = { id: "free", signals: signals({ verificationTier: 2, planMultiplier: 1 }) };
+  const pro = { id: "pro", signals: signals({ verificationTier: 2, planMultiplier: 1.35 }) };
 
   it("plan tier reorders two otherwise identical suppliers", () => {
     const ordered = rank([free, pro], (r) => r.signals);
@@ -59,10 +63,15 @@ describe("acceptance criterion 5 — the weights are a config object", () => {
   });
 
   it("cannot buy its way past verification", () => {
-    // A free tier-4 supplier beats a paying tier-0 one, by a wide margin. The
-    // whole subscription rests on this staying true.
+    // A free supplier on the top rung beats a paying unverified one, by a wide
+    // margin. The whole subscription rests on this staying true.
+    //
+    // `TOP_ACHIEVABLE_TIER` rather than the literal 4 this carried: the ladder
+    // stopped at 3 when site visits were withdrawn and stops at 2 in practice,
+    // and `trustScore` clamps — so the old fixture was asserting about a rung
+    // that neither exists nor scores differently from the one that does.
     const paidUnverified = signals({ verificationTier: 0, planMultiplier: 1.35 });
-    const freeVerified = signals({ verificationTier: 4, planMultiplier: 1 });
+    const freeVerified = signals({ verificationTier: TOP_ACHIEVABLE_TIER, planMultiplier: 1 });
     expect(scoreRow(freeVerified)).toBeGreaterThan(scoreRow(paidUnverified));
   });
 });

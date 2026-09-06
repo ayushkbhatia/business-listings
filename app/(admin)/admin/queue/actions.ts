@@ -5,6 +5,7 @@ import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import { requireStaff } from "@/lib/auth/staff";
 import { approveChange, rejectChange } from "@/lib/moderation/service";
 import { resolveConflict } from "@/lib/onboarding/conflict";
+import { approveDocument, rejectDocument } from "@/lib/verification/review";
 import type { ClaimResolution } from "@/lib/db/generated/client";
 import { t } from "@/lib/i18n";
 
@@ -94,6 +95,50 @@ export async function resolve(formData: FormData): Promise<ActionResult> {
     revalidatePath("/admin/queue");
     revalidatePath("/admin");
     return { ok: true, message: t("admin.queue.resolved") };
+  } catch (error) {
+    return refused(error);
+  }
+}
+
+/**
+ * Board 3e's credential review, through the same two buttons and the same
+ * required reason as every other decision on this queue.
+ *
+ * `approveDocument` and `rejectDocument` go through `staffMutation`, so neither
+ * can reach the database without an audit row carrying the words the moderator
+ * typed. Neither can reach `verificationTier`: what is decided here is whether
+ * a certificate may be named on a public page, and the tier is a different kind
+ * of statement with a different function and a different capability behind it.
+ */
+export async function approveCredential(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const result = await approveDocument({
+      actor: seat.actor,
+      documentId: String(formData.get("requestId") ?? ""),
+      reason: String(formData.get("reason") ?? ""),
+    });
+    if (!result.ok) return { ok: false, error: result.message };
+    revalidatePath("/admin/queue");
+    revalidatePath("/admin");
+    return { ok: true, message: t("admin.queue.approved") };
+  } catch (error) {
+    return refused(error);
+  }
+}
+
+export async function rejectCredential(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const result = await rejectDocument({
+      actor: seat.actor,
+      documentId: String(formData.get("requestId") ?? ""),
+      reason: String(formData.get("reason") ?? ""),
+    });
+    if (!result.ok) return { ok: false, error: result.message };
+    revalidatePath("/admin/queue");
+    revalidatePath("/admin");
+    return { ok: true, message: t("admin.queue.rejected") };
   } catch (error) {
     return refused(error);
   }

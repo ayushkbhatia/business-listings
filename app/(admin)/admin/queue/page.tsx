@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
-import { pendingQueue } from "@/lib/moderation/service";
+import { pendingQueue, ageInDays } from "@/lib/moderation/service";
+import { pendingDocumentReviews } from "@/lib/verification/review";
 import { openConflicts } from "@/lib/onboarding/conflict";
 import { SLA_DAYS } from "@/lib/console/overview";
 import { prisma } from "@/lib/db/client";
@@ -29,9 +30,19 @@ export default async function QueuePage() {
   const seat = await requireStaff();
   if (!can(seat.actor, "queue.decide")) notFound();
 
-  const [changes, conflicts, badges, categories] = await Promise.all([
+  const [changes, conflicts, documents, badges, categories] = await Promise.all([
     pendingQueue(200),
     openConflicts(200),
+    /*
+       Board 3e §4's third kind of waiting thing.
+
+       A credential a seller has asked to publish, which their own screen tells
+       them takes two working days "in the moderation queue" — so the queue has
+       to hold it. It was a state with an SLA, an owner named in copy, and no
+       row anywhere; that is the same defect the board came here to fix, one
+       screen along.
+    */
+    pendingDocumentReviews(200),
     getAdminNavBadges(seat),
     prisma.category.findMany({ select: { id: true, name: true } }),
   ]);
@@ -61,6 +72,18 @@ export default async function QueuePage() {
       ageDays: change.ageDays,
       late: change.ageDays > SLA_DAYS.moderation,
       href: `/admin/queue/${change.id}`,
+    })),
+    ...documents.map((document) => ({
+      id: document.id,
+      kind: "document" as const,
+      what: document.kind,
+      businessName: document.business!.displayName,
+      businessSlug: document.business!.slug,
+      from: null,
+      to: document.displayName ?? document.filename,
+      ageDays: ageInDays(document.createdAt),
+      late: ageInDays(document.createdAt) > SLA_DAYS.credential,
+      href: `/admin/queue/document/${document.id}`,
     })),
     ...conflicts.map((conflict) => ({
       id: conflict.id,

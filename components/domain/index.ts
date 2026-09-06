@@ -36,7 +36,14 @@ export {
   type QuoteLineEditorValue,
 } from "./QuoteLineEditor";
 
-export { TIERS, tierSpec, isVerified, type TierSpec, type VerificationTier } from "./verification";
+export {
+  TIERS,
+  tierSpec,
+  isVerified,
+  TOP_ACHIEVABLE_TIER,
+  type TierSpec,
+  type VerificationTier,
+} from "./verification";
 
 export { HoursEditor, type HoursEditorProps } from "./HoursEditor";
 export {

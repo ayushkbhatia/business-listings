@@ -91,7 +91,7 @@ My recommendation: **stop building features.** The next unit of work is closing 
 | `/dashboard/quotes` | Wired | Quote lines are the only place a price legally exists. |
 | `/dashboard/products` + `[id]`, `/import` | Wired | CSV import included. |
 | `/dashboard/listing`, `/media`, `/locations`, `/hours`, `/team` | Wired | The dead `mediaUrl()` export is gone; the page calls `publicUrl` directly, so images do display. |
-| `/dashboard/verification` | Wired | Submits evidence. Tier itself stays staff-only, correctly. |
+| `/dashboard/verification` | Built (board 3e) | Two document tables — checked by us, uploaded by you — the corrected ladder, and the 60 / 14 / 0 expiry sequence with the job behind it. Tier stays staff-only, correctly, and the screen says so. |
 | `/dashboard/billing` + `/change`, `/cancel` | Wired | No payment capture, as designed. |
 | `/dashboard/analytics` | Thin | Fed by the measurements in `/api/jobs/daily`, which run nightly. Numbers appear after the first run against real traffic; nothing to build. |
 | `/dashboard/promote` | Wired | Boosts write audit rows. |

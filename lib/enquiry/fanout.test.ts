@@ -117,7 +117,8 @@ describe("who ranks first", () => {
   it("puts a pinned seller first whatever the ranking says", () => {
     // The storefront the buyer was standing on when they wrote the enquiry.
     const weak = candidate({ businessId: "weak", matchedLineCount: 0, inStockLineCount: 0, verificationTier: 0 });
-    const strong = candidate({ businessId: "strong", verificationTier: 4 });
+    // Tier 2, the top rung. It read 4, a rung the ladder lost with site visits.
+    const strong = candidate({ businessId: "strong", verificationTier: 2 });
     const { recipients } = selectRecipients([strong, weak], { ...REQUEST, want: 2, pinned: ["weak"] });
     expect(recipients[0]!.businessId).toBe("weak");
   });

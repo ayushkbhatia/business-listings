@@ -188,8 +188,22 @@ async function sectionData(businessId: string, slug: string): Promise<SectionDat
          fence. A document becomes public because somebody said so, never
          because it was uploaded — the column defaults to false for exactly that
          reason.
+
+         `reviewedAt` is the other half, added by board 3e. The seller's wish to
+         publish is not on its own a licence to publish: a certificate reaches
+         this block only once a moderator has looked at it, which is what makes
+         `In review · 2 working days` on the seller's screen a description of
+         where the file actually is rather than a courtesy. Two columns because
+         they record two people's decisions — collapsed into one, either the
+         seller publishes unreviewed or the moderator publishes something the
+         seller asked to hide.
       */
-      where: { businessId, isPublic: true, kind: { in: [...PUBLISHABLE_DOCUMENT_KINDS] } },
+      where: {
+        businessId,
+        isPublic: true,
+        reviewedAt: { not: null },
+        kind: { in: [...PUBLISHABLE_DOCUMENT_KINDS] },
+      },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,

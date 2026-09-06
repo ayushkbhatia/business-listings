@@ -21,7 +21,7 @@ import {
   VerificationBadge,
   VerificationLadder,
   TIERS,
-  tierSpec,
+  TOP_ACHIEVABLE_TIER,
   type Availability,
   type ListingCardBusiness,
   type ListingContext,
@@ -51,7 +51,26 @@ import { SpecsCell } from "@/app/(dashboard)/dashboard/products/CatalogueTable";
  * it comes from the shipped ladder, so withdrawing a rung takes it out of the
  * gallery in the same commit instead of leaving a key nothing answers.
  */
-const LADDER_RUNGS = TIERS.map((spec) => spec.tier).filter((tier) => tier > 0);
+/**
+ * The rungs as the seller's own screen builds them, so the gallery specimen and
+ * board 3e cannot drift apart. Tier 0 is implied rather than drawn: it is "this
+ * listing is unclaimed", which is a state with no ladder in front of it.
+ */
+function ladderRungs(current: number) {
+  return TIERS.filter((spec) => spec.tier > 0).map((spec) => ({
+    tier: spec.tier,
+    label: t(spec.labelKey as never),
+    requirement: t(`verify.requirement.t${spec.tier}` as never),
+    ...(spec.reserved
+      ? { reserved: true, badge: t("verify_listing.reserved") }
+      : spec.tier === TOP_ACHIEVABLE_TIER
+        ? { badge: t("verify_listing.top_tier") }
+        : {}),
+    ...(spec.tier <= current && !spec.reserved
+      ? { date: formatDate("2026-03-14T00:00:00+04:00") }
+      : {}),
+  }));
+}
 
 const THEMES = ["default", "industrial", "trade", "mono", "clinic", "salon"] as const;
 
@@ -62,7 +81,7 @@ const BUSINESS: ListingCardBusiness = {
   categoryCode: "VF",
   areaName: "Al Quoz Industrial 1",
   emirateName: "Dubai",
-  verificationTier: 3,
+  verificationTier: 2,
   verifiedAt: "2026-03-14T00:00:00+04:00",
   productCount: 92,
   reviewCount: 4,
@@ -181,33 +200,30 @@ export function Domain() {
            `TIERS` rather than a literal, so the next change to the ladder moves
            this with it instead of breaking it again.
         */}
-        <States label="at tier 2" stack>
-          <Frame width="34rem">
+        {/*
+           `reserved` is why the second story is "at the top rung" rather than
+           "at tier 3". Nothing reaches tier 3 — it is drawn so the ladder has
+           somewhere to go and carries no affordance — so the top state a real
+           listing can be in is tier 2, and a gallery story showing a listing
+           sitting on the reserved rung would be a state that cannot happen.
+        */}
+        <States label="at tier 1 — claimed, nothing checked yet" stack>
+          <Frame width="46rem">
             <VerificationLadder
-              label={`${t("verify.ladder")} — at tier 2`}
+              label={`${t("verify.ladder")} — at tier 1`}
               reachedLabel={t("verify.reached")}
-              current={2}
-              rungs={LADDER_RUNGS.map((tier) => ({
-                tier,
-                label: t(tierSpec(tier).labelKey as never),
-                requirement: t(`verify.requirement.t${tier}` as never),
-                date: tier <= 2 ? formatDate("2026-03-14T00:00:00+04:00") : undefined,
-              }))}
+              current={1}
+              rungs={ladderRungs(1)}
             />
           </Frame>
         </States>
-        <States label="at the top rung" stack>
-          <Frame width="34rem">
+        <States label="at tier 2 — the top achievable rung" stack>
+          <Frame width="46rem">
             <VerificationLadder
-              label={`${t("verify.ladder")} — at the top rung`}
+              label={`${t("verify.ladder")} — at tier 2`}
               reachedLabel={t("verify.reached")}
-              current={LADDER_RUNGS[LADDER_RUNGS.length - 1] as number}
-              rungs={LADDER_RUNGS.map((tier) => ({
-                tier,
-                label: t(tierSpec(tier).labelKey as never),
-                requirement: t(`verify.requirement.t${tier}` as never),
-                date: formatDate("2026-06-02T00:00:00+04:00"),
-              }))}
+              current={TOP_ACHIEVABLE_TIER}
+              rungs={ladderRungs(TOP_ACHIEVABLE_TIER)}
             />
           </Frame>
         </States>
@@ -811,7 +827,7 @@ const ENQUIRY_RECIPIENTS = [
     businessId: "b1",
     displayName: "Al Marwan Industrial Supplies LLC",
     areaName: "Al Quoz Industrial 1",
-    verificationTier: 3,
+    verificationTier: 2,
     responseLabel: t("response.median", { duration: formatDuration(7_200_000) }),
     pinned: true,
   },

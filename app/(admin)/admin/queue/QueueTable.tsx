@@ -8,10 +8,10 @@ import { t } from "@/lib/i18n";
 /**
  * Board 4b — what is waiting, oldest first.
  *
- * Two kinds of row in one queue, because from a moderator's side of the desk
+ * Three kinds of row in one queue, because from a moderator's side of the desk
  * they are the same job: something is waiting for a decision. Splitting them
- * into two screens makes "what is behind" a question you answer by adding up
- * two numbers.
+ * into separate screens makes "what is behind" a question you answer by adding
+ * up several numbers.
  *
  * **Banded by service level, not sorted by it.** Late rows are grouped first
  * and each band keeps its own age order, so the oldest late row is the first
@@ -26,7 +26,7 @@ import { t } from "@/lib/i18n";
 
 export interface QueueRow {
   id: string;
-  kind: "change" | "conflict";
+  kind: "change" | "conflict" | "document";
   /** The field for a change, or "conflict". */
   what: string;
   businessName: string;
@@ -56,7 +56,11 @@ export function QueueTable({ rows, failed = false }: QueueTableProps) {
         <span className="flex flex-col">
           <span className="text-ink">{labelFor(row)}</span>
           <span className="font-mono text-eyebrow uppercase text-faint">
-            {row.kind === "conflict" ? t("admin.queue.kind.conflict") : t("admin.queue.kind.change")}
+            {row.kind === "conflict"
+              ? t("admin.queue.kind.conflict")
+              : row.kind === "document"
+                ? t("admin.queue.kind.document")
+                : t("admin.queue.kind.change")}
           </span>
         </span>
       ),
@@ -135,6 +139,10 @@ export function QueueTable({ rows, failed = false }: QueueTableProps) {
 
 function labelFor(row: QueueRow): string {
   if (row.kind === "conflict") return t("admin.queue.kind.conflict");
+  // What is being decided is whether it may be published, never whether the
+  // certificate is true — nothing here checks an ISO number against a
+  // registrar, and the label has to stop short of saying we did.
+  if (row.kind === "document") return t("admin.queue.kind.document");
   if (row.what === "trade_name") return t("admin.queue.field.trade_name");
   if (row.what === "primary_category") return t("admin.queue.field.primary_category");
   return t("admin.queue.field.licence");

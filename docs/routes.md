@@ -77,7 +77,7 @@ and it is the one that argues back.
 /dashboard/listing                      Listing profile                       [3b]
 /dashboard/locations                    Locations                             [3c]
 /dashboard/hours                        Hours & Ramadan                       [3d]
-/dashboard/verification                 Verification & documents              [3e]
+/dashboard/verification                 Verification & documents              [3e]  built h3 wave 3
 /dashboard/products                     Catalogue                             [3f]  built h3 wave 2
 /dashboard/products/:id                 Product editor                        [3g]  built h3 wave 2
 /dashboard/products/import              CSV import mapper                    [11d]  built h3 wave 2
@@ -113,6 +113,7 @@ and it is the one that argues back.
 /admin/queue                            Approval queue                        [4b]
 /admin/queue/:id                        Review a submission                   [4c]
 /admin/queue/conflict/:id               Resolve a conflicting claim           [4c]
+/admin/queue/document/:id               Decide a seller's credential          [3e]  built h3 wave 3
 /admin/ingest                           Licence importer                     [12a]  built h4s2
 /admin/ingest/:id                       One import run                       [12a]  built h4s2
 /admin/ingest/dedupe                    Dedupe & merge                       [12b]  built h4s2

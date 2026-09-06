@@ -50,8 +50,9 @@ describe("what an event supplies", () => {
      * nothing — which is not a bug, but staff should know before spending an
      * afternoon on the copy.
      *
-     * `subscription_renewed`, `setup_nudge` and `enquiry_escalated` are the
-     * three sent from a schedule rather than from a request. Every other
+     * `subscription_renewed`, `setup_nudge`, `enquiry_escalated`,
+     * `quote_expiring` and `document_expiring` are sent from a schedule rather
+     * than from a request. Every other
      * emitted event is sent by the service that did the work; these are sent by
      * a cron, which is why each carries its own exactly-once guard —
      * `notify()` deduplicates nothing.
@@ -62,6 +63,15 @@ describe("what an event supplies", () => {
      */
     const emitted = (Object.keys(EVENT_PARAMS) as (keyof typeof EVENT_PARAMS)[]).filter(isEmitted);
     expect([...emitted].sort()).toEqual([
+      /*
+         Board 3e §5, and the fifth event sent from a schedule. It was declared
+         in the enum and seeded with a live email template from handoff 1, and
+         emitted by nothing for the whole of it — so the verification screen
+         promised a sixty-day warning that no job sent, and the first a supplier
+         heard about a lapse was the badge going. `lib/verification/
+         licence-notice-job.ts` carries the exactly-once guard, per stage.
+      */
+      "document_expiring",
       "enquiry_escalated",
       "enquiry_received",
       // Board 11b's follow-up. The first message-shaped notification in the
