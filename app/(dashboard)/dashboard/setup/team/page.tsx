@@ -40,7 +40,7 @@ import {
  * and board 7d's branch-scoped sales seat scoped nothing. The branch column on
  * an invitation is what finally sets it.
  */
-export const metadata = { title: "Invite your team" };
+export const metadata = { title: t("team_setup.meta_title") };
 export const dynamic = "force-dynamic";
 
 /** §1: owner and manager. A sales seat cannot buy more seats. */

@@ -16,7 +16,7 @@ import { requestResetAction, setPasswordAction } from "../actions";
  * A password is the second way in, not the first. Signing in with a code needs
  * none at all, and the copy says so rather than implying everyone needs one.
  */
-export const metadata = { title: "Reset your password" };
+export const metadata = { title: t("auth.reset.title") };
 
 export default async function ResetPage({
   searchParams,

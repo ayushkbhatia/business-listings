@@ -16,7 +16,7 @@ import { DomainPanel, type DomainRecordView } from "./DomainPanel";
  * state names the plan rather than hiding the feature — the same rule the rest
  * of the dashboard follows.
  */
-export const metadata = { title: "Web address" };
+export const metadata = { title: t("domain.meta_title") };
 export const dynamic = "force-dynamic";
 
 export default async function DomainPage() {

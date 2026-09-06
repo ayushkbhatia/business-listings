@@ -55,7 +55,7 @@ import { TaskCard } from "./TaskCard";
  * those disappear at a hundred per cent — as does this route, which redirects
  * once the last task lands.
  */
-export const metadata = { title: "Finish setting up" };
+export const metadata = { title: t("setup.title") };
 export const dynamic = "force-dynamic";
 
 /**

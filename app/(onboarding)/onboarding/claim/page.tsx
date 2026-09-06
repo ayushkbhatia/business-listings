@@ -42,7 +42,7 @@ import { ClaimSearchForm } from "./ClaimSearchForm";
  * links out of it are worth crawling.
  */
 export const metadata: Metadata = {
-  title: "Find your business",
+  title: t("claim.meta_title"),
   robots: { index: false, follow: true },
 };
 

@@ -18,7 +18,7 @@ import { ReviewForm } from "./ReviewForm";
  * shows a form it will refuse to accept is a page that wastes somebody's
  * evening.
  */
-export const metadata = { title: "Write a review" };
+export const metadata = { title: t("review.meta_title") };
 export const dynamic = "force-dynamic";
 
 export default async function WriteReviewPage({

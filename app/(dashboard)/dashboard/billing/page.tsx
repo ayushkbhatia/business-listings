@@ -17,7 +17,7 @@ import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
  * A missing seller TRN is said out loud with what to do about it rather than
  * left as a blank line somebody notices at year end.
  */
-export const metadata = { title: "Subscription" };
+export const metadata = { title: t("billing.title") };
 export const dynamic = "force-dynamic";
 
 /** Ours. A constant rather than a setting, because it is a fact about us. */

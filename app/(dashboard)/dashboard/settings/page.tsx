@@ -45,7 +45,7 @@ import { EVENTS, GOES_TO } from "./matrix";
  * The policy half is still owner and manager, checked here and asserted again
  * in `saveAlerts`.
  */
-export const metadata = { title: "Settings" };
+export const metadata = { title: t("alerts.title") };
 export const dynamic = "force-dynamic";
 
 const DEFAULTS: AlertsValue = {

@@ -14,7 +14,7 @@ import { HoursForm } from "./HoursForm";
  * moon sighting confirmed a day or two beforehand, so the copy says "about"
  * and the component shows it as an approximation rather than a fact.
  */
-export const metadata = { title: "Hours & Ramadan" };
+export const metadata = { title: t("hours.title") };
 export const dynamic = "force-dynamic";
 
 export default async function HoursPage() {

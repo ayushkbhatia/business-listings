@@ -40,7 +40,7 @@ import { HeaderBadge, RecipientRow } from "./_rows";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Your enquiry",
+  title: t("track.meta_title"),
   /*
      Nothing here should be indexed, and nothing should be followed either: the
      links out carry the token, and a crawler following one would put a bearer

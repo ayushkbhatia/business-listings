@@ -20,7 +20,7 @@ import { resendAction, verifyAction } from "../actions";
  * the browser, so reloading the page does not offer a fresh send. The same
  * policy refuses it either way; this only stops the button lying about it.
  */
-export const metadata = { title: "Enter your code" };
+export const metadata = { title: t("auth.verify.title") };
 export const dynamic = "force-dynamic";
 
 export default async function VerifyPage({

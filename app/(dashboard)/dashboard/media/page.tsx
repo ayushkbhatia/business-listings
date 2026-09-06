@@ -17,7 +17,7 @@ import { MediaLibrary, type MediaItem } from "./MediaLibrary";
  * numbers on the setup hub, and two places quoting a percentage that has drifted
  * apart is worse than neither quoting one.
  */
-export const metadata = { title: "Media" };
+export const metadata = { title: t("media.title") };
 export const dynamic = "force-dynamic";
 
 const PLAN_SELECT = {

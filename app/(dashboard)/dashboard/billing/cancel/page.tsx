@@ -7,7 +7,7 @@ import { getNavBadges, requireSellerSeat, SellerPage } from "../../_shell";
 import { confirmCancellation } from "../actions";
 import { CancelForm } from "./CancelForm";
 
-export const metadata = { title: "Cancel subscription" };
+export const metadata = { title: t("cancel.title") };
 export const dynamic = "force-dynamic";
 
 export default async function CancelPage() {
