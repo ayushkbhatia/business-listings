@@ -2,11 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
+import type { Prisma } from "@/lib/db/generated/client";
 import { assertCanEditProduct } from "@/lib/auth/guards";
 import { applyImport, previewImport, revertImport, type ImportPreview } from "@/lib/import/service";
 import { getSpecFieldOptions } from "@/lib/db/queries/catalogue";
 import type { ColumnPlan } from "@/lib/import/columns";
 import { cloneTemplate, saveTemplateEdits, type FieldEdit } from "@/lib/catalogue/template";
+import { mergeSpecValues } from "@/lib/products/spec-values";
 import { reindexBusiness, reindexProduct } from "@/lib/search/reindex";
 import { t } from "@/lib/i18n";
 import { getSellerSeat } from "../_shell";
@@ -190,7 +192,7 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
   const id = String(formData.get("id") ?? "");
   const existing = await prisma.product.findUnique({
     where: { id },
-    select: { businessId: true, categoryId: true },
+    select: { businessId: true, categoryId: true, specValues: true },
   });
   // Someone else's product and one that does not exist give the same answer.
   if (!existing || existing.businessId !== seat.businessId) {
@@ -203,18 +205,28 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
   const availability = String(formData.get("availability") ?? "in_stock");
   const status = String(formData.get("status") ?? "draft");
 
-  // The template's own fields, so a posted key that is not one of them is
-  // simply not stored rather than becoming a spec value nothing can read.
+  /*
+     Merged over what is stored, never rebuilt from the form.
+
+     The decision is in `lib/products/spec-values.ts`, with the failure it
+     prevents written out beside it: a value can only be cleared by a form that
+     was showing its field.
+  */
   const fields = await prisma.specField.findMany({
     where: { template: { defaultForCategories: { some: { id: existing.categoryId } } } },
     select: { id: true },
   });
 
-  const specValues: Record<string, string> = {};
-  for (const field of fields) {
-    const value = String(formData.get(`spec.${field.id}`) ?? "").trim();
-    if (value !== "") specValues[field.id] = value;
-  }
+  const presented = formData.getAll("spec.present").map(String);
+  const posted: Record<string, string> = {};
+  for (const fieldId of presented) posted[fieldId] = String(formData.get(`spec.${fieldId}`) ?? "");
+
+  const specValues = mergeSpecValues({
+    stored: (existing.specValues ?? {}) as Record<string, unknown>,
+    presented,
+    posted,
+    known: new Set(fields.map((field) => field.id)),
+  });
 
   await prisma.product.update({
     where: { id },
@@ -231,7 +243,7 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
       stockQty: readOptionalInt(formData.get("stockQty")),
       leadTimeDays: readOptionalInt(formData.get("leadTimeDays")),
       minOrderQty: readOptionalInt(formData.get("minOrderQty")),
-      specValues,
+      specValues: specValues as Prisma.InputJsonValue,
     },
   });
 
@@ -267,7 +279,6 @@ export async function saveTemplate(formData: FormData): Promise<SaveTemplateActi
   const edits: FieldEdit[] = fieldIds.map((platformFieldId, index) => ({
     platformFieldId,
     label: String(formData.get(`label.${platformFieldId}`) ?? "").trim(),
-    hidden: formData.get(`hidden.${platformFieldId}`) === "on",
     sortOrder: index,
   }));
 

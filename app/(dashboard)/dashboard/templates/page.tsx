@@ -98,7 +98,6 @@ export default async function TemplatePage() {
     platformLabel: field.platformLabel,
     label: field.label,
     isFilterable: field.isFilterable,
-    hidden: field.hidden,
     productCount: counts.get(field.platformFieldId) ?? 0,
   }));
 

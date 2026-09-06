@@ -186,7 +186,10 @@ describe("criterion 6 — a rename keeps the mapping", () => {
     ]);
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(result.error).toContain("hide it instead");
+    // The refusal used to offer hiding as the alternative. Hiding is gone —
+    // it deleted product data one screen over — so an empty label is simply
+    // refused, and a field the seller does not stock is left unfilled.
+    expect(result.error).toContain("a name");
   });
 
   it("refuses an edit naming a field that is not on the template", async () => {
@@ -199,18 +202,32 @@ describe("criterion 6 — a rename keeps the mapping", () => {
     expect(result.error).toContain("Reload");
   });
 
-  it("hides a field without deleting it or its mapping", async () => {
-    const clone = await cloneTemplate(actor, businessId, platformTemplateId);
-    const target = clone.fields.find((f) => !f.isFilterable) ?? clone.fields[0]!;
+  it("ignores a hidden flag left behind by the control that used to write one", async () => {
+    /*
+       Hiding a field is gone — see the note at the top of
+       lib/catalogue/template.ts. It was documented as label-only and was not:
+       board 3g rendered inputs for un-hidden fields only and `saveProduct`
+       rebuilt `specValues` from the posted boxes, so hiding a field deleted its
+       value from the next product saved.
 
-    await saveTemplateEdits(actor, businessId, clone.id, [
-      { platformFieldId: target.platformFieldId, hidden: true },
-    ]);
+       Migration `20260914090000_drop_field_hidden` clears the flags already
+       stored. This asserts the read path does not depend on that having run —
+       a row written before it, or restored from a backup taken before it, must
+       resolve to a plain visible field rather than reviving the behaviour.
+    */
+    const clone = await cloneTemplate(actor, businessId, platformTemplateId);
+    const target = clone.fields[0]!;
+
+    await prisma.sellerTemplate.update({
+      where: { id: clone.id },
+      data: { fieldMappings: { [target.platformFieldId]: { hidden: true, label: "Kept" } } },
+    });
 
     const after = await getSellerTemplate(businessId, clone.id);
-    const hidden = after!.fields.find((f) => f.platformFieldId === target.platformFieldId)!;
-    expect(hidden.hidden).toBe(true);
-    expect(hidden.platformFieldId).toBe(target.platformFieldId);
+    const field = after!.fields.find((f) => f.platformFieldId === target.platformFieldId)!;
+    expect(field.label).toBe("Kept");
+    expect(after!.fields).toHaveLength(clone.fields.length);
+    expect(Object.hasOwn(field, "hidden")).toBe(false);
   });
 
   it("gives the same answer for another seller's template as for one that does not exist", async () => {

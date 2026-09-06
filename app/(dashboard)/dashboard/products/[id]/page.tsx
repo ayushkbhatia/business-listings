@@ -48,7 +48,15 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
   const fields: EditorField[] = view
     ? view.fields
-        .filter((field) => !field.hidden)
+        /*
+           Every field, not the un-hidden ones.
+
+           The filter that was here is why hiding a field destroyed data: a
+           field with no input on screen posted nothing, and `saveProduct`
+           rebuilt `specValues` from what was posted. Hiding is gone — see
+           lib/catalogue/template.ts — and the editor shows the whole template,
+           which is also what "unfilled data stays visible" asks for.
+        */
         .map((field) => ({
           id: field.platformFieldId,
           label: field.label,

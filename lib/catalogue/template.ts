@@ -18,10 +18,31 @@ import type { Actor } from "@/lib/auth/roles";
  * mapping. Criterion 6 asks that renaming warns before saving and keeps the
  * mapping; the warning is a courtesy, and this is the guarantee.
  *
- * What a seller may do: rename a field, hide one they do not stock, reorder.
- * What a seller may not do: invent a field. A field nobody else has is a field
- * nobody can filter on, and a template where every seller has their own columns
- * is a spreadsheet, not a comparison.
+ * ## Hiding a field was removed, and it was the sharpest control on the screen
+ *
+ * A seller could tick `Hidden` on any field, including a filterable one. It was
+ * documented as label-only and buyer-invisible — `getSpecFilters` refuses to
+ * read it for exactly that reason — and it was neither:
+ *
+ *   1. board 3g's editor rendered inputs for `!hidden` fields only;
+ *   2. `saveProduct` rebuilt `specValues` from the boxes the form posted;
+ *   3. so hiding a field and then saving any product deleted that field's
+ *      stored value from it.
+ *
+ * That column feeds `Business.specCompleteness`, which is twelve of the hundred
+ * ranking points, and the spec table every buyer reads. A control whose only
+ * effect was to make a seller harder to find, which also destroyed their data,
+ * while `renameWarning` sat on the same screen promising nothing would be lost.
+ *
+ * It is gone rather than guarded. "Unfilled data stays visible" is a project
+ * non-negotiable: a field a seller does not stock is left empty and renders
+ * "Not provided", which is the truth and is what makes the completeness count
+ * mean anything. There was never a state hiding was the right answer to.
+ *
+ * `saveProduct` merges over the stored values now, so the same hole cannot
+ * reopen the next time a screen renders a partial field set.
+ *
+ * What a seller may do: rename a field, reorder it.
  */
 
 /** One field as the seller sees it, over the platform field underneath. */
@@ -39,12 +60,17 @@ export interface MappedField {
   required: boolean;
   /** Drives a site-wide filter. Marked FILTER in the editor. */
   isFilterable: boolean;
-  hidden: boolean;
   sortOrder: number;
 }
 
-/** What is stored in `SellerTemplate.fieldMappings`. Keyed by platform field id. */
-export type FieldMappings = Record<string, { label?: string; hidden?: boolean; sortOrder?: number }>;
+/**
+ * What is stored in `SellerTemplate.fieldMappings`. Keyed by platform field id.
+ *
+ * `hidden` was a member and is not one now — see the note above. A stored
+ * `hidden: true` from before is ignored on read and dropped on the next save;
+ * migration `20260914090000_drop_field_hidden` clears the ones already written.
+ */
+export type FieldMappings = Record<string, { label?: string; sortOrder?: number }>;
 
 export interface SellerTemplateView {
   id: string;
@@ -161,7 +187,6 @@ export async function getSellerTemplate(
       options: field.options,
       required: field.required,
       isFilterable: field.isFilterable,
-      hidden: override.hidden ?? false,
       sortOrder: override.sortOrder ?? field.sortOrder,
     };
   });
@@ -187,7 +212,6 @@ async function getSellerTemplateOrThrow(businessId: string, id: string) {
 export interface FieldEdit {
   platformFieldId: string;
   label?: string;
-  hidden?: boolean;
   sortOrder?: number;
 }
 
@@ -235,14 +259,13 @@ export async function saveTemplateEdits(
     const label = (edit.label ?? field.label).trim();
 
     if (label === "") {
-      return { ok: false, error: `Give "${field.platformLabel}" a name, or hide it instead.` };
+      return { ok: false, error: `Give "${field.platformLabel}" a name.` };
     }
 
     const entry: FieldMappings[string] = {};
     // Only what differs from the platform. An untouched field follows a later
     // admin rename instead of being frozen at clone time.
     if (label !== field.platformLabel) entry.label = label;
-    if (edit.hidden) entry.hidden = true;
     if (edit.sortOrder !== undefined && edit.sortOrder !== field.sortOrder) {
       entry.sortOrder = edit.sortOrder;
     }

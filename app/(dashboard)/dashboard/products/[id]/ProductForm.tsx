@@ -189,6 +189,16 @@ export function ProductForm(props: ProductFormProps) {
         <div className="grid gap-4 sm:grid-cols-2">
           {props.fields.map((field) => (
             <label key={field.id} className="flex flex-col gap-1">
+              {/*
+                What this form was actually showing.
+
+                `saveProduct` merges over the stored values and only clears a
+                field it can see was on screen. Without this marker it could not
+                tell "the seller emptied this box" from "this box was never
+                rendered" — and it guessed the first, so a field the template
+                stopped showing lost its value on the next save of any product.
+              */}
+              <input type="hidden" name="spec.present" value={field.id} />
               <span className="flex flex-wrap items-center gap-1.5 text-body-sm text-ink">
                 {field.label}
                 {field.unit ? <span className="text-caption text-muted">{field.unit}</span> : null}

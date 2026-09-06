@@ -2250,14 +2250,38 @@ async function seedProducts(
       total += 1;
     }
 
-    // A seller clone of the platform template, for the businesses in valves.
+    /*
+       A seller clone of the platform template, for the businesses in valves.
+
+       The shape here was wrong, and wrong in the way that hides: it wrote
+       `{ sellerKey: platformFieldId }` — the shape in docs/data-model.md, which
+       describes a mapping from a seller's own field to a platform one — while
+       `lib/catalogue/template.ts` implements the opposite,
+       `{ platformFieldId: { label, sortOrder } }`. So `mappings[field.id]` was
+       `undefined` for every field, every override resolved to the platform's
+       own value, and the seeded clones carried two keys that did nothing.
+
+       Nothing failed, because the resolver iterates the platform's fields
+       rather than the mapping's keys. It meant no seeded seller had a working
+       override, so the rename path, the reorder and the FILLED counts had never
+       once been rendered against real data.
+
+       Two real overrides now: the trade calls `nominal_diameter` several
+       things, so it is renamed, and the reorder puts it first — which is the
+       order the seller's own product page then reads in. No `rnd()` or `int()`
+       draw is added or removed here; the PRNG is positional and every business
+       generated after this point is named by where the cursor is.
+    */
     if (isValves && rnd() < 0.5) {
       await db.sellerTemplate.create({
         data: {
           businessId: b.id,
           platformTemplateId: templateId,
           name: "Our valve spec",
-          fieldMappings: { size: fieldId("nominal_diameter"), rating: fieldId("pressure_rating") },
+          fieldMappings: {
+            [fieldId("nominal_diameter")]: { label: "Bore size", sortOrder: 0 },
+            [fieldId("pressure_rating")]: { label: "Working pressure" },
+          },
         },
       });
     }

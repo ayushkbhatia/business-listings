@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Button, Checkbox, Input } from "@/components/primitives";
+import { Button, Input } from "@/components/primitives";
 import { Alert, Tag } from "@/components/display";
 import { Modal } from "@/components/structure";
 import { formatCount } from "@/lib/format";
@@ -27,7 +27,6 @@ export interface TemplateFieldRow {
   platformLabel: string;
   label: string;
   isFilterable: boolean;
-  hidden: boolean;
   /** How many of this seller's products have a value for it. */
   productCount: number;
 }
@@ -41,9 +40,6 @@ export interface TemplateFormProps {
 export function TemplateForm({ sellerTemplateId, fields, action }: TemplateFormProps) {
   const [labels, setLabels] = useState<Record<string, string>>(
     Object.fromEntries(fields.map((f) => [f.platformFieldId, f.label])),
-  );
-  const [hidden, setHidden] = useState<Record<string, boolean>>(
-    Object.fromEntries(fields.map((f) => [f.platformFieldId, f.hidden])),
   );
   const [confirming, setConfirming] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -60,7 +56,6 @@ export function TemplateForm({ sellerTemplateId, fields, action }: TemplateFormP
     for (const field of fields) {
       form.append("fieldId", field.platformFieldId);
       form.set(`label.${field.platformFieldId}`, labels[field.platformFieldId] ?? field.label);
-      if (hidden[field.platformFieldId]) form.set(`hidden.${field.platformFieldId}`, "on");
     }
 
     setError(null);
@@ -107,9 +102,6 @@ export function TemplateForm({ sellerTemplateId, fields, action }: TemplateFormP
                 <th scope="col" className="w-24 px-3 py-2 text-caption font-normal text-muted">
                   {t("template.col_filter")}
                 </th>
-                <th scope="col" className="w-24 px-3 py-2 text-caption font-normal text-muted">
-                  {t("template.col_hidden")}
-                </th>
               </tr>
             </thead>
             <tbody>
@@ -146,18 +138,6 @@ export function TemplateForm({ sellerTemplateId, fields, action }: TemplateFormP
                     ) : (
                       <span className="text-caption text-faint">{t("template.filter_no")}</span>
                     )}
-                  </td>
-                  <td className="px-3 py-2">
-                    <Checkbox
-                      checked={hidden[field.platformFieldId] ?? false}
-                      aria-label={t("template.hidden_label", { field: field.platformLabel })}
-                      onChange={(e) =>
-                        setHidden((current) => ({
-                          ...current,
-                          [field.platformFieldId]: e.target.checked,
-                        }))
-                      }
-                    />
                   </td>
                 </tr>
               ))}
