@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/db/client";
+import { resolveTemplate } from "@/lib/spec/resolve";
 import { VERIFIED_TIER } from "@/lib/verification";
 
 /**
@@ -161,26 +162,16 @@ export type PublicProductDetail = NonNullable<Awaited<ReturnType<typeof getProdu
  * column, once inside `getSpecFacets` for the rail. Each read is two queries
  * (the template, then its fields), so this was four round trips for one answer.
  */
-export const getSpecTemplate = cache(async (categoryId: string) => {
-  const own = await prisma.specTemplate.findFirst({
-    where: { categoryId, status: "live" },
-    orderBy: { version: "desc" },
-    include: { fields: { orderBy: { sortOrder: "asc" } } },
-  });
-  if (own) return own;
-
-  const category = await prisma.category.findUnique({
-    where: { id: categoryId },
-    select: { parentId: true },
-  });
-  if (!category?.parentId) return null;
-
-  return prisma.specTemplate.findFirst({
-    where: { categoryId: category.parentId, status: "live" },
-    orderBy: { version: "desc" },
-    include: { fields: { orderBy: { sortOrder: "asc" } } },
-  });
-});
+export const getSpecTemplate = cache(async (categoryId: string) =>
+  /*
+     Board 4e: the own-then-parent walk this used to do by hand now lives in
+     `resolveTemplate`, because a subcategory holds several templates and
+     "the first one, newest version" stopped being an answer. The rule is
+     `4d`'s per-subcategory default; see the note in lib/spec/resolve.ts for
+     what the two resolvers used to disagree about.
+  */
+  resolveTemplate(prisma, categoryId),
+);
 
 export type SpecTemplateWithFields = NonNullable<Awaited<ReturnType<typeof getSpecTemplate>>>;
 

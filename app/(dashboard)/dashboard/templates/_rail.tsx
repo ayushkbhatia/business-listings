@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Panel } from "@/components/structure";
+import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
 /**
@@ -64,6 +65,19 @@ export function TemplatesRail({
 
       {clonable.length > 0 ? (
         <Panel eyebrow={t("template.rail_library")} padded={false}>
+          {/*
+              The count, per board 4e's Q4: a new library template is an offer
+              and never an application. A seller whose products predate the
+              template has nothing to lose by ignoring it, and a template
+              arriving unannounced would change what their storefront claims to
+              describe.
+          */}
+          <p className="border-b border-line px-3 py-1.5 font-mono text-eyebrow uppercase text-muted">
+            {t("template.rail_library_count", {
+              count: clonable.length,
+              n: formatCount(clonable.length),
+            })}
+          </p>
           <ul className="flex flex-col">
             {clonable.map((sheet) => (
               <li key={sheet.id} className="border-b border-line last:border-0">

@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { resolveTemplate } from "@/lib/spec/resolve";
 import { assertCanEditProduct } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import {
@@ -284,11 +285,7 @@ export async function applyImport(actor: Actor, input: ApplyImportInput): Promis
   */
   const [importCategory, importTemplate] = await Promise.all([
     prisma.category.findUnique({ where: { id: input.categoryId }, select: { name: true } }),
-    prisma.specTemplate.findFirst({
-      where: { categoryId: input.categoryId },
-      orderBy: { version: "desc" },
-      select: { fields: { select: { id: true, label: true, unit: true } } },
-    }),
+    resolveTemplate(prisma, input.categoryId),
   ]);
   const importFields = importTemplate?.fields ?? [];
 

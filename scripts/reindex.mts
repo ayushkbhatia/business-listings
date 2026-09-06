@@ -2,6 +2,7 @@ import { config as loadEnv } from "dotenv";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/db/generated/client.js";
 import { buildBusinessSearchText, buildProductSearchText } from "../lib/search/index-text.js";
+import { resolveTemplateId } from "../lib/spec/resolve.js";
 
 /**
  * Rebuild every match surface, for rows that predate the write path.
@@ -45,11 +46,15 @@ const fieldCache = new Map<string, { id: string; label: string; unit: string | n
 async function fieldsFor(categoryId: string) {
   const cached = fieldCache.get(categoryId);
   if (cached) return cached;
-  const template = await prisma.specTemplate.findFirst({
-    where: { categoryId },
-    orderBy: { version: "desc" },
-    select: { fields: { select: { id: true, label: true, unit: true } } },
-  });
+  // Board 4e: the same resolver the app uses, rather than a sixth answer to
+  // "which template governs this category" written in a script.
+  const templateId = await resolveTemplateId(prisma, categoryId);
+  const template = templateId
+    ? await prisma.specTemplate.findUnique({
+        where: { id: templateId },
+        select: { fields: { select: { id: true, label: true, unit: true } } },
+      })
+    : null;
   const fields = template?.fields ?? [];
   fieldCache.set(categoryId, fields);
   return fields;

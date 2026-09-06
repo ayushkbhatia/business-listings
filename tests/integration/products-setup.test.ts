@@ -42,7 +42,7 @@ beforeAll(async () => {
     where: { status: "live", fields: { some: { required: true, isFilterable: true } } },
     select: {
       id: true,
-      categoryId: true,
+      categories: { select: { categoryId: true } },
       fields: {
         orderBy: { sortOrder: "asc" },
         select: { id: true, unit: true, required: true, isFilterable: true },
@@ -50,6 +50,7 @@ beforeAll(async () => {
     },
   });
   templateId = template.id;
+  const templateCategoryId = template.categories[0]!.categoryId;
   requiredIds = template.fields
     .filter((field) => field.required && field.isFilterable)
     .map((field) => field.id);
@@ -65,7 +66,7 @@ beforeAll(async () => {
       licenceNumber: `DED-8C-${stamp.slice(-6)}`,
       licenceAuthority: "DED",
       licenceExpiry: new Date(Date.now() + 300 * 86_400_000),
-      primaryCategoryId: template.categoryId,
+      primaryCategoryId: templateCategoryId,
       claimStatus: "claimed",
       planId: "free",
       publishedAt: new Date(Date.now() - 2 * 86_400_000),
@@ -294,10 +295,11 @@ describe("the sheet", () => {
     */
     const template = await prisma.specTemplate.findUniqueOrThrow({
       where: { id: templateId },
-      select: { categoryId: true },
+      select: { categories: { select: { categoryId: true } } },
     });
+    const parentId = template.categories[0]!.categoryId;
     const child = await prisma.category.findFirst({
-      where: { parentId: template.categoryId },
+      where: { parentId },
       select: { id: true },
     });
     if (!child) return;
@@ -314,7 +316,7 @@ describe("the sheet", () => {
 
     await prisma.business.update({
       where: { id: businessId },
-      data: { primaryCategoryId: template.categoryId },
+      data: { primaryCategoryId: parentId },
     });
   });
 

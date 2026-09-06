@@ -464,7 +464,7 @@ async function main() {
   console.log("→ spec template");
   const template = await prisma.specTemplate.create({
     data: {
-      categoryId: catBySlug.get("valves-and-fittings")!,
+      categories: { create: { categoryId: catBySlug.get("valves-and-fittings")! } },
       name: "Industrial valve",
       version: 1,
       status: "live",
@@ -1430,7 +1430,7 @@ async function seedDeepCatalogue(db: Db) {
   }
 
   const template = await db.specTemplate.findFirst({
-    where: { categoryId: seller.primaryCategoryId },
+    where: { categories: { some: { categoryId: seller.primaryCategoryId } } },
     orderBy: { version: "desc" },
     select: { fields: { select: { id: true, key: true, label: true, unit: true, options: true } } },
   });
@@ -1612,7 +1612,7 @@ async function seedPumps(db: Db, catBySlug: Map<string, string>) {
   */
   const template = await db.specTemplate.create({
     data: {
-      categoryId,
+      categories: { create: { categoryId } },
       name: "Pump",
       version: 1,
       status: "live",
@@ -1630,6 +1630,17 @@ async function seedPumps(db: Db, catBySlug: Map<string, string>) {
     },
     include: { fields: true },
   });
+
+  /*
+     The default, and the reason it is not optional.
+
+     A subcategory with a template and no default resolves to nothing on the
+     seller side: before board 4e this seed left it null, so the buyer-facing
+     facet rail found the pump template through `spec_template.category_id`
+     while `templateForCategory` found none — a pump seller's required fields
+     were never enforced and nothing said so. `resolveTemplateId` reads this.
+  */
+  await db.category.update({ where: { id: categoryId }, data: { defaultTemplateId: template.id } });
 
   const fieldId = (key: string) => template.fields.find((f) => f.key === key)!.id;
   const fields = template.fields.map((f) => ({ id: f.id, label: f.label, unit: f.unit }));

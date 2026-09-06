@@ -309,7 +309,7 @@ model Category {
   parent            Category?            @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   children          Category[]           @relation("CategoryTree")
   defaultTemplate   SpecTemplate?        @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
-  templates         SpecTemplate[]       @relation("TemplateCategory")
+  templates         SpecTemplateCategory[]
   primaryFor        Business[]           @relation("BusinessPrimaryCategory")
   sectorFor         Business[]           @relation("BusinessSector")
   businesses        BusinessCategory[]
@@ -362,21 +362,52 @@ enum FieldType {
 /// Platform-owned and versioned. A seller clones it; the clone maps back here so
 /// cross-seller comparison survives a rename.
 model SpecTemplate {
-  id         String         @id @default(cuid())
-  categoryId String         @map("category_id")
-  name       String
-  version    Int            @default(1)
-  status     TemplateStatus @default(draft)
-  createdAt  DateTime       @default(now()) @map("created_at")
+  id      String         @id @default(cuid())
+  name    String
+  version Int            @default(1)
+  status  TemplateStatus @default(draft)
+  /// Ops's unapplied edits, in the shape `lib/spec/changes.ts` reads.
+  ///
+  /// On the row rather than in a second `draft` row, for the reason
+  /// `lib/spec/versions.ts` gives at length: `Product.specValues` is keyed by
+  /// `SpecField.id`, so a draft that is a copy of the template hands every
+  /// carried-forward field a new id and empties every catalogue in the
+  /// category the moment it is published. Null means nothing pending, which is
+  /// why it is nullable rather than defaulted — board 4e §5 makes the draft
+  /// card absent with none pending rather than empty.
+  draftChanges Json?     @map("draft_changes")
+  createdAt    DateTime  @default(now()) @map("created_at")
 
-  category             Category         @relation("TemplateCategory", fields: [categoryId], references: [id], onDelete: Restrict)
-  defaultForCategories Category[]       @relation("CategoryDefaultTemplate")
+  /// Every subcategory this template serves. Board 4e: the relation is
+  /// many-to-many. Pipes & fittings holds four templates, because grooved,
+  /// threaded, flanged and press fittings share almost no fields; the valve
+  /// template serves both Valves & fittings and Pumps & motors. Which one a
+  /// seller is offered first is `Category.defaultTemplateId`, a default and
+  /// not an exclusive assignment.
+  categories           SpecTemplateCategory[]
+  defaultForCategories Category[]            @relation("CategoryDefaultTemplate")
   fields               SpecField[]
   sellerTemplates      SellerTemplate[]
 
-  @@unique([categoryId, version])
-  @@index([categoryId])
+  @@index([status])
   @@map("spec_template")
+}
+
+/// Which templates serve which subcategories — board 4e's many-to-many.
+///
+/// Explicit rather than an implicit Prisma relation, because coverage is a
+/// query over it — subcategories with no row here — and that query is the
+/// number this screen exists to move.
+model SpecTemplateCategory {
+  templateId String @map("template_id")
+  categoryId String @map("category_id")
+
+  template SpecTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  category Category     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([templateId, categoryId])
+  @@index([categoryId])
+  @@map("spec_template_category")
 }
 
 model SpecField {
@@ -389,17 +420,33 @@ model SpecField {
   unit         String?
   options      String[]  @default([])
   required     Boolean   @default(false)
-  /// When `required` starts biting, for a field added to a live template.
+  /// Vestigial. Nothing writes this any more, and nothing should.
   ///
-  /// Criterion 4: publishing a version with a new required field must not
-  /// invalidate the products already filed against it. Null means required from
-  /// the beginning, which is the common case; a date means everything before it
-  /// is incomplete-but-valid until then. Read the two together — a field is
-  /// required now if `required` and (`requiredFrom` is null or in the past).
+  /// It was board 4e's grace period: a publish could add a required field with
+  /// a deadline, and the field bit on that date. The 4e handoff retires the
+  /// idea outright, because a grace period implies a day 61 and the only things
+  /// that could happen then — delisting, unpublishing, dropping out of search —
+  /// are exactly what `3h` §5 and `6f`'s 301-not-404 exist to prevent. A
+  /// version publish is additive and lands not-required; requiring a field is a
+  /// separate action that flags and blocks the next save, with no deadline.
+  ///
+  /// The column stays because the read rule stays: a field is required now if
+  /// `required` and (`requiredFrom` is null or in the past). Dropping it would
+  /// make any row that still carries a future date required immediately, which
+  /// is the one thing the retirement is meant to prevent.
   requiredFrom DateTime? @map("required_from")
   /// Drives the site-wide filter rail. Changing this changes the rail with no
   /// code change — see handoff 1 acceptance criterion 4.
   isFilterable Boolean   @default(false) @map("is_filterable")
+  /// Whether this field differs between variants of the same product.
+  ///
+  /// Board 4e authors it and board 3g enforces it: a `VARIES` field is never
+  /// offered for push-to-variants and never inherited by a duplicate, because
+  /// pushing nominal size across a set overwrites DN80's size with DN100's. It
+  /// has to live on the platform field — a clone can only inherit a flag the
+  /// library template carries, so if it originated on the seller's copy `3g`
+  /// would have nothing to read.
+  variesByVariant Boolean @default(false) @map("varies_by_variant")
   sortOrder    Int       @default(0) @map("sort_order")
 
   template  SpecTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)

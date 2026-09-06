@@ -64,7 +64,7 @@ beforeAll(async () => {
   */
   const template = await prisma.specTemplate.findFirstOrThrow({
     where: { status: "live", fields: { some: {} }, defaultForCategories: { some: {} } },
-    select: { id: true, categoryId: true, defaultForCategories: { select: { id: true } } },
+    select: { id: true, defaultForCategories: { select: { id: true } } },
   });
   platformTemplateId = template.id;
   categoryId = template.defaultForCategories[0]!.id;

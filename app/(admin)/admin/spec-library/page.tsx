@@ -1,46 +1,76 @@
 import { notFound } from "next/navigation";
-import { Panel } from "@/components/structure";
+import Link from "next/link";
+import { Tabs } from "@/components/structure";
+import { buttonClassName } from "@/components/primitives";
 import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
-import { fieldProposals, templateLibrary } from "@/lib/spec/versions";
+import { coverage, libraryHeader, proposedFields, specLibrary } from "@/lib/spec/library";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { TemplateTable } from "./TemplateTable";
+import { CoverageCard, DraftCard, ProposedCard } from "./_rail";
+import { CoverageTable } from "./CoverageTable";
+import { ProposedTable } from "./ProposedTable";
+import { NewTemplatePanel } from "./NewTemplatePanel";
 
 /**
- * Board 4e — the spec library.
+ * Board 4e — the global spec library.
  *
- * Two things on one screen, because they are two halves of the same job:
+ * The templates sellers clone. A library template is the platform's opinion
+ * about how a kind of product is described: which attributes it has, in what
+ * order, which of them buyers can filter on, and which vary between variants of
+ * the same product. A seller clones one and it becomes theirs (`3h`); the
+ * product editor enforces it (`3g`); the buyer reads the result as a spec table
+ * (`1g`).
  *
- *   - **What the platform defines**, per category, with the version and how
- *     many sellers have cloned it. The clone count is the blast radius of a
- *     change, and it belongs next to the change rather than in a report.
- *   - **What sellers keep inventing**, ranked by how many of them invented it.
- *     That promotion path is what stops 40,000 businesses inventing 40,000
- *     attribute names, and it was not a countable thing until step 1 gave it a
- *     row — `SellerTemplate.fieldMappings` is an opaque Json blob.
+ * The screen has three jobs and the board did one of them:
  *
- * The `in grace` count is the one to read first. A field inside its grace
- * period is a deadline somebody set and a catalogue somebody has to fill in
- * before it, and it stops being visible the moment it expires.
+ *   1. **Author and version templates.** The board's part, and mostly right —
+ *      except that its one publish button had two blast radii inside it. See
+ *      `lib/spec/versions.ts`.
+ *   2. **Keep the field set comparable per subcategory.** Facets are
+ *      platform-owned per category (`3h`), so this is where they are set.
+ *   3. **Cover demand.** The board rendered the coverage gap — every
+ *      subcategory whose products carry no comparable fields at all — as a
+ *      single table row, with a `Create` link sitting in the `VERSION` column.
+ *      One row type doing two jobs, and a value column holding an action.
+ *
+ * Coverage is what this screen is for, so it leads: a counted header figure, a
+ * tab, and a rail card ranked by products already listed without a template.
+ * Templates and subcategories are separate views of separate entities.
+ *
+ * Every count is a query — criterion 12. The board hardcoded all of them.
  */
 
 export const dynamic = "force-dynamic";
 
-export default async function SpecLibraryPage() {
+type View = "templates" | "coverage" | "drafts" | "proposed";
+
+const VIEWS: View[] = ["templates", "coverage", "drafts", "proposed"];
+
+function viewFrom(raw: string | undefined): View {
+  return VIEWS.includes(raw as View) ? (raw as View) : "templates";
+}
+
+export default async function SpecLibraryPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
   const seat = await requireStaff();
   if (!can(seat.actor, "taxonomy.write")) notFound();
 
-  const [templates, proposals, badges] = await Promise.all([
-    templateLibrary(),
-    fieldProposals(),
+  const [header, rows, gaps, proposals, badges] = await Promise.all([
+    libraryHeader(),
+    specLibrary(),
+    coverage(),
+    proposedFields(),
     getAdminNavBadges(seat),
   ]);
 
-  const live = templates.filter((template) => template.status === "live");
-  const inGrace = templates.reduce((sum, template) => sum + template.inGrace, 0);
-
+  const view = viewFrom((await searchParams).view);
+  const drafts = rows.filter((row) => row.draftVersion !== null);
 
   return (
     <AdminPage
@@ -52,46 +82,92 @@ export default async function SpecLibraryPage() {
       meta={
         <span className="text-caption text-muted">
           {t("admin.spec.meta", {
-            live: formatCount(live.length),
-            grace: formatCount(inGrace),
+            templates: formatCount(header.templates),
+            covered: formatCount(header.covered),
+            total: formatCount(header.total),
+            products: formatCount(header.products),
           })}
         </span>
       }
+      actions={
+        /*
+           `+ New template` on the board. It goes to the coverage view rather
+           than opening a form here, because a template needs a subcategory and
+           coverage is where the ones that need a template are already named and
+           ranked. The board put its `Create` in a template table's `VERSION`
+           column instead.
+        */
+        <Link
+          href="/admin/spec-library?view=coverage"
+          className={buttonClassName({ variant: "secondary", size: "sm" })}
+        >
+          {t("admin.spec.new.title")}
+        </Link>
+      }
     >
-      <TemplateTable rows={templates} />
+      {/*
+        Tabs as links rather than buttons. Four different entities, and the
+        board rendered two of them in one table; each view is a real URL that
+        can be opened in a new tab and appears in history.
+      */}
+      <Tabs
+        as="a"
+        variant="enclosed"
+        label={t("admin.spec.tabs_label")}
+        active={view}
+        items={[
+          {
+            key: "templates",
+            label: t("admin.spec.tab.templates"),
+            href: "/admin/spec-library",
+            badge: rows.length,
+          },
+          {
+            key: "coverage",
+            label: t("admin.spec.tab.coverage"),
+            href: "/admin/spec-library?view=coverage",
+            badge: gaps.gaps.length,
+          },
+          {
+            key: "drafts",
+            label: t("admin.spec.tab.drafts"),
+            href: "/admin/spec-library?view=drafts",
+            // Reads `0` rather than disappearing — board 4e's `No drafts`
+            // state. A tab that vanishes takes its count with it.
+            badge: drafts.length,
+          },
+          {
+            key: "proposed",
+            label: t("admin.spec.tab.proposed"),
+            href: "/admin/spec-library?view=proposed",
+            badge: proposals.length,
+          },
+        ]}
+      />
 
-      <p className="mt-[var(--gutter)] max-w-prose text-caption text-muted">
-        {t("admin.spec.note")}
-      </p>
+      <div className="mt-[var(--gutter)] flex flex-col gap-[var(--gutter)] xl:flex-row">
+        <div className="min-w-0 flex-1">
+          {view === "templates" && <TemplateTable rows={rows} />}
+          {view === "drafts" && <TemplateTable rows={drafts} />}
+          {view === "coverage" && <CoverageTable gaps={gaps.gaps} />}
+          {view === "proposed" && <ProposedTable rows={proposals} />}
+        </div>
 
-      <div className="mt-[var(--gutter)]">
-        <Panel title={t("admin.spec.proposals")}>
-          {proposals.length === 0 ? (
-            <p className="text-caption text-muted">{t("admin.spec.proposals_empty")}</p>
+        <div className="flex w-full shrink-0 flex-col gap-[var(--gutter)] xl:w-[352px]">
+          {view === "coverage" ? (
+            <NewTemplatePanel
+              subcategories={gaps.gaps
+                .filter((gap) => !gap.held)
+                .map((gap) => ({ id: gap.id, name: gap.name }))}
+            />
           ) : (
-            <ul className="flex flex-col">
-              {proposals.map((proposal) => (
-                <li
-                  key={proposal.id}
-                  className="flex items-baseline justify-between gap-3 border-t border-line py-1.5 first:border-t-0"
-                >
-                  <span className="min-w-0 text-body-sm text-body">
-                    {proposal.sampleLabel}
-                    <span className="ms-2 font-mono text-eyebrow uppercase text-faint">
-                      {proposal.category.name}
-                    </span>
-                  </span>
-                  <span className="shrink-0 font-mono text-caption tabular-nums text-muted">
-                    {t("admin.spec.proposal_count", {
-                      count: formatCount(proposal.businessCount),
-                    })}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            <DraftCard drafts={drafts} />
           )}
-        </Panel>
+          <CoverageCard coverage={gaps} />
+          <ProposedCard proposals={proposals} />
+        </div>
       </div>
+
     </AdminPage>
   );
 }

@@ -54,6 +54,16 @@ export interface BoardField {
   platformRequired: boolean;
   facet: "platform" | "not_a_facet" | "yours_only";
   facetLabel: string;
+  /**
+   * Authored on board 4e, enforced by board 3g.
+   *
+   * Read-only here for the same reason the facet is: a clone can only inherit
+   * a flag the library template carries, and a per-seller answer to "does
+   * nominal size differ between variants" is not a thing the platform could
+   * act on.
+   */
+  varies: boolean;
+  variesLabel: string;
   detached: boolean;
   own: boolean;
   isNew: boolean;
@@ -335,9 +345,16 @@ export function TemplateBoard(props: TemplateBoardProps) {
                           claims otherwise — §"Why the facet cannot be
                           per-seller".
                         */}
-                        <StatusBadge tone={facetTone(now.facet)} size="sm" shape="chip">
-                          {row.facetLabel}
-                        </StatusBadge>
+                        <span className="flex flex-wrap items-center gap-1">
+                          <StatusBadge tone={facetTone(now.facet)} size="sm" shape="chip">
+                            {row.facetLabel}
+                          </StatusBadge>
+                          {row.varies && (
+                            <StatusBadge tone="neutral" size="sm" shape="chip">
+                              {row.variesLabel}
+                            </StatusBadge>
+                          )}
+                        </span>
                       </td>
                       <td className="px-2 py-2 text-right">
                         <span className="block font-mono tabular-nums text-body-sm text-ink">

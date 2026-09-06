@@ -1,29 +1,48 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import {
-  affectedByNewField,
-  publishVersionWithField,
-  templateLibrary,
+  createTemplate,
+  discardDraft,
   proposalKey,
-  type NewField,
+  publishDraft,
+  reviewRequireField,
+  setFieldRequired,
+  stageAddField,
+  stageChange,
 } from "@/lib/spec/versions";
+import { coverage, libraryHeader, specLibrary, templateDetail } from "@/lib/spec/library";
+import { resolveTemplateId } from "@/lib/spec/resolve";
+import { readOwnFields, type FieldMappings } from "@/lib/catalogue/overlay";
+import type { DraftField } from "@/lib/spec/changes";
 import { categoryHealth, editCategory, thresholdsFor } from "@/lib/taxonomy/service";
-import { specCompleteness, type SpecFieldRule } from "@/lib/metrics/spec-completeness";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
 
 /**
- * Criterion 4, against a real database:
+ * Board 4e, against a real database.
  *
- *   "Publishing a spec-template version with a new required field does not
- *    invalidate existing products — the grace period works and the affected
- *    count is accurate."
+ * The criteria this file exists for, in the handoff's own numbering:
  *
- * Both halves, and the second decides whether the first gets used: staff who
- * cannot see that a change breaks 1,842 products will publish it.
+ *   1. Publishing a version never marks an existing product as violating its
+ *      template, never blocks a seller's save, and never changes a product's
+ *      published state.
+ *   2. Requiring a platform field is a separate action with its own review, and
+ *      it flags and blocks-on-next-save. It never delists and carries no
+ *      deadline.
+ *   3. Removing a field leaves the field and its values on every clone as a
+ *      seller-owned field, and drops its facet status only.
+ *   5. A subcategory may hold several templates and a template may serve
+ *      several subcategories.
+ *   7. Coverage is a query — subcategories with no template.
+ *   9. `filled` is computed over mapped platform fields only, across all
+ *      clones, and a template with no clones is null rather than zero.
+ *  11. `varies_by_variant` is authored here and inherited by every clone.
+ *  12. Every count is a query. No constants.
  *
- * Plus criterion 6's first half — the per-category publish floor, which has had
- * columns since handoff 0 and no reader at all.
+ * The one that used to be here — "the grace period works" — is gone, and its
+ * absence is the point. `3h` §6 lands additive platform changes not required,
+ * so there is nothing for a grace period to postpone; a deadline would imply a
+ * day 61 whose only outcomes are the ones `3h` §5 and `6f` exist to prevent.
  */
 
 const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
@@ -50,6 +69,8 @@ beforeAll(async () => {
   ).id;
 });
 
+const ops = () => actor(opsLeadId, "staff_ops_lead");
+
 let seq = 0;
 
 /**
@@ -73,63 +94,64 @@ afterAll(async () => {
     where: { id: { in: made.categories } },
     data: { defaultTemplateId: null },
   });
-  await prisma.specTemplate.deleteMany({ where: { categoryId: { in: made.categories } } });
+  await prisma.specTemplate.deleteMany({
+    where: { categories: { some: { categoryId: { in: made.categories } } } },
+  });
   await prisma.category.deleteMany({ where: { id: { in: made.categories } } });
   // By slug too, so a crashed run does not leave a sector behind for the next.
   await prisma.category.deleteMany({ where: { slug: { startsWith: "test-trade-" } } });
   await prisma.$disconnect();
 });
 
+interface Fixture {
+  templateId: string;
+  categoryId: string;
+  businessId: string;
+  boreId: string;
+  noteId: string;
+  productIds: string[];
+}
+
 /**
  * A category of its own, with a live template and a catalogue.
  *
- * Built per test rather than shared. `publishVersionWithField` retires the
- * template it supersedes and repoints the category, and a required field with
- * no grace period permanently breaks every product under it — so a suite that
- * used the seeded valves template poisoned its own fixture on the first run and
- * every assertion about affected counts read zero on the second. This suite
- * runs against a database it does not reset.
+ * Built per test rather than shared: this suite publishes versions and requires
+ * fields, and a shared fixture would carry one test's requirement into the
+ * next. It runs against a database it does not reset.
  */
-async function freshTemplate(options: { complete: number; incomplete: number }) {
+async function freshTemplate(options: { complete: number; incomplete: number }): Promise<Fixture> {
   seq += 1;
   const stamp = `${Date.now()}${String(seq).padStart(2, "0")}`;
 
+  const category = await prisma.category.create({
+    data: { name: `Test Trade ${stamp}`, slug: `test-trade-${stamp}`, code: "TT" },
+    select: { id: true },
+  });
+  made.categories.push(category.id);
+
   const template = await prisma.specTemplate.create({
     data: {
-      category: {
-        create: {
-          name: `Test Trade ${stamp}`,
-          slug: `test-trade-${stamp}`,
-          code: "TT",
-        },
-      },
+      categories: { create: { categoryId: category.id } },
       name: `Test template ${stamp}`,
       version: 1,
       status: "live",
       fields: {
         create: [
-          { key: "bore", label: "Bore", type: "select", required: true, isFilterable: true, sortOrder: 0 },
+          { key: "bore", label: "Bore", type: "select", required: false, isFilterable: true, sortOrder: 0 },
           { key: "note", label: "Note", type: "text", required: false, isFilterable: false, sortOrder: 1 },
         ],
       },
     },
-    select: {
-      id: true,
-      categoryId: true,
-      version: true,
-      name: true,
-      fields: { select: { id: true, key: true } },
-    },
+    select: { id: true, fields: { select: { id: true, key: true } } },
   });
 
   await prisma.category.update({
-    where: { id: template.categoryId },
+    where: { id: category.id },
     data: { defaultTemplateId: template.id },
   });
 
-  made.categories.push(template.categoryId);
-
   const boreId = template.fields.find((f) => f.key === "bore")!.id;
+  const noteId = template.fields.find((f) => f.key === "note")!.id;
 
   /*
    * Its own business, not the first one that comes back.
@@ -148,7 +170,7 @@ async function freshTemplate(options: { complete: number; incomplete: number }) 
       licenceNumber: `DED-SF-${stamp.slice(-6)}`,
       licenceAuthority: "DED",
       licenceExpiry: new Date(Date.now() + 200 * 86_400_000),
-      primaryCategoryId: template.categoryId,
+      primaryCategoryId: category.id,
       claimStatus: "unclaimed",
       // Never published: it must not reach a search result, a sitemap, or a
       // category listing count.
@@ -158,11 +180,12 @@ async function freshTemplate(options: { complete: number; incomplete: number }) 
   });
   made.businesses.push(business.id);
 
+  const productIds: string[] = [];
   for (let i = 0; i < options.complete + options.incomplete; i += 1) {
-    await prisma.product.create({
+    const product = await prisma.product.create({
       data: {
         businessId: business.id,
-        categoryId: template.categoryId,
+        categoryId: category.id,
         name: `Test product ${stamp}-${i}`,
         slug: `test-product-${stamp}-${i}`,
         status: "live",
@@ -170,272 +193,439 @@ async function freshTemplate(options: { complete: number; incomplete: number }) 
         specValues: i < options.complete ? { [boreId]: "DN100" } : {},
         searchText: `test product ${stamp}`,
       },
+      select: { id: true },
     });
+    productIds.push(product.id);
   }
 
-  return template;
+  return { templateId: template.id, categoryId: category.id, businessId: business.id, boreId, noteId, productIds };
 }
 
-const field = (over: Partial<NewField> = {}): NewField => ({
+/** A seller copy of a fixture's template, with whatever overlay the test needs. */
+async function clone(fixture: Fixture, mappings: FieldMappings = {}) {
+  seq += 1;
+  return prisma.sellerTemplate.create({
+    data: {
+      businessId: fixture.businessId,
+      platformTemplateId: fixture.templateId,
+      name: "Seller copy",
+      slug: `seller-copy-${Date.now()}${seq}`,
+      fieldMappings: mappings as object,
+    },
+    select: { id: true },
+  });
+}
+
+const newField = (over: Partial<DraftField> = {}): DraftField => ({
   key: `wall_thickness_${Date.now()}`,
   label: "Wall thickness",
   type: "number",
   unit: "mm",
-  required: true,
+  options: [],
   isFilterable: true,
+  variesByVariant: false,
   ...over,
 });
 
 const REASON =
   "Buyers keep asking for wall thickness on pipe enquiries and cannot filter for it.";
 
-describe("the affected count, before anything is published", () => {
-  it("counts the products a new required field would make incomplete", async () => {
-    const template = await freshTemplate({ complete: 5, incomplete: 2 });
-    const { affectedNow, total } = await affectedByNewField(template.id, field());
-
-    expect(total).toBe(7);
-    // The five complete ones. The two already incomplete are not counted: a
-    // new field does not make them more incomplete, and counting them would
-    // overstate what the change costs.
-    expect(affectedNow).toBe(5);
-  });
-
-  it("counts nothing for a field that is not required", async () => {
-    const template = await freshTemplate({ complete: 3, incomplete: 0 });
-    const { affectedNow } = await affectedByNewField(
-      template.id,
-      field({ required: false }),
-    );
-    expect(affectedNow).toBe(0);
-  });
-
-  it("counts nothing for a field buyers cannot filter on", async () => {
-    // A required free-text note is worth having and is not what this measures.
-    const template = await freshTemplate({ complete: 3, incomplete: 0 });
-    const { affectedNow } = await affectedByNewField(
-      template.id,
-      field({ isFilterable: false }),
-    );
-    expect(affectedNow).toBe(0);
-  });
-
-  it("agrees with what completeness says afterwards", async () => {
-    const template = await freshTemplate({ complete: 4, incomplete: 1 });
-    const added = field({ key: `agreement_${Date.now()}` });
-
-    const before = await affectedByNewField(template.id, added);
-    const published = await publishVersionWithField({
-      actor: actor(opsLeadId, "staff_ops_lead"),
-      templateId: template.id,
-      field: added,
-      requiredFrom: null,
-      reason: REASON,
-    });
-    expect(published.ok).toBe(true);
-    if (!published.ok) return;
-
-    // The count the screen showed is the count the audit row recorded.
-    expect(published.affected).toBe(before.affectedNow);
-
-    const audit = await prisma.auditEvent.findFirstOrThrow({
-      where: { action: "taxonomy_changed", subject: `SpecTemplate:${template.id}` },
-      orderBy: { createdAt: "desc" },
-      select: { after: true },
-    });
-    expect((audit.after as { productsAffected: number }).productsAffected).toBe(
-      before.affectedNow,
-    );
-  });
-});
-
-describe("the grace period", () => {
-  it("leaves existing products complete until the deadline", async () => {
-    // Complete under the current version, so the only thing that can make it
-    // incomplete is the field being added.
-    const template = await freshTemplate({ complete: 1, incomplete: 0 });
-    const completeNow = await prisma.product.findFirstOrThrow({
-      where: { category: { defaultTemplateId: template.id } },
-      select: { specValues: true },
-    });
-
-    const added = field({ key: `graced_${Date.now()}` });
-    const deadline = new Date(Date.now() + 30 * 86_400_000);
-
-    const published = await publishVersionWithField({
-      actor: actor(opsLeadId, "staff_ops_lead"),
-      templateId: template.id,
-      field: added,
-      requiredFrom: deadline,
-      reason: REASON,
-    });
-    expect(published.ok).toBe(true);
-    if (!published.ok) return;
-
-    const fields = await prisma.specField.findMany({
-      where: { templateId: published.templateId },
-      select: { id: true, key: true, required: true, isFilterable: true, requiredFrom: true },
-    });
-    const rules = new Map<string, SpecFieldRule[]>([[published.templateId, fields]]);
-
-    const product = {
-      templateId: published.templateId,
-      values: completeNow.specValues as Record<string, unknown> | null,
-    };
-
-    // Inside the grace period the catalogue is unchanged...
-    const during = specCompleteness([product], rules, new Date());
-    // ...and after it, the new field bites.
-    const after = specCompleteness([product], rules, new Date(deadline.getTime() + 86_400_000));
-
-    expect(during).toBe(1);
-    expect(after).toBe(0);
-  });
-
-  it("refuses a deadline in the past", async () => {
-    const template = await freshTemplate({ complete: 1, incomplete: 0 });
-    const result = await publishVersionWithField({
-      actor: actor(opsLeadId, "staff_ops_lead"),
-      templateId: template.id,
-      field: field({ key: `past_${Date.now()}` }),
-      requiredFrom: new Date(Date.now() - 86_400_000),
-      reason: REASON,
-    });
-    expect(result).toMatchObject({ ok: false, error: "grace_in_past" });
-  });
-
-  it("refuses a grace period on a field that is not required", async () => {
-    // The database refuses it too — a deadline for something optional is not a
-    // deadline. The service simply never writes one.
-    const template = await freshTemplate({ complete: 1, incomplete: 0 });
-    const published = await publishVersionWithField({
-      actor: actor(opsLeadId, "staff_ops_lead"),
-      templateId: template.id,
-      field: field({ key: `optional_${Date.now()}`, required: false }),
-      requiredFrom: new Date(Date.now() + 30 * 86_400_000),
-      reason: REASON,
-    });
-    expect(published.ok).toBe(true);
-    if (!published.ok) return;
-
-    const added = await prisma.specField.findFirstOrThrow({
-      where: { templateId: published.templateId, required: false },
-      orderBy: { sortOrder: "desc" },
-      select: { requiredFrom: true },
-    });
-    expect(added.requiredFrom).toBeNull();
-  });
-});
+/* ── Criterion 1 ─────────────────────────────────────────────────────────── */
 
 describe("publishing a version", () => {
+  it("adds the field not required, so no product is left in violation", async () => {
+    const fixture = await freshTemplate({ complete: 2, incomplete: 3 });
+    const before = await prisma.product.findMany({
+      where: { id: { in: fixture.productIds } },
+      orderBy: { slug: "asc" },
+      select: { id: true, status: true, specValues: true },
+    });
+
+    await stageAddField(ops(), fixture.templateId, newField({ key: "wall_thk" }));
+    const result = await publishDraft({ actor: ops(), templateId: fixture.templateId, reason: REASON });
+    expect(result.ok).toBe(true);
+
+    const added = await prisma.specField.findFirstOrThrow({
+      where: { templateId: fixture.templateId, key: "wall_thk" },
+      select: { required: true, requiredFrom: true, isFilterable: true },
+    });
+    // Not required, and no deadline. Both halves of criterion 1 and 4.
+    expect(added.required).toBe(false);
+    expect(added.requiredFrom).toBeNull();
+    expect(added.isFilterable).toBe(true);
+
+    const after = await prisma.product.findMany({
+      where: { id: { in: fixture.productIds } },
+      orderBy: { slug: "asc" },
+      select: { id: true, status: true, specValues: true },
+    });
+    // Nothing about the products changed — not their state, not their values.
+    expect(after).toEqual(before);
+  });
+
   it("bumps the version in place, so no field id moves", async () => {
-    /*
-     * The correction an earlier version of this test forced. `specValues` is
-     * keyed by `SpecField.id`, so cloning fields onto a new template row would
-     * orphan every product's specs the moment somebody published a version.
-     */
-    const template = await freshTemplate({ complete: 1, incomplete: 0 });
-    const idsBefore = (
-      await prisma.specField.findMany({
-        where: { templateId: template.id },
-        select: { id: true },
-        orderBy: { sortOrder: "asc" },
-      })
-    ).map((f) => f.id);
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    await stageAddField(ops(), fixture.templateId, newField({ key: "cv" }));
+    await publishDraft({ actor: ops(), templateId: fixture.templateId, reason: REASON });
 
-    const published = await publishVersionWithField({
-      actor: actor(opsLeadId, "staff_ops_lead"),
-      templateId: template.id,
-      field: field({ key: `supersede_${Date.now()}` }),
-      requiredFrom: null,
-      reason: REASON,
+    const template = await prisma.specTemplate.findUniqueOrThrow({
+      where: { id: fixture.templateId },
+      select: { version: true, fields: { select: { id: true, key: true } } },
     });
-    expect(published.ok).toBe(true);
-    if (!published.ok) return;
-
-    expect(published.templateId).toBe(template.id);
-    expect(published.version).toBe(template.version + 1);
-
-    const idsAfter = (
-      await prisma.specField.findMany({
-        where: { templateId: template.id },
-        select: { id: true },
-        orderBy: { sortOrder: "asc" },
-      })
-    ).map((f) => f.id);
-    // Every id that existed still exists, in place. One is added.
-    expect(idsAfter.slice(0, idsBefore.length)).toEqual(idsBefore);
-    expect(idsAfter).toHaveLength(idsBefore.length + 1);
-
-    // And the category never had to be repointed.
-    const category = await prisma.category.findUniqueOrThrow({
-      where: { id: template.categoryId },
-      select: { defaultTemplateId: true },
-    });
-    expect(category.defaultTemplateId).toBe(template.id);
+    expect(template.version).toBe(2);
+    // The carried-forward field kept its id. A clone would have given it a new
+    // one and emptied every catalogue in the category.
+    expect(template.fields.find((f) => f.key === "bore")?.id).toBe(fixture.boreId);
   });
 
-  it("carries every field of the old version forward", async () => {
-    const template = await freshTemplate({ complete: 1, incomplete: 0 });
-    const beforeCount = await prisma.specField.count({ where: { templateId: template.id } });
+  it("clears the draft, so the card is absent rather than empty", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    await stageAddField(ops(), fixture.templateId, newField({ key: "dn" }));
+    await publishDraft({ actor: ops(), templateId: fixture.templateId, reason: REASON });
 
-    const published = await publishVersionWithField({
-      actor: actor(opsLeadId, "staff_ops_lead"),
-      templateId: template.id,
-      field: field({ key: `carried_${Date.now()}` }),
-      requiredFrom: null,
-      reason: REASON,
+    const row = await prisma.specTemplate.findUniqueOrThrow({
+      where: { id: fixture.templateId },
+      select: { draftChanges: true },
     });
-    if (!published.ok) throw new Error("publish failed");
-
-    const afterCount = await prisma.specField.count({
-      where: { templateId: published.templateId },
-    });
-    expect(afterCount).toBe(beforeCount + 1);
+    expect(row.draftChanges).toBeNull();
   });
 
-  it("refuses to add to a retired template", async () => {
-    const template = await freshTemplate({ complete: 1, incomplete: 0 });
-    await prisma.specTemplate.update({
-      where: { id: template.id },
-      data: { status: "retired" },
-    });
-    const retired = template;
-
-    const result = await publishVersionWithField({
-      actor: actor(opsLeadId, "staff_ops_lead"),
-      templateId: retired.id,
-      field: field({ key: `retired_${Date.now()}` }),
-      requiredFrom: null,
-      reason: REASON,
-    });
-    expect(result).toMatchObject({ ok: false, error: "not_live" });
+  it("refuses to publish nothing", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    const result = await publishDraft({ actor: ops(), templateId: fixture.templateId, reason: REASON });
+    expect(result).toMatchObject({ ok: false, error: "empty_draft" });
   });
 
-  it("refuses a moderator — taxonomy.write is ops lead alone", async () => {
-    const template = await freshTemplate({ complete: 1, incomplete: 0 });
+  it("writes an audit row naming what changed and why", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    await stageAddField(ops(), fixture.templateId, newField({ key: "torque" }));
+    await publishDraft({ actor: ops(), templateId: fixture.templateId, reason: REASON });
+
+    const event = await prisma.auditEvent.findFirst({
+      where: { subject: `SpecTemplate:${fixture.templateId}` },
+      orderBy: { createdAt: "desc" },
+      select: { reason: true, actorId: true },
+    });
+    expect(event?.reason).toBe(REASON);
+    expect(event?.actorId).toBe(opsLeadId);
+  });
+
+  it("refuses a moderator", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
     await expect(
-      publishVersionWithField({
+      stageAddField(actor(moderatorId, "staff_moderator"), fixture.templateId, newField()),
+    ).rejects.toBeInstanceOf(PermissionError);
+  });
+
+  it("discards a draft without touching the live version", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    await stageAddField(ops(), fixture.templateId, newField({ key: "flange" }));
+    await discardDraft(ops(), fixture.templateId);
+
+    const template = await prisma.specTemplate.findUniqueOrThrow({
+      where: { id: fixture.templateId },
+      select: { version: true, draftChanges: true, _count: { select: { fields: true } } },
+    });
+    expect(template.version).toBe(1);
+    expect(template.draftChanges).toBeNull();
+    expect(template._count.fields).toBe(2);
+  });
+});
+
+/* ── Criterion 11 ────────────────────────────────────────────────────────── */
+
+describe("varies_by_variant", () => {
+  it("is authored here, so board 3g has a flag to read", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    await stageAddField(ops(), fixture.templateId, newField({ key: "size", variesByVariant: true }));
+    await publishDraft({ actor: ops(), templateId: fixture.templateId, reason: REASON });
+
+    const field = await prisma.specField.findFirstOrThrow({
+      where: { templateId: fixture.templateId, key: "size" },
+      select: { variesByVariant: true },
+    });
+    expect(field.variesByVariant).toBe(true);
+  });
+
+  it("can be turned on for a field that already exists", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    await stageChange(ops(), fixture.templateId, (draft) => ({
+      ...draft,
+      edited: { [fixture.boreId]: { variesByVariant: true } },
+    }));
+    await publishDraft({ actor: ops(), templateId: fixture.templateId, reason: REASON });
+
+    const field = await prisma.specField.findUniqueOrThrow({
+      where: { id: fixture.boreId },
+      select: { variesByVariant: true },
+    });
+    expect(field.variesByVariant).toBe(true);
+  });
+});
+
+/* ── Criterion 2 ─────────────────────────────────────────────────────────── */
+
+describe("requiring a platform field", () => {
+  it("is a separate action from publishing, with its own review", async () => {
+    const fixture = await freshTemplate({ complete: 2, incomplete: 3 });
+    const review = await reviewRequireField(fixture.boreId);
+
+    // Three products have no bore. The review names them before anything is
+    // written, which is what makes the decision reviewable at all.
+    expect(review?.affected).toBe(3);
+    expect(review?.sellers).toBe(1);
+    expect(review?.detached).toBe(0);
+  });
+
+  it("flags and blocks the next save, and delists nothing", async () => {
+    const fixture = await freshTemplate({ complete: 2, incomplete: 3 });
+    const before = await prisma.product.findMany({
+      where: { id: { in: fixture.productIds } },
+      select: { status: true },
+    });
+
+    const result = await setFieldRequired({
+      actor: ops(),
+      fieldId: fixture.boreId,
+      required: true,
+      reason: "Buyers cannot compare valves without a bore.",
+    });
+    expect(result.ok).toBe(true);
+
+    const field = await prisma.specField.findUniqueOrThrow({
+      where: { id: fixture.boreId },
+      select: { required: true, requiredFrom: true },
+    });
+    expect(field.required).toBe(true);
+    // No deadline. There is no day 61 for anything to happen on.
+    expect(field.requiredFrom).toBeNull();
+
+    const after = await prisma.product.findMany({
+      where: { id: { in: fixture.productIds } },
+      select: { status: true },
+    });
+    expect(after).toEqual(before);
+  });
+
+  it("names the clones that have detached the field separately", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 1 });
+    await clone(fixture, { [fixture.boreId]: { detached: true } });
+
+    const review = await reviewRequireField(fixture.boreId);
+    // They cannot be held to a mapping they no longer have, so the count is
+    // stated rather than the edit being blocked — the handoff's Q3.
+    expect(review?.detached).toBe(1);
+  });
+
+  it("refuses to require a field that is already required", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    await setFieldRequired({ actor: ops(), fieldId: fixture.boreId, required: true, reason: REASON });
+    const again = await setFieldRequired({
+      actor: ops(),
+      fieldId: fixture.boreId,
+      required: true,
+      reason: REASON,
+    });
+    expect(again).toMatchObject({ ok: false, error: "already" });
+  });
+
+  it("refuses a moderator", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    await expect(
+      setFieldRequired({
         actor: actor(moderatorId, "staff_moderator"),
-        templateId: template.id,
-        field: field({ key: `refused_${Date.now()}` }),
-        requiredFrom: null,
+        fieldId: fixture.boreId,
+        required: true,
         reason: REASON,
       }),
     ).rejects.toBeInstanceOf(PermissionError);
   });
+});
 
-  it("shows the library with its live version and its clones", async () => {
-    const library = await templateLibrary();
-    expect(library.length).toBeGreaterThan(0);
-    const live = library.filter((t) => t.status === "live");
-    expect(live.length).toBeGreaterThan(0);
-    for (const template of live) {
-      expect(template.fields).toBeGreaterThan(0);
-      expect(template.categoryName).toBeTruthy();
+/* ── Criterion 3 ─────────────────────────────────────────────────────────── */
+
+describe("removing a field from a library template", () => {
+  it("leaves the field and its values on every clone, as the seller's own", async () => {
+    const fixture = await freshTemplate({ complete: 3, incomplete: 0 });
+    await clone(fixture, { [fixture.boreId]: { label: "Nominal bore" } });
+
+    await stageChange(ops(), fixture.templateId, (draft) => ({
+      ...draft,
+      removed: [fixture.boreId],
+    }));
+    const result = await publishDraft({
+      actor: ops(),
+      templateId: fixture.templateId,
+      reason: "Bore duplicates nominal diameter and buyers filter on the wrong one.",
+    });
+    expect(result.ok).toBe(true);
+
+    // Gone from the platform set.
+    expect(await prisma.specField.findUnique({ where: { id: fixture.boreId } })).toBeNull();
+
+    const copy = await prisma.sellerTemplate.findFirstOrThrow({
+      where: { platformTemplateId: fixture.templateId },
+      select: { ownFields: true, fieldMappings: true },
+    });
+    const own = readOwnFields(copy.ownFields);
+    const carried = own.find((field) => field.id === fixture.boreId);
+
+    // The same id, so `Product.specValues` keeps resolving and no data moved.
+    expect(carried).toBeTruthy();
+    // The seller's own label, not the platform's — a removal must not silently
+    // rename their field back.
+    expect(carried?.label).toBe("Nominal bore");
+    // And it is out of the mapping, which is what drops its facet status.
+    expect(Object.keys(copy.fieldMappings as object)).not.toContain(fixture.boreId);
+
+    const products = await prisma.product.findMany({
+      where: { id: { in: fixture.productIds } },
+      select: { specValues: true },
+    });
+    for (const product of products) {
+      expect((product.specValues as Record<string, unknown>)[fixture.boreId]).toBe("DN100");
     }
   });
 });
+
+/* ── Criteria 5, 7, 9, 12 ────────────────────────────────────────────────── */
+
+describe("the library, as the screen reads it", () => {
+  it("lets a template serve several subcategories and a subcategory hold several", async () => {
+    const a = await freshTemplate({ complete: 1, incomplete: 0 });
+    const b = await freshTemplate({ complete: 1, incomplete: 0 });
+
+    // One template, two subcategories.
+    await prisma.specTemplateCategory.create({
+      data: { templateId: a.templateId, categoryId: b.categoryId },
+    });
+    // One subcategory, two templates.
+    const second = await createTemplate({
+      actor: ops(),
+      name: "Second sheet",
+      categoryId: a.categoryId,
+      reason: "Grooved fittings share almost no fields with threaded ones.",
+    });
+    expect(second.ok).toBe(true);
+
+    const rows = await specLibrary();
+    const first = rows.find((row) => row.id === a.templateId);
+    expect(first?.subcategories.map((c) => c.id).sort()).toEqual([a.categoryId, b.categoryId].sort());
+
+    const onA = rows.filter((row) => row.subcategories.some((c) => c.id === a.categoryId));
+    expect(onA.length).toBe(2);
+  });
+
+  it("keeps 4d's default as a default, not an exclusive assignment", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    const second = await createTemplate({
+      actor: ops(),
+      name: "Alternative sheet",
+      categoryId: fixture.categoryId,
+      reason: "A second opinion about how this trade is described.",
+    });
+    expect(second.ok).toBe(true);
+
+    // Two templates serve it; the default is still the first, and that is what
+    // every product-side reader resolves to.
+    expect(await resolveTemplateId(prisma, fixture.categoryId)).toBe(fixture.templateId);
+  });
+
+  it("reads filled as null for a template no seller has cloned", async () => {
+    const fixture = await freshTemplate({ complete: 2, incomplete: 2 });
+    const row = (await specLibrary()).find((entry) => entry.id === fixture.templateId);
+    // Not 0%. Zero of zero is not a fill rate.
+    expect(row?.filled).toBeNull();
+    expect(row?.clones).toBe(0);
+  });
+
+  it("measures filled over mapped platform fields only", async () => {
+    const fixture = await freshTemplate({ complete: 2, incomplete: 2 });
+    await clone(fixture);
+
+    // Four products, two platform fields each: eight slots, two filled.
+    const row = (await specLibrary()).find((entry) => entry.id === fixture.templateId);
+    expect(row?.filled).toBeCloseTo(2 / 8, 5);
+
+    // Detaching `note` takes it out of both halves: four slots, two filled.
+    await prisma.sellerTemplate.updateMany({
+      where: { platformTemplateId: fixture.templateId },
+      data: { fieldMappings: { [fixture.noteId]: { detached: true } } },
+    });
+    const after = (await specLibrary()).find((entry) => entry.id === fixture.templateId);
+    expect(after?.filled).toBeCloseTo(2 / 4, 5);
+  });
+
+  it("counts coverage as a query, and the header agrees with it", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    const [cover, header] = await Promise.all([coverage(), libraryHeader()]);
+
+    expect(header.total).toBe(cover.total);
+    expect(header.covered).toBe(cover.covered);
+    expect(cover.covered + cover.gaps.length).toBe(cover.total);
+    // A subcategory that has a template is not a gap.
+    expect(cover.gaps.some((gap) => gap.id === fixture.categoryId)).toBe(false);
+  });
+
+  it("ranks coverage gaps by products already listed", async () => {
+    const { gaps } = await coverage();
+    for (let i = 1; i < gaps.length; i += 1) {
+      expect(gaps[i - 1]!.products).toBeGreaterThanOrEqual(gaps[i]!.products);
+    }
+  });
+
+  it("gives every template row a detail page with its fields", async () => {
+    const fixture = await freshTemplate({ complete: 2, incomplete: 1 });
+    const detail = await templateDetail(fixture.templateId);
+
+    expect(detail?.fields.map((field) => field.key)).toEqual(["bore", "note"]);
+    // One product has no bore, three have no note.
+    expect(detail?.fields.find((field) => field.key === "bore")?.missing).toBe(1);
+    expect(detail?.fields.find((field) => field.key === "note")?.missing).toBe(3);
+    expect(detail?.blast.products).toBe(3);
+  });
+});
+
+/* ── The resolver the many-to-many made necessary ────────────────────────── */
+
+describe("resolving which template a category answers to", () => {
+  it("falls back to a template serving the category when no default is set", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    await prisma.category.update({
+      where: { id: fixture.categoryId },
+      data: { defaultTemplateId: null },
+    });
+
+    /*
+       The seeded pump catalogue's exact state before board 4e: a template
+       against the category and no default, where the facet rail resolved it
+       and `templateForCategory` did not.
+    */
+    expect(await resolveTemplateId(prisma, fixture.categoryId)).toBe(fixture.templateId);
+
+    await prisma.category.update({
+      where: { id: fixture.categoryId },
+      data: { defaultTemplateId: fixture.templateId },
+    });
+  });
+
+  it("hops to the parent, because templates belong to the trade", async () => {
+    const fixture = await freshTemplate({ complete: 1, incomplete: 0 });
+    const child = await prisma.category.create({
+      data: {
+        name: "Test niche",
+        slug: `test-trade-niche-${Date.now()}`,
+        code: "TN",
+        parentId: fixture.categoryId,
+      },
+      select: { id: true },
+    });
+    made.categories.push(child.id);
+
+    expect(await resolveTemplateId(prisma, child.id)).toBe(fixture.templateId);
+  });
+});
+
 
 describe("the publish floor, per category", () => {
   it("judges each category against its own thresholds, not the defaults", async () => {

@@ -8,6 +8,8 @@ import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { CategoryTable } from "./CategoryTable";
 import { previewRename, remove, rename } from "./actions";
 import { RenamePanel, type TradeOption } from "./RenamePanel";
+import { DefaultTemplatePanel, type SubcategoryOption } from "./DefaultTemplatePanel";
+import { prisma } from "@/lib/db/client";
 
 /**
  * Board 4d — the taxonomy, and the floor under every landing page.
@@ -32,7 +34,7 @@ export default async function TaxonomyPage() {
   const seat = await requireStaff();
   if (!can(seat.actor, "taxonomy.write")) notFound();
 
-  const [rows, badges] = await Promise.all([
+  const [rows, badges, templateLinks] = await Promise.all([
     /*
      * Intro words passed as satisfied. The copy lives with the landing page,
      * which handoff 5 owns, so counting it here would fail every category on a
@@ -41,7 +43,31 @@ export default async function TaxonomyPage() {
      */
     categoryHealth(),
     getAdminNavBadges(seat),
+    /*
+       Board 4e criterion 6. `Category.defaultTemplateId` decides which template
+       every product-side reader resolves to and nothing on any screen could
+       write it — the seeded pump catalogue shipped with it null, so a pump
+       seller's required fields were silently never enforced.
+    */
+    prisma.category.findMany({
+      where: { templates: { some: {} } },
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        parentId: true,
+        defaultTemplateId: true,
+        templates: { select: { template: { select: { id: true, name: true } } } },
+      },
+    }),
   ]);
+
+  const subcategories: SubcategoryOption[] = templateLinks.map((row) => ({
+    id: row.id,
+    label: row.parentId ? `— ${row.name}` : row.name,
+    templates: row.templates.map((link) => link.template),
+    defaultTemplateId: row.defaultTemplateId,
+  }));
 
   const blocked = rows.filter((row) => !row.decision.publishable).length;
 
@@ -76,6 +102,10 @@ export default async function TaxonomyPage() {
           remove={remove}
           preview={previewRename}
         />
+      </div>
+
+      <div className="mt-[var(--gutter)]">
+        <DefaultTemplatePanel subcategories={subcategories} />
       </div>
 
       <div className="mt-[var(--gutter)] flex flex-col gap-1">

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import { requireStaff } from "@/lib/auth/staff";
 import { addressesFor, deleteCategory, renameCategory } from "@/lib/taxonomy/rename";
+import { setCategoryDefaultTemplate } from "@/lib/spec/versions";
 import { t } from "@/lib/i18n";
 
 /**
@@ -67,4 +68,31 @@ export async function remove(formData: FormData): Promise<ActionResult> {
   } catch (error) {
     return refused(error);
   }
+}
+
+/**
+ * Which template this subcategory offers a seller first.
+ *
+ * Board 4e criterion 6. The relation is many-to-many, so this is a **default**
+ * and not an assignment: the other templates serving the subcategory stay
+ * available on `3h`'s `CLONE FROM LIBRARY` rail. Audited like every other
+ * taxonomy change, because it decides which fields a seller's whole catalogue
+ * is described by.
+ */
+export async function setDefaultTemplate(formData: FormData): Promise<void> {
+  const seat = await requireStaff();
+  const categoryId = String(formData.get("categoryId") ?? "");
+  const templateId = String(formData.get("templateId") ?? "");
+  const reason = String(formData.get("reason") ?? "").trim();
+
+  const result = await setCategoryDefaultTemplate({
+    actor: seat.actor,
+    categoryId,
+    templateId,
+    reason,
+  });
+  if (!result.ok) throw new Error(result.message);
+
+  revalidatePath("/admin/categories");
+  revalidatePath("/admin/spec-library");
 }

@@ -97,6 +97,16 @@ export interface MappedField {
   requiredFrom: Date | null;
   /** Drives the site-wide filter rail. Platform-owned, per category. */
   isFilterable: boolean;
+  /**
+   * Whether this field differs between variants of the same product.
+   *
+   * Authored on board 4e and inherited here — a clone can only carry a flag the
+   * library template has. Board 3g reads it to decide what a push-to-variants
+   * may touch: pushing nominal size across a set overwrites DN80's size with
+   * DN100's. A seller's own field is never marked, because nothing upstream
+   * defines it.
+   */
+  variesByVariant: boolean;
   /** What board 3h's read-only FILTER column renders. */
   facet: FacetState;
   detached: boolean;
@@ -120,7 +130,15 @@ export interface SellerTemplateView {
   slug: string;
   platformTemplateId: string;
   platformTemplateName: string;
-  categoryId: string;
+  /**
+   * Every subcategory the platform template serves. Many-to-many since 4e.
+   *
+   * A list rather than one id, because a template covering four subcategories
+   * governs the products in all of them — counting only the first reads `0`
+   * against a full catalogue, the same defect `categoriesGovernedBy` was added
+   * to fix one level down.
+   */
+  categoryIds: string[];
   /** The platform category's slug. The prefix on the locked field id. */
   categorySlug: string;
   /** Board 3h's `YOUR REV 7`. */
@@ -165,6 +183,7 @@ function resolve(
     required: boolean;
     requiredFrom: Date | null;
     isFilterable: boolean;
+    variesByVariant: boolean;
     sortOrder: number;
   }[],
   mappings: FieldMappings,
@@ -201,6 +220,7 @@ function resolve(
       // Detaching takes the field out of the facet; it does not make the
       // platform's field non-filterable for anybody else.
       isFilterable: field.isFilterable && !detached,
+      variesByVariant: field.variesByVariant,
       facet: facetStateOf({ own: false, detached, isFilterable: field.isFilterable }),
       detached,
       own: false,
@@ -225,6 +245,9 @@ function resolve(
     sellerRequired: field.required,
     requiredFrom: null,
     isFilterable: false,
+    // Never marked. `varies_by_variant` is authored on the platform template
+    // (board 4e) and there is nothing upstream of a field the seller invented.
+    variesByVariant: false,
     facet: facetStateOf({ own: true, detached: false, isFilterable: false }),
     detached: false,
     own: true,
@@ -257,8 +280,7 @@ const TEMPLATE_SELECT = {
       id: true,
       name: true,
       version: true,
-      categoryId: true,
-      category: { select: { slug: true } },
+      categories: { select: { category: { select: { id: true, slug: true } } } },
       fields: {
         orderBy: { sortOrder: "asc" },
         select: {
@@ -271,6 +293,7 @@ const TEMPLATE_SELECT = {
           required: true,
           requiredFrom: true,
           isFilterable: true,
+          variesByVariant: true,
           sortOrder: true,
         },
       },
@@ -329,8 +352,8 @@ function toView(template: TemplateRow): SellerTemplateView {
     slug: template.slug,
     platformTemplateId: template.platformTemplate.id,
     platformTemplateName: template.platformTemplate.name,
-    categoryId: template.platformTemplate.categoryId,
-    categorySlug: template.platformTemplate.category.slug,
+    categoryIds: template.platformTemplate.categories.map((link) => link.category.id),
+    categorySlug: template.platformTemplate.categories[0]?.category.slug ?? "",
     revision: template.revision,
     tracksVersion: template.tracksVersion,
     platformVersion: template.platformTemplate.version,
@@ -462,14 +485,14 @@ export async function templatesFor(businessId: string): Promise<TemplateSummary[
   const views = rows.map(toView);
   const counts = await appliedCounts(
     businessId,
-    views.map((view) => view.categoryId),
+    views.flatMap((view) => view.categoryIds),
   );
 
   return views.map((view) => ({
     id: view.id,
     name: view.name,
     slug: view.slug,
-    products: counts.get(view.categoryId) ?? 0,
+    products: view.categoryIds.reduce((sum, id) => sum + (counts.get(id) ?? 0), 0),
     pendingChanges: pendingChanges(view).length,
   }));
 }
@@ -487,12 +510,19 @@ export async function templatesFor(businessId: string): Promise<TemplateSummary[
  * "which products does this template govern" and two of them already disagree
  * on the seeded pump catalogue.
  */
-export async function categoriesGovernedBy(categoryId: string): Promise<string[]> {
+export async function categoriesGovernedBy(
+  categoryIds: string | readonly string[],
+): Promise<string[]> {
+  // A list since board 4e made a template serve several subcategories. The
+  // single-id form is kept because most callers hold one and threading an
+  // array through them all would say nothing about what they mean.
+  const ids = typeof categoryIds === "string" ? [categoryIds] : [...categoryIds];
+  if (ids.length === 0) return [];
   const children = await prisma.category.findMany({
-    where: { parentId: categoryId },
+    where: { parentId: { in: ids } },
     select: { id: true },
   });
-  return [categoryId, ...children.map((child) => child.id)];
+  return [...new Set([...ids, ...children.map((child) => child.id)])];
 }
 
 /** How many products sit under each of these templates, in one query. */
@@ -872,7 +902,7 @@ export async function fillFor(
   const products = await prisma.product.findMany({
     // The template's own category and its children — a product filed under
     // "Gate valves" answers to the valve template. See `categoriesGovernedBy`.
-    where: { businessId, categoryId: { in: await categoriesGovernedBy(view.categoryId) } },
+    where: { businessId, categoryId: { in: await categoriesGovernedBy(view.categoryIds) } },
     select: { id: true, specValues: true },
   });
 
