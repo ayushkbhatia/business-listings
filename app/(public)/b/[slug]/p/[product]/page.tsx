@@ -3,7 +3,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { Breadcrumb, Panel, PublicShell } from "@/components/structure";
 import { ImagePlaceholder, LogoTile, StatusBadge, type StatusTone } from "@/components/display";
 import { ResponseTime, SpecTable, VerificationBadge, tierSpec } from "@/components/domain";
-import { getBusinessBySlug, getProductBySlug, getSpecTemplate } from "@/lib/db/queries";
+import { getBusinessBySlug, getProductBySlug } from "@/lib/db/queries";
 import {
   countOtherSellers,
   getComparison,
@@ -15,8 +15,7 @@ import { formatBytes, formatCount, formatDate, formatDuration } from "@/lib/form
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
-import { applyOverlay, countFilled, primarySize, toSpecRows } from "@/lib/spec";
-import { getSellerOverlay } from "@/lib/db/queries/storefront-catalogue";
+import { buyerPreviewFor } from "@/lib/products/buyer-preview";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { EMIRATES } from "@/lib/uae";
@@ -124,29 +123,22 @@ export default async function ProductPage({ params }: Params) {
   }
 
   const business = product.business;
-  const [template, actor, overlay] = await Promise.all([
-    getSpecTemplate(product.categoryId),
+  const [preview, actor] = await Promise.all([
+    /*
+       The spec table, composed by the module board 3g's preview rail also
+       calls. Two screens showing one table, so the rail's caption — "spec table
+       as buyers see it" — cannot quietly stop being true.
+
+       It resolves the template and this seller's own labels and order. Only the
+       label and the order move: the key is untouched, so comparison still
+       matches across sellers and the facet rail is unaffected, which is why a
+       rename is safe.
+    */
+    buyerPreviewFor(product.businessId, product.categoryId, product.specValues),
     // Only to decide whether the composer asks for a phone number.
     getActor(),
-    /*
-       This seller's own labels and order.
-
-       Board 3h §"The ownership split": what a field is called and the order a
-       buyer reads it in are the seller's. `SellerTemplate.fieldMappings` has
-       supported both since the initial migration and reached no public surface
-       — a seller renamed a field on a screen whose own copy promised buyers
-       would see it, and none did.
-
-       Only the label and the order move. The key is untouched, so comparison
-       still matches across sellers and the facet rail is unaffected: both read
-       the platform field, which is why a rename is safe.
-    */
-    getSellerOverlay(product.businessId, product.categoryId),
   ]);
-  const fields = applyOverlay(template?.fields ?? [], overlay);
-  const rows = toSpecRows(fields, product.specValues);
-  const filled = countFilled(fields, product.specValues);
-  const sizeLabel = primarySize(fields, product.specValues);
+  const { rows, filled, fields, primary: sizeLabel } = preview;
   const filterableIds = fields.filter((f) => f.isFilterable).map((f) => f.id);
   /*
      Whether there is a spec to compare on at all.
@@ -207,10 +199,10 @@ export default async function ProductPage({ params }: Params) {
      `CompletenessMeter` reads, the figure the seller sees in 3g, and the
      spec-completeness ranking weight.
   */
-  const specMeta = template
+  const specMeta = preview.templateName
     ? t("pdp.spec_meta", {
-        template: template.name,
-        version: template.version,
+        template: preview.templateName,
+        version: preview.templateVersion ?? 1,
         filled,
         total: rows.length,
       })
@@ -671,12 +663,6 @@ export default async function ProductPage({ params }: Params) {
               <p className="max-w-[var(--measure-prose)] text-caption text-body">
                 {t("pdp.spec_footnote")}
               </p>
-              {/*
-                 Criterion 5. The enquiry names the fields rather than saying
-                 "please send full specs" — a seller who reads "confirm the seat
-                 material and the face-to-face dimension" can answer in a line,
-                 and that is what makes it high-intent rather than a chore.
-              */}
               {/*
                  Criterion 5. The enquiry names the fields rather than saying
                  "please send full specs" — a seller who reads "confirm the seat

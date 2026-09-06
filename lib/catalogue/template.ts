@@ -11,6 +11,8 @@ import {
 } from "./template-changes";
 import {
   facetStateOf,
+  isFilled,
+  missingFrom,
   readMappings,
   readOwnFields,
   type FacetState,
@@ -914,14 +916,6 @@ export async function fillFor(
   return { total: products.length, byField, productsWithGaps };
 }
 
-/** The same emptiness test `lib/metrics/spec-completeness.ts` applies. */
-function isFilled(value: unknown): boolean {
-  if (value === null || value === undefined) return false;
-  if (typeof value === "string") return value.trim() !== "";
-  if (Array.isArray(value)) return value.length > 0;
-  return true;
-}
-
 /* ── What a product must carry before it can be saved ────────────────────── */
 
 export interface RequirementCheck {
@@ -952,16 +946,24 @@ export function missingRequired(
   specValues: Record<string, unknown>,
   now = new Date(),
 ): RequirementCheck {
-  const missing = view.fields
-    .filter(
-      (field) =>
-        field.required &&
-        (field.requiredFrom === null || field.requiredFrom.getTime() <= now.getTime()) &&
-        !isFilled(specValues[field.fieldId]),
-    )
-    .map((field) => field.label);
+  /*
+     Resolves the grace period, then delegates.
 
-  return { ok: missing.length === 0, missing };
+     The predicate itself lives in ./overlay.ts because the product editor
+     disables its Save from it, and this module is `server-only`. One definition
+     with two callers, rather than a second implementation in the browser that
+     could answer differently about the same product.
+  */
+  return missingFrom(
+    view.fields.map((field) => ({
+      fieldId: field.fieldId,
+      label: field.label,
+      requiredNow:
+        field.required &&
+        (field.requiredFrom === null || field.requiredFrom.getTime() <= now.getTime()),
+    })),
+    specValues,
+  );
 }
 
 /**
@@ -969,8 +971,14 @@ export function missingRequired(
  *
  * A product filed under "Gate valves" answers to the valve template, and a
  * seller who has cloned it sees their own labels — so the refusal names the box
- * on their screen. Null where they have no clone, which is not an error: the
- * platform's own requirements still apply and `requiredFor` falls back to them.
+ * on their screen. Null where they have no clone, which is not an error:
+ * `resolveEditorTemplate` in lib/products/editor-template.ts falls back to the
+ * platform template, so the platform's own requirements still apply.
+ *
+ * This comment used to promise that a `requiredFor` fell back to them. There is
+ * no such function anywhere in the repo and there never was, and its absence is
+ * precisely what let a seller with no clone save a product with every required
+ * field empty.
  */
 export async function templateForCategory(
   businessId: string,
