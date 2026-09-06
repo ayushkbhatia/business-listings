@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db/client";
-import { getCatalogue } from "@/lib/db/queries/catalogue";
+import { catalogueGapSummary } from "@/lib/products/catalogue";
 import { slotsFor } from "@/lib/placement/service";
 import { Panel } from "@/components/structure";
 import { formatCount, formatDate } from "@/lib/format";
@@ -34,7 +34,7 @@ export default async function PromotePage() {
         categories: { select: { categoryId: true } },
       },
     }),
-    getCatalogue(seat.businessId),
+    catalogueGapSummary(seat.businessId),
     getNavBadges(seat.businessId),
   ]);
 
@@ -60,11 +60,11 @@ export default async function PromotePage() {
           warning about is decoration.
         */}
         <Panel title={t("promote.fix_first_heading")}>
-          {catalogue.missingFilterableSpecs > 0 ? (
+          {catalogue.missingFilterValue > 0 ? (
             <>
               <p className="max-w-prose text-body-sm text-prose">
                 {t("promote.fix_first", {
-                  count: formatCount(catalogue.missingFilterableSpecs),
+                  count: formatCount(catalogue.missingFilterValue),
                 })}
               </p>
               <Link

@@ -2670,13 +2670,13 @@ export const en = {
   // ── Catalogue, board 3f ───────────────────────────────────────────────────
   "catalogue.title": "Products",
   "catalogue.eyebrow": "Catalogue",
-  "catalogue.caption": "Your products, most recently changed first",
+  "catalogue.caption": "Your products, and the work outstanding on them",
   "catalogue.empty_title": "No products yet",
   "catalogue.empty_body": "Add one by hand, or import a spreadsheet you already have. A product with its filterable specs filled in is the difference between being listed and being found.",
   "catalogue.add": "Add a product",
   "catalogue.import": "Import a spreadsheet",
   "catalogue.col.product": "Product",
-  "catalogue.col.specs": "Filterable specs",
+  "catalogue.col.specs": "Specs",
   "catalogue.col.availability": "Availability",
   "catalogue.col.photos": "Photos",
   "catalogue.col.status": "Status",
@@ -2692,6 +2692,164 @@ export const en = {
   "catalogue.no_specs": "None filled",
   "catalogue.no_template": "No template",
   "catalogue.from_import": "Imported",
+
+  // ── Catalogue, board 3f ───────────────────────────────────────────────────
+
+  /*
+     The header. One total, with a breakdown that sums to it.
+
+     The board read `1,204 live · 38 drafts · 14 out of stock` — 1,256 — over a
+     pagination reading `1–10 of 1,242`. 1,204 was the seller's *total*, so the
+     header labelled the total as the live count and then added two more states
+     on top of it. Every figure here is a query over one read, so they cannot
+     disagree with each other or with the rows beneath.
+  */
+  "catalogue.header_counts": { one: "{formatted} product", other: "{formatted} products" },
+  "catalogue.header_breakdown": "{live} live · {draft} drafts · {outOfStock} out of stock",
+  "catalogue.approximate": "Counted over your {scanned} most recently edited products.",
+
+  /*
+     The two chips, and the correction the screen turns on.
+
+     The board had one: `62 with missing specs`. An empty required field blocks
+     that product's next save and changes nothing a buyer sees; an empty
+     filterable field makes the product absent from a buyer's filter and blocks
+     nothing. One is a wall in front of the seller's next edit, the other is
+     reach they will never notice losing. Different work, different order, so
+     they cannot share a count — and an empty optional field is not counted at
+     all, because counting it teaches the seller the figure is noise.
+  */
+  "catalogue.chip.blocked": { one: "{count} blocked on save", other: "{count} blocked on save" },
+  "catalogue.chip.filter": { one: "{count} missing a filter value", other: "{count} missing a filter value" },
+  "catalogue.chip.untemplated": { one: "{count} with no template", other: "{count} with no template" },
+  "catalogue.chip.clear": "Show everything",
+
+  /*
+     NB the `catalogue.` prefix is shared with board 1e, the buyer's view of a
+     seller's shelf. Three keys here carry a suffix rather than the obvious
+     name — `sort_by`, `sort.product`, `search_hint` — because the obvious ones
+     are already 1e's and mean something else there.
+  */
+  "catalogue.search_label": "Search",
+  "catalogue.search_hint": "SKU, name or spec value",
+  "catalogue.filter.category": "Category",
+  "catalogue.filter.status": "Status",
+  "catalogue.filter.template": "Template",
+  "catalogue.filter.any": "Any",
+  "catalogue.filter.option": "{name} · {count}",
+  "catalogue.filter.clear": "Clear filters",
+  "catalogue.sort_by": "Sort",
+  "catalogue.sort.gaps": "Gaps first",
+  "catalogue.sort.product": "Name",
+  "catalogue.sort.sku": "SKU",
+  "catalogue.sort.template": "Template",
+  "catalogue.sort.stock": "Stock",
+  "catalogue.sort.specs": "Specs filled",
+  "catalogue.sort.status": "Status",
+  "catalogue.sort.updated": "Last edited",
+  "catalogue.rows_label": "Rows",
+  "catalogue.range": "{from}–{to} of {total}",
+  "catalogue.previous": "Previous page",
+  "catalogue.next": "Next page",
+  "catalogue.page": "Page {page}",
+
+  "catalogue.empty_filtered_title": "Nothing matches those filters.",
+  "catalogue.empty_filtered_body": "{count} products are filtered out. Clearing the filters brings them back.",
+
+  /*
+     Selection scope, stated.
+
+     The board said `3 selected` above a 125-page list, which does not say
+     whether the action applies to three products or to the whole set. Page by
+     default, with an explicit route to the filtered set — and the label carries
+     the filter's count, because a bulk action whose blast radius changes when a
+     chip is clicked is the trap the whole section exists to close.
+  */
+  "catalogue.selected_here": { one: "{count} selected on this page", other: "{count} selected on this page" },
+  "catalogue.selected_all": { one: "{count} selected, the whole filtered set", other: "{count} selected, the whole filtered set" },
+  "catalogue.select_filtered": { one: "Select the 1 product these filters match", other: "Select all {count} products these filters match" },
+  "catalogue.clear_selection": "Clear",
+  "catalogue.bulk.hint": "An action ending in … opens a preview naming what changes and what is lost.",
+  "catalogue.bulk.unpublish": "Unpublish…",
+  "catalogue.bulk.move": "Move category…",
+  "catalogue.bulk.availability": "Change availability",
+  "catalogue.cap.refused": "Publishing {adding} would pass your plan's limit of {cap}. There is room for {room} more.",
+
+  /*
+     Unpublish, and what a buyer at that URL actually gets.
+
+     Board 6f settled that we 301 rather than 404: an unpublished product's URL
+     has inbound links and accumulated ranking, and answering it with a 404
+     throws both away. The page already redirects; this is the sentence that
+     tells the seller before they do it, which the board's two-click bulk
+     unpublish never did.
+  */
+  "catalogue.unpublish.title": { one: "Unpublish {count} product", other: "Unpublish {count} products" },
+  "catalogue.unpublish.body": { one: "It stays in your catalogue and comes off your storefront. Anyone following its link is redirected to your storefront rather than shown a dead page, and you can publish it again at any time.", other: "They stay in your catalogue and come off your storefront. Anyone following one of their links is redirected to your storefront rather than shown a dead page, and you can publish them again at any time." },
+  "catalogue.unpublish.live_note": { one: "{count} of them is live now.", other: "{count} of them are live now." },
+  "catalogue.unpublish.confirm": { one: "Unpublish {count} product", other: "Unpublish {count} products" },
+
+  /*
+     Move category — which is also what changes the template.
+
+     A product has no template pointer; the template is resolved through the
+     category. Two buttons for one write would be the dangerous kind of lie, so
+     there is one action and its preview names both consequences.
+  */
+  "catalogue.move.title": "Move to another category",
+  "catalogue.move.body": "A product's spec template comes from its category, so moving it changes which fields it has and which filters buyers can find it through.",
+  "catalogue.move.target": "Move to",
+  "catalogue.move.choose": "Choose a category",
+  "catalogue.move.no_target": "Choose a category to move them to.",
+  "catalogue.move.summary": { one: "{count} product moves to {category}.", other: "{count} products move to {category}." },
+  "catalogue.move.already": { one: "{count} is already there and will not change.", other: "{count} are already there and will not change." },
+  "catalogue.move.same_template": "Same spec template, so no value is lost and no filter changes.",
+  "catalogue.move.dropped_heading": { one: "{count} value stops being readable", other: "{count} values stop being readable" },
+  "catalogue.move.dropped_body": "The new template does not have these fields. Nothing is deleted — the values stay on the record and come back if you move the products back — but until then they show nowhere.",
+  "catalogue.move.dropped_row": { one: "{label} — {count} product, for example {sample}", other: "{label} — {count} products, for example {sample}" },
+  "catalogue.move.facets_gained": "Buyers gain these filters: {list}.",
+  "catalogue.move.facets_lost": "Buyers lose these filters: {list}. Products drop out of them until the new template's fields are filled.",
+  "catalogue.move.untemplated": "That category has no spec template, so nothing can be published there until one exists.",
+  "catalogue.move.confirm": { one: "Move {count} product", other: "Move {count} products" },
+  "catalogue.cancel": "Cancel",
+
+  /*
+     The SPECS column, which names the consequence rather than the ratio.
+
+     `18 / 22` describes how much of a form is filled and nothing about what the
+     gap costs. The ratio stays as context; underneath it, what it means.
+  */
+  "catalogue.specs.ratio": "{filled} / {total}",
+  "catalogue.specs.missing_filters": { one: "Missing {count} filter", other: "Missing {count} filters" },
+  "catalogue.specs.required": { one: "{count} required · save blocked", other: "{count} required · save blocked" },
+  "catalogue.specs.complete": "Complete",
+  "catalogue.specs.no_gaps": "Nothing missing that costs anything",
+  "catalogue.specs.cannot_publish": "Cannot publish · set one",
+  "catalogue.specs.legend": "REQUIRED blocks that product's next save in the editor and never unpublishes it — a product can be live and unsaveable at once. MISSING N FILTERS means it is absent from that many buyer filters on the category pages; it is not ranked lower. Both are worked out when this page loads, never stored.",
+
+  "catalogue.col.sku": "SKU",
+  "catalogue.col.template": "Template",
+  "catalogue.col.stock": "Stock",
+  "catalogue.stored_not_listed": "Stored · not listed",
+  "catalogue.stored_reason": "Above your plan's product limit. The record is kept; publishing it needs room.",
+  "catalogue.no_photo": "No photo",
+
+  /*
+     The plan's limit, in the header, on every plan.
+
+     A Pro seller with 1,242 products who downgrades has to be told what happens
+     to 1,232 of them, and the answer is that nothing is deleted. Stated before
+     it bites rather than discovered at the moment of being blocked.
+  */
+  "catalogue.cap.unlimited": "{plan} · no product limit",
+  "catalogue.cap.listed": "{plan} · {listed} of {cap} listed",
+  "catalogue.cap.at": "You are at your plan's limit. Unpublish something to list another, or move to a larger plan.",
+  "catalogue.cap.over": { one: "{count} product is stored above your plan's limit and is not listed. Nothing has been deleted — publish it in place of one that is live, or move to a larger plan.", other: "{count} products are stored above your plan's limit and are not listed. Nothing has been deleted — publish them in place of ones that are live, or move to a larger plan." },
+  "catalogue.new_product": "New product",
+  "catalogue.new_product_named": "Give it a name",
+  "catalogue.new_product_hint": "You can change everything about it afterwards. It starts as a draft, so no buyer sees it until you publish.",
+  "catalogue.new_product_create": "Create and edit",
+  "catalogue.new_product_at_cap": "Your plan lists {cap} products and {listed} are live. You can still add one — it starts as a draft, and publishing it needs room.",
   "catalogue.missing_specs": "{count} products have no filterable specs. Buyers filter on those fields, so those products are listed but not found.",
   "catalogue.drafts": "{count} drafts are not visible to buyers yet.",
   "catalogue.select_all": "Select every product",

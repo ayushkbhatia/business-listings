@@ -78,7 +78,7 @@ and it is the one that argues back.
 /dashboard/locations                    Locations                             [3c]
 /dashboard/hours                        Hours & Ramadan                       [3d]
 /dashboard/verification                 Verification & documents              [3e]
-/dashboard/products                     Catalogue                             [3f]
+/dashboard/products                     Catalogue                             [3f]  built h3 wave 2
 /dashboard/products/:id                 Product editor                        [3g]  built h3 wave 2
 /dashboard/products/import              CSV import mapper                    [11d]
 /dashboard/templates                    Spec templates                        [3h]  built h3 wave 2
