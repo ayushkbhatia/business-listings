@@ -327,7 +327,10 @@ export function ResultsList({
                        flag that was not about it.
                     */
                     whatsapp={business.locations[0]?.whatsapp ?? null}
-                    surface={basePath}
+                    // The shelf, not the shelf's path. `basePath` is
+                    // `/c/valves-and-fittings`, and a column holding one value
+                    // per category cannot be grouped by.
+                    surface="category"
                   />
                 }
                 compareHref={compareHref(business.slug)}

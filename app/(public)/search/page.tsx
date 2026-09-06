@@ -22,6 +22,7 @@ import { crossLinkFor } from "@/lib/seo/cross-link";
 import { nearestKm } from "@/lib/geo/distance";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { MapResults } from "@/app/(public)/_results/MapResults";
+import { RevealWhatsApp } from "@/app/(public)/_results/RevealWhatsApp";
 import { SearchFilterBar, SortStrip } from "@/app/(public)/_results/SearchFilterBar";
 import { ZeroResult } from "@/app/(public)/_results/ZeroResult";
 import { AlertForm } from "@/app/(public)/_results/AlertForm";
@@ -373,6 +374,26 @@ export default async function SearchPage({ searchParams }: Props) {
                   }}
                   sponsoredLabel={t("results.sponsored")}
                   enquireHref={`/rfq/new?supplier=${business.slug}`}
+                  /*
+                     The reveal this row has always had a slot for.
+
+                     `ListingCard`'s map context places `{contactAction}` after
+                     Storefront and Enquire — the card was built expecting one —
+                     and this call site never passed anything, so board 1c's
+                     rows were the one results surface with no way to reach a
+                     supplier's WhatsApp. The category shelves have had it since
+                     board 1b.
+
+                     `RevealWhatsApp` renders nothing without a number, so a
+                     supplier who has published none costs this row no space.
+                  */
+                  contactAction={
+                    <RevealWhatsApp
+                      businessId={business.id}
+                      whatsapp={business.locations[0]?.whatsapp ?? null}
+                      surface="search_results"
+                    />
+                  }
                 />
               </li>
             ))}

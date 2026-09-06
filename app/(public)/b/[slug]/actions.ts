@@ -1,7 +1,20 @@
 "use server";
 
+/*
+   Registers the Prisma writer. `recordContactReveal` no-ops when none is set —
+   deliberately, so a counter that is down never costs a buyer the number they
+   asked for — and a server action is its own module graph. Neither reveal
+   action imported this, so nothing registered a writer on either path and
+   every reveal was discarded in silence.
+
+   That is the one thing masking exists to prevent. `lib/audit/contact-reveal.ts`
+   says it in its own header: "when a seller asks what the subscription bought,
+   the answer is a count of reveals and enquiries, and that answer only exists
+   if the reveal was written down."
+*/
+import "@/lib/audit/prisma-writer";
 import { getActor } from "@/lib/auth/session";
-import { recordContactReveal } from "@/lib/audit";
+import { recordContactReveal, type RevealSurface } from "@/lib/audit";
 
 /**
  * Somebody asked for a supplier's number.
@@ -17,7 +30,7 @@ import { recordContactReveal } from "@/lib/audit";
 export async function revealContact(input: {
   businessId: string;
   channel: "phone" | "whatsapp";
-  surface: string;
+  surface: RevealSurface;
 }): Promise<void> {
   const actor = await getActor();
   await recordContactReveal({

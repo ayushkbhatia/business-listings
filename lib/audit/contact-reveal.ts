@@ -12,14 +12,30 @@ import type { Actor } from "@/lib/auth/roles";
  */
 export type RevealChannel = "phone" | "whatsapp" | "email" | "website";
 
+/**
+ * Where a reveal happened. A closed set, and it has to be one.
+ *
+ * `surface` was typed `String` with a doc comment saying "e.g. `storefront` or
+ * `search_results`", and nothing checked it — so call sites drifted into paths:
+ * the storefront card wrote `/b/<slug>` and a results row wrote
+ * `/c/<category>`. Grouping by a column like that returns one row per listing,
+ * which means it answers no question at all. `lib/telemetry/events.ts` records
+ * this exact column as the argument for why its own event names are a closed
+ * set; this is that argument applied back here.
+ *
+ * Three members, because those are the three surfaces that reveal a number and
+ * they are the three values already in the table.
+ */
+export type RevealSurface = "storefront" | "search_results" | "category";
+
 export interface ContactRevealInput {
   /** Null for an anonymous buyer — most reveals happen before signup. */
   actor: Actor | null;
   businessId: string;
   locationId?: string;
   channel: RevealChannel;
-  /** Where on the site it happened, e.g. `storefront` or `search_results`. */
-  surface: string;
+  /** Where on the site it happened. Never a path — see `RevealSurface`. */
+  surface: RevealSurface;
 }
 
 export interface ContactRevealRow {
@@ -27,7 +43,7 @@ export interface ContactRevealRow {
   businessId: string;
   locationId: string | null;
   channel: RevealChannel;
-  surface: string;
+  surface: RevealSurface;
 }
 
 export interface ContactRevealWriter {

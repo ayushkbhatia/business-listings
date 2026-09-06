@@ -8,6 +8,7 @@ export {
   type ContactRevealRow,
   type ContactRevealWriter,
   type RevealChannel,
+  type RevealSurface,
 } from "./contact-reveal";
 export {
   ACTION_FOR_CAPABILITY,
