@@ -4003,6 +4003,47 @@ model LegalPage {
 
 /// An editorial article on the directory. Staff-authored, published from
 /// `/admin/content/guides`, and never generated.
+/// The subjects a reader browses guides by — board 10b §3.
+///
+/// A table rather than an enum, and that is the spec's own doing: its Q2 says
+/// the four subjects have never been agreed and recommends dropping one of
+/// them. An enum bakes a contested taxonomy into a migration, so renaming a
+/// subject or adding one would cost a deploy — while the global rule is that
+/// content added through the admin costs a revalidation and the same content
+/// added as a constant costs a build and a cold cache.
+///
+/// Not `Guide.topic`, which stays what its own comment says it is: the mono
+/// kicker's middle term on the article. A trade licence guide can be filed
+/// under "Buying safely" and still print `GUIDE · VERIFICATION · 6 MIN` — the
+/// kicker is about the article and the subject is about the shelf.
+model GuideSubject {
+  id   String @id @default(cuid())
+  /// The chip's URL: `/guides/buying-safely`.
+  ///
+  /// One namespace with `Guide.slug`, because both live directly under
+  /// `/guides/`. `guideSlugCollision` refuses a subject that takes a guide's
+  /// slug and a guide that takes a subject's, the way `slugCollision` already
+  /// does for areas and categories.
+  slug String @unique
+  name String
+
+  /// One line under the subject heading in the `Every guide` block. Optional:
+  /// a subject with no blurb renders its heading and its count.
+  blurb String?
+
+  /// Where this subject sits on the index, left to right.
+  ///
+  /// Board 10b Q1: editorial sequence, not recency. "Newest review first turns
+  /// the index into a changelog, and a guide re-checked yesterday is not more
+  /// useful than the one that explains the badge."
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  guides Guide[]
+
+  @@map("guide_subject")
+}
+
 model Guide {
   id      String @id @default(cuid())
   /// Frozen once published. The rule `Redirect` states, enforced in
@@ -4067,11 +4108,47 @@ model Guide {
   /// that is what they are for. Null means the index; a slug means that trade.
   ctaCategoryId String? @map("cta_category_id")
 
+  /// Which shelf the index files this under — board 10b §3.
+  ///
+  /// Nullable, and the index says so rather than hiding it: a published guide
+  /// with no subject still needs a link from its own index, or it is one of
+  /// the fifteen articles this board exists to stop being unreachable.
+  subjectId String? @map("subject_id")
+
+  /// Editorial sequence within the subject. Board 10b Q1.
+  sortOrder Int @default(0) @map("sort_order")
+
+  /// The `START HERE` slot — board 10b §4.
+  ///
+  /// A timestamp rather than a boolean so the log says when it was chosen, and
+  /// at most one across the whole programme: the migration carries a unique
+  /// index over a constant expression filtered to `featured_at IS NOT NULL`,
+  /// which is a rule Postgres enforces rather than one an `if` can drop.
+  ///
+  /// The slot is editorial and the label says so. The board called it
+  /// `MOST READ`, which is either a computed ranking or an editorial choice
+  /// and cannot be both — and if it is computed, nobody has written a
+  /// standfirst for whichever article wins.
+  featuredAt DateTime? @map("featured_at")
+
+  /// The line under the featured standfirst saying why this one is first.
+  ///
+  /// A column, because the slot moves and the sentence is about the article in
+  /// it. Board 10b §4 asks for "a second line saying why it is first", and a
+  /// constant would go on saying the trade-licence guide defines the badge
+  /// however many times the slot changed hands — the same defect §Ordering
+  /// exists to prevent one paragraph earlier, where a computed ranking and a
+  /// frozen editorial claim cannot describe each other.
+  ///
+  /// Null renders no line rather than a generic one.
+  featuredNote String? @map("featured_note")
+
   publishedAt DateTime? @map("published_at")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
-  ctaCategory Category? @relation("GuideCtaCategory", fields: [ctaCategoryId], references: [id], onDelete: SetNull)
+  ctaCategory Category?     @relation("GuideCtaCategory", fields: [ctaCategoryId], references: [id], onDelete: SetNull)
+  subject     GuideSubject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
 
   related     GuideRelated[] @relation("GuideFrom")
   relatedFrom GuideRelated[] @relation("GuideTo")
@@ -4080,6 +4157,8 @@ model Guide {
   /// the same set.
   @@index([publishedAt])
   @@index([regulatoryCheckedAt])
+  /// The index reads one shelf at a time, in the editor's order.
+  @@index([subjectId, sortOrder])
   @@map("guide")
 }
 

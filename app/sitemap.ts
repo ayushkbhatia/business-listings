@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db/client";
 import { STOREFRONT_TAB_COUNTS } from "@/lib/db/queries/business";
 import { LEGAL_PAGES } from "@/lib/legal/pages";
+import { guideIndex } from "@/lib/guides/queries";
 import { absoluteUrl } from "@/lib/site";
 import { livePages } from "@/lib/seo/area";
 import { liveLists } from "@/lib/seo/curated";
@@ -27,7 +28,16 @@ export const revalidate = 3600;
 const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } } as const;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const [businesses, products, categories, areaPages, lists, guides, emiratePages] = await Promise.all([
+  const [
+    businesses,
+    products,
+    categories,
+    areaPages,
+    lists,
+    guides,
+    emiratePages,
+    guideShelves,
+  ] = await Promise.all([
     prisma.business.findMany({
       where: PUBLIC_BUSINESS,
       select: {
@@ -101,6 +111,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
        cannot disagree.
     */
     liveEmiratePages(),
+    /*
+       The shelves that actually have a guide on them. `guideIndex` builds a
+       shelf only for a subject with published guides, which is the same rule
+       the route uses to decide whether the page exists at all.
+    */
+    guideIndex().then((index) => index.shelves),
   ]);
 
   const entries: MetadataRoute.Sitemap = [
@@ -109,6 +125,32 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   if (guides.length > 0) {
     entries.push({ url: absoluteUrl("/guides"), changeFrequency: "weekly", priority: 0.6 });
+    /*
+       The page the index's author strip links to. It exists only once there is
+       a programme to explain, and its whole content is the record of the
+       checks — so it belongs in the sitemap for the same reason the index does
+       and is absent for the same reason when there is nothing published.
+    */
+    entries.push({
+      url: absoluteUrl("/guides/how-we-check"),
+      changeFrequency: "monthly",
+      priority: 0.3,
+    });
+  }
+
+  /*
+     Board 10b §SEO: the subject views are real URLs, canonical to themselves.
+     A URL a chip links to and the sitemap omits is a page we ask a reader to
+     visit and a crawler not to — and only the shelves that HAVE guides are
+     here, because an empty one 404s.
+  */
+  for (const shelf of guideShelves) {
+    if (shelf.slug === null) continue;
+    entries.push({
+      url: absoluteUrl(`/guides/${shelf.slug}`),
+      changeFrequency: "weekly",
+      priority: 0.5,
+    });
   }
   for (const guide of guides) {
     entries.push({

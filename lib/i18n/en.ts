@@ -218,6 +218,7 @@ export const en = {
   "nav.compliance": "PDPL requests",
   "nav.group.content_seo": "Content & SEO",
   "nav.content_lists": "Curated lists",
+  "nav.content_guide_subjects": "Guide subjects",
   "nav.group.content": "Editorial",
   "nav.dedupe": "Dedupe & merge",
   "nav.users": "Users",
@@ -5803,6 +5804,117 @@ export const en = {
   //
   // The public half. Read by strangers deciding whether to trust us, so §08
   // applies harder here than anywhere: say the number, never spin.
+  // ── Board 10b · the guide index ──
+  "subjects.title": "Guide subjects",
+  "subjects.meta": "{count} subjects. {unfiled} published guides are not filed under one.",
+  "subjects.caption": "The shelves the guide index browses by",
+  "subjects.col.name": "Subject",
+  "subjects.col.url": "Address",
+  "subjects.col.published": "Published guides",
+  "subjects.col.order": "Order",
+  "subjects.new": "Add a subject",
+  "subjects.edit": "Edit {name}",
+  "subjects.empty": "No subjects yet. Every published guide is still linked from the index, under a shelf that says it is not filed.",
+  "subjects.blurb": "One line",
+  "subjects.blurb_hint": "Printed under the subject heading on the index and used as the subject page's own description.",
+  "subjects.slug_hint": "The chip's address. It shares one namespace with every guide, because both live directly under /guides/ — a subject cannot take a slug an article already holds, and the save is refused rather than one of the two pages disappearing.",
+  "subjects.note": "A subject is content, not a code constant: adding or renaming one costs a revalidation rather than a deploy. Board 10b leaves the taxonomy itself an open question — \"For suppliers\" is written for the other side of the marketplace and is deliberately not seeded here.",
+  "guide_admin.check_recorded": "Recorded. The index shows the new date.",
+  "guide_admin.check_title": "Regulatory check",
+  "guide_admin.check_hint": "Records that a person has re-read this article's external facts against the source today. It is the date every reader sees beside the guide on the index, and the thing that clears an overdue row.",
+  "guide_admin.check_last": "Last checked {date}",
+  "guide_admin.check_never": "No check recorded. The index says so rather than showing the publication date as if it were one.",
+  "guide_admin.check_cta": "Record a check today",
+  "guide_admin.featured_note": "Why this one is first",
+  "guide_admin.featured_note_hint": "One line under the standfirst. It travels with the slot and is cleared when the slot moves, because a sentence explaining why an article is first is false the moment a different article is.",
+  "guide_admin.featured_set": "Start-here slot moved.",
+  "guide_admin.featured_is": "This guide holds the start-here slot on the index.",
+  "guide_admin.featured_not": "This guide does not hold the start-here slot.",
+  "guide_admin.featured_hint": "One guide at a time, and it is an editorial choice rather than a ranking — the pill on the index says Start here, not Most read. The slot should hold the article a first-time reader needs first.",
+  "guide_admin.featured_set_cta": "Give it the start-here slot",
+  "guide_admin.featured_clear": "Clear the start-here slot",
+  "guide_admin.subject_saved": "Subject saved.",
+  "guide_admin.field.standfirst": "Standfirst",
+  "guide_admin.field.standfirst_hint": "The sentence that states the problem, not a summary of the article. It is what the index prints under the title and what Google shows.",
+  "guide_admin.field.topic": "Kicker topic",
+  "guide_admin.field.topic_hint": "The middle term of GUIDE · VERIFICATION · 6 MIN on the article itself. Not the index's subject.",
+  "guide_admin.field.byline_role": "Byline role",
+  "guide_admin.field.subject": "Subject",
+  "guide_admin.field.subject_hint": "Which shelf the index files this under, and which subject page links to it. Unfiled guides are still listed, under a shelf that says so.",
+  "guide_admin.field.sort_order": "Sequence",
+  "guide_admin.field.sort_order_hint": "Order within the subject, lowest first. The index sorts on this rather than on the review date — a guide re-checked yesterday is not more useful than the one that explains the badge.",
+  "guide_admin.field.cadence": "Review window, months",
+  "guide_admin.field.cadence_hint": "How often the external facts need re-checking. Leave empty for an article that names no authority and no rate: an empty window is never overdue, and a window of nought would be overdue from the day it published.",
+  "guide_admin.no_subject": "Not filed",
+  "guides.index_h1": "How buying works in the UAE, in plain English.",
+  /*
+     No list of topics. The board's standfirst named four — verification,
+     quoting, payment terms, getting a supplier to turn up — against a
+     programme of twenty-two. At two published guides, both about verification,
+     that sentence would be a queried number wrapped in a claim about content
+     that does not exist. The count is the only part that can be true of every
+     state the page launches through, so the count is the only part that is
+     specific.
+  */
+  "guides.index_lede": {
+    one: "{count} guide on buying from UAE suppliers, free to read. No gated PDFs, no sign-up.",
+    other: "{count} guides on buying from UAE suppliers, free to read. No gated PDFs, no sign-up.",
+  },
+  "guides.index_lede_empty": "Nothing published yet. The directory is the place to start in the meantime.",
+  /*
+     The claim the strip makes, and it is deliberately about the checking rather
+     than about the authorship.
+
+     The board's headline read "written by people who check licences all day",
+     which names the verification team as the authors while every article ships
+     with "Business Listings editorial" and no name — board 6d Q1, still open.
+     An index that claims specific authorship while the articles carry none is
+     worse than one that claims nothing, because the index is the page that sets
+     the expectation. What IS true and recorded is the check: every date beside
+     every guide is an audited `recordRegulatoryCheck`.
+  */
+  "guides.strip_claim": "Checked against the source, not rewritten from other sites.",
+  "guides.strip_meta": "Last review pass {date} · {guides} · {reviewed} reviewed this quarter",
+  "guides.strip_meta_unchecked": "{guides} · no review recorded yet",
+  "guides.strip_link": "How we check these",
+  "guides.chip_all": { one: "All {count}", other: "All {count}" },
+  "guides.chips_label": "Guide subjects",
+  "guides.start_here": "Start here",
+  "guides.featured_why": "Read this one first: it is where we set out what our verification badge covers, and what it does not.",
+  "guides.read_the_guide": "Read the guide",
+  "guides.browse_suppliers": "Browse verified suppliers",
+  "guides.every_guide": "Every guide",
+  "guides.every_guide_note": "Nothing here is behind a button.",
+  "guides.unfiled": "Not yet filed",
+  "guides.unfiled_blurb": "Published, and waiting for an editor to put it on a shelf. It is linked here so it is never reachable only by search.",
+  "guides.entry_meta": "{minutes} min · checked {date}",
+  "guides.entry_meta_unchecked": "{minutes} min · not yet checked",
+  "guides.entry_overdue": "Review overdue",
+  "guides.card_meta": "{subject} · {minutes} min · checked {date}",
+  "guides.card_meta_unchecked": "{subject} · {minutes} min",
+  "guides.card_meta_nosubject": "{minutes} min · checked {date}",
+  "guides.dates_note": "Dates are when a person last checked the regulatory detail against the source, not when the page was last deployed. Overdue means we have not checked in the article's own review window — the guide is still accurate as far as we know, and we would rather say so than hide it.",
+  "guides.browse_directory": "Browse suppliers",
+  "guides.subject_title": "{subject} guides",
+  "guides.subject_back": "All guides",
+  "guides.subject_empty": "No guides on this subject yet.",
+  "guides.one_guide_note": "One guide so far. The rest of the programme is being written.",
+  // The author page the strip links to — board 10b, and 6d Q1's placeholder.
+  "guides.how_h1": "How we check these guides",
+  "guides.how_lede": "Every guide here makes claims about licensing authorities, VAT and renewal cadences. Those change. This is what we do about it.",
+  "guides.how_process": "Process",
+  "guides.how_step_source": "Each regulatory claim is read against the authority that publishes it, not against another directory.",
+  "guides.how_step_date": "The date of that reading is recorded on the article and shown to you on the index, whether it is recent or not.",
+  "guides.how_step_cadence": "An article naming an authority or a rate carries a review window. One about how to write a good enquiry does not, because it makes no claim about the world.",
+  "guides.how_step_overdue": "When an article passes its window it says so, and it stays published. A stale fact is not a misrepresented supplier, and hiding the date would be the part we could not defend.",
+  "guides.how_record": "The record",
+  "guides.how_row_guides": "Guides published",
+  "guides.how_row_last": "Last review pass",
+  "guides.how_row_quarter": "Reviewed this quarter, of those carrying a review window",
+  "guides.how_row_overdue": "Past their review window, and still published",
+  "guides.how_author": "Who writes them",
+  "guides.how_author_body": "Guides are written and checked in-house by the team that runs verification. They do not yet carry an individual byline — naming a person is an editorial decision that has not been taken, and inventing one would be the first false thing on a page about checking facts.",
+  "guides.how_back": "Back to the guides",
   "guides.title": "Guides",
   "guides.eyebrow": "Guides",
   "guides.lede": "How verification works, what a quote should tell you, which payment terms are normal in the UAE, and how to get a supplier to actually turn up.",
