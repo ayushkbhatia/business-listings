@@ -62,7 +62,7 @@ const PLAN_SELECT = {
   enquiriesPerMonth: true,
   productLimit: true,
   locationLimit: true,
-  photoLimit: true,
+  photoLimit: true, storageMb: true,
   teamSeats: true,
   rankingMultiplier: true,
   customDomain: true,
@@ -117,7 +117,7 @@ export async function getOverview(businessId: string, now = new Date()): Promise
     // A photo on a product is still one of the seller's photos, and the plan's
     // photoLimit governs both. Review media is the buyer's and is not counted.
     prisma.media.count({
-      where: { OR: [{ businessId }, { product: { businessId } }], reviewId: null },
+      where: { businessId, reviewId: null },
     }),
     prisma.user.count({ where: { businessId } }),
     prisma.enquiryRecipient.count({ where: { businessId, state: { in: ["delivered", "opened"] } } }),
@@ -212,6 +212,14 @@ export function usageOf(overview: Overview, what: Metered) {
     locations: overview.usage.locations,
     photos: overview.usage.photos,
     seats: overview.usage.seats,
+    /*
+       Megabytes, and the overview does not carry them. The media library is
+       the only screen that meters storage and it queries the sum itself; a
+       zero here would render "0 MB of 10 GB used" on the dashboard, which is
+       a number that is not a query. `usageOf` is asked for one resource at a
+       time, so nothing reads this today.
+    */
+    storage: 0,
   };
   return allowance(overview.plan, what, used[what]);
 }

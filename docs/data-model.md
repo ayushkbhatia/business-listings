@@ -421,6 +421,43 @@ site visit no longer exists at all. What the handoff actually requires — that 
 arithmetic on *this* seller's score rather than constants — is what `lib/setup/tasks.ts`
 computes, from `strengthItems()`.
 
+### One file, many products — board 3i
+
+```prisma
+model Media    { folderId String?  /* null = Unfiled */  products ProductMedia[]    }
+model Document { folderId String?                        products ProductDocument[] }
+
+model ProductMedia    { productId; mediaId;    sortOrder }  // @@id([productId, mediaId])
+model ProductDocument { productId; documentId; sortOrder }
+model MediaFolder     { businessId; name; sortOrder }       // @@unique([businessId, name])
+```
+
+**`Media.productId` and `Document.productId` are gone.** They were single
+nullable columns, so a photograph belonged to at most one product and the same
+image had to be uploaded again for the next size in a range — while board 3i's
+render already showed `ds-bf-valve.pdf · 4 products`. The join is also the
+answer to board 3g's Q4: documents are shared and referenced, never copied per
+product, because a UL certificate covers a whole range.
+
+**Position zero is the primary image.** There is no `isPrimary` flag: a flag and
+an order are two sources of truth for one fact and they drift, and board 3i's
+criterion 8 asks that the primary be settable *and* that board 1g's gallery
+order match it. One column satisfies both by construction.
+
+**Deleting a product no longer deletes its photographs.** `media.product_id`
+carried `onDelete: Cascade`; the join carries it now, so only the reference
+goes. The file is the library's, and it may well be on three other products.
+
+**`Unfiled` is `folderId IS NULL`, not a row.** That is what keeps "every file
+is in exactly one folder" true — there is no default folder to rename or delete
+out from under it. Unreferenced is a *state*, computed by `lib/media/state.ts`
+across products, the storefront, team members, enquiry threads and **sent
+quotes**; it is never inferred from the absence of a product attachment, and a
+quote-held file cannot be deleted at all.
+
+**`Plan.storageMb`** is the allowance board 3i's header states. Uploads stop at
+the cap; nothing is deleted and nothing is unpublished.
+
 ### Photographs after board 8b
 
 ```prisma

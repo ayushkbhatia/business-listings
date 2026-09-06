@@ -40,7 +40,7 @@ function plan(over: Partial<PricingPlan> = {}): PricingPlan {
     enquiriesPerMonth: 40,
     productLimit: 150,
     locationLimit: 3,
-    photoLimit: 40,
+    photoLimit: 40, storageMb: 1024,
     teamSeats: 3,
     rankingMultiplier: 1.15,
     customDomain: false,

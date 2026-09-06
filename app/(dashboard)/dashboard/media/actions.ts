@@ -3,9 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
 import { assertCanEditListing } from "@/lib/auth/guards";
-import { allowance, type PlanCaps } from "@/lib/plan/entitlements";
+import { allowance } from "@/lib/plan/entitlements";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
-import { checkImage, MEDIA_BUCKET, mediaPath, removeObject, signUpload } from "@/lib/storage";
+import { checkImage, MEDIA_BUCKET, mediaPath, signUpload } from "@/lib/storage";
+import * as media from "@/lib/media/service";
+import type { DeletePreview } from "@/lib/media/service";
 import { t } from "@/lib/i18n";
 import { getSellerSeat } from "../_shell";
 
@@ -14,36 +16,39 @@ import { getSellerSeat } from "../_shell";
  *
  * The browser uploads straight to Storage with a signed URL. The permission is
  * the signature, and it is issued here — after checking the seller owns the
- * business the path is under and that they have a photograph left on their
- * plan. There is no bucket-wide write policy to get wrong, and no eight-megabyte
- * request body through a server action.
+ * business the path is under and that they have room left on their plan. There
+ * is no bucket-wide write policy to get wrong, and no eight-megabyte request
+ * body through a server action.
+ *
+ * Every rule that decides what may happen to a file lives in `lib/media/`;
+ * these are the entry points, and each one re-checks the seat. A server action
+ * is a URL: the screen not rendering a control is not the same as the action
+ * refusing it.
  */
-
-const KINDS = ["logo", "cover", "gallery", "product", "storefront"] as const;
-type Kind = (typeof KINDS)[number];
 
 export type SignResult =
   | { ok: true; path: string; token: string; url: string }
   | { ok: false; error: string };
 
-/**
- * The caps that actually apply to this seller.
- *
- * This read the raw `Plan` row and never applied `entitlementSnapshot`, so a
- * grandfathered account was capped at today's number rather than the one it
- * signed up on — which is the promise `lib/plan/entitlements.ts` says "was
- * written down as a fact and was not one" until it was fixed everywhere else.
- * The photograph gate was the path it had not reached.
- */
-async function planFor(businessId: string): Promise<PlanCaps | null> {
-  return effectiveFor(businessId);
+const KINDS = ["logo", "cover", "gallery", "product", "storefront"] as const;
+type Kind = (typeof KINDS)[number];
+
+async function seatOrThrow() {
+  const seat = await getSellerSeat();
+  if (!seat) throw new Error(t("dev.no_seat_title"));
+  assertCanEditListing(seat.actor);
+  return seat;
 }
 
-async function photoCount(businessId: string): Promise<number> {
-  return prisma.media.count({
-    where: { OR: [{ businessId }, { product: { businessId } }], reviewId: null },
-  });
-}
+const refresh = () => {
+  revalidatePath("/dashboard/media");
+  // A file's alt text, its gallery position and whether it exists at all are
+  // all read by public surfaces, so the storefront is revalidated with it.
+  revalidatePath("/dashboard/products");
+  revalidatePath("/", "layout");
+};
+
+/* ── Upload ──────────────────────────────────────────────────────────────── */
 
 export async function signMediaUpload(formData: FormData): Promise<SignResult> {
   const seat = await getSellerSeat();
@@ -59,25 +64,53 @@ export async function signMediaUpload(formData: FormData): Promise<SignResult> {
   const check = checkImage(type, bytes);
   if (!check.ok) return { ok: false, error: check.reason };
 
-  const plan = await planFor(seat.businessId);
+  const plan = await effectiveFor(seat.businessId);
   if (plan) {
-    const used = await photoCount(seat.businessId);
-    const left = allowance(plan, "photos", used);
-    if (left.atCap) {
+    /*
+       Two caps, and the refusal names whichever bites.
+
+       `photoLimit` counts photographs and `storageMb` counts bytes; a datasheet
+       costs storage and is not a photograph, so neither subsumes the other.
+       Per board 3f §6 and 3i §1 the limit is stated before it bites and never
+       destroys a record: at the cap uploads stop, nothing is deleted and
+       nothing comes off the seller's listing.
+    */
+    const photos = await prisma.media.count({
+      where: { businessId: seat.businessId, reviewId: null },
+    });
+    const photoRoom = allowance(plan, "photos", photos);
+    if (photoRoom.atCap) {
       return {
         ok: false,
         error: t("media.at_cap", {
-          cap: String(left.cap ?? 0),
+          cap: String(photoRoom.cap ?? 0),
           plan: plan.name,
           next: "Pro",
           cap_next: "200",
         }),
       };
     }
+
+    const usedBytes = await media.storageUsedBytes(seat.businessId);
+    const usedMb = Math.ceil((usedBytes + bytes) / (1024 * 1024));
+    const room = allowance(plan, "storage", usedMb);
+    if (room.atCap) {
+      return {
+        ok: false,
+        error: t("media.cap_reached", {
+          cap: `${room.cap} MB`,
+          plan: plan.name,
+        }),
+      };
+    }
   }
 
   // The path is built from the seat's own businessId, never from the form.
-  const path = mediaPath(seat.businessId, (KINDS as readonly string[]).includes(kind) ? kind : "gallery", filename);
+  const path = mediaPath(
+    seat.businessId,
+    (KINDS as readonly string[]).includes(kind) ? kind : "gallery",
+    filename,
+  );
 
   try {
     const signed = await signUpload(MEDIA_BUCKET, path);
@@ -97,21 +130,28 @@ export async function recordMedia(formData: FormData): Promise<RecordResult> {
 
   const path = String(formData.get("path") ?? "");
   const kind = String(formData.get("kind") ?? "gallery");
-  /*
-     Measured by the canvas that resized the file, in the browser.
-
-     `Media.width` and `Media.height` have existed since handoff 0 and nothing
-     has ever written them, so no surface could reserve space for an image or
-     refuse one too small to render. The decode had already happened; the
-     numbers were free and were being thrown away.
-  */
   const width = Number(formData.get("width") ?? 0);
   const height = Number(formData.get("height") ?? 0);
+  const folderId = String(formData.get("folderId") ?? "") || null;
 
   // A path outside this seller's folder is not theirs to record, whatever the
   // signature said. Cheap, and it is the only check that survives a bug above.
   if (!path.startsWith(`${seat.businessId}/`)) {
     return { ok: false, error: t("media.storage_off") };
+  }
+
+  /*
+     An upload that duplicates a file already stored is offered back rather than
+     stored twice — board 3i's states. The cap is measured in bytes, so a second
+     copy costs the seller their allowance for nothing.
+  */
+  const existing = await prisma.media.findFirst({
+    where: { businessId: seat.businessId, storagePath: path, reviewId: null },
+    select: { id: true },
+  });
+  if (existing) {
+    refresh();
+    return { ok: true, id: existing.id };
   }
 
   const created = await prisma.media.create({
@@ -121,53 +161,92 @@ export async function recordMedia(formData: FormData): Promise<RecordResult> {
       storagePath: path,
       alt: String(formData.get("alt") ?? "").trim() || null,
       bytes: Number(formData.get("bytes") ?? 0) || null,
+      folderId,
       ...(width > 0 && height > 0 ? { width, height } : {}),
     },
     select: { id: true },
   });
 
-  revalidatePath("/dashboard/media");
+  refresh();
   return { ok: true, id: created.id };
 }
 
-export type MediaResult = { ok: true } | { ok: false; error: string };
+/* ── The board's actions ─────────────────────────────────────────────────── */
 
-export async function saveAlt(formData: FormData): Promise<MediaResult> {
-  const seat = await getSellerSeat();
-  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
-  assertCanEditListing(seat.actor);
-
-  const id = String(formData.get("id") ?? "");
-  const { count } = await prisma.media.updateMany({
-    where: { id, businessId: seat.businessId },
-    data: { alt: String(formData.get("alt") ?? "").trim() || null },
-  });
-  if (count === 0) return { ok: false, error: t("product.not_found") };
-
-  revalidatePath("/dashboard/media");
-  return { ok: true };
+export async function previewDeleteAction(
+  fileId: string,
+): Promise<{ ok: true; value: DeletePreview } | { ok: false; message: string }> {
+  const seat = await seatOrThrow();
+  const result = await media.previewDelete(seat.businessId, fileId);
+  return result.ok ? { ok: true, value: result.value } : { ok: false, message: result.message };
 }
 
-export async function deleteMedia(formData: FormData): Promise<MediaResult> {
-  const seat = await getSellerSeat();
-  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
-  assertCanEditListing(seat.actor);
-
-  const id = String(formData.get("id") ?? "");
-  const media = await prisma.media.findUnique({
-    where: { id },
-    select: { id: true, businessId: true, storagePath: true },
-  });
-  if (!media || media.businessId !== seat.businessId) {
-    return { ok: false, error: t("product.not_found") };
-  }
-
-  // The row first. An orphaned object costs storage; an orphaned row renders a
-  // broken image on a storefront, which is the worse of the two.
-  await prisma.media.delete({ where: { id: media.id } });
-  await removeObject(MEDIA_BUCKET, media.storagePath).catch(() => undefined);
-
-  revalidatePath("/dashboard/media");
-  return { ok: true };
+export async function deleteFileAction(formData: FormData): Promise<void> {
+  const seat = await seatOrThrow();
+  const result = await media.deleteFile(seat.businessId, String(formData.get("fileId") ?? ""));
+  if (!result.ok) throw new Error(result.message);
+  refresh();
 }
 
+export async function saveAltAction(formData: FormData): Promise<void> {
+  const seat = await seatOrThrow();
+  const result = await media.saveAlt(
+    seat.businessId,
+    String(formData.get("fileId") ?? ""),
+    String(formData.get("alt") ?? ""),
+  );
+  if (!result.ok) throw new Error(result.message);
+  refresh();
+}
+
+export async function createFolderAction(formData: FormData): Promise<void> {
+  const seat = await seatOrThrow();
+  const result = await media.createFolder(seat.businessId, String(formData.get("name") ?? ""));
+  if (!result.ok) throw new Error(result.message);
+  refresh();
+}
+
+export async function moveToFolderAction(formData: FormData): Promise<void> {
+  const seat = await seatOrThrow();
+  const raw = String(formData.get("folderId") ?? "");
+  const result = await media.moveToFolder(
+    seat.businessId,
+    formData.getAll("fileId").map(String),
+    raw === "" ? null : raw,
+  );
+  if (!result.ok) throw new Error(result.message);
+  refresh();
+}
+
+export async function attachToProductAction(formData: FormData): Promise<void> {
+  const seat = await seatOrThrow();
+  const result = await media.attachToProduct(
+    seat.businessId,
+    formData.getAll("fileId").map(String),
+    String(formData.get("productId") ?? ""),
+  );
+  if (!result.ok) throw new Error(result.message);
+  refresh();
+}
+
+export async function detachFromProductAction(formData: FormData): Promise<void> {
+  const seat = await seatOrThrow();
+  const result = await media.detachFromProduct(
+    seat.businessId,
+    String(formData.get("fileId") ?? ""),
+    String(formData.get("productId") ?? ""),
+  );
+  if (!result.ok) throw new Error(result.message);
+  refresh();
+}
+
+export async function setPrimaryAction(formData: FormData): Promise<void> {
+  const seat = await seatOrThrow();
+  const result = await media.setPrimary(
+    seat.businessId,
+    String(formData.get("fileId") ?? ""),
+    String(formData.get("productId") ?? ""),
+  );
+  if (!result.ok) throw new Error(result.message);
+  refresh();
+}

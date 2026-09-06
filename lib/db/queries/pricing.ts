@@ -43,7 +43,7 @@ const PRICING_PLAN_SELECT = {
   enquiriesPerMonth: true,
   productLimit: true,
   locationLimit: true,
-  photoLimit: true,
+  photoLimit: true, storageMb: true,
   teamSeats: true,
   rankingMultiplier: true,
   customDomain: true,

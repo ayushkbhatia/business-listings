@@ -98,7 +98,13 @@ export async function getBusinessProducts(
   const { take = 60, skip = 0 } = options;
   return prisma.product.findMany({
     where: { businessId, status: { not: "draft" } },
-    include: { category: true, media: { orderBy: { sortOrder: "asc" }, take: 1 } },
+    include: {
+      category: true,
+      // Board 3i: the first row of the join is the primary image, and one file
+      // may serve several products. `take: 1` on a sorted join is still the
+      // cover for a card.
+      media: { orderBy: { sortOrder: "asc" }, take: 1, include: { media: true } },
+    },
     // In stock first: a buyer scanning a catalogue is looking for what they can
     // have now, and made-to-order below it is still a useful answer.
     orderBy: [{ availability: "asc" }, { name: "asc" }],
@@ -118,8 +124,8 @@ export async function getProductBySlug(businessSlug: string, productSlug: string
     },
     include: {
       category: true,
-      media: { orderBy: { sortOrder: "asc" } },
-      documents: true,
+      media: { orderBy: { sortOrder: "asc" }, include: { media: true } },
+      documents: { orderBy: { sortOrder: "asc" }, include: { document: true } },
       business: {
         include: {
           primaryCategory: true,

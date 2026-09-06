@@ -62,7 +62,9 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
     }),
     prisma.media.findMany({
       where: { reviewId: null },
-      select: { kind: true, businessId: true, product: { select: { businessId: true } } },
+      // Board 3i backfilled `business_id` onto every product photograph, so the
+      // owner is on the row and the hop through `product` is gone.
+      select: { kind: true, businessId: true },
     }),
     /*
      * The rules every template imposes, read once. `requiredFrom` is what makes
@@ -115,7 +117,7 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
   const logos = new Set<string>();
   const covers = new Set<string>();
   for (const media of mediaRows) {
-    const owner = media.businessId ?? media.product?.businessId;
+    const owner = media.businessId;
     if (!owner) continue;
     photoCounts.set(owner, (photoCounts.get(owner) ?? 0) + 1);
     if (media.kind === "logo") logos.add(owner);

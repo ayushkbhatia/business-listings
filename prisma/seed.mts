@@ -3160,7 +3160,7 @@ async function deriveProfileStrength(db: Db) {
     }),
     db.media.findMany({
       where: { reviewId: null },
-      select: { kind: true, businessId: true, product: { select: { businessId: true } } },
+      select: { kind: true, businessId: true },
     }),
     db.specField.findMany({
       select: { id: true, templateId: true, key: true, required: true, isFilterable: true, requiredFrom: true },
@@ -3188,7 +3188,7 @@ async function deriveProfileStrength(db: Db) {
   const logos = new Set<string>();
   const covers = new Set<string>();
   for (const m of media) {
-    const owner = m.businessId ?? m.product?.businessId;
+    const owner = m.businessId;
     if (!owner) continue;
     photos.set(owner, (photos.get(owner) ?? 0) + 1);
     if (m.kind === "logo") logos.add(owner);
@@ -3556,6 +3556,7 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
             productLimit: plan.productLimit,
             locationLimit: plan.locationLimit,
             photoLimit: plan.photoLimit,
+            storageMb: plan.storageMb,
             teamSeats: plan.teamSeats,
             rankingMultiplier: Number(plan.rankingMultiplier),
             customDomain: plan.customDomain,
@@ -5836,34 +5837,54 @@ async function seedProductDetail(db: Db) {
      fixture and does not pretend the file exists.
   */
   const existingDoc = await db.document.findFirst({
-    where: { productId: flagship.id, kind: "datasheet" },
+    where: { products: { some: { productId: flagship.id } }, kind: "datasheet" },
     select: { id: true },
   });
   if (!existingDoc) {
-    await db.document.createMany({
-      data: [
-        {
-          productId: flagship.id,
-          kind: "datasheet",
-          storagePath: `products/${flagship.id}/datasheet.pdf`,
-          filename: "scan_0043_final.pdf",
-          displayName: `${flagship.name} — technical datasheet`,
-          isPublic: true,
-          bytes: 491_520,
-          mimeType: "application/pdf",
-        },
-        {
-          productId: flagship.id,
-          kind: "certificate",
-          storagePath: `products/${flagship.id}/wras.pdf`,
-          filename: "WRAS-2024-scan.pdf",
-          displayName: "WRAS approval — potable water",
-          isPublic: true,
-          bytes: 212_992,
-          mimeType: "application/pdf",
-        },
-      ],
+    /*
+       Board 3i: a document is the library's and is *referenced* by products,
+       never copied per product. The datasheet here covers the whole DN range,
+       so it is created once and cited by every size — which is the shape board
+       3g Q4 asked for and the old `product_id` column could not express.
+    */
+    const range = await db.product.findMany({
+      where: { businessId: seller.id, categoryId: flagship.categoryId },
+      orderBy: { name: "asc" },
+      take: 4,
+      select: { id: true },
     });
+    const cited = range.length > 0 ? range : [{ id: flagship.id }];
+
+    const datasheet = await db.document.create({
+      data: {
+        businessId: seller.id,
+        kind: "datasheet",
+        storagePath: `products/${flagship.id}/datasheet.pdf`,
+        filename: "scan_0043_final.pdf",
+        displayName: `${flagship.name} — technical datasheet`,
+        isPublic: true,
+        bytes: 491_520,
+        mimeType: "application/pdf",
+        products: { create: cited.map((p, i) => ({ productId: p.id, sortOrder: i })) },
+      },
+      select: { id: true },
+    });
+
+    await db.document.create({
+      data: {
+        businessId: seller.id,
+        kind: "certificate",
+        storagePath: `products/${flagship.id}/wras.pdf`,
+        filename: "WRAS-2024-scan.pdf",
+        displayName: "WRAS approval — potable water",
+        isPublic: true,
+        bytes: 212_992,
+        mimeType: "application/pdf",
+        products: { create: cited.map((p, i) => ({ productId: p.id, sortOrder: i })) },
+      },
+      select: { id: true },
+    });
+    void datasheet;
   }
 
   /*

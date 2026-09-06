@@ -613,4 +613,14 @@
      measure at every width. Naming it sorts it by value, which is the only
      thing that makes it beat `md:`. */
   --breakpoint-wide: 75rem;
+
+  /* The 1440px design width every board is drawn at.
+
+     Same trap as `wide`, one board later. Board 3i's grid is three columns
+     between 1280 and 1439 and four above it, written as
+     `sm:grid-cols-3 min-[1440px]:grid-cols-4` — and the arbitrary variant is
+     emitted *before* `sm:`, so `sm:` won on order and the grid stayed at three
+     columns at 1440. Naming it sorts it by value, which is the only thing that
+     makes it beat a smaller named breakpoint. */
+  --breakpoint-board: 90rem;
 }
