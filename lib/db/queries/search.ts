@@ -157,6 +157,44 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
     and.push({ products: { some: { availability: { in: query.availability as never[] }, status: { not: "draft" } } } });
   }
 
+  /*
+     Spec facets, on the tab that is every category page's default.
+
+     They were parsed, rendered in the rail, counted, and given a removable
+     chip — and honoured by nothing. `productWhere` had the branch and this did
+     not, so a buyer on `/c/valves-and-fittings` could tick `DN100`, watch the
+     URL change and the chip appear, and get the same list back. A filter that
+     changes nothing is worse than an absent one: it answers a question the
+     buyer asked with a number they now believe.
+
+     The comment above says these clauses "cannot see a product's spec values",
+     which is true of the columns on this row and not of a relation. The
+     availability filter directly above has been reaching through `products`
+     since it shipped; this is the same reach.
+
+     **One product must satisfy all of them.** Every constraint goes inside a
+     single `some`, not one `some` per field. A supplier stocking a DN100 brass
+     valve and a DN50 cast-iron one does not stock a DN100 cast-iron valve, and
+     a rail that said they did would be answering a different question from the
+     one the two chips describe.
+
+     `status: { not: "draft" }` matches the availability clause: a draft product
+     is not on the storefront, so it cannot be the reason a supplier appears in
+     a filtered result.
+  */
+  const specConstraints = Object.entries(query.spec ?? {})
+    .filter(([, values]) => values.length > 0)
+    .map(([fieldId, values]) => ({
+      OR: values.flatMap((value) => [
+        { specValues: { path: [fieldId], equals: value } },
+        { specValues: { path: [fieldId], array_contains: [value] } },
+      ]),
+    })) as Prisma.ProductWhereInput[];
+
+  if (specConstraints.length > 0) {
+    and.push({ products: { some: { status: { not: "draft" }, AND: specConstraints } } });
+  }
+
   return { AND: and };
 }
 
@@ -483,7 +521,13 @@ function productWhere(query: SearchQuery, categoryIds?: string[]): Prisma.Produc
 
   // Spec facets are keyed by SpecField id, and the values live in a JSON
   // column. A multiselect field holds an array, so both shapes are matched.
-  for (const [fieldId, values] of Object.entries(query.spec)) {
+  /*
+     `?? {}` because `spec` is required on the type and absent on real callers.
+     `searchBusinesses` is reached from board 1b's header, its chips and the
+     results themselves, and a hand-built query missing one field should narrow
+     nothing rather than throw on the busiest public route on the site.
+  */
+  for (const [fieldId, values] of Object.entries(query.spec ?? {})) {
     if (values.length === 0) continue;
     and.push({
       OR: values.flatMap((value) => [
@@ -814,7 +858,12 @@ export async function getFixedFacets(
  * in the rail; unmarking it takes it out. That is handoff 1 criterion 4, and it
  * is why the query string treats any unreserved key as a SpecField id.
  */
-export async function getSpecFacets(
+/**
+ * Exported uncached, the way `readFixedFacetCounts` is, for the same reason:
+ * `unstable_cache` needs Next's incremental cache context and throws outside a
+ * request, so the integration tests that prove these numbers call this.
+ */
+export async function readSpecFacets(
   categoryIds: string[],
   query: SearchQuery,
   /**
@@ -835,40 +884,103 @@ export async function getSpecFacets(
   });
   if (!template) return [];
 
-  // Values are grouped in the process rather than in SQL: a JSON column with a
-  // dynamic key does not group cleanly through the query builder, and the
-  // candidate set here is bounded by the same filters as the results.
-  const matching = await prisma.product.findMany({
-    where: productWhere({ ...query, spec: {} }, categoryIds),
-    select: { specValues: true },
-    take: 1000,
-  });
+  /*
+     One count per option, measured with **that field** cleared — not with every
+     spec field cleared.
 
-  return template.fields
-    .map((field) => {
-      const counts = new Map<string, number>();
-      for (const row of matching) {
-        const raw = (row.specValues as Record<string, unknown>)[field.id];
-        const values = Array.isArray(raw) ? raw : raw === undefined || raw === null ? [] : [raw];
-        for (const value of values) {
-          const key = String(value);
-          if (key) counts.set(key, (counts.get(key) ?? 0) + 1);
-        }
-      }
+     `optionCounts` has done this correctly for the six fixed facets since it
+     shipped, and says why in its own comment: measuring with the facet still
+     applied shows 0 against every option the buyer has not picked, which is the
+     most common way a filter rail becomes useless. This function cleared the
+     whole `spec` bucket instead, which is the opposite mistake — with `DN100`
+     and `Cast iron` both picked, the material counts were measured as though no
+     size were selected, so the rail promised results the list did not have.
 
+     Counted against the population the tab is showing. A buyer on the
+     businesses tab reads a header counting businesses and a list of businesses,
+     and every number in the rail beside it counted products — so a facet could
+     read 40 over a list of nine suppliers.
+  */
+  const counting = query.tab === "products" ? "products" : "businesses";
+
+  return Promise.all(
+    template.fields.map(async (field) => {
+      const cleared = withoutFacet(query, field.id);
       const selected = query.spec[field.id] ?? [];
-      const options: FacetOption[] = field.options
-        .map((option) => ({
+
+      const options = await Promise.all(
+        field.options.map(async (option) => ({
           value: option,
           label: field.unit && !option.startsWith(field.unit) ? `${option} ${field.unit}` : option,
-          count: counts.get(option) ?? 0,
+          count: await countWithSpec(cleared, field.id, option, categoryIds, counting),
           selected: selected.includes(option),
-        }))
-        .filter((option) => option.count > 0 || option.selected);
+        })),
+      );
 
-      return { key: field.id, label: field.label, source: "spec" as const, options };
-    })
-    .filter((group) => group.options.length > 0);
+      return {
+        key: field.id,
+        label: field.label,
+        source: "spec" as const,
+        options: options.filter((option) => option.count > 0 || option.selected),
+      };
+    }),
+  ).then((groups) => groups.filter((group) => group.options.length > 0));
+}
+
+/**
+ * The same sixty seconds the fixed rail takes, and for a sharper reason.
+ *
+ * The old implementation was one `findMany` pulling a thousand rows of JSON
+ * into the process. Counting in the database is exact at any catalogue size and
+ * costs one query per option — four filterable fields on the valve template is
+ * about thirty, on a public browse page, uncached. That is the trade
+ * `readFixedFacetCounts` already made for its nineteen, so this makes it the
+ * same way rather than a second way.
+ *
+ * The predicate is untouched by caching: the rail counts what the results
+ * return, and a newly published supplier appears in both within the minute.
+ */
+const cachedSpecFacets = unstable_cache(readSpecFacets, ["browse-spec-facets"], {
+  revalidate: FACET_CACHE_REVALIDATE_S,
+});
+
+export async function getSpecFacets(
+  categoryIds: string[],
+  query: SearchQuery,
+  templateCategoryIds: string[] = categoryIds,
+): Promise<FacetGroup[]> {
+  return cachedSpecFacets(categoryIds, query, templateCategoryIds);
+}
+
+/**
+ * How many rows one more spec value would leave, in the unit the tab counts.
+ *
+ * Replaces a `findMany({ take: 1000 })` that pulled every matching product's
+ * JSON into the process and grouped it there. Two things were wrong with that
+ * beyond the population it counted: the cap had no `orderBy`, so above a
+ * thousand published products in a category every count was a sample of an
+ * arbitrary subset with nothing on screen saying so — and it could only ever
+ * count products, because products were what it had fetched.
+ *
+ * The database counts now, which also makes the number exact at any catalogue
+ * size. `businessWhere` and `productWhere` are the same predicates the results
+ * use, which is the property the whole rail rests on.
+ */
+async function countWithSpec(
+  cleared: SearchQuery,
+  fieldId: string,
+  value: string,
+  categoryIds: string[] | undefined,
+  counting: "businesses" | "products",
+): Promise<number> {
+  const query: SearchQuery = {
+    ...cleared,
+    spec: { ...cleared.spec, [fieldId]: [value] },
+  };
+
+  return counting === "products"
+    ? prisma.product.count({ where: productWhere(query, categoryIds) })
+    : prisma.business.count({ where: businessWhere(query, categoryIds) });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

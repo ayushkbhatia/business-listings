@@ -115,3 +115,213 @@ describe("the fixed facet counts survive being cached", () => {
     expect(withDubai.emirates).toEqual(unfiltered.emirates);
   });
 });
+
+/**
+ * The spec facets, which had none of this.
+ *
+ * They were parsed, rendered, counted and given a removable chip — and honoured
+ * by nothing on the businesses tab, which is the default on every category
+ * page. `productWhere` carried the branch; `businessWhere` did not.
+ *
+ * The counts had three separate faults beside it: measured over products even
+ * when the tab counts businesses, measured with every spec field cleared rather
+ * than only the field being counted, and sampled from an un-ordered
+ * `take: 1000` above a thousand products with nothing on screen saying so.
+ */
+describe("a spec facet on the businesses tab", () => {
+  /** The seeded valve template's filterable fields, and a value each. */
+  async function aFilterableValue(): Promise<{ fieldId: string; value: string } | null> {
+    const { prisma } = await import("@/lib/db/client");
+    const field = await prisma.specField.findFirst({
+      where: { isFilterable: true, options: { isEmpty: false }, template: { status: "live" } },
+      orderBy: { sortOrder: "asc" },
+      select: { id: true, options: true },
+    });
+    if (!field) return null;
+
+    // A value some product actually carries, so the assertions are not about
+    // an empty set.
+    for (const option of field.options) {
+      const carried = await prisma.product.count({
+        where: {
+          status: { not: "draft" },
+          OR: [
+            { specValues: { path: [field.id], equals: option } },
+            { specValues: { path: [field.id], array_contains: [option] } },
+          ],
+        },
+      });
+      if (carried > 0) return { fieldId: field.id, value: option };
+    }
+    return null;
+  }
+
+  it("narrows the businesses, rather than changing nothing", async () => {
+    const pick = await aFilterableValue();
+    if (!pick) return;
+
+    const category = await getCategoryBySlug("valves-and-fittings");
+    const ids = category ? categoryIdsFor(category) : undefined;
+
+    const before = await countResults(parseSearchQuery({}), ids);
+    const after = await countResults(
+      parseSearchQuery({ [pick.fieldId]: pick.value }),
+      ids,
+    );
+
+    /*
+       The assertion the bug would have failed: with the facet honoured, a
+       supplier stocking nothing of that spec drops out. Before this, the two
+       numbers were identical for every value of every field.
+    */
+    expect(after).toBeLessThan(before);
+    expect(after).toBeGreaterThan(0);
+  });
+
+  it("requires one product to satisfy every spec chip, not one product each", async () => {
+    /*
+       A supplier stocking a DN100 brass valve and a DN50 cast-iron one does not
+       stock a DN100 cast-iron valve. Two `some` clauses would say they do, and
+       the rail's two chips describe one product.
+    */
+    const { prisma } = await import("@/lib/db/client");
+    const fields = await prisma.specField.findMany({
+      where: { isFilterable: true, options: { isEmpty: false }, template: { status: "live" } },
+      orderBy: { sortOrder: "asc" },
+      take: 2,
+      select: { id: true, options: true },
+    });
+    if (fields.length < 2) return;
+
+    const category = await getCategoryBySlug("valves-and-fittings");
+    const ids = category ? categoryIdsFor(category) : undefined;
+
+    const both = parseSearchQuery({
+      [fields[0]!.id]: fields[0]!.options[0]!,
+      [fields[1]!.id]: fields[1]!.options[0]!,
+    });
+
+    const businesses = await countResults(both, ids);
+
+    // Every business the pair returns must hold a single product carrying both.
+    const holders = await prisma.business.count({
+      where: {
+        products: {
+          some: {
+            status: { not: "draft" },
+            AND: [
+              {
+                OR: [
+                  { specValues: { path: [fields[0]!.id], equals: fields[0]!.options[0]! } },
+                  { specValues: { path: [fields[0]!.id], array_contains: [fields[0]!.options[0]!] } },
+                ],
+              },
+              {
+                OR: [
+                  { specValues: { path: [fields[1]!.id], equals: fields[1]!.options[0]! } },
+                  { specValues: { path: [fields[1]!.id], array_contains: [fields[1]!.options[0]!] } },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    });
+
+    expect(businesses).toBeLessThanOrEqual(holders);
+  });
+
+  it("counts the rail in the unit the tab counts", async () => {
+    /*
+       A buyer on the businesses tab reads a header counting businesses and a
+       list of businesses. Every number in the rail beside it counted products,
+       so a facet could read 40 over a list of nine suppliers.
+    */
+    const { readSpecFacets } = await import("@/lib/db/queries/search");
+    const category = await getCategoryBySlug("valves-and-fittings");
+    if (!category) return;
+    const ids = categoryIdsFor(category);
+
+    const [asBusinesses, asProducts] = await Promise.all([
+      readSpecFacets(ids, parseSearchQuery({}), ids),
+      readSpecFacets(ids, parseSearchQuery({ tab: "products" }), ids),
+    ]);
+    if (asBusinesses.length === 0) return;
+
+    for (const group of asBusinesses) {
+      const mirror = asProducts.find((other) => other.key === group.key);
+      for (const option of group.options) {
+        const businesses = option.count;
+        const products = mirror?.options.find((o) => o.value === option.value)?.count ?? 0;
+        // One business can carry several matching products and never fewer.
+        expect(businesses).toBeLessThanOrEqual(products);
+        expect(businesses).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("measures each option with its own field cleared and the others still applied", async () => {
+    /*
+       `optionCounts` has done this for the fixed facets since it shipped. The
+       spec version cleared the whole bucket, so with two fields picked the
+       second field's counts were measured as though the first were not — and
+       the rail promised results the list did not have.
+    */
+    const { readSpecFacets } = await import("@/lib/db/queries/search");
+    const pick = await aFilterableValue();
+    const category = await getCategoryBySlug("valves-and-fittings");
+    if (!pick || !category) return;
+    const ids = categoryIdsFor(category);
+
+    const unfiltered = await readSpecFacets(ids, parseSearchQuery({}), ids);
+    const filtered = await readSpecFacets(
+      ids,
+      parseSearchQuery({ [pick.fieldId]: pick.value }),
+      ids,
+    );
+
+    // The picked field's own options are unchanged: it was cleared to count them.
+    const before = unfiltered.find((g) => g.key === pick.fieldId);
+    const after = filtered.find((g) => g.key === pick.fieldId);
+    if (before && after) {
+      for (const option of before.options) {
+        const now = after.options.find((o) => o.value === option.value);
+        if (now) expect(now.count).toBe(option.count);
+      }
+    }
+
+    // Every OTHER field is now measured under the picked constraint, so no
+    // count may have risen.
+    for (const group of filtered) {
+      if (group.key === pick.fieldId) continue;
+      const was = unfiltered.find((g) => g.key === group.key);
+      for (const option of group.options) {
+        const previous = was?.options.find((o) => o.value === option.value)?.count ?? 0;
+        expect(option.count).toBeLessThanOrEqual(previous);
+      }
+    }
+  });
+});
+
+describe("removing a filter chip", () => {
+  it("clears the map viewport, which used to link to the page it was on", () => {
+    /*
+       `withoutFacet` had no `bounds` case, so it fell to the spec branch and
+       deleted a key that does not exist — returning the query unchanged. The
+       "Map area" chip rendered a remove link pointing at the URL it was already
+       on: a control that looks like every other chip and cannot be dismissed.
+    */
+    const bounded: SearchQuery = parseSearchQuery({
+      bounds: "24.9,55.0,25.3,55.4",
+    });
+    expect(bounded.bounds).toBeDefined();
+    expect(withoutFacet(bounded, "bounds").bounds).toBeUndefined();
+  });
+
+  it("leaves the other filters alone when it clears one", () => {
+    const query = parseSearchQuery({ emirate: "dubai", tier: "3" });
+    const cleared = withoutFacet(query, "emirate");
+    expect(cleared.emirate).toBeUndefined();
+    expect(cleared.tier).toBe(3);
+  });
+});

@@ -270,6 +270,17 @@ export function withoutFacet(query: SearchQuery, key: string): SearchQuery {
     case "availability": next.availability = []; break;
     case "replyWithinHours": delete next.replyWithinHours; break;
     case "yearsTrading": delete next.yearsTrading; break;
+    /*
+       The map viewport. Without this it fell to the spec branch below, which
+       deleted `spec["bounds"]` — a key that does not exist — and returned a
+       query identical to the one it was given. So the "Map area" chip rendered
+       a remove link pointing at the page it was already on: a control that
+       looks like every other chip and cannot be dismissed.
+
+       `bounds` is written only by "Search this area", so clearing it returns
+       the buyer to the unbounded search, which is what the chip promises.
+    */
+    case "bounds": delete next.bounds; break;
     default: delete next.spec[key];
   }
   return next;

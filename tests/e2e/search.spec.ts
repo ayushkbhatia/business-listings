@@ -80,6 +80,28 @@ test.describe("acceptance criterion 4 — the rail comes from the template", () 
     await expect(rail.getByText("Verification", { exact: true })).toBeVisible();
   });
 
+  test("selecting a spec facet narrows the suppliers on the default tab", async ({ page }) => {
+    /*
+       The businesses tab, which is what every category page opens on — and
+       which honoured no spec facet at all until `businessWhere` gained the
+       branch `productWhere` already had. Every test here navigated to
+       `?tab=products` first, so the rail on the tab a buyer actually lands on
+       was never exercised.
+    */
+    await page.goto("/c/valves-and-fittings");
+    const before = await page.locator('a[href^="/b/"]').count();
+    expect(before).toBeGreaterThan(0);
+
+    await openRail(page);
+    await page.getByRole("link", { name: /^DN100/ }).first().click();
+
+    await expect(page.getByLabel(/Remove the .* filter/).first()).toBeVisible();
+    const after = await page.locator('a[href^="/b/"]').count();
+    // A filter that changes nothing is worse than an absent one: it answers a
+    // question the buyer asked with a number they now believe.
+    expect(after).toBeLessThan(before);
+  });
+
   test("selecting a spec facet narrows the products and shows a chip", async ({ page }) => {
     await page.goto("/c/valves-and-fittings?tab=products");
     const before = await page.locator('a[href*="/p/"]').count();
