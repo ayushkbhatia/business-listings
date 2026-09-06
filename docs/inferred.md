@@ -197,6 +197,14 @@ decision before handoff 1 puts these colours in front of buyers.
 what the shipped documents state: the tier is 0..4 and staff-write-only, tier 3
 requires `visitedAt`, and the tier drops to 2 the day the licence expires.
 
+> **Superseded on 5 September 2026.** Site visits were withdrawn, and with them
+> the rung that named one. The ladder that ships has four rungs — 0 Not
+> verified, 1 Licence on file, 2 Licence verified, 3 Audited — and rung 3 is
+> trading history checked against what the listing claims, not premises. Every
+> mention of a visit below this line is a record of what was inferred before
+> the cut, kept because this file is that record; none of it describes the
+> product. `lib/verification.ts` is the authority.
+
 | tier | label | what was checked |
 |---|---|---|
 | 0 | Not verified | nothing on the page has been checked |

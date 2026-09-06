@@ -150,7 +150,16 @@ echo "→ 6. the site visit, which was withdrawn and keeps coming back"
 # Comments are stripped by both helpers, which matters here more than anywhere:
 # most of what is left in the codebase is a comment explaining that the rung is
 # gone and why, and those have to be allowed to name it.
-VISITS='\bsite[- ]visit|\bvisited by|verification (site )?visit|premises (have been |been )?visit|visited in person|\bfield team\b'
+# Round 3 adds the phrases that describe a visit without using the word.
+#
+# The pattern above was written from the sentences the cut had already found,
+# so it looked for "visit", "premises" and "field team" — and missed
+# "in some cases that we have stood in the building", which survived in a
+# seeded guide callout through two rounds and reached production. A claim about
+# having been somewhere does not have to contain the word "visit", and the
+# scan that only knows the wording it has already seen catches the same
+# sentence twice and a new one never.
+VISITS='\bsite[- ]visit|\bvisited by|verification (site )?visit|premises (have been |been )?visit|visited in person|\bfield team\b|stood in the building|been to the (premises|warehouse|factory|office)|seen the stock|\bin person at (their|the)\b|walked the (floor|warehouse)'
 # The seeds too, and that is not belt-and-braces: seed copy **is** public copy.
 # Round 2 of this cut found the claim living in a seeded curated-list intro, a
 # seeded guide and the seeded verification policy — three public pages whose

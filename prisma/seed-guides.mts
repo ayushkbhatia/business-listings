@@ -78,7 +78,16 @@ const BLOCKS = [
     kind: "callout",
     values: {
       label: "What verification is not",
-      body: "It is not a guarantee of quality, price or delivery. It is a check that the business is licensed to trade in what it says it trades in, and in some cases that we have stood in the building. Read the reviews for the rest — they come only from buyers who sent an enquiry through the platform.",
+      /*
+         Round 3 of the site-visit cut.
+
+         Board 6d corrected the ladder, the heading and the summary in this
+         file and left this sentence, which claims we have been to the premises
+         without using any of the words the vocabulary scan looked for. It
+         reached production and sat on the one page that defines what the badge
+         covers until the board 10b smoke check read it.
+      */
+      body: "It is not a guarantee of quality, price or delivery. It is a check that the business is licensed to trade in what it says it trades in, and at the top rung that its trading history matches what the listing claims. Read the reviews for the rest — they come only from buyers who sent an enquiry through the platform.",
     },
   },
   {
