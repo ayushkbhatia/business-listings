@@ -113,6 +113,10 @@ export default async function TemplatePage({ params }: { params: Promise<{ slug:
       platformRequired: field.platformRequired,
       facet: field.facet,
       facetLabel: t(`template.facet.${field.facet}` as "template.facet.platform"),
+      varies: field.variesByVariant,
+      // Pre-resolved to a string: a function cannot cross into a client
+      // component, which is the repeated defect this file already guards.
+      variesLabel: t("template.varies"),
       detached: field.detached,
       own: field.own,
       isNew: newFields.includes(field.fieldId),
@@ -148,8 +152,15 @@ export default async function TemplatePage({ params }: { params: Promise<{ slug:
             and flagging a field new in v3 — which cannot all hold.
           */}
           <StatusBadge tone="neutral" size="sm" shape="chip">
+            {/*
+                The template is named, because versions are per template.
+                Board 4e's library shows v1 and v2 on different rows and there
+                is no platform-wide version — read beside that screen, an
+                unqualified `tracks platform v3` reads like a release number.
+            */}
             {t("template.header_revision", {
               revision: String(view.revision),
+              template: view.platformTemplateName,
               version: String(view.tracksVersion),
             })}
           </StatusBadge>

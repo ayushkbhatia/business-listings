@@ -63,6 +63,7 @@ export type ProductResult = { ok: true; id?: string } | { ok: false; error: stri
 export interface SheetChoice {
   id: string;
   name: string;
+  /** The subcategories this sheet serves. Many-to-many since board 4e. */
   categoryId: string;
   categoryName: string;
   fields: number;
@@ -70,7 +71,7 @@ export interface SheetChoice {
   filterable: number;
   /** Live suppliers using this sheet. Excludes suspended listings. §2. */
   adoption: number;
-  /** True where the sheet's category is one of this business's own. */
+  /** True where one of the sheet's categories is one of this business's own. */
   matches: boolean;
 }
 
@@ -142,8 +143,7 @@ export async function sheetChoicesFor(businessId: string): Promise<SheetChoice[]
       select: {
         id: true,
         name: true,
-        categoryId: true,
-        category: { select: { name: true } },
+        categories: { select: { category: { select: { id: true, name: true } } } },
         fields: { select: { required: true, isFilterable: true } },
       },
     }),
@@ -171,17 +171,28 @@ export async function sheetChoicesFor(businessId: string): Promise<SheetChoice[]
   const byCategory = new Map(adoption.map((row) => [row.categoryId, row._count.businessId]));
 
   return templates
-    .map((template) => ({
-      id: template.id,
-      name: template.name,
-      categoryId: template.categoryId,
-      categoryName: template.category.name,
-      fields: template.fields.length,
-      required: template.fields.filter((field) => field.required).length,
-      filterable: template.fields.filter((field) => field.isFilterable).length,
-      adoption: byCategory.get(template.categoryId) ?? 0,
-      matches: mine.has(template.categoryId),
-    }))
+    .map((template) => {
+      /*
+         A sheet serves several subcategories since board 4e, so both the
+         adoption figure and the match test go over the whole set: summing the
+         first category alone would understate a sheet that covers four of
+         them, and testing it alone would turn `MATCHES YOUR CATEGORY` off for
+         a seller filed under the second.
+      */
+      const served = template.categories.map((link) => link.category);
+      const first = served[0];
+      return {
+        id: template.id,
+        name: template.name,
+        categoryId: first?.id ?? "",
+        categoryName: served.map((category) => category.name).join(" · "),
+        fields: template.fields.length,
+        required: template.fields.filter((field) => field.required).length,
+        filterable: template.fields.filter((field) => field.isFilterable).length,
+        adoption: served.reduce((sum, category) => sum + (byCategory.get(category.id) ?? 0), 0),
+        matches: served.some((category) => mine.has(category.id)),
+      };
+    })
     .sort(
       (a, b) =>
         Number(b.matches) - Number(a.matches) ||

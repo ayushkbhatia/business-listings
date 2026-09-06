@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma, PrismaClient } from "@/lib/db/generated/client";
 import { prisma as defaultClient } from "@/lib/db/client";
+import { resolveTemplateId } from "@/lib/spec/resolve";
 import {
   buildBusinessSearchText,
   buildProductSearchText,
@@ -38,9 +39,10 @@ async function fieldsFor(
   client: Client,
   categoryId: string,
 ): Promise<IndexableField[]> {
-  const template = await client.specTemplate.findFirst({
-    where: { categoryId },
-    orderBy: { version: "desc" },
+  const templateId = await resolveTemplateId(client, categoryId);
+  if (!templateId) return [];
+  const template = await client.specTemplate.findUnique({
+    where: { id: templateId },
     select: { fields: { select: { id: true, label: true, unit: true } } },
   });
   return template?.fields ?? [];

@@ -878,7 +878,10 @@ export async function readSpecFacets(
   templateCategoryIds: string[] = categoryIds,
 ): Promise<FacetGroup[]> {
   const template = await prisma.specTemplate.findFirst({
-    where: { categoryId: { in: templateCategoryIds }, status: "live" },
+    where: {
+      status: "live",
+      categories: { some: { categoryId: { in: templateCategoryIds } } },
+    },
     orderBy: { version: "desc" },
     include: { fields: { where: { isFilterable: true }, orderBy: { sortOrder: "asc" } } },
   });

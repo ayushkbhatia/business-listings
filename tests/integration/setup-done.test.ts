@@ -126,13 +126,13 @@ async function removeFixtures() {
   });
   await prisma.user.deleteMany({ where: { email: { endsWith: EMAIL_DOMAIN } } });
   await prisma.business.deleteMany({ where: { slug: { startsWith: PREFIX } } });
-  // By category, not by slug: `SpecTemplate` has no slug — it is unique on
-  // (categoryId, version) — and this suite owns its category outright.
+  // By the categories it serves, not by slug: `SpecTemplate` has no slug, and
+  // this suite owns its category outright.
   await prisma.specField.deleteMany({
-    where: { template: { category: { slug: { startsWith: PREFIX } } } },
+    where: { template: { categories: { some: { category: { slug: { startsWith: PREFIX } } } } } },
   });
   await prisma.specTemplate.deleteMany({
-    where: { category: { slug: { startsWith: PREFIX } } },
+    where: { categories: { some: { category: { slug: { startsWith: PREFIX } } } } },
   });
   await prisma.category.deleteMany({ where: { slug: { startsWith: PREFIX } } });
 }
@@ -148,7 +148,7 @@ beforeAll(async () => {
   const template = await prisma.specTemplate.create({
     data: {
       name: "Setup done sheet",
-      categoryId,
+      categories: { create: { categoryId } },
       status: "live",
       fields: {
         create: [

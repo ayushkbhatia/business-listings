@@ -356,7 +356,7 @@ describe("a subcategory inherits its trade's specification template", () => {
 
     const own = await prisma.specTemplate.create({
       data: {
-        categoryId: child.id,
+        categories: { create: { categoryId: child.id } },
         name: "Own template",
         version: 1,
         status: "draft",
