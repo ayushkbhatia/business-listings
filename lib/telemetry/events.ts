@@ -81,6 +81,8 @@ export const EVENT_NAMES = [
   "template_field_detached",
   "product_editor_viewed",
   "product_save_blocked",
+  "catalogue_exported",
+  "catalogue_imported",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -637,6 +639,33 @@ export const EVENT_SPECS = {
     emitter: "server",
     session: "never",
     props: { missing: "number" },
+  },
+  /**
+   * Board 11d, and board `3f` Q3's answer measured rather than assumed.
+   *
+   * The claim this board makes is that the export is a bulk-edit workflow: the
+   * file goes out, comes back, and the references match. Whether that loop is
+   * real is the ratio of `catalogue_imported` with `round_trip` true to
+   * `catalogue_exported` — and if sellers export and never re-import, the
+   * round trip is a feature nobody uses rather than the one the wave ends on.
+   *
+   * Row counts only. Nothing about what is in the file.
+   */
+  catalogue_exported: {
+    emitter: "server",
+    session: "never",
+    props: { rows: "number", selection: "boolean" },
+  },
+  catalogue_imported: {
+    emitter: "server",
+    session: "never",
+    props: {
+      created: "number",
+      updated: "number",
+      listed: "number",
+      errors: "number",
+      round_trip: "boolean",
+    },
   },
 } as const satisfies Record<EventName, EventDefinition>;
 

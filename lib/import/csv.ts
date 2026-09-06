@@ -141,7 +141,30 @@ export class CsvError extends Error {
   }
 }
 
-export function parseCsv(text: string, maxRows: number = MAX_ROWS): ParsedCsv {
+export interface ParseOptions {
+  maxRows?: number;
+  /**
+   * Whether the first row names the columns.
+   *
+   * Board 11d §2: *"`first row used as headers` is a control, not a sentence."*
+   * A stock file whose first row is a title — `AL WAHA TRADING — AUGUST 2026` in
+   * A1 and the real headings in row 2 — is common enough that the assumption has
+   * to be changeable, and changing it re-parses. Same defect corrected on `3f`
+   * §5's `Newest first` and `3i` §3's `Sort`.
+   *
+   * When false, the columns are named `Column 1…Column N` and every row in the
+   * file is data. The seller then maps by position, which is the only thing left
+   * to map by.
+   */
+  headerRow?: boolean;
+}
+
+export function parseCsv(text: string, options: ParseOptions | number = {}): ParsedCsv {
+  // Handoff 4's licence importer passes a bare row ceiling. Kept working rather
+  // than changed at both ends: it has nothing to say about header rows.
+  const settings: ParseOptions = typeof options === "number" ? { maxRows: options } : options;
+  const maxRows = settings.maxRows ?? MAX_ROWS;
+  const headerRow = settings.headerRow ?? true;
   const clean = text.startsWith(BOM) ? text.slice(BOM.length) : text;
   const records = toRecords(clean);
 
@@ -150,25 +173,36 @@ export function parseCsv(text: string, maxRows: number = MAX_ROWS): ParsedCsv {
   }
 
   const delimiter = detectDelimiter(records[0]!);
-  const headers = splitLine(records[0]!, delimiter);
+  const firstRow = splitLine(records[0]!, delimiter);
 
-  if (headers.filter((h) => h !== "").length < 2) {
+  /*
+     With the header row switched off, the file has no names to offer, so the
+     columns are numbered. `Column 3` is a worse label than `Part No` and it is
+     an honest one — the alternative is presenting the first product in the file
+     as though it were a set of headings, which is exactly the state this
+     control exists to get out of.
+  */
+  const headers = headerRow ? firstRow : firstRow.map((_, i) => `Column ${i + 1}`);
+
+  if (headerRow && headers.filter((h) => h !== "").length < 2) {
     throw new CsvError(
       "The first row does not look like column headings. The importer needs a header row " +
-        "naming each column, then one row per product.",
+        "naming each column, then one row per product — or switch off \u201cFirst row " +
+        "names the columns\u201d and map them by position.",
     );
   }
 
   const raggedRows: number[] = [];
   const rows: string[][] = [];
 
-  const body = records.slice(1);
+  const body = headerRow ? records.slice(1) : records;
   const truncated = Math.max(0, body.length - maxRows);
 
   for (const record of body.slice(0, maxRows)) {
     const cells = splitLine(record, delimiter);
     if (cells.length !== headers.length) {
-      raggedRows.push(rows.length + 2); // 1-based, and the header is row 1.
+      // 1-based. Row 1 is the header when there is one, and data when there is not.
+      raggedRows.push(rows.length + (headerRow ? 2 : 1));
       // Padded or trimmed, never dropped. Refusing a 400-row catalogue because
       // row 173 has a trailing comma is how a seller decides this does not work.
       while (cells.length < headers.length) cells.push("");
@@ -183,4 +217,27 @@ export function parseCsv(text: string, maxRows: number = MAX_ROWS): ParsedCsv {
 /** Every value in one column, for guessing what the column is. */
 export function columnValues(parsed: ParsedCsv, index: number): string[] {
   return parsed.rows.map((row) => row[index] ?? "");
+}
+
+/**
+ * One cell, escaped.
+ *
+ * The writer lives beside the reader on purpose. The export and the import are
+ * one schema — board `3f` Q3's answer — and a round trip whose two halves
+ * disagree about what a quote means inside a field is a round trip that loses a
+ * product description on the way home.
+ *
+ * A leading `=`, `+`, `-` or `@` is prefixed with an apostrophe. Excel reads
+ * those as the start of a formula, and a part number like `-40C-SEAL` becomes a
+ * broken cell in the seller's own file. Not a security measure — the file goes
+ * to the person who asked for it — but a correctness one.
+ */
+export function csvField(value: string): string {
+  const risky = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  return /[",\n\r]/.test(risky) ? `"${risky.replace(/"/g, '""')}"` : risky;
+}
+
+/** A whole file. CRLF, because the readers this writes for are Excel's. */
+export function toCsv(rows: readonly (readonly string[])[]): string {
+  return rows.map((row) => row.map(csvField).join(",")).join("\r\n");
 }

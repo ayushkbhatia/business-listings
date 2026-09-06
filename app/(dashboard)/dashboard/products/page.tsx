@@ -16,6 +16,7 @@ import { movableCategories } from "@/lib/products/move-category";
 import { revertableRuns } from "@/lib/import/service";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { runHeadline } from "@/lib/import/labels";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 import {
   bulkMoveCategory,
@@ -157,13 +158,31 @@ export default async function CataloguePage({
         </span>
       }
       actions={
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/*
+             Board 3f §1 drew `Export ▾`, and board 3f Q3 asked whether it
+             produces the file the mapper reads back. `11d` §5 answers yes and
+             names one format, so this is a link rather than a menu: a
+             disclosure triangle over a single choice is a control pretending to
+             have options. What the file does and does not carry is said beside
+             it — the columns that never come back are the point of the answer.
+          */}
+          <Link
+            href="/dashboard/products/export"
+            prefetch={false}
+            className={buttonClassName({ variant: "secondary", size: "sm" })}
+          >
+            {t("catalogue.export")}
+          </Link>
           <Link
             href="/dashboard/products/import"
             className={buttonClassName({ variant: "secondary", size: "sm" })}
           >
             {t("catalogue.import")}
           </Link>
+          <span className="w-full text-caption text-muted sm:w-auto sm:max-w-[38ch]">
+            {t("catalogue.export.hint")}
+          </span>
         </div>
       }
     >
@@ -173,10 +192,33 @@ export default async function CataloguePage({
             <input type="hidden" name="importRunId" value={run.id} />
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-ctl border border-line bg-paper-sunk px-3 py-2">
               <p className="text-body-sm text-ink">
-                {t("import.done_title", { count: formatCount(run.createdCount) })}
+                {/*
+                   `40 products imported` over `0 new · 40 updated` is a number
+                   the screen got wrong about itself. A run that only rewrote
+                   existing products imported nothing.
+                */}
+                {runHeadline(run)}
                 <span className="ml-2 font-mono text-caption text-muted">{run.filename}</span>
+                {/*
+                   Three numbers, not one. `18 products imported` over a run
+                   that also rewrote eighteen existing ones says nothing about
+                   the half that overwrote something — which is the half a
+                   rollback is for.
+                */}
+                <span className="mt-0.5 block font-mono text-caption text-muted">
+                  {t("import.done_counts", {
+                    created: formatCount(run.createdCount),
+                    updated: formatCount(run.updatedCount),
+                    listed: formatCount(run.listedCount),
+                  })}
+                </span>
                 <span className="mt-0.5 block text-caption text-muted">
-                  {t("import.undo_window")}
+                  {/*
+                     Not the rail's sentence. That one opens "Nothing imports
+                     until you confirm", which is a promise about an import that
+                     has already run by the time this banner exists.
+                  */}
+                  {t("import.rollback_done")}
                 </span>
               </p>
               <button

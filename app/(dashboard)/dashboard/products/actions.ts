@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
 import type { Prisma } from "@/lib/db/generated/client";
 import { assertCanEditProduct } from "@/lib/auth/guards";
-import { applyImport, previewImport, revertImport, type ImportPreview } from "@/lib/import/service";
+import { analyseImport, applyImport, revertImport, type ImportPreview } from "@/lib/import/service";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
 import { allowance } from "@/lib/plan/entitlements";
 import { refusesPublish, roomLeft } from "@/lib/products/catalogue-query";
@@ -12,6 +12,7 @@ import { previewMove, type MovePreview } from "@/lib/products/move-category";
 import { createWithUniqueSlug } from "@/lib/products/service";
 import { getSpecFieldOptions } from "@/lib/db/queries/catalogue";
 import type { ColumnPlan } from "@/lib/import/columns";
+import { looksLikeExport } from "@/lib/import/round-trip";
 import { missingFrom } from "@/lib/catalogue/overlay";
 import {
   arrayFieldIds,
@@ -51,12 +52,42 @@ export async function previewImportFile(formData: FormData): Promise<PreviewResu
 
   const text = String(formData.get("text") ?? "");
   const categoryId = String(formData.get("categoryId") ?? "");
-  const specFields = await getSpecFieldOptions(categoryId);
+  /*
+     The plan comes back on every call after the first.
+
+     §4's rail is a consequence of the mapping, not of the file: `Listed
+     immediately 386` is a different number once a `Category` column is mapped,
+     and a rail recomputed only on upload would state the outcome of a mapping
+     nobody chose. So the wizard re-posts the plan on every change and this
+     answers with the numbers for *that* mapping.
+  */
+  const raw = String(formData.get("plan") ?? "");
+  let plan: ColumnPlan | undefined;
+  if (raw !== "") {
+    try {
+      const parsed = JSON.parse(raw) as ColumnPlan;
+      if (Array.isArray(parsed.columns)) plan = parsed;
+    } catch {
+      plan = undefined;
+    }
+  }
+
+  // `headerRow` is a control now, not an assumption — criterion 9.
+  const headerRow = String(formData.get("headerRow") ?? "1") !== "0";
 
   try {
-    return { ok: true, preview: previewImport(text, specFields) };
+    return {
+      ok: true,
+      preview: await analyseImport({
+        businessId: seat.businessId,
+        fallbackCategoryId: categoryId,
+        text,
+        headerRow,
+        ...(plan ? { plan } : {}),
+      }),
+    };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : t("import.needs_name") };
+    return { ok: false, error: error instanceof Error ? error.message : t("import.unreadable") };
   }
 }
 
@@ -235,7 +266,14 @@ export async function bulkMoveCategory(formData: FormData): Promise<BulkResult> 
 }
 
 export type RunImportResult =
-  | { ok: true; importRunId: string; created: number; skipped: number }
+  | {
+      ok: true;
+      importRunId: string;
+      created: number;
+      updated: number;
+      listed: number;
+      errors: number;
+    }
   | { ok: false; error: string };
 
 export async function runImport(formData: FormData): Promise<RunImportResult> {
@@ -246,6 +284,7 @@ export async function runImport(formData: FormData): Promise<RunImportResult> {
   const filename = String(formData.get("filename") ?? "catalogue.csv");
   const categoryId = String(formData.get("categoryId") ?? "");
   const saveAs = String(formData.get("saveAs") ?? "").trim();
+  const headerRow = String(formData.get("headerRow") ?? "1") !== "0";
 
   let plan: ColumnPlan;
   try {
@@ -258,19 +297,42 @@ export async function runImport(formData: FormData): Promise<RunImportResult> {
   try {
     const result = await applyImport(seat.actor, {
       businessId: seat.businessId,
-      categoryId,
+      fallbackCategoryId: categoryId,
       filename,
       text,
       plan,
+      headerRow,
       ...(saveAs ? { saveAs } : {}),
     });
     if (!result.ok) return result;
     revalidatePath("/dashboard/products");
+
+    /*
+       Board 3f Q3's answer, measured rather than assumed. The claim is that a
+       downloaded catalogue is a bulk-edit loop; whether sellers complete it is
+       the ratio of round-trip imports to downloads, and nothing else on either
+       screen can tell us.
+    */
+    await recordEvent({
+      name: "catalogue_imported",
+      businessId: seat.businessId,
+      actorId: seat.actor.id,
+      props: {
+        created: result.created,
+        updated: result.updated,
+        listed: result.listed,
+        errors: result.errors.length,
+        round_trip: looksLikeExport(plan.columns.map((column) => column.header)),
+      },
+    });
+
     return {
       ok: true,
       importRunId: result.importRunId,
       created: result.created,
-      skipped: result.skipped.length,
+      updated: result.updated,
+      listed: result.listed,
+      errors: result.errors.length,
     };
   } catch (error) {
     // PriceColumnError lands here. Its message already names the column and
@@ -279,7 +341,9 @@ export async function runImport(formData: FormData): Promise<RunImportResult> {
   }
 }
 
-export type UndoResult = { ok: true; deleted: number } | { ok: false; error: string };
+export type UndoResult =
+  | { ok: true; unlisted: number; restored: number }
+  | { ok: false; error: string };
 
 /**
  * The banner on the catalogue screen posts a plain form, and React requires a

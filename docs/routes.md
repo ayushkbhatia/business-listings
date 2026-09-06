@@ -80,11 +80,12 @@ and it is the one that argues back.
 /dashboard/verification                 Verification & documents              [3e]
 /dashboard/products                     Catalogue                             [3f]  built h3 wave 2
 /dashboard/products/:id                 Product editor                        [3g]  built h3 wave 2
-/dashboard/products/import              CSV import mapper                    [11d]
+/dashboard/products/import              CSV import mapper                    [11d]  built h3 wave 2
+/dashboard/products/export              Catalogue as a spreadsheet           [11d]  built h3 wave 2
 /dashboard/templates                    Spec templates                        [3h]  built h3 wave 2
 /dashboard/templates/:slug              One template, fields and settings      [3h]  built h3 wave 2
 /dashboard/templates/:slug/history      Revision history and rollback         [3h]  built h3 wave 2
-/dashboard/media                        Media library                         [3i]
+/dashboard/media                        Media library                         [3i]  built h3 wave 2
 /dashboard/leads                        Leads & RFQ inbox                     [3j]  built h3 wave 1
 /dashboard/leads/:id                    One lead, and the quote composer      [3j]  built h3 wave 1
 /dashboard/leads/:id/thread             Seller message thread                [11b]  built h3 wave 1

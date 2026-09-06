@@ -26,12 +26,50 @@ export type TargetKind =
   | "lead_time_days"
   | "min_order_qty"
   | "spec"
+  /**
+   * The column that selects a subcategory, and with it the spec template.
+   *
+   * Board 11d's structural correction. The board carried a single
+   * `Template: Valves v3` chip over a 412-row file spanning three
+   * subcategories; templates attach to subcategories many-to-many (`3h`, `4e`),
+   * so one badge either applies the wrong field set to two thirds of the file
+   * or drops the values it cannot place. The template is resolved per row from
+   * this column instead.
+   */
+  | "subcategory"
+  /**
+   * Filenames, resolved against the media library as references.
+   *
+   * The board had no photo column at all, on the only route in the product that
+   * can bulk-attach media. One filename on forty rows attaches one file to
+   * forty products — `3i`'s reference model, not forty copies.
+   */
+  | "photo"
   | "ignore"
   | "blocked";
 
 export interface ColumnTarget {
   kind: TargetKind;
-  /** For `spec`: the platform SpecField id this column fills. */
+  /**
+   * For `spec`: the SpecField **key** this column fills — `nominal_size`, not
+   * a cuid.
+   *
+   * A key and not an id, because the template is resolved per row now. Two
+   * subcategories in one file both have a `nominal_size` field and those are
+   * two different `SpecField` rows with two different ids; the column means the
+   * same thing in both. Writing `specValues` still keys by id — that invariant
+   * is untouched — but the id is looked up per row, from the template that row
+   * resolved to.
+   */
+  specFieldKey?: string;
+  /**
+   * The id, as older saved mappings stored it.
+   *
+   * Kept readable rather than migrated. An `ImportMapping` is a row a seller
+   * saved months ago to make next month's file one click, and silently failing
+   * to apply it would be worse than the drift. `resolveTargetKey` below turns
+   * one into a key when the plan is applied.
+   */
   specFieldId?: string;
 }
 
@@ -181,7 +219,16 @@ interface FieldPattern {
 const FIELDS: readonly FieldPattern[] = [
   {
     kind: "name",
-    words: ["productname", "itemname", "description", "item", "product", "name", "title", "material"],
+    /*
+       `material` was here and is not a name.
+   
+       In a valves and fittings directory it is the single most common spec
+       field — body material, disc material, seat material — and a column headed
+       `Material` mapped to the product name with `certain` confidence, ahead of
+       any spec field, because an exact match on this list beat the fuzzy pass.
+       Board 11d's own render maps `Material` to two spec fields via a split.
+    */
+    words: ["productname", "itemname", "description", "item", "product", "name", "title"],
     reason: "Used as the product name buyers see.",
   },
   {
@@ -208,6 +255,29 @@ const FIELDS: readonly FieldPattern[] = [
     kind: "availability",
     words: ["availability", "status", "madetoorder", "indent", "stockstatus"],
     reason: "In stock, made to order, indent or out of stock.",
+  },
+  {
+    kind: "subcategory",
+    /*
+       Not `type`. It is the most tempting word on this list and the most
+       dangerous: `Type` in a valves file is `Butterfly / Gate / Ball`, which is
+       a spec field on the template, and mapping it to the taxonomy would file
+       every row under a subcategory that does not exist and error the lot.
+    */
+    words: [
+      "category", "subcategory", "categoryname", "productcategory", "productgroup",
+      "group", "family", "range", "section", "producttype",
+    ],
+    reason: "Chooses the subcategory, and with it the spec fields for that row.",
+  },
+  {
+    kind: "photo",
+    words: [
+      "photo", "photos", "photofile", "photofilename", "image", "images",
+      "imagefile", "imagefilename", "picture", "pictures", "img", "filename",
+      "file",
+    ],
+    reason: "Matched by filename against your media library. Nothing is uploaded from here.",
   },
 ];
 
@@ -282,7 +352,7 @@ export function suggestColumn(
   if (exactSpec) {
     return {
       header,
-      target: { kind: "spec", specFieldId: exactSpec.id },
+      target: { kind: "spec", specFieldKey: exactSpec.key },
       reason: exactSpec.isFilterable
         ? "Buyers filter on this field. Filling it is what makes you findable."
         : "Shown on the product's spec table.",
@@ -312,7 +382,7 @@ export function suggestColumn(
   if (partialSpec && key.length >= 3) {
     return {
       header,
-      target: { kind: "spec", specFieldId: partialSpec.id },
+      target: { kind: "spec", specFieldKey: partialSpec.key },
       reason: partialSpec.isFilterable
         ? "Buyers filter on this field. Filling it is what makes you findable."
         : "Shown on the product's spec table.",
@@ -334,7 +404,18 @@ export function suggestColumn(
    * has to notice a bad guess in order to undo it, and has to notice nothing
    * at all to fill in one that was left blank.
    */
-  const shortEnoughToGuess = words.length <= 2;
+  /*
+     Three words, not two.
+
+     `Qty on hand` is three words and one of the most common stock headings
+     there is; at two it fell through to `ignore` and the running screen offered
+     to drop it. The reason the limit exists at all is that a long header
+     carrying one incidental match is not that field — `Internal notes ref 4` is
+     four words and still excluded — and the guess is now checked against the
+     rest of the file as well, in `bestTargets` below, so a wrong one loses to a
+     confident column rather than standing.
+  */
+  const shortEnoughToGuess = words.length <= 3;
   for (const field of FIELDS) {
     if (shortEnoughToGuess && field.words.some((word) => words.includes(word))) {
       return {
@@ -403,4 +484,156 @@ export function assertNoPriceEscapes(plan: ColumnPlan): void {
     if (column.target.kind === "blocked" || column.target.kind === "ignore") continue;
     if (looksLikeMoney(column.header)) throw new PriceColumnError(column.header);
   }
+}
+
+/**
+ * The spec key a column fills, whichever way the plan spells it.
+ *
+ * A plan built by this build carries `specFieldKey`. One restored from an
+ * `ImportMapping` saved before board 11d carries `specFieldId`, and the id
+ * belongs to whichever template was current when the seller pressed Save — so
+ * it is translated through the field list rather than trusted.
+ *
+ * An id that no longer resolves returns undefined, and the caller treats the
+ * column as unmapped. That is the honest outcome: the field it named has been
+ * deleted from the template, and guessing a replacement by position or by name
+ * is how a saved mapping quietly starts filling the wrong column.
+ */
+export function resolveTargetKey(
+  target: ColumnTarget,
+  keyById: ReadonlyMap<string, string>,
+): string | undefined {
+  if (target.specFieldKey) return target.specFieldKey;
+  if (target.specFieldId) return keyById.get(target.specFieldId);
+  return undefined;
+}
+
+/**
+ * What the seller reads in the STATUS column, and what the tally counts.
+ *
+ * Four states, and the board's own header has to sum to them: `5 matched ·
+ * 2 need you · 1 blocked · 1 ignored` over nine columns. The board printed
+ * `Auto-matched 7 of 9` above statuses showing four matched, which is the same
+ * defect `3f` §1 corrected — a breakdown that does not sum to its own total.
+ */
+export type ColumnStatus = "matched" | "needs_you" | "blocked" | "ignored";
+
+export interface ColumnStatusInput {
+  target: ColumnTarget;
+  confidence?: ColumnSuggestion["confidence"];
+  /** A split was offered and the seller has not answered yet. */
+  splitPending?: boolean;
+  /** Values in this column that resolved to nothing — filenames, categories. */
+  unresolved?: number;
+}
+
+/**
+ * `needs_you` is not "we are unsure". It is "this column carries a decision
+ * only you can make, and importing without it would silently do the wrong
+ * thing".
+ *
+ * Three sources of one: a split whose delimiter is a guess, a value that
+ * resolved to nothing, and a low-confidence match. Everything else is matched
+ * — including a column the seller has explicitly set, which is why confidence
+ * is optional here.
+ */
+export function statusOf(input: ColumnStatusInput): ColumnStatus {
+  if (input.target.kind === "blocked") return "blocked";
+
+  /*
+     A column we could not place must not read the same as one the seller
+     dropped on purpose.
+
+     Both were `Ignored`. On the running screen a `Size` column the matcher had
+     no field for sat in the table looking exactly like `Supplier Ref`, which
+     the seller means to discard — and on a forty-column file that is how a
+     column goes missing without anyone noticing. `guess` confidence is the
+     matcher saying it does not know; the seller setting the column explicitly
+     clears the confidence, and then `Ignored` means what it says.
+  */
+  if (input.target.kind === "ignore") {
+    return input.confidence === "guess" ? "needs_you" : "ignored";
+  }
+
+  if (input.splitPending) return "needs_you";
+  if ((input.unresolved ?? 0) > 0) return "needs_you";
+  if (input.confidence === "guess") return "needs_you";
+  return "matched";
+}
+
+export type ColumnTally = Record<ColumnStatus, number>;
+
+/**
+ * The tally, which must sum to the column count.
+ *
+ * Returned as a record rather than a sentence so the caller cannot render a
+ * total that disagrees with its own parts — `total` here is derived from the
+ * same array the parts are.
+ */
+export function tallyOf(statuses: readonly ColumnStatus[]): ColumnTally & { total: number } {
+  const tally: ColumnTally = { matched: 0, needs_you: 0, blocked: 0, ignored: 0 };
+  for (const status of statuses) tally[status] += 1;
+  return { ...tally, total: statuses.length };
+}
+
+
+/**
+ * One column per single-valued target, and the confident one wins.
+ *
+ * On the running screen `Part No` matched `sku` outright and `Supplier Ref`
+ * matched it too, on the word `ref`, at `guess` confidence — so the table told
+ * the seller both columns were `Your reference` while the import would read the
+ * first and silently drop the second. A screen whose entire job is to be exact
+ * about where a column lands cannot have two columns claiming one field.
+ *
+ * The loser is demoted to `ignore` at `guess` confidence, which reads as
+ * `Needs you` rather than `Ignored` — we do not know what that column is, and
+ * saying so is the honest version of the same answer.
+ *
+ * `spec` and `photo` are exempt. A file legitimately carries `photo_1…photo_6`,
+ * and two spec columns are two different fields.
+ */
+const SINGLE_VALUED: readonly TargetKind[] = [
+  "name",
+  "sku",
+  "description",
+  "availability",
+  "stock_qty",
+  "lead_time_days",
+  "min_order_qty",
+  "subcategory",
+];
+
+const RANK: Record<ColumnSuggestion["confidence"], number> = {
+  certain: 2,
+  likely: 1,
+  guess: 0,
+};
+
+export function resolveConflicts(
+  suggestions: readonly ColumnSuggestion[],
+): ColumnSuggestion[] {
+  const winner = new Map<TargetKind, number>();
+  suggestions.forEach((suggestion, index) => {
+    const kind = suggestion.target.kind;
+    if (!SINGLE_VALUED.includes(kind)) return;
+    const held = winner.get(kind);
+    if (held === undefined) {
+      winner.set(kind, index);
+      return;
+    }
+    // Strictly better wins. A tie keeps the earlier column, which is the one
+    // the seller sees first in a table rendered in file order.
+    if (RANK[suggestion.confidence] > RANK[suggestions[held]!.confidence]) {
+      winner.set(kind, index);
+    }
+  });
+
+  return suggestions.map((suggestion, index) => {
+    const kind = suggestion.target.kind;
+    if (!SINGLE_VALUED.includes(kind)) return suggestion;
+    if (winner.get(kind) === index) return suggestion;
+    const { reason: _dropped, ...rest } = suggestion;
+    return { ...rest, target: { kind: "ignore" as const }, confidence: "guess" as const };
+  });
 }
