@@ -101,32 +101,55 @@ test.describe("board 3f — the catalogue", () => {
   });
 });
 
-test.describe("board 3h — the spec template", () => {
-  test("shows our field beside theirs on every row", async ({ page }) => {
+/*
+   Board 3h's own screen moved to tests/e2e/dashboard-spec-template.spec.ts when
+   it was rebuilt. Two of what stood here are gone by design rather than
+   untested, and both were the board's substance rather than its decoration.
+
+   **"Our field" as a column.** The old table put the platform's *label* beside
+   the seller's. The pairing that actually holds is the platform field *id*,
+   which a rename cannot touch, and it is shown locked in the settings rail —
+   `valves.nominal_diameter`, next to the sentence saying comparison follows it
+   rather than the label. A label beside a label invites the reading that the
+   two have to match.
+
+   **The rename warning.** §4 is explicit: "a warning is not a mapping". The
+   board answered the epic's one hard rule with copy — *rename a field and it
+   stops matching, we'll warn you* — and the answer is that the label and the
+   mapping are two different fields, so a rename physically cannot break
+   comparison and there is nothing to warn about. A dialog that appears before a
+   safe act teaches a seller the act is dangerous.
+
+   What stays here is the one thing this file is about rather than 3h's: that
+   the catalogue's own route to the template still works.
+*/
+test.describe("board 3h — the spec template, from the catalogue side", () => {
+  test("is reachable, and states the mapping a rename cannot break", async ({ page }) => {
     await page.goto("/dashboard/templates");
 
     const setUp = page.getByRole("button", { name: "Set up your template" });
     if (await setUp.isVisible().catch(() => false)) await setUp.click();
 
-    await expect(page.getByRole("columnheader", { name: "Our field" })).toBeVisible();
-    // The pairing is what makes a rename safe, and a seller who cannot see it
-    // has no reason to believe it.
-    await expect(page.locator("tbody tr").first()).toContainText("Nominal diameter");
+    await expect(page.getByText("Mapped to")).toBeVisible();
+    await expect(
+      page.getByText(/Comparison follows the mapping below, not the label/),
+    ).toBeVisible();
   });
 
-  test("warns before saving a rename, and says what is kept", async ({ page }) => {
+  test("offers no warning before a rename, because there is nothing to warn about", async ({
+    page,
+  }) => {
     await page.goto("/dashboard/templates");
     const setUp = page.getByRole("button", { name: "Set up your template" });
     if (await setUp.isVisible().catch(() => false)) await setUp.click();
 
-    await page.getByLabel("Your name for Body material").fill("Material of construction");
+    const label = page.getByRole("textbox").first();
+    await label.fill("Material of construction");
     await page.getByRole("button", { name: "Save the template" }).click();
 
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toContainText("Material of construction");
-    // The fear is that entered values are lost. The sentence answers it.
-    await expect(dialog).toContainText("keep their values");
-    await expect(dialog).toContainText("still find you");
+    // Staged, not applied — and no dialog in front of it.
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Pending changes" })).toBeVisible();
   });
 
   test("is axe clean", async ({ page }) => {
