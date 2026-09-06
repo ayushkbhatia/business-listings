@@ -58,7 +58,9 @@ export async function GET(_request: Request, { params }: Params) {
       kind: { in: [...PUBLISHABLE_DOCUMENT_KINDS] },
       OR: [
         { business: visibleBusiness },
-        { product: { status: { not: "draft" }, business: visibleBusiness } },
+        // Board 3i: one document can cover a whole range, so reachability is
+        // "some product that cites it is public" rather than "its product is".
+        { products: { some: { product: { status: { not: "draft" }, business: visibleBusiness } } } },
       ],
     },
     select: { storagePath: true },

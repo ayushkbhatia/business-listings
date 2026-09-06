@@ -28,6 +28,18 @@ const templates: string[] = [];
 beforeAll(async () => {
   const template = await prisma.specTemplate.findFirstOrThrow({
     where: { status: "live", fields: { some: {} }, defaultForCategories: { some: {} } },
+    /*
+       Oldest first, so this is the seeded valve template rather than whichever
+       row Postgres happened to return.
+
+       `findFirstOrThrow` with no order was deterministic only while the seed
+       held the only live templates with a default. Board 4e gave ops a control
+       that creates them, and its own suite builds several against **top-level**
+       test categories — so this could pick a category that is nobody's trade,
+       and `movableCategories` would rightly not offer it. The suites run
+       against one database and this file passed alone and failed beside them.
+    */
+    orderBy: { createdAt: "asc" },
     select: {
       id: true,
       defaultForCategories: { select: { id: true } },

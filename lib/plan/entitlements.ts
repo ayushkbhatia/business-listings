@@ -25,6 +25,8 @@ export interface PlanCaps {
   productLimit: number | null;
   locationLimit: number | null;
   photoLimit: number | null;
+  /// Megabytes of storage. Null is unlimited. Board 3i's header states it.
+  storageMb: number | null;
   teamSeats: number;
   rankingMultiplier: number;
   customDomain: boolean;
@@ -51,6 +53,14 @@ export interface EntitlementSnapshot {
   productLimit: number | null;
   locationLimit: number | null;
   photoLimit: number | null;
+  /**
+   * Frozen with the rest. A seller who signed up on 10 GB keeps 10 GB.
+   *
+   * Optional on the type rather than required, because every snapshot written
+   * before board 3i has no such key and reading one must not make a seller's
+   * allowance `undefined` — `effectiveCaps` falls back to the live plan.
+   */
+  storageMb?: number | null;
   teamSeats: number;
   customDomain: boolean;
 }
@@ -64,6 +74,7 @@ export function snapshotOf(plan: PlanCaps, capturedAt: Date): EntitlementSnapsho
     productLimit: plan.productLimit,
     locationLimit: plan.locationLimit,
     photoLimit: plan.photoLimit,
+    storageMb: plan.storageMb,
     teamSeats: plan.teamSeats,
     customDomain: plan.customDomain,
   };
@@ -102,13 +113,16 @@ export function effectiveCaps(plan: PlanCaps, snapshot: unknown): PlanCaps {
     productLimit: frozen.productLimit,
     locationLimit: frozen.locationLimit,
     photoLimit: frozen.photoLimit,
+    // A pre-3i snapshot has no storage key at all. Falling back to the live
+    // plan is the honest reading: nothing was frozen, so nothing is owed.
+    storageMb: frozen.storageMb === undefined ? plan.storageMb : frozen.storageMb,
     teamSeats: frozen.teamSeats,
     customDomain: frozen.customDomain,
   };
 }
 
 /** The capped resources. Named because a screen asks about one of them by name. */
-export const METERED = ["enquiries", "products", "locations", "photos", "seats"] as const;
+export const METERED = ["enquiries", "products", "locations", "photos", "seats", "storage"] as const;
 export type Metered = (typeof METERED)[number];
 
 const CAP_OF: Record<Metered, (p: PlanCaps) => number | null> = {
@@ -117,6 +131,10 @@ const CAP_OF: Record<Metered, (p: PlanCaps) => number | null> = {
   locations: (p) => p.locationLimit,
   photos: (p) => p.photoLimit,
   seats: (p) => p.teamSeats,
+  // Megabytes, not a count. `allowance` is unit-agnostic — it compares a used
+  // figure to a cap — so storage rides the same path as the other five and the
+  // "visible before it bites" rule is one implementation, not six.
+  storage: (p) => p.storageMb,
 };
 
 /** The plan's cap for one resource. `null` is unlimited. */

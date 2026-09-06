@@ -31,7 +31,7 @@ export type InviteActionResult =
 
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
-  locationLimit: true, photoLimit: true, teamSeats: true, rankingMultiplier: true,
+  locationLimit: true, photoLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
   customDomain: true, sortOrder: true,
 } as const;
 

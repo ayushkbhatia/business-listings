@@ -165,7 +165,7 @@ export async function photoBoardFor(businessId: string): Promise<PhotoBoard> {
  */
 export async function photoUsage(businessId: string): Promise<number> {
   return prisma.media.count({
-    where: { OR: [{ businessId }, { product: { businessId } }], reviewId: null },
+    where: { businessId, reviewId: null },
   });
 }
 

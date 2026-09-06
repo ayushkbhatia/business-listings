@@ -784,6 +784,7 @@ model Business {
   products               Product[]
   productQuestions       ProductQuestion[]
   media                  Media[]
+  mediaFolders         MediaFolder[]
   documents              Document[]
   sellerTemplates        SellerTemplate[]
   recipients             EnquiryRecipient[]
@@ -1032,8 +1033,8 @@ model Product {
   business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   importRun    ImportRun?        @relation(fields: [importRunId], references: [id], onDelete: SetNull)
   category     Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  media        Media[]
-  documents    Document[]
+  media        ProductMedia[]
+  documents    ProductDocument[]
   quoteLines   QuoteLine[]
   enquiryLines EnquiryLine[]
   alerts       ProductAlert[]
@@ -1153,20 +1154,98 @@ model Media {
   createdAt   DateTime  @default(now()) @map("created_at")
 
   businessId String? @map("business_id")
-  productId  String? @map("product_id")
   reviewId   String? @map("review_id")
+  /// Which of the seller's folders this file sits in. Null is `Unfiled`.
+  ///
+  /// Board 3i §2: every file is in exactly one folder and the counts sum to the
+  /// header total. `Unfiled` is the null case rather than a row, so there is no
+  /// state in which a file is in two folders — the board listed `Unused 41` as
+  /// a sixth folder, which put 41 files in `Product shots` and in `Unused` at
+  /// once. Unreferenced is a **state**, computed; this is a folder.
+  folderId   String? @map("folder_id")
 
-  business Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  product  Product?  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  review   Review?   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  business Business?    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  review   Review?      @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  folder   MediaFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
 
+  /// Every product this file appears on. Many-to-many since board 3i.
+  ///
+  /// It was `productId`, one nullable column, so a photograph belonged to at
+  /// most one product and the same image had to be uploaded again for the next
+  /// size in the range. One file, many products, stored once — and both the
+  /// gallery order and which image is primary live on the join, because they
+  /// are facts about a file *on a product*, not about the file.
+  products    ProductMedia[]
   teamMembers TeamMember[]
 
   @@index([businessId])
-  @@index([productId])
   /// The grid, in order. Board 8b reads exactly this.
   @@index([businessId, kind, sortOrder])
+  @@index([folderId])
   @@map("media")
+}
+
+/// A seller's own folder. Board 3i §2.
+///
+/// Named by the seller — the render's six are one seller's choices, not a fixed
+/// set. `Unfiled` is not a row: it is `folderId IS NULL`, which is what keeps
+/// "every file is in exactly one folder" true without a default folder that
+/// could be renamed or deleted out from under it.
+model MediaFolder {
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  name       String
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  business  Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  media     Media[]
+  documents Document[]
+
+  @@unique([businessId, name])
+  @@index([businessId, sortOrder])
+  @@map("media_folder")
+}
+
+/// One image on one product. Board 3i's reference model.
+///
+/// `sortOrder` is the gallery order board 1g renders, and **position 0 is the
+/// primary image** — there is no separate `isPrimary` flag, because a flag and
+/// an order are two sources of truth for the same fact and they drift. Board
+/// 3i's acceptance criterion 8 is that the primary is settable and 1g's order
+/// matches it; one column satisfies both by construction.
+model ProductMedia {
+  productId String @map("product_id")
+  mediaId   String @map("media_id")
+  sortOrder Int    @default(0) @map("sort_order")
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  media   Media   @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  @@id([productId, mediaId])
+  @@index([mediaId])
+  /// The gallery, in order.
+  @@index([productId, sortOrder])
+  @@map("product_media")
+}
+
+/// One document on one product — a datasheet or certificate covering a range.
+///
+/// Board 3g Q4, answered on 3i: documents are shared and referenced, never
+/// copied per product. A UL certificate covers a whole range, and the board was
+/// already rendering `ds-bf-valve.pdf · 4 products` without a model that
+/// allowed it.
+model ProductDocument {
+  productId  String @map("product_id")
+  documentId String @map("document_id")
+  sortOrder  Int    @default(0) @map("sort_order")
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([productId, documentId])
+  @@index([documentId])
+  @@map("product_document")
 }
 
 enum DocumentKind {
@@ -1217,19 +1296,22 @@ model Document {
   validUntil  DateTime? @map("valid_until")
 
   businessId String? @map("business_id")
-  productId  String? @map("product_id")
   enquiryId  String? @map("enquiry_id")
+  /// The seller's folder. Null is `Unfiled`. See `Media.folderId`.
+  folderId   String? @map("folder_id")
 
   business         Business?                @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  product          Product?                 @relation(fields: [productId], references: [id], onDelete: Cascade)
   enquiry          Enquiry?                 @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  folder           MediaFolder?             @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  /// Every product citing this document. Many-to-many since board 3i.
+  products         ProductDocument[]
   claims           ClaimSubmission[]
   catalogueImports CatalogueImportRequest[]
   quoteAttachments QuoteAttachment[]
 
   @@index([businessId])
-  @@index([productId])
   @@index([enquiryId])
+  @@index([folderId])
   /// The storefront's certificates block reads exactly this.
   @@index([businessId, isPublic])
   @@map("document")
@@ -2519,6 +2601,16 @@ model Plan {
   productLimit        Int?      @map("product_limit")
   locationLimit       Int?      @map("location_limit")
   photoLimit          Int?      @map("photo_limit")
+  /// Megabytes of storage. Null means unlimited.
+  ///
+  /// Board 3i §1: the header reads `2.1 GB of 10 GB used`, and per board 3f §6
+  /// a plan limit is visible before it bites and never destroys a record — at
+  /// the cap **uploads stop**, nothing is deleted and nothing is unpublished.
+  /// A downgrading seller keeps every file they have; only the next upload is
+  /// refused. Separate from `photoLimit`, which counts photographs rather than
+  /// bytes: a datasheet costs storage and is not a photograph, and whichever
+  /// cap bites first is the one the refusal names.
+  storageMb           Int?      @map("storage_mb")
   /// How many categories a listing may sit in, **including the primary one**.
   ///
   /// Board 2c counts this two ways on one screen and they are both right: the

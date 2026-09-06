@@ -554,7 +554,7 @@ export async function readNewCatalogueProducts(take = 5) {
     take: take * 8,
     include: {
       category: { select: { id: true, name: true } },
-      media: { orderBy: { sortOrder: "asc" }, take: 1 },
+      media: { orderBy: { sortOrder: "asc" }, take: 1, include: { media: true } },
       business: { select: { slug: true, displayName: true, verificationTier: true } },
     },
   });
@@ -600,7 +600,7 @@ export async function readHomePlans() {
       monthlyPriceAed: true,
       locationLimit: true,
       productLimit: true,
-      photoLimit: true,
+      photoLimit: true, storageMb: true,
       enquiriesPerMonth: true,
       customDomain: true,
     },

@@ -51,6 +51,11 @@ describe("criterion 1 — every figure the page prints exists on the row", () =>
           "productLimit",
           "rankingMultiplier",
           "sortOrder",
+          // Board 3i's storage allowance. The page does not print it yet — 11f
+          // owns the plan matrix — but `PlanCaps` requires it, and a plan
+          // object missing a cap reads as unlimited through `capFor`, which is
+          // exactly the failure this assertion exists to catch.
+          "storageMb",
           "teamSeats",
           "withdrawnAt",
         ].sort(),

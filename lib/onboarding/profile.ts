@@ -178,7 +178,7 @@ async function profileFacts(
     */
     prisma.product.findMany({ where: { businessId }, select: { specValues: true } }),
     prisma.media.count({
-      where: { OR: [{ businessId }, { product: { businessId } }], reviewId: null },
+      where: { businessId, reviewId: null },
     }),
     prisma.user.count({ where: { businessId } }),
     prisma.location.count({ where: { businessId } }),

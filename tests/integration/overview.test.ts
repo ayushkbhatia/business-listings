@@ -265,7 +265,7 @@ describe("criterion 11 — profile strength has no seller-writable path", () => 
       select: { specValues: true },
     });
     const photos = await prisma.media.count({
-      where: { OR: [{ businessId: business.id }, { product: { businessId: business.id } }], reviewId: null },
+      where: { businessId: business.id, reviewId: null },
     });
 
     const expected = profileStrength({

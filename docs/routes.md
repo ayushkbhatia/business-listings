@@ -117,7 +117,8 @@ and it is the one that argues back.
 /admin/ingest/dedupe                    Dedupe & merge                       [12b]  built h4s2
 /admin/search                           Ranking, boosts, routing             [12c]  built h4s8
 /admin/categories                       Taxonomy                              [4d]  rename h5s6
-/admin/spec-library                     Spec templates                        [4e]
+/admin/spec-library                     Spec library                          [4e]  built h4e
+/admin/spec-library/:id                 One template's fields                 [4e]  built h4e
 /admin/catalogue-imports                Concierge catalogue queue            [12i]  built h8s1
 /admin/attributes                       Attribute dictionary                  later
 /admin/businesses                       Businesses & health                   [4f]  built h4s4

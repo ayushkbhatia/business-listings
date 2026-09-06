@@ -242,7 +242,14 @@ export default async function ProductPage({ params }: Params) {
     },
   };
 
-  const gallery = product.media.filter((item) => item.kind === "gallery" || item.kind === "cover");
+  /*
+     The join's order is the gallery's order, and its first row is the primary
+     image — board 3i acceptance criterion 8. One file can serve several
+     products now, so the row is the reference and `.media` is the file.
+  */
+  const gallery = product.media
+    .map((row) => row.media)
+    .filter((item) => item.kind === "gallery" || item.kind === "cover" || item.kind === "product");
   const primaryImage = gallery[0];
 
   return (
@@ -372,7 +379,7 @@ export default async function ProductPage({ params }: Params) {
                    cannot outlive the cached page.
                 */}
                 <ul className="flex flex-col gap-1.5">
-                  {product.documents.map((doc) => (
+                  {product.documents.map(({ document: doc }) => (
                     <li key={doc.id}>
                       <a
                         href={`/b/${business.slug}/d/${doc.id}`}

@@ -82,7 +82,10 @@ export const getProductForEditor = cache(async (businessId: string, productId: s
       // The public path this product sits on, for the Preview link and for the
       // revalidation `saveProduct` does after a write.
       business: { select: { slug: true } },
-      media: { orderBy: { sortOrder: "asc" }, select: { id: true, storagePath: true, alt: true } },
+      media: {
+        orderBy: { sortOrder: "asc" },
+        select: { media: { select: { id: true, storagePath: true, alt: true } } },
+      },
     },
   });
   if (!product || product.businessId !== businessId) return null;

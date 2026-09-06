@@ -392,7 +392,7 @@ export default async function HomePage() {
                       // bucket is public, so this is a string build rather
                       // than a signed-link round trip per card.
                       imageUrl: product.media[0]
-                        ? publicUrl(MEDIA_BUCKET, product.media[0].storagePath)
+                        ? publicUrl(MEDIA_BUCKET, product.media[0].media.storagePath)
                         : null,
                     }}
                   />

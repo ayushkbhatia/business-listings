@@ -121,7 +121,7 @@ export async function setupHubState(
          Review photographs are the buyer's and belong to nobody's profile.
       */
       prisma.media.findMany({
-        where: { OR: [{ businessId }, { product: { businessId } }], reviewId: null },
+        where: { businessId, reviewId: null },
         select: { kind: true },
       }),
       /*
@@ -305,7 +305,7 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
 
   const [media, products, invitesSent] = await Promise.all([
     prisma.media.findMany({
-      where: { OR: [{ businessId }, { product: { businessId } }], reviewId: null },
+      where: { businessId, reviewId: null },
       select: { kind: true },
     }),
     prisma.product.findMany({ where: { businessId }, select: { specValues: true } }),

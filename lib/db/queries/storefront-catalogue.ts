@@ -490,7 +490,11 @@ async function getPage(
     minOrderQty: true,
     specValues: true,
     category: { select: { name: true } },
-    media: { orderBy: { sortOrder: "asc" as const }, take: 1, select: { storagePath: true } },
+    media: {
+      orderBy: { sortOrder: "asc" as const },
+      take: 1,
+      select: { media: { select: { storagePath: true } } },
+    },
     ...(withWatchers
       ? { _count: { select: { watches: { where: { notifiedAt: null } } } } }
       : {}),
@@ -564,7 +568,7 @@ function toCatalogueProduct(
     minOrderQty: number | null;
     specValues: unknown;
     category: { name: string };
-    media: { storagePath: string }[];
+    media: { media: { storagePath: string } }[];
     _count?: { watches: number };
   },
   now: Date,
@@ -580,7 +584,7 @@ function toCatalogueProduct(
     minOrderQty: row.minOrderQty,
     specValues: (row.specValues ?? {}) as Record<string, unknown>,
     categoryName: row.category.name,
-    imagePath: row.media[0]?.storagePath ?? null,
+    imagePath: row.media[0]?.media.storagePath ?? null,
     ...(row._count ? { watchers: row._count.watches } : {}),
   };
 }

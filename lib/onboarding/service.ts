@@ -82,7 +82,7 @@ export async function setupStateFor(businessId: string): Promise<SetupState> {
       select: { profileStrength: true, publishedAt: true, planId: true },
     }),
     prisma.media.count({
-      where: { OR: [{ businessId }, { product: { businessId } }], reviewId: null },
+      where: { businessId, reviewId: null },
     }),
     prisma.product.count({ where: { businessId } }),
     prisma.user.count({ where: { businessId } }),
