@@ -86,6 +86,32 @@ test.describe("the page a buyer opens on a Thursday afternoon", () => {
     }
   });
 
+  test("shows the number on every branch that has one", async ({ page }) => {
+    /*
+       This page used to hide a number unless `Location.phoneVerified` was true,
+       and nothing writes that column outside the seed — so in production every
+       branch number was hidden from every buyer, while the seeded 80% made the
+       page look correct.
+
+       Asserted as "every branch with a number shows it" rather than a count, so
+       the test says the rule rather than pinning a fixture: a seed that adds a
+       branch should not need this edited, and a gate that came back would fail
+       it whatever the fixture holds.
+    */
+    const branches = await rows(page).count();
+    expect(branches).toBeGreaterThan(0);
+
+    // One `tel:` link per branch at least. `rows()` is the branch list rather
+    // than every `listitem` on the page — the nav and the breadcrumb are lists
+    // too, and counting those made the first version of this expect 33.
+    const numbers = await page.locator("main a[href^='tel:']").count();
+    expect(numbers).toBeGreaterThanOrEqual(branches);
+
+    // And none of them reads as absent. Before the gate came off, every branch
+    // on a production listing rendered this instead of the number.
+    await expect(page.getByText("Not provided", { exact: true })).toHaveCount(0);
+  });
+
   test("emits one LocalBusiness per branch, and no geo for the unpinned one", async ({ page }) => {
     /*
        Criterion 9. This is the page Google reads for local pack eligibility, so
@@ -103,6 +129,13 @@ test.describe("the page a buyer opens on a Thursday afternoon", () => {
     expect(blocks.every((b) => b["address"])).toBe(true);
     expect(blocks.filter((b) => !b["geo"])).toHaveLength(1);
     expect(blocks.every((b) => b["openingHoursSpecification"])).toBe(true);
+    /*
+       And the number, on every branch that has one. Structured data that
+       omitted a telephone the page displays is the mismatch crawlers penalise,
+       and the storefront one level up has always marked its own up without a
+       verification gate.
+    */
+    expect(blocks.every((b) => b["telephone"])).toBe(true);
   });
 
   test("the branch list is a list", async ({ page }) => {

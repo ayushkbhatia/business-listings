@@ -39,7 +39,6 @@ export interface BranchLocation {
   lng: number | null;
   phone: string | null;
   whatsapp: string | null;
-  phoneVerified: boolean;
   hours: unknown;
   ramadanHours: unknown;
   serviceRadiusKm: number | null;

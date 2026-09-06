@@ -5,7 +5,7 @@ import { Button } from "@/components/primitives";
 import { Breadcrumb, Card, KeyValuePanel, Panel, PublicShell } from "@/components/structure";
 import { ListingCard, tierSpec } from "@/components/domain";
 import { getBusinessBySlug, getSimilarClaimedBusinesses } from "@/lib/db/queries";
-import { formatDate, formatDuration } from "@/lib/format";
+import { formatDate, formatDuration, toE164 } from "@/lib/format";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
 import { absoluteUrl } from "@/lib/site";
@@ -376,7 +376,14 @@ async function ClaimedStorefront({ business }: { business: Business }) {
              helps nobody. Board 1d says it in as many words — schema is for
              machines.
           */
-          telephone: head?.phone ?? undefined,
+          /*
+             E.164, because a crawler cannot infer the country from `04 883
+             4120` and a knowledge panel offering an undialable number is worse
+             than one offering none. The visible `tel:` href has always used
+             `toE164` for exactly this reason; the markup was emitting the
+             stored local form beside it.
+          */
+          telephone: head?.phone ? (toE164(head.phone) ?? head.phone) : undefined,
           /*
              The week as the schema expects it, from the same source the rail
              renders — including the Ramadan override, because a machine reading

@@ -37,7 +37,6 @@ function branch(over: Partial<BranchLocation> = {}): BranchLocation {
     lng: 55.23,
     phone: "+97148834120",
     whatsapp: null,
-    phoneVerified: true,
     hours: WEEK,
     ramadanHours: null,
     serviceRadiusKm: null,

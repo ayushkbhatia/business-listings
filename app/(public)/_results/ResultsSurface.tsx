@@ -315,17 +315,18 @@ export function ResultsList({
                   <RevealWhatsApp
                     businessId={business.id}
                     /*
-                       Only a verified number reaches a buyer. `Location`
-                       carries the rule in a comment — "an unverified number is
-                       hidden from buyers" — and the branches page already
-                       honours it; a results row is a wider surface than that
-                       one, not a narrower one.
+                       Gated on the WhatsApp number, which is the number this
+                       control dials.
+
+                       It used to be gated on `Location.phoneVerified`, and that
+                       flag is about `Location.phone` — a different column,
+                       usually a landline where this one is a mobile. Nothing
+                       writes it outside the seed, so the effect in production
+                       was that no results row ever offered WhatsApp to anybody:
+                       a contact action that could not appear, hidden behind a
+                       flag that was not about it.
                     */
-                    whatsapp={
-                      business.locations[0]?.phoneVerified
-                        ? (business.locations[0]?.whatsapp ?? null)
-                        : null
-                    }
+                    whatsapp={business.locations[0]?.whatsapp ?? null}
                     surface={basePath}
                   />
                 }
