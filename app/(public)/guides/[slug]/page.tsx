@@ -4,12 +4,19 @@ import { notFound } from "next/navigation";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { formatDate } from "@/lib/format";
 import { MIN_HEADINGS_FOR_CONTENTS } from "@/lib/guides/blocks";
-import { guideBySlug, publishedGuides, verifiedSellerCount } from "@/lib/guides/queries";
+import {
+  guideBySlug,
+  guideIndex,
+  publishedGuides,
+  verifiedSellerCount,
+} from "@/lib/guides/queries";
+import { subjectBySlug, type SubjectRow } from "@/lib/guides/subjects";
 import { t } from "@/lib/i18n";
 import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { GuideBody } from "../_Article";
+import { GuideIndexView } from "../_Index";
 import { Contents, ContentsDisclosure } from "./Contents";
 import { RelatedGuides, WhyWeWrite } from "./Rail";
 
@@ -23,7 +30,17 @@ import { RelatedGuides, WhyWeWrite } from "./Rail";
  * end in the directory is a blog post.
  */
 
-export const revalidate = 3600;
+/*
+   Five minutes, not an hour, and it is the index's doing.
+
+   This route serves two kinds of page since board 10b: an article, which
+   changes rarely, and a subject view, which renders the index's chip counts and
+   author strip. Those numbers move when a guide publishes, and a subject page
+   an hour behind `/guides` would show a different count for the same query on
+   two pages a reader can flip between. The cheaper cadence wins because the
+   number being wrong is the thing this board is about.
+*/
+export const revalidate = 300;
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -41,10 +58,89 @@ export async function generateStaticParams() {
   return guides.map((guide) => ({ slug: guide.slug }));
 }
 
+/** The subject view, when the segment names a shelf rather than an article. */
+async function SubjectPage({ subject }: { subject: SubjectRow }) {
+  /*
+     The whole index, and the view narrows it.
+
+     Handing the view the shelf's guides made the `All` chip read the shelf's
+     count — `All 0` on a page where the answer was two — and hid the author
+     strip on any empty subject. The chips and the strip describe the
+     programme; only the list narrows.
+  */
+  const index = await guideIndex();
+  const shelf = index.shelves.find((row) => row.slug === subject.slug);
+
+  /*
+     A shelf with nothing on it is not a page.
+
+     `guideIndex` only builds a shelf for a subject that has published guides,
+     so an absent one means an empty subject — and rendering it would put a
+     live, self-canonical URL in the world that no chip links to, that the
+     sitemap does not carry, and whose whole content is a heading and a sentence
+     saying there is nothing here. That is the thin page the publish gate exists
+     to keep out, arriving through a different door. §States has the reader-side
+     of the same rule: "A subject with zero guides has no chip."
+  */
+  if (!shelf) notFound();
+  const scoped = shelf.guides;
+
+  const crumbs = [
+    { label: t("chrome.directory"), href: "/" },
+    { label: t("guides.title"), href: "/guides" },
+    { label: subject.name },
+  ];
+
+  return (
+    <PublicShell
+      bleed
+      nav={<DirectoryNav />}
+      breadcrumb={<Breadcrumb label={t("gallery.breadcrumb_label")} items={crumbs} />}
+      footer={<DirectoryFooter />}
+    >
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: t("guides.subject_title", { subject: subject.name }),
+          url: absoluteUrl(`/guides/${subject.slug}`),
+          mainEntity: {
+            "@type": "ItemList",
+            numberOfItems: scoped.length,
+            itemListElement: scoped.map((card, i) => ({
+              "@type": "ListItem",
+              position: i + 1,
+              url: absoluteUrl(`/guides/${card.slug}`),
+              name: card.title,
+            })),
+          },
+        }}
+      />
+      <GuideIndexView index={index} subject={subject} />
+    </PublicShell>
+  );
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const guide = await guideBySlug(slug);
-  if (!guide) return {};
+  if (!guide) {
+    /*
+       The subject view is canonical to itself — criterion 9. Without this it
+       would inherit no canonical at all and the four shelves would look to a
+       crawler like four thin duplicates of the index they are subsets of.
+    */
+    const subject = await subjectBySlug(slug);
+    if (!subject) return {};
+    // An empty shelf is a 404, so it gets no metadata either.
+    const index = await guideIndex();
+    if (!index.shelves.some((shelf) => shelf.slug === subject.slug)) return {};
+    return {
+      title: t("guides.subject_title", { subject: subject.name }),
+      description: subject.blurb ?? t("guides.lede"),
+      alternates: { canonical: absoluteUrl(`/guides/${subject.slug}`) },
+    };
+  }
 
   return {
     /*
@@ -71,10 +167,26 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function GuidePage({ params }: Props) {
   const { slug } = await params;
   const guide = await guideBySlug(slug);
-  // An unpublished guide is a draft, and `guideBySlug` filters those out. A
-  // draft reachable by URL is exactly the thin page this handoff exists to
-  // keep out of the index.
-  if (!guide) notFound();
+
+  /*
+     One segment, two kinds of page — board 10b §3.
+
+     The index's subject chips are real URLs: `/guides/buying-safely` alongside
+     `/guides/check-a-uae-trade-licence`. Next cannot hold two dynamic siblings,
+     so this route resolves both, article first, and `guideSlugCollision`
+     refuses either from taking the other's slug before it is ever written.
+
+     An unpublished guide is a draft and `guideBySlug` filters those out — a
+     draft reachable by URL is exactly the thin page this handoff exists to keep
+     out of the index — so a draft's slug falls through to the subject lookup
+     and then to a 404, which is the right answer for both.
+  */
+  if (!guide) {
+    const subject = await subjectBySlug(slug);
+    if (subject) return <SubjectPage subject={subject} />;
+    notFound();
+  }
+
 
   const verifiedCount = await verifiedSellerCount();
 

@@ -251,7 +251,55 @@ const LICENCE_BLOCKS = [
   },
 ];
 
+/**
+ * The shelves the index browses by — board 10b §3.
+ *
+ * Three, not the board's four. Board 10b Q2: *"'For suppliers' is the only
+ * group written for the other side of the marketplace, sitting in a buyer-facing
+ * index… Keep the three buyer subjects here and move 'For suppliers' to the
+ * seller dashboard's help surface."* Adding it back is one row on
+ * `/admin/content/guide-subjects`, which is the point of the taxonomy being a
+ * table rather than an enum.
+ *
+ * The blurbs are one line each, and the index prints them under the heading.
+ */
+const SUBJECTS = [
+  {
+    slug: "buying-safely",
+    name: "Buying safely",
+    blurb: "Checking who you are about to pay, and what our badge does and does not cover.",
+    sortOrder: 0,
+  },
+  {
+    slug: "quotes-and-pricing",
+    name: "Quotes & pricing",
+    blurb: "Reading a quote, comparing three of them, and the lines that are usually padded.",
+    sortOrder: 1,
+  },
+  {
+    slug: "setting-up",
+    name: "Setting up",
+    blurb: "Licences, free zones and VAT, for a buyer working out who can invoice them.",
+    sortOrder: 2,
+  },
+] as const;
+
+async function seedGuideSubjects(db: PrismaClient) {
+  for (const subject of SUBJECTS) {
+    await db.guideSubject.upsert({
+      where: { slug: subject.slug },
+      update: { name: subject.name, blurb: subject.blurb, sortOrder: subject.sortOrder },
+      create: { ...subject },
+    });
+  }
+}
+
 export async function seedGuides(db: PrismaClient) {
+  await seedGuideSubjects(db);
+  const buyingSafely = await db.guideSubject.findUniqueOrThrow({
+    where: { slug: "buying-safely" },
+    select: { id: true },
+  });
   const industrial = await db.category.findFirst({
     where: { parentId: null },
     orderBy: { sortOrder: "asc" },
@@ -290,6 +338,8 @@ export async function seedGuides(db: PrismaClient) {
       */
       regulatoryCheckedAt: new Date(Date.UTC(2026, 7, 20)),
       reviewCadenceMonths: 6,
+      subjectId: buyingSafely.id,
+      sortOrder: 1,
     },
     update: {
       summary:
@@ -302,6 +352,8 @@ export async function seedGuides(db: PrismaClient) {
       body: BLOCKS as unknown as object,
       regulatoryCheckedAt: new Date(Date.UTC(2026, 7, 20)),
       reviewCadenceMonths: 6,
+      subjectId: buyingSafely.id,
+      sortOrder: 1,
     },
     select: { id: true },
   });
@@ -328,6 +380,17 @@ export async function seedGuides(db: PrismaClient) {
       */
       regulatoryCheckedAt: new Date(Date.UTC(2026, 7, 14)),
       reviewCadenceMonths: 6,
+      subjectId: buyingSafely.id,
+      /*
+         Board 10b §4: the trade-licence guide holds the `START HERE` slot,
+         because it is where the verification badge is defined in prose. A
+         reader who reads that one first understands what every green pill on
+         the site means.
+      */
+      sortOrder: 0,
+      featuredAt: new Date(Date.UTC(2026, 7, 4)),
+      featuredNote:
+        "Read this one first: it is where we set out what our verification badge covers, and what it does not.",
     },
     update: {
       title: "How to check a UAE trade licence before you pay",
@@ -339,6 +402,17 @@ export async function seedGuides(db: PrismaClient) {
       body: LICENCE_BLOCKS as unknown as object,
       regulatoryCheckedAt: new Date(Date.UTC(2026, 7, 14)),
       reviewCadenceMonths: 6,
+      subjectId: buyingSafely.id,
+      /*
+         Board 10b §4: the trade-licence guide holds the `START HERE` slot,
+         because it is where the verification badge is defined in prose. A
+         reader who reads that one first understands what every green pill on
+         the site means.
+      */
+      sortOrder: 0,
+      featuredAt: new Date(Date.UTC(2026, 7, 4)),
+      featuredNote:
+        "Read this one first: it is where we set out what our verification badge covers, and what it does not.",
     },
     select: { id: true },
   });

@@ -3,9 +3,11 @@ import { prisma } from "@/lib/db/client";
 import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
 import { guideById } from "@/lib/guides/service";
+import { guideSubjects } from "@/lib/guides/subjects";
+import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../../_shell";
-import { publish, remove, save, unpublish } from "../actions";
+import { publish, recordCheck, remove, save, setFeatured, unpublish } from "../actions";
 import { GuideEditor } from "./GuideEditor";
 
 /**
@@ -29,13 +31,14 @@ export default async function GuideEditorPage({ params }: Props) {
   const { id } = await params;
   const isNew = id === "new";
 
-  const [guide, categories, badges] = await Promise.all([
+  const [guide, categories, subjects, badges] = await Promise.all([
     isNew ? null : guideById(id),
     prisma.category.findMany({
       where: { parentId: null },
       orderBy: { sortOrder: "asc" },
       select: { id: true, name: true },
     }),
+    guideSubjects(),
     getAdminNavBadges(seat),
   ]);
 
@@ -66,6 +69,24 @@ export default async function GuideEditorPage({ params }: Props) {
         blocks={guide?.blocks ?? []}
         publishedAt={guide?.publishedAt ? guide.publishedAt.toISOString() : null}
         categories={categories}
+        standfirst={guide?.standfirst ?? ""}
+        topic={guide?.topic ?? ""}
+        bylineRole={guide?.bylineRole ?? ""}
+        subjectId={guide?.subjectId ?? ""}
+        sortOrder={guide?.sortOrder ?? 0}
+        reviewCadenceMonths={
+          guide?.reviewCadenceMonths === null || guide?.reviewCadenceMonths === undefined
+            ? ""
+            : String(guide.reviewCadenceMonths)
+        }
+        subjects={subjects}
+        featured={guide?.featured ?? false}
+        featuredNote={guide?.featuredNote ?? ""}
+        setFeatured={setFeatured}
+        regulatoryCheckedAt={
+          guide?.regulatoryCheckedAt ? formatDate(guide.regulatoryCheckedAt) : null
+        }
+        recordCheck={recordCheck}
         save={save}
         publish={publish}
         unpublish={unpublish}

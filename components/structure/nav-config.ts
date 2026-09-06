@@ -292,6 +292,7 @@ export const ADMIN_NAV: readonly NavGroup[] = [
       { key: "content", labelKey: "nav.content", href: "/admin/content/matrix", capability: "taxonomy.write" },
       { key: "content-lists", labelKey: "nav.content_lists", href: "/admin/content/lists", capability: "taxonomy.write" },
       { key: "content-guides", labelKey: "nav.content_guides", href: "/admin/content/guides", capability: "taxonomy.write" },
+      { key: "content-guide-subjects", labelKey: "nav.content_guide_subjects", href: "/admin/content/guide-subjects", capability: "taxonomy.write" },
       { key: "content-redirects", labelKey: "nav.content_redirects", href: "/admin/content/redirects", capability: "taxonomy.write" },
     ],
   },

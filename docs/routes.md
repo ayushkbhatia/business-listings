@@ -31,8 +31,9 @@ and it is the one that argues back.
 /enquiry/:id/accepted                   Accepted quote record                 [7c]  built h2s3
 /enquiry/:id/thread/:seller             Negotiation thread                   [10h]  built h2s4
 /pricing                                Plans                                 [1l]  built h1s1l
-/guides                                 Guide index                          [10b]  built h5s1
-/guides/:slug                           Guide article                         [6d]  built h5s1
+/guides                                 Guide index                          [10b]  built h5s3
+/guides/how-we-check                    How the guides are checked           [10b]  built h5s3
+/guides/:slug                           Guide article, or a subject view [6d, 10b]  built h5s3
 /best/:slug                             Curated list                          [6b]  built h5s4
 /categories                             Category index                        [6c]  built h5s2
 /:emirate/:category                     Trade across one emirate — 84 of them [6a]  built h5s2
@@ -133,6 +134,7 @@ and it is the one that argues back.
 /admin/strings                          Localisation                         [12g]  built h4s7
 /admin/content/matrix                   Page matrix & content ops             [6f]  built h5s2
 /admin/content/lists                    Curated lists index               [6b, 6f]  built h5s2
+/admin/content/guide-subjects           Guide subjects                       [10b]  built h5s3
 /admin/content/guides                   Guides                          [10b, 6d]  built h5s1
 /admin/content/guides/:id               One guide, or new               [10b, 6d]  built h5s1
 /admin/content/attribution              Enquiry attribution                  [10i]  built h5s5
@@ -240,6 +242,15 @@ worth ranking. `?page=` is cumulative: page 3 renders thirty rows, so "Load more
 a buyer can go back through rather than an endless list. The route 404s where the business has
 no published review, because `StorefrontHeader` hides a tab with a zero count and a tab that
 does not exist should not have a URL that renders.
+
+`/guides/:slug` resolves two kinds of page from one segment: a published article
+first, then a guide subject. Next cannot hold two dynamic siblings, and board
+10b puts the subject chips at real URLs of their own — `/guides/buying-safely`
+alongside `/guides/check-a-uae-trade-licence`. `guideSlugCollision` refuses
+either from taking the other's slug, and `how-we-check` is a reserved segment
+because a fixed route answers before the dynamic one and a guide minted there
+would have no URL at all. A subject with no published guides 404s rather than
+serving a self-canonical page nothing links to.
 
 Slugs are immutable once published. Renaming a category or merging two listings creates a
 301 automatically; deleting a page without one is blocked at the service layer.

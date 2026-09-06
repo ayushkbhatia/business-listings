@@ -36,10 +36,34 @@ export interface GuideEditorProps {
   blocks: GuideBlock[];
   publishedAt: string | null;
   categories: readonly { id: string; name: string }[];
+  /*
+     Board 10b. Six fields board 6d added and left with no form.
+
+     Four of them are what the index prints — the standfirst under the title,
+     the shelf, the sequence within it and the review window that decides
+     whether a row says "review overdue". Until now the only thing that set any
+     of them was `prisma/seed-guides.mts`, which is guide content living in a
+     commit: a build, a deploy and a cold cache to change one sentence.
+  */
+  standfirst: string;
+  topic: string;
+  bylineRole: string;
+  subjectId: string;
+  sortOrder: number;
+  /** Empty means no window, which is never overdue rather than always. */
+  reviewCadenceMonths: string;
+  subjects: readonly { id: string; name: string }[];
   save: (formData: FormData) => Promise<ActionResult>;
   publish: (formData: FormData) => Promise<ActionResult>;
   unpublish: (formData: FormData) => Promise<ActionResult>;
   remove: (formData: FormData) => Promise<ActionResult>;
+  /** Board 10b §4 — the index's editorial slot. */
+  featured: boolean;
+  featuredNote: string;
+  setFeatured: (formData: FormData) => Promise<ActionResult>;
+  /** Board 6d's audited re-check, which had no caller until board 10b. */
+  regulatoryCheckedAt: string | null;
+  recordCheck: (formData: FormData) => Promise<ActionResult>;
 }
 
 /**
@@ -78,6 +102,13 @@ export function GuideEditor(props: GuideEditorProps) {
   const [summary, setSummary] = useState(props.summary);
   const [byline, setByline] = useState(props.byline);
   const [ctaCategoryId, setCta] = useState(props.ctaCategoryId);
+  const [standfirst, setStandfirst] = useState(props.standfirst);
+  const [topic, setTopic] = useState(props.topic);
+  const [bylineRole, setBylineRole] = useState(props.bylineRole);
+  const [subjectId, setSubjectId] = useState(props.subjectId);
+  const [sortOrder, setSortOrder] = useState(String(props.sortOrder));
+  const [cadence, setCadence] = useState(props.reviewCadenceMonths);
+  const [featuredNote, setFeaturedNote] = useState(props.featuredNote);
   const [blocks, setBlocks] = useState<GuideBlock[]>(props.blocks);
   const [reason, setReason] = useState("");
   const [result, setResult] = useState<ActionResult | null>(null);
@@ -167,6 +198,12 @@ export function GuideEditor(props: GuideEditorProps) {
     form.set("summary", summary);
     form.set("byline", byline);
     form.set("ctaCategoryId", ctaCategoryId);
+    form.set("standfirst", standfirst);
+    form.set("topic", topic);
+    form.set("bylineRole", bylineRole);
+    form.set("subjectId", subjectId);
+    form.set("sortOrder", sortOrder);
+    form.set("reviewCadenceMonths", cadence);
     form.set("blocks", JSON.stringify(blocks));
     form.set("reason", reason);
 
@@ -254,11 +291,87 @@ export function GuideEditor(props: GuideEditorProps) {
             <p className="mt-1 text-caption text-muted">{t("guide_admin.field.summary_hint")}</p>
           </div>
           <div>
-            <Label htmlFor="guide-byline">{t("guide_admin.field.byline")}</Label>
+            <Label htmlFor="guide-standfirst" hint={t("guide_admin.field.standfirst_hint")}>
+              {t("guide_admin.field.standfirst")}
+            </Label>
+            <Textarea
+              id="guide-standfirst"
+              rows={2}
+              value={standfirst}
+              onChange={(event) => setStandfirst(event.target.value)}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="guide-byline">{t("guide_admin.field.byline")}</Label>
+              <Input
+                id="guide-byline"
+                value={byline}
+                onChange={(event) => setByline(event.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="guide-byline-role">{t("guide_admin.field.byline_role")}</Label>
+              <Input
+                id="guide-byline-role"
+                value={bylineRole}
+                onChange={(event) => setBylineRole(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div>
+              <Label htmlFor="guide-subject" hint={t("guide_admin.field.subject_hint")}>
+                {t("guide_admin.field.subject")}
+              </Label>
+              <Select
+                id="guide-subject"
+                value={subjectId}
+                onChange={(event) => setSubjectId(event.target.value)}
+                options={[
+                  { value: "", label: t("guide_admin.no_subject") },
+                  ...props.subjects.map((subject) => ({
+                    value: subject.id,
+                    label: subject.name,
+                  })),
+                ]}
+              />
+            </div>
+            <div>
+              <Label htmlFor="guide-sort" hint={t("guide_admin.field.sort_order_hint")}>
+                {t("guide_admin.field.sort_order")}
+              </Label>
+              <Input
+                id="guide-sort"
+                type="number"
+                min="0"
+                step="1"
+                value={sortOrder}
+                onChange={(event) => setSortOrder(event.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="guide-cadence" hint={t("guide_admin.field.cadence_hint")}>
+                {t("guide_admin.field.cadence")}
+              </Label>
+              <Input
+                id="guide-cadence"
+                type="number"
+                min="1"
+                step="1"
+                value={cadence}
+                onChange={(event) => setCadence(event.target.value)}
+              />
+            </div>
+          </div>
+          <div>
+            <Label htmlFor="guide-topic" hint={t("guide_admin.field.topic_hint")}>
+              {t("guide_admin.field.topic")}
+            </Label>
             <Input
-              id="guide-byline"
-              value={byline}
-              onChange={(event) => setByline(event.target.value)}
+              id="guide-topic"
+              value={topic}
+              onChange={(event) => setTopic(event.target.value)}
             />
           </div>
           <div>
@@ -392,6 +505,95 @@ export function GuideEditor(props: GuideEditorProps) {
       </Panel>
 
       <Panel title={t("guide_admin.panel.commit")}>
+        {/*
+           Board 10b §4 — the `START HERE` slot.
+
+           Published only, one at a time, and the database refuses a second: a
+           unique index over a constant expression filtered to the featured
+           rows. Offered here rather than on the list because it is a decision
+           about this article, and the reason box below is the one it is
+           written into.
+        */}
+        {publishedAt !== null && (
+          <div className="mb-4 rounded-card border border-line bg-card px-4 py-3">
+            <p className="text-body-sm text-ink">
+              {props.featured ? t("guide_admin.featured_is") : t("guide_admin.featured_not")}
+            </p>
+            <p className="mt-1 text-caption text-muted">{t("guide_admin.featured_hint")}</p>
+
+            {!props.featured && (
+              <div className="mt-3">
+                <Label htmlFor="guide-featured-note" hint={t("guide_admin.featured_note_hint")}>
+                  {t("guide_admin.featured_note")}
+                </Label>
+                <Textarea
+                  id="guide-featured-note"
+                  rows={2}
+                  value={featuredNote}
+                  onChange={(event) => setFeaturedNote(event.target.value)}
+                />
+              </div>
+            )}
+
+            <div className="mt-2.5" />
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!ready || pending}
+              onClick={() => {
+                const form = new FormData();
+                form.set("id", props.featured ? "" : (id ?? ""));
+                form.set("note", featuredNote);
+                form.set("reason", reason);
+                void (async () => {
+                  setResult(await props.setFeatured(form));
+                  router.refresh();
+                })();
+              }}
+            >
+              {props.featured ? t("guide_admin.featured_clear") : t("guide_admin.featured_set_cta")}
+            </Button>
+          </div>
+        )}
+
+        {/*
+           Board 6d's audited re-check, reachable at last.
+
+           `recordRegulatoryCheck` shipped with 6d and had no caller in `app/`,
+           so the date board 10b prints beside every guide on the index could
+           only ever be set by the seed. The reader-facing overdue state is only
+           defensible if a person can clear it.
+        */}
+        {publishedAt !== null && id !== null && (
+          <div className="mb-4 rounded-card border border-line bg-card px-4 py-3">
+            <p className="text-body-sm text-ink">{t("guide_admin.check_title")}</p>
+            <p className="mt-1 text-caption text-muted">
+              {props.regulatoryCheckedAt
+                ? t("guide_admin.check_last", { date: props.regulatoryCheckedAt })
+                : t("guide_admin.check_never")}
+            </p>
+            <p className="mt-1 text-caption text-muted">{t("guide_admin.check_hint")}</p>
+            <div className="mt-2.5" />
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={!ready || pending}
+              onClick={() => {
+                const form = new FormData();
+                form.set("id", id);
+                form.set("slug", slug);
+                form.set("reason", reason);
+                void (async () => {
+                  setResult(await props.recordCheck(form));
+                  router.refresh();
+                })();
+              }}
+            >
+              {t("guide_admin.check_cta")}
+            </Button>
+          </div>
+        )}
+
         <Label htmlFor="guide-reason">{t("guide_admin.field.reason")}</Label>
         <Textarea
           id="guide-reason"
