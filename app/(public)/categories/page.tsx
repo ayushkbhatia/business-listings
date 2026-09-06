@@ -6,7 +6,6 @@ import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { emirateMatrix, emiratePagePath, MATRIX_EMIRATES } from "@/lib/seo/emirate";
 import { categoryIndex } from "@/lib/seo/taxonomy";
-import { DEFAULT_THRESHOLDS } from "@/lib/publish-threshold";
 import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
@@ -332,8 +331,18 @@ export default async function CategoriesPage() {
           </div>
 
           <p className="mt-3.5 text-caption text-muted">
-            {/* The real threshold, from config rather than a hardcoded 60. */}
-            {t("categories.threshold_note", { count: threshold(matrix) })}
+            {/*
+               No number, and that is board 6f's doing rather than a retreat.
+
+               This quoted the lowest `publishThreshold` across sectors, on the
+               reasoning that it was the only figure true of every greyed cell.
+               It is no longer true of any of them: a page's need is the higher
+               of that floor and 25 listings per 1,000 monthly searches, so a
+               greyed cell can hold ninety suppliers and still be below what it
+               needs. The sentence says the rule instead, which is the part a
+               reader can act on and the part that stays true.
+            */}
+            {t("categories.threshold_note")}
           </p>
         </div>
       </section>
@@ -341,21 +350,3 @@ export default async function CategoriesPage() {
   );
 }
 
-/**
- * The listing floor to quote in the footnote.
- *
- * Each category carries its own `Category.publishThreshold`, so there is not
- * necessarily one number to state. Where they agree — the seeded state, and
- * the expected one — the footnote says it; where they do not it says the
- * lowest, because that is the only figure a reader can rely on being true of
- * every greyed cell on the page.
- *
- * Read from the rows rather than from `DEFAULT_THRESHOLDS`, which is the
- * fallback and not the answer: the spec asks for "the real threshold from
- * config, not a hardcoded 60".
- */
-function threshold(rows: readonly { publishThreshold: number }[]): number {
-  return rows.length > 0
-    ? Math.min(...rows.map((row) => row.publishThreshold))
-    : DEFAULT_THRESHOLDS.minListings;
-}

@@ -30,15 +30,13 @@ import { VERIFIED_TIER } from "@/lib/verification";
  * under it and every page built from it.
  */
 
-export interface CategoryHealth {
+export interface CategoryHealth extends CategoryRules {
   id: string;
   parentId: string | null;
   name: string;
   slug: string;
   code: string;
   synonyms: string[];
-  publishThreshold: number;
-  verifiedShareMin: number;
   /// Words in the landing page's own copy. Nought where there is none.
   introWords: number;
   /** Published listings whose primary category is this one. */
@@ -76,8 +74,7 @@ export async function categoryHealth(): Promise<CategoryHealth[]> {
         slug: true,
         code: true,
         synonyms: true,
-        publishThreshold: true,
-        verifiedShareMin: true,
+        ...CATEGORY_RULES_SELECT,
         intro: true,
       },
     }),
@@ -117,22 +114,48 @@ export async function categoryHealth(): Promise<CategoryHealth[]> {
   });
 }
 
-/** A category's own floor, which is what the columns are for. */
-export function thresholdsFor(category: {
+/**
+ * The columns that make up one category's publish rules — board 6f §5.
+ *
+ * Every field the rules panel edits, so a caller that reads a category for the
+ * gate is told by the compiler which columns it has to select.
+ */
+export interface CategoryRules {
   publishThreshold: number;
   verifiedShareMin: number;
-}): PublishThresholds {
+  demandPerThousand: number;
+  holdShare: number;
+  minIntroWords: number;
+  minLiveDays: number;
+  humanReviewRequired: boolean;
+}
+
+export const CATEGORY_RULES_SELECT = {
+  publishThreshold: true,
+  verifiedShareMin: true,
+  demandPerThousand: true,
+  holdShare: true,
+  minIntroWords: true,
+  minLiveDays: true,
+  humanReviewRequired: true,
+} as const;
+
+/** A category's own floors, which is what the columns are for. */
+export function thresholdsFor(category: CategoryRules): PublishThresholds {
   return {
     minListings: category.publishThreshold,
     minVerifiedShare: category.verifiedShareMin,
-    // Unchanged from the default: the word count is a property of the page's
-    // copy, not of the category, so board 6f owns it in step 7.
-    minIntroWords: DEFAULT_THRESHOLDS.minIntroWords,
-    // Likewise the FAQ counts. Board 6a states them as one rule for the whole
-    // page class rather than per trade, and only the two landing classes pass
-    // an FAQ count in for them to apply to at all.
+    // A column since board 6f, which put the word floor on the rules panel
+    // beside the other five. It read the module default until then, under a
+    // comment saying this board owned it.
+    minIntroWords: category.minIntroWords,
+    // The FAQ counts stay module-wide. Board 6a states them as one rule for the
+    // whole page class rather than per trade, and only the two landing classes
+    // pass an FAQ count in for them to apply to at all.
     minFaqRows: DEFAULT_THRESHOLDS.minFaqRows,
     minScopeSpecificFaqRows: DEFAULT_THRESHOLDS.minScopeSpecificFaqRows,
+    demandPerThousand: category.demandPerThousand,
+    holdShare: category.holdShare,
   };
 }
 
@@ -149,8 +172,6 @@ export interface EditCategoryInput {
   categoryId: string;
   name?: string;
   synonyms?: string[];
-  publishThreshold?: number;
-  verifiedShareMin?: number;
   /**
    * The landing page's own copy — board 6f.
    *
@@ -162,7 +183,17 @@ export interface EditCategoryInput {
   reason: string;
 }
 
-const MAX_THRESHOLD = 5_000;
+/*
+   The publish rules are no longer editable from here.
+
+   `publishThreshold` and `verifiedShareMin` were fields on this input, written
+   by one actor with one reason. Board 6f puts every rule that decides whether a
+   page exists behind an impact preview and a second approver, and leaving a
+   single-approver path to the same two columns would have made the second
+   approver a formality anybody could route around — `/admin/categories` is one
+   wired form away from being that route. `lib/content/publish-rule.ts` is the
+   only writer now.
+*/
 
 /**
  * Edit a category.
@@ -180,44 +211,10 @@ const MAX_THRESHOLD = 5_000;
 export async function editCategory(input: EditCategoryInput): Promise<TaxonomyResult> {
   const category = await prisma.category.findUnique({
     where: { id: input.categoryId },
-    select: {
-      id: true,
-      name: true,
-      synonyms: true,
-      publishThreshold: true,
-      verifiedShareMin: true,
-    },
+    select: { id: true, name: true, synonyms: true },
   });
   if (!category) {
     return { ok: false, error: "not_found", message: "That category is not in the taxonomy." };
-  }
-
-  if (input.publishThreshold !== undefined) {
-    if (
-      !Number.isInteger(input.publishThreshold) ||
-      input.publishThreshold < 1 ||
-      input.publishThreshold > MAX_THRESHOLD
-    ) {
-      return {
-        ok: false,
-        error: "out_of_range",
-        message: `A listing floor is a whole number from 1 to ${MAX_THRESHOLD}.`,
-      };
-    }
-  }
-
-  if (input.verifiedShareMin !== undefined) {
-    if (
-      !Number.isFinite(input.verifiedShareMin) ||
-      input.verifiedShareMin < 0 ||
-      input.verifiedShareMin > 1
-    ) {
-      return {
-        ok: false,
-        error: "out_of_range",
-        message: "A verified share is between 0 and 1 — 0.30 is thirty per cent.",
-      };
-    }
   }
 
   const synonyms =
@@ -225,12 +222,7 @@ export async function editCategory(input: EditCategoryInput): Promise<TaxonomyRe
       ? undefined
       : [...new Set(input.synonyms.map((s) => s.trim()).filter(Boolean))];
 
-  const before = {
-    name: category.name,
-    synonyms: category.synonyms,
-    publishThreshold: category.publishThreshold,
-    verifiedShareMin: category.verifiedShareMin,
-  };
+  const before = { name: category.name, synonyms: category.synonyms };
 
   await prisma.$transaction(async (tx) => {
     await staffMutation(
@@ -247,22 +239,11 @@ export async function editCategory(input: EditCategoryInput): Promise<TaxonomyRe
           data: {
             ...(input.name !== undefined ? { name: input.name.trim() } : {}),
             ...(synonyms !== undefined ? { synonyms } : {}),
-            ...(input.publishThreshold !== undefined
-              ? { publishThreshold: input.publishThreshold }
-              : {}),
-            ...(input.verifiedShareMin !== undefined
-              ? { verifiedShareMin: input.verifiedShareMin }
-              : {}),
             // An empty box means no copy, not the string "". A category with
             // an empty intro and one with none are the same page.
             ...(input.intro !== undefined ? { intro: input.intro?.trim() || null } : {}),
           },
-          select: {
-            name: true,
-            synonyms: true,
-            publishThreshold: true,
-            verifiedShareMin: true,
-          },
+          select: { name: true, synonyms: true },
         });
         return { result: true, before, after };
       },

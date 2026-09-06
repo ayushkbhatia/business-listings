@@ -67,6 +67,16 @@ export const SEAT_KINDS: readonly SeatKind[] = [
   { key: "sales", roles: ["seller_sales"], needsBusiness: true, landing: "/dashboard/leads" },
   { key: "finance", roles: ["seller_finance"], needsBusiness: true, landing: "/dashboard/billing" },
   { key: "ops_lead", roles: ["staff_ops_lead"], needsBusiness: false, landing: "/admin" },
+  /*
+     A second ops lead, and it is not a convenience.
+
+     Board 6f puts every publish-rule change behind a second approver, enforced
+     by a CHECK constraint that refuses `approved_by_id = proposed_by_id`. With
+     one ops-lead seat the whole flow deadlocks the moment somebody tries it —
+     in dev, in CI, and in the "click it, not the diff" pass that is the last
+     gate before a screen is called done.
+  */
+  { key: "ops_lead_2", roles: ["staff_ops_lead"], needsBusiness: false, landing: "/admin/content/matrix" },
   { key: "moderator", roles: ["staff_moderator"], needsBusiness: false, landing: "/admin" },
   { key: "field", roles: ["staff_field"], needsBusiness: false, landing: "/admin" },
   { key: "staff_finance", roles: ["staff_finance"], needsBusiness: false, landing: "/admin" },

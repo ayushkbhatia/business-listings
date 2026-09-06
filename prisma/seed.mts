@@ -494,6 +494,25 @@ async function main() {
   const opsLead = await prisma.user.create({
     data: { id: uuid(1), email: "ops@businesslistings.me", fullName: "Ops Lead", roles: ["staff_ops_lead"] },
   });
+  /*
+     A second ops lead, because board 6f's rule changes need one.
+
+     `publish_rule_change` carries a CHECK refusing an approver who is also the
+     proposer, so a database with one ops lead cannot complete the flow at all.
+     Named rather than "Ops Lead 2": the sidebar footer prints this, and the
+     dual-control panel prints it beside a proposal a person is being asked to
+     approve.
+  */
+  const secondOpsLead = await prisma.user.create({
+    data: {
+      id: uuid(5),
+      email: "ops.second@businesslistings.me",
+      fullName: "Second Ops Lead",
+      roles: ["staff_ops_lead"],
+    },
+  });
+  void secondOpsLead;
+
   const moderator = await prisma.user.create({
     data: { id: uuid(2), email: "moderator@businesslistings.me", fullName: "Moderator", roles: ["staff_moderator"] },
   });

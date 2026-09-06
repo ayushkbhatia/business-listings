@@ -1,4 +1,5 @@
 import "server-only";
+import { prisma } from "@/lib/db/client";
 import { notFound } from "next/navigation";
 import { getActor } from "@/lib/auth/session";
 import { type Actor, isStaff, isStaffRole, type Role } from "@/lib/auth/roles";
@@ -33,16 +34,33 @@ export interface StaffSeat {
   roles: readonly Role[];
   /** Ops lead reads the whole audit log; the other three read their own rows. */
   isOpsLead: boolean;
+  /**
+   * Who this is, for the pinned sidebar footer — board 6f §1.
+   *
+   * On the seat rather than on `Actor`, deliberately. `Actor` is the object a
+   * hundred and fifty permission checks read, and a display name has no
+   * business on a permission boundary. This is the console's own lookup, paid
+   * once per admin render.
+   */
+  name: string;
 }
 
 export async function getStaffSeat(): Promise<StaffSeat | null> {
   const actor = await getActor();
   if (!actor || !isStaff(actor)) return null;
 
+  const profile = await prisma.user.findUnique({
+    where: { id: actor.id },
+    select: { fullName: true, email: true },
+  });
+
   return {
     actor,
     roles: actor.roles.filter(isStaffRole),
     isOpsLead: actor.roles.includes("staff_ops_lead"),
+    // The em dash rather than the id: a UUID in the footer tells the person
+    // reading it nothing they did not already know.
+    name: profile?.fullName ?? profile?.email ?? "—",
   };
 }
 

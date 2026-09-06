@@ -190,6 +190,13 @@ export async function GET(request: NextRequest) {
        `areaPageState.live` recomputes the publish floors at read time, so a
        page whose supply has dropped stops being indexable in the same request.
        This only makes the stored column agree with what is already served.
+
+       Board 6f gives it two more rules and a number to report. It takes a page
+       down below the hysteresis band rather than below the publish floor, and
+       it skips a page inside its minimum-live window — `heldByGrace` in the
+       result, so a run that walks four hundred pages and takes none of them
+       down can say whether that is because nothing fell or because the window
+       caught them.
     */
     areaPages: () => sweepAreaPages(),
     /*

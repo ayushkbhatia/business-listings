@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Alert, StatusBadge } from "@/components/display";
 import { Button, Label, Textarea } from "@/components/primitives";
 import { DataTable, Panel, type Column } from "@/components/structure";
+import type { MatrixGate } from "@/lib/content/matrix";
 import { t } from "@/lib/i18n";
 import type { ActionResult } from "./actions";
 import {
@@ -39,7 +40,7 @@ export interface EmirateRowView {
   published: boolean;
   live: boolean;
   clearsFloors: boolean;
-  failing: string[];
+  failing: MatrixGate[];
   /** Board 6a's other three content records, as stored. */
   content: LandingContentDraft;
 }
@@ -118,7 +119,9 @@ export function EmirateTable({
     },
     {
       key: "act",
-      header: t("matrix.col.state"),
+      // Not "State": the row already carries one, three columns to the left.
+      // This one holds a button.
+      header: t("matrix.col.edit"),
       render: (row) => (
         <Button variant="ghost" size="sm" onClick={() => edit(row)}>
           {t("matrix.write", { page: `${row.categoryName}, ${row.emirateName}` })}
@@ -206,7 +209,15 @@ export function EmirateTable({
 
           {!open.clearsFloors && (
             <p className="mt-3 max-w-prose text-caption text-muted">
-              {t("matrix.blocked_by", { gates: open.failing.join(", ") })}
+              {t("matrix.blocked_by", {
+                /*
+                   Translated, not joined raw. This printed the gate keys
+                   themselves — "copy, listings" here and "intro_words,
+                   faq_scope_specific" on the sibling table below, two
+                   vocabularies for one rule and neither of them English.
+                */
+                gates: open.failing.map((gate) => t(`matrix.gate.${gate}` as never)).join(", "),
+              })}
             </p>
           )}
         </Panel>

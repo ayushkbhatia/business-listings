@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
-import { DEFAULT_THRESHOLDS } from "@/lib/publish-threshold";
+import { DEFAULT_THRESHOLDS, holdFloor } from "@/lib/publish-threshold";
 import {
   areaPageState,
   livePages,
@@ -30,9 +30,16 @@ import { VERIFIED_TIER } from "@/lib/verification";
  *    or by admin action; an existing page auto-unpublishes when supply drops
  *    and disappears from the sitemap on the next build."
  *
- * Asserted at the real numbers, with fixtures of this file's own — 60 is
- * `DEFAULT_THRESHOLDS.minListings` and is read from there, so a test that
- * passed after somebody moved the floor would be testing the wrong thing.
+ * **Board 6f amends the second half**, and the amendment is the point of the
+ * band: a page publishes at 60 and comes down below 48, so one sitting on the
+ * floor that gains and loses a listing a day no longer publishes and
+ * unpublishes daily — and every one of those cycles was a sitemap change.
+ * "Auto-unpublishes when supply drops" now reads "auto-unpublishes when supply
+ * drops below the hold floor, and not within its first 30 days live".
+ *
+ * Asserted at the real numbers, with fixtures of this file's own — the floors
+ * are read from `DEFAULT_THRESHOLDS` and `holdFloor`, so a test that passed
+ * after somebody moved one would be testing the wrong thing.
  *
  * Both halves are negatives, and negatives pass by accident. So each is checked
  * from both sides: the refusal, and the same call succeeding once the thing it
@@ -50,6 +57,10 @@ let seq = 0;
 
 const FLOOR = DEFAULT_THRESHOLDS.minListings;
 const SHARE = DEFAULT_THRESHOLDS.minVerifiedShare;
+/** 48 at the shipped defaults. The floor a live page keeps holding at. */
+const HOLD = holdFloor({});
+/** Past any minimum-live window, so the sweep is judged on supply alone. */
+const LATER = new Date(Date.now() + 400 * 86_400_000);
 
 /** 250 words, built rather than pasted, for the reason the guide fixture is. */
 const INTRO = Array.from({ length: 60 }, () => "Al Quoz industrial supply for contractors.").join(" ");
@@ -136,6 +147,10 @@ beforeAll(async () => {
   opsLeadId = (
     await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_ops_lead" } },
+      // One of two seeded ops leads, and always the same one: board 6f
+      // needs a second for dual control, and `findFirst` has no defined
+      // order without this.
+      orderBy: { id: "asc" as const },
       select: { id: true },
     })
   ).id;
@@ -244,40 +259,107 @@ describe("criterion 1 — a page below the floors cannot be published", () => {
 });
 
 describe("criterion 1 — a published page stops being live when supply drops", () => {
-  it("stops serving as indexable the moment the floor breaks, before any job runs", async () => {
+  it("keeps serving inside the band, and stops the moment it falls through it", async () => {
     /*
-       The half that is easy to get wrong. A stored flag alone would leave a
-       thin page live and indexable in the window between the supply dropping
-       and the sweep running — and a thin page in the index costs standing
-       across the whole domain rather than only its own.
+       The half that is easy to get wrong twice over.
+
+       A stored flag would leave a thin page live and indexable in the window
+       between the supply dropping and the sweep running. A single floor used in
+       both directions would take a page down for one lost listing and put it
+       back for one gained, and every cycle is a sitemap change that teaches a
+       crawler the section is unstable. Board 6f wants neither.
     */
     const before = await areaPageState(areaId, categoryId);
     expect(before?.live).toBe(true);
 
-    await removeListings((before?.listings ?? 0) - FLOOR + 1);
+    // One below the publish floor and comfortably above the hold floor.
+    await removeListings((before?.listings ?? 0) - (FLOOR - 1));
+    const banded = await areaPageState(areaId, categoryId);
+    expect(banded?.listings).toBe(FLOOR - 1);
+    // It could not be published fresh from here...
+    expect(banded?.clearsFloors).toBe(false);
+    // ...and it is not taken down for it either.
+    expect(banded?.holdsFloors).toBe(true);
+    expect(banded?.live).toBe(true);
+    expect((await livePages()).some((page) => page.areaSlug === `${PREFIX}zone`)).toBe(true);
 
-    const after = await areaPageState(areaId, categoryId);
-    expect(after?.listings).toBeLessThan(FLOOR);
+    // Now through the band.
+    await removeListings((banded?.listings ?? 0) - (HOLD - 1));
+    const dropped = await areaPageState(areaId, categoryId, LATER);
+    expect(dropped?.listings).toBe(HOLD - 1);
     // Intent is untouched. Live is not.
-    expect(after?.publishedAt).not.toBeNull();
-    expect(after?.clearsFloors).toBe(false);
-    expect(after?.live).toBe(false);
+    expect(dropped?.publishedAt).not.toBeNull();
+    expect(dropped?.holdsFloors).toBe(false);
+    expect(dropped?.live).toBe(false);
 
     // And it is already out of the sitemap, without the sweep.
-    const live = await livePages();
+    const live = await livePages(LATER);
     expect(live.some((page) => page.areaSlug === `${PREFIX}zone`)).toBe(false);
   }, 120_000);
 
+  it("does not flap: oscillating across 60 changes nothing either way", async () => {
+    /*
+       Criterion 7's own test — "tested by oscillating a fixture across 60".
+
+       Back up to the publish floor first, because the case before this one left
+       the page through the band. Then one listing leaves and returns, three
+       times: below 60 the page cannot be published fresh, and it must not leave
+       the index for it. Every one of those exits used to be a sitemap change.
+    */
+    const current = (await areaPageState(areaId, categoryId, LATER))?.listings ?? 0;
+    const short = FLOOR - current;
+    // Six in ten verified, not all of them: the freshness cases below need an
+    // unverified listing to promote, and a fixture that verified everything it
+    // added left them with nothing to find.
+    await addListings(short, Math.ceil(short * 0.6));
+    expect((await areaPageState(areaId, categoryId, LATER))?.listings).toBe(FLOOR);
+
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      await removeListings(1);
+      const dipped = await areaPageState(areaId, categoryId, LATER);
+      expect(dipped?.listings).toBe(FLOOR - 1);
+      expect(dipped?.clearsFloors, "a page under the floor cannot publish fresh").toBe(false);
+      expect(dipped?.live, "and it must not leave the index for one listing").toBe(true);
+
+      await addListings(1, 0);
+      expect((await areaPageState(areaId, categoryId, LATER))?.live).toBe(true);
+    }
+
+    const result = await sweepAreaPages(LATER);
+    expect(result.unpublished.some((page) => page.areaSlug === `${PREFIX}zone`)).toBe(false);
+  }, 120_000);
+
+  it("holds a page through its first 30 days even below the band", async () => {
+    // The minimum-live window. `firstPublishedAt` was stamped when this fixture
+    // published, so "now" is inside it and the sweep must leave the page alone
+    // — and say that it did rather than reporting a quiet nothing.
+    const current = (await areaPageState(areaId, categoryId))?.listings ?? 0;
+    await removeListings(current - 2);
+
+    const inside = await areaPageState(areaId, categoryId);
+    expect(inside?.holdsFloors).toBe(false);
+    expect(inside?.withinGrace).toBe(true);
+    expect(inside?.live).toBe(true);
+
+    const held = await sweepAreaPages();
+    expect(held.heldByGrace).toBeGreaterThan(0);
+    expect(held.unpublished.some((page) => page.areaSlug === `${PREFIX}zone`)).toBe(false);
+    expect((await areaPageState(areaId, categoryId))?.publishedAt).not.toBeNull();
+  }, 120_000);
+
   it("the sweep then clears the column so the matrix agrees with the site", async () => {
-    const result = await sweepAreaPages();
+    // Past the window, the same page comes down.
+    const result = await sweepAreaPages(LATER);
     expect(result.checked).toBeGreaterThan(0);
     expect(
       result.unpublished.some((page) => page.areaSlug === `${PREFIX}zone`),
-      "the sweep did not unpublish the page that fell below the floor",
+      "the sweep did not unpublish the page that fell through the band",
     ).toBe(true);
 
     const after = await areaPageState(areaId, categoryId);
     expect(after?.publishedAt).toBeNull();
+    // Never cleared, which is what the window measures from on a republish.
+    expect(after?.firstPublishedAt).not.toBeNull();
   }, 120_000);
 
   it("leaves a healthy page alone", async () => {
@@ -285,7 +367,7 @@ describe("criterion 1 — a published page stops being live when supply drops", 
     const republished = await publishAreaPage(lead(), areaId, categoryId, "Recruited back up.");
     expect(republished.ok).toBe(true);
 
-    const result = await sweepAreaPages();
+    const result = await sweepAreaPages(LATER);
     expect(result.unpublished.some((page) => page.areaSlug === `${PREFIX}zone`)).toBe(false);
     expect((await areaPageState(areaId, categoryId))?.live).toBe(true);
   }, 120_000);
@@ -551,7 +633,18 @@ describe("criterion 12 — the matrix and the site agree", () => {
   }, 180_000);
 
   it("every live page in the matrix is in the sitemap set, and nothing else is", async () => {
-    const [matrix, live] = await Promise.all([areaMatrix(), livePages()]);
+    /*
+       The whole set, not the first page of it.
+
+       Board 6f paginates this screen — HVAC in Dubai is forty-odd areas — so
+       `areaMatrix()` returns twenty-five rows by default, and a set comparison
+       against a page of a list is a test that passes while the list grows past
+       it. Criterion 12 is about the whole sitemap.
+    */
+    const [matrix, live] = await Promise.all([
+      areaMatrix({ perPage: Number.MAX_SAFE_INTEGER }),
+      livePages(),
+    ]);
     const inMatrix = matrix.rows.filter((row) => row.live).map((row) => row.path).sort();
     const inSitemap = live
       .map((page) => `/${page.emirate}/${page.areaSlug}/${page.categorySlug}`)

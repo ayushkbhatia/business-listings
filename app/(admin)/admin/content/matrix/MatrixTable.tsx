@@ -6,6 +6,7 @@ import { Button, Label, Textarea } from "@/components/primitives";
 import { DataTable, Panel, type Column } from "@/components/structure";
 import { countWords } from "@/lib/publish-threshold";
 import { formatCount } from "@/lib/format";
+import type { MatrixGate } from "@/lib/content/matrix";
 import { t } from "@/lib/i18n";
 import type { ActionResult } from "./actions";
 
@@ -28,11 +29,19 @@ export interface MatrixRowView {
   introWords: number;
   intro: string | null;
   publishable: boolean;
-  failing: string[];
+  failing: MatrixGate[];
+  /**
+   * This trade's own word floor.
+   *
+   * A row property since board 6f made the word count a `Category` column on
+   * the rules panel. It was a module constant reading 250, which was the
+   * default rather than the rule, and would have coloured a row red against a
+   * floor its own trade did not have.
+   */
+  minWords: number;
 }
 
 const MIN_REASON = 4;
-const MIN_WORDS = 250;
 
 export function MatrixTable({
   rows,
@@ -107,7 +116,7 @@ export function MatrixTable({
       numeric: true,
       width: "7rem",
       render: (row) => (
-        <span className={row.introWords >= MIN_WORDS ? "text-ink" : "text-bad-ink"}>
+        <span className={row.introWords >= row.minWords ? "text-ink" : "text-bad-ink"}>
           {formatCount(row.introWords)}
         </span>
       ),
@@ -175,7 +184,7 @@ export function MatrixTable({
             />
             <p
               className={
-                words >= MIN_WORDS
+                words >= (rows.find((row) => row.id === editingId)?.minWords ?? 0)
                   ? "font-mono text-eyebrow text-ok-ink"
                   : "font-mono text-eyebrow text-muted"
               }

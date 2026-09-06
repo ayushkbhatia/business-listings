@@ -87,6 +87,26 @@ export function AdminPage({
           actor={seat.actor}
           lockedLabel={t("nav.locked")}
           laterLabel={t("nav.later")}
+          /*
+             Board 6f §1: the item list is a scroll region with the account
+             footer pinned. The scroll region has existed since the sidebar did
+             — `min-h-0 flex-1 overflow-y-auto`, focusable for the axe rule —
+             and so has this slot; nothing has ever passed one, so the nav
+             scrolled and the seat's identity scrolled away with it.
+
+             It states who you are and what you hold, and nothing more. There is
+             no sign-out control here: signing out is not a thing the console
+             owns, and a button that looked like one and was not would be worse
+             than its absence.
+          */
+          footer={
+            <div className="flex flex-col gap-0.5">
+              <span className="truncate text-caption text-on-ink">{seat.name}</span>
+              <span className="font-mono text-eyebrow uppercase text-on-ink-muted">
+                {seat.roles.map((role) => t(`staff.role.${role}` as never)).join(" · ")}
+              </span>
+            </div>
+          }
           mark={
             <span className="flex items-center gap-2">
               <span className="font-serif text-h3 text-on-ink">Business Listings</span>

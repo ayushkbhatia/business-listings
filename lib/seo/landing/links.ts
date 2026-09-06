@@ -1,7 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { haversineKm } from "@/lib/geo/distance";
-import { landingState, PUBLIC_BUSINESS, type LandingScope } from "./scope";
+import { CATEGORY_RULES_SELECT, type CategoryRules } from "@/lib/taxonomy/service";
+import { landingState, PUBLIC_BUSINESS, toLandingCategory, type LandingScope } from "./scope";
 import { EMIRATES } from "./scope";
 import type { Emirate } from "@/lib/db/generated/enums";
 
@@ -66,8 +67,7 @@ const CATEGORY_SELECT = {
   slug: true,
   name: true,
   parentId: true,
-  publishThreshold: true,
-  verifiedShareMin: true,
+  ...CATEGORY_RULES_SELECT,
   parent: { select: { slug: true, name: true } },
 } as const;
 
@@ -75,13 +75,11 @@ function scopeOf(
   kind: "area" | "emirate",
   emirate: Emirate,
   area: { id: string; slug: string; name: string; lat: number | null; lng: number | null } | null,
-  category: {
+  category: CategoryRules & {
     id: string;
     slug: string;
     name: string;
     parentId: string | null;
-    publishThreshold: number;
-    verifiedShareMin: number;
     parent: { slug: string; name: string } | null;
   },
   categoryIds: string[],
@@ -90,16 +88,7 @@ function scopeOf(
     kind,
     emirate,
     area,
-    category: {
-      id: category.id,
-      slug: category.slug,
-      name: category.name,
-      parentId: category.parentId,
-      parentSlug: category.parent?.slug ?? null,
-      parentName: category.parent?.name ?? null,
-      publishThreshold: category.publishThreshold,
-      verifiedShareMin: category.verifiedShareMin,
-    },
+    category: toLandingCategory(category),
     categoryIds,
     path: area ? `/${emirate}/${area.slug}/${category.slug}` : `/${emirate}/${category.slug}`,
   };
