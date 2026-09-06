@@ -70,7 +70,11 @@ beforeAll(async () => {
 
   const foreignTemplate = await prisma.specTemplate.create({
     data: {
-      categoryId: foreign.id,
+      // Board 4e made the relation many-to-many and dropped
+      // `spec_template.category_id`. This fixture and #119 were built in
+      // parallel and squash-merged an hour apart, so nothing typechecked the
+      // two together until after both were on main.
+      categories: { create: { categoryId: foreign.id } },
       name: `${PREFIX} bearings`,
       version: 1,
       status: "live",
