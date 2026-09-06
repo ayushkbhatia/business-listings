@@ -92,6 +92,7 @@ export default async function OverviewPage({
         */}
         {setup && setup.openCount > 0 && <SetupBanner setup={setup} />}
 
+        <LicenceRow overview={overview} />
         <ReplyQueue overview={overview} />
 
         {/*
@@ -145,6 +146,50 @@ function SetupBanner({ setup }: { setup: SetupChrome }) {
 }
 
 /* ── What needs a reply ──────────────────────────────────────────────────── */
+
+/**
+ * Board 3a §2's licence row, and the most consequential item on this screen.
+ *
+ * `verificationTier` drops to 1 automatically the day the licence expires,
+ * which costs 22 of 100 ranking weight and the badge on every public card. The
+ * row states the consequence rather than the date, because "expires 12 Oct"
+ * reads as administrative and the loss does not.
+ *
+ * It appears at sixty days, escalates in tone at fourteen, and becomes a
+ * warning rather than a notice on the day it lapses. It cannot be dismissed:
+ * the board says so, and a dismissible warning about a thing that takes a badge
+ * off a listing is a warning that gets dismissed.
+ *
+ * `Renew` deep-links to board 3e **with the licence row focused** — board 3e's
+ * criterion 11 — so a seller who clicks it lands on the row the sentence is
+ * about rather than at the top of a screen with two tables on it.
+ */
+function LicenceRow({ overview }: { overview: Overview }) {
+  if (overview.licenceStage === "current") return null;
+
+  const lapsed = overview.licenceStage === "lapsed";
+  return (
+    <Alert
+      tone={lapsed ? "bad" : overview.licenceStage === "urgent" ? "warn" : "info"}
+      live="polite"
+      action={
+        <Link
+          href="/dashboard/verification#licence"
+          className={buttonClassName({ variant: lapsed ? "primary" : "secondary", size: "sm" })}
+        >
+          {t("overview.licence_renew")}
+        </Link>
+      }
+    >
+      {lapsed
+        ? t("overview.licence_lapsed", { when: formatDate(overview.licenceExpiry) })
+        : t("overview.licence_expiring", {
+            count: overview.daysToLicenceExpiry,
+            formatted: formatCount(overview.daysToLicenceExpiry),
+          })}
+    </Alert>
+  );
+}
 
 function ReplyQueue({ overview }: { overview: Overview }) {
   const { awaitingReply, threadsAwaitingReply, quotesOut, reviewsAwaitingReply } = overview;

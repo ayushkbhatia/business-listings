@@ -150,7 +150,21 @@ echo "→ 6. the site visit, which was withdrawn and keeps coming back"
 # Comments are stripped by both helpers, which matters here more than anywhere:
 # most of what is left in the codebase is a comment explaining that the rung is
 # gone and why, and those have to be allowed to name it.
-VISITS='\bsite[- ]visit|\bvisited by|verification (site )?visit|premises (have been |been )?visit|visited in person|\bfield team\b'
+#
+# Round 3 added the bare word, and it took a fourth miss to earn it. Board 3e's
+# RFQ recipient row read `VISITED · ` — a raw English literal inside a
+# component, one word, keyed off a tier that no longer exists. None of the
+# patterns below saw it: they all want the word next to another word, and this
+# one stood alone. `\bvisit(ed|s)?\b` on copy alone is the correction. It costs
+# nothing: "visited" is not a word this product has any other use for. A buyer
+# *visits* a page and a supplier's copy offers to *visit* their trade counter —
+# both are live and fine — but nothing here is ever *visited* except premises
+# nobody goes to any more. The past participle alone is the whole rule.
+#
+# It found four more the moment it ran: the gallery's own verification-filter
+# specimen still offered `Tier 3 — visited` and `Tier 4 — visited and audited`,
+# in two places, on the surface where the shipped states are meant to be checked.
+VISITS='\bsite[- ]visit|\bvisited\b|verification (site )?visit|premises (have been |been )?visit|\bfield team\b'
 # The seeds too, and that is not belt-and-braces: seed copy **is** public copy.
 # Round 2 of this cut found the claim living in a seeded curated-list intro, a
 # seeded guide and the seeded verification policy — three public pages whose

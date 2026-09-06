@@ -122,9 +122,14 @@ export function Overlays() {
                 activeCount: 1,
                 children: (
                   <>
-                    <Checkbox label="Tier 4 — visited and audited" />
-                    <Checkbox label="Tier 3 — visited" defaultChecked />
-                    <Checkbox label="Tier 2 — licence checked" />
+                    {/*
+                       Two rungs, not four. The ladder lost the visited tiers on
+                       5 Sep and this specimen kept them — on the one surface whose
+                       job is showing what the shipped components do. See
+                       components/domain/verification.ts.
+                    */}
+                    <Checkbox label="Tier 2 — licence verified" defaultChecked />
+                    <Checkbox label="Tier 1 — claimed" />
                   </>
                 ),
               },
@@ -175,9 +180,14 @@ export function Overlays() {
                   activeCount: 1,
                   children: (
                     <>
-                      <Checkbox label="Tier 4 — visited and audited" />
-                      <Checkbox label="Tier 3 — visited" defaultChecked />
-                      <Checkbox label="Tier 2 — licence checked" />
+                      {/*
+                         Two rungs, not four. The ladder lost the visited tiers on
+                         5 Sep and this specimen kept them — on the one surface whose
+                         job is showing what the shipped components do. See
+                         components/domain/verification.ts.
+                      */}
+                      <Checkbox label="Tier 2 — licence verified" defaultChecked />
+                      <Checkbox label="Tier 1 — claimed" />
                       <Checkbox label="Tier 1 — licence on file" />
                     </>
                   ),

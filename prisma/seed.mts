@@ -23,6 +23,7 @@ import {
   VALVE_TEMPLATE_FIELDS,
 } from "./seed-data.mjs";
 import { DN_SYNONYMS } from "../lib/trade/nominal-size.js";
+import { EXPIRED_LICENCE_TIER } from "../lib/verification.js";
 // The key and the estimates from the module that owns both — a typo here would
 // be a row nothing reads.
 import { FALLBACK_RAMADAN, RAMADAN_SETTING_KEY } from "../lib/trade/hours.js";
@@ -582,13 +583,32 @@ async function main() {
     // Unclaimed listings are tier 0 by definition — nothing has been checked.
     // Claimed ones walk the ladder so every badge state appears at least twice.
     /*
-       Nought to three since site visits were withdrawn. The two 4s became 3s
-       rather than being dropped, so the top rung still has suppliers on it —
-       a ladder whose highest rung is empty on every seeded database is a rung
-       nobody ever sees rendered.
+       Nought to two. **Tier 2 is the top achievable rung**, so the seed does
+       not mint a 3.
+
+       It used to. The two 4s became 3s when site visits were withdrawn, on the
+       reasoning that "a ladder whose highest rung is empty on every seeded
+       database is a rung nobody ever sees rendered". That was right about the
+       old rung and wrong about this one: rung 3 is now trade references, it is
+       reserved and unbuilt, and a seeded listing sitting on it renders a header
+       reading `Tier 3 · Trade references` over a ladder drawing that same rung
+       as unreached — which is what a seeded database showed until board 3e
+       opened the page and looked.
+
+       An empty top rung is the honest state of an unbuilt feature. The ladder's
+       reserved treatment is the thing worth seeing rendered, and it renders
+       from any tier.
+
+       The draw below is kept regardless, and its condition with it: the
+       generator is a seeded PRNG and the *number of draws* is part of the
+       output. See the note there.
     */
-    const TIER_LADDER = [3, 1, 3, 2, 2, 3, 1, 2, 3, 1, 2, 3, 2, 1] as const;
+    const TIER_LADDER = [2, 1, 2, 2, 2, 2, 1, 2, 2, 1, 2, 2, 2, 1] as const;
     const tier = claimed ? TIER_LADDER[Math.floor(i / 3) % TIER_LADDER.length]! : 0;
+    /** What the ladder used to hold here, kept only to steer the PRNG. */
+    const legacyTier = [3, 1, 3, 2, 2, 3, 1, 2, 3, 1, 2, 3, 2, 1][
+      Math.floor(i / 3) % 14
+    ]!;
 
     /*
        Drawn and discarded, on purpose.
@@ -605,11 +625,22 @@ async function main() {
        Delete it only alongside a deliberate reseed of everything that names a
        slug.
     */
-    if (tier >= 3) void int(20, 200);
+    if (claimed && legacyTier >= 3) void int(20, 200);
 
     const licenceExpiry = days(int(-40, 500));
-    // Expiry already past means the scheduled job has dropped the tier to 2.
-    const effectiveTier = licenceExpiry < NOW && tier > 2 ? 2 : tier;
+    /*
+       Expiry already past means the nightly sweep has dropped the tier — and it
+       drops to **1**, not 2.
+
+       This read `tier > 2 ? 2`, which was the schema's own pre-cut wording and
+       is wrong in the dangerous direction: tier 2 *is* licence verification, so
+       a seeded listing whose licence lapsed forty days ago kept the
+       licence-verified badge and the ranking weight behind it, and
+       `sweepExpiredLicences` would move it on the first nightly run — a seed
+       that disagrees with the job that runs against it.
+    */
+    const effectiveTier =
+      licenceExpiry < NOW && tier > EXPIRED_LICENCE_TIER ? EXPIRED_LICENCE_TIER : tier;
 
     const planId = claimed ? pick(["free", "free", "basic", "basic", "pro"]) : null;
     const authority = pick(AUTHORITY_BY_EMIRATE[emirate]);
@@ -1687,7 +1718,10 @@ async function seedPumps(db: Db, catBySlug: Map<string, string>) {
     // say on this page too.
     const unpinned = i >= PUMP_NAMES.length - 2;
     const area = dubaiAreas[i % dubaiAreas.length]!;
-    const tier = i < 3 ? 3 : i < 8 ? 2 : 0;
+    // Eight verified and four unverified. Tier 2 is the top achievable rung —
+    // rung 3 is trade references, reserved and unbuilt — so the first three are
+    // 2 like the rest rather than sitting on a rung nobody can reach.
+    const tier = i < 8 ? 2 : 0;
 
     const business = await db.business.create({
       data: {
@@ -1803,10 +1837,11 @@ async function seedHomeSignals(db: Db, businesses: Biz[], opsLeadId: string) {
         actorId: opsLeadId,
         action: "tier_change",
         subject: `Business:${business.id}`,
+        // One reason, because there is one rung a decision can put a listing
+        // on. The other branch read "Trading history audited", for a rung that
+        // was withdrawn and is now reserved and unbuilt.
         reason:
-          business.tier >= 3
-            ? "Trading history audited. Enquiries answered, quotes sent and reply times all match the listing."
-            : "Trade licence checked against the issuing authority and the contact number answered.",
+          "Trade licence checked against the issuing authority and the contact number answered.",
         before: { verificationTier: business.tier - 1 },
         after: { verificationTier: business.tier },
         createdAt: when,
@@ -3849,9 +3884,12 @@ async function seedTrust(db: Db, businesses: Biz[], opsLeadId: string, moderator
         actorId: opsLeadId,
         action: "tier_change",
         subject: `Business:${claimed[0]!.id}`,
-        reason: "Trading history audited to 2 Aug. Reply times and quote volume both match the listing, promoted to tier 3.",
-        before: { verificationTier: 2 },
-        after: { verificationTier: 3 },
+        // A real decision on a rung that exists. The audited-to-tier-3
+        // promotion described a rung nobody can reach and a check nobody
+        // performs.
+        reason: "Trade licence checked against the issuing authority and the contact number answered. Promoted to tier 2.",
+        before: { verificationTier: 1 },
+        after: { verificationTier: 2 },
         createdAt: days(-12),
       },
       {
@@ -3926,7 +3964,7 @@ async function seedSignals(db: Db, businesses: Biz[], buyerId: string, catBySlug
   // day it ships.
   await db.zeroResultQuery.createMany({
     data: [
-      { query: "api 6d trunnion ball valve dn600", categoryId: catBySlug.get("valves-and-fittings")!, emirate: "abu_dhabi", filters: { verificationTier: 3, availability: "in_stock" }, tab: "products", createdAt: hours(-4) },
+      { query: "api 6d trunnion ball valve dn600", categoryId: catBySlug.get("valves-and-fittings")!, emirate: "abu_dhabi", filters: { verificationTier: 2, availability: "in_stock" }, tab: "products", createdAt: hours(-4) },
       { query: "صمامات بوابة 12 انش", categoryId: catBySlug.get("valves-and-fittings")!, emirate: "dubai", filters: {}, tab: "products", createdAt: hours(-9) },
       { query: "cryogenic valve supplier", categoryId: null, emirate: "dubai", filters: { freeZone: true }, tab: "businesses", createdAt: hours(-26) },
       { query: "hdpe electrofusion fittings dn630", categoryId: catBySlug.get("pipes-and-tubing")!, emirate: "sharjah", filters: { verificationTier: 2 }, tab: "products", createdAt: hours(-31) },
@@ -4347,7 +4385,10 @@ async function seedReviewDepth(db: Db) {
       languages: ["English", "Arabic", "Hindi"],
       description:
         "Valve and fitting stockist supplying MEP contractors across Dubai and the Northern Emirates. Counter sales, scheduled site delivery and an indent desk for sizes held off the shelf.",
-      verificationTier: 3,
+      // Tier 2 is the top achievable rung. This read 3, which is now trade
+      // references — reserved and unbuilt — so the board's own worked example
+      // sat on a rung the ladder draws as unreachable.
+      verificationTier: 2,
       verifiedAt: days(-64),
       claimStatus: "claimed",
       planId: "pro",
@@ -5020,11 +5061,22 @@ const TEMPLATES: TemplateSeed[] = [
     actionPath: "/review/new?enq={enquiryId}",
     status: "live",
   },
+  /*
+     Board 3e §5. The copy said "drops to tier 2", which was the schema's own
+     wording before the site-visit cut and was wrong in the dangerous direction:
+     tier 2 *is* licence verification, so a listing left there keeps the badge
+     the expiry is supposed to withdraw. It drops to tier 1, claimed.
+
+     The consequence rather than the number, because "tier 1" means nothing to a
+     supplier reading their email. The badge and the filter are what they lose,
+     and the last sentence is the one the screen also carries: nothing is
+     deleted, and a renewal puts it back.
+  */
   {
     event: "document_expiring",
     channel: "email",
-    subject: "Your trade licence expires {expiresAt}",
-    body: "The trade licence on your listing expires {expiresAt}. Verification drops to tier 2 the day it lapses, with no grace period.",
+    subject: "Your trade licence expires {expiresAt} — {days} days",
+    body: "The trade licence on your listing expires {expiresAt}, in {days} days. On the day it lapses your listing stops showing the licence-verified badge and stops matching the licence-verified filter, with no grace period. Your listing, products and enquiries are not affected, and the badge returns as soon as we have checked a renewal.",
     actionLabel: "Upload the renewal",
     actionPath: "/dashboard/verification",
     status: "live",

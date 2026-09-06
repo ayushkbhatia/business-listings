@@ -643,3 +643,47 @@ function firstClause(requirement: string): string {
 }
 
 export type { NotifyOutcome };
+
+/**
+ * A trade licence is about to expire. Board 3e §5.
+ *
+ * The sequence the verification screen writes down, and the half of it that
+ * leaves the platform: an email at sixty days and again at fourteen. The third
+ * point in that sequence is not a message — it is `sweepExpiredLicences`
+ * dropping the tier, which the seller sees as the badge coming off.
+ *
+ * To the **owner**, and not through `recipientFor`. Every other seller-side
+ * emitter routes to whoever holds the lead, because a message about an enquiry
+ * is useless to somebody who cannot open it. A licence renewal is the opposite
+ * shape: `listing.edit` is owner and manager only — docs/permissions.md §2,
+ * "Upload verification documents" — so a sales seat told about it can do
+ * nothing but forward the mail.
+ *
+ * Once per stage, guarded by the caller in
+ * `lib/verification/licence-notice-job.ts`. `notify()` deduplicates nothing,
+ * and a daily sweep would otherwise send this on all sixty days.
+ */
+export async function onLicenceExpiring(input: {
+  businessId: string;
+  expiresAt: Date;
+  /** Whole days left, at the stage that fired. 60 or 14. */
+  days: number;
+}): Promise<void> {
+  await safely("document_expiring", async () => {
+    const owner = await prisma.user.findFirst({
+      where: { businessId: input.businessId, roles: { has: "seller_owner" } },
+      select: { id: true },
+    });
+    if (!owner) return;
+
+    await notify({
+      event: "document_expiring",
+      businessId: input.businessId,
+      recipientUserId: owner.id,
+      params: withParams("document_expiring", {
+        expiresAt: formatDate(input.expiresAt),
+        days: formatCount(input.days),
+      }),
+    });
+  });
+}

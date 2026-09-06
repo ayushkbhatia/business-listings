@@ -79,17 +79,17 @@ describe("writeAudit", () => {
       actor: opsLead,
       action: "tier_change",
       subject: "Business:clx1",
-      reason: "Site visit completed, promoted to tier 3.",
+      reason: "Trade licence checked with the issuing authority, promoted to tier 2.",
       before: { verificationTier: 2 },
-      after: { verificationTier: 3 },
+      after: { verificationTier: 2 },
     });
     expect(rows[0]).toEqual({
       actorId: "user_staff_ops_lead",
       action: "tier_change",
       subject: "Business:clx1",
-      reason: "Site visit completed, promoted to tier 3.",
+      reason: "Trade licence checked with the issuing authority, promoted to tier 2.",
       before: { verificationTier: 2 },
-      after: { verificationTier: 3 },
+      after: { verificationTier: 2 },
     });
   });
 

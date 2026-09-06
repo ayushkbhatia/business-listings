@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { CREDENTIAL_REVIEW_DAYS } from "@/lib/verification";
 
 // Re-exported so callers keep one import. The function itself lives outside
 // this module because it is pure and `server-only` is not testable in jsdom.
@@ -44,6 +45,13 @@ export const SLA_DAYS = {
   report: 5,
   /** A payment failed. D14 is when the plan drops, so 14 is the deadline. */
   dunning: 14,
+  /**
+   * A credential a seller has asked to publish. Board 3e §4 states this on the
+   * seller's own screen, which makes it copy rather than configuration — so it
+   * is read from `lib/verification.ts`, where the screen reads it too, rather
+   * than written twice.
+   */
+  credential: CREDENTIAL_REVIEW_DAYS,
 } as const;
 
 export type JobKey = "supply" | "comparable" | "storefronts" | "accounts" | "money" | "trust";

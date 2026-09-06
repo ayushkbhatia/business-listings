@@ -192,22 +192,40 @@ decision before handoff 1 puts these colours in front of buyers.
 
 ## Handoff 1, steps 1 and 2
 
-### The verification ladder — five rungs, all inferred
+### The verification ladder — four rungs, one of them reserved
 §06 is canvas-only. `components/domain/verification.ts` derives the rungs from
-what the shipped documents state: the tier is 0..4 and staff-write-only, tier 3
-requires `visitedAt`, and the tier drops to 2 the day the licence expires.
+what the shipped documents state: the tier is 0..3 and staff-write-only, and it
+drops to **1** the day the licence expires.
 
 | tier | label | what was checked |
 |---|---|---|
 | 0 | Not verified | nothing on the page has been checked |
-| 1 | Licence on file | trade licence number recorded |
-| 2 | Licence verified | checked against the issuing authority |
-| 3 | Site visited | premises visited by the field team |
-| 4 | Audited | premises visited and trading history audited |
+| 1 | Claimed | claimed by the supplier, contact confirmed by us |
+| 2 | Licence verified | checked against the issuing authority — **top achievable** |
+| 3 | Trade references | reserved, not built, reachable by nobody |
 
-Tier 1 versus 2 is the least certain: the data model distinguishes them only by
-implication. Tiers 3 and 4 both require a visit, and the difference drawn here
-— an audit of trading history — is an invention that needs confirming.
+**This table read five rungs with a site visit at 3 until board 3e, three
+applications of the cut later.** It is worth recording where, because the shape
+repeats: the cut of 5 September was applied by searching for the phrase, and it
+landed everywhere a scan could read it and survived everywhere a person had to
+notice it. `pnpm check:vocabulary` reads `lib/i18n/en.ts`, the JSX under `app`
+and `components`, and `prisma/*.mts`. It does not read `docs/`, it does not read
+a design canvas, and it cannot read a database row — and the claim was found
+living in all three:
+
+- this table, and it is the file whose job is recording what the ladder means
+- the `notification_template` row for `document_expiring`, live and staff-editable,
+  promising "verification drops to tier 2" (corrected by a data statement in
+  `20260916090000_document_review`)
+- eight `business` rows stored at tier 3, rendering a header reading
+  `Tier 3 · Trade references` over a ladder drawing that rung as unreached
+- `RfqComposer.tsx`, which wrote `VISITED · ` as a raw literal — one word, alone,
+  inside a component, keyed off a tier nothing could reach. The scan now matches
+  the bare past participle, which found two more in the gallery on its first run.
+
+Rung 1 versus 2 was once the least certain distinction here. It is settled now:
+1 is the claim, 2 is the licence check, and the gap between them is what expiry
+moves a listing across.
 
 ### ResponseTime bands
 Green under 4 hours, amber under 24, red past that. The design system names the

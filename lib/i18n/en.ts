@@ -297,6 +297,21 @@ export const en = {
   "admin.queue.error.title": "The queue could not be loaded",
   "admin.queue.error.body": "Reload the page. Nothing has been lost — the submissions are still there.",
   "admin.queue.kind.change": "Listing edit",
+  // Board 3e §4. A seller has asked to publish a certificate, and the queue
+  // their screen names is this one.
+  "admin.queue.kind.document": "Credential",
+  "admin.queue.document.scope": "What you are deciding",
+  // The narrow decision, stated where a moderator cannot miss it. Nothing here
+  // checks an ISO number against a registrar, and the seller's own screen draws
+  // the line between "Verified by us" and "Uploaded by you" precisely so this
+  // cannot be read as a check.
+  "admin.queue.document.scope_body": "Whether this file is the document it says it is and fit to name on a public page. Not whether the certificate is genuine — we do not check these with the issuing body, and approving one changes no verification tier and no badge. The listing shows the name and the expiry month; the file itself is never published.",
+  "admin.queue.document.details": "What the seller uploaded",
+  "admin.queue.document.file": "File",
+  "admin.queue.document.asked": "Asked to publish",
+  "admin.queue.document.note": "Approving names this on the seller's public listing. Rejecting returns it to their own files with your reason attached, and they can ask again.",
+  "admin.queue.document.decided": "Already decided",
+  "admin.queue.document.decided_body": "Somebody looked at this on {when}. It is no longer in the queue.",
   "admin.queue.kind.conflict": "Conflicting claim",
   "admin.queue.field.trade_name": "Trade name",
   "admin.queue.field.primary_category": "Primary category",
@@ -848,22 +863,36 @@ export const en = {
   //    model and recorded in docs/inferred.md.
   "verify.t0": "Not verified",
   "verify.t0.checked": "Nothing on this page has been checked by us",
-  "verify.t1": "Licence on file",
-  "verify.t1.checked": "Trade licence number recorded",
+  // Board 3e, and the change log of 5 Sep: the ladder reads
+  // `1 claimed -> 2 licence verified (top) -> 3 trade references (reserved)`.
+  //
+  // Rung 1 was "Licence on file", which is a sentence about a document and
+  // reads as reassurance on a listing where nothing has been checked — and it
+  // is the rung an expired licence drops to, so it was reassuring hardest at
+  // the moment it was least true. "Claimed" is what actually happened: a
+  // person proved the listing is theirs, by licence upload or by a call to the
+  // number on the public register.
+  "verify.t1": "Claimed",
+  "verify.t1.checked": "Claimed by the supplier, contact confirmed by us",
   "verify.t2": "Licence verified",
   "verify.t2.checked": "Trade licence checked against the issuing authority",
-  // The ladder stops at 3 since site visits were withdrawn. "Audited" moved down
-  // from 4 and lost the visit from its wording, because what is left is what we
-  // measure: enquiries answered, quotes sent, reply times.
-  "verify.t3": "Audited",
-  "verify.t3.checked": "Trading history and buyer outcomes checked by us",
+  // Rung 3 is reserved and unbuilt. "Audited" claimed a check nobody performs —
+  // it moved down from 4 when site visits were withdrawn, wearing wording about
+  // trading history that no job measures and no screen sets. Trade references
+  // is what the change log put here, and it is drawn with no affordance until
+  // somebody funds it.
+  "verify.t3": "Trade references",
+  "verify.t3.checked": "Not built yet — no listing has reached this rung",
   "verify.tier": "tier {tier}",
   "verify.ladder": "Verification ladder",
   "verify.reached": "Reached",
-  "verify.requirement.t1": "The supplier gives us a trade licence number.",
+  "verify.requirement.t1": "The supplier proves the listing is theirs, and we confirm the contact details on the public licence record.",
   "verify.requirement.t2": "We check the licence against the issuing authority and confirm it is current.",
-  "verify.requirement.t3": "We audit the trading history on this listing — enquiries answered, quotes sent and reply times — against what it claims.",
-  "verify.expired": "Licence expired — tier held at 2 until it is renewed",
+  "verify.requirement.t3": "Reserved. Nothing you do reaches it yet, and we will say so here when it exists.",
+  // It drops to tier 1, not to 2. Tier 2 *is* licence verification, so a
+  // listing held there keeps the badge the expiry exists to withdraw — the
+  // self-contradiction change-log decision 3 fixed. See lib/verification.ts.
+  "verify.expired": "Licence expired — tier drops to 1 until a renewal is checked",
 
   // ── Listing card ──
   "listing.products": { one: "{count} product", other: "{count} products" },
@@ -1911,6 +1940,11 @@ export const en = {
   "rfq.recipients_more": { one: "{count} more matches your spec", other: "{count} more match your spec" },
   "rfq.recipients_add_all": "Add all",
   "rfq.recipient_pick": "Send to {name}",
+  // Board 1h's recipient row. It was the literal `VISITED` written straight
+  // into RfqComposer.tsx, keyed off tier 3 — a rung that was site visits and is
+  // now reserved and unreachable, so the mark rendered for nobody. What the
+  // platform has actually checked is the licence.
+  "rfq.recipient_verified": "Licence",
   "rfq.from_page": "· from the page you were on",
   "rfq.cap_note": "8 sellers is the most one request can reach.",
   "rfq.none_picked": "Pick at least one seller to send to.",
@@ -2732,6 +2766,16 @@ export const en = {
 
   "overview.title": "Overview",
   "overview.eyebrow": "Your business",
+  // ── Board 3a §2's licence row ──
+  // The consequence, not the date. "Expires 12 Oct" reads as administrative and
+  // the loss does not: the badge comes off every public card and the listing
+  // stops matching the licence-verified filter the same morning.
+  "overview.licence_expiring": {
+    one: "Your trade licence expires in {formatted} day. On the day it lapses your listing loses the licence-verified badge and stops matching the licence-verified filter.",
+    other: "Your trade licence expires in {formatted} days. On the day it lapses your listing loses the licence-verified badge and stops matching the licence-verified filter.",
+  },
+  "overview.licence_lapsed": "Your trade licence expired on {when}. Your listing has dropped to tier 1, lost the licence-verified badge and no longer matches the licence-verified filter. Your listing, products and enquiries are untouched.",
+  "overview.licence_renew": "Renew",
   "overview.needs_reply": "Needs a reply",
   "overview.needs_reply_body": "Enquiries waiting on you, oldest first. Response time is measured from the first reply, not from when you open one.",
   "overview.awaiting": "Enquiries awaiting a reply",
@@ -3495,15 +3539,127 @@ export const en = {
   // ── Verification, board 3e ────────────────────────────────────────────────
   "verify_listing.title": "Verification",
   "verify_listing.eyebrow": "Listing",
-  "verify_listing.intro": "What we have checked about you, and what a buyer sees because of it. Every rung is checked by us — there is no field on this page that sets your own tier.",
-  "verify_listing.ladder": "The verification ladder",
+  "verify_listing.staff_only": "Your tier is set by our team after checking. Nothing on this page changes it.",
+
+  // ── Header ──
+  // "Next licence check due" described a check nobody performs. Nothing is
+  // re-checked on a schedule; the licence expires and the expiry job acts. One
+  // implies the platform is watching, the other says what actually happens.
+  "verify_listing.checked_on": "Checked against {authority} on {when}",
+  "verify_listing.never_checked": "Nothing checked yet",
+  "verify_listing.expires_label": "Licence expires",
+  "verify_listing.expires_days": { one: "{when} · {formatted} day", other: "{when} · {formatted} days" },
+  "verify_listing.expired_on": "Expired {when}",
+
+  // ── The ladder ──
+  "verify_listing.ladder": "Your verification",
+  "verify_listing.ladder_lede": {
+    one: "{formatted} tier is achievable today",
+    other: "{formatted} tiers are achievable today",
+  },
   "verify_listing.current": "You are at tier {tier}",
   "verify_listing.reached": "Reached",
+  "verify_listing.top_tier": "Top tier",
+  "verify_listing.reserved": "Reserved",
+  "verify_listing.rung": "Tier {tier} · {label}",
+  // The sentence the board never said. Written out because "expires with your
+  // licence" on its own leaves a seller to guess what expiring costs.
+  "verify_listing.ladder_note": "Tier 2 is the top tier, and it expires with your licence. On {when} you drop to tier 1 — claimed — until a renewal is uploaded and checked. Nothing is deleted and your listing stays live.",
+  "verify_listing.ladder_note_below": "Tier 2 is the top tier. It needs your trade licence checked against the issuing authority — upload it below and we will do that, usually within four working hours. Once you are there, the tier expires with the licence and returns when a renewal is checked.",
+  "verify_listing.ladder_note_lapsed": "Your licence expired on {when}, so you are at tier 1 — claimed. Upload a renewal and the tier returns as soon as we have checked it. Nothing was deleted and your listing is still live.",
+
+  // ── Verified by us ──
+  "verify_listing.checked_title": "Verified by us",
+  "verify_listing.checked_hint": "These two set your tier. Checked against the issuing authority.",
+  "verify_listing.checked_caption": "The documents we have checked against the issuing authority",
+  "verify_listing.col_document": "Document",
+  "verify_listing.col_number": "Number",
+  "verify_listing.col_expires": "Expires",
+  "verify_listing.col_state": "State",
+  "verify_listing.col_who": "Who sees it",
+  "verify_listing.row_licence": "Trade licence · {authority}",
+  "verify_listing.row_trn": "VAT / TRN certificate",
+  "verify_listing.no_expiry": "No expiry",
+  "verify_listing.state_checked": "Checked {when}",
+  "verify_listing.state_unchecked": "Not checked yet",
+  // The badge is platform output, not a seller preference — which is why this
+  // column states that it cannot be changed rather than offering a control
+  // that would be refused.
+  "verify_listing.who_badge_only": "Badge only · you cannot change this",
+  "verify_listing.who_badge_masked": "Badge only · number never shown",
+
+  // ── Uploaded by you ──
+  "verify_listing.uploaded_title": "Uploaded by you",
+  "verify_listing.uploaded_hint": "We hold these and show the name and expiry month. We do not check them, so they carry no badge.",
+  "verify_listing.uploaded_caption": "Certificates and approvals you have uploaded",
+  "verify_listing.uploaded_empty": "Nothing uploaded yet. Certificates and approvals put you in the filters buyers use — they never change your tier.",
+  "verify_listing.state_on_file": "On file",
+  "verify_listing.state_expiring": { one: "Expiring · {formatted} day", other: "Expiring · {formatted} days" },
+  "verify_listing.state_in_review": "In review · {days} working days",
+  "verify_listing.state_lapsed": "Lapsed",
+  "verify_listing.who_public": "Public · name and month",
+  "verify_listing.who_hidden": "Hidden",
+  "verify_listing.who_in_review": "Hidden while in review",
+  // The consequence, stated where the table ends. A credential is a filter, and
+  // nothing else — the board's version implied a lapse cost you standing
+  // generally, and it costs you one filter.
+  "verify_listing.uploaded_footer": "A credential here puts you in the filters buyers use — it never changes your tier or your badge. Reviewed by our moderation queue, {days} working days.",
+  "verify_listing.review_reason": "We could not publish this: {reason}",
+
+  // ── Visibility, the seller's own choice ──
+  "verify_listing.visibility": "Who sees {name}",
+  "verify_listing.make_public": "Show on my listing",
+  "verify_listing.make_hidden": "Hide from my listing",
+  "verify_listing.withdraw": "Withdraw the request",
+  "verify_listing.public_hint": "We show the name and the expiry month. The file itself is never published or linked.",
+
+  // ── The rail: when your licence expires ──
+  "verify_listing.expiry_title": "When your licence expires",
+  "verify_listing.expiry_now": { one: "{formatted} day", other: "{formatted} days" },
+  "verify_listing.expiry_60": "{days} days",
+  "verify_listing.expiry_60_body": "Email, and a banner on your dashboard.",
+  "verify_listing.expiry_14": "{days} days",
+  "verify_listing.expiry_14_body": "The banner stays and the licence row turns amber.",
+  "verify_listing.expiry_0": "The day it lapses",
+  "verify_listing.expiry_0_body": "Your tier drops to 1 · claimed. The licence-verified badge comes off your listing and you stop matching the licence-verified filter.",
+  // Load-bearing rather than decorative. A lapse withdraws a claim; it does not
+  // destroy a record — the same position as 3f's cap and 3i's refused delete.
+  "verify_listing.expiry_0_body_unverified": "Nothing changes on your listing, because the licence-verified badge is not on it yet. A current licence is what tier 2 needs, so an expired one closes that route until a renewal is checked.",
+  "verify_listing.expiry_reassurance": "Upload a renewal and the tier returns as soon as it is checked. Your listing, products and enquiries are never touched by an expiry.",
+
+  // ── The rail: action needed ──
+  "verify_listing.action_title": "Action needed",
+  "verify_listing.action_licence": "Your trade licence expires in {days} days. On the day it lapses your listing loses the licence-verified badge and stops matching the licence-verified filter.",
+  "verify_listing.action_licence_lapsed": "Your trade licence expired on {when}. Your listing has dropped to tier 1 and lost the licence-verified badge.",
+  "verify_listing.action_credential": "Your {name} expires in {days} days. Buyers filtering for it stop seeing you the day it lapses. Your tier and badge are unaffected.",
+  "verify_listing.action_credential_lapsed": "Your {name} expired on {when}. Buyers filtering for it no longer see you. Your tier and badge are unaffected.",
+  "verify_listing.upload_renewal": "Upload renewal",
+  "verify_listing.action_none": "Nothing needs your attention. Your licence has {days} days to run and no certificate is inside its notice window.",
+
+  // ── The rail: what buyers see ──
+  "verify_listing.buyers_title": "What buyers see",
+  "verify_listing.buyers_badge": "The licence-verified badge, and the date we checked it",
+  "verify_listing.buyers_certs": "Certificate names and expiry months",
+  "verify_listing.buyers_no_files": "Never the document files themselves",
+  "verify_listing.buyers_no_trn": "Never your full TRN or licence scan",
+  "verify_listing.buyers_shown": "Shown",
+  "verify_listing.buyers_never": "Never shown",
+
+  // ── Upload ──
   "verify_listing.documents": "Documents",
   "verify_listing.documents_hint": "Your trade licence and VAT certificate are only ever seen by our team. They are never on your public listing and never linked from it. Certificates, catalogues and datasheets can be shown on your storefront if you choose.",
   "verify_listing.upload": "Upload a document",
   "verify_listing.upload_hint": "PDF, JPEG or PNG, up to 16 MB.",
   "verify_listing.kind": "What this is",
+  // The three fields the `Uploaded by you` table has columns for. Asked at
+  // upload, because the name is also what `document_public_has_a_name`
+  // requires before a row can be published — discovering that at the moment a
+  // seller tries to publish would be a refusal with nothing to do about it.
+  "verify_listing.field_name": "What buyers should call it",
+  "verify_listing.field_name_hint": "ISO 9001:2015",
+  "verify_listing.field_reference": "Certificate number",
+  "verify_listing.field_valid_until": "Valid until",
+  "verify_listing.name_required": "Give the certificate the name a buyer would recognise — \u201cISO 9001:2015\u201d, not the file name. It is what your listing shows.",
   "verify_listing.kind.trade_licence": "Trade licence",
   "verify_listing.kind.vat_certificate": "VAT certificate",
   "verify_listing.kind.certificate": "Certificate or approval",
@@ -3513,10 +3669,12 @@ export const en = {
   "verify_listing.uploaded": "Uploaded {when}",
   "verify_listing.delete_document": "Delete",
   "verify_listing.confirm_delete": "Delete this document? This cannot be undone.",
-  "verify_listing.licence_expiry": "Licence expires {when}",
-  "verify_listing.licence_expired": "Your trade licence expired on {when}. Tier 3 and above need a licence that has not expired.",
+  // A document we have checked backs the tier, so the seller cannot remove it
+  // from under their own badge. Board 3e open question 5, one class over: a
+  // lapsed document is kept because the tier history has to stay auditable.
+  "verify_listing.cannot_delete": "A trade licence or VAT certificate we have checked stays on file — it is the evidence behind your tier. Upload a renewal to replace it.",
+  "verify_listing.licence_expired": "Your trade licence expired on {when}, so your listing is at tier 1 and no longer carries the licence-verified badge.",
   "verify_listing.licence_expired_fix": "Upload the renewed licence below and we will check it, usually within four working hours.",
-  "verify_listing.staff_only": "Your tier is set by our team after checking. Nothing on this page changes it.",
 
 
   // ── Plans, shared by 1l, 2e and 11f ───────────────────────────────────────

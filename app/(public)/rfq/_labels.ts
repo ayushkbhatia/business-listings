@@ -132,6 +132,7 @@ export function rfqLabels(options: { emirateName: string }): RfqComposerLabels {
     recipientsMore: (count) => t("rfq.recipients_more", { count }),
     recipientsAddAll: t("rfq.recipients_add_all"),
     recipientPick: (name) => t("rfq.recipient_pick", { name }),
+    recipientVerified: t("rfq.recipient_verified"),
     fromPage: t("rfq.from_page"),
     capNote: t("rfq.cap_note"),
     onlyOneMatch: t("rfq.only_one_match", { count: 1, emirate: options.emirateName }),

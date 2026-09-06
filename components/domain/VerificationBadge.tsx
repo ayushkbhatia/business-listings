@@ -1,10 +1,10 @@
 import { cn } from "@/lib/cn";
 import { Check, Warning } from "@/components/primitives/icons";
-import { Building, Pin } from "@/components/display/icons";
+import { Building } from "@/components/display/icons";
 import { tierSpec, type VerificationTier } from "./verification";
 
 /**
- * The trust signal. Four tiers, plus unverified.
+ * The trust signal. Three rungs, plus unverified.
  *
  * Two rules make this component what it is, and both are architectural:
  *
@@ -19,7 +19,7 @@ import { tierSpec, type VerificationTier } from "./verification";
  */
 export interface VerificationBadgeProps {
   tier: number;
-  /** Already localised: the short name, e.g. "Site visited". */
+  /** Already localised: the short name, e.g. "Licence verified". */
   label: string;
   /** Already localised: what was checked. Required — this is the whole point. */
   checked: string;
@@ -43,10 +43,18 @@ const TONE = {
   ok: "border-ok-line bg-ok-wash text-ok-ink",
 } as const;
 
+/*
+   Three icons, and the pin is gone with the rung it stood for.
+
+   `Pin` is a map pin and it marked the visited tier — somebody had stood at
+   that address. Site visits were withdrawn, the rung that replaced them at 3 is
+   reserved and unbuilt, and nothing reaches it; a listing carrying a stored 3
+   is a legacy row, not a stronger claim, so it gets the same tick as tier 2
+   rather than a mark asserting a visit nobody made.
+*/
 function TierIcon({ tier, size }: { tier: VerificationTier; size: number }) {
   if (tier === 0) return <Warning size={size} />;
-  if (tier >= 3) return <Pin size={size} />;
-  if (tier === 2) return <Check size={size} />;
+  if (tier >= 2) return <Check size={size} />;
   return <Building size={size} />;
 }
 

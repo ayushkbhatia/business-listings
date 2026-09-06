@@ -1294,6 +1294,36 @@ model Document {
   /// invites a page that looks wrong for the twenty-four hours around it. Null
   /// for documents that do not expire.
   validUntil  DateTime? @map("valid_until")
+  /// The credential's own number — `CD-DXB-8842`, an ISO certificate number.
+  ///
+  /// Board 3e §4 gives the uploaded-by-you table a `NUMBER` column, and the
+  /// number is how a buyer's compliance officer matches a certificate against a
+  /// register they already hold. It is the seller's to type, because we do not
+  /// check it: nothing in the platform validates this against an issuing body,
+  /// and the `Uploaded by you` heading is what says so.
+  ///
+  /// Never on the licence or the TRN rows. Those two read their numbers off
+  /// `Business.licenceNumber` and `Business.trn`, which are licence-locked.
+  reference   String?
+  /// When a moderator last looked at this document. Null means never.
+  ///
+  /// Board 3e §4's third state: a credential the seller has asked to publish
+  /// shows `In review · 2 working days` and stays off the storefront until
+  /// somebody has looked. The gate is `isPublic AND reviewedAt IS NOT NULL`,
+  /// checked in `lib/storefront/loader.ts` — two facts, because they are two
+  /// different people's decisions and collapsing them into one column means
+  /// either the seller can publish unreviewed or a moderator can publish
+  /// something the seller wanted hidden.
+  ///
+  /// It is not a claim that the certificate is true. Nothing here is checked
+  /// against an issuing authority — that is the whole distinction the screen
+  /// draws between `Verified by us` and `Uploaded by you`, and a review that
+  /// confirmed a certificate would erase it. What a moderator decides is
+  /// whether the file is the document it says it is and fit for a public page.
+  reviewedAt  DateTime? @map("reviewed_at")
+  /// Written by staff on a decision. Non-negotiable 3 — the audit row carries
+  /// the same words, and this is the copy the seller reads on the row.
+  reviewReason String?  @map("review_reason")
 
   businessId String? @map("business_id")
   enquiryId  String? @map("enquiry_id")
@@ -1314,6 +1344,9 @@ model Document {
   @@index([folderId])
   /// The storefront's certificates block reads exactly this.
   @@index([businessId, isPublic])
+  /// The moderation queue: everything a seller has asked to publish and nobody
+  /// has looked at, oldest first, so the two-working-day SLA is readable.
+  @@index([isPublic, reviewedAt, createdAt])
   @@map("document")
 }
 

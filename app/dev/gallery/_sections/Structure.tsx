@@ -16,6 +16,7 @@ import {
 } from "@/components/structure";
 import { Button, SearchField } from "@/components/primitives";
 import { formatAED, formatCount, formatDate, formatDuration, maskPhone, maskTRN } from "@/lib/format";
+import { isVerified } from "@/lib/verification";
 import { t } from "@/lib/i18n";
 import { Frame, Section, Specimen, States } from "../_kit";
 
@@ -200,7 +201,11 @@ export function Structure() {
               rows={ROWS}
               rowKey={(r) => r.id}
               stickyHeader
-              groupBy={(r) => (r.tier >= 3 ? "verified" : "unverified")}
+              // `VERIFIED_TIER`, not 3. Verified has meant "licence checked" — rung 2 —
+              // on every public surface since handoff 1; the literal 3 here grouped a
+              // specimen by the withdrawn visited rung and put verified suppliers in
+              // the unverified band.
+              groupBy={(r) => (isVerified(r.tier) ? "verified" : "unverified")}
               groupLabel={(key, count) =>
                 key === "verified"
                   ? t("table.band.verified", { count: formatCount(count) })

@@ -114,7 +114,24 @@ export const EVENT_PARAMS = {
   message_received: ["businessName", "preview", "enquiryId", "shortLink"],
   review_posted: [],
   review_requested: [],
-  document_expiring: [],
+  /*
+     Board 3e §5 — the sixty-day and fourteen-day notices on a trade licence.
+
+     Declared and emitted by nothing until this board. The screen writes the
+     whole sequence down — email and banner at sixty days, banner and an amber
+     row at fourteen, the tier drop on the day — and a screen that describes a
+     job on the job's behalf is a job that has to exist. It did not; the only
+     thing that ever read `licenceExpiry` was the nightly sweep that performs
+     the drop, so the first a supplier heard about their licence was the badge
+     going.
+
+     `days` as well as `expiresAt` because the two notices are the same event at
+     different distances, and a template that can say "in 14 days" reads as a
+     deadline where a bare date reads as administration. That distinction is the
+     board's own argument for the column: *"`28 Sep 2026` in a table does not
+     read as urgent."*
+  */
+  document_expiring: ["expiresAt", "days"],
   /*
      Declared, and deliberately empty — so `isEmitted` reports false and the
      notifications screen shows it as "nothing sends this yet", which is the

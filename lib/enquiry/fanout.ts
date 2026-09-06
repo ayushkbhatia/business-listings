@@ -15,6 +15,8 @@
  * Pure. The query layer fetches candidates, this ranks and cuts.
  */
 
+import { trustScore } from "@/lib/verification";
+
 export const MIN_RECIPIENTS = 1;
 export const MAX_RECIPIENTS = 8;
 
@@ -137,8 +139,16 @@ export function scoreCandidate(candidate: FanoutCandidate, request: FanoutReques
   // Same emirate is a real delivery difference in the UAE, not a nicety.
   const locality = request.emirate === null ? 0.5 : candidate.emirate === request.emirate ? 1 : 0.35;
 
-  // Platform-owned, so it is safe to rank on. 0..4 normalised.
-  const trust = candidate.verificationTier / 4;
+  /*
+     Platform-owned, so it is safe to rank on.
+
+     Normalised against the top rung anybody can reach, which is 2 — not 4. The
+     literal divisor here was right when the ladder ran to four and has been
+     wrong since site visits were withdrawn: a licence-verified supplier, the
+     best a supplier can be, scored 0.75 of this component instead of 1, in the
+     function that decides which eight of them receive an enquiry.
+  */
+  const trust = trustScore(candidate.verificationTier);
 
   /*
    * Measured, never claimed. An unmeasured seller scores the midpoint rather

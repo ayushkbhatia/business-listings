@@ -12,6 +12,7 @@ import { sweepAreaPages } from "@/lib/seo/area";
 import { sweepEmiratePages } from "@/lib/seo/emirate";
 import { sweepCuratedLists } from "@/lib/seo/curated";
 import { sweepExpiredLicences } from "@/lib/verification/expiry-job";
+import { sweepExpiringLicences } from "@/lib/verification/licence-notice-job";
 import { sweepZeroQuoteEnquiries } from "@/lib/enquiry/zero-quote";
 import { pruneProductEvents } from "@/lib/telemetry/record";
 import { expireInvites } from "@/lib/team/invite";
@@ -258,6 +259,22 @@ export async function GET(request: NextRequest) {
        delivery row, so a retry caused by a step above it finds nothing to do.
     */
     expiringQuotes: () => sweepExpiringQuotes(),
+    /*
+       Board 3e §5's first two points, and it sits with the other two carriers
+       for the same reason: it hands a message to one. Idempotent the same way —
+       `sweepExpiringLicences` reads the delivery log and skips a business that
+       has already had this stage's notice, so a retry caused by a step above it
+       finds nothing to do.
+
+       **After `expiredLicences`, and the order is load-bearing.** That step
+       drops the tier on a licence that lapsed overnight; this one only ever
+       looks forward, at licences that have not lapsed yet. Running it first
+       would be harmless today and would stop being so the moment either
+       function's window moved to touch the day itself — the two would then
+       disagree about whether a licence expiring at midnight is a thing to warn
+       about or a thing already done.
+    */
+    expiringLicences: () => sweepExpiringLicences(),
   });
 
   console.info("[jobs] daily", outcome.steps);

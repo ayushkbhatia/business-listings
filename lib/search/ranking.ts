@@ -10,6 +10,8 @@
  * its way to the top is a directory nobody comes back to, and the subscription
  * only holds if being found is worth paying for.
  */
+import { trustScore } from "@/lib/verification";
+
 export interface RankingWeights {
   relevance: number;
   verificationTier: number;
@@ -205,7 +207,15 @@ function scorePlan(multiplier: number): number {
 export function scoreRow(signals: RankSignals, weights: RankingWeights = DEFAULT_WEIGHTS): number {
   const parts: [number, number][] = [
     [weights.relevance, Math.min(1, Math.max(0, signals.relevance))],
-    [weights.verificationTier, Math.min(1, signals.verificationTier / 4)],
+    /*
+       Normalised against the top achievable rung — 2 — and not the 4 the ladder
+       stopped having when site visits were withdrawn. Until this, the strongest
+       verification a supplier can hold contributed three quarters of the
+       verification weight, which is 22 of 100 on this scale: the whole
+       directory ranked as though every verified listing were one rung short of
+       something nobody can reach.
+    */
+    [weights.verificationTier, trustScore(signals.verificationTier)],
     [weights.responseTime, scoreResponseTime(signals.responseTimeMedianMs)],
     [weights.specCompleteness, signals.specCompleteness ?? UNKNOWN],
     [weights.distance, scoreDistance(signals.distanceKm)],

@@ -37,12 +37,25 @@ enum ListingSource { licence_import self_added }
 `verificationTier` drops to 1 automatically the day `licenceExpiry` passes — a scheduled job,
 not a manual step. No grace period.
 
-The ladder ran to 4 and stops at 3. Tiers 3 and 4 were "site visited" and "premises visited
-and trading history audited", and both rested on somebody standing in the warehouse. Site
-visits were withdrawn, so `audited` moved down to 3 and now rests on the trading history
-this platform already measures — enquiries answered, quotes sent, reply times. `visitedAt`
-and `visitedByStaffId` are gone, as are `SiteVisitRequest`, `SiteVisitReport` and
-`SiteVisitPhoto`. A `business_verification_tier_range` CHECK holds the ceiling at 3.
+The ladder ran to 4 and stops at 3:
+
+```
+0 unclaimed → 1 claimed → 2 licence verified (top) → 3 trade references (reserved)
+```
+
+**Tier 2 is the top achievable rung.** Tiers 3 and 4 were "site visited" and "premises
+visited and trading history audited", and both rested on somebody standing in the warehouse.
+Site visits were withdrawn, so `visitedAt` and `visitedByStaffId` are gone, as are
+`SiteVisitRequest`, `SiteVisitReport` and `SiteVisitPhoto`. A
+`business_verification_tier_range` CHECK holds the ceiling at 3.
+
+The first pass at that cut moved `audited` down to rung 3 and re-based it on trading
+history. That was the same mistake one step quieter: nothing measures a trading-history
+audit, no screen sets it, and no listing ever held it — so rung 3 was again a requirement
+nobody performs. Board 3e put **trade references** there, `reserved`, drawn so the ladder has
+somewhere to go and carrying no affordance because it is not built. `20260916090000_document_review`
+moved the eight rows still stored at 3 down to 2, which is what their licence check actually
+supports.
 
 ```prisma
 model Location {
@@ -425,7 +438,8 @@ computes, from `strengthItems()`.
 
 ```prisma
 model Media    { folderId String?  /* null = Unfiled */  products ProductMedia[]    }
-model Document { folderId String?                        products ProductDocument[] }
+model Document { folderId String?  reference String?  reviewedAt DateTime?  reviewReason String?
+                 products ProductDocument[] }
 
 model ProductMedia    { productId; mediaId;    sortOrder }  // @@id([productId, mediaId])
 model ProductDocument { productId; documentId; sortOrder }
@@ -443,6 +457,14 @@ product, because a UL certificate covers a whole range.
 an order are two sources of truth for one fact and they drift, and board 3i's
 criterion 8 asks that the primary be settable *and* that board 1g's gallery
 order match it. One column satisfies both by construction.
+
+**A document reaches a storefront on two decisions, not one.** `isPublic` is the seller's —
+they want this certificate named on their listing — and `reviewedAt` is a moderator's, that it
+may be. `lib/storefront/loader.ts` requires both, which is what makes board 3e's
+`In review · 2 working days` a description of where the file is rather than a courtesy.
+Collapsed into one column, either a seller publishes unreviewed or a moderator publishes
+something the seller asked to hide. `reference` is the credential's own number, and nothing
+validates it against an issuing body — the `Uploaded by you` heading is what says so.
 
 **Deleting a product no longer deletes its photographs.** `media.product_id`
 carried `onDelete: Cascade`; the join carries it now, so only the reference
