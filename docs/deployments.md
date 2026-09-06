@@ -163,6 +163,22 @@ The same check fails on a migration **modified** relative to `main`. Prisma
 checksums applied migrations: editing one that production has already run does
 not re-run it, it makes the next `migrate deploy` refuse. Write a new migration.
 
+### The CLI cannot reach production by hand
+
+`pnpm db:deploy` is the only path. `prisma.config.ts` refuses any Prisma CLI
+command whose target is not loopback, so `pnpm exec prisma migrate deploy`,
+`migrate dev`, `db push` and `db execute` all stop before they connect.
+
+The refusal names the host and points at `db:deploy`, which prints every pending
+migration, says which database it is about to change, and requires the word back.
+That script sets `PRISMA_MIGRATE_REVIEWED=1` for the single child process it
+spawns — so the review is not a convention that a shortcut can go around.
+
+On 2026-09-06 a session applied two migrations to the hosted database by typing
+the raw command in a worktree whose `.env.local` named production rather than a
+throwaway. `lib/db/target.ts` had guarded the seed, the integration suite and the
+end-to-end run since the incident before it, and covered none of the CLI.
+
 ### Ordering, when a migration and its code both need to ship
 
 Vercel deploys on merge; the database waits for a person. So the two are never

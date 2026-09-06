@@ -52,12 +52,22 @@ beforeAll(async () => {
      clone with real overrides, and a test that borrowed one would assert
      against somebody else's labels.
   */
+  /*
+     A template its own category actually points at.
+
+     `templateForCategory` resolves the way the product write path does —
+     `Category.defaultTemplateId`, then a hop to the parent — and an arbitrary
+     live template need not be any category's default. Picking one without that
+     constraint passed alone and failed in the full suite, which is the "five
+     incompatible resolutions of which template governs this product" the map
+     found, reproduced inside this file.
+  */
   const template = await prisma.specTemplate.findFirstOrThrow({
-    where: { status: "live", fields: { some: {} } },
-    select: { id: true, categoryId: true },
+    where: { status: "live", fields: { some: {} }, defaultForCategories: { some: {} } },
+    select: { id: true, categoryId: true, defaultForCategories: { select: { id: true } } },
   });
   platformTemplateId = template.id;
-  categoryId = template.categoryId;
+  categoryId = template.defaultForCategories[0]!.id;
 
   const business = await prisma.business.findFirstOrThrow({
     where: { claimStatus: "claimed", sellerTemplates: { none: {} } },
