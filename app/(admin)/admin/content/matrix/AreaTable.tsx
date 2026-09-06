@@ -336,7 +336,17 @@ export function AreaTable({
           </fieldset>
 
           <div className="mt-6">
-            <Label htmlFor="area-reason">{t("guide_admin.field.reason")}</Label>
+                          {/*
+                 The same label the other two editors on this page use.
+
+                 `/admin/content/matrix` carries four controls that write an
+                 audited reason — this table, the emirate table, the matrix
+                 table and the rules panel — and two of them called the field
+                 "Why" while two called it "Reason". One screen, one contract,
+                 two names for it. `builder.reason_label` is what the rest of
+                 the console uses and what the design system names.
+              */}
+              <Label htmlFor="area-reason">{t("builder.reason_label")}</Label>
             <Textarea
               id="area-reason"
               rows={2}
