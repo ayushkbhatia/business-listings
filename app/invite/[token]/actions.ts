@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { isSafeNext } from "@/lib/auth/flow";
+import { signInHref } from "@/lib/auth/next-path";
 import { getActor } from "@/lib/auth/session";
 import { acceptInvite } from "@/lib/team/invite";
 
@@ -29,13 +29,13 @@ export async function acceptInviteAction(formData: FormData): Promise<void> {
        the invitation as `next` so the round trip lands here again rather than
        on the directory home page with the token lost.
 
-       `isSafeNext` guards a path this function built itself, which looks
+       `signInHref` guards a path this function built itself, which looks
        redundant and is not: the token comes from a URL a stranger controls, and
-       `encodeURIComponent` is what keeps a `//host` or a backslash in it from
-       becoming an off-site destination. The assertion is cheap and the failure
+       the encoding it applies is what keeps a `//host` or a backslash in it
+       from becoming an off-site destination. The check is cheap and the failure
        it prevents is an open redirect.
     */
-    redirect(`/signin?next=${encodeURIComponent(isSafeNext(here) ? here : "/")}`);
+    redirect(signInHref(here));
   }
 
   const result = await acceptInvite(token, actor);

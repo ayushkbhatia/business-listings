@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { prisma } from "@/lib/db/client";
-import { getActor } from "@/lib/auth/session";
+import { requireBuyerSeat } from "@/lib/auth/buyer";
 import { formatRelative } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
@@ -24,14 +23,13 @@ import { forgetSearch } from "./actions";
 
 export const dynamic = "force-dynamic";
 
+// `robots` is inherited from ../layout.tsx, which owns it for the subtree.
 export const metadata: Metadata = {
   title: t("saved.title"),
-  robots: { index: false, follow: false },
 };
 
 export default async function SavedSearchesPage() {
-  const actor = await getActor();
-  if (!actor) redirect("/signin?next=/account/saved");
+  const { actor } = await requireBuyerSeat("/account/saved");
 
   const rows = await prisma.savedSearch.findMany({
     where: { userId: actor.id },

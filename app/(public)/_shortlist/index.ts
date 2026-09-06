@@ -1,4 +1,5 @@
 import { t } from "@/lib/i18n";
+import { signInHref } from "@/lib/auth/next-path";
 import type { ShortlistLabels } from "./ShortlistButton";
 
 /**
@@ -21,9 +22,10 @@ export {
  * Every string the button needs, translated, plus the sign-in link.
  *
  * `next` is the path the buyer is on — the caller knows it and a server
- * component cannot ask for it. Encoded here rather than by each caller: a raw
- * slug with a query string on it would truncate the return path at the first
- * ampersand, and `/signin` reads the parameter through `isSafeNext` either way.
+ * component cannot ask for it. The URL is built by `signInHref`, which is the
+ * one construction of it in the project: encoding here rather than in each
+ * caller is what stops a slug with a query string on it truncating the return
+ * path at the first ampersand.
  */
 export function shortlistLabels(next: string): ShortlistLabels {
   return {
@@ -31,6 +33,6 @@ export function shortlistLabels(next: string): ShortlistLabels {
     saved: t("shortlist.saved"),
     remove: t("shortlist.remove"),
     signIn: t("shortlist.sign_in"),
-    signInHref: `/signin?next=${encodeURIComponent(next)}`,
+    signInHref: signInHref(next),
   };
 }
