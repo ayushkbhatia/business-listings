@@ -7,8 +7,14 @@ import { assertCanEditProduct } from "@/lib/auth/guards";
 import { applyImport, previewImport, revertImport, type ImportPreview } from "@/lib/import/service";
 import { getSpecFieldOptions } from "@/lib/db/queries/catalogue";
 import type { ColumnPlan } from "@/lib/import/columns";
-import { missingRequired, templateForCategory } from "@/lib/catalogue/template";
+import { missingFrom } from "@/lib/catalogue/overlay";
+import {
+  arrayFieldIds,
+  knownFieldIds,
+  resolveEditorTemplate,
+} from "@/lib/products/editor-template";
 import { mergeSpecValues } from "@/lib/products/spec-values";
+import { recordEvent } from "@/lib/telemetry/record";
 import { reindexBusiness, reindexProduct } from "@/lib/search/reindex";
 import { t } from "@/lib/i18n";
 import { getSellerSeat } from "../_shell";
@@ -192,7 +198,16 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
   const id = String(formData.get("id") ?? "");
   const existing = await prisma.product.findUnique({
     where: { id },
-    select: { businessId: true, categoryId: true, specValues: true },
+    select: {
+      businessId: true,
+      categoryId: true,
+      specValues: true,
+      slug: true,
+      // Compared against what was posted, so `stockUpdatedAt` moves only on a
+      // real change — see the write below.
+      stockQty: true,
+      business: { select: { slug: true } },
+    },
   });
   // Someone else's product and one that does not exist give the same answer.
   if (!existing || existing.businessId !== seat.businessId) {
@@ -200,7 +215,9 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
   }
 
   const name = String(formData.get("name") ?? "").trim();
-  if (name === "") return { ok: false, error: t("product.name_label") };
+  // The label, not a message. This branch used to return "Product name", which
+  // rendered in the error banner as a heading with no verb.
+  if (name === "") return { ok: false, error: t("product.name_required") };
 
   const availability = String(formData.get("availability") ?? "in_stock");
   const status = String(formData.get("status") ?? "draft");
@@ -212,10 +229,18 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
      prevents written out beside it: a value can only be cleared by a form that
      was showing its field.
   */
-  const fields = await prisma.specField.findMany({
-    where: { template: { defaultForCategories: { some: { id: existing.categoryId } } } },
-    select: { id: true },
-  });
+  /*
+     One resolver for the boxes and for the refusal.
+
+     This read `specField.findMany({ template: { defaultForCategories: ... } })`
+     — which does not hop to the parent category, while `templateForCategory`
+     six lines below it did. Every product in the seeded catalogue is filed
+     under a subcategory, so `known` came back empty and every spec value the
+     form posted was dropped on the floor, silently, while the requirement check
+     read a different template and refused the save naming fields that had no
+     box on screen. See lib/products/editor-template.ts.
+  */
+  const template = await resolveEditorTemplate(seat.businessId, existing.categoryId);
 
   const presented = formData.getAll("spec.present").map(String);
   const posted: Record<string, string> = {};
@@ -225,7 +250,10 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
     stored: (existing.specValues ?? {}) as Record<string, unknown>,
     presented,
     posted,
-    known: new Set(fields.map((field) => field.id)),
+    // Both kinds of id. The query this replaced returned platform fields only,
+    // so a value typed into a field the seller had invented was never stored.
+    known: template ? knownFieldIds(template) : new Set<string>(),
+    ...(template ? { arrayFields: arrayFieldIds(template) } : {}),
   });
 
   /*
@@ -238,13 +266,26 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
      The labels in the refusal are the seller's own, so it names the box they
      are looking at rather than the platform's word for it.
   */
-  const template = await templateForCategory(seat.businessId, existing.categoryId);
   if (template) {
-    const check = missingRequired(template, specValues);
+    const check = missingFrom(template.fields, specValues);
     if (!check.ok) {
+      /*
+         Recorded from the server, not the browser.
+
+         Whether this save will be refused is a state fact, and a state fact
+         taken from a browser is the browser's word for it — lib/telemetry/events.ts
+         says so at the top. The count only; the labels are the seller's catalogue.
+      */
+      await recordEvent({
+        name: "product_save_blocked",
+        businessId: seat.businessId,
+        props: { missing: check.missing.length },
+      });
       return { ok: false, error: t("product.missing_required", { fields: check.missing.join(", ") }) };
     }
   }
+
+  const stockQty = readOptionalInt(formData.get("stockQty"));
 
   await prisma.product.update({
     where: { id },
@@ -258,7 +299,17 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
       status: (STATUSES as readonly string[]).includes(status)
         ? (status as Status)
         : "draft",
-      stockQty: readOptionalInt(formData.get("stockQty")),
+      stockQty,
+      /*
+         Dated only when the number actually moved.
+
+         `stockUpdatedAt` records when the count was last *stated*, which is what
+         lets board 1e show a quantity for thirty days and then stop. Stamping it
+         on every save would make a March figure permanently fresh — the exact
+         staleness the column exists to catch — and stamping it never leaves a
+         corrected count reading as old. So: on a delta, and only on a delta.
+      */
+      ...(stockQty !== existing.stockQty ? { stockUpdatedAt: new Date() } : {}),
       leadTimeDays: readOptionalInt(formData.get("leadTimeDays")),
       minOrderQty: readOptionalInt(formData.get("minOrderQty")),
       specValues: specValues as Prisma.InputJsonValue,
@@ -278,6 +329,17 @@ export async function saveProduct(formData: FormData): Promise<SaveProductResult
 
   revalidatePath("/dashboard/products");
   revalidatePath(`/dashboard/products/${id}`);
+  /*
+     The buyer's page too, and by its concrete path.
+
+     Board 1g sets `revalidate = 300`, so without this a corrected spec value is
+     invisible to buyers for five minutes after the seller has watched the
+     preview rail update. The dynamic pattern `/b/[slug]/p/[product]` would also
+     work and would invalidate every product page on the site on every save —
+     each one then re-rendered cold by the next crawler, which is the ISR cost
+     the workspace rule is about.
+  */
+  revalidatePath(`/b/${existing.business.slug}/p/${existing.slug}`);
   return { ok: true };
 }
 

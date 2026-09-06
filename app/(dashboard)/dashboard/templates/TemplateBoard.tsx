@@ -32,8 +32,19 @@ import type { TemplateActionResult } from "./actions";
 export interface BoardField {
   fieldId: string;
   label: string;
-  /** Pre-resolved: "Select · 18 · DN / inch". */
+  /** Pre-resolved for the table cell: "Select · 18 · DN / inch". */
   typeLabel: string;
+  /**
+   * The field's actual type — `select`, `multiselect`, `number`, `text`.
+   *
+   * Carried beside the label rather than derived from it, because `stage()`
+   * used to write `typeLabel` into `OwnField.type`, so any staged save turned a
+   * seller's own field's type into a sentence. `readOwnFields` accepts any
+   * string and defaults a non-string to "text", so nothing failed — the product
+   * editor simply stopped being able to tell a multiselect from a text box, and
+   * a multiselect it renders as a text box is a stored array it deletes.
+   */
+  type: string;
   platformFieldId: string | null;
   /** The immutable mapping, shown locked. Null for a field the seller invented. */
   mappedTo: string | null;
@@ -165,7 +176,8 @@ export function TemplateBoard(props: TemplateBoardProps) {
         ownFields.push({
           id: field.fieldId,
           label: now.label,
-          type: field.typeLabel,
+          // The type, not the label for it. See `BoardField.type`.
+          type: field.type,
           unit: field.unit,
           options: now.options,
           required: now.required,

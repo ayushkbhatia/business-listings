@@ -135,7 +135,15 @@ const TIER_4 = [
  * plans and copying the markup is how two screens start disagreeing about one
  * record. Which tier it belongs to is the design owner's call, not this file's.
  */
-const UNLISTED = ["plan-comparison"] as const;
+/*
+   Page-local components with no canvas home.
+
+   `spec-field-row` is board 3g's grid row. It is not a tier entry — the tier
+   arrays' lengths are asserted below against the inventory, and a component
+   that lives beside one route has no row in it — but the pre-flight list still
+   asks for every documented state to render somewhere clickable.
+*/
+const UNLISTED = ["plan-comparison", "spec-field-row"] as const;
 
 export default function Gallery() {
   return (

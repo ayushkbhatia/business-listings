@@ -146,3 +146,57 @@ The one thing worth saying plainly: **contrast and type size compound.** Caption
 text at 11.5px and 4.23:1 is meaningfully harder to read than either problem
 alone suggests, and both currently apply to the same `--text-muted` metadata
 that carries most of a listing's facts.
+
+## Board 3g, and the unfilled spec row
+
+Board 3g's handoff asked for the unfilled rows to be **dropped** from the
+buyer-facing spec table, and gave the reason in its own words: "a row whose
+entire content is an admission of a gap, in the lowest-contrast tone on the
+board."
+
+The row stays — "unfilled data stays visible" is a project non-negotiable, and
+board 1g's own criterion pins the row count. The tone was the real complaint and
+it moved:
+
+| pairing | where | before | after |
+|---|---|---:|---:|
+| unfilled value in `SpecTable` | 1g, 1e, board 3g's preview rail | `--text-faint` 2.70:1 on card, 2.46:1 on paper-sunk | `--text-muted` 4.46:1 on card, 4.05:1 on paper-sunk |
+
+Still under 4.5:1, because `--text-muted` itself is — which is the unresolved
+token decision this file already documents, not something board 3g introduced.
+The three ways out above apply unchanged.
+
+### The gap field in the product editor
+
+Board 3g's render draws an empty filterable field as a `1.5px #c98d84` border on
+a `#fdf6f5` fill. The nearest tokens are worse than the raw values and neither
+reaches even the 3:1 border floor:
+
+| pairing | ratio | floor |
+|---|---:|---:|
+| `--bad-line-strong` on `--card` (gap field border) | 2.16:1 | 3:1 |
+| `--bad-line-strong` on `--bad-surface` | 2.02:1 | 3:1 |
+| `--bad-ink` on `--card` (the reason line beneath it) | 6.98:1 | 4.5:1 |
+
+So the border is treated as decoration and **is not what carries the state**.
+The field carries an `EMPTY` badge with the word in it and a reason line in
+`--bad-ink`, both of which survive the colour being removed — which is what
+criterion 15 asks for, and what the border alone could not deliver.
+
+### What board 3g does not claim
+
+Criterion 14 asks for "axe clean at the project's type scale — every tone at
+4.5:1 or better", with floors of 9.5px mono eyebrow, 10px mono metadata and
+11.5px prose. Two halves are unmet and neither is board 3g's to fix:
+
+- **The 4.5:1 half** fails on `--text-muted`, above.
+- **The 10px mono metadata floor** has no token. `--t-eyebrow` is 9.5px and
+  `--t-caption` is 11.5px with nothing between them, so the screen uses
+  `--t-caption`: above the floor rather than at it. Adding `--t-meta: 10px`
+  would edit the token block the handoff says to paste unchanged, and it is the
+  same decision this file is already waiting on.
+
+Every axe run in the suite disables `color-contrast` (jsdom has no layout, and
+the e2e pass excludes it deliberately), so this file and `pnpm check:contrast`
+are the only evidence for that half. It is in neither gate — run it by hand
+whenever a screen moves a colour.

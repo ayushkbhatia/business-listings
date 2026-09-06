@@ -79,6 +79,8 @@ export const EVENT_NAMES = [
   "template_revision_applied",
   "template_revision_restored",
   "template_field_detached",
+  "product_editor_viewed",
+  "product_save_blocked",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -608,6 +610,33 @@ export const EVENT_SPECS = {
     emitter: "server",
     session: "never",
     props: { key: "string" },
+  },
+  /**
+   * Board 3g opened.
+   *
+   * `gaps` is what the seller was shown, not what the server would refuse —
+   * a browser reporting a state fact is reporting its own belief about it, and
+   * the two can differ by a template edit in another tab. The refusal has its
+   * own event below, emitted where the decision is actually made.
+   */
+  product_editor_viewed: {
+    emitter: "browser",
+    session: "required",
+    props: { fields: "number?", gaps: "number?" },
+  },
+  /**
+   * A save the requirement check refused.
+   *
+   * The number worth watching for board 3h open question 2: a seller who set a
+   * requirement and then hit it is a seller the flag-not-delist model is
+   * working on. One that never falls is one who has stopped editing.
+   *
+   * The count only. The labels are the seller's own catalogue.
+   */
+  product_save_blocked: {
+    emitter: "server",
+    session: "never",
+    props: { missing: "number" },
   },
 } as const satisfies Record<EventName, EventDefinition>;
 

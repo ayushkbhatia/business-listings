@@ -72,7 +72,24 @@ export function SpecTable({
                   className={cn(
                     "px-3 py-2 align-top text-body-sm",
                     row.mono && "font-mono",
-                    empty ? "text-faint" : "text-body",
+                    /*
+                       Muted, not faint.
+
+                       An unfilled row is the one whose entire content is an
+                       admission of a gap, and it was rendered in the least
+                       legible tone on the page: `--text-faint` measures 2.56:1
+                       on paper and 2.70:1 on card, both under the 4.5:1 floor.
+                       Two components already refuse it by name for the same
+                       reason (ChipLink, Eyebrow).
+
+                       Board 3g's handoff asked for the row to be dropped
+                       instead. It stays — "unfilled data stays visible" is a
+                       project rule and board 1g's own criterion — but the
+                       complaint underneath it was legible and correct, so the
+                       tone moves. The seller reads exactly this table in the
+                       editor's preview rail.
+                    */
+                    empty ? "text-muted" : "text-body",
                   )}
                 >
                   {empty ? (

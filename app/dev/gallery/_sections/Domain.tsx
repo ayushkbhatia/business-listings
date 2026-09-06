@@ -39,6 +39,7 @@ import type { RamadanHours, WeekHours } from "@/lib/trade/hours";
 import { formatAED, formatDate, formatDuration, formatSize } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { Frame, Section, Specimen, States } from "../_kit";
+import { SpecGridStates } from "./SpecGridStates";
 
 /**
  * The rungs the ladder draws, from `TIERS` rather than a literal.
@@ -272,7 +273,7 @@ export function Domain() {
       <Section
         id="spec-table"
         title="SpecTable"
-        note="unfilled template rows stay visible in faint grey — dropping them would let a thin listing look complete"
+        note="unfilled template rows stay visible and say so — dropping them would let a thin listing look complete"
       >
         <Frame width="38rem">
           <SpecTable
@@ -290,6 +291,22 @@ export function Domain() {
               { key: "coating", label: "Coating", value: null },
             ]}
           />
+        </Frame>
+      </Section>
+
+      {/*
+        Board 3g's grid row. Page-local rather than an inventory component —
+        it belongs to one route — but the pre-flight list asks for every
+        documented state to render somewhere clickable, and the gap treatment
+        in particular is a thing to look at rather than to read about.
+      */}
+      <Section
+        id="spec-field-row"
+        title="SpecFieldRow (board 3g)"
+        note="a gap carries a word and a reason, never only a colour — and the reason is never a placeholder"
+      >
+        <Frame width="46rem">
+          <SpecGridStates />
         </Frame>
       </Section>
 

@@ -79,7 +79,7 @@ and it is the one that argues back.
 /dashboard/hours                        Hours & Ramadan                       [3d]
 /dashboard/verification                 Verification & documents              [3e]
 /dashboard/products                     Catalogue                             [3f]
-/dashboard/products/:sku                Product editor                        [3g]
+/dashboard/products/:id                 Product editor                        [3g]  built h3 wave 2
 /dashboard/products/import              CSV import mapper                    [11d]
 /dashboard/templates                    Spec templates                        [3h]  built h3 wave 2
 /dashboard/templates/:slug              One template, fields and settings      [3h]  built h3 wave 2
@@ -272,3 +272,15 @@ accumulated ranking a 404 would discard.
 
 All of it is enforced in code, not by editorial discipline, and the numbers are edited on
 `/admin/content/matrix` behind an impact preview and a second approver.
+
+## Why the product editor is `:id` and not `:sku`
+
+The spec, the epic and this file all said `/dashboard/products/:sku`. The route
+is `:id` and stays that way.
+
+`Product.sku` is `String?` with no unique constraint — the only per-business
+uniqueness on the table is `@@unique([businessId, slug])`. So a sku route is
+unaddressable for a product that has no sku, ambiguous for two that share one,
+and would need a new unique index to be either. That is a migration, and a
+migration for a cosmetic match to a line in a document is the wrong trade. The
+catalogue links by id and the e2e waits on `/dashboard/products/\w+`.

@@ -141,3 +141,63 @@ export function facetStateOf(input: {
   if (input.own || input.detached) return "yours_only";
   return input.isFilterable ? "platform" : "not_a_facet";
 }
+
+/* ── What counts as filled, and what a product still owes ────────────────── */
+
+/**
+ * The one emptiness test.
+ *
+ * Moved here from `./template.ts`, which is `server-only`: the product editor
+ * disables its Save from the same predicate the server refuses with, and a
+ * client component importing that module pulls Prisma into the browser bundle —
+ * which typecheck and lint both allow and only `next build` catches.
+ *
+ * It matches `lib/metrics/spec-completeness.ts` case for case. Two answers to
+ * "is this filled" is how a completeness figure and a save refusal end up
+ * disagreeing about one product.
+ */
+export function isFilled(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === "string") return value.trim() !== "";
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+/**
+ * One field, reduced to what the requirement check needs.
+ *
+ * `requiredNow` rather than `required` and `requiredFrom`, because board 4e's
+ * grace period is a comparison against a clock and there are two clocks here.
+ * The server resolves it; the browser is handed the answer. Otherwise a tab
+ * open across the moment a requirement starts biting gets a different verdict
+ * from the button than from the action behind it.
+ */
+export interface RequirementField {
+  fieldId: string;
+  label: string;
+  requiredNow: boolean;
+}
+
+/**
+ * The fields a product must carry before it can be saved.
+ *
+ * Board 3h §5: a requirement never delists a live product. It blocks that
+ * product's next save until the field is filled, and the labels are the
+ * seller's own so the refusal names a box on the screen they are looking at.
+ *
+ * The known limitation, stated rather than papered over: a `requiredFrom` that
+ * passes while the editor sits open leaves Save enabled until the page is
+ * re-rendered. The server refuses it, which is the correct order — the disabled
+ * button is a courtesy and the action is the guarantee, because a server action
+ * is a URL.
+ */
+export function missingFrom(
+  fields: readonly RequirementField[],
+  values: Record<string, unknown>,
+): { ok: boolean; missing: string[] } {
+  const missing = fields
+    .filter((field) => field.requiredNow && !isFilled(values[field.fieldId]))
+    .map((field) => field.label);
+
+  return { ok: missing.length === 0, missing };
+}

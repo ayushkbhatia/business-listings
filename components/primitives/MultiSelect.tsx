@@ -40,6 +40,16 @@ export interface MultiSelectProps {
   invalid?: boolean;
   disabled?: boolean;
   filterThreshold?: number;
+  /**
+   * The id of the message describing this control, e.g. a `FieldError`.
+   *
+   * A prop rather than a spread native attribute, because the trigger is a
+   * `<button>` inside a wrapper and an `aria-describedby` landing on the
+   * wrapper describes nothing. Board 3g needs it: a multiselect field with no
+   * value carries a reason line, and a reason line no screen reader reaches
+   * from the control is a reason only some sellers get.
+   */
+  describedBy?: string;
 }
 
 export function MultiSelect({
@@ -54,6 +64,7 @@ export function MultiSelect({
   emptyLabel,
   size = "md",
   invalid = false,
+  describedBy,
   disabled = false,
   filterThreshold = 8,
 }: MultiSelectProps) {
@@ -106,9 +117,10 @@ export function MultiSelect({
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-label={label}
+        {...(describedBy ? { "aria-describedby": describedBy } : {})}
         // Not aria-invalid: the attribute is not supported on role=button. The
-        // border carries it visually and the FieldError beside it carries it
-        // to assistive technology.
+        // border carries it visually, and `describedBy` points at the message
+        // that carries it to assistive technology.
         onClick={() => setOpen((o) => !o)}
         className={cn(
           "flex w-full items-center gap-1.5 rounded-ctl border bg-card py-1 pl-3 pr-8 text-left",

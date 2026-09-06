@@ -2782,6 +2782,86 @@ export const en = {
   "product.back": "Back to the catalogue",
   "product.template_link": "Rename these fields",
   "product.not_found": "That product cannot be found.",
+  "product.name_required": "Give the product a name before saving.",
+
+  // The template banner. Every count is a projection of the resolved template,
+  // so a number here cannot disagree with the grid beneath it.
+  "product.template_eyebrow": "Template",
+  "product.template_counts": "{fields} fields · {filterable} filterable",
+  "product.template_revision": "Your rev {revision} · tracks platform v{version}",
+  "product.template_platform": "The platform's own template — you have not made a copy of it yet",
+
+  // Scope chips. Counts ride in the label because a chip whose count sits
+  // elsewhere is a chip the seller has to look away from to read.
+  "product.scope_label": "Which fields to show",
+  "product.scope_all": "All {count}",
+  "product.scope_gaps": "Gaps {count}",
+  "product.scope_filterable": "Filterable {count}",
+  "product.scope_hint": "Order follows the template — it is the order buyers read",
+  "product.scope_empty": "No field is in this group.",
+
+  "product.pill_empty": "Empty",
+  "product.pill_yours_only": "Yours only",
+  "product.pill_required": "Required",
+  "product.own_marker": "your own field",
+
+  /*
+     Gap reasons. Three of them, because the honest sentence depends on what the
+     field is: a facet, a field of the seller's own, or a platform field nobody
+     filters on. None of them claims a ranking effect — an empty filterable
+     field is not a product ranked lower, it is a product absent from that
+     filter, which is a fact about the index rather than a correlation.
+
+     And none of them carries a search-volume figure. Board 3h reached that
+     first: the search log records what was typed, not which filters were used.
+  */
+  "product.gap_reason_filter": "Buyers filter on this. A product with it empty is not in that filter — not ranked lower in it, absent from it.",
+  "product.gap_reason_filter_scoped": "Buyers filter on this. A product with it empty is not in that filter. {filled} of your {total} products in this category have a value.",
+  "product.gap_reason_not_a_facet": "Not a filter. It shows on your product page and in your spec table.",
+  "product.gap_reason_yours_only": "Your own field. It shows in your spec table and is not a site-wide filter.",
+
+  "product.completeness_title": "Completeness",
+  "product.completeness": "How much of the template this product fills",
+  "product.multi_summary": { one: "{count} selected", other: "{count} selected" },
+  "product.multi_placeholder": "Nothing selected",
+  /*
+     The empty option a select needs to be able to be empty.
+
+     Not an information-carrying placeholder — the gap's reason lives beneath
+     the field, per criterion 13. This is the difference between a control that
+     has no value and one that silently has the first one.
+  */
+  "product.select_empty": "Not selected",
+  "product.multi_remove": "Remove {option}",
+  "product.completeness_value": "{filled} of {total} fields in your template",
+  "product.completeness_filterable": "{count} of the gaps are fields buyers filter on.",
+  "product.completeness_filterable_none": "None of the gaps is a field buyers filter on.",
+  "product.save_ok": "No required field is missing, so saving is not blocked.",
+  "product.save_blocked": "Fill {fields} before this product can be saved.",
+  /*
+     The card's half of the same fact.
+
+     A count rather than the list, because the alert above Save already names
+     the fields and one screen saying the same sentence twice reads as a bug in
+     the screen rather than as emphasis.
+  */
+  "product.save_blocked_count": { one: "{count} required field is still empty, so this product cannot be saved. It stays live in the meantime — nothing has been taken down.", other: "{count} required fields are still empty, so this product cannot be saved. It stays live in the meantime — nothing has been taken down." },
+  "product.go_to_first_missing": "Go to the first one",
+  "product.save_blocked_where": "Your template decides what is required. You can change that on your spec template.",
+  "product.go_to_gaps": "Go to the gaps",
+
+  "product.preview_eyebrow": "Spec table as buyers see it",
+  "product.preview_caption": "The specification a buyer reads on this product's page",
+  "product.preview_rows": "{filled} of {total} filled",
+  "product.preview_own_note": { one: "{count} field you added is not on your product page.", other: "{count} fields you added are not on your product page." },
+  "product.preview_draft_note": "This product is a draft, so the page is not published yet. This is what it would show.",
+
+  "product.add_field_body": "Need a field the template does not have? Add it to your template — it shows on your page and in your spec table, but it is not a site-wide filter until the platform makes it one for the whole category.",
+  "product.add_field_link": "Edit your template",
+  "product.field_detached_note": "Detached from the platform field. It keeps its value and its place in your spec table.",
+
+  "product.preview_action": "Preview",
+  "product.preview_draft_disabled": "A draft has no public page to preview yet.",
 
   // ── Spec template, board 3h ───────────────────────────────────────────────
   "product.missing_required": "Fill {fields} before saving. Your template requires it — the products already saved without it stay live, and this one needs it now.",

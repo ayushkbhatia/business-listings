@@ -103,6 +103,7 @@ export default async function TemplatePage({ params }: { params: Promise<{ slug:
       fieldId: field.fieldId,
       label: field.label,
       typeLabel: typeLabel(field),
+      type: field.type,
       platformFieldId: field.platformFieldId,
       // The immutable half of the pairing, shown locked. A rename cannot touch
       // it, which is why a rename cannot break comparison.
