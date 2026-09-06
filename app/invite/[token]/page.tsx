@@ -30,7 +30,7 @@ import { acceptInviteAction } from "./actions";
  */
 
 export const metadata: Metadata = {
-  title: "Team invitation",
+  title: t("invite.meta_title"),
   // Never indexed. A live invitation link in a search result is a seat granted
   // to whoever searched, and a spent one is a supplier's team page in public.
   robots: { index: false, follow: false },

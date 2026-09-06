@@ -16,7 +16,7 @@ import { PlanChooser } from "./PlanChooser";
  * whose recommendation is always its dearest tier is a directory a supplier
  * learns to read past.
  */
-export const metadata = { title: "Change plan" };
+export const metadata = { title: t("change.title") };
 export const dynamic = "force-dynamic";
 
 const PLAN_SELECT = {

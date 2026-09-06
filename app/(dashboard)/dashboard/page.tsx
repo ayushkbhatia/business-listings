@@ -27,7 +27,7 @@ import { getNavBadges, getSetupProgress, requireSellerSeat, SellerPage } from ".
  * The page opens on what needs a reply. An SME owner opens this product to
  * answer someone, not to admire their numbers, so the charts are a link.
  */
-export const metadata = { title: "Overview" };
+export const metadata = { title: t("overview.title") };
 export const dynamic = "force-dynamic";
 
 export default async function OverviewPage({

@@ -43,7 +43,7 @@ import { CatalogueWorkspace } from "./CatalogueWorkspace";
  * unlisted, never deleted: `hideOverPlanCap` flips them to draft and records
  * them on the subscription, and an upgrade puts them back.
  */
-export const metadata = { title: "Products" };
+export const metadata = { title: t("catalogue.title") };
 export const dynamic = "force-dynamic";
 
 function one(value: string | string[] | undefined): string {

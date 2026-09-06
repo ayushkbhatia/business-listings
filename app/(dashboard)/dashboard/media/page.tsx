@@ -43,7 +43,7 @@ import { Filters } from "./Filters";
  *
  * Every count here is a query. The board hardcoded all of them.
  */
-export const metadata = { title: "Media" };
+export const metadata = { title: t("media.title") };
 export const dynamic = "force-dynamic";
 
 const SORTS: SortKey[] = ["newest", "oldest", "largest", "name"];

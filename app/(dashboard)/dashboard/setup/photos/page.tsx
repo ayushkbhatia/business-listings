@@ -49,7 +49,7 @@ import {
  * never an assessment of the pixels. §4 spends half its length on that
  * distinction because one visual treatment hides it. See `lib/photos/slots.ts`.
  */
-export const metadata = { title: "Photos" };
+export const metadata = { title: t("photos.meta_title") };
 export const dynamic = "force-dynamic";
 
 /** Board 8b: owner and manager. The same seats the hub itself is for. */

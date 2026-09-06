@@ -27,7 +27,7 @@ import { cancelInvite, removeTeamMember, resendTeamInvite, saveLeadRouting, send
  * forms and the channel joins are the sort of thing that wants to be a callback
  * — see the note at the top of TeamBoard.tsx.
  */
-export const metadata = { title: "Team" };
+export const metadata = { title: t("team.title") };
 export const dynamic = "force-dynamic";
 
 const ROLES = ["seller_manager", "seller_sales", "seller_finance"] as const;

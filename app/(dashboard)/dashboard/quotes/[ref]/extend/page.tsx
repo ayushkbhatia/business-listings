@@ -1,4 +1,5 @@
 import { PipelineScreen } from "../../_pipeline";
+import { t } from "@/lib/i18n";
 
 /**
  * Board 3k §1 — the pipeline with one row's extend dialog already open.
@@ -9,7 +10,7 @@ import { PipelineScreen } from "../../_pipeline";
  * on a 404 the day somebody adds it, and because a seller can reach it from the
  * expiring card in the meantime.
  */
-export const metadata = { title: "Quotes sent" };
+export const metadata = { title: t("quotes.title") };
 export const dynamic = "force-dynamic";
 
 export default async function ExtendQuotePage({

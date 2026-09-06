@@ -17,7 +17,7 @@ import { restoreRevision } from "../../actions";
  * overlay: the history is append-only, a rollback can itself be rolled back,
  * and the record of what happened never depends on what happened next.
  */
-export const metadata = { title: "Revision history" };
+export const metadata = { title: t("template.history") };
 export const dynamic = "force-dynamic";
 
 export default async function HistoryPage({ params }: { params: Promise<{ slug: string }> }) {

@@ -16,7 +16,7 @@ import { QuestionCard } from "./QuestionCards";
  * asked and got nothing is a buyer who went to the next supplier, and the
  * question is a lead with the intent already written down.
  */
-export const metadata = { title: "Questions" };
+export const metadata = { title: t("questions.title") };
 export const dynamic = "force-dynamic";
 
 export default async function SellerQuestionsPage() {

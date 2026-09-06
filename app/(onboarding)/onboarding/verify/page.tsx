@@ -40,7 +40,7 @@ import { VerifySidebar } from "./VerifySidebar";
  * the actor's own seat after that, so a refresh does not lose the step.
  */
 export const metadata: Metadata = {
-  title: "Prove ownership",
+  title: t("verify.meta_title"),
   robots: { index: false, follow: true },
 };
 

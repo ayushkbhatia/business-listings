@@ -1,4 +1,5 @@
 import { PipelineScreen } from "../_pipeline";
+import { t } from "@/lib/i18n";
 
 /**
  * Board 3k §1 — `/dashboard/quotes/:ref` highlights that row.
@@ -10,7 +11,7 @@ import { PipelineScreen } from "../_pipeline";
  * `:ref` is the quote reference — `QT-8841-ALMR2` — because that is the string
  * both sides say on the phone. A cuid here would be a link nobody can check.
  */
-export const metadata = { title: "Quotes sent" };
+export const metadata = { title: t("quotes.title") };
 export const dynamic = "force-dynamic";
 
 export default async function QuoteRowPage({

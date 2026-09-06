@@ -15,7 +15,7 @@ import { ImportWizard } from "./ImportWizard";
  * category picks it on the catalogue screen first; offering a category chooser
  * here would make the spec fields change under a mapping already in progress.
  */
-export const metadata = { title: "Import a spreadsheet" };
+export const metadata = { title: t("import.title") };
 export const dynamic = "force-dynamic";
 
 export default async function ImportPage() {

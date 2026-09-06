@@ -36,7 +36,7 @@ import { signInAction } from "../actions";
  * server-side on every admin page.
  */
 export const metadata: Metadata = {
-  title: "Staff sign in",
+  title: t("auth.staff.title"),
   robots: { index: false, follow: false },
 };
 

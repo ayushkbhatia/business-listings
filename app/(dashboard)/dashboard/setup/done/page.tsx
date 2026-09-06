@@ -46,7 +46,7 @@ import { Exits } from "./Exits";
  * ranks by, marks the two this session moved, and stops there — the full
  * explanation belongs on the pricing and verification pages.
  */
-export const metadata = { title: "Setup complete" };
+export const metadata = { title: t("setup_done.meta_title") };
 export const dynamic = "force-dynamic";
 
 /** §1: owner and manager, consistent with the rest of `/dashboard/setup/*`. */

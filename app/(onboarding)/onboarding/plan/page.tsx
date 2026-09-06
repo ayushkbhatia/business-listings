@@ -35,7 +35,7 @@ import { TrialButton } from "./TrialButton";
  * and finishes four tasks is worth more than one who picks Pro and abandons.
  */
 export const metadata: Metadata = {
-  title: "Pick a plan",
+  title: t("plan_step.meta_title"),
   robots: { index: false, follow: true },
 };
 

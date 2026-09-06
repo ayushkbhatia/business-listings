@@ -18,7 +18,7 @@ import { SlotList } from "./SlotList";
  * nobody can filter to at the top of a page sells them nothing, and they find
  * that out a month later and never buy one again.
  */
-export const metadata = { title: "Sponsored placement" };
+export const metadata = { title: t("promote.title") };
 export const dynamic = "force-dynamic";
 
 const RULES = ["labelled", "never_outranks", "one_slot"] as const;

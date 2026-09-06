@@ -1,4 +1,5 @@
 import { PipelineScreen } from "./_pipeline";
+import { t } from "@/lib/i18n";
 
 /**
  * Board 3k — quotes sent, the pipeline.
@@ -11,7 +12,7 @@ import { PipelineScreen } from "./_pipeline";
  * cached for sixty seconds is a pipeline whose "3 days left" is sixty seconds
  * wrong on the one screen that exists to count days.
  */
-export const metadata = { title: "Quotes sent" };
+export const metadata = { title: t("quotes.title") };
 export const dynamic = "force-dynamic";
 
 export default async function QuotesPage({

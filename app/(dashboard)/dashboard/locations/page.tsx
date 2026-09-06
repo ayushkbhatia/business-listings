@@ -11,7 +11,7 @@ import { LocationsForm } from "./LocationsForm";
  * A Sharjah supplier opening a depot in Ras Al Khaimah is ordinary, and a
  * picker that hides it makes them think we do not cover it.
  */
-export const metadata = { title: "Locations" };
+export const metadata = { title: t("locations.title") };
 export const dynamic = "force-dynamic";
 
 export default async function LocationsPage() {

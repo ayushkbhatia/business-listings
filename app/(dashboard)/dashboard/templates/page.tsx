@@ -15,7 +15,7 @@ import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
  * primary category points at, which is the state board 8c leaves them in when
  * they skipped choosing a sheet during setup.
  */
-export const metadata = { title: "Spec templates" };
+export const metadata = { title: t("template.title") };
 export const dynamic = "force-dynamic";
 
 export default async function TemplatesIndexPage() {
