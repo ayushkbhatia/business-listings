@@ -245,11 +245,16 @@ export default async function BranchesPage({ params }: Params) {
                 : undefined,
             /*
                The real number, unmasked, for the reason board 1d gives: schema
-               is for machines, and a crawler will not send an enquiry. An
-               unverified number is omitted rather than published — the same
-               rule the visible card runs.
+               is for machines, and a crawler will not send an enquiry.
+
+               Marked up whenever it is shown, which is the same rule the
+               storefront one level up already runs — it publishes `head.phone`
+               with no verification gate. Structured data that omitted a number
+               the page displays is the mismatch crawlers actually penalise.
             */
-            telephone: location.phoneVerified ? (location.phone ?? undefined) : undefined,
+            // E.164, matching the `tel:` href the page renders — a crawler
+            // cannot infer the country from the stored local form.
+            telephone: location.phone ? (toE164(location.phone) ?? location.phone) : undefined,
             openingHoursSpecification: openingHoursSchema(
               location.hours as never,
               location.ramadanHours as never,
@@ -346,13 +351,24 @@ function BranchCard({
   const unpinned = location.lat == null || location.lng == null;
 
   /*
-     Unverified numbers never reach a buyer — the schema comment says so on the
-     column. Unlike board 1d, a verified number here is shown in full: the buyer
-     has navigated two levels to reach a specific branch, the reveal event was
-     written once on the overview, and masking it a second time is friction that
-     buys no signal.
+     Shown in full, and shown whether or not anybody has checked it.
+
+     This page used to hide a number unless `Location.phoneVerified` was true,
+     which made it stricter than the storefront one level up — that page marks
+     up `head.phone` with no such gate. Nothing has ever written the column
+     outside the seed, so in production the rule hid *every* branch number from
+     *every* buyer, and the seeded 80% made it look like it worked.
+
+     The gate is gone rather than given a writer. A branch page only exists for
+     a claimed listing (see the `notFound` above), so this number was typed by
+     the business itself; and an unclaimed listing already says page-wide that
+     nothing on it has been confirmed. Neither case is improved by silence.
+
+     Unlike board 1d it is not masked: the buyer has navigated two levels to
+     reach a specific branch, the reveal event was written once on the overview,
+     and masking it a second time is friction that buys no signal.
   */
-  const phone = location.phoneVerified ? location.phone : null;
+  const phone = location.phone;
 
   return (
     <>

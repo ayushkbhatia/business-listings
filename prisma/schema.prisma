@@ -799,7 +799,26 @@ model Location {
   lng             Float?
   phone           String?
   whatsapp        String?
-  /// An unverified number is hidden from buyers.
+  /// Whether anybody has checked this number. Read by nothing today.
+  ///
+  /// It used to gate display: the branches page hid an unverified number and a
+  /// results row hid the branch's WhatsApp behind it. Nothing has ever written
+  /// it outside `prisma/seed.mts`, so in production it hid every branch number
+  /// from every buyer and made the WhatsApp action on a results row impossible
+  /// to render — while the seeded 80% made both look like they worked. The
+  /// storefront one level up never had the gate at all.
+  ///
+  /// The gates are gone. Listings are seeded from public directory data that
+  /// businesses publish about themselves, a wrong number is a reason for an
+  /// owner to claim the listing, and an unclaimed listing already says
+  /// page-wide that nothing on it has been confirmed.
+  ///
+  /// The column is kept rather than dropped because there is a real check
+  /// waiting for it: `ClaimSubmission.phone` is "the number we would call,
+  /// taken from the public licence record, never typed by the claimant", so a
+  /// branch phone matching the licence record is verified by stronger evidence
+  /// than an OTP — which a landline cannot receive anyway. Until that is built
+  /// this is an unread column, and that is the honest description of it.
   phoneVerified   Boolean      @default(false) @map("phone_verified")
   /// Per-day open/close, split shifts.
   hours           Json         @default("{}")
