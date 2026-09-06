@@ -3035,6 +3035,105 @@ export const en = {
   "import.blocked_intro": "{count} column will not be imported. Prices never sit on a product here.",
   "import.blocked_intro_plural": "{count} columns will not be imported. Prices never sit on a product here.",
 
+  /* ── Board 11d · the mapper proper ──────────────────────────────────────
+     The board counted nine columns and listed seven. The two it hid were the
+     two that decide what the import does, so both have a target of their own
+     and a status the tally counts. */
+  "import.step_preview": "Preview and confirm",
+  "import.back": "Back",
+  "import.preview_rows": { one: "Preview {n} row", other: "Preview {n} rows" },
+  "import.col_status": "Status",
+  "import.target.subcategory": "Subcategory",
+  "import.target.photo": "Image, matched by filename",
+  "import.status.matched": "Matched",
+  "import.status.needs_you": "Needs you",
+  "import.status.blocked": "Blocked",
+  "import.status.ignored": "Ignored",
+  "import.tally": "{matched} matched · {needs} need you · {blocked} blocked · {ignored} ignored",
+  "import.note.sku": { one: "Existing references update instead of duplicating — {n} row matches", other: "Existing references update instead of duplicating — {n} rows match" },
+  "import.note.subcategory": { one: "Sets the spec template per row. {n} subcategory in this file", other: "Sets the spec template per row. {n} subcategories in this file" },
+  "import.note.subcategory_unknown": { one: "{n} row names a subcategory that does not exist. Those rows will not import.", other: "{n} rows name subcategories that do not exist. Those rows will not import." },
+  "import.note.photo": "{matched} of {total} filenames are in your media library. {missing} are not — those rows import without a photo.",
+  "import.note.photo_none": "No filenames matched your media library, so this column is ignored rather than silently attaching nothing.",
+  "import.note.photo_ambiguous": { one: "{n} filename matches more than one file in your library, so it is left unattached — renaming one of them resolves it.", other: "{n} filenames match more than one file each, so they are left unattached — renaming resolves it." },
+  "import.note.filter": "Values must match this field's allowed list, or the row is an error.",
+
+  /* ── The file card, §2 ── */
+  "import.file.summary": "{rows} rows · {columns} columns",
+  "import.file.header_row": "First row names the columns",
+  "import.file.header_row_hint": "Switch off if row 1 is a title rather than headings. Changing this re-reads the file.",
+  "import.file.templates": { one: "{n} subcategory · {templates} applies", other: "{n} subcategories · {templates} apply" },
+  "import.file.templates_count": { one: "{n} template", other: "{n} templates" },
+  "import.file.replace": "Replace file",
+
+  /* ── What will happen, §4 ── */
+  "import.rail.title": "What will happen",
+  "import.rail.new": "New products",
+  "import.rail.updated": "Updated by reference match",
+  "import.rail.errors": "Rows with errors",
+  "import.rail.photos": "Photos matched",
+  "import.rail.photos_value": "{matched} of {total}",
+  "import.rail.listed": "Listed immediately",
+  "import.rail.cap_unlimited": { one: "The {n} new product lists — {plan} sets no product limit.", other: "All {n} new products list — {plan} sets no product limit." },
+  /* The same fact when something *else* is holding products back. Saying "all 2
+     new products list" directly under `Listed immediately 0` puts two numbers on
+     one card that disagree, which is the defect this board exists to correct. */
+  "import.rail.cap_unlimited_held": "{plan} sets no product limit, so nothing here is held back by your plan.",
+  /* A file that only rewrites existing products creates nothing for a cap to
+     apply to, and "All 0 new products list" is a sentence about nothing. */
+  "import.rail.cap_updates_only": "Nothing new is being created, so your plan's product limit does not come into it. The products this file matches keep the listing they already have.",
+  "import.rail.cap_limited": "{listed} of {created} list — {plan} allows {cap}. The rest are stored unlisted for you to choose from. Nothing is dropped and no row is refused.",
+  "import.rail.incomplete": { one: "{n} product is held back because a required spec field is empty. It imports and stays a draft until you fill it.", other: "{n} products are held back because a required spec field is empty. They import and stay drafts until you fill them." },
+  "import.rail.rollback": "Nothing imports until you confirm. For 24 hours you can roll the import back: the new products are unlisted and the updated ones return to their previous values.",
+  /* The same scope, said after the import rather than before it. The rail's
+     sentence opens with "Nothing imports until you confirm", which read as a
+     promise about an import that had already run when it was reused on the
+     catalogue's banner. */
+  "import.rollback_done": "For 24 hours you can roll this import back: the new products are unlisted and the updated ones return to their previous values.",
+  /* A run that only rewrote existing products imported nothing, and saying "40
+     products imported" over `0 new · 40 updated` is the kind of number a
+     directory cannot afford to get wrong about its own screen. */
+  "import.done_title_updated": { one: "{n} product updated", other: "{n} products updated" },
+  "import.done_title_mixed": "{created} imported, {updated} updated",
+  "import.rail.rollback_replaces": "Confirming closes the rollback window on your previous import. There is one rollback point.",
+
+  /* ── Error rows, §States ── */
+  "import.errors_heading": "Rows that will not import",
+  "import.errors_intro": { one: "{n} row cannot be imported. Every other row still will be.", other: "{n} rows cannot be imported. Every other row still will be." },
+  "import.errors_row": "Row {row}",
+  "import.error.no_name": "No product name in that row.",
+  "import.error.unknown_category": "That subcategory does not exist. Map it to one that does, or fix the file.",
+  "import.error.duplicate_name": "You already have a product with this name, and this row has no reference to match it by. Add a reference column and it will update instead.",
+  "import.nothing_importable": "Nothing in this file can be imported.",
+  "import.nothing_importable_hint": "Every column is blocked or ignored, so there is no product to create. Map a column to the product name to begin.",
+  "import.unreadable": "That file could not be read.",
+  "import.not_yours": "You can only import into your own catalogue.",
+
+  /* ── Mappings you can reuse, §5 ── */
+  "import.round_trip.badge": "MAPS 1:1",
+  "import.round_trip.applied": "This file came from Export, so every column is already mapped.",
+  "import.round_trip.unknown": { one: "{n} column is not one of ours and is left for you to place.", other: "{n} columns are not ours and are left for you to place." },
+  "import.mapping_used": "Used {date}",
+  "import.mapping_never": "Not used yet",
+
+  /* ── Undo, §4 ── */
+  "import.undo_not_found": "That import cannot be found.",
+  "import.undo_already": "That import has already been undone.",
+  "import.undo_expired": "An import can be rolled back for 24 hours. This one is older than that, so its products are part of your catalogue — unlist them from the catalogue screen instead.",
+  "import.undo_result": "{unlisted} unlisted, {restored} returned to their previous values.",
+  "import.done_counts": "{created} new · {updated} updated · {listed} listed",
+
+  /* ── Concierge, §6. A real queue, not a promise: /admin/catalogue-imports. ── */
+  "import.concierge.title": "Rather not do this yourself?",
+  "import.concierge.body": "Send us the file and our team maps and loads it for you.",
+  "import.concierge.action": "Ask us to do it",
+
+  /* ── Export, board 3f §1's other button — the round trip's outward leg ── */
+  "catalogue.export": "Export",
+  "catalogue.export.all": "Whole catalogue",
+  "catalogue.export.hint": "A spreadsheet you can edit and import again. References match, so edited rows update rather than duplicate.",
+  "catalogue.export.never": "Prices are not in the file. There are none on a product here.",
+
 
   // ── Product editor, board 3g ──────────────────────────────────────────────
   "product.title": "{name}",

@@ -306,12 +306,12 @@ model Category {
   sortOrder           Int      @default(0) @map("sort_order")
   createdAt           DateTime @default(now()) @map("created_at")
 
-  parent            Category?            @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children          Category[]           @relation("CategoryTree")
-  defaultTemplate   SpecTemplate?        @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
+  parent            Category?              @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children          Category[]             @relation("CategoryTree")
+  defaultTemplate   SpecTemplate?          @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
   templates         SpecTemplateCategory[]
-  primaryFor        Business[]           @relation("BusinessPrimaryCategory")
-  sectorFor         Business[]           @relation("BusinessSector")
+  primaryFor        Business[]             @relation("BusinessPrimaryCategory")
+  sectorFor         Business[]             @relation("BusinessSector")
   businesses        BusinessCategory[]
   products          Product[]
   placements        PlacementSlot[]
@@ -319,15 +319,15 @@ model Category {
   placementWaitlist PlacementWaitlist[]
   fieldProposals    SpecFieldProposal[]
   stagedListings    StagedListing[]
-  guideCtas         Guide[]              @relation("GuideCtaCategory")
+  guideCtas         Guide[]                @relation("GuideCtaCategory")
   areaPages         AreaPage[]
   emiratePages      EmiratePage[]
   scopeDemand       ScopeDemand[]
   ruleChanges       PublishRuleChange[]
-  campaignCtas      Campaign[]           @relation("CampaignCtaCategory")
+  campaignCtas      Campaign[]             @relation("CampaignCtaCategory")
   productAlerts     ProductAlert[]
   curatedLists      CuratedList[]
-  sectorTemplates   StorefrontTemplate[] @relation("SectorTemplates")
+  sectorTemplates   StorefrontTemplate[]   @relation("SectorTemplates")
 
   @@index([parentId])
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
@@ -362,10 +362,10 @@ enum FieldType {
 /// Platform-owned and versioned. A seller clones it; the clone maps back here so
 /// cross-seller comparison survives a rename.
 model SpecTemplate {
-  id      String         @id @default(cuid())
-  name    String
-  version Int            @default(1)
-  status  TemplateStatus @default(draft)
+  id           String         @id @default(cuid())
+  name         String
+  version      Int            @default(1)
+  status       TemplateStatus @default(draft)
   /// Ops's unapplied edits, in the shape `lib/spec/changes.ts` reads.
   ///
   /// On the row rather than in a second `draft` row, for the reason
@@ -375,8 +375,8 @@ model SpecTemplate {
   /// category the moment it is published. Null means nothing pending, which is
   /// why it is nullable rather than defaulted — board 4e §5 makes the draft
   /// card absent with none pending rather than empty.
-  draftChanges Json?     @map("draft_changes")
-  createdAt    DateTime  @default(now()) @map("created_at")
+  draftChanges Json?          @map("draft_changes")
+  createdAt    DateTime       @default(now()) @map("created_at")
 
   /// Every subcategory this template serves. Board 4e: the relation is
   /// many-to-many. Pipes & fittings holds four templates, because grooved,
@@ -385,7 +385,7 @@ model SpecTemplate {
   /// seller is offered first is `Category.defaultTemplateId`, a default and
   /// not an exclusive assignment.
   categories           SpecTemplateCategory[]
-  defaultForCategories Category[]            @relation("CategoryDefaultTemplate")
+  defaultForCategories Category[]             @relation("CategoryDefaultTemplate")
   fields               SpecField[]
   sellerTemplates      SellerTemplate[]
 
@@ -411,15 +411,15 @@ model SpecTemplateCategory {
 }
 
 model SpecField {
-  id           String    @id @default(cuid())
-  templateId   String    @map("template_id")
-  key          String
-  label        String
-  labelAr      String?   @map("label_ar")
-  type         FieldType
-  unit         String?
-  options      String[]  @default([])
-  required     Boolean   @default(false)
+  id              String    @id @default(cuid())
+  templateId      String    @map("template_id")
+  key             String
+  label           String
+  labelAr         String?   @map("label_ar")
+  type            FieldType
+  unit            String?
+  options         String[]  @default([])
+  required        Boolean   @default(false)
   /// Vestigial. Nothing writes this any more, and nothing should.
   ///
   /// It was board 4e's grace period: a publish could add a required field with
@@ -434,10 +434,10 @@ model SpecField {
   /// `required` and (`requiredFrom` is null or in the past). Dropping it would
   /// make any row that still carries a future date required immediately, which
   /// is the one thing the retirement is meant to prevent.
-  requiredFrom DateTime? @map("required_from")
+  requiredFrom    DateTime? @map("required_from")
   /// Drives the site-wide filter rail. Changing this changes the rail with no
   /// code change — see handoff 1 acceptance criterion 4.
-  isFilterable Boolean   @default(false) @map("is_filterable")
+  isFilterable    Boolean   @default(false) @map("is_filterable")
   /// Whether this field differs between variants of the same product.
   ///
   /// Board 4e authors it and board 3g enforces it: a `VARIES` field is never
@@ -446,8 +446,8 @@ model SpecField {
   /// has to live on the platform field — a clone can only inherit a flag the
   /// library template carries, so if it originated on the seller's copy `3g`
   /// would have nothing to read.
-  variesByVariant Boolean @default(false) @map("varies_by_variant")
-  sortOrder    Int       @default(0) @map("sort_order")
+  variesByVariant Boolean   @default(false) @map("varies_by_variant")
+  sortOrder       Int       @default(0) @map("sort_order")
 
   template  SpecTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
   proposals SpecFieldProposal[]
@@ -784,7 +784,7 @@ model Business {
   products               Product[]
   productQuestions       ProductQuestion[]
   media                  Media[]
-  mediaFolders         MediaFolder[]
+  mediaFolders           MediaFolder[]
   documents              Document[]
   sellerTemplates        SellerTemplate[]
   recipients             EnquiryRecipient[]
@@ -1030,17 +1030,18 @@ model Product {
   // The CSV importer is the widest path into this table and refuses a price
   // column outright — see lib/import/columns.ts.
 
-  business     Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  importRun    ImportRun?        @relation(fields: [importRunId], references: [id], onDelete: SetNull)
-  category     Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  media        ProductMedia[]
-  documents    ProductDocument[]
-  quoteLines   QuoteLine[]
-  enquiryLines EnquiryLine[]
-  alerts       ProductAlert[]
+  business      Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  importRun     ImportRun?        @relation(fields: [importRunId], references: [id], onDelete: SetNull)
+  importChanges ImportRunChange[]
+  category      Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  media         ProductMedia[]
+  documents     ProductDocument[]
+  quoteLines    QuoteLine[]
+  enquiryLines  EnquiryLine[]
+  alerts        ProductAlert[]
   /// Buyers waiting for this one to come back into stock.
-  watches      ProductAlert[]    @relation("ProductWatch")
-  questions    ProductQuestion[]
+  watches       ProductAlert[]    @relation("ProductWatch")
+  questions     ProductQuestion[]
 
   @@unique([businessId, slug])
   @@index([businessId])
@@ -1124,6 +1125,25 @@ model Media {
   kind        MediaKind
   /// Supabase Storage object path. The bucket is not in Prisma's schema.
   storagePath String    @map("storage_path")
+  /// The name of the file as the seller's computer had it.
+  ///
+  /// `Document` has carried one since handoff 1 and `Media` did not, which made
+  /// the two halves of one library answer "what is this file called?" two
+  /// different ways. Board 11d needs them to agree, because a CSV column of
+  /// filenames is matched against both.
+  ///
+  /// It cannot be derived from `storagePath`. `safeName` in
+  /// `lib/storage/buckets.ts` lowercases, replaces punctuation and appends six
+  /// random characters — deliberately, because two uploads called `photo.jpg`
+  /// are the normal case and the second must not replace the first. So
+  /// `BF-100 (1).JPG` is stored as `bf-100-1-x7k2m9.jpg`, and a mapper matching
+  /// on the stored path resolves nothing while reporting it as nothing matching
+  /// rather than as the wrong question asked.
+  ///
+  /// Null on every row uploaded before 11d. The backfill puts the stored
+  /// basename here so those files still match something, and
+  /// `lib/import/filenames.ts` reconciles the two forms.
+  filename    String?
   alt         String?
   /// Pixels, measured in the browser before upload. Board 8b writes these.
   ///
@@ -1481,17 +1501,68 @@ model ImportRun {
   rowCount     Int       @map("row_count")
   /// Products actually created.
   createdCount Int       @map("created_count")
+  /// Products that already existed, were matched by SKU, and were rewritten.
+  ///
+  /// Board 11d §4 asserts `new + updated + errors == rows`, which is only an
+  /// assertion if all three are stored. The board rendered the sum from
+  /// constants.
+  updatedCount Int       @default(0) @map("updated_count")
+  /// Rows that could not import at all, for the same sum.
+  errorCount   Int       @default(0) @map("error_count")
+  /// How many of the created products the plan had room to list.
+  ///
+  /// Separate from `createdCount`, because the difference between them is the
+  /// whole of §4's cap outcome: on Free 412 rows import, ten list, and the rest
+  /// are stored unlisted. One count cannot say that.
+  listedCount  Int       @default(0) @map("listed_count")
   columnPlan   Json      @map("column_plan")
   /// Set when the seller reverses it. A reverted run is kept, not deleted.
   revertedAt   DateTime? @map("reverted_at")
   createdAt    DateTime  @default(now()) @map("created_at")
 
-  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  actor    User      @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  business Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actor    User              @relation(fields: [actorId], references: [id], onDelete: Restrict)
   products Product[]
+  changes  ImportRunChange[]
 
   @@index([businessId, createdAt])
   @@map("import_run")
+}
+
+/// What a product looked like before an import overwrote it.
+///
+/// Board 11d §4: *"the 386 new products are unlisted and the 18 updated ones
+/// return to their previous values."* The board promised a 24-hour rollback
+/// without saying what it restored, which — on an import that rewrote 18 live
+/// products — is the only part anyone needs. It is also the part that cannot be
+/// reconstructed after the fact: `Product.importRunId` names what a run
+/// **created**, and until this table nothing named what it **changed**.
+///
+/// One row per product a run rewrote, holding the fields an import is allowed
+/// to touch. A snapshot, not a diff: a diff has to be applied against the row
+/// as it stands, and the seller may have edited it since — which is exactly
+/// when a rollback most needs to be predictable rather than clever.
+model ImportRunChange {
+  id            String   @id @default(cuid())
+  importRunId   String   @map("import_run_id")
+  productId     String   @map("product_id")
+  /// The product's own columns and `specValues`, as they were.
+  previous      Json
+  /// The media ids attached before, in gallery order.
+  ///
+  /// Ordered, because board 3i settled that position 0 **is** the primary image
+  /// and there is no separate flag. Restoring the set without the order would
+  /// restore a different primary image, which is the one part of a product page
+  /// a buyer sees first.
+  previousMedia String[] @map("previous_media")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  importRun ImportRun @relation(fields: [importRunId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([importRunId, productId])
+  @@index([productId])
+  @@map("import_run_change")
 }
 
 /// A column mapping the seller saved to use again.

@@ -189,10 +189,38 @@ simultaneous, and the order is a choice worth making on purpose:
 | Adds a table, column, index or constraint nothing yet reads | before the merge |
 | Adds a `NOT NULL` column, or a constraint the old code would violate | before the merge, and only if the old code still satisfies it |
 | Drops or renames anything | after the merge, once no running code refers to it |
+| **Does both — adds what the new code needs *and* drops what the old code reads** | **neither. Split it in two** |
 
 The middle row is the one that bites: production runs the previous deployment
 until the new one is live, and that code is still writing rows the new
 constraint may reject.
+
+The last row has no safe order at all, which is why it is worth naming
+separately. On 2026-09-06 board `3i`'s `20260916090000_media_library` added
+`product_media`, backfilled it from `media.product_id`, and dropped that column
+in the same file. Applied before the merge it broke the running deployment;
+applied after, it would have broken the one the merge shipped. It went first,
+and `/search` and every `/c/*` returned 500 for eight minutes until the merge
+landed. `/` stayed up because it is prerendered — the same misleading signature
+as the six-hour outage above.
+
+Split it: an **expand** migration carrying every addition and the backfill,
+applied before the merge, and a **contract** migration carrying the drops,
+applied after. Both deployments then run against a schema that satisfies them,
+and `ALLOW_PENDING_MIGRATIONS` names the contract half so the merge's production
+build is not refused for the pending migration it is itself the prerequisite for.
+
+Two things make this easy to miss when reading a diff:
+
+- **The old code need not mention the column.** `3i`'s readers were
+  `media: { … }` inside a Prisma select — the `Product.media` relation, in
+  `lib/db/queries/catalogue.ts`, `storefront-catalogue.ts`,
+  `lib/products/catalogue.ts` and `lib/products/service.ts`. Prisma generates
+  the `WHERE product_id = …` itself, so grepping `origin/main` for the column
+  name finds nothing. Grep for the **relation field**.
+- **`check:schema-deployed` does not cover this direction.** It refuses a build
+  whose schema is *behind* the code. A schema *ahead* of the code is this
+  outage, and nothing checks for it.
 
 ### Why there is no workflow that does this
 

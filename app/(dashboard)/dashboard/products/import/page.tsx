@@ -1,4 +1,3 @@
-import { getSpecFieldOptions } from "@/lib/db/queries/catalogue";
 import { prisma } from "@/lib/db/client";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
 import { allowance } from "@/lib/plan/entitlements";
@@ -32,12 +31,15 @@ export default async function ImportPage() {
        Two readers of one function, not two definitions of the cap.
     */
     effectiveFor(seat.businessId),
-    prisma.product.count({ where: { businessId: seat.businessId } }),
+    /*
+       Live, not every record. The cap is on reach — `3f`'s header counts the
+       same way, and this screen counted every draft as though it took a listing
+       slot, which reads as no room over a catalogue with plenty.
+    */
+    prisma.product.count({ where: { businessId: seat.businessId, status: "live" } }),
   ]);
 
   const room = caps ? allowance(caps, "products", used) : null;
-
-  const specFields = await getSpecFieldOptions(business.primaryCategoryId);
 
   return (
     <SellerPage
@@ -49,13 +51,7 @@ export default async function ImportPage() {
     >
       <ImportWizard
         categoryId={business.primaryCategoryId}
-        room={room?.remaining ?? null}
         roomLabel={roomLabel(room, caps?.name ?? "")}
-        specFields={specFields.map((f) => ({
-          id: f.id,
-          label: f.label,
-          isFilterable: f.isFilterable,
-        }))}
         previewAction={previewImportFile}
         runAction={runImport}
         undoAction={undoImport}

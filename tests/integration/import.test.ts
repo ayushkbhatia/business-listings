@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { applyImport, revertableRuns, revertImport, REVERSIBLE_FOR_MS } from "@/lib/import/service";
 import { PriceColumnError, type ColumnPlan } from "@/lib/import/columns";
+import { readHidden } from "@/lib/billing/plan-caps";
 import { Prisma } from "@/lib/db/generated/client";
 import type { Actor } from "@/lib/auth/roles";
 
@@ -79,7 +80,7 @@ describe("criterion 7 — the price column cannot get through", () => {
     await expect(
       applyImport(actor, {
         businessId,
-        categoryId,
+        fallbackCategoryId: categoryId,
         filename: "catalogue.csv",
         text: FILE,
         plan: smuggled,
@@ -94,7 +95,7 @@ describe("criterion 7 — the price column cannot get through", () => {
   it("imports the rest of the file with the price left out", async () => {
     const result = await applyImport(actor, {
       businessId,
-      categoryId,
+      fallbackCategoryId: categoryId,
       filename: "catalogue.csv",
       text: FILE,
       plan: NAME_ONLY,
@@ -135,24 +136,40 @@ describe("criterion 7 — the price column cannot get through", () => {
     expect(Object.keys(products[0]!)).not.toContain("unitPrice");
   });
 
-  it("lands imported products as drafts", async () => {
-    // A seller who mapped a column wrong should find out on their own
-    // catalogue screen, not from a buyer.
+  it("lists what it imports, up to the plan and the platform's own rules", async () => {
+    /*
+       Board 11d §4 states `Listed immediately 386`, so an import lists rather
+       than landing everything as a draft. Two things can hold a product back
+       and neither refuses it: the plan's cap (`3f` §6) and an unfilled required
+       spec field (`3h` §5, which `saveProduct` enforces and this path used to
+       bypass with `createMany`).
+
+       Asserted as an invariant rather than a fixed count, because which of the
+       two applies depends on the seeded plan and template.
+    */
     const products = await prisma.product.findMany({
       where: { importRunId: runIds[0] },
       select: { status: true },
     });
-    expect(products.every((p) => p.status === "draft")).toBe(true);
+    expect(products.length).toBeGreaterThan(0);
+    expect(products.every((p) => p.status === "live" || p.status === "draft")).toBe(true);
+
+    const run = await prisma.importRun.findUniqueOrThrow({
+      where: { id: runIds[0]! },
+      select: { createdCount: true, listedCount: true },
+    });
+    expect(run.listedCount).toBe(products.filter((p) => p.status === "live").length);
+    expect(run.listedCount).toBeLessThanOrEqual(run.createdCount);
   });
 });
 
 describe("criterion 7 — an import is reversible for 24 hours", () => {
-  it("undoes a run and deletes exactly what it created", async () => {
+  it("undoes a run by unlisting exactly what it created, and destroys nothing", async () => {
     const before = await prisma.product.count({ where: { businessId } });
 
     const applied = await applyImport(actor, {
       businessId,
-      categoryId,
+      fallbackCategoryId: categoryId,
       filename: "second.csv",
       text: [
         "Item Name,Part No",
@@ -170,10 +187,25 @@ describe("criterion 7 — an import is reversible for 24 hours", () => {
     expect(await prisma.product.count({ where: { businessId } })).toBe(before + 2);
 
     const reverted = await revertImport(actor, applied.importRunId);
-    expect(reverted).toEqual({ ok: true, deleted: 2 });
+    expect(reverted.ok).toBe(true);
+    if (!reverted.ok) return;
 
-    // Back to exactly where it started — nothing else was touched.
-    expect(await prisma.product.count({ where: { businessId } })).toBe(before);
+    /*
+       The board promised a 24-hour rollback and never said what it restored.
+       §4 does: the new products are **unlisted**, not deleted. `3f` §6 and `3i`
+       both hold that no billing or import event destroys a record, and an undo
+       is the case that most looks like an exception and is not.
+
+       It also makes the undo itself reversible: four hundred drafts to publish
+       rather than four hundred rows to upload again.
+    */
+    expect(await prisma.product.count({ where: { businessId } })).toBe(before + 2);
+    const after = await prisma.product.findMany({
+      where: { importRunId: applied.importRunId },
+      select: { status: true },
+    });
+    expect(after).toHaveLength(2);
+    expect(after.every((product) => product.status === "draft")).toBe(true);
 
     // The record of what happened survives the undo.
     const run = await prisma.importRun.findUniqueOrThrow({ where: { id: applied.importRunId } });
@@ -254,7 +286,7 @@ describe("a mapping saved for next month", () => {
   it("keeps the plan as applied, blocked column included", async () => {
     const result = await applyImport(actor, {
       businessId,
-      categoryId,
+      fallbackCategoryId: categoryId,
       filename: "third.csv",
       text: "Item Name,Unit Price AED\nBall valve DN50,220.00\n",
       plan: {
@@ -298,17 +330,44 @@ describe("the plan's product cap", () => {
      headings at all. A one-column fixture fails for that reason and proves
      nothing about the cap.
   */
-  const MANY = [
-    "Item Name,Part No",
-    ...Array.from({ length: 40 }, (_, i) => `${PREFIX} valve ${i},${PREFIX}-${i}`),
-  ].join("\n");
+  /*
+     Each test builds its own rows.
 
-  const NAME_ONLY_PLAN: ColumnPlan = {
-    columns: [
-      { header: "Item Name", target: { kind: "name" } },
-      { header: "Part No", target: { kind: "sku" } },
-    ],
-  };
+     They used to share one `MANY` constant, which worked only while the first
+     test in the block refused its file and wrote nothing. Now that an over-cap
+     import writes every row — which is the correction — the second test's rows
+     already exist and come back as duplicates. Board 3i hit the same thing on
+     gallery order and answered it the same way: a test that mutates shared
+     fixture data has to bring its own.
+  */
+  let batch = 0;
+  function ownRows(count: number, filled = false): { text: string; plan: ColumnPlan } {
+    batch += 1;
+    const tag = `${PREFIX}-B${batch}`;
+    const header = filled
+      ? "Item Name,Part No,Nominal diameter,Pressure rating,Body material"
+      : "Item Name,Part No";
+    const row = (i: number) =>
+      filled
+        ? `${tag} valve ${i},${tag}-${i},DN100,PN16,Ductile iron`
+        : `${tag} valve ${i},${tag}-${i}`;
+    return {
+      text: [header, ...Array.from({ length: count }, (_, i) => row(i))].join("\n"),
+      plan: {
+        columns: [
+          { header: "Item Name", target: { kind: "name" } },
+          { header: "Part No", target: { kind: "sku" } },
+          ...(filled
+            ? [
+                { header: "Nominal diameter", target: { kind: "spec" as const, specFieldKey: "nominal_diameter" } },
+                { header: "Pressure rating", target: { kind: "spec" as const, specFieldKey: "pressure_rating" } },
+                { header: "Body material", target: { kind: "spec" as const, specFieldKey: "body_material" } },
+              ]
+            : []),
+        ],
+      },
+    };
+  }
 
   let planId: string;
   let originalLimit: number | null;
@@ -358,49 +417,138 @@ describe("the plan's product cap", () => {
     await prisma.product.deleteMany({ where: { businessId, name: { startsWith: PREFIX } } });
   });
 
-  it("refuses the whole file rather than importing up to the limit", async () => {
+  it("imports every row and lists up to the cap — criterion 10", async () => {
     /*
-       Whole, never truncated — the same choice `assertNoPriceEscapes` makes:
-       "there is no partial success worth having." A file cut off at the cap
-       hands a seller an arbitrary slice of their catalogue, arbitrary because
-       it is whatever order the spreadsheet happened to be in, and the rows that
-       did not arrive are the ones nobody would think to look for.
+       The correction this board makes, and the behaviour this test used to
+       assert the opposite of.
+
+       It read: *"refuses the whole file rather than importing up to the
+       limit"*, on the reasoning that a truncated import hands a seller an
+       arbitrary slice of their own catalogue. That reasoning is sound about
+       **truncation** and the conclusion did not follow: refusing the file
+       leaves a Free seller with a 412-row stock file unable to import their
+       catalogue at all.
+
+       §4 and criterion 10 settle it a third way. Every row imports — nothing is
+       dropped and nothing is refused — the plan's worth are listed, and the
+       rest are **stored unlisted** for the seller to choose from, which is
+       exactly what `3f` §6's downgrade path already does to an existing
+       catalogue. A plan limit never destroys a record, and it does not turn one
+       away either.
     */
     const used = await prisma.product.count({ where: { businessId } });
-    await prisma.plan.update({
-      where: { id: planId },
-      data: { productLimit: used + 5 },
-    });
+    const rows = 40;
+    /*
+       Required fields filled, so the cap is the only thing that can hold a row
+       back. Without them every row lands a draft for the `3h` §5 reason and
+       this test would pass while proving nothing about the plan.
+    */
+    const file = ownRows(rows, true);
 
-    const before = await prisma.product.count({ where: { businessId } });
+    // Room for five of them, and the file is bigger than that.
+    await prisma.plan.update({ where: { id: planId }, data: { productLimit: used + 5 } });
+
     const result = await applyImport(actor, {
       businessId,
-      categoryId,
-      filename: "big.csv",
-      text: MANY,
-      plan: NAME_ONLY_PLAN,
+      fallbackCategoryId: categoryId,
+      filename: "over-cap.csv",
+      text: file.text,
+      plan: file.plan,
     });
 
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).toMatch(/allows/);
-    // Nothing written, and no run row left behind to undo.
-    expect(await prisma.product.count({ where: { businessId } })).toBe(before);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    runIds.push(result.importRunId);
+
+    // Criterion 10's own assertion: every record exists.
+    expect(result.created).toBe(rows);
+    expect(await prisma.product.count({ where: { importRunId: result.importRunId } })).toBe(rows);
+
+    // And the seller's whole catalogue is still no more listed than the plan.
+    const live = await prisma.product.count({ where: { businessId, status: "live" } });
+    expect(live).toBeLessThanOrEqual(used + 5);
+
+    // Most of the file did not list. That is the cap doing its work, not a
+    // failure to import.
+    const overCap = await prisma.product.findMany({
+      where: { importRunId: result.importRunId, status: "draft" },
+      select: { id: true },
+    });
+    expect(overCap.length).toBeGreaterThan(0);
+
+    /*
+       Stored, not lost. Every product the cap held back is on the
+       subscription's list — which is what `3f` distinguishes from a seller's
+       own draft, and what an upgrade reads to put them back. Without it a
+       seller who upgrades finds four hundred drafts to republish by hand.
+    */
+    const subscription = await prisma.subscription.findUniqueOrThrow({
+      where: { businessId },
+      select: { hiddenByPlan: true },
+    });
+    const hidden = new Set(readHidden(subscription.hiddenByPlan));
+    expect(overCap.every((product) => hidden.has(product.id))).toBe(true);
+  });
+
+  it("reads the cap from the plan record rather than a constant — criterion 11", async () => {
+    /*
+       Superadmin will be experimenting across Free, Basic and every tier, so
+       the number must never be a constant in import code. Proved by moving it
+       between two imports and watching the outcome move with it.
+    */
+    /*
+       Listed, not every record — `3f`'s header counts the cap the same way,
+       because the cap is on reach rather than on storage. Setting the limit to
+       the total product count leaves listing slots free and proves nothing.
+    */
+    const listed = await prisma.product.count({ where: { businessId, status: "live" } });
+    await prisma.plan.update({ where: { id: planId }, data: { productLimit: listed } });
+
+    const first = ownRows(1, true);
+    const noRoom = await applyImport(actor, {
+      businessId,
+      fallbackCategoryId: categoryId,
+      filename: "no-room.csv",
+      text: first.text,
+      plan: first.plan,
+    });
+    expect(noRoom.ok).toBe(true);
+    if (!noRoom.ok) return;
+    runIds.push(noRoom.importRunId);
+    // Imported, and not listed. Both halves matter.
+    expect(noRoom.created).toBe(1);
+    expect(noRoom.listed).toBe(0);
+
+    await prisma.plan.update({ where: { id: planId }, data: { productLimit: null } });
+
+    const second = ownRows(1, true);
+    const room = await applyImport(actor, {
+      businessId,
+      fallbackCategoryId: categoryId,
+      filename: "room.csv",
+      text: second.text,
+      plan: second.plan,
+    });
+    expect(room.ok).toBe(true);
+    if (!room.ok) return;
+    runIds.push(room.importRunId);
+    expect(room.created).toBe(1);
+    // The same file, the same code, a different number on the plan row.
+    expect(room.listed).toBe(1);
   });
 
   it("imports a file that fits exactly", async () => {
     /*
        Exactly, not comfortably.
 
-       `existing` is doing two jobs inside the row loop — the catalogue's slugs
+       The slug set inside the row loop does two jobs — the catalogue's slugs
        and the ones this file has already used — so reading its size after the
-       loop counts the catalogue plus the file. The first version of this check
-       did, and refused imports that fit; the first version of this test gave
-       itself a hundred rows of headroom and passed anyway. The limit is now set
-       to the exact total, so a double-count fails here.
+       loop counts the catalogue plus the file. An earlier version of this check
+       did, and refused imports that fit.
     */
     const used = await prisma.product.count({ where: { businessId } });
-    const rows = MANY.split("\n").length - 1;
+    const rows = 12;
+    const file = ownRows(rows, true);
     await prisma.plan.update({
       where: { id: planId },
       data: { productLimit: used + rows },
@@ -408,39 +556,100 @@ describe("the plan's product cap", () => {
 
     const result = await applyImport(actor, {
       businessId,
-      categoryId,
+      fallbackCategoryId: categoryId,
       filename: "small.csv",
-      text: MANY,
-      plan: NAME_ONLY_PLAN,
+      text: file.text,
+      plan: file.plan,
     });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     runIds.push(result.importRunId);
-    expect(result.created).toBeGreaterThan(0);
+    expect(result.created).toBe(rows);
+    // Room for every one of them, so every one lists.
+    expect(result.listed).toBe(rows);
   });
 
-  it("does not block a file whose rows all duplicate what is already there", async () => {
+  it("re-importing the same file twice adds nothing and refuses nothing", async () => {
     /*
-       Counted against the rows that would actually be created, not the file's
-       length. A seller re-uploading last month's export adds nothing, and
-       refusing that on row count would refuse an import that writes no rows.
-    */
-    const used = await prisma.product.count({ where: { businessId } });
-    await prisma.plan.update({ where: { id: planId }, data: { productLimit: used } });
+       A seller re-uploading last month's export. With no reference column there
+       is nothing to match the rows to, so each one is an error row naming the
+       product that already exists — rather than a second copy of the catalogue
+       with no way to tell the two apart.
 
-    const result = await applyImport(actor, {
+       The error also says what to do about it, which is the difference between
+       this and the previous `You already have a product called…`: add a
+       reference column and the same file updates instead.
+    */
+    const file = ownRows(4, true);
+    await prisma.plan.update({ where: { id: planId }, data: { productLimit: null } });
+
+    const first = await applyImport(actor, {
       businessId,
-      categoryId,
-      filename: "again.csv",
-      text: MANY,
-      plan: NAME_ONLY_PLAN,
+      fallbackCategoryId: categoryId,
+      filename: "again-1.csv",
+      text: file.text,
+      plan: file.plan,
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    runIds.push(first.importRunId);
+    expect(first.created).toBe(4);
+
+    // The same file, with the reference column dropped so nothing can match.
+    const noReference: ColumnPlan = {
+      columns: file.plan.columns.map((column) =>
+        column.target.kind === "sku" ? { header: column.header, target: { kind: "ignore" } } : column,
+      ),
+    };
+    const again = await applyImport(actor, {
+      businessId,
+      fallbackCategoryId: categoryId,
+      filename: "again-2.csv",
+      text: file.text,
+      plan: noReference,
     });
 
-    // Every row is a duplicate slug, so `toCreate` is empty and the file is
-    // refused for having nothing to import — not for the cap.
-    expect(result.ok).toBe(false);
-    if (result.ok) return;
-    expect(result.error).not.toMatch(/allows/);
+    expect(again.ok).toBe(false);
+    if (again.ok) return;
+    expect(again.error).not.toMatch(/allows/);
+
+    // Nothing added.
+    expect(
+      await prisma.product.count({ where: { businessId, name: { startsWith: PREFIX } } }),
+    ).toBeGreaterThan(0);
+  });
+
+  it("updates rather than duplicating when the same file keeps its reference column", async () => {
+    // §5's whole point: export, edit in Excel, re-import, references match.
+    const file = ownRows(3, true);
+    await prisma.plan.update({ where: { id: planId }, data: { productLimit: null } });
+
+    const first = await applyImport(actor, {
+      businessId,
+      fallbackCategoryId: categoryId,
+      filename: "loop-1.csv",
+      text: file.text,
+      plan: file.plan,
+    });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    runIds.push(first.importRunId);
+
+    const edited = file.text.replace(/ valve 0,/, " valve 0 renamed,");
+    const second = await applyImport(actor, {
+      businessId,
+      fallbackCategoryId: categoryId,
+      filename: "loop-2.csv",
+      text: edited,
+      plan: file.plan,
+    });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    runIds.push(second.importRunId);
+
+    // Three rows, three matches, nothing new.
+    expect(second.updated).toBe(3);
+    expect(second.created).toBe(0);
   });
 });

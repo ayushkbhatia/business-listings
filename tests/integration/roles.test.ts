@@ -98,7 +98,7 @@ describe("criterion 9 — a sales seat is refused, server-side", () => {
     await expect(
       applyImport(sales, {
         businessId,
-        categoryId: "anything",
+        fallbackCategoryId: "anything",
         filename: "x.csv",
         text: "Item\nValve\n",
         plan: { columns: [{ header: "Item", target: { kind: "name" } }] },
