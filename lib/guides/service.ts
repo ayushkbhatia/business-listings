@@ -10,6 +10,7 @@ import {
   readGuideBlocks,
   type GuideBlock,
 } from "./blocks";
+import { freshness } from "./freshness";
 
 /**
  * Boards 10b and 6d — guide authoring.
@@ -439,22 +440,25 @@ export async function overdueGuides(now = new Date()): Promise<OverdueGuide[]> {
   for (const row of rows) {
     const cadence = row.reviewCadenceMonths as number;
     /*
-       An article never re-checked is measured from publication. On the day it
-       went out its facts had just been read, which is the honest baseline —
-       and treating "never checked" as infinitely overdue would put every new
-       article in the queue the moment it published.
+       Through `freshness`, which board 10b's public index reads for the same
+       row. `6d`'s rule is that an overdue article stays published, so the index
+       says "review overdue" out loud — and a queue that disagreed with the page
+       it links to would be the version of that rule nobody could defend.
+
+       It also fixes the arithmetic this loop had. `setMonth` rolls 31 August
+       plus six months into 3 March, because February has no 31st, so an article
+       checked on a month end reported a due date days into the following month
+       and read as less overdue than it was.
     */
-    const from = row.regulatoryCheckedAt ?? (row.publishedAt as Date);
-    const due = new Date(from);
-    due.setMonth(due.getMonth() + cadence);
-    if (due > now) continue;
+    const state = freshness(row, now);
+    if (!state.overdue || state.dueAt === null) continue;
 
     overdue.push({
       id: row.id,
       slug: row.slug,
       title: row.title,
       checkedAt: row.regulatoryCheckedAt,
-      dueAt: due,
+      dueAt: state.dueAt,
       cadenceMonths: cadence,
     });
   }
