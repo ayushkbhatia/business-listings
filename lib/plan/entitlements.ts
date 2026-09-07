@@ -25,6 +25,13 @@ export interface PlanCaps {
   productLimit: number | null;
   locationLimit: number | null;
   photoLimit: number | null;
+  /// Additional categories a listing may carry. Null is unlimited.
+  ///
+  /// It has existed on `Plan` since handoff 1 and only board 2c read it, and
+  /// read it directly rather than through `capFor` — so board 3b would have
+  /// been the second place the same limit was interpreted. Board 3b Q2: fold it
+  /// in with seats and products rather than write a fourth copy.
+  categoryLimit: number | null;
   /// Megabytes of storage. Null is unlimited. Board 3i's header states it.
   storageMb: number | null;
   teamSeats: number;
@@ -62,6 +69,10 @@ export interface EntitlementSnapshot {
    */
   storageMb?: number | null;
   teamSeats: number;
+  /// Board 3b folded this in. Optional so a snapshot frozen before it existed
+  /// still parses — an old subscription's entitlements are a record of what was
+  /// promised, not a shape to rewrite.
+  categoryLimit?: number | null;
   customDomain: boolean;
 }
 
@@ -74,6 +85,7 @@ export function snapshotOf(plan: PlanCaps, capturedAt: Date): EntitlementSnapsho
     productLimit: plan.productLimit,
     locationLimit: plan.locationLimit,
     photoLimit: plan.photoLimit,
+    categoryLimit: plan.categoryLimit,
     storageMb: plan.storageMb,
     teamSeats: plan.teamSeats,
     customDomain: plan.customDomain,
@@ -122,7 +134,15 @@ export function effectiveCaps(plan: PlanCaps, snapshot: unknown): PlanCaps {
 }
 
 /** The capped resources. Named because a screen asks about one of them by name. */
-export const METERED = ["enquiries", "products", "locations", "photos", "seats", "storage"] as const;
+export const METERED = [
+  "enquiries",
+  "products",
+  "locations",
+  "photos",
+  "categories",
+  "seats",
+  "storage",
+] as const;
 export type Metered = (typeof METERED)[number];
 
 const CAP_OF: Record<Metered, (p: PlanCaps) => number | null> = {
@@ -130,6 +150,15 @@ const CAP_OF: Record<Metered, (p: PlanCaps) => number | null> = {
   products: (p) => p.productLimit,
   locations: (p) => p.locationLimit,
   photos: (p) => p.photoLimit,
+  /*
+     Counted as *additional* categories, not total.
+
+     A listing always has a primary one — `Business.primaryCategoryId` is NOT
+     NULL — so counting it against the cap would mean a plan allowing "three
+     categories" actually allowed two extra, and the chip row would say a
+     different number from the pricing page.
+  */
+  categories: (p) => p.categoryLimit,
   seats: (p) => p.teamSeats,
   // Megabytes, not a count. `allowance` is unit-agnostic — it compares a used
   // figure to a cap — so storage rides the same path as the other five and the

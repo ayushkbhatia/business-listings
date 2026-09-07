@@ -255,6 +255,7 @@ function storageOf(files: readonly LibraryFile[], plan: PlanCaps | null): Librar
       productLimit: null,
       locationLimit: null,
       photoLimit: null,
+    categoryLimit: null,
       storageMb: null,
       teamSeats: 0,
       rankingMultiplier: 1,

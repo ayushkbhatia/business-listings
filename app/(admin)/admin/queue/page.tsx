@@ -56,7 +56,10 @@ export default async function QueuePage() {
    */
   const readable = (field: string, value: string | null): string | null => {
     if (value === null) return null;
-    if (field !== "primary_category") return value;
+    // Both category fields store an id. `additional_category` joined them on
+    // board 3b, and without this the queue row read a raw cuid — a moderator
+    // cannot review "cm3x9…" against anything.
+    if (field !== "primary_category" && field !== "additional_category") return value;
     return categoryName.get(value) ?? value;
   };
 

@@ -54,7 +54,7 @@ export default async function ReviewSubmissionPage({
   // A category change stores ids. Resolve both sides, or the diff is unreadable.
   let from = submission.beforeValue;
   let to: string = submission.afterValue;
-  if (submission.field === "primary_category") {
+  if (submission.field === "primary_category" || submission.field === "additional_category") {
     const ids = [submission.beforeValue, submission.afterValue].filter(
       (v): v is string => v !== null,
     );

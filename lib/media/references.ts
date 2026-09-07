@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { t } from "@/lib/i18n";
 import type { Reference } from "./state";
 
 /**
@@ -123,7 +124,7 @@ export async function referencesFor(
     if (file.kind === "product") continue;
     push(file.id, {
       kind: "storefront",
-      label: SURFACE_LABEL[file.kind] ?? "Storefront",
+      label: (SURFACE_LABEL[file.kind] ?? SURFACE_LABEL.storefront!)(),
       ...(business?.slug ? { href: `/b/${business.slug}` } : {}),
       live: businessLive,
     });
@@ -142,7 +143,7 @@ export async function referencesFor(
     */
     push(doc.id, {
       kind: "certificate",
-      label: CERTIFICATE_SURFACE,
+      label: CERTIFICATE_SURFACE(),
       ...(business?.slug ? { href: `/b/${business.slug}` } : {}),
       live: businessLive,
     });
@@ -212,16 +213,30 @@ export async function referencesFor(
   return out;
 }
 
-/** The storefront block a published certificate is listed in. Board 1d. */
-const CERTIFICATE_SURFACE = "Certificates on your listing";
+/**
+ * What the seller calls the surface a file sits on.
+ *
+ * Through the catalogue, which they were not. These are as user-visible as any
+ * label on the media board — they are the badge on a tile answering "who is
+ * using this?" — and they sat here as English literals because
+ * `check:tokens` reads JSX under `app` and `components` and never looks in
+ * `lib`. Non-negotiable 5 has no carve-out for a lookup table.
+ *
+ * `visit` read "Site visit" until board 3b came past. The kind is vestigial —
+ * nothing has written it since site visits were withdrawn on 5 September, and
+ * the enum keeps the label only because dropping a Postgres enum value rewrites
+ * the table — but a row that predates the cut would still have rendered the
+ * name of a programme that no longer exists.
+ */
+const CERTIFICATE_SURFACE = () => t("media.surface.certificates");
 
-/** What the seller calls the surface a non-product image sits on. */
-const SURFACE_LABEL: Record<string, string> = {
-  cover: "Storefront cover",
-  logo: "Logo",
-  gallery: "Listing profile",
-  storefront: "Storefront page",
-  visit: "Site visit",
+const SURFACE_LABEL: Record<string, () => string> = {
+  cover: () => t("media.surface.cover"),
+  logo: () => t("media.surface.logo"),
+  gallery: () => t("media.surface.gallery"),
+  storefront: () => t("media.surface.storefront"),
+  library: () => t("media.surface.library"),
+  visit: () => t("media.surface.withdrawn"),
 };
 
 /** One file's references. The detail panel's `USED IN`. */

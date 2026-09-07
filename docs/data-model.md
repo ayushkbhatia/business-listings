@@ -458,6 +458,18 @@ an order are two sources of truth for one fact and they drift, and board 3i's
 criterion 8 asks that the primary be settable *and* that board 1g's gallery
 order match it. One column satisfies both by construction.
 
+**A seller's own edits have their own table.** `listing_revision` records what a seller changed
+and when, for board 3b's recent-changes rail. It is deliberately **not** `audit_event`: that log
+records *decisions* — a staff member changing something they do not own, with a written reason —
+and filing "S. Menon edited their description" there would dilute the one table whose value is
+that every row in it is a staff action somebody can be asked about. Non-negotiable 3 covers staff
+state changes; a seller editing their own listing is the other kind.
+
+**`media_kind` has a `library` value that names no surface.** Every other kind names a page, which
+made "held in the library and placed on nothing" unrepresentable — `referencesFor` counts any
+non-product file as a storefront reference. Board 3b's unpick needed a destination that is not a
+deletion.
+
 **A document reaches a storefront on two decisions, not one.** `isPublic` is the seller's —
 they want this certificate named on their listing — and `reviewedAt` is a moderator's, that it
 may be. `lib/storefront/loader.ts` requires both, which is what makes board 3e's

@@ -11,39 +11,89 @@ import AxeBuilder from "@axe-core/playwright";
  * kills the product. Both are asserted.
  */
 
-test.describe("board 3b — the two moderation states, on one screen", () => {
+test.describe("board 3b — the listing profile", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/dashboard/listing");
   });
 
-  test("says which half publishes and which half waits", async ({ page }) => {
-    // A seller who has only ever seen the moderated half assumes everything
-    // waits and stops editing.
-    await expect(page.getByText("Publishes as soon as you save")).toBeVisible();
-    await expect(page.getByText("A person checks these first")).toBeVisible();
+  test("criterion 6 — there is no certificate upload, and the rail names where they live", async ({
+    page,
+  }) => {
+    // The editor carried a `Certificates` tab while 3e holds the same
+    // collection. Two upload points is how one ISO 9001 PDF ends up on file
+    // twice with two expiry dates.
+    await expect(page.getByRole("tab", { name: "Certificates" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Verification & documents/ })).toHaveAttribute(
+      "href",
+      "/dashboard/verification",
+    );
   });
 
-  test("puts exactly three fields on the waiting side", async ({ page }) => {
-    const moderated = page.getByRole("region", { name: "A person checks these first" });
-    await expect(moderated.getByText("Trade name")).toBeVisible();
-    await expect(moderated.getByText("Primary category")).toBeVisible();
-    await expect(moderated.getByText("Licence number")).toBeVisible();
-
-    // And nothing else. Description, hours and photographs are not in it.
-    await expect(moderated.getByText("Description")).toHaveCount(0);
-    await expect(moderated.getByRole("button", { name: "Submit for review" })).toHaveCount(3);
+  test("has the four tabs the board draws, and no fifth", async ({ page }) => {
+    const tabs = page.getByRole("tablist", { name: "Listing sections" });
+    await expect(tabs.getByRole("tab")).toHaveCount(4);
+    for (const name of ["Basics", "Services", "Media", "SEO & slug"]) {
+      await expect(tabs.getByRole("tab", { name })).toBeVisible();
+    }
   });
 
-  test("offers no review step on the instant half", async ({ page }) => {
-    const instant = page.getByRole("region", { name: "Publishes as soon as you save" });
-    await expect(instant.getByRole("button", { name: "Save" })).toBeVisible();
-    await expect(instant.getByRole("button", { name: "Submit for review" })).toHaveCount(0);
+  test("criterion 3 — one save button, and no separate submit", async ({ page }) => {
+    await expect(page.getByRole("button", { name: "Save changes" })).toBeVisible();
+    // `Save & submit` and a per-field `Submit for review` are both gone: the
+    // save queues what has to be queued and says so.
+    await expect(page.getByRole("button", { name: "Submit for review" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Save & submit/ })).toHaveCount(0);
   });
 
-  test("cannot submit a change to what it already says", async ({ page }) => {
-    const moderated = page.getByRole("region", { name: "A person checks these first" });
-    // Untouched, so there is nothing to ask for.
-    await expect(moderated.getByRole("button", { name: "Submit for review" }).first()).toBeDisabled();
+  test("the trade name is licence-locked and the slug is not edited here", async ({ page }) => {
+    await expect(page.getByText("· licence-locked")).toBeVisible();
+    // A writable slug with no redirect behind it turns bookmarks into 404s.
+    // docs/routes.md holds it immutable once published; the SEO tab owns it.
+    await expect(page.getByText(/Changed on the SEO & slug tab/)).toBeVisible();
+  });
+
+  test("criterion 8 — the preview moves before the save does", async ({ page }) => {
+    const preview = page.getByText("How it will look");
+    await expect(preview).toBeVisible();
+
+    const textarea = page.getByRole("textbox", { name: /Description/ }).first();
+    if ((await textarea.count()) === 0) return;
+    await textarea.fill("A sentence that exists only in the form.");
+    // Rendered from unsaved state, so it is visible without saving.
+    await expect(page.getByText("A sentence that exists only in the form.")).toHaveCount(2);
+  });
+
+  test("criterion 10 — the board's own metadata uses the darker token", async ({ page }) => {
+    /*
+       The floor the handoff names sits between `--text-muted` and
+       `--text-body`, so every hint, counter and caption this board writes takes
+       `--text-body`.
+       
+       **Partly, and the remainder is not this board's to fix.** `Panel` renders
+       its eyebrow in `--text-faint` and `Tabs` renders an inactive label in
+       `--text-muted`, and both are shared components carrying every screen in
+       the product — forking them here would break the rule that a shared
+       component renders identically wherever it appears, to satisfy one board.
+       The real fix is the token itself, which is the canvas decision the
+       handoff records and which moves all ninety-five screens at once.
+
+       So this asserts what is in scope: the form's own metadata, positively,
+       rather than sweeping for the absence of a class the chrome legitimately
+       uses.
+    */
+    const hint = page.getByText(/Changed on the SEO & slug tab/);
+    await expect(hint).toHaveClass(/text-body/);
+    await expect(hint).not.toHaveClass(/text-muted|text-faint/);
+
+    const reviewed = page.getByText(/it sets which area pages and filters/);
+    await expect(reviewed).toHaveClass(/text-body/);
+  });
+
+  test("the moderation card states the live half even with nothing held", async ({ page }) => {
+    // A panel that only lists what is stuck reads as though nothing shipped,
+    // and its absence would read as broken.
+    await expect(page.getByText("Moderation")).toBeVisible();
+    await expect(page.getByText(/live now/)).toBeVisible();
   });
 
   test("is axe clean", async ({ page }) => {

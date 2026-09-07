@@ -315,6 +315,10 @@ export const en = {
   "admin.queue.kind.conflict": "Conflicting claim",
   "admin.queue.field.trade_name": "Trade name",
   "admin.queue.field.primary_category": "Primary category",
+  // Board 3b. An addition rather than a replacement — the listing keeps the
+  // categories it already has while this one is checked, so the queue row reads
+  // "add X" and not "X → Y".
+  "admin.queue.field.additional_category": "Additional category",
   "admin.queue.field.licence": "Licence number",
   "admin.queue.not_yours": "That decision is not one your role holds.",
   "admin.queue.needs_reason": "Write a reason. A sentence, not a keystroke — it goes on the record and the seller reads it.",
@@ -3500,6 +3504,19 @@ export const en = {
   "media.panel.alt": "Alt text",
   "media.panel.alt_hint": "Read out on your product page and used by search. Required once the file is on a live page.",
   "media.panel.alt_document": "A document is described by its name rather than by alt text.",
+  // Where a file is read, as the seller would name it. Board 3i's `USED IN`
+  // badges, moved out of a lookup table in lib/media/references.ts that
+  // check:tokens cannot see — it reads JSX under app and components, and never
+  // looks in lib.
+  "media.surface.certificates": "Certificates on your listing",
+  "media.surface.cover": "Storefront cover",
+  "media.surface.logo": "Logo",
+  "media.surface.gallery": "Listing profile",
+  "media.surface.storefront": "Storefront page",
+  "media.surface.library": "In your library, on no page",
+  // The vestigial `visit` kind. Nothing has written it since 5 September; the
+  // enum keeps the value only because dropping one rewrites the table.
+  "media.surface.withdrawn": "No longer published",
   "media.panel.used_in": "Used in",
   "media.panel.used_nowhere": "Nothing references this file.",
   "media.panel.replace": "Replace…",
@@ -3564,6 +3581,121 @@ export const en = {
   "listing.team.b51_200": "51 to 200",
   "listing.team.b201_500": "201 to 500",
   "listing.team.b500_plus": "More than 500",
+
+  // ── Board 3b, the editor ──────────────────────────────────────────────────
+  // The pill counts held edits only. Saving a description on its own produces
+  // no pill: it answers "what is somebody looking at", and the answer is often
+  // none. The screen this replaced put "2 edits pending review" over a save
+  // where one of the two was already live.
+  "listing.in_review_count": {
+    one: "{formatted} edit in review",
+    other: "{formatted} edits in review",
+  },
+  "listing.in_review": "In review",
+  // A chip the seller has picked and not yet saved. Nobody is looking at it,
+  // so it does not claim they are.
+  "listing.not_saved": "Not saved",
+  // "Save changes", not "Save & submit". It saves; some of what it saves is
+  // queued, and the chip beside that field says which — the button does not
+  // have to carry both behaviours in its name.
+  "listing.save_changes": "Save changes",
+  "listing.discard": "Discard changes",
+  // Criterion 9: it names how many tabs it throws away, because the edits it
+  // discards are not all on the tab in front of the seller.
+  "listing.discard_confirm": "Discard your unsaved changes across all {formatted} tabs? This cannot be undone.",
+  "listing.saved_with_review": {
+    one: "Saved. {formatted} change is with our team; everything else is live now.",
+    other: "Saved. {formatted} changes are with our team; everything else is live now.",
+  },
+  "listing.read_only": "You can see this listing but not change it. Ask an owner or a manager to edit it.",
+  "listing.tabs": "Listing sections",
+  "listing.tab.basics": "Basics",
+  "listing.tab.services": "Services",
+  "listing.tab.media": "Media",
+  "listing.tab.seo": "SEO & slug",
+  "listing.tab_empty": "Not built yet. This tab has its own board and nothing here is lost by it being empty — everything on Basics saves as normal.",
+
+  "listing.licence_locked": "· licence-locked",
+  "listing.public_url": "Public URL",
+  // Slugs are immutable once published (docs/routes.md) and changing one has to
+  // write a 301, which is the SEO tab's work. A writable field with no redirect
+  // behind it turns every bookmarked address into a 404.
+  "listing.public_url_hint": "Changed on the SEO & slug tab, where the redirect from your old address is set up with it.",
+  "listing.counter": "{used} / {limit}",
+  "listing.over_limit": "That is over the {limit}-character limit. Shorten it and the save will go through.",
+  "listing.primary_reviewed": "Reviewed before it changes — it sets which area pages and filters you appear on.",
+  "listing.payment_terms": "Payment terms offered",
+  "listing.payment_terms_hint": "What you accept, in your own words. Buyers read it on your listing.",
+
+  "listing.also_list_under": "Also list under",
+  // What is true, rather than what a tier would buy. The board read
+  // "· unlimited on Pro", which sold a plan inside an editor.
+  "listing.also_list_meta": {
+    one: "· {formatted} added · reviewed before they go live",
+    other: "· {formatted} added · reviewed before they go live",
+  },
+  "listing.add_category": "Add a category",
+  "listing.remove_category": "Remove {name}",
+  "listing.category_cap": "{cap} additional categories on {plan}. Remove one to add another.",
+
+  "listing.photos": "Storefront photos",
+  // Both numbers are queries. The picked count and the library count are
+  // different facts, and the sentence only means something with both in it.
+  "listing.photos_meta": "· {picked} of the {total} in your media library, shown in this order",
+  "listing.photo": "photograph",
+  "listing.cover": "Cover",
+  "listing.make_cover": "Make cover",
+  "listing.remove": "Remove",
+  // Criterion 7. The word is "remove", and what it does is take it off the
+  // listing — the file stays in the library, and deleting it is the library's
+  // action with the blast radius in view.
+  "listing.remove_photo": "Remove {name} from your listing",
+  "listing.add_photo": "Add {name} to your listing",
+  "listing.choose_from_library": "Choose from library",
+  "listing.library_empty": "Every photograph you hold is already on your listing.",
+  "listing.open_library": "Open the media library",
+  "listing.picker_note": "Adding one here puts it on your listing. Removing takes it off and leaves the file in your library.",
+  "listing.team_size_none": "Not saying",
+
+  // ── The rail ──
+  "listing.preview": "How it will look",
+  "listing.preview_device": "Preview width",
+  "listing.desktop": "Desktop",
+  "listing.mobile": "Mobile",
+  "listing.preview_no_description": "No description yet. Buyers see this space empty.",
+  "listing.moderation": "Moderation",
+  "listing.held_category": "New category: {name} · in review",
+  "listing.submitted_sla": "Submitted {when} · two working days",
+  // The sentence a seller assumes the opposite of. Without it the reasonable
+  // reading is that the whole listing is held while one chip is checked.
+  // Two keys rather than a `zero` plural form: `Intl.PluralRules` has no zero
+  // category in English, so a `zero:` entry is never selected and the sentence
+  // read "its 0 current categories" — which is the commonest case of all, a
+  // seller adding their first extra category.
+  "listing.stays_live_none": "Your listing stays live on its primary category while this one is checked.",
+  "listing.stays_live": {
+    one: "Your listing stays live on its primary category and its {formatted} current one while this is checked.",
+    other: "Your listing stays live on its primary category and its {formatted} current ones while this is checked.",
+  },
+  "listing.live_now": "Everything else · live now",
+  "listing.saved_when": "Saved {when}",
+  "listing.never_saved": "Nothing changed yet",
+  "listing.moderation_note": "Trade name, licence details and categories are reviewed by our team — they set your badge and where you rank. Everything else publishes the moment you save. If your description breaks a content rule the audit flags it to us afterwards; it does not take your text down.",
+  "listing.documents": "Documents",
+  "listing.documents_body": "Your trade licence, TRN and uploaded certificates live on the verification page, with the badge they earn.",
+  "listing.documents_link": "Verification & documents →",
+  "listing.history": "Version history",
+  "listing.history_empty": "No changes recorded yet.",
+  "listing.history_note": "The three most recent changes. Reviewed edits keep their full record with our team.",
+  "listing.revision": "{field} · {author}",
+  "listing.revision_counted": "{field} ×{formatted} · {author}",
+  "listing.field.description": "Description",
+  "listing.field.payment_terms": "Payment terms",
+  "listing.field.established_year": "Established",
+  "listing.field.team_size": "Team size",
+  "listing.field.languages": "Languages",
+  "listing.field.photos": "Photos",
+  "listing.field.categories_removed": "Categories",
 
   // ── Locations, board 3c ───────────────────────────────────────────────────
   "locations.title": "Locations",

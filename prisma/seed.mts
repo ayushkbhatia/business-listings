@@ -3588,6 +3588,7 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
             name: plan.name,
             monthlyPriceAed: Number(plan.monthlyPriceAed),
             enquiriesPerMonth: plan.enquiriesPerMonth,
+            categoryLimit: plan.categoryLimit,
             productLimit: plan.productLimit,
             locationLimit: plan.locationLimit,
             photoLimit: plan.photoLimit,

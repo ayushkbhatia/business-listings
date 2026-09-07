@@ -21,7 +21,8 @@ export const dynamic = "force-dynamic";
 
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
-  locationLimit: true, photoLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
+  locationLimit: true, photoLimit: true,
+  categoryLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
   customDomain: true, sortOrder: true,
   // What a year costs, so a card can state the term the seller is actually on.
   annualMonthsCharged: true,
