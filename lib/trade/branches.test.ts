@@ -35,6 +35,9 @@ function branch(over: Partial<BranchLocation> = {}): BranchLocation {
     addressLine: "Unit 5, Street 9",
     lat: 25.12,
     lng: 55.23,
+    // A pin somebody placed. The distance assertions below are about the sort,
+    // and an approximate pin is not measured at all — see `measurable`.
+    geocodePrecision: "exact" as const,
     phone: "+97148834120",
     whatsapp: null,
     hours: WEEK,

@@ -73,9 +73,40 @@ model Location {
   hours         Json          // per-day open/close, split shifts
   ramadanHours  Json?         // applied automatically on announced dates
   serviceRadiusKm Int?
+  geocodePrecision GeocodePrecision?  // exact | approximate; null exactly when unpinned
   published     Boolean  @default(false)
+  publishedAt   DateTime?     // first time it went live; never cleared
+}
+
+enum GeocodePrecision { exact approximate }
+
+model BusinessCoverage {          // board 3c — where a supplier delivers
+  id            String  @id @default(cuid())
+  businessId    String
+  emirate       Emirate
+  areaId        String?           // null covers the emirate entire
+  leadTimeHours Int               // 0 is same day
 }
 ```
+
+**A pin's precision is a record of who placed it**, not a judgement about the
+coordinates. Dragged by the seller or resolved to a rooftop is `exact`; derived
+from the area is `approximate`. Only `exact` may be measured — an area centroid
+ranked by distance is the distance to the area presented as the distance to the
+address, and on 2026-09-07 that described 116 of the 118 pinned branches in
+production. `missing` is not a third value: it is `lat IS NULL`, and a CHECK
+ties the pair together.
+
+**Three statuses out of a boolean and a date.** `published` is the one answer to
+"can buyers see this". `publishedAt` separates a branch taken down (**hidden**)
+from one never finished (**draft**), which is the only difference anything reads:
+board 3d offers a hidden branch in its hours picker and skips a draft.
+
+**Coverage is rows, not strings.** They drive `1h`'s RFQ routing and sit beside
+the facets `1b` filters on, so a typed area would match nothing. Both scales come
+from the taxonomy: an emirate, or an area inside one. Distinct from
+`Location.serviceRadiusKm`, which is geometry around one branch rather than a
+named place and a promise.
 
 ## Taxonomy & specs
 

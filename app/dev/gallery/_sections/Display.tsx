@@ -529,7 +529,7 @@ export function Display() {
       <Section
         id="map-canvas"
         title="MapCanvas"
-        note="moss = head office or selected · ink = verified · outlined = unverified · a location with no coordinates never appears"
+        note="moss = head office or selected · ink = verified · amber = an approximate coordinate · outlined = unverified, or hidden on a seller\u2019s own screen · a location with no coordinates never appears"
       >
         <States label="pinned" stack>
           <div className="w-full max-w-2xl">
@@ -557,6 +557,33 @@ export function Display() {
               excluded={3}
               excludedLabel={t("display.map_excluded", { count: 3 })}
               emptyLabel={t("display.map_empty")}
+            />
+          </div>
+        </States>
+        {/*
+          Board 3c's rail, at the geography it exists to show. The four branches
+          span 110 km from Mussafah to Sharjah, which is the fact a locations
+          manager is for — the board it replaced drew a tight cluster and
+          implied the opposite.
+
+          Amber is the pin whose coordinates came from the area rather than the
+          address; outlined here is a branch the seller has hidden. The label
+          sides are computed from the spread, so the easternmost pin points
+          inward rather than off the edge of the frame.
+        */}
+        <States label="branch overview — labelled, with an approximate pin" stack>
+          <div className="w-full max-w-sm">
+            <MapCanvas
+              label={t("display.map_label")}
+              height={420}
+              labelled
+              emptyLabel={t("display.map_empty")}
+              pins={[
+                { id: "1", lat: 24.9857, lng: 55.0272, label: "Jebel Ali FZ", kind: "head_office" },
+                { id: "2", lat: 25.1412, lng: 55.2311, label: "Al Quoz Ind. 3", kind: "verified" },
+                { id: "3", lat: 25.3197, lng: 55.4083, label: "Ind. 15, Sharjah", kind: "approximate" },
+                { id: "4", lat: 24.3512, lng: 54.5089, label: "Mussafah M-14", kind: "unverified" },
+              ]}
             />
           </div>
         </States>

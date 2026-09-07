@@ -225,6 +225,9 @@ async function recruit(db: PrismaClient, spec: Recruit) {
             areaId: area.id,
             addressLine: `Warehouse ${n}, Street 6`,
             published: true,
+            // Fixed rather than `new Date()`, like every other date in this file:
+            // two runs must agree so a screenshot diff shows real changes only.
+            publishedAt: new Date(Date.UTC(2026, 0, 1)),
             /*
                A number on two in three, and verified on those.
 
@@ -254,6 +257,14 @@ async function recruit(db: PrismaClient, spec: Recruit) {
               : {
                   lat: area.lat + ((i % 9) - 4) * 0.0016,
                   lng: area.lng + ((Math.floor(i / 9) % 9) - 4) * 0.0016,
+                  /*
+                     A lattice around the area's centre is the area, at finer
+                     resolution — so `approximate`, and out of distance sort.
+                     Board 6a is the reason these exist and it wants them on a
+                     map, which they still are: an approximate pin renders, it
+                     is only the kilometres that are refused.
+                  */
+                  geocodePrecision: "approximate" as const,
                 }),
             /*
                Hours on four in five, and the stat line depends on the other one.

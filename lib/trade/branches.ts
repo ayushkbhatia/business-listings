@@ -1,7 +1,8 @@
 import { openNow, type OpenState } from "./open-now";
 import { nextRamadan, type RamadanCalendar } from "./hours";
 import { haversineKm } from "@/lib/geo/distance";
-import type { Emirate, LocationType } from "@/lib/db/generated/enums";
+import { measurable } from "@/lib/locations/branch";
+import type { Emirate, GeocodePrecision, LocationType } from "@/lib/db/generated/enums";
 
 /**
  * The branches page reduced to decisions, with no React and no database.
@@ -37,6 +38,9 @@ export interface BranchLocation {
   addressLine: string;
   lat: number | null;
   lng: number | null;
+  /// How the pin was placed. Only an exact one may be measured — see
+  /// `orderBranches` below and `measurable` in lib/locations/branch.ts.
+  geocodePrecision: GeocodePrecision | null;
   phone: string | null;
   whatsapp: string | null;
   hours: unknown;
@@ -153,7 +157,18 @@ export function orderBranches(
   const distanceKm: Record<string, number> = {};
 
   if (origin) {
-    for (const location of locations) {
+    /*
+       Board 3c criterion 3, on the page where the number is actually printed.
+
+       `measurable` keeps only the branches whose pin somebody placed. An
+       approximate one is the area's centre, and "12 km" beside a branch address
+       is a claim about that address — the buyer reads it as how far they are
+       driving. Unmeasured branches keep their entry out of `distanceKm`, which
+       the comparator below already sends to the end and the column already
+       renders without a figure, so this narrows what is measured rather than
+       adding a state.
+    */
+    for (const location of measurable(locations)) {
       if (location.lat == null || location.lng == null) continue;
       distanceKm[location.id] = haversineKm(origin, {
         lat: location.lat,
