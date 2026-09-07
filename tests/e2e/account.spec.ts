@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 /**
- * Boards 3l, 3m, 7d, 11e and 11f, signed in as a seller.
+ * Boards 3l, 3m, 7d, 11e, 11f and 11h, signed in as a seller.
  *
  * Criteria 9 and 10 are proved in tests/integration — they are claims about
  * what services refuse and what they write, and a browser is the wrong
@@ -11,32 +11,79 @@ import AxeBuilder from "@axe-core/playwright";
  * is that the catalogue is deleted, and the answer has to be visible.
  */
 
-test.describe("board 11f — plan change", () => {
+test.describe("board 11f — change plan", () => {
+  /*
+     The seller is `al-marwan-industrial-supplies-llc`, seeded on Pro. Every
+     assertion below is against that: Pro is the current column, and Basic and
+     Free are both downgrades.
+
+     This block was written against the first `11f`, which drew three plan cards
+     with a `Recommended` badge and a `Your plan` label. That board was replaced
+     by a comparison table, so the assertions moved with it — what is tested is
+     the same claim in both cases, which is that the screen says what a change
+     costs before it costs anything.
+  */
   test.beforeEach(async ({ page }) => {
     await page.goto("/dashboard/billing/change");
   });
 
-  test("shows three plans, with one recommended and one current", async ({ page }) => {
-    await expect(page.getByRole("region", { name: "Free" })).toBeVisible();
-    await expect(page.getByText("Recommended")).toBeVisible();
-    await expect(page.getByText("Your plan")).toBeVisible();
+  test("renders the whole ladder, with the seller's own column marked", async ({ page }) => {
+    const grid = page.getByRole("table", { name: /What each plan holds/ });
+    await expect(grid).toBeVisible();
+    // Nine rows: four meters, then enquiries and four entitlements.
+    await expect(grid.getByRole("row")).toHaveCount(10);
+    await expect(grid.getByText("Current plan")).toBeVisible();
   });
 
-  test("lists a feature the plan lacks rather than hiding it", async ({ page }) => {
+  test("states one denominator per row — criterion 4", async ({ page }) => {
+    /*
+       The board's first correction. Team seats read `1 of 3`, `2 of 3` and
+       `3 of 5 used` — the first two against the seller's seats and the third
+       against Pro's cap, so a reader comparing across was comparing nothing.
+
+       Every cell in a row now counts against the same figure: what the seller
+       has. The plan holding all of them says `All n` rather than restating its
+       own cap.
+    */
+    const seats = page.getByRole("row").filter({ hasText: "Team seats" });
+    const cells = await seats.getByRole("cell").allInnerTexts();
+    expect(cells).toHaveLength(3);
+
+    const denominator = cells
+      .map((cell) => /(?:of|All)\s+([\d,]+)/.exec(cell)?.[1])
+      .filter(Boolean);
+    expect(denominator).toHaveLength(3);
+    expect(new Set(denominator).size).toBe(1);
+  });
+
+  test("names an absent entitlement rather than hiding it", async ({ page }) => {
     // The absence is what the next tier up is selling.
-    const free = page.getByRole("region", { name: "Free" });
-    await expect(free.getByText("Your own web address")).toBeVisible();
+    const domain = page.getByRole("row").filter({ hasText: "Custom domain" });
+    await expect(domain.getByText("Not on this plan").first()).toBeVisible();
   });
 
-  test("breaks the proration into a credit and a charge before anything is charged", async ({ page }) => {
-    // One net figure is a number the seller has to take on trust.
-    await page.getByRole("button", { name: /Move to Basic/ }).click();
+  test("schedules a downgrade rather than charging for one", async ({ page }) => {
+    /*
+       Criterion 6. A downgrade takes effect at the end of the period: nothing is
+       charged on the day, the effective date is stated, and it is withdrawable
+       until then. The action says what it does — `Schedule downgrade`, not
+       `Downgrade`.
+    */
+    await page.getByRole("link", { name: /Select Basic/ }).click();
 
-    const quote = page.getByRole("region", { name: "What changes today" });
-    await expect(quote).toBeVisible();
-    await expect(quote).toContainText(/unused days/);
-    await expect(quote).toContainText(/AED \d/);
-    await expect(quote).toContainText(/Your renewal date does not move/);
+    await expect(page.getByText("Due today")).toBeVisible();
+    await expect(page.getByText("AED 0.00")).toBeVisible();
+    await expect(page.getByText(/takes effect at the end of the period/)).toBeVisible();
+    await expect(page.getByRole("button", { name: /Schedule downgrade to Basic/ })).toBeVisible();
+    await expect(page.getByText(/Withdraw any time before/)).toBeVisible();
+  });
+
+  test("prices a downgrade from the renewal, VAT included", async ({ page }) => {
+    // Rule 3 of the convention: every total is labelled `incl. VAT`, and nothing
+    // is rounded.
+    await page.getByRole("link", { name: /Select Basic/ }).click();
+    await expect(page.getByText(/^From /)).toBeVisible();
+    await expect(page.getByText("incl. VAT").first()).toBeVisible();
   });
 
   test("is axe clean", async ({ page }) => {
@@ -45,7 +92,13 @@ test.describe("board 11f — plan change", () => {
   });
 });
 
-test.describe("board 11f — cancel", () => {
+/*
+   The cancel screen is board `11h` now, and the reason step is `11j`. Neither is
+   exported, so the screen here is the one built in #12 and what it says is
+   governed by the entry point on `3m` — which states the same three things and
+   is written as a constraint on those boards so they cannot contradict it.
+*/
+test.describe("board 11h — cancel", () => {
   test("answers the three things a seller is afraid of", async ({ page }) => {
     await page.goto("/dashboard/billing/cancel");
 
