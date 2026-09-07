@@ -97,6 +97,24 @@ a legend and a value, required fields say "required" rather than showing an aste
 44px on mobile, 32px on desktop, 8px minimum gap. Real table markup with `scope`. Toasts and
 new-lead counts announce politely; only a failed save announces assertively.
 
+**Two tokens do not meet that floor, and are known not to.** `--text-muted`
+misses by 0.04 to 0.45 across six surfaces and `--text-faint` is 2.46–2.70:1,
+which is not a text colour at any size. They are measured, enumerated and left
+unchanged in `docs/contrast.md`, pending a canvas decision on the two values.
+
+**A board asked to sit darker than the ramp takes `text-body` in its own markup
+and leaves the shared components alone.** `Panel`'s mono eyebrow renders in
+`--text-faint` and an inactive `Tabs` label in `--text-muted`; both carry almost
+every screen in the product, so darkening either to clear one board's criterion
+forks a shared component — and moving the token is the same blast radius with a
+smaller diff. Board 3b is the worked example: its own hints and counters are
+`text-body`, its chrome is not, and its criterion is reported partly met rather
+than patched. `docs/contrast.md` § "The shared-component question" has the
+recipe, including what the override costs and when it is unwound.
+
+`pnpm check:contrast` computes every pairing from `docs/tokens.css`. It is in
+neither gate — run it by hand whenever a screen moves a colour.
+
 ## Component inventory
 
 Tier 1 (18), tier 2 (17), tier 3 (16), tier 4 (15) — **66 in total**. The full list, with the
