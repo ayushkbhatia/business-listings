@@ -680,7 +680,34 @@ async function optionCounts(
  * Module level rather than inside `getFixedFacets`, because the cacheable
  * counting function below needs the same lists and the two must not drift.
  */
-const TIERS = ["4", "3", "2", "1"] as const;
+/*
+   Two rungs, not four, and the two that went did so for different reasons.
+
+   Tier 4 could not exist even when this list offered it: the column has refused
+   it since site visits were withdrawn, so the count was not merely zero but
+   unreachable. Tier 3 was legal in the column and reserved on the ladder —
+   trade references, drawn so the ladder had somewhere to go, and unbuilt — so
+   nothing set it and no seller had a path to it. Both options counted zero on
+   every category and search page, and zero-count options are rendered rather
+   than hidden.
+
+   Trade references have since been cut outright, which retires the distinction:
+   `business_verification_tier_range` is `BETWEEN 0 AND 2` and rung 3 is drawn
+   nowhere. Both options are now unreachable in the same way, and this list is
+   the same two entries either way.
+
+   So the rail stops at `TOP_ACHIEVABLE_TIER`. A filter for a rung the ladder
+   does not draw is not a harmless empty row: the interface-honesty rules turn
+   on the counts being true, and an option that can only ever say 0 teaches a
+   buyer that the numbers in this rail mean nothing. It is also the third fossil
+   of the four-rung ladder found in a corpus no scan reads — after the two
+   divisors board 3e corrected — because a scan reads copy and this is an array
+   of digits.
+
+   If the ladder ever gains a rung, `TOP_ACHIEVABLE_TIER` moves and this list
+   gains an entry with it. The two must move together.
+*/
+const TIERS = ["2", "1"] as const;
 const EMIRATES = ["dubai", "abu_dhabi", "sharjah", "ajman"] as const;
 const AVAILABILITY = ["in_stock", "made_to_order", "indent", "out_of_stock"] as const;
 const FREE_ZONE = ["1"] as const;

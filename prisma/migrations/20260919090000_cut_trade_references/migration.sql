@@ -1,0 +1,98 @@
+-- Cut trade references, and shorten the verification ladder to two rungs.
+--
+-- The ladder becomes:
+--
+--   0 unclaimed → 1 claimed → 2 licence verified (top)
+--
+-- Rung 3 was drawn and inert. Board 3e put trade references there and marked it
+-- `reserved` so the ladder had somewhere to go, on the reasoning that a rung
+-- drawn muted is honest about being unbuilt. It has now been decided that trade
+-- references will never be built, and that changes what the drawing says: a
+-- reserved rung nobody intends to ship is a promise on a live screen, and the
+-- seller reading "we will say so here when it exists" is reading a roadmap the
+-- roadmap does not contain. Drawing somewhere to go is only honest while
+-- somebody means to go there.
+--
+-- ## Ordering — additive, so this applies BEFORE the merge
+--
+-- docs/deployments.md § Ordering. Tightening a CHECK drops no schema element,
+-- so the constraint can narrow while the old code is still serving and the new
+-- code arrives to a column that already matches it.
+--
+-- ### The window, stated honestly
+--
+-- An earlier draft of this note said the previous deployment never writes a 3,
+-- because `setVerificationTier` refused anything the ladder did not draw. That
+-- was wrong, and consolidating the branch is what surfaced it. On `main` today
+-- `MAX_TIER` is 3, and `TIERS` in the admin table renders radios `[0,1,2,3,4]`.
+-- An ops lead can see a 3 and click it, and the write succeeds.
+--
+-- So between this migration and the merge there is a window in which that one
+-- control would fail: the code offers 3, the CHECK now refuses it, and the
+-- staff action errors instead of writing.
+--
+-- The window is accepted rather than designed around, and it is worth saying
+-- why so the next person does not re-derive it:
+--
+--   · It is minutes wide — the merge follows the migration directly.
+--   · It costs one refused staff write, not a serving outage. Nothing a buyer
+--     touches reads or writes this column through a path that can fail here.
+--   · The alternative is worse. Applying after the merge needs
+--     `ALLOW_PENDING_MIGRATIONS` naming this migration on the deployment, or
+--     `check:schema-deployed` marks the build ERROR — a second manual step, on
+--     the deploy path, to avoid a failure mode narrower than the one that step
+--     introduces.
+--
+-- The merge closes it: `MAX_TIER` becomes `TOP_ACHIEVABLE_TIER` and the radios
+-- are derived from it, so the interface stops offering the rung first.
+--
+-- ## No audit rows
+--
+-- If any row moves below, none of it is logged, and deliberately.
+-- `AuditEvent.actorId` is NOT NULL because the log records *decisions*, and a
+-- migration applying a decision already published has no actor to attribute —
+-- the same reasoning `lib/verification/expiry-job.ts` carries, and the same
+-- reason `20260906090000_withdraw_site_visits` and
+-- `20260916090000_document_review` wrote none either.
+
+-- ── Retier before the range tightens ────────────────────────────────────────
+--
+-- This order is load-bearing, and it is the lesson of
+-- `20260906090000_withdraw_site_visits`: a row outside the new range at the
+-- moment the constraint is added makes it fail to validate and aborts the whole
+-- migration.
+--
+-- Production was checked before this was written and holds nothing above 2 —
+-- 73 rows at 0, 6 at 1, 44 at 2 — because `20260916090000_document_review`
+-- already moved the eight rows that were sitting on rung 3. This statement is
+-- therefore expected to touch nothing there. It is not decoration: a developer
+-- database seeded before that migration, a restore from an older dump, or a
+-- replica lagging it would each have rows the CHECK would reject, and a
+-- migration that aborts halfway through a deploy is worse than one whose first
+-- statement matches zero rows.
+--
+-- Two is where such a row belongs. Rung 3 has meant three different things —
+-- site visited, trading history audited, trade references — and a listing
+-- carrying one has only ever had one thing genuinely checked underneath it: its
+-- trade licence, against the issuing authority. Nothing is lost by the move.
+-- `VERIFIED_TIER` is 2, so the badge, the `/verified` filter and the ranking
+-- weight are all unchanged.
+--
+-- `verified_at` is untouched. It records that a check happened on a date, and
+-- it did.
+UPDATE "business" SET "verification_tier" = 2 WHERE "verification_tier" > 2;
+
+-- ── The range ──────────────────────────────────────────────────────────────
+--
+-- 0..2, matching `TIERS` in components/domain/verification.ts and `MAX_TIER` in
+-- lib/verification/service.ts, which is `TOP_ACHIEVABLE_TIER`.
+--
+-- The service refuses first so the message can name the range; this refuses
+-- underneath so a second code path cannot get around it. Both, because either
+-- alone has been wrong before: the CHECK allowed 0..3 while every screen drew
+-- two reachable rungs, which is how an ops lead could set a tier the ladder
+-- does not draw.
+ALTER TABLE "business" DROP CONSTRAINT IF EXISTS "business_verification_tier_range";
+ALTER TABLE "business"
+  ADD CONSTRAINT "business_verification_tier_range"
+  CHECK ("verification_tier" BETWEEN 0 AND 2);

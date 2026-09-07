@@ -54,6 +54,15 @@ export interface CategoryView {
   parentName: string | null;
 }
 
+/** A category a moderator turned down. Board 3b Q3. */
+export interface RejectedCategoryView {
+  id: string;
+  categoryId: string;
+  label: string;
+  reason: string | null;
+  decidedAt: string | null;
+}
+
 export interface ListingWorkspaceProps {
   view: {
     displayName: string;
@@ -66,6 +75,7 @@ export interface ListingWorkspaceProps {
     languages: string[];
     primary: CategoryView;
     additional: CategoryView[];
+    rejected: RejectedCategoryView[];
     choices: CategoryView[];
     held: HeldEditView[];
     photos: {
@@ -280,6 +290,7 @@ export function ListingWorkspace(props: ListingWorkspaceProps) {
               setLanguages={setLanguages}
               chips={chips}
               heldCategoryIds={heldCategoryIds}
+              rejected={view.rejected}
               adding={adding}
               setAdding={setAdding}
               removing={removing}
@@ -329,6 +340,7 @@ interface BasicsProps extends ListingWorkspaceProps {
   setLanguages: (value: string[]) => void;
   chips: CategoryView[];
   heldCategoryIds: Set<string>;
+  rejected: RejectedCategoryView[];
   adding: string[];
   setAdding: (value: string[]) => void;
   removing: string[];
@@ -345,7 +357,17 @@ function Basics(props: BasicsProps) {
     (row) =>
       row.id !== props.primaryId &&
       !props.chips.some((chip) => chip.id === row.id) &&
-      !props.heldCategoryIds.has(row.id),
+      !props.heldCategoryIds.has(row.id) &&
+      /*
+         A refused category stays in the picker.
+
+         Deliberately: the reason may have stopped applying — a licence renewed,
+         an activity added to it — and asking again is the only move the seller
+         has. What it must not do is appear twice, once as a refusal chip and
+         once as an option in the same list, so it leaves the picker only while
+         its chip is on screen.
+      */
+      !props.rejected.some((row2) => row2.categoryId === row.id),
   );
 
   return (
@@ -503,6 +525,51 @@ function Basics(props: BasicsProps) {
               </span>
             );
           })}
+
+          {/*
+             Board 3b Q3. The fourth state, and the only one reporting a
+             decision rather than a queue position.
+
+             It is drawn here, beside the live and held chips, because that is
+             where the field is edited — the board's own rule, and the reason
+             `IN REVIEW` sits on a chip rather than only in the rail. Before
+             this, a refusal had no drawing at all: the amber chip vanished on
+             the moderator's decision and the seller was left to notice an
+             absence.
+
+             The reason itself is in the rail card. A moderator writes a
+             sentence and a pill holds two words, so the chip says what happened
+             and the card says why — and `aria-describedby` ties the two
+             together for anybody who cannot see that they are on the same
+             screen.
+
+             Hidden once the seller re-asks: `adding` already draws that
+             category as a dashed `NOT SAVED` chip, and both at once would be
+             the screen saying refused and pending about the same thing.
+          */}
+          {props.rejected
+            .filter((row) => !props.adding.includes(row.categoryId))
+            .map((row) => (
+              <span
+                key={row.id}
+                aria-describedby={`refused-${row.id}`}
+                className="inline-flex items-center gap-1.5 rounded-pill border border-bad-line bg-bad-wash px-2.5 py-1 text-caption text-bad-ink"
+              >
+                {row.label}
+                <span className="font-mono text-eyebrow uppercase tracking-eyebrow">
+                  {t("listing.category_refused")}
+                </span>
+                {editable && (
+                  <button
+                    type="button"
+                    className="rounded-pill px-1 underline decoration-dotted underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:shadow-focus"
+                    onClick={() => props.setAdding([...props.adding, row.categoryId])}
+                  >
+                    {t("listing.ask_again")}
+                  </button>
+                )}
+              </span>
+            ))}
 
           {editable && !props.capReached && available.length > 0 && (
             <Select

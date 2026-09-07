@@ -596,9 +596,8 @@ export function RfqComposer({
                            labels prop like everything else on this screen. And
                            the threshold is `isVerified` — the shared definition
                            of "carries the badge" — instead of a literal 3,
-                           which since the ladder shortened has meant a reserved
-                           rung nothing can reach, so this line rendered for
-                           nobody at all.
+                           which the ladder no longer has at all, so this line
+                           rendered for nobody.
                         */}
                         {isVerified(recipient.verificationTier) ? `${labels.recipientVerified} · ` : ""}
                         {recipient.responseLabel}

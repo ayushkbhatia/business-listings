@@ -8,6 +8,16 @@
 export type SearchTab = "businesses" | "products";
 
 /**
+ * The largest value Postgres will take in an int4 column.
+ *
+ * Only a guard: `verificationTier` is an int4, and an inbound `?tier=` that
+ * exceeds it reaches Prisma and throws rather than returning the empty result
+ * a filter nobody can satisfy should return. See the clamp in
+ * `parseSearchQuery` for why this is the overflow bound and not a ladder rung.
+ */
+const INT4_MAX = 2_147_483_647;
+
+/**
  * How the result list is ordered.
  *
  * `best` is the ranked order — relevance, verification, response time, spec
@@ -172,7 +182,39 @@ export function parseSearchQuery(
     tab: one(params.tab) === "products" ? "products" : "businesses",
     emirate: one(params.emirate),
     area: one(params.area),
-    tier: Number.isFinite(tier) && tier > 0 ? Math.min(4, tier) : undefined,
+    /*
+       Clamped for int4 safety, and deliberately NOT to any rung of the ladder.
+
+       The clamp is a guard rather than a policy: `verificationTier` is an int4
+       and `Number("9999999999")` is finite and positive, so an unclamped value
+       reaches Prisma and throws where a filter nobody can satisfy should simply
+       return nothing. Dropping the filter instead — parsing to `undefined` —
+       would be worse than either: the buyer asked to narrow and would be shown
+       the whole unfiltered shelf.
+
+       Clamping to `TOP_ACHIEVABLE_TIER` was the alternative and it is the
+       dishonest one. An old bookmark carrying `?tier=3` would silently become
+       tier 2, and because `toSearchParams` re-emits whatever this returns into
+       every anchor and the applied-filter chip, the page would state a filter
+       the buyer never set over results that do not match the one they did.
+       Parsed as it says, the URL yields an honest empty state — which is a
+       designed state here, not a failure.
+
+       That reasoning is why this is `INT4_MAX` and not a tier. The ceiling has
+       been written as a ladder rung twice and drifted both times: a literal `4`
+       outlived the rung site visits took away, and a `MAX_STORED_TIER` of 3 was
+       true for one commit before trade references were cut and the CHECK
+       narrowed to 0..2. A guard that names the overflow it guards against has
+       nothing to drift from — the ladder can shorten again without reaching
+       into this line.
+
+       Nothing in SEO turns on the value. `isFiltered` reads every key, so any
+       `?tier=` is `noindex, follow` and canonicalises to the unfiltered shelf;
+       `CRAWLABLE_QUERY_KEYS` holds only `page`, so the anchor is `nofollow`
+       either way. The facet trap was opened by combining keys, never by their
+       values, and this changes no key.
+    */
+    tier: Number.isFinite(tier) && tier > 0 ? Math.min(INT4_MAX, tier) : undefined,
     freeZone: one(params.freeZone) === "1" || one(params.freeZone) === "true",
     availability: list(params.availability),
     replyWithinHours: Number.isFinite(hours) && hours > 0 ? hours : undefined,

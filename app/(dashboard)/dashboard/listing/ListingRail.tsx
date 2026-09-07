@@ -101,6 +101,56 @@ export function ListingRail({ view, description, withdrawAction, editable }: Lis
           ))}
 
           {/*
+             Board 3b Q3. The refusal, in full, where there is room for a
+             sentence.
+
+             The chip beside the categories field carries the mark and points
+             here with `aria-describedby`; this is the half that can hold a
+             moderator's own words. Both halves, because either alone fails:
+             a mark with no reason is the state this board found, and a reason
+             with no mark is a paragraph in the rail about a chip that is not
+             drawn.
+
+             The canned line runs above the quoted words, and that order is the
+             substance of the fix rather than decoration. "A moderator looked at
+             this and did not add it" frames what follows as a decision under a
+             rule; the sentence on its own reads as one person's opinion, which
+             is what a seller assumes when a refusal arrives with no frame.
+          */}
+          {view.rejected.map((row) => (
+            <li key={row.id} className="flex gap-2">
+              <span aria-hidden="true" className="mt-1.5 size-1.5 shrink-0 rounded-pill bg-bad" />
+              <span id={`refused-${row.id}`} className="min-w-0 flex-1">
+                <span className="block text-body-sm text-ink">
+                  {t("listing.refused_category", { name: row.label })}
+                </span>
+                {row.decidedAt && (
+                  <span className="mt-0.5 block font-mono text-eyebrow uppercase tracking-eyebrow text-body">
+                    {t("listing.refused_when", { when: formatRelative(row.decidedAt) })}
+                  </span>
+                )}
+                <span className="mt-1 block text-caption text-body">
+                  {row.reason ? t("listing.refused_lede") : t("listing.refused_no_reason")}
+                </span>
+                {/*
+                   A blockquote, not a `<q>`. The reason is a block passage
+                   rather than an inline aside, and `<q>` makes the browser
+                   generate quotation marks of its own — which land beside the
+                   rule this already draws down the left, quoting it twice.
+                */}
+                {row.reason && (
+                  <blockquote className="mt-1 mb-0 block max-w-prose border-l-2 border-line pl-2 text-caption text-ink">
+                    {row.reason}
+                  </blockquote>
+                )}
+                <span className="mt-1 block text-caption text-body">
+                  {t("listing.refused_next")}
+                </span>
+              </span>
+            </li>
+          ))}
+
+          {/*
              The live half, stated even when nothing is held. A card that only
              ever lists what is stuck reads as though nothing shipped — and when
              there is nothing held at all its absence would read as broken.

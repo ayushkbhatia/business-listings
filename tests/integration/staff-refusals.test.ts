@@ -5,6 +5,7 @@ import { suspendBusiness, liftSuspension } from "@/lib/business/service";
 import { issueSubscriptionCredit } from "@/lib/billing/service";
 import { staffMutation, SubjectCheckRequiredError } from "@/lib/audit/staff-mutation";
 import { PermissionError, AuditReasonError } from "@/lib/auth/errors";
+import { VERIFIED_TIER } from "@/lib/verification";
 import type { Actor, Role } from "@/lib/auth/roles";
 
 /**
@@ -146,7 +147,7 @@ describe("a moderator is refused the three rows §07 denies them", () => {
       setVerificationTier({
         actor: actor(moderatorId, "staff_moderator"),
         businessId: subjectBusinessId,
-        tier: 3,
+        tier: 2,
         reason: REASON,
       }),
     ).rejects.toBeInstanceOf(PermissionError);
@@ -213,7 +214,7 @@ describe("the other roles are refused what is not theirs", () => {
       setVerificationTier({
         actor: actor(sellerOwnerId, "seller_owner"),
         businessId: subjectBusinessId,
-        tier: 3,
+        tier: 2,
         reason: REASON,
       }),
     ).rejects.toBeInstanceOf(PermissionError);
@@ -234,7 +235,7 @@ describe("the field verifier no longer holds the tier grant at all", () => {
         setVerificationTier({
           actor: actor(fieldOfficerId, "staff_field"),
           businessId,
-          tier: 3,
+          tier: 2,
           reason: REASON,
         }),
       ).rejects.toBeInstanceOf(PermissionError);
@@ -246,7 +247,14 @@ describe("the field verifier no longer holds the tier grant at all", () => {
       where: { id: subjectBusinessId },
       select: { verificationTier: true },
     });
-    const target = business.verificationTier === 3 ? 2 : 3;
+    /*
+       Any rung but the one it is on — `setVerificationTier` refuses an
+       unchanged tier, and the point here is the grant, not the number. It read
+       `=== 3 ? 2 : 3` while 3 was the ceiling. The licence is current by
+       construction (see the subject query), so 2 is not blocked by the
+       lapsed-licence floor.
+    */
+    const target = business.verificationTier === VERIFIED_TIER ? 1 : VERIFIED_TIER;
 
     const result = await setVerificationTier({
       actor: actor(opsLeadId, "staff_ops_lead"),
@@ -456,32 +464,39 @@ describe("what the permitted roles can do, and what it leaves behind", () => {
   });
 });
 
-describe("the ladder stops at 3", () => {
+describe("the ladder stops at 2", () => {
   /*
-     It stopped at 4, and tier 3 additionally required a recorded site visit —
-     a database CHECK enforced that. Visits were withdrawn, `audited` moved down
-     from 4 to 3, and the range CHECK was rewritten to match. What is asserted
-     here is the same shape as before: the service refuses first so the message
-     can say what is wrong, and the constraint refuses underneath so a second
-     code path cannot get around it.
+     It stopped at 4, then at 3. Tier 3 first required a recorded site visit,
+     with a database CHECK enforcing it; visits were withdrawn and `audited`
+     moved down from 4 to 3; then 3 became trade references, drawn `reserved`
+     and built by nobody. Cutting that rung is what brings the ceiling to 2.
+
+     What is asserted here is the same shape as it has been through all three:
+     the service refuses first so the message can say what is wrong, and the
+     constraint refuses underneath so a second code path cannot get around it.
+
+     The interesting case is now 3 rather than 4. A 4 was always nonsense; a 3
+     is the rung an ops lead could set last week and the one eight legacy rows
+     were stored on, so it is the number a stale runbook or a half-applied
+     migration would produce.
   */
   it("is refused before the write, with a message naming the range", async () => {
     const result = await setVerificationTier({
       actor: actor(opsLeadId, "staff_ops_lead"),
       businessId: otherBusinessId,
-      tier: 4,
+      tier: 3,
       reason: REASON,
     });
     expect(result).toMatchObject({ ok: false, error: "out_of_range" });
     if (result.ok) return;
-    expect(result.message).toMatch(/from 0 to 3/i);
+    expect(result.message).toMatch(/from 0 to 2/i);
   });
 
   it("and the database refuses it too, if a second path ever tries", async () => {
     await expect(
       prisma.business.update({
         where: { id: otherBusinessId },
-        data: { verificationTier: 4 },
+        data: { verificationTier: 3 },
       }),
     ).rejects.toThrow();
   });

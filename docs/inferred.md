@@ -192,17 +192,23 @@ decision before handoff 1 puts these colours in front of buyers.
 
 ## Handoff 1, steps 1 and 2
 
-### The verification ladder — four rungs, one of them reserved
+### The verification ladder — three rungs, all of them real
 §06 is canvas-only. `components/domain/verification.ts` derives the rungs from
-what the shipped documents state: the tier is 0..3 and staff-write-only, and it
+what the shipped documents state: the tier is 0..2 and staff-write-only, and it
 drops to **1** the day the licence expires.
 
 | tier | label | what was checked |
 |---|---|---|
 | 0 | Not verified | nothing on the page has been checked |
 | 1 | Claimed | claimed by the supplier, contact confirmed by us |
-| 2 | Licence verified | checked against the issuing authority — **top achievable** |
-| 3 | Trade references | reserved, not built, reachable by nobody |
+| 2 | Licence verified | checked against the issuing authority — **top rung** |
+
+A fourth row sat under that table until trade references was cut: rung 3,
+`reserved`, drawn so the ladder had somewhere to go and reachable by nobody. It
+is gone, and the reasoning is worth keeping even though the row is not — a rung
+drawn muted is honest about being unbuilt only while somebody intends to build
+it. Once the answer is never, the muted drawing is just a promise in a quieter
+typeface.
 
 **This table read five rungs with a site visit at 3 until board 3e, three
 applications of the cut later.** It is worth recording where, because the shape
