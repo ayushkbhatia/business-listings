@@ -5901,12 +5901,22 @@ async function seedProductDetail(db: Db) {
        3g Q4 asked for and the old `product_id` column could not express.
     */
     const range = await db.product.findMany({
-      where: { businessId: seller.id, categoryId: flagship.categoryId },
+      where: { businessId: seller.id, categoryId: flagship.categoryId, id: { not: flagship.id } },
       orderBy: { name: "asc" },
-      take: 4,
+      take: 3,
       select: { id: true },
     });
-    const cited = range.length > 0 ? range : [{ id: flagship.id }];
+    /*
+       The flagship first, and unconditionally.
+
+       `range` is the rest of the DN range in name order, and the flagship does
+       not sort into the first few of it — "Cast iron gate valve imperial"
+       lands after four brass ball valves. So a `take` over the category alone
+       cited every size except the one the whole fixture is built around, and
+       product-detail's criterion 12 — a datasheet a buyer can take away —
+       rendered its empty state on the page that exists to prove it.
+    */
+    const cited = [{ id: flagship.id }, ...range];
 
     const datasheet = await db.document.create({
       data: {
