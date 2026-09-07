@@ -255,14 +255,14 @@ export function BranchEditor(props: BranchEditorProps) {
         </label>
       </div>
 
-      {area?.isFreeZone && (
-        <p className="max-w-prose text-caption text-muted">
-          {t("locations.free_zone_note", {
-            emirate: t(`emirate.${area?.emirate ?? "dubai"}` as "emirate.dubai"),
-            area: area.name,
-          })}
-        </p>
-      )}
+      {/*
+        No free-zone note here.
+
+        `EmirateAreaPicker` already renders it — it takes `freeZoneNote` and
+        emits the sentence beside the area it is about, which is where a seller
+        reads it. This component printed a second copy underneath, so a JAFZA
+        branch showed the same two sentences twice. One control, one sentence.
+      */}
 
       {!props.readOnly && (
         <div className="flex flex-wrap items-center gap-3">
