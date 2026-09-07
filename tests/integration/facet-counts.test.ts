@@ -29,7 +29,7 @@ import { parseSearchQuery, withoutFacet, type SearchQuery } from "@/lib/search/q
 
 /** The option lists, in the order `readFixedFacetCounts` returns their buckets. */
 const GROUPS = [
-  { key: "tier", values: ["4", "3", "2", "1"], bucket: "tiers" },
+  { key: "tier", values: ["2", "1"], bucket: "tiers" },
   { key: "emirate", values: ["dubai", "abu_dhabi", "sharjah", "ajman"], bucket: "emirates" },
   {
     key: "availability",
@@ -68,7 +68,7 @@ async function oracle(
 const SHAPES: Array<[string, Record<string, string>]> = [
   ["unfiltered", {}],
   ["one emirate", { emirate: "dubai" }],
-  ["a tier", { tier: "3" }],
+  ["a tier", { tier: "2" }],
   ["availability", { availability: "in_stock" }],
   ["free zone", { freeZone: "1" }],
   ["a reply window", { replyWithinHours: "24" }],

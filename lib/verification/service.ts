@@ -62,6 +62,11 @@ const MIN_TIER = 0;
  *
  * The `business_verification_tier_range` CHECK is 0..2 underneath, which is
  * what makes the ceiling true rather than merely asserted.
+ *
+ * There was a second copy of this ceiling: `parseSearchQuery` clamped a `tier=`
+ * parameter to its own literal, which had not moved when this one did. It now
+ * clamps to `TOP_ACHIEVABLE_TIER` as well. One number, one place — a ceiling
+ * written twice is a ceiling that drifts.
  */
 const MAX_TIER = TOP_ACHIEVABLE_TIER;
 
