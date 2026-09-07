@@ -200,3 +200,55 @@ Every axe run in the suite disables `color-contrast` (jsdom has no layout, and
 the e2e pass excludes it deliberately), so this file and `pnpm check:contrast`
 are the only evidence for that half. It is in neither gate — run it by hand
 whenever a screen moves a colour.
+
+## The shared-component question — board 3b's metadata criterion
+
+Board 3b (`/dashboard/listing`) carries an acceptance criterion that no metadata
+on the screen sit lighter than the value its handoff names, which falls between
+`--text-muted` and `--text-body`. The board meets it in its own markup and
+cannot meet it on the screen, and that split is the thing worth writing down
+once rather than rediscovering per board.
+
+**What the board did.** Every hint, counter and caption `ListingWorkspace.tsx`
+writes takes `--text-body` instead of `--text-muted`. Its header comment records
+the reasoning and `tests/e2e/listing.spec.ts` asserts it positively — the hint
+carries `text-body` and does not carry `text-muted` or `text-faint`.
+
+**What it left.** The screen renders five `Panel`s and two `Tabs`, and both are
+lighter than the floor wherever they appear:
+
+| component | what | token | on `--card` |
+|---|---|---|---:|
+| `components/structure/Panel.tsx` | the mono `eyebrow` above a panel title | `--text-faint` | 2.70:1 |
+| `components/structure/Tabs.tsx` | an inactive tab label, both variants | `--text-muted` | 4.46:1 |
+
+Neither was forked, and neither should be. `Panel` takes an `eyebrow` on 88 call
+sites and `Tabs` sits on almost every dashboard and storefront board; a shared
+component renders identically on every screen that carries it, so darkening
+either to clear one board's criterion trades a measured contrast gap for the
+defect this project hits most often. Changing the token instead is the same
+blast radius with a smaller diff — the decision this file has been waiting on
+since checkpoint 6, and the reason to make it there rather than in a component.
+
+### For the next board that gets this criterion
+
+1. **Take the `text-body` override in your own markup.** It is cheap, local,
+   and reversible, and it is what 3b did.
+2. **Leave `Panel` and `Tabs` alone.** Report the criterion partly met and point
+   here. Do not fork a shared component, and do not special-case one by prop.
+3. **Say so in the test.** Assert your own metadata positively — that the hint
+   carries `text-body` — rather than sweeping the page for the absence of a
+   class the chrome legitimately uses. A sweep fails on the shared components
+   and tells the next reader nothing about why.
+
+### What the override costs, and when it is unwound
+
+The per-screen `text-body` is a divergence from the ramp, not a fix: it means
+two boards can render the same kind of caption in two different tones depending
+on which acceptance criterion their handoff carried. That is the price of not
+forking a component, and it is the right price — but it is a debt with a
+payoff date. When `--text-muted` and `--text-faint` move to values that clear
+the floor, every `text-body`-on-metadata override placed for this reason becomes
+redundant and should come back to `text-muted`, and `Panel` and `Tabs` pass
+without being touched at all. That is one commit, and this is the list of what
+it has to sweep.
