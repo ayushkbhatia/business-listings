@@ -15,11 +15,36 @@
 --
 -- ## Ordering — additive, so this applies BEFORE the merge
 --
--- docs/deployments.md § Ordering. Tightening a CHECK is additive: the previous
--- deployment never writes a 3, because `setVerificationTier` refused anything
--- the ladder did not draw and no other path writes the column. So the
--- constraint can narrow while the old code is still serving, and the new code
--- arrives to a column that already matches it.
+-- docs/deployments.md § Ordering. Tightening a CHECK drops no schema element,
+-- so the constraint can narrow while the old code is still serving and the new
+-- code arrives to a column that already matches it.
+--
+-- ### The window, stated honestly
+--
+-- An earlier draft of this note said the previous deployment never writes a 3,
+-- because `setVerificationTier` refused anything the ladder did not draw. That
+-- was wrong, and consolidating the branch is what surfaced it. On `main` today
+-- `MAX_TIER` is 3, and `TIERS` in the admin table renders radios `[0,1,2,3,4]`.
+-- An ops lead can see a 3 and click it, and the write succeeds.
+--
+-- So between this migration and the merge there is a window in which that one
+-- control would fail: the code offers 3, the CHECK now refuses it, and the
+-- staff action errors instead of writing.
+--
+-- The window is accepted rather than designed around, and it is worth saying
+-- why so the next person does not re-derive it:
+--
+--   · It is minutes wide — the merge follows the migration directly.
+--   · It costs one refused staff write, not a serving outage. Nothing a buyer
+--     touches reads or writes this column through a path that can fail here.
+--   · The alternative is worse. Applying after the merge needs
+--     `ALLOW_PENDING_MIGRATIONS` naming this migration on the deployment, or
+--     `check:schema-deployed` marks the build ERROR — a second manual step, on
+--     the deploy path, to avoid a failure mode narrower than the one that step
+--     introduces.
+--
+-- The merge closes it: `MAX_TIER` becomes `TOP_ACHIEVABLE_TIER` and the radios
+-- are derived from it, so the interface stops offering the rung first.
 --
 -- ## No audit rows
 --

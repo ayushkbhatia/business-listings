@@ -6,6 +6,7 @@ import { DataTable, type Column } from "@/components/structure";
 import { Alert, StatusBadge } from "@/components/display";
 import { formatCount, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { TOP_ACHIEVABLE_TIER } from "@/lib/verification";
 import type { ActionResult } from "./actions";
 
 /**
@@ -45,7 +46,22 @@ const TONE = {
   live: "ok",
 } as const;
 
-const TIERS = [0, 1, 2, 3, 4] as const;
+/*
+   The rungs an ops lead may set, derived rather than listed.
+
+   This was `[0, 1, 2, 3, 4]` — two radios past the end of a ladder that has been
+   shorter than five since site visits were withdrawn. `setVerificationTier`
+   refused 4 and the CHECK refused it underneath, so clicking it produced an
+   error rather than a write; 3 went through into a rung nothing drew. Offering
+   a control that cannot work is the staff-side of the defect the buyer's facet
+   rail had — an option the interface promises and the fence refuses.
+
+   `TOP_ACHIEVABLE_TIER` is the same number `MAX_TIER` in
+   lib/verification/service.ts refuses above and the same number
+   `business_verification_tier_range` holds at 2, so the radios cannot outlive
+   the ladder again.
+*/
+const TIERS = Array.from({ length: TOP_ACHIEVABLE_TIER + 1 }, (_, tier) => tier);
 /** The same floor `assertReason` enforces at the fence. Kept in step by hand. */
 const MIN_REASON = 4;
 
