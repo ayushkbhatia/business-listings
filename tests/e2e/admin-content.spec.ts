@@ -533,7 +533,15 @@ test.describe("criterion 7 — renaming a trade on the taxonomy screen", () => {
     */
     await page.goto("/admin/categories");
     await page.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
-    await page.getByRole("textbox", { name: "Reason" }).fill("Checking what the refusal says.");
+    /*
+       Scoped to the region that owns the button this test then clicks. Every
+       staff action on this screen writes its own audit reason, so "Reason"
+       names a field in each of them — unscoped it matches two.
+    */
+    await page
+      .getByRole("region", { name: "Move a trade's address" })
+      .getByRole("textbox", { name: "Reason" })
+      .fill("Checking what the refusal says.");
     await page.getByRole("button", { name: "Remove the trade" }).click();
 
     await expect(

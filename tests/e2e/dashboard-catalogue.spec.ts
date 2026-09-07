@@ -24,7 +24,9 @@ test.describe("the header tells the truth about the catalogue", () => {
     */
     await page.goto("/dashboard/products");
 
-    const header = await page.locator("header").innerText();
+    // The banner, not every `<header>`: `Modal` gives each of its three dialogs
+    // one too, so the bare tag matches four elements on this page.
+    const header = await page.getByRole("banner").innerText();
     const total = Number(/([\d,]+)\s+products/.exec(header)?.[1]?.replace(/,/g, ""));
     const live = Number(/([\d,]+)\s+LIVE/i.exec(header)?.[1]?.replace(/,/g, ""));
     const drafts = Number(/([\d,]+)\s+DRAFTS?/i.exec(header)?.[1]?.replace(/,/g, ""));

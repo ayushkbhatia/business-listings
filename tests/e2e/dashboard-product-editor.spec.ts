@@ -25,7 +25,17 @@ async function openFirstProduct(page: import("@playwright/test").Page) {
 /** A product with no spec values at all — the cold-start case. */
 async function openEmptyProduct(page: import("@playwright/test").Page) {
   await page.goto("/dashboard/products");
-  const row = page.locator("tbody tr").filter({ hasText: "None filled" }).first();
+  /*
+     The row whose template has an unfilled *required* field, which is what
+     every test below then asserts about. Board 3f replaced the old "None
+     filled" cell with a ratio and two badges; `catalogue.specs.required` is
+     the badge that names this condition, and matching on it says what the
+     fixture needs rather than what the cell used to read.
+  */
+  const row = page
+    .locator("tbody tr")
+    .filter({ hasText: /required · save blocked/i })
+    .first();
   await row.locator("th a").click();
   await page.waitForURL(/\/dashboard\/products\/\w+/);
 }

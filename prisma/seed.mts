@@ -6225,14 +6225,26 @@ async function seedProductDetail(db: Db) {
        never copied per product. The datasheet here covers the whole DN range,
        so it is created once and cited by every size — which is the shape board
        3g Q4 asked for and the old `product_id` column could not express.
+
+       The flagship goes first, then its siblings — not simply the first four by
+       name. `orderBy: name` over the whole category returned four brass ball
+       valves and stopped before "Cast iron gate valve 6"", which is the product
+       the document is named after and the only one board 1g's acceptance test
+       opens. The datasheet existed, cited four pages, and was missing from the
+       one page that asserts it. Whatever else the range covers, it covers the
+       product it is named for.
     */
-    const range = await db.product.findMany({
-      where: { businessId: seller.id, categoryId: flagship.categoryId },
+    const siblings = await db.product.findMany({
+      where: {
+        businessId: seller.id,
+        categoryId: flagship.categoryId,
+        id: { not: flagship.id },
+      },
       orderBy: { name: "asc" },
-      take: 4,
+      take: 3,
       select: { id: true },
     });
-    const cited = range.length > 0 ? range : [{ id: flagship.id }];
+    const cited = [{ id: flagship.id }, ...siblings];
 
     const datasheet = await db.document.create({
       data: {

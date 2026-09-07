@@ -204,7 +204,7 @@ export const en = {
   "nav.ingest": "Licence importer",
   "nav.crm": "Recruitment",
   "nav.categories": "Taxonomy",
-  "nav.spec_library": "Spec templates",
+  "nav.spec_library": "Spec library",
   "nav.areas": "Emirates & areas",
   "nav.attributes": "Attribute dictionary",
   "nav.search_ranking": "Ranking & boosts",
@@ -2866,7 +2866,6 @@ export const en = {
   "catalogue.availability.indent": "Indent order",
   "catalogue.availability.out_of_stock": "Out of stock",
   "catalogue.of_specs": "{filled} of {total}",
-  "catalogue.no_specs": "None filled",
   "catalogue.no_template": "No template",
   "catalogue.from_import": "Imported",
 
@@ -3050,7 +3049,6 @@ export const en = {
   "import.upload_label": "Spreadsheet",
   "import.upload_hint": "A CSV exported from whatever you already use. The first row must name the columns.",
   "import.upload_action": "Read the file",
-  "import.rows_found": "{rows} rows, {columns} columns.",
   "import.ragged": "{count} rows had a different number of columns and were padded. They are listed below.",
   "import.map_caption": "Every column in the file, and where it will go",
   "import.col_header": "Column in your file",
@@ -3089,9 +3087,6 @@ export const en = {
   "import.room_none": "You are at the {cap}-product limit on {plan}. Delete something, or move to a plan with room, before importing.",
   "import.room_unlimited": "{plan} does not cap how many products you list.",
   "import.may_exceed": "This file has {rows} rows and there is room for {room} more products. Rows that duplicate a product you already have are skipped, so it may still fit — if it does not, nothing will be imported and you can trim the file.",
-  "import.blocked_heading": "Not imported",
-  "import.blocked_intro": "{count} column will not be imported. Prices never sit on a product here.",
-  "import.blocked_intro_plural": "{count} columns will not be imported. Prices never sit on a product here.",
 
   /* ── Board 11d · the mapper proper ──────────────────────────────────────
      The board counted nine columns and listed seven. The two it hid were the

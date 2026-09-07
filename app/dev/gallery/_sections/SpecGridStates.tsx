@@ -100,14 +100,21 @@ const FIELDS: EditorField[] = [
   },
 ];
 
-function Grid({ fields, prefix }: { fields: EditorField[]; prefix: string }) {
+/*
+   `label` is not optional. A `<form>` with an accessible name is a landmark,
+   and the gallery renders two of these on one page — so unnamed they arrive in
+   a screen reader's landmark list as two identical rows, which is what
+   `landmarks.spec.ts` fails on. Every other specimen form on this page is named
+   the same way; see the enquiry composers in `Domain.tsx`.
+*/
+function Grid({ fields, prefix, label }: { fields: EditorField[]; prefix: string; label: string }) {
   const [scope, setScope] = useState<Scope>("all");
   const [values, setValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(fields.map((field) => [field.fieldId, field.value])),
   );
 
   return (
-    <form onSubmit={(event) => event.preventDefault()}>
+    <form aria-label={label} onSubmit={(event) => event.preventDefault()}>
       <SpecGrid
         fields={fields}
         values={values}
@@ -123,7 +130,7 @@ function Grid({ fields, prefix }: { fields: EditorField[]; prefix: string }) {
 export function SpecGridStates() {
   return (
     <div className="flex flex-col gap-8">
-      <Grid fields={FIELDS} prefix="gallery-spec" />
+      <Grid fields={FIELDS} prefix="gallery-spec" label="Spec grid — a full template" />
       <div className="flex flex-col gap-2 border-t border-line pt-6">
         <p className="font-mono text-eyebrow uppercase text-faint">a template with one field</p>
         {/*
@@ -131,7 +138,7 @@ export function SpecGridStates() {
           `min-[1440px]:` class on the grid, so the single field simply takes
           the row rather than being paired with an empty cell.
         */}
-        <Grid fields={[FIELDS[0]!]} prefix="gallery-solo" />
+        <Grid fields={[FIELDS[0]!]} prefix="gallery-solo" label="Spec grid — a template with one field" />
       </div>
     </div>
   );

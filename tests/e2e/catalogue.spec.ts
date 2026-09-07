@@ -26,17 +26,30 @@ test.describe("board 11d — the CSV mapper refuses a price", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/dashboard/products/import");
     await page.setInputFiles("input[type=file]", FIXTURE);
-    await expect(page.getByText("5 rows, 10 columns.")).toBeVisible();
+    // `import.file.summary`, which board 11d rewrote from the older
+    // `import.rows_found` ("5 rows, 10 columns."). Same two numbers, a middot
+    // between them and no full stop.
+    await expect(page.getByText("5 rows · 10 columns")).toBeVisible();
   });
 
   test("names both price columns and says why", async ({ page }) => {
-    const panel = page.getByRole("region", { name: "Not imported" });
-    await expect(panel).toBeVisible();
-    await expect(panel).toContainText("2 columns will not be imported");
-    await expect(panel).toContainText("Unit Price AED");
-    await expect(panel).toContainText("List Price");
-    // The reason, in the seller's terms, not "invalid column".
-    await expect(panel).toContainText("they belong on a quote");
+    /*
+       In the table, not in a panel above it.
+
+       This asserted a `Not imported` region until board 11d removed it, for the
+       reason the next test states: a banner at the top is a thing the seller
+       scrolls past, and the refusal has to arrive where they are already
+       reading. What has to hold is unchanged — both price columns are named,
+       both are refused, and the reason is in the seller's terms rather than
+       "invalid column" — so it is asserted where the answer now lives.
+    */
+    await expect(page.getByText("2 blocked")).toBeVisible();
+
+    for (const header of ["Unit Price AED", "List Price"]) {
+      const row = columnRow(page, header);
+      await expect(row).toBeVisible();
+      await expect(row).toContainText("they belong on a quote");
+    }
   });
 
   test("puts the refusal in the same table as every other column", async ({ page }) => {
@@ -82,15 +95,17 @@ test.describe("board 3f — the catalogue", () => {
     await expect(page.locator("tbody tr").first()).toBeVisible();
     // The column that earns its place: a product with no filterable specs is
     // listed and not found.
-    await expect(page.getByRole("columnheader", { name: "Filterable specs" })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Specs" })).toBeVisible();
   });
 
   test("offers bulk actions only once something is selected", async ({ page }) => {
     await page.goto("/dashboard/products");
-    await expect(page.getByRole("button", { name: "Publish" })).toHaveCount(0);
+    // `exact`, or the name matches "Unpublish…" as a substring and the bulk bar
+    // looks like two Publish buttons the moment anything is selected.
+    await expect(page.getByRole("button", { name: "Publish", exact: true })).toHaveCount(0);
 
     await page.getByRole("checkbox", { name: "Select every product" }).check();
-    await expect(page.getByRole("button", { name: "Publish" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Publish", exact: true })).toBeVisible();
     await expect(page.getByText(/\d+ selected/)).toBeVisible();
   });
 
