@@ -65,6 +65,26 @@ export const EXPIRED_LICENCE_TIER = 1;
 export const TOP_ACHIEVABLE_TIER = VERIFIED_TIER;
 
 /**
+ * The highest tier the column will accept, which is not the highest anybody can
+ * reach.
+ *
+ * `business_verification_tier_range` is `BETWEEN 0 AND 3`: rung 3 is trade
+ * references, drawn on the ladder and unbuilt, so the schema permits it while
+ * `TOP_ACHIEVABLE_TIER` says nobody has a path to it. Two different numbers
+ * answering two different questions — "what may be stored" and "what may be
+ * earned" — and code that wants one has reliably reached for the other.
+ *
+ * It exists because the ceiling was written out as a literal `4` in two places
+ * that outlived the four-rung ladder: `setVerificationTier`, which now imports
+ * it, and `parseSearchQuery`, which clamped an inbound `?tier=` to a rung the
+ * database had already stopped accepting.
+ *
+ * Raising this is a migration, not an edit. The CHECK underneath is what makes
+ * it true rather than merely asserted.
+ */
+export const MAX_STORED_TIER = 3;
+
+/**
  * How long a seller waits for a decision on a credential they asked to publish.
  *
  * Board 3e §4 puts "two working days" on the seller's own screen, which makes

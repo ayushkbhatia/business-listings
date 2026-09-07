@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import { assertCan } from "@/lib/auth/can";
-import { EXPIRED_LICENCE_TIER, licenceExpired } from "@/lib/verification";
+import { EXPIRED_LICENCE_TIER, licenceExpired, MAX_STORED_TIER } from "@/lib/verification";
 import type { Actor } from "@/lib/auth/roles";
 
 /**
@@ -49,16 +49,21 @@ export interface SetTierInput {
 }
 
 const MIN_TIER = 0;
-/**
- * Three, not four.
- *
- * The ladder lost its "site visited" rung when site visits were withdrawn, and
- * `audited` moved down from 4 to take its place — see components/domain/
- * verification.ts. A tier of 4 is now out of range here and refused by the
- * `business_verification_tier_range` CHECK underneath, which is what makes the
- * ceiling true rather than merely asserted.
- */
-const MAX_TIER = 3;
+/*
+   Three, not four, and imported rather than restated.
+
+   The ladder lost its "site visited" rung when site visits were withdrawn, and
+   `audited` moved down from 4 to take its place — see components/domain/
+   verification.ts. A tier of 4 is out of range here and refused by the
+   `business_verification_tier_range` CHECK underneath, which is what makes the
+   ceiling true rather than merely asserted.
+
+   It was a literal until `parseSearchQuery` was found still clamping to 4, a
+   second copy of this ceiling that had not moved when this one did. One number,
+   in lib/verification.ts beside `TOP_ACHIEVABLE_TIER` so the difference between
+   what may be stored and what may be earned is legible in one place.
+*/
+const MAX_TIER = MAX_STORED_TIER;
 
 export async function setVerificationTier(input: SetTierInput): Promise<TierResult> {
   const business = await prisma.business.findUnique({

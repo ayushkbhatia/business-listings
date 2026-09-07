@@ -1,3 +1,5 @@
+import { MAX_STORED_TIER } from "@/lib/verification";
+
 /**
  * The search query, parsed out of the URL and back into it.
  *
@@ -172,7 +174,35 @@ export function parseSearchQuery(
     tab: one(params.tab) === "products" ? "products" : "businesses",
     emirate: one(params.emirate),
     area: one(params.area),
-    tier: Number.isFinite(tier) && tier > 0 ? Math.min(4, tier) : undefined,
+    /*
+       Clamped to what the column can hold, and deliberately NOT to
+       `TOP_ACHIEVABLE_TIER`.
+
+       The clamp is a guard rather than a policy: `verificationTier` is an int4
+       and `Number("9999999999")` is finite and positive, so an unclamped value
+       reaches Prisma and throws where a filter nobody can satisfy should simply
+       return nothing. Dropping the filter instead — parsing to `undefined` —
+       would be worse than either: the buyer asked to narrow and would be shown
+       the whole unfiltered shelf.
+
+       Clamping to 2 was the alternative and it is the dishonest one. An old
+       bookmark carrying `?tier=3` would silently become tier 2, and because
+       `toSearchParams` re-emits whatever this returns into every anchor and the
+       applied-filter chip, the page would state a filter the buyer never set
+       over results that do not match the one they did. Left at 3 the URL parses
+       to what it says and yields an honest empty state — which is a designed
+       state here, not a failure.
+
+       Nothing in SEO turns on the value. `isFiltered` reads every key, so any
+       `?tier=` is `noindex, follow` and canonicalises to the unfiltered shelf;
+       `CRAWLABLE_QUERY_KEYS` holds only `page`, so the anchor is `nofollow`
+       either way. The facet trap was opened by combining keys, never by their
+       values, and this changes no key.
+
+       The literal was `4` — a ceiling from the ladder site visits took away,
+       clamping to a rung `business_verification_tier_range` has refused since.
+    */
+    tier: Number.isFinite(tier) && tier > 0 ? Math.min(MAX_STORED_TIER, tier) : undefined,
     freeZone: one(params.freeZone) === "1" || one(params.freeZone) === "true",
     availability: list(params.availability),
     replyWithinHours: Number.isFinite(hours) && hours > 0 ? hours : undefined,

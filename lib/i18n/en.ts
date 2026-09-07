@@ -457,7 +457,10 @@ export const en = {
   "admin.businesses.tier_legend": "Verification tier",
   "admin.businesses.tier_option": "Tier {tier}",
   "admin.businesses.tier_set": "Tier set to {tier}.",
-  "admin.businesses.tier_invalid": "Pick a tier between 0 and 4.",
+  // Three, not four. The top of the range is `MAX_STORED_TIER` — what the
+  // column accepts, including the reserved rung — and it has said 4 since site
+  // visits were withdrawn, naming a tier `setVerificationTier` would refuse.
+  "admin.businesses.tier_invalid": "Pick a tier between 0 and 3.",
   "admin.businesses.suspended": "Suspended. The listing is off the directory.",
   "admin.businesses.lifted": "Suspension lifted. The listing is back.",
   "admin.businesses.suspend_note": "A suspension hides the listing and stops new enquiries. It does not delete anything.",
@@ -1402,8 +1405,14 @@ export const en = {
   "home.free_zones": "Free zones only",
 
   "home.verified_title": "Verified this week",
+  // "the audited tier" was rung 3 when it moved down from 4 and carried wording
+  // about a trading history nobody measures. Board 3e renamed the rung to trade
+  // references and marked it unbuilt — `verify.t3.checked` says "Not built yet"
+  // — and this sentence, on the busiest public surface on the site, went on
+  // describing the check it had just retired. It now says the two things this
+  // platform actually does.
   "home.verified_body":
-    "Licence checked, contact confirmed, and for the audited tier, a trading history we measured rather than took somebody's word for.",
+    "The trade licence checked against the issuing authority, and the contact details confirmed on the public licence record.",
   "home.verified_all": "See all verified →",
 
   "home.catalogue_title": "New in supplier catalogues",
