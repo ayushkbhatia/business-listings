@@ -33,9 +33,9 @@ export const SPECIMEN_DATA: SectionData = {
     tradeName: "Al Waha Valves & Fittings LLC",
     description:
       "Stockist of gate, globe and butterfly valves for contractors across Dubai and Sharjah. Counter sales from Al Quoz and scheduled site delivery.",
-    // The top achievable rung. It read 3, which is now trade references —
-    // reserved and unbuilt — so the specimen rendered a badge for a rung no
-    // storefront can hold.
+    // The top rung. It read 3, which was trade references — reserved, never
+    // built, and now cut from the ladder — so the specimen rendered a badge for
+    // a rung no storefront can hold.
     verificationTier: 2,
     verifiedAt: day(-64),
     // Measured, not chosen. 2 h 14 m.

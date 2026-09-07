@@ -35,7 +35,7 @@ describe("the weights are the config board 12c specifies", () => {
 
 describe("acceptance criterion 5 — the weights are a config object", () => {
   // Tier 2, the top rung anybody can reach. It read 3, which is now trade
-  // references — reserved and unbuilt — so the fixture described a supplier
+  // references, reserved and never built — so the fixture described a supplier
   // that cannot exist.
   const free = { id: "free", signals: signals({ verificationTier: 2, planMultiplier: 1 }) };
   const pro = { id: "pro", signals: signals({ verificationTier: 2, planMultiplier: 1.35 }) };
@@ -67,9 +67,10 @@ describe("acceptance criterion 5 — the weights are a config object", () => {
     // margin. The whole subscription rests on this staying true.
     //
     // `TOP_ACHIEVABLE_TIER` rather than the literal 4 this carried: the ladder
-    // stopped at 3 when site visits were withdrawn and stops at 2 in practice,
-    // and `trustScore` clamps — so the old fixture was asserting about a rung
-    // that neither exists nor scores differently from the one that does.
+    // stopped at 3 when site visits were withdrawn and stops at 2 now that
+    // trade references is cut, and `trustScore` clamps — so the old fixture was
+    // asserting about a rung that neither exists nor scores differently from
+    // the one that does.
     const paidUnverified = signals({ verificationTier: 0, planMultiplier: 1.35 });
     const freeVerified = signals({ verificationTier: TOP_ACHIEVABLE_TIER, planMultiplier: 1 });
     expect(scoreRow(freeVerified)).toBeGreaterThan(scoreRow(paidUnverified));

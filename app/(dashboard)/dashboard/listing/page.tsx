@@ -65,6 +65,10 @@ export default async function ListingPage() {
         view={{
           ...view,
           held: view.held.map((row) => ({ ...row, submittedAt: row.submittedAt.toISOString() })),
+          rejected: view.rejected.map((row) => ({
+            ...row,
+            decidedAt: row.decidedAt?.toISOString() ?? null,
+          })),
           revisions: view.revisions.map((row) => ({ ...row, at: row.at.toISOString() })),
           lastSavedAt: view.lastSavedAt?.toISOString() ?? null,
         }}

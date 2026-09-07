@@ -187,31 +187,36 @@ test.describe("board 3e — verification", () => {
     await expect(ladder.getByRole("link")).toHaveCount(0);
   });
 
-  test("criterion 1 — nothing references a visit or a tier above 2 as achievable", async ({
+  test("criterion 1 — nothing references a visit, and no rung above 2 is drawn", async ({
     page,
   }) => {
     const body = page.locator("body");
     await expect(body).not.toContainText(/visited/i);
     await expect(body).not.toContainText(/site visit/i);
-    // Rung 3 is drawn so the ladder has somewhere to go, and it is inert.
-    // `RESERVED` on screen is `Reserved` in the DOM — the mono eyebrow is
-    // uppercased in CSS, so an assertion on the rendered case would be an
-    // assertion about a stylesheet.
-    await expect(page.getByText("Trade references", { exact: true })).toBeVisible();
-    await expect(page.getByText("Reserved", { exact: true })).toBeVisible();
+    /*
+       These two assertions used to run the other way. Rung 3 was drawn
+       `reserved` so the ladder had somewhere to go, and this test asserted
+       "Trade references" and "Reserved" were both on screen.
+
+       Trade references will not be built, so the rung is cut and the
+       assertions invert: a reserved rung nobody intends to ship is a promise on
+       a live screen, which is the same defect as the `Start this →` button the
+       last assertion has guarded since board 3e — one shade quieter.
+    */
+    await expect(page.getByText("Trade references")).toHaveCount(0);
+    await expect(page.getByText("Reserved")).toHaveCount(0);
     await expect(page.getByText(/Start this/)).toHaveCount(0);
   });
 
-  test("criterion 2 — the ladder reads claimed, licence verified, trade references", async ({
+  test("criterion 2 — the ladder reads claimed, then licence verified, and stops", async ({
     page,
   }) => {
     const ladder = page.getByRole("region", { name: /You are at tier/ });
     const rungs = ladder.getByRole("listitem");
-    await expect(rungs).toHaveCount(3);
+    await expect(rungs).toHaveCount(2);
     await expect(rungs.nth(0)).toContainText("Claimed");
     await expect(rungs.nth(1)).toContainText("Licence verified");
     await expect(rungs.nth(1)).toContainText(/top tier/i);
-    await expect(rungs.nth(2)).toContainText("Trade references");
   });
 
   test("criterion 6 — the two document classes never share a state", async ({ page }) => {

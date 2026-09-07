@@ -252,8 +252,11 @@ beforeAll(async () => {
   // decides the count and not the size of the pool.
   for (let i = 0; i < 12; i += 1) await addSupplier({ categoryId: catMany });
 
-  await addSupplier({ categoryId: catOrder, tier: 3, responseTimeMedianMs: HOUR });
-  await addSupplier({ categoryId: catOrder, tier: 3, responseTimeMedianMs: 20 * HOUR });
+  // Tier 2, the top rung. These read 3 — a rung the ladder no longer draws and
+  // the range CHECK now refuses — while what the ordering actually turns on is
+  // verified against unverified.
+  await addSupplier({ categoryId: catOrder, tier: 2, responseTimeMedianMs: HOUR });
+  await addSupplier({ categoryId: catOrder, tier: 2, responseTimeMedianMs: 20 * HOUR });
   await addSupplier({ categoryId: catOrder, tier: 0, responseTimeMedianMs: HOUR });
   await addSupplier({ categoryId: catOrder, tier: 0, responseTimeMedianMs: 20 * HOUR });
 
@@ -317,7 +320,9 @@ describe("criterion 7 — the order the buyer sees them in", () => {
     */
     const order = await preview(catOrder);
     expect(order).toHaveLength(4);
-    expect(order.map((r) => r.verificationTier)).toEqual([3, 3, 0, 0]);
+    // Tier 2, the top rung, since trade references was cut. The pair above the
+    // pair at 0 is what the assertion is about; the number is incidental.
+    expect(order.map((r) => r.verificationTier)).toEqual([2, 2, 0, 0]);
 
     const rows = await prisma.business.findMany({
       where: { id: { in: order.map((r) => r.businessId) } },

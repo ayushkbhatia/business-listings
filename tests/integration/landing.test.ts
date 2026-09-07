@@ -132,9 +132,10 @@ describe("criterion 2 — a new subcategory needs no code change", () => {
   it("appears in the index, and its page's facts resolve", async () => {
     const trade = await makeSubcategory("Gaskets and seals");
 
-    // Tier 2, not 3: `business_tier_3_requires_visit` means a tier-3 listing
-    // without a `visitedAt` is refused by the database, which is the constraint
-    // doing its job. Tier 2 is what "verified" means on every public surface.
+    // Tier 2, which is now the top of the ladder as well as what "verified"
+    // means on every public surface. This read 3 until `business_tier_3_requires_visit`
+    // refused it for want of a `visitedAt`; that constraint and that rung are
+    // both gone, and `business_verification_tier_range` is 0..2.
     await makeListing({ categoryId: trade.id, tier: 2, areaId: areaDubai, emirate: "dubai" });
     await makeListing({ categoryId: trade.id, tier: 0, areaId: areaSharjah, emirate: "sharjah" });
 

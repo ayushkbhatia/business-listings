@@ -102,7 +102,7 @@ describe("the drop lands where the ladder stays true", () => {
        requirement is "we check the licence with the issuing authority and
        confirm it is current". An expired licence falsifies exactly that.
     */
-    const slug = await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 3 });
+    const slug = await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 2 });
 
     await sweepExpiredLicences(NOW);
 
@@ -113,14 +113,22 @@ describe("the drop lands where the ladder stays true", () => {
     expect(isVerified(row.verificationTier)).toBe(false);
   });
 
-  it("drops every tier above the floor to the same floor", async () => {
-    const three = await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 3 });
-    const two = await addBusiness({ expiry: new Date(NOW.getTime() - 400 * DAY), tier: 2 });
+  it("drops however long the licence has been expired", async () => {
+    /*
+       This walked tiers 3 and 2 and asserted both landed on the same floor,
+       back when the ladder had a rung above 2. Cutting trade references leaves
+       exactly one tier above the floor, so what is left worth asserting is the
+       other axis the pair happened to cover: a licence a day past its date and
+       one more than a year past it get the same treatment, because there is no
+       grace period and no decay.
+    */
+    const yesterday = await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 2 });
+    const longGone = await addBusiness({ expiry: new Date(NOW.getTime() - 400 * DAY), tier: 2 });
 
     await sweepExpiredLicences(NOW);
 
-    expect((await tierOf(three)).verificationTier).toBe(1);
-    expect((await tierOf(two)).verificationTier).toBe(1);
+    expect((await tierOf(yesterday)).verificationTier).toBe(1);
+    expect((await tierOf(longGone)).verificationTier).toBe(1);
   });
 
   it("leaves verifiedAt alone", async () => {
@@ -129,7 +137,7 @@ describe("the drop lands where the ladder stays true", () => {
        would erase the history that tells an ops lead what to re-check when the
        supplier comes back with a renewal.
     */
-    const slug = await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 3 });
+    const slug = await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 2 });
 
     await sweepExpiredLicences(NOW);
 
@@ -140,11 +148,11 @@ describe("the drop lands where the ladder stays true", () => {
 
 describe("what it must not touch", () => {
   it("leaves a licence expiring tomorrow at its tier", async () => {
-    const slug = await addBusiness({ expiry: new Date(NOW.getTime() + DAY), tier: 3 });
+    const slug = await addBusiness({ expiry: new Date(NOW.getTime() + DAY), tier: 2 });
 
     await sweepExpiredLicences(NOW);
 
-    expect((await tierOf(slug)).verificationTier).toBe(3);
+    expect((await tierOf(slug)).verificationTier).toBe(2);
   });
 
   it("has no grace period — expired by a second is expired", async () => {
@@ -153,7 +161,7 @@ describe("what it must not touch", () => {
        day of the platform displaying a claim it cannot support, and it would be
        invisible: every test using whole days would still pass.
     */
-    const slug = await addBusiness({ expiry: new Date(NOW.getTime() - 1000), tier: 3 });
+    const slug = await addBusiness({ expiry: new Date(NOW.getTime() - 1000), tier: 2 });
 
     await sweepExpiredLicences(NOW);
 
@@ -183,20 +191,20 @@ describe("what it must not touch", () => {
     */
     const slug = await addBusiness({
       expiry: new Date(NOW.getTime() - DAY),
-      tier: 3,
+      tier: 2,
       suspendedAt: new Date("2026-05-01T00:00:00.000Z"),
     });
 
     await sweepExpiredLicences(NOW);
 
-    expect((await tierOf(slug)).verificationTier).toBe(3);
+    expect((await tierOf(slug)).verificationTier).toBe(2);
   });
 });
 
 describe("the report it returns", () => {
   it("counts only what it changed and names each one", async () => {
-    const lapsed = await addBusiness({ expiry: new Date(NOW.getTime() - 2 * DAY), tier: 3 });
-    await addBusiness({ expiry: new Date(NOW.getTime() + DAY), tier: 3 });
+    const lapsed = await addBusiness({ expiry: new Date(NOW.getTime() - 2 * DAY), tier: 2 });
+    await addBusiness({ expiry: new Date(NOW.getTime() + DAY), tier: 2 });
     // Already at the floor: expired, but with nothing left to drop.
     await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 1 });
 
@@ -204,12 +212,12 @@ describe("the report it returns", () => {
 
     const mine = result.dropped.filter((row) => row.slug.startsWith(PREFIX));
     expect(mine.map((row) => row.slug)).toEqual([lapsed]);
-    expect(mine[0]?.from).toBe(3);
+    expect(mine[0]?.from).toBe(2);
     expect(mine[0]?.expiredOn).toEqual(new Date(NOW.getTime() - 2 * DAY));
   });
 
   it("is idempotent — a second run in the same day changes nothing", async () => {
-    await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 3 });
+    await addBusiness({ expiry: new Date(NOW.getTime() - DAY), tier: 2 });
 
     await sweepExpiredLicences(NOW);
     const second = await sweepExpiredLicences(NOW);
@@ -242,7 +250,7 @@ describe("the daily run actually performs it", () => {
   let original: string | undefined;
 
   it("drops a lapsed listing through GET /api/jobs/daily", async () => {
-    const slug = await addBusiness({ expiry: new Date(Date.now() - DAY), tier: 3 });
+    const slug = await addBusiness({ expiry: new Date(Date.now() - DAY), tier: 2 });
 
     original = process.env["CRON_SECRET"];
     process.env["CRON_SECRET"] = SECRET;

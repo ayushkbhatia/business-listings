@@ -37,25 +37,32 @@ enum ListingSource { licence_import self_added }
 `verificationTier` drops to 1 automatically the day `licenceExpiry` passes — a scheduled job,
 not a manual step. No grace period.
 
-The ladder ran to 4 and stops at 3:
+The ladder ran to 4 and stops at 2:
 
 ```
-0 unclaimed → 1 claimed → 2 licence verified (top) → 3 trade references (reserved)
+0 unclaimed → 1 claimed → 2 licence verified (top)
 ```
 
-**Tier 2 is the top achievable rung.** Tiers 3 and 4 were "site visited" and "premises
-visited and trading history audited", and both rested on somebody standing in the warehouse.
-Site visits were withdrawn, so `visitedAt` and `visitedByStaffId` are gone, as are
-`SiteVisitRequest`, `SiteVisitReport` and `SiteVisitPhoto`. A
-`business_verification_tier_range` CHECK holds the ceiling at 3.
+**Tier 2 is the top rung.** Tiers 3 and 4 were "site visited" and "premises visited and
+trading history audited", and both rested on somebody standing in the warehouse. Site visits
+were withdrawn, so `visitedAt` and `visitedByStaffId` are gone, as are `SiteVisitRequest`,
+`SiteVisitReport` and `SiteVisitPhoto`. A `business_verification_tier_range` CHECK holds the
+ceiling, and `MAX_TIER` in `lib/verification/service.ts` is `TOP_ACHIEVABLE_TIER` so the
+service and the column cannot name different ceilings.
 
 The first pass at that cut moved `audited` down to rung 3 and re-based it on trading
 history. That was the same mistake one step quieter: nothing measures a trading-history
 audit, no screen sets it, and no listing ever held it — so rung 3 was again a requirement
-nobody performs. Board 3e put **trade references** there, `reserved`, drawn so the ladder has
-somewhere to go and carrying no affordance because it is not built. `20260916090000_document_review`
-moved the eight rows still stored at 3 down to 2, which is what their licence check actually
-supports.
+nobody performs. Board 3e put **trade references** there, `reserved`, drawn so the ladder had
+somewhere to go and carrying no affordance because it was not built.
+`20260916090000_document_review` moved the eight rows still stored at 3 down to 2, which is
+what their licence check actually supports.
+
+**Rung 3 is now gone too.** Trade references will never be built, and that changes what
+drawing it says: a reserved rung nobody intends to ship is a promise on a live screen, and
+the seller reading "we will say so here when it exists" is reading a roadmap the roadmap does
+not contain. `20260919090000_cut_trade_references` tightens the CHECK to `BETWEEN 0 AND 2`.
+Drawing somewhere to go is only honest while somebody means to go there.
 
 ```prisma
 model Location {
@@ -94,7 +101,24 @@ model Category {
   publishThreshold  Int      @default(60)   // listings needed before landing pages publish
   verifiedShareMin  Float    @default(0.30)
 }
+```
 
+**The verified share counts `verificationTier >= 2`** — `VERIFIED_TIER`, the same rung the
+badge, the `/verified` filter, the home counters and the sitemap read. Four surfaces compute
+it: `lib/seo/landing/stats.ts`, `lib/seo/landing/scope.ts` (`supply`, which feeds the
+publish and hold decision), `lib/content/matrix.ts` and `lib/taxonomy/service.ts`.
+`tests/integration/page-matrix.test.ts` pins all four to that rung, because a share computed
+at tier 1 in one place and tier 2 in another is how the admin matrix and the sitemap once
+disagreed — criterion 12's failure mode, live before handoff 5.
+
+The consequence is worth stating rather than discovering. `sweepExpiredLicences` drops a
+lapsed listing to `EXPIRED_LICENCE_TIER`, which is **1**, and 1 is below the share. So a
+wave of licence expiries lowers a trade's verified share with nobody editing anything, and
+can take a live area page under `verifiedShareMin` and unpublish it. That is correct
+behaviour — a page whose suppliers are no longer verified should not go on claiming they are
+— but it means landing pages move on the licence calendar as well as on supply.
+
+```prisma
 model SpecTemplate {          // platform-owned
   id         String  @id @default(cuid())
   categoryId String

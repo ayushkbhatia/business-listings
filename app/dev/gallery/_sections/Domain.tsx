@@ -61,14 +61,8 @@ function ladderRungs(current: number) {
     tier: spec.tier,
     label: t(spec.labelKey as never),
     requirement: t(`verify.requirement.t${spec.tier}` as never),
-    ...(spec.reserved
-      ? { reserved: true, badge: t("verify_listing.reserved") }
-      : spec.tier === TOP_ACHIEVABLE_TIER
-        ? { badge: t("verify_listing.top_tier") }
-        : {}),
-    ...(spec.tier <= current && !spec.reserved
-      ? { date: formatDate("2026-03-14T00:00:00+04:00") }
-      : {}),
+    ...(spec.tier === TOP_ACHIEVABLE_TIER ? { badge: t("verify_listing.top_tier") } : {}),
+    ...(spec.tier <= current ? { date: formatDate("2026-03-14T00:00:00+04:00") } : {}),
   }));
 }
 
@@ -144,9 +138,9 @@ export function Domain() {
               <VerificationBadge
                 compact
                 size={size}
-                tier={3}
-                label={t("verify.t3")}
-                checked={t("verify.t3.checked")}
+                tier={2}
+                label={t("verify.t2")}
+                checked={t("verify.t2.checked")}
               />
             </Specimen>
           ))}
@@ -169,9 +163,9 @@ export function Domain() {
                 <span data-theme-proof="badge">
                   <VerificationBadge
                     compact
-                    tier={3}
-                    label={t("verify.t3")}
-                    checked={t("verify.t3.checked")}
+                    tier={2}
+                    label={t("verify.t2")}
+                    checked={t("verify.t2.checked")}
                   />
                 </span>
               </div>
@@ -187,7 +181,7 @@ export function Domain() {
         note="shows the rungs above as well as below — that is the mechanism, not decoration"
       >
         {/*
-           Three rungs, not four.
+           Two rungs now, and the count comes from `TIERS`.
 
            This block walked `[1, 2, 3, 4]` and asked for
            `verify.requirement.t4`, which the site-visit cut deleted along with
@@ -198,14 +192,12 @@ export function Domain() {
            gallery nobody can open is a checklist item nobody can complete.
 
            `TIERS` rather than a literal, so the next change to the ladder moves
-           this with it instead of breaking it again.
-        */}
-        {/*
-           `reserved` is why the second story is "at the top rung" rather than
-           "at tier 3". Nothing reaches tier 3 — it is drawn so the ladder has
-           somewhere to go and carries no affordance — so the top state a real
-           listing can be in is tier 2, and a gallery story showing a listing
-           sitting on the reserved rung would be a state that cannot happen.
+           this with it instead of breaking it again — which is what cutting
+           trade references just did, taking a third rung and a `reserved` story
+           out of here without an edit to the walk.
+
+           Two stories and no third, because two rungs have two states worth
+           drawing: below the top, and on it.
         */}
         <States label="at tier 1 — claimed, nothing checked yet" stack>
           <Frame width="46rem">
@@ -1240,7 +1232,7 @@ export function ModerationSpecimens() {
                 actorRoleLabel="staff_ops_lead"
                 at="21 Aug 2026, 16:03"
                 reason="Trade licence checked against the DED register and confirmed current; TRN matched the listing."
-                change={{ from: "tier 2", to: "tier 3" }}
+                change={{ from: "tier 1", to: "tier 2" }}
               />
               <AuditRow
                 actionLabel={t("audit.action.suspend")}

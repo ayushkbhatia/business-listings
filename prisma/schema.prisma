@@ -661,17 +661,22 @@ model Business {
   /// is matched as empty, never as "matches everything".
   searchText       String?       @map("search_text")
 
-  /// 0..3. STAFF WRITE ONLY, ops_lead role. There is no API path and no
-  /// seller-editable field. Drops to 1 automatically the day licenceExpiry
-  /// passes — a scheduled job, no grace period.
+  /// 0..2, held by the `business_verification_tier_range` CHECK. STAFF WRITE
+  /// ONLY, ops_lead role. There is no API path and no seller-editable field.
+  /// Drops to 1 automatically the day licenceExpiry passes — a scheduled job,
+  /// no grace period.
   ///
   /// The ladder ran to 4 until site visits were withdrawn. Tiers 3 and 4 both
   /// rested on somebody standing in the warehouse — "site visited", and
   /// "premises visited and trading history audited" — and with no field team
   /// there is no evidence behind either. Rather than leave two rungs meaning
-  /// whatever staff decide on the day, the visited rung is gone and `audited`
-  /// moves down to 3, resting on the trading history and buyer outcomes this
-  /// platform already measures.
+  /// whatever staff decide on the day, the visited rung went and `audited`
+  /// moved down to 3, re-based on trading history.
+  ///
+  /// Rung 3 then became trade references, drawn `reserved` so the ladder had
+  /// somewhere to go, and is now cut outright: it will never be built, and a
+  /// reserved rung nobody intends to ship is a promise on a live screen. Tier 2
+  /// is the top rung. See `20260919090000_cut_trade_references`.
   ///
   /// This said "drops to 2" until the job was written, and 2 was wrong in the
   /// dangerous direction: 2 IS the badge threshold (`VERIFIED_TIER`), and tier

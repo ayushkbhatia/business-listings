@@ -56,8 +56,15 @@ import { VisibilityControl } from "./VisibilityControl";
 export const metadata = { title: t("verify_listing.title") };
 export const dynamic = "force-dynamic";
 
-/** Rungs a listing can actually get to. Tier 0 is not a rung; tier 3 is reserved. */
-const ACHIEVABLE_RUNGS = TIERS.filter((spec) => spec.tier > 0 && !spec.reserved).length;
+/**
+ * Rungs a listing can actually get to. Tier 0 is not a rung — it is "nothing
+ * here has been checked", which is a state with no ladder in front of it.
+ *
+ * This also filtered `!spec.reserved` while trade references sat on the ladder
+ * drawn but unbuilt. That rung is cut, so every rung above 0 is now reachable
+ * and the count is unchanged at two — the number was already excluding it.
+ */
+const ACHIEVABLE_RUNGS = TIERS.filter((spec) => spec.tier > 0).length;
 
 export default async function VerificationPage() {
   const seat = await requireSellerSeat();
@@ -206,9 +213,9 @@ function Ladder({
       title={t("verify_listing.ladder")}
       /*
          Counted, not written. `TIERS` decides how many rungs a seller can
-         actually reach — everything above 0 that is not reserved — so funding
-         trade references moves the sentence with the ladder instead of leaving
-         a header saying two over three.
+         actually reach — everything above 0 — so a rung added or withdrawn
+         moves the sentence with the ladder instead of leaving a header saying
+         two over three.
       */
       description={t("verify_listing.ladder_lede", {
         count: ACHIEVABLE_RUNGS,
@@ -230,7 +237,6 @@ function Ladder({
           tier: spec.tier,
           label: t(spec.labelKey as never),
           requirement: t(`verify.requirement.t${spec.tier}` as never),
-          ...(spec.reserved ? { reserved: true, badge: t("verify_listing.reserved") } : {}),
           ...(spec.tier === TOP_ACHIEVABLE_TIER ? { badge: t("verify_listing.top_tier") } : {}),
         }))}
       />

@@ -1,5 +1,4 @@
 import { t } from "@/lib/i18n";
-import { VERIFIED_TIER } from "@/lib/verification";
 import type { SearchQuery } from "./query";
 
 /**
@@ -53,13 +52,19 @@ export function appliedFacetLabels(query: SearchQuery): AppliedFacetLabel[] {
   }
 
   if (query.tier) {
+    /*
+       One branch, because there was only ever one.
+
+       This was a ternary on `query.tier >= VERIFIED_TIER` whose two arms were
+       byte-identical — the same `facet.tier_option` call either way. Whatever
+       the second wording was meant to be, it was never written, and a
+       conditional that cannot change its own answer reads to the next person as
+       a distinction the chip is making and is not.
+    */
     out.push({
       key: "tier",
       facet: t("facet.tier"),
-      value:
-        query.tier >= VERIFIED_TIER
-          ? t("facet.tier_option", { tier: query.tier })
-          : t("facet.tier_option", { tier: query.tier }),
+      value: t("facet.tier_option", { tier: query.tier }),
     });
   }
 

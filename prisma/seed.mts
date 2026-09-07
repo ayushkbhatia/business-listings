@@ -583,21 +583,18 @@ async function main() {
     // Unclaimed listings are tier 0 by definition — nothing has been checked.
     // Claimed ones walk the ladder so every badge state appears at least twice.
     /*
-       Nought to two. **Tier 2 is the top achievable rung**, so the seed does
-       not mint a 3.
+       Nought to two, which is now the whole ladder — a 3 would be refused by
+       `business_verification_tier_range` before it reached a screen.
 
-       It used to. The two 4s became 3s when site visits were withdrawn, on the
-       reasoning that "a ladder whose highest rung is empty on every seeded
-       database is a rung nobody ever sees rendered". That was right about the
-       old rung and wrong about this one: rung 3 is now trade references, it is
-       reserved and unbuilt, and a seeded listing sitting on it renders a header
-       reading `Tier 3 · Trade references` over a ladder drawing that same rung
-       as unreached — which is what a seeded database showed until board 3e
-       opened the page and looked.
-
-       An empty top rung is the honest state of an unbuilt feature. The ladder's
-       reserved treatment is the thing worth seeing rendered, and it renders
-       from any tier.
+       It used to mint one. The two 4s became 3s when site visits were
+       withdrawn, on the reasoning that "a ladder whose highest rung is empty on
+       every seeded database is a rung nobody ever sees rendered". That was
+       right about the old rung and wrong about the one that replaced it: rung 3
+       became trade references, reserved and unbuilt, and a seeded listing
+       sitting on it rendered a header reading `Tier 3 · Trade references` over
+       a ladder drawing that same rung as unreached — which is what a seeded
+       database showed until board 3e opened the page and looked. The rung is
+       now cut outright.
 
        The draw below is kept regardless, and its condition with it: the
        generator is a seeded PRNG and the *number of draws* is part of the
@@ -1839,7 +1836,7 @@ async function seedHomeSignals(db: Db, businesses: Biz[], opsLeadId: string) {
         subject: `Business:${business.id}`,
         // One reason, because there is one rung a decision can put a listing
         // on. The other branch read "Trading history audited", for a rung that
-        // was withdrawn and is now reserved and unbuilt.
+        // was withdrawn, briefly reserved, and is now cut.
         reason:
           "Trade licence checked against the issuing authority and the contact number answered.",
         before: { verificationTier: business.tier - 1 },
@@ -3886,8 +3883,8 @@ async function seedTrust(db: Db, businesses: Biz[], opsLeadId: string, moderator
         action: "tier_change",
         subject: `Business:${claimed[0]!.id}`,
         // A real decision on a rung that exists. The audited-to-tier-3
-        // promotion described a rung nobody can reach and a check nobody
-        // performs.
+        // promotion described a rung nobody could reach and a check nobody
+        // performs, and the ladder no longer draws it at all.
         reason: "Trade licence checked against the issuing authority and the contact number answered. Promoted to tier 2.",
         before: { verificationTier: 1 },
         after: { verificationTier: 2 },
@@ -4386,9 +4383,9 @@ async function seedReviewDepth(db: Db) {
       languages: ["English", "Arabic", "Hindi"],
       description:
         "Valve and fitting stockist supplying MEP contractors across Dubai and the Northern Emirates. Counter sales, scheduled site delivery and an indent desk for sizes held off the shelf.",
-      // Tier 2 is the top achievable rung. This read 3, which is now trade
-      // references — reserved and unbuilt — so the board's own worked example
-      // sat on a rung the ladder draws as unreachable.
+      // Tier 2 is the top rung. This read 3, which became trade references —
+      // reserved, never built, now cut — so the board's own worked example sat
+      // on a rung the ladder drew as unreachable.
       verificationTier: 2,
       verifiedAt: days(-64),
       claimStatus: "claimed",

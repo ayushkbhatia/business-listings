@@ -43,11 +43,13 @@ export const EXPIRED_LICENCE_TIER = 1;
  * The highest rung a listing can actually get to, and the divisor for any score
  * that reads the tier as a fraction.
  *
- * Equal to `VERIFIED_TIER` and that is not a coincidence: rung 3 is trade
- * references, reserved and unbuilt, so the top rung anybody has a path to is
- * the same one the badge threshold sits on. `components/domain/verification.ts`
- * derives the same number from `TIERS` and a unit test asserts the two agree,
- * so funding trade references cannot move one without the other.
+ * Equal to `VERIFIED_TIER`, and with the ladder ending at 2 the top rung and
+ * the badge threshold are now the same rung. It keeps a separate name anyway:
+ * the badge threshold is a claim about evidence and the ceiling is a claim
+ * about the ladder, and a rung added above 2 would move the second without
+ * touching the first. `components/domain/verification.ts` derives the same
+ * number from `TIERS` and a unit test asserts the two agree, so adding a rung
+ * cannot move one without the other.
  *
  * ## Why this exists rather than a literal
  *

@@ -168,13 +168,19 @@ describe("the checkpoint — a tier is nobody's but the ops lead's", () => {
   it("lets the ops lead set a tier", async () => {
     const business = await listing("Ops Tier");
 
+    /*
+       Tier 2 with a licence reason. It read tier 3 and "Trading history
+       audited" — a rung that has since been cut and a check nobody performs, so
+       the one passing case in this file was the one describing work the
+       platform does not do.
+    */
     const result = await setVerificationTier({
       actor: actor(opsLeadId, "staff_ops_lead"),
       businessId: business.id,
-      tier: 3,
-      reason: "Trading history audited. Reply times and quote volume match the listing.",
+      tier: 2,
+      reason: "Trade licence checked against the issuing authority and confirmed current.",
     });
-    expect(result).toMatchObject({ ok: true, tier: 3 });
+    expect(result).toMatchObject({ ok: true, tier: 2 });
   });
 
   it("refuses a field verifier", async () => {
@@ -184,7 +190,7 @@ describe("the checkpoint — a tier is nobody's but the ops lead's", () => {
       setVerificationTier({
         actor: actor(fieldOfficerId, "staff_field"),
         businessId: business.id,
-        tier: 3,
+        tier: 2,
         reason: "Not my row any more.",
       }),
     ).rejects.toBeInstanceOf(PermissionError);
@@ -197,7 +203,7 @@ describe("the checkpoint — a tier is nobody's but the ops lead's", () => {
       setVerificationTier({
         actor: actor(moderatorId, "staff_moderator"),
         businessId: business.id,
-        tier: 3,
+        tier: 2,
         reason: "Not my row.",
       }),
     ).rejects.toBeInstanceOf(PermissionError);
