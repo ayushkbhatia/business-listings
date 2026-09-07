@@ -880,19 +880,18 @@ export const en = {
   "verify.t1.checked": "Claimed by the supplier, contact confirmed by us",
   "verify.t2": "Licence verified",
   "verify.t2.checked": "Trade licence checked against the issuing authority",
-  // Rung 3 is reserved and unbuilt. "Audited" claimed a check nobody performs —
-  // it moved down from 4 when site visits were withdrawn, wearing wording about
-  // trading history that no job measures and no screen sets. Trade references
-  // is what the change log put here, and it is drawn with no affordance until
-  // somebody funds it.
-  "verify.t3": "Trade references",
-  "verify.t3.checked": "Not built yet — no listing has reached this rung",
+  // Rung 3 is gone, and with it `verify.t3`, `verify.t3.checked` and
+  // `verify.requirement.t3`. It held three different claims in three months —
+  // site visited, trading history audited, trade references — and the last of
+  // those was drawn `reserved` so the ladder had somewhere to go. Trade
+  // references will not be built, so the rung is not somewhere to go; it is a
+  // promise, on the seller's own screen, in a string that told them we would
+  // say so here when it existed.
   "verify.tier": "tier {tier}",
   "verify.ladder": "Verification ladder",
   "verify.reached": "Reached",
   "verify.requirement.t1": "The supplier proves the listing is theirs, and we confirm the contact details on the public licence record.",
   "verify.requirement.t2": "We check the licence against the issuing authority and confirm it is current.",
-  "verify.requirement.t3": "Reserved. Nothing you do reaches it yet, and we will say so here when it exists.",
   // It drops to tier 1, not to 2. Tier 2 *is* licence verification, so a
   // listing held there keeps the badge the expiry exists to withdraw — the
   // self-contradiction change-log decision 3 fixed. See lib/verification.ts.
@@ -1945,9 +1944,9 @@ export const en = {
   "rfq.recipients_add_all": "Add all",
   "rfq.recipient_pick": "Send to {name}",
   // Board 1h's recipient row. It was the literal `VISITED` written straight
-  // into RfqComposer.tsx, keyed off tier 3 — a rung that was site visits and is
-  // now reserved and unreachable, so the mark rendered for nobody. What the
-  // platform has actually checked is the licence.
+  // into RfqComposer.tsx, keyed off tier 3 — a rung that was site visits and no
+  // longer exists at all, so the mark rendered for nobody. What the platform
+  // has actually checked is the licence.
   "rfq.recipient_verified": "Licence",
   "rfq.from_page": "· from the page you were on",
   "rfq.cap_note": "8 sellers is the most one request can reach.",
@@ -3595,6 +3594,19 @@ export const en = {
   // A chip the seller has picked and not yet saved. Nobody is looking at it,
   // so it does not claim they are.
   "listing.not_saved": "Not saved",
+  // Board 3b Q3. The fourth chip state, and the only one that reports a
+  // decision rather than a queue position.
+  //
+  // "Not added", not "Rejected". The refused thing is the request, and the
+  // seller is not: a directory whose only asset is that its numbers are true
+  // still has to tell somebody their category was turned down without making
+  // it sound like a judgement on them. What it names is the outcome the seller
+  // can see for themselves — the category is not on the listing.
+  "listing.category_refused": "Not added",
+  // The way out of a refusal, on the chip itself. Adding it back is not a
+  // second appeal path — it makes an ordinary new request, which is what a
+  // seller whose licence has since been amended actually needs.
+  "listing.ask_again": "Ask again",
   // "Save changes", not "Save & submit". It saves; some of what it saves is
   // queued, and the chip beside that field says which — the button does not
   // have to carry both behaviours in its name.
@@ -3677,6 +3689,25 @@ export const en = {
     one: "Your listing stays live on its primary category and its {formatted} current one while this is checked.",
     other: "Your listing stays live on its primary category and its {formatted} current ones while this is checked.",
   },
+  // Board 3b Q3, the rail's half of it. The chip carries the mark because that
+  // is where the field is edited; the card carries the words, because a
+  // moderator's sentence does not fit in a pill.
+  //
+  // The canned line goes first and the free text second, and that order is the
+  // point. "Not added: we could not match this to your trade licence" reads as
+  // a rule with a reason; the sentence on its own reads as one person's
+  // opinion on a Tuesday, which is what the seller assumes when a refusal
+  // arrives with no frame around it.
+  "listing.refused_category": "Not added: {name}",
+  "listing.refused_lede": "A moderator looked at this and did not add it. Their reason:",
+  // A row decided before the reason became mandatory on decided rows. Saying
+  // so beats rendering an empty quote and beats inventing a reason.
+  "listing.refused_no_reason": "This was decided before we recorded reasons, so we do not have one to show.",
+  "listing.refused_when": "Decided {when}",
+  // What to do next, because a refusal with no move left is a dead end. Asking
+  // again is a real route — the licence may have been renewed since — and it
+  // is the same control the seller already has.
+  "listing.refused_next": "Ask again on the chip once the reason no longer applies. It goes back to our team as a new request.",
   "listing.live_now": "Everything else · live now",
   "listing.saved_when": "Saved {when}",
   "listing.never_saved": "Nothing changed yet",
@@ -4034,7 +4065,6 @@ export const en = {
   "verify_listing.current": "You are at tier {tier}",
   "verify_listing.reached": "Reached",
   "verify_listing.top_tier": "Top tier",
-  "verify_listing.reserved": "Reserved",
   "verify_listing.rung": "Tier {tier} · {label}",
   // The sentence the board never said. Written out because "expires with your
   // licence" on its own leaves a seller to guess what expiring costs.

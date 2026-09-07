@@ -40,6 +40,35 @@ export interface HeldEdit {
   submittedAt: Date;
 }
 
+/**
+ * A category the seller asked for and a moderator turned down.
+ *
+ * Board 3b Q3. `decisionReason` has always been written — the moderator types
+ * it and the CHECK constraint on decided rows makes it mandatory — and it has
+ * never been read on the seller's side. The queue took the words and the chip
+ * went back to looking like nothing had happened, so a seller learned that
+ * their request had stopped being pending and nothing else. Re-asking blind is
+ * the only move that leaves them.
+ *
+ * One per category, the most recent, and only where the category is neither
+ * live nor pending: a newer request supersedes an older refusal, and a category
+ * that has since been approved is on the listing where the seller can see it.
+ */
+export interface RejectedCategory {
+  id: string;
+  /** The category the request named. */
+  categoryId: string;
+  /** Its name, resolved here for the same reason `HeldEdit.label` is. */
+  label: string;
+  /**
+   * The moderator's own words. Nullable in the schema because a pending row has
+   * none; a rejected row cannot be written without one, so this is only null
+   * for a row that predates that constraint.
+   */
+  reason: string | null;
+  decidedAt: Date | null;
+}
+
 export interface ListingCategory {
   id: string;
   name: string;
@@ -71,6 +100,8 @@ export interface ListingView {
   choices: ListingCategory[];
 
   held: HeldEdit[];
+  /** Turned down, most recent per category. Never counts against the cap. */
+  rejected: RejectedCategory[];
   photos: PhotoPicks;
   revisions: Revision[];
 
@@ -114,7 +145,7 @@ export async function getListing(businessId: string): Promise<ListingView | null
   });
   if (!business) return null;
 
-  const [choices, pending, photos, revisions, allPlans] = await Promise.all([
+  const [choices, pending, refused, photos, revisions, allPlans] = await Promise.all([
     /*
        Leaf categories only. A supplier sells gate valves, not "valves and
        fittings", and offering the parent is how a listing ends up filed one
@@ -129,6 +160,19 @@ export async function getListing(businessId: string): Promise<ListingView | null
       where: { businessId, status: "pending" },
       orderBy: { createdAt: "desc" },
       select: { id: true, field: true, afterValue: true, createdAt: true },
+    }),
+    /*
+       Every refusal, newest first, reduced to one per category below.
+
+       Not `take: 1` — that is one row across the whole business, and a seller
+       turned down on two categories would read the reason for one of them
+       under both. The reduction has to be per category, so the query returns
+       the set and the code picks the head of each group.
+    */
+    prisma.listingChangeRequest.findMany({
+      where: { businessId, field: "additional_category", status: "rejected" },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, afterValue: true, decisionReason: true, decidedAt: true },
     }),
     photoPicks(businessId),
     recentRevisions(businessId),
@@ -150,6 +194,36 @@ export async function getListing(businessId: string): Promise<ListingView | null
     .map((row) => shape(row.category))
     .filter((row) => row.id !== business.primaryCategoryId)
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  /*
+     A refusal the seller still needs, and the three ways one stops being that.
+
+     · The category is live now — a later request was approved, so the listing
+       already answers the question and a stale refusal beside it would read as
+       a contradiction.
+     · A request for it is pending — the seller has re-asked, and `IN REVIEW` is
+       the newer, truer state of the same chip.
+     · An older refusal for a category already refused — only the head of each
+       group survives, because a moderator's second set of words replaces the
+       first rather than joining it.
+  */
+  const liveOrPending = new Set<string>([
+    ...business.categories.map((row) => row.category.id),
+    ...pending.filter((row) => row.field === "additional_category").map((row) => row.afterValue),
+  ]);
+  const rejected: RejectedCategory[] = [];
+  const seen = new Set<string>();
+  for (const row of refused) {
+    if (seen.has(row.afterValue) || liveOrPending.has(row.afterValue)) continue;
+    seen.add(row.afterValue);
+    rejected.push({
+      id: row.id,
+      categoryId: row.afterValue,
+      label: byId.get(row.afterValue)?.name ?? row.afterValue,
+      reason: row.decisionReason,
+      decidedAt: row.decidedAt,
+    });
+  }
 
   const plan =
     (business.plan as PlanCaps | null) ??
@@ -186,6 +260,7 @@ export async function getListing(businessId: string): Promise<ListingView | null
           : row.afterValue,
       submittedAt: row.createdAt,
     })),
+    rejected,
     photos,
     revisions: revisions.map((row) => ({
       id: row.id,

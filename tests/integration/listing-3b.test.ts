@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { getListing } from "@/lib/db/queries/listing";
 import { saveListing } from "@/lib/listing/save";
 import { pick, setCover, unpick } from "@/lib/listing/photos";
-import { approveChange } from "@/lib/moderation/service";
+import { approveChange, rejectChange } from "@/lib/moderation/service";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
 
@@ -263,6 +263,144 @@ describe("criterion 4 — a held category does not touch the live ones", () => {
     const view = await getListing(fixture.id);
     expect(view!.additional).toHaveLength(0);
     expect(view!.held).toHaveLength(0);
+  });
+});
+
+/**
+ * Board 3b Q3 — a refusal the seller can read.
+ *
+ * `decision_reason` has been written on every rejection since the queue
+ * existed, and read on the seller's side by nothing. The amber chip vanished on
+ * the moderator's decision and the seller was left to notice an absence, which
+ * is the same defect as the held chip that used to disappear on submission:
+ * the mark has to be where the field is edited, and a chip that is not drawn
+ * cannot carry one.
+ */
+describe("board 3b Q3 — a rejected category says why", () => {
+  it("carries the moderator's own words back to the seller", async () => {
+    const fixture = await listing();
+    await saveListing(fixture.owner, fixture.id, { addCategoryIds: [categoryIds[1]!] });
+    const request = await prisma.listingChangeRequest.findFirstOrThrow({
+      where: { businessId: fixture.id, status: "pending" },
+      select: { id: true },
+    });
+
+    const reason = "The trade licence does not list this activity. Add it and send the amended licence.";
+    expect((await rejectChange({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      requestId: request.id,
+      reason,
+    })).ok).toBe(true);
+
+    const view = await getListing(fixture.id);
+    // Off the pending list, on the refused one, and still off the listing.
+    expect(view!.held).toHaveLength(0);
+    expect(view!.additional).toHaveLength(0);
+    expect(view!.rejected).toHaveLength(1);
+    expect(view!.rejected[0]!.categoryId).toBe(categoryIds[1]);
+    expect(view!.rejected[0]!.reason).toBe(reason);
+    expect(view!.rejected[0]!.decidedAt).toBeInstanceOf(Date);
+    // Resolved to a name, for the same reason `held` is: a chip reading a cuid
+    // answers nothing.
+    expect(view!.rejected[0]!.label).not.toBe(categoryIds[1]);
+  });
+
+  it("shows the newest refusal only, not every one it has ever had", async () => {
+    /*
+       A moderator's second set of words replaces the first rather than joining
+       it. Two chips for one category would be the screen refusing it twice.
+    */
+    const fixture = await listing();
+    for (const words of ["Not on the licence.", "Still not on the licence."]) {
+      await saveListing(fixture.owner, fixture.id, { addCategoryIds: [categoryIds[2]!] });
+      const request = await prisma.listingChangeRequest.findFirstOrThrow({
+        where: { businessId: fixture.id, status: "pending" },
+        select: { id: true },
+      });
+      await rejectChange({
+        actor: actor(opsLeadId, "staff_ops_lead"),
+        requestId: request.id,
+        reason: words,
+      });
+    }
+
+    const view = await getListing(fixture.id);
+    expect(view!.rejected).toHaveLength(1);
+    expect(view!.rejected[0]!.reason).toBe("Still not on the licence.");
+  });
+
+  it("drops the refusal once the seller asks again", async () => {
+    // `IN REVIEW` is the newer and truer state of the same chip, and showing
+    // both would be the screen saying refused and pending about one category.
+    const fixture = await listing();
+    await saveListing(fixture.owner, fixture.id, { addCategoryIds: [categoryIds[3]!] });
+    const first = await prisma.listingChangeRequest.findFirstOrThrow({
+      where: { businessId: fixture.id, status: "pending" },
+      select: { id: true },
+    });
+    await rejectChange({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      requestId: first.id,
+      reason: "Not on the licence.",
+    });
+    expect((await getListing(fixture.id))!.rejected).toHaveLength(1);
+
+    await saveListing(fixture.owner, fixture.id, { addCategoryIds: [categoryIds[3]!] });
+
+    const view = await getListing(fixture.id);
+    expect(view!.rejected).toHaveLength(0);
+    expect(view!.held).toHaveLength(1);
+  });
+
+  it("drops the refusal once the category goes live another way", async () => {
+    // A later approval put it on the listing. A refusal beside the live chip
+    // would be the screen contradicting itself.
+    const fixture = await listing();
+    await saveListing(fixture.owner, fixture.id, { addCategoryIds: [categoryIds[4]!] });
+    const first = await prisma.listingChangeRequest.findFirstOrThrow({
+      where: { businessId: fixture.id, status: "pending" },
+      select: { id: true },
+    });
+    await rejectChange({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      requestId: first.id,
+      reason: "Not on the licence.",
+    });
+
+    await saveListing(fixture.owner, fixture.id, { addCategoryIds: [categoryIds[4]!] });
+    const second = await prisma.listingChangeRequest.findFirstOrThrow({
+      where: { businessId: fixture.id, status: "pending" },
+      select: { id: true },
+    });
+    await approveChange({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      requestId: second.id,
+      reason: "Amended licence covers it.",
+    });
+
+    const view = await getListing(fixture.id);
+    expect(view!.rejected).toHaveLength(0);
+    expect(view!.additional.map((row) => row.id)).toEqual([categoryIds[4]]);
+  });
+
+  it("keeps a refused category out of the cap it was never added to", async () => {
+    // The chip is a notice, not a category. Counting it would spend an
+    // allowance on a listing that gained nothing.
+    const fixture = await listing();
+    await saveListing(fixture.owner, fixture.id, { addCategoryIds: [categoryIds[5]!] });
+    const request = await prisma.listingChangeRequest.findFirstOrThrow({
+      where: { businessId: fixture.id, status: "pending" },
+      select: { id: true },
+    });
+    await rejectChange({
+      actor: actor(opsLeadId, "staff_ops_lead"),
+      requestId: request.id,
+      reason: "Not on the licence.",
+    });
+
+    const view = await getListing(fixture.id);
+    expect(view!.rejected).toHaveLength(1);
+    expect(view!.categoryAllowance.used).toBe(0);
   });
 });
 

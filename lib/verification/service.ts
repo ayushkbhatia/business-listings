@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import { assertCan } from "@/lib/auth/can";
-import { EXPIRED_LICENCE_TIER, licenceExpired } from "@/lib/verification";
+import { EXPIRED_LICENCE_TIER, licenceExpired, TOP_ACHIEVABLE_TIER } from "@/lib/verification";
 import type { Actor } from "@/lib/auth/roles";
 
 /**
@@ -50,15 +50,20 @@ export interface SetTierInput {
 
 const MIN_TIER = 0;
 /**
- * Three, not four.
+ * Two, not three, and the ladder is the reason.
  *
- * The ladder lost its "site visited" rung when site visits were withdrawn, and
- * `audited` moved down from 4 to take its place — see components/domain/
- * verification.ts. A tier of 4 is now out of range here and refused by the
- * `business_verification_tier_range` CHECK underneath, which is what makes the
- * ceiling true rather than merely asserted.
+ * `TOP_ACHIEVABLE_TIER`, imported rather than written, because the two numbers
+ * are the same decision. This was a literal 3 through the reserved-rung period:
+ * trade references was drawn on the ladder but built by nobody, and refusing 3
+ * here while the column allowed it would have been a second source of truth.
+ * With that rung cut there is no gap left to keep open — a 3 an ops lead could
+ * still set is a tier the ladder does not draw, which is precisely the state
+ * the eight legacy rows were in when board 3e found them.
+ *
+ * The `business_verification_tier_range` CHECK is 0..2 underneath, which is
+ * what makes the ceiling true rather than merely asserted.
  */
-const MAX_TIER = 3;
+const MAX_TIER = TOP_ACHIEVABLE_TIER;
 
 export async function setVerificationTier(input: SetTierInput): Promise<TierResult> {
   const business = await prisma.business.findUnique({
@@ -106,13 +111,13 @@ export async function setVerificationTier(input: SetTierInput): Promise<TierResu
      otherwise fight.
 
      `sweepExpiredLicences` drops a lapsed listing to `EXPIRED_LICENCE_TIER`
-     every night. Without this, an ops lead could set tier 4 on a licence that
+     every night. Without this, an ops lead could set tier 2 on a licence that
      expired last year, the sweep would undo it before morning, and the console
      would show a tier that keeps reverting with nothing on screen saying why.
      Two writers to one column need one floor between them.
 
      Refused rather than silently clamped: the tier is the most guarded field in
-     the system and a staff member who asked for 4 should be told they got 1,
+     the system and a staff member who asked for 2 should be told they got 1,
      not discover it. The message names the fix, because the fix is real — a
      renewed licence is a new expiry date on the record, and once it is in, this
      returns to allowing the tier.

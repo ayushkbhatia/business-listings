@@ -16,18 +16,22 @@ import { Check } from "@/components/primitives/icons";
  *
  * There is no rung with an action. There was: the board this was drawn from
  * offered `Start this →` on a tier with no implementation behind it, which is a
- * promise a live screen cannot keep. A `reserved` rung now renders muted and
- * inert, and `tests/e2e/listing.spec.ts` asserts the region contains no button,
- * textbox, combobox or spinbutton at all — the seller's own tier is
- * `ops_lead`-write-only (CLAUDE.md non-negotiable 2) and a control here would
- * be a control that gets refused.
+ * promise a live screen cannot keep. `tests/e2e/listing.spec.ts` asserts the
+ * region contains no button, textbox, combobox or spinbutton at all — the
+ * seller's own tier is `ops_lead`-write-only (CLAUDE.md non-negotiable 2) and a
+ * control here would be a control that gets refused.
+ *
+ * There was also a `reserved` rung, drawn muted and inert so the ladder had
+ * somewhere to go. Trade references will never be built, so it has gone with
+ * the tier: a rung nobody intends to ship is the same unkeepable promise as a
+ * button with nothing behind it, drawn one shade quieter.
  *
  * ## Why it reads across rather than down
  *
  * Board 3e draws it as a row of nodes with the progression between them, which
- * is what a ladder is for: three rungs stacked as list rows read as three
- * unrelated facts. Below `md` it stacks, because three columns inside a 340px
- * phone is three columns of two words each.
+ * is what a ladder is for: rungs stacked as list rows read as unrelated facts.
+ * Below `md` it stacks, because two columns inside a 340px phone is two columns
+ * of two words each.
  */
 export interface LadderRung {
   tier: number;
@@ -37,22 +41,14 @@ export interface LadderRung {
   /** Already formatted. Present only on rungs already reached. */
   date?: string;
   /**
-   * A short mono mark on the rung — "Top tier", "Reserved". Already localised.
+   * A short mono mark on the rung — "Top tier". Already localised.
    *
-   * Two of the three rungs carry one and they say opposite things: tier 2 is as
-   * far as anybody can currently get, and tier 3 is drawn so the ladder has
-   * somewhere to go without pretending it goes there yet.
+   * Only the top rung carries one, and it says the ladder ends here rather than
+   * that this seller has arrived: it renders at tier 2 whether or not the
+   * seller has reached it, so somebody at tier 1 can see how far there is left
+   * to go.
    */
   badge?: string;
-  /**
-   * Drawn, unreachable, and honest about it.
-   *
-   * Not the same as "not yet reached". An unreached rung is work the seller can
-   * do; a reserved one is work nobody has built, so it gets no number circle
-   * treatment that would read as a next step and no requirement phrased as an
-   * instruction.
-   */
-  reserved?: boolean;
 }
 
 export interface VerificationLadderProps {
@@ -67,10 +63,24 @@ export interface VerificationLadderProps {
 export function VerificationLadder({ rungs, current, label, reachedLabel }: VerificationLadderProps) {
   return (
     <section aria-label={label} className="w-full">
-      <ol className="grid gap-3 md:grid-cols-3 md:gap-0">
+      {/*
+         Columns counted from the rungs, not written.
+
+         This was `md:grid-cols-3` while the ladder had three rungs. Cutting
+         trade references left two rungs in a three-column grid — a third of the
+         panel empty, which reads as a rung that failed to render rather than a
+         ladder that ends. Tailwind cannot see a runtime value, so the two
+         classes it may emit are both spelt out here.
+      */}
+      <ol
+        className={cn(
+          "grid gap-3 md:gap-0",
+          rungs.length >= 3 ? "md:grid-cols-3" : "md:grid-cols-2",
+        )}
+      >
         {rungs.map((rung, index) => {
-          const reached = !rung.reserved && rung.tier <= current;
-          const isCurrent = !rung.reserved && rung.tier === current;
+          const reached = rung.tier <= current;
+          const isCurrent = rung.tier === current;
 
           return (
             <li
@@ -100,22 +110,12 @@ export function VerificationLadder({ rungs, current, label, reachedLabel }: Veri
 
               <span className="min-w-0 flex-1">
                 <span className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                  <span
-                    className={cn(
-                      "text-body-sm",
-                      rung.reserved ? "text-muted" : reached ? "text-ink" : "text-body",
-                    )}
-                  >
+                  <span className={cn("text-body-sm", reached ? "text-ink" : "text-body")}>
                     {rung.label}
                   </span>
                   {reached && <span className="sr-only">{reachedLabel}</span>}
                   {rung.badge && (
-                    <span
-                      className={cn(
-                        "rounded-chip px-1.5 py-px font-mono text-eyebrow uppercase tracking-eyebrow",
-                        rung.reserved ? "bg-fill text-muted" : "bg-ok-wash text-ok-ink",
-                      )}
-                    >
+                    <span className="rounded-chip bg-ok-wash px-1.5 py-px font-mono text-eyebrow uppercase tracking-eyebrow text-ok-ink">
                       {rung.badge}
                     </span>
                   )}

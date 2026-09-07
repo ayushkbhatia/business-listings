@@ -107,11 +107,26 @@ describe("trustScore", () => {
 });
 
 describe("the ceiling, defined twice and asserted equal", () => {
-  it("agrees with the highest non-reserved rung on the ladder", () => {
+  it("agrees with the highest rung on the ladder", () => {
     // `lib/verification.ts` states it so the two scorers can import it without
     // reaching into `components`; `TIERS` is where the rungs actually live.
-    // Funding trade references has to move both, and this is what says so.
-    const derived = TIERS.filter((spec) => !spec.reserved).at(-1)!.tier;
-    expect(TOP_ACHIEVABLE_TIER).toBe(derived);
+    // Adding a rung has to move both, and this is what says so.
+    //
+    // It read `TIERS.filter((spec) => !spec.reserved)` while trade references
+    // sat on the ladder drawn but unbuilt. That rung is cut, so every rung in
+    // `TIERS` is now reachable and the top of the array is the ceiling — but
+    // the pin stays, because two numbers that must be equal and are written in
+    // two files is exactly the drift this file exists to catch.
+    expect(TOP_ACHIEVABLE_TIER).toBe(TIERS.at(-1)!.tier);
+  });
+
+  it("is the ceiling the tier service will actually write", () => {
+    // `setVerificationTier` refuses anything above `TOP_ACHIEVABLE_TIER`, and
+    // the `business_verification_tier_range` CHECK refuses it underneath. A
+    // rung the ladder does not draw but an ops lead can still set is the state
+    // the eight legacy rows were in — drawn as unreached on the seller's own
+    // screen while the header read the tier back to them.
+    expect(TIERS.map((spec) => spec.tier)).toEqual([0, 1, 2]);
+    expect(TOP_ACHIEVABLE_TIER).toBe(2);
   });
 });

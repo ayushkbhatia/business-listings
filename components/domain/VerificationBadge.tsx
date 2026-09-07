@@ -47,10 +47,11 @@ const TONE = {
    Three icons, and the pin is gone with the rung it stood for.
 
    `Pin` is a map pin and it marked the visited tier — somebody had stood at
-   that address. Site visits were withdrawn, the rung that replaced them at 3 is
-   reserved and unbuilt, and nothing reaches it; a listing carrying a stored 3
-   is a legacy row, not a stronger claim, so it gets the same tick as tier 2
-   rather than a mark asserting a visit nobody made.
+   that address. Site visits were withdrawn, the rung that replaced them at 3
+   was reserved and never built, and the ladder now stops at 2; a listing
+   carrying a stored 3 is a legacy row, not a stronger claim, so `tier >= 2`
+   gives it the same tick as tier 2 rather than a mark asserting a visit nobody
+   made.
 */
 function TierIcon({ tier, size }: { tier: VerificationTier; size: number }) {
   if (tier === 0) return <Warning size={size} />;

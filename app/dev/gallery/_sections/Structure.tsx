@@ -32,10 +32,19 @@ interface Row {
   tone: RowTone;
 }
 
+/*
+   Tiers 0..2, because that is the whole ladder.
+
+   Two of these rows carried 3 and 4 — the withdrawn visited rung and the
+   audited rung above it — and the `tier` column renders the number straight
+   out, so the gallery drew a supplier at tier 4 over a ladder that stops at 2.
+   A specimen is a drawing of a shipped state; a number no listing can hold is
+   the same defect as a padded list, in a table nobody reads twice.
+*/
 const ROWS: Row[] = [
-  { id: "1", name: "Al Marwan Trading", ref: "DED-618402", emirate: "Dubai", tier: 3, enquiries: 41, quoted: 184_200, responseMs: 2_400_000, tone: "default" },
+  { id: "1", name: "Al Marwan Trading", ref: "DED-618402", emirate: "Dubai", tier: 2, enquiries: 41, quoted: 184_200, responseMs: 2_400_000, tone: "default" },
   { id: "2", name: "Gulf Line Industrial Supplies", ref: "SHJ-204118", emirate: "Sharjah", tier: 2, enquiries: 18, quoted: 62_400, responseMs: 9_600_000, tone: "default" },
-  { id: "3", name: "Emirates Crest Equipment", ref: "ADDED-773915", emirate: "Abu Dhabi", tier: 4, enquiries: 96, quoted: 512_800, responseMs: 900_000, tone: "default" },
+  { id: "3", name: "Emirates Crest Equipment", ref: "ADDED-773915", emirate: "Abu Dhabi", tier: 2, enquiries: 96, quoted: 512_800, responseMs: 900_000, tone: "default" },
   { id: "4", name: "Al Sahra General Trading", ref: "AJM-118206", emirate: "Ajman", tier: 1, enquiries: 4, quoted: 8_900, responseMs: 187_200_000, tone: "attention" },
   { id: "5", name: "Northbay Technical Services", ref: "JAFZA-441027", emirate: "Dubai", tier: 0, enquiries: 0, quoted: 0, responseMs: 0, tone: "blocked" },
   { id: "6", name: "Al Wadi Building Materials", ref: "SAIF-330914", emirate: "Sharjah", tier: 2, enquiries: 27, quoted: 141_050, responseMs: 5_400_000, tone: "default" },
