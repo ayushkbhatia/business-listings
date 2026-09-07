@@ -533,7 +533,13 @@ test.describe("criterion 7 — renaming a trade on the taxonomy screen", () => {
     */
     await page.goto("/admin/categories");
     await page.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
-    await page.getByRole("textbox", { name: "Reason" }).fill("Checking what the refusal says.");
+    /*
+       Scoped to the rename panel. Board 4e added a second audited write to
+       this screen — the default template — and its own reason field carries
+       the same label, as every audited write on every screen does.
+    */
+    const panel = page.getByRole("region", { name: "Move a trade's address" });
+    await panel.getByRole("textbox", { name: "Reason" }).fill("Checking what the refusal says.");
     await page.getByRole("button", { name: "Remove the trade" }).click();
 
     await expect(

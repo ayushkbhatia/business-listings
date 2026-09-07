@@ -39,7 +39,12 @@ test.describe("board 11d — the import mapper", () => {
     // An import is the fastest way to hit a cap, so the sentence is on the
     // upload step rather than after nine columns have been mapped.
     await page.goto("/dashboard/products/import");
-    await expect(page.getByText(/product limit|Room for|at the/i).first()).toBeVisible();
+    // Three states, three sentences — `import.room`, `import.room_none` and
+    // `import.room_unlimited`. The seller here is on a plan with no cap, and
+    // the regex only had the other two.
+    await expect(
+      page.getByText(/does not cap how many|Room for|at the \d+-product limit/i).first(),
+    ).toBeVisible();
   });
 
   test("gives every column in the file a row, in file order", async ({ page }) => {

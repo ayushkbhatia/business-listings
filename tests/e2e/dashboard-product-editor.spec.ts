@@ -25,7 +25,12 @@ async function openFirstProduct(page: import("@playwright/test").Page) {
 /** A product with no spec values at all — the cold-start case. */
 async function openEmptyProduct(page: import("@playwright/test").Page) {
   await page.goto("/dashboard/products");
-  const row = page.locator("tbody tr").filter({ hasText: "None filled" }).first();
+  // `0 / N` in the SPECS column. Board 3f replaced "None filled" with the
+  // ratio and the consequence beneath it; the ratio is what says "no values".
+  const row = page
+    .locator("tbody tr")
+    .filter({ has: page.getByText(/^0 \/ \d+$/) })
+    .first();
   await row.locator("th a").click();
   await page.waitForURL(/\/dashboard\/products\/\w+/);
 }

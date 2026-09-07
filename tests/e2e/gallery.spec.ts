@@ -37,7 +37,6 @@ const KNOWN_CONTRAST_PAIRS: readonly string[] = [
   "#7e7b77 on #ffffff @4.5:1", // disabled control text on --card
   "#8a6d12 on #f7efdd @4.5:1", // --warn-ink on --warn-wash
   "#8a857a on #211f1b @4.5:1", // --text-on-ink-muted on --ink
-  "#a29d92 on #e7ece7 @4.5:1", // faint on --ok-surface
   "#a29d92 on #f3f4f2 @4.5:1", // faint on --info-surface
   "#a29d92 on #f6f4ee @4.5:1", // faint on --paper-sunk
   "#a29d92 on #faf9f6 @4.5:1", // faint on --paper

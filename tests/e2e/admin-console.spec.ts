@@ -171,8 +171,13 @@ test.describe("boards 4b, 4d and 4e", () => {
 
   test("the spec library shows the version and who has cloned it", async ({ page }) => {
     await page.goto("/admin/spec-library");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Spec templates");
-    await expect(page.getByRole("cell", { name: /^v\d+$/ }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Spec library");
+    /*
+       `v1 · LIVE` on screen — board 4e put the state in the cell beside the
+       number. Case-insensitive because the shouting is `text-transform`, so
+       the accessible name is the untransformed "v1 · Live".
+    */
+    await expect(page.getByRole("cell", { name: /^v\d+ · live/i }).first()).toBeVisible();
   });
 
   test("all three are axe clean at compact density", async ({ page }) => {

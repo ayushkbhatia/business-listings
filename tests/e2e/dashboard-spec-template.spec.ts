@@ -175,6 +175,13 @@ test.describe("board 3h — accessibility", () => {
   test("passes axe on revision history", async ({ page }) => {
     await page.goto(TEMPLATE);
     await page.getByRole("link", { name: "Revision history" }).click();
+    /*
+       Wait for the new document, as the sibling assertion above does. Without
+       it axe races the navigation and reports `document-title` against the
+       page it caught mid-flight — the route exports a title, so the violation
+       was the timing, not the page. It lost that race only on CI.
+    */
+    await expect(page.getByRole("heading", { level: 1, name: /Revision history/ })).toBeVisible();
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
       .disableRules(["color-contrast"])

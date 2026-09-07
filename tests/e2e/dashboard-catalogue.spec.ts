@@ -24,7 +24,13 @@ test.describe("the header tells the truth about the catalogue", () => {
     */
     await page.goto("/dashboard/products");
 
-    const header = await page.locator("header").innerText();
+    /*
+       `getByRole("banner")`, not `locator("header")`. The bulk actions
+       put three <dialog>s on this page and each carries its own <header>,
+       so the tag matches four elements and only the first is the page
+       header this test is reading.
+    */
+    const header = await page.getByRole("banner").innerText();
     const total = Number(/([\d,]+)\s+products/.exec(header)?.[1]?.replace(/,/g, ""));
     const live = Number(/([\d,]+)\s+LIVE/i.exec(header)?.[1]?.replace(/,/g, ""));
     const drafts = Number(/([\d,]+)\s+DRAFTS?/i.exec(header)?.[1]?.replace(/,/g, ""));
