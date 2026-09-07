@@ -158,7 +158,27 @@ export function isClosedAllWeek(hours: WeekHours): boolean {
  * without a database, and so a missing or malformed row degrades to the last
  * known-good estimates rather than taking a storefront's hours down.
  */
-export type RamadanCalendar = Record<number, { from: string; to: string }>;
+export interface RamadanYear {
+  from: string;
+  to: string;
+  /**
+   * True once the UAE has announced the dates.
+   *
+   * Board 3d's first correction. Ramadan begins on a moon sighting confirmed a
+   * day or two beforehand, so a window more than a week out is an astronomical
+   * estimate and the card says `ESTIMATED` rather than printing it as fact.
+   * Optional, and absent means estimated: every entry in the compiled table
+   * below is one, and a platform row that omits the flag is making no claim.
+   *
+   * It describes the **dates**, which are ours. Whether the seller has
+   * confirmed their **hours** is `Location.ramadanConfirmedYear`, and the two
+   * are deliberately not one field — the board collapsed them and contradicted
+   * board 3a's card by doing it.
+   */
+  confirmed?: boolean;
+}
+
+export type RamadanCalendar = Record<number, RamadanYear>;
 
 const RAMADAN: RamadanCalendar = {
   2026: { from: "2026-02-17", to: "2026-03-19" },
@@ -181,6 +201,28 @@ export const FALLBACK_RAMADAN: RamadanCalendar = RAMADAN;
  */
 export const RAMADAN_SETTING_KEY = "ramadan_dates";
 
+/**
+ * What we last told sellers the window was, per year, and when.
+ *
+ * The baseline `lib/trade/ramadan-shift-job.ts` compares against. Board 3d
+ * promises "we shift them and email you when they move", and "moved" only means
+ * anything relative to something previously published — nothing stored the
+ * previous value, so the job had nothing to detect a change against.
+ *
+ * A settings row rather than a column per business: the dates are the
+ * platform's, one window serves all 41,000 sellers, and a per-business copy of
+ * a platform fact is 41,000 rows to keep in step.
+ */
+export const RAMADAN_NOTIFIED_KEY = "ramadan_dates_notified";
+
+export interface RamadanNotified {
+  /** ISO dates, as published. */
+  from: string;
+  to: string;
+  /** When this became the published window. ISO instant. */
+  at: string;
+}
+
 export interface RamadanWindow {
   year: number;
   from: Date;
@@ -189,6 +231,8 @@ export interface RamadanWindow {
   active: boolean;
   /** The estimate is a day either side; the UI says so rather than implying precision. */
   approximate: true;
+  /** False until the announcement. Drives `ESTIMATED` / `CONFIRMED` on the card. */
+  confirmed: boolean;
 }
 
 export function ramadanFor(
@@ -207,6 +251,7 @@ export function ramadanFor(
     to,
     active: now >= from && now <= to,
     approximate: true,
+    confirmed: entry.confirmed === true,
   };
 }
 

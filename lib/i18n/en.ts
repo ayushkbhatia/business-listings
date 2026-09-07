@@ -3700,6 +3700,11 @@ export const en = {
      changed on my listing" means their branches as much as their description. */
   "listing.field.locations": "Locations",
   "listing.field.coverage": "Delivery coverage",
+  /* Board 3d writes this one. `ListingRail` resolves the key from the row's
+     own `field`, and `t()` throws on a missing key in development — so a
+     revision written with no label here takes board 3b's rail down rather than
+     rendering a blank. */
+  "listing.field.hours": "Opening hours",
 
   // ── Locations, board 3c ───────────────────────────────────────────────────
   "locations.title": "Locations",
@@ -3888,6 +3893,122 @@ export const en = {
   "hours.problem.bad_time": "\"{value}\" is not a time. Use 24-hour times like 08:00 and 17:30.",
   "hours.problem.backwards": "{open} to {close} closes before it opens. If you trade past midnight, enter two shifts.",
   "hours.problem.overlap": "{first} and {second} overlap. Shifts cannot run over each other.",
+
+  /* ── Board 3d · hours, holidays and Ramadan ─────────────────────────────── */
+
+  /*
+     Correction 5: a branch picker, a copy button and a Save in one 58px header
+     with nothing saying which branch was being written.
+  */
+  "hours.scope": "Hours below apply to this branch",
+  "hours.branch_picker": "Which branch",
+  "hours.hidden_branch": "{branch} — hidden",
+  "hours.standard_week": "Standard week",
+  "hours.timezone": "Gulf Standard Time · UTC+4",
+  "hours.jumuah_note": "Jumu'ah break {from} – {to}",
+
+  "hours.copy_to": {
+    one: "Copy to {count} other branch…",
+    other: "Copy to {count} other branches…",
+  },
+  "hours.copy_title": {
+    one: "Copy these hours to {count} branch?",
+    other: "Copy these hours to {count} branches?",
+  },
+  "hours.copy_body": {
+    one: "{count} branch keeps different hours today. Copying replaces them.",
+    other: "{count} branches keep different hours today. Copying replaces them.",
+  },
+  "hours.copy_none": "Every other branch already keeps these hours. Nothing would change.",
+  "hours.copy_unchanged": "Already the same",
+  "hours.copy_confirm": "Copy",
+  "hours.copy_ramadan_note": "Ramadan hours travel too, but the confirmation does not — each branch is confirmed on its own.",
+  "hours.copied_to": {
+    one: "Copied to {count} branch.",
+    other: "Copied to {count} branches.",
+  },
+
+  /*
+     Correction 1. The dates are ours and the hours are theirs, and the board
+     collapsed both into one `AUTO-APPLIED` label — while board 3a's card told
+     the same seller their 2027 hours were unconfirmed and linked here.
+  */
+  "hours.ramadan_estimated": "Estimated · {from} – {to}",
+  "hours.ramadan_confirmed": "Confirmed · {from} – {to}",
+  "hours.ramadan_group_weekdays": "Mon – Thu",
+  "hours.ramadan_group_weekend": "Fri – Sat",
+  "hours.ramadan_carried": "These times carried over from {year}.",
+  "hours.ramadan_carried_fix": "Confirm them and buyers stop seeing last year's Ramadan hours.",
+  "hours.ramadan_confirm": "Confirm",
+  "hours.ramadan_confirmed_note": "Confirmed for {year}. Nothing else to do.",
+  "hours.ramadan_dates_promise": "The dates are ours to get right: they follow the official UAE announcement, usually confirmed a day or two before. We shift them and email you when they move.",
+  "hours.ramadan_off": "The standard week runs through Ramadan.",
+
+  "hours.holidays_title": "Public holidays {years}",
+  "hours.holidays_add": "Add date",
+  "hours.holiday_closed": "Closed",
+  "hours.holiday_half": "Half day",
+  "hours.holiday_half_hours": "{from} – {to}",
+  "hours.holiday_also_ramadan": "{date} also Ramadan · closed wins",
+  /* Correction 2, stated once in the footer and again on the row where the
+     collision actually is. */
+  "hours.precedence": "A holiday closure beats Ramadan hours, which beat the standard week. A closure you schedule beats all three.",
+  "hours.holiday_ownership": "Official UAE dates are kept current for you. Dates you add are yours to maintain.",
+  "hours.holiday_yours": "Yours",
+  "hours.holiday_remove": "Remove {name}",
+  "hours.holiday_estimated": "Estimated",
+
+  "hours.add_date_title": "Add a date",
+  "hours.add_date_name": "What is it",
+  "hours.add_date_name_hint": "Annual stock-take, warehouse move",
+  "hours.add_date_from": "First day",
+  "hours.add_date_to": "Last day",
+  "hours.add_date_half": "Open for part of the day",
+  "hours.add_date_save": "Add date",
+
+  "hours.closure_eyebrow": "Temporary closure",
+  "hours.closure_body": "Shutting for stock-take, or shifting to a new warehouse? Set a date range and buyers see a notice instead of a wrong \"open now\".",
+  "hours.closure_schedule": "Schedule a closure",
+  "hours.closure_reason": "Why",
+  "hours.closure_reason_hint": "Buyers read this, so say when you are back.",
+  "hours.closure_active": "Closed {from} – {until}. Buyers see this instead of your hours.",
+  "hours.closure_clear": "End this closure",
+  "hours.closure_note": "A closure shows a notice. It does not stop RFQs — hide the branch on Locations to do that.",
+
+  "hours.why_title": "Why this matters more than it looks",
+  "hours.why_body": "\"Open now\" is the third most-used filter on the site. Listings with wrong hours get complaints, and complaints affect your response score.",
+
+  "hours.cancel": "Cancel",
+  "hours.not_found": "That branch is no longer on your account.",
+  "hours.not_found_fix": "Reload the page to see what is there now.",
+  "hours.no_reason": "This date needs a reason.",
+  "hours.no_reason_fix": "Say what it is — buyers read it on your branches page.",
+  "hours.backwards": "That range ends before it starts.",
+  "hours.backwards_fix": "Set the last day on or after the first.",
+  "hours.half_day_needs_hours": "A half day needs both times.",
+  "hours.half_day_needs_hours_fix": "Give the opening and closing time, or leave it as a full closure.",
+  "hours.read_only": "You are viewing this account. Hours are set by the supplier.",
+
+  /*
+     Service-layer refusals, which were raw English literals until board 3d.
+
+     `check:tokens` reads JSX and metadata titles, so a string returned from a
+     module under `lib/` reaches a seller's screen without passing any scan —
+     six of them had. Non-negotiable 5 is that every user-visible string goes
+     through `t()` even while English is the only locale, and a refusal a seller
+     reads is as user-visible as a label.
+  */
+  "listing.not_your_listing": "You can only edit your own listing.",
+  "listing.branch_not_found": "That branch cannot be found.",
+  "listing.request_not_found": "That request cannot be found.",
+  "listing.needs_display_name": "Give your listing a display name buyers will recognise.",
+  "listing.bad_established_year": "Enter the year the business was established, as four digits.",
+  "listing.bad_team_size": "Choose a team size from the list.",
+  "listing.needs_a_value": "Enter the new value before submitting it.",
+  "listing.unchanged": "That is what it says now. Nothing has been submitted.",
+  "listing.already_in_category": "Your listing is already under that category.",
+  "listing.category_already_queued": "That category is already waiting for review.",
+  "listing.description_too_long": "That description is {length} characters. The limit is {limit}.",
 
   // ── Verification, board 3e ────────────────────────────────────────────────
   "verify_listing.title": "Verification",

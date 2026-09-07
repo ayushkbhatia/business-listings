@@ -19,26 +19,23 @@
  */
 
 export type NotificationChannel = "whatsapp" | "sms" | "email" | "in_app";
-export type NotificationEvent =
-  | "enquiry_received"
-  | "enquiry_unanswered"
-  | "enquiry_escalated"
-  | "quote_received"
-  | "quote_revised"
-  | "quote_accepted"
-  | "quote_expiring"
-  | "review_posted"
-  | "review_requested"
-  | "document_expiring"
-  /// Criterion 8. A buyer whose search found nothing, told when it would not.
-  | "product_alert_matched"
-  /// A subscription charged for another period. The first event a cron sends.
-  | "subscription_renewed"
-  /// Board 8a's one nudge, 72 hours after go-live. Exactly one, ever.
-  | "setup_nudge"
-  /// Board 11b's follow-up, to a buyer who has gone quiet after a quote.
-  | "message_received"
-  | "weekly_digest";
+
+/**
+ * The events, from the schema rather than retyped beside it.
+ *
+ * This was a hand-written union listing the same fifteen values as the Prisma
+ * enum, and the two drifted the first time one of them gained a value: board
+ * 3d added `ramadan_dates_moved` to the schema, `params.ts` demanded the entry
+ * because it is keyed to the generated type, and this file went on refusing to
+ * route it. A second list of the same thing is a second thing to keep in step,
+ * and this one had no test that would have noticed.
+ *
+ * A type import, so nothing at runtime comes with it — `lib/db/generated/enums`
+ * is types and a frozen object, not a client, which is why the pure modules on
+ * this side of the boundary can read it.
+ */
+export type { NotificationEvent } from "@/lib/db/generated/enums";
+import type { NotificationEvent } from "@/lib/db/generated/enums";
 
 /** The channels quiet hours actually silence. */
 export const INTERRUPTING_CHANNELS: readonly NotificationChannel[] = ["whatsapp", "sms"];

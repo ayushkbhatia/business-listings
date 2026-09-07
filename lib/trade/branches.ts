@@ -2,6 +2,7 @@ import { openNow, type OpenState } from "./open-now";
 import { nextRamadan, type RamadanCalendar } from "./hours";
 import { haversineKm } from "@/lib/geo/distance";
 import { measurable } from "@/lib/locations/branch";
+import type { BranchSchedule } from "./closures";
 import type { Emirate, GeocodePrecision, LocationType } from "@/lib/db/generated/enums";
 
 /**
@@ -93,6 +94,15 @@ export function branchStatus(
   now: Date,
   /** The platform's Ramadan calendar. Omitted, the compiled estimates apply. */
   calendar?: RamadanCalendar,
+  /**
+   * The national calendar and this branch's own dates — board 3d criterion 6.
+   *
+   * The temporary closure is handled above and always has been, which is the
+   * top rung of the order. These are the second: without them a branch shut for
+   * Eid reports "Open until 18:00" on the page a buyer checks before driving
+   * to it.
+   */
+  dates?: Pick<BranchSchedule, "holidays" | "closures">,
 ): BranchStatus {
   if (!isStocking(location.type)) return { kind: "type", type: location.type };
   const closure = activeClosure(location, now);
@@ -104,6 +114,7 @@ export function branchStatus(
     location.ramadanHours as never,
     now,
     calendar,
+    dates,
   );
   if (state.state === "open") return { kind: "open", until: state.until };
   if (state.state === "closed") {

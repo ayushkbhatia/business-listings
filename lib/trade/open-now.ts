@@ -8,6 +8,7 @@ import {
   type Shift,
   type WeekHours,
 } from "./hours";
+import { rulingFor, type BranchSchedule, type DayRuling } from "./closures";
 
 /**
  * Whether a counter is open at this moment, in the only timezone that matters.
@@ -62,7 +63,21 @@ export function dubaiNow(now = new Date()): { day: Day; minutes: number } {
 
 export type OpenState =
   | { state: "open"; until: string; isRamadan: boolean }
-  | { state: "closed"; opensAt?: string; opensDay?: Day; isRamadan: boolean }
+  | {
+      state: "closed";
+      opensAt?: string;
+      opensDay?: Day;
+      isRamadan: boolean;
+      /**
+       * Why, when it is not simply the standard week.
+       *
+       * Board 3d criterion 6 makes the order real; this is what lets a surface
+       * *say* which rung applied. `1f` prints "Closed for Eid Al Fitr" rather
+       * than "Closed", which is the difference between a buyer waiting until
+       * tomorrow and a buyer ringing to ask.
+       */
+      because?: { kind: "temporary_closure" | "holiday"; name: string };
+    }
   | { state: "unknown" };
 
 function shiftsFor(week: WeekHours, day: Day): Shift[] {
@@ -74,29 +89,9 @@ function hasAnyHours(week: WeekHours): boolean {
   return DAYS.some((day) => shiftsFor(week, day).length > 0);
 }
 
-/**
- * The next opening time on or after `day`, searching a week forward.
- *
- * A week rather than "tomorrow", because a supplier closed Friday and Saturday
- * needs Sunday, and one that trades a single day a week still has an answer.
- */
-function nextOpening(
-  week: WeekHours,
-  day: Day,
-  minutes: number,
-): { opensAt: string; opensDay: Day } | null {
-  const start = DAYS.indexOf(day);
-
-  for (let ahead = 0; ahead < 7; ahead += 1) {
-    const candidate = DAYS[(start + ahead) % 7]!;
-    for (const shift of shiftsFor(week, candidate)) {
-      // Today only counts if the shift has not already started.
-      if (ahead === 0 && minutesOf(shift.open) <= minutes) continue;
-      return { opensAt: shift.open, opensDay: candidate };
-    }
-  }
-  return null;
-}
+/** How far ahead "opens 08:00" is willing to look. */
+const LOOKAHEAD_DAYS = 7;
+const DAY_MS = 86_400_000;
 
 /**
  * Open, closed, or unknown — with the time that matters attached.
@@ -105,6 +100,19 @@ function nextOpening(
  * "Open until 18:00" rather than only "Open". `opensAt` is the mirror: "Closed ·
  * opens 08:00". Both are the strings the seller typed, not reformatted, because
  * a supplier who wrote 08:00 means 08:00.
+ *
+ * ## The fifth argument
+ *
+ * Board 3d criterion 6 puts three more things above the standard week —
+ * a temporary closure, a holiday, and the Ramadan block — in that order.
+ * `rulingFor` owns the order; this function asks it, once for today and again
+ * for each day it looks ahead to.
+ *
+ * Optional, so the eight existing callers keep the behaviour they had until
+ * each is given the rows to pass. That is a real state and not a shim: a
+ * caller that has not loaded a branch's closures genuinely does not know about
+ * them, and answering as though there were none is better than refusing to
+ * answer at all. Every caller that renders `open now` to a buyer passes them.
  */
 export function openNow(
   hours: WeekHours | null | undefined,
@@ -112,6 +120,8 @@ export function openNow(
   now = new Date(),
   /** The platform's calendar. Omitted, the compiled estimates apply. */
   calendar?: RamadanCalendar,
+  /** The three rungs above the standard week. Omitted, only Ramadan applies. */
+  overrides?: Pick<BranchSchedule, "temporaryClosure" | "holidays" | "closures">,
 ): OpenState {
   if (!hours || !hasAnyHours(hours)) return { state: "unknown" };
 
@@ -124,9 +134,11 @@ export function openNow(
   const { hours: week, isRamadan } = hoursInEffect(hours, ramadan ?? null, now, calendar);
   if (!hasAnyHours(week)) return { state: "unknown" };
 
+  const schedule: BranchSchedule = { hours, ramadanHours: ramadan ?? null, calendar, ...overrides };
+  const today = rulingFor(now, schedule);
   const { day, minutes } = dubaiNow(now);
 
-  for (const shift of shiftsFor(week, day)) {
+  for (const shift of today.shifts) {
     const open = minutesOf(shift.open);
     const close = minutesOf(shift.close);
     /*
@@ -142,10 +154,45 @@ export function openNow(
     if (inside) return { state: "open", until: shift.close, isRamadan };
   }
 
-  const next = nextOpening(week, day, minutes);
+  const because = reasonOf(today);
+  const next = nextOpeningWith(now, minutes, day, schedule);
   return next
-    ? { state: "closed", opensAt: next.opensAt, opensDay: next.opensDay, isRamadan }
-    : { state: "closed", isRamadan };
+    ? { state: "closed", opensAt: next.opensAt, opensDay: next.opensDay, isRamadan, ...(because ? { because } : {}) }
+    : { state: "closed", isRamadan, ...(because ? { because } : {}) };
+}
+
+function reasonOf(ruling: DayRuling): { kind: "temporary_closure" | "holiday"; name: string } | null {
+  if (ruling.kind === "temporary_closure") return { kind: "temporary_closure", name: ruling.reason };
+  if (ruling.kind === "holiday") return { kind: "holiday", name: ruling.name };
+  return null;
+}
+
+/**
+ * The next opening, skipping days something above the week has closed.
+ *
+ * `nextOpening` below reads the week alone, which was right until holidays
+ * existed and is now the difference between "opens 08:00 tomorrow" and a buyer
+ * arriving on the first morning of Eid. Each candidate day is ruled on in turn,
+ * so a four-day closure is stepped over rather than announced.
+ */
+function nextOpeningWith(
+  now: Date,
+  minutes: number,
+  day: Day,
+  schedule: BranchSchedule,
+): { opensAt: string; opensDay: Day } | null {
+  const start = DAYS.indexOf(day);
+
+  for (let ahead = 0; ahead < LOOKAHEAD_DAYS; ahead += 1) {
+    const candidate = DAYS[(start + ahead) % 7]!;
+    const ruling = rulingFor(new Date(now.getTime() + ahead * DAY_MS), schedule);
+    for (const shift of ruling.shifts) {
+      // Today only counts if the shift has not already started.
+      if (ahead === 0 && minutesOf(shift.open) <= minutes) continue;
+      return { opensAt: shift.open, opensDay: candidate };
+    }
+  }
+  return null;
 }
 
 /**

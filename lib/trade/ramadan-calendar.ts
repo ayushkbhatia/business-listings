@@ -56,11 +56,21 @@ export function parseRamadanCalendar(value: unknown): RamadanCalendar {
     if (!Number.isInteger(year) || year < 2000 || year > 2200) continue;
     if (!entry || typeof entry !== "object") continue;
 
-    const { from, to } = entry as { from?: unknown; to?: unknown };
+    const { from, to, confirmed } = entry as {
+      from?: unknown;
+      to?: unknown;
+      confirmed?: unknown;
+    };
     if (typeof from !== "string" || typeof to !== "string") continue;
     if (!isDate(from) || !isDate(to) || to < from) continue;
 
-    out[year] = { from, to };
+    /*
+       `confirmed` is optional and only `true` counts. A row that omits it, or
+       carries something that is not a boolean, is making no claim — and the
+       claim it would otherwise make is that the UAE has announced a date it has
+       not. `ESTIMATED` is the honest label for anything short of that.
+    */
+    out[year] = { from, to, ...(confirmed === true ? { confirmed: true } : {}) };
   }
   return out;
 }
