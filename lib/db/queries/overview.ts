@@ -76,7 +76,8 @@ const PLAN_SELECT = {
   enquiriesPerMonth: true,
   productLimit: true,
   locationLimit: true,
-  photoLimit: true, storageMb: true,
+  photoLimit: true,
+  categoryLimit: true, storageMb: true,
   teamSeats: true,
   rankingMultiplier: true,
   customDomain: true,
@@ -230,6 +231,13 @@ export function usageOf(overview: Overview, what: Metered) {
     locations: overview.usage.locations,
     photos: overview.usage.photos,
     seats: overview.usage.seats,
+    /*
+       Additional categories, and the overview does not carry them either. The
+       listing editor is the only screen that meters them, and it counts the
+       join itself. Same reasoning as storage below: a zero here would be a
+       number that is not a query, and nothing reads this today.
+    */
+    categories: 0,
     /*
        Megabytes, and the overview does not carry them. The media library is
        the only screen that meters storage and it queries the sum itself; a

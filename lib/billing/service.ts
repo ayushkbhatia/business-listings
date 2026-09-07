@@ -45,7 +45,8 @@ import { recordMovement } from "./mrr";
 
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
-  locationLimit: true, photoLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
+  locationLimit: true, photoLimit: true,
+  categoryLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
   customDomain: true, sortOrder: true,
   // What a year costs, for pricing a period that is not a month. Not an
   // entitlement, so `snapshotOf` ignores it — see lib/plan/entitlements.ts.

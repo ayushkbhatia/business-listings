@@ -145,5 +145,8 @@ function labelFor(row: QueueRow): string {
   if (row.kind === "document") return t("admin.queue.kind.document");
   if (row.what === "trade_name") return t("admin.queue.field.trade_name");
   if (row.what === "primary_category") return t("admin.queue.field.primary_category");
+  // An addition, and the label says so: the listing keeps the categories it has
+  // while this one is checked.
+  if (row.what === "additional_category") return t("admin.queue.field.additional_category");
   return t("admin.queue.field.licence");
 }

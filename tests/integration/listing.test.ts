@@ -90,8 +90,24 @@ afterAll(async () => {
 });
 
 describe("criterion 8 — the split is three fields and no more", () => {
-  it("moderates exactly trade name, category and licence", () => {
-    expect([...MODERATED]).toEqual(["trade_name", "primary_category", "licence"]);
+  it("moderates exactly the fields that set the badge or the ranking", () => {
+    /*
+       Four since board 3b, and the fourth was a product decision rather than a
+       drift: `additional_category` queues because category membership is the
+       join the enquiry fan-out matches on and the facet buyers filter by, so
+       adding one changes which demand a listing receives. It is also the only
+       self-serve route a seller has into a market their licence may not cover.
+
+       The list stays asserted in full rather than by length, because the way it
+       would go wrong is a fifth field added quietly — and moderating more
+       always feels safer in the moment.
+    */
+    expect([...MODERATED]).toEqual([
+      "trade_name",
+      "primary_category",
+      "licence",
+      "additional_category",
+    ]);
   });
 
   it("does not moderate anything a seller is the authority on", () => {

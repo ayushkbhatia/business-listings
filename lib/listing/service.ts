@@ -25,8 +25,23 @@ export { DESCRIPTION_LIMIT };
  * seller does appears is a dashboard they stop opening.
  */
 
-/** The three, and adding a fourth means changing an enum in the schema. */
-export const MODERATED = ["trade_name", "primary_category", "licence"] as const;
+/**
+ * The four, and adding a fifth means changing an enum in the schema.
+ *
+ * `additional_category` is board 3b Q1's answer. It queues for the same reason
+ * the primary category does — category membership is the join the enquiry
+ * fan-out matches on and the facet buyers filter by, so adding one changes
+ * which demand a listing receives and which area pages count it towards. It is
+ * also the only self-serve route a seller has into a market their licence may
+ * not cover, which is what `BusinessCategory.unverifiedActivityAt` was already
+ * flagging after the fact.
+ */
+export const MODERATED = [
+  "trade_name",
+  "primary_category",
+  "licence",
+  "additional_category",
+] as const;
 export type ModeratedField = (typeof MODERATED)[number];
 
 /**
@@ -217,22 +232,70 @@ export async function requestModeratedChange(
     select: { tradeName: true, primaryCategoryId: true, licenceNumber: true },
   });
 
+  /*
+     What it says now, so the queue can show the change rather than only the ask.
+
+     `additional_category` has no "now": it is an addition, not a replacement,
+     and the listing keeps every category it already has while this one is
+     checked. A null before-value is what says so on the moderator's screen —
+     the row reads "add Pipes & fittings", not "Bearings → Pipes & fittings".
+  */
   const before =
     field === "trade_name"
       ? business.tradeName
       : field === "primary_category"
         ? business.primaryCategoryId
-        : business.licenceNumber;
+        : field === "licence"
+          ? business.licenceNumber
+          : null;
 
-  if (before === value) {
+  if (before !== null && before === value) {
     return { ok: false, error: "That is what it says now. Nothing has been submitted." };
   }
 
+  /*
+     A category the listing already carries, asked for again.
+
+     Not an error the seller caused — the chip row shows what they have — but
+     the check is here rather than in the form because the form is not the
+     fence. Also refuses a second pending request for the same category, which
+     the supersede below would otherwise turn into a silent withdrawal of the
+     first.
+  */
+  if (field === "additional_category") {
+    const [held, already] = await Promise.all([
+      prisma.listingChangeRequest.findFirst({
+        where: { businessId, field, status: "pending", afterValue: value },
+        select: { id: true },
+      }),
+      prisma.businessCategory.findUnique({
+        where: { businessId_categoryId: { businessId, categoryId: value } },
+        select: { businessId: true },
+      }),
+    ]);
+    if (already) {
+      return { ok: false, error: "Your listing is already under that category." };
+    }
+    if (held) {
+      return { ok: false, error: "That category is already waiting for review." };
+    }
+  }
+
   const created = await prisma.$transaction(async (tx) => {
-    await tx.listingChangeRequest.updateMany({
-      where: { businessId, field, status: "pending" },
-      data: { status: "withdrawn" },
-    });
+    /*
+       One pending request per field — a seller who submits twice has changed
+       their mind, not asked twice.
+
+       Except for `additional_category`, where each request is a different
+       category and superseding would silently drop the first. Four chips can be
+       waiting at once; the check above is what stops the same one twice.
+    */
+    if (field !== "additional_category") {
+      await tx.listingChangeRequest.updateMany({
+        where: { businessId, field, status: "pending" },
+        data: { status: "withdrawn" },
+      });
+    }
 
     return tx.listingChangeRequest.create({
       data: { businessId, actorId: actor.id, field, beforeValue: before, afterValue: value },

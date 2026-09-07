@@ -1,16 +1,36 @@
-import { prisma } from "@/lib/db/client";
-import { pendingChanges } from "@/lib/listing/service";
+import { notFound } from "next/navigation";
+import { getListing } from "@/lib/db/queries/listing";
+import { unpickedPhotos } from "@/lib/listing/photos";
+import { mayEditListing } from "@/lib/auth/guards";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
-import { saveListingProfile, submitModeratedChange, withdrawModeratedChange } from "./actions";
-import { ListingForm } from "./ListingForm";
+import {
+  makeCover,
+  pickPhoto,
+  saveListingProfile,
+  unpickPhoto,
+  withdrawModeratedChange,
+} from "./actions";
+import { ListingWorkspace } from "./ListingWorkspace";
 
 /**
- * Board 3b — the listing profile, with both moderation states on one screen.
+ * Board 3b — the listing profile.
  *
- * Criterion 8 is what this page is for. A seller who has only ever seen the
- * moderated half assumes everything waits and stops editing, so the instant
- * half is above it and says so in a heading.
+ * The steady state of `2a`–`2c`. Onboarding asked for these fields once; this
+ * is where a seller changes them for the next several years, and that makes it
+ * a different problem. The question it answers on every edit is **did that go
+ * live, or is someone looking at it** — and the screen it replaces answered
+ * with one button and one header count for two different behaviours.
+ *
+ * Three things the seller controls: the prose and facts buyers read, which
+ * categories the listing appears under, and which photographs the storefront
+ * leads with. Two they do not: the trade name, which is licence-locked, and the
+ * badge, which is `3e`'s.
+ *
+ * There is no certificate upload here. `3e` owns documents, with the visibility
+ * and expiry state that deliberately does not claim we checked them; two upload
+ * points on one collection is how the same ISO 9001 PDF ends up on file twice
+ * with two expiry dates. The rail links there instead — criterion 6.
  */
 export const metadata = { title: t("listing.title") };
 export const dynamic = "force-dynamic";
@@ -18,32 +38,20 @@ export const dynamic = "force-dynamic";
 export default async function ListingPage() {
   const seat = await requireSellerSeat();
 
-  const [business, categories, badges, pending] = await Promise.all([
-    prisma.business.findUniqueOrThrow({
-      where: { id: seat.businessId },
-      select: {
-        displayName: true,
-        description: true,
-        establishedYear: true,
-        teamSize: true,
-        languages: true,
-        tradeName: true,
-        licenceNumber: true,
-        primaryCategoryId: true,
-        primaryCategory: { select: { name: true } },
-      },
-    }),
-    // Leaf categories only. A supplier sells gate valves, not "valves and
-    // fittings", and offering the parent as a choice is how a listing ends up
-    // filed one level too shallow to be found on a filter.
-    prisma.category.findMany({
-      where: { children: { none: {} } },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
+  const [view, badges, library] = await Promise.all([
+    getListing(seat.businessId),
     getNavBadges(seat.businessId),
-    pendingChanges(seat.businessId),
+    unpickedPhotos(seat.businessId),
   ]);
+  if (!view) notFound();
+
+  /*
+     Criterion 11. A staff seat looking through board 12f's view-as holds no
+     seller capability, so every action here would be refused at the service
+     layer anyway — this renders the form disabled and says who can edit rather
+     than letting somebody discover it by pressing Save.
+  */
+  const editable = mayEditListing(seat.actor);
 
   return (
     <SellerPage
@@ -53,26 +61,20 @@ export default async function ListingPage() {
       eyebrow={t("listing.eyebrow")}
       title={t("listing.title")}
     >
-      <ListingForm
-        displayName={business.displayName}
-        description={business.description ?? ""}
-        establishedYear={business.establishedYear}
-        teamSize={business.teamSize}
-        languages={business.languages}
-        tradeName={business.tradeName}
-        licenceNumber={business.licenceNumber}
-        categoryName={business.primaryCategory.name}
-        primaryCategoryId={business.primaryCategoryId}
-        categories={categories.map((c) => ({ value: c.id, label: c.name }))}
-        pending={pending.map((p) => ({
-          id: p.id,
-          field: p.field,
-          afterValue: p.afterValue,
-          createdAt: p.createdAt.toISOString(),
-        }))}
+      <ListingWorkspace
+        view={{
+          ...view,
+          held: view.held.map((row) => ({ ...row, submittedAt: row.submittedAt.toISOString() })),
+          revisions: view.revisions.map((row) => ({ ...row, at: row.at.toISOString() })),
+          lastSavedAt: view.lastSavedAt?.toISOString() ?? null,
+        }}
+        library={library}
+        editable={editable}
         saveAction={saveListingProfile}
-        submitAction={submitModeratedChange}
         withdrawAction={withdrawModeratedChange}
+        unpickAction={unpickPhoto}
+        pickAction={pickPhoto}
+        coverAction={makeCover}
       />
     </SellerPage>
   );

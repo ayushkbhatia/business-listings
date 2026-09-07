@@ -195,7 +195,11 @@ export async function approveChange(input: DecideInput): Promise<DecisionResult>
       ? request.business.tradeName
       : request.field === "primary_category"
         ? request.business.primaryCategoryId
-        : request.business.licenceNumber;
+        : request.field === "licence"
+          ? request.business.licenceNumber
+          // An addition has no current value to be stale against. Board 3b: the
+          // listing keeps its existing categories while this one is checked.
+          : null;
 
   if (request.beforeValue !== null && request.beforeValue !== current) {
     return {
@@ -233,6 +237,43 @@ export async function approveChange(input: DecideInput): Promise<DecisionResult>
         tx,
       },
       async () => {
+        /*
+           An additional category is a row on the join, not a column on the
+           business — the one moderated field that writes somewhere else.
+
+           `createMany` with `skipDuplicates` rather than `create`: the seller
+           may have been granted the same category by another route between the
+           ask and the decision, and a moderator's approval failing on a unique
+           constraint would leave a queue row nobody can clear.
+
+           `unverifiedActivityAt` is deliberately not set. That flag means "the
+           licence's stated activity did not cover this and nobody has looked" —
+           board 2c's after-the-fact check — and somebody has just looked. A
+           category cleared by a moderator arrives already checked.
+        */
+        if (field === "additional_category") {
+          await tx.businessCategory.createMany({
+            data: [{ businessId: request.businessId, categoryId: request.afterValue }],
+            skipDuplicates: true,
+          });
+
+          await tx.listingChangeRequest.update({
+            where: { id: request.id },
+            data: {
+              status: "approved",
+              decisionReason: input.reason,
+              decidedById: input.actor.id,
+              decidedAt: new Date(),
+            },
+          });
+
+          return {
+            result: true,
+            before: { additionalCategory: null },
+            after: { additionalCategory: request.afterValue },
+          };
+        }
+
         const data =
           field === "trade_name"
             ? {

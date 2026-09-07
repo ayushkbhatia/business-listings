@@ -27,7 +27,8 @@ import { effectiveCaps, snapshotOf, type PlanCaps } from "@/lib/plan/entitlement
 
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
-  locationLimit: true, photoLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
+  locationLimit: true, photoLimit: true,
+  categoryLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
   customDomain: true, sortOrder: true,
 } as const;
 
@@ -43,6 +44,7 @@ function toCaps(row: {
   teamSeats: number;
   rankingMultiplier: unknown;
   customDomain: boolean;
+  categoryLimit: number | null;
   sortOrder: number;
 }): PlanCaps {
   return {

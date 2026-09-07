@@ -41,6 +41,11 @@ describe("criterion 1 — every figure the page prints exists on the row", () =>
           // the page reads it to decide whether a plan can be sold by the year
           // at all, and null means it cannot.
           "annualMonthsCharged",
+          // Board 3b folded the category cap into `PlanCaps` with the other
+          // limits. It had lived on `Plan` since handoff 1 and only board 2c
+          // read it, directly — so the editor would have been the second place
+          // one limit was interpreted.
+          "categoryLimit",
           "customDomain",
           "enquiriesPerMonth",
           "id",

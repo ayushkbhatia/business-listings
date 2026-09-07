@@ -88,6 +88,7 @@ model User {
   reviewRequests          ReviewRequest[]
   importRuns              ImportRun[]
   changeRequests          ListingChangeRequest[]   @relation("ChangeRequestActor")
+  listingRevisions        ListingRevision[]        @relation("ListingRevisionActor")
   /// Board 6b: who last audited a curated list, and every audit they signed.
   curatedListsEdited      CuratedList[]            @relation("CuratedListEditor")
   curatedAudits           CuratedListAudit[]       @relation("CuratedListAuditor")
@@ -801,6 +802,7 @@ model Business {
   curatedEntries         CuratedListMember[]
   curatedDrift           CuratedListDrift[]
   claimSubmissions       ClaimSubmission[]
+  listingRevisions       ListingRevision[]
   setupBaseline          SetupBaseline?
   licenceImportRun       LicenceImportRun?        @relation(fields: [licenceImportRunId], references: [id], onDelete: SetNull)
   mergedInto             Business?                @relation("BusinessMergedInto", fields: [mergedIntoId], references: [id], onDelete: SetNull)
@@ -1116,6 +1118,19 @@ enum MediaKind {
   /// tidiness. Do not reuse it for anything else; a kind that once meant
   /// evidence in a private bucket is not a kind to hand new content.
   visit
+  /// Held in the library and placed on nothing. Board 3b's unpick.
+  ///
+  /// Every other kind names a surface, which made "in the library but not on
+  /// the storefront" a state the model could not hold: `lib/media/references.ts`
+  /// counts any non-product file as a storefront reference, so a photograph a
+  /// seller removed from their listing had nowhere to go that did not either
+  /// keep it on the page or claim it belonged to a product.
+  ///
+  /// Removing a photograph on `/dashboard/listing` moves it here. The file, its
+  /// alt text, its folder and its dimensions are untouched — board 3b
+  /// criterion 7: unpicking is not deleting, and deleting is `3i`'s action with
+  /// `3i`'s blast-radius warning in front of it.
+  library
 
   @@map("media_kind")
 }
@@ -1203,6 +1218,45 @@ model Media {
   @@index([businessId, kind, sortOrder])
   @@index([folderId])
   @@map("media")
+}
+
+/// A seller edit, for the recent-changes list on board 3b's rail.
+///
+/// **Not the audit log.** `AuditEvent` records *decisions* — a staff member
+/// changing something they do not own, with a written reason and a NOT NULL
+/// `actorId` that is theirs. A seller editing their own description is not a
+/// decision anybody has to answer for, and filing it there would dilute the one
+/// table whose whole value is that every row in it is a staff action somebody
+/// can be asked about. Non-negotiable 3 covers staff state changes; this is the
+/// other kind.
+///
+/// So: a short, seller-visible trail of who changed what and when, which board
+/// 3b's rail shows three of. The full history a moderator reads is still `4i`'s
+/// audit rows for the fields that pass through moderation.
+///
+/// No before/after values. The rail says "Description · S. Menon · 2 H", and
+/// storing the old prose to render a line that never shows it would be keeping
+/// a copy of every description a seller has ever written for no reader.
+model ListingRevision {
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  /// Who saved it. `Restrict`, because a revision naming nobody is not a
+  /// revision — the line the rail draws is "what changed, and by whom".
+  actorId    String   @map("actor_id") @db.Uuid
+  /// The field group as the seller would name it: `description`, `photos`,
+  /// `payment_terms`. Rendered through the catalogue, never shown raw.
+  field      String
+  /// How many items the save touched, where that is the fact worth showing —
+  /// "Photos ×6". Null where the field is singular.
+  itemCount  Int?     @map("item_count")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actor    User     @relation("ListingRevisionActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  /// The rail reads exactly this: one business, newest first.
+  @@index([businessId, createdAt])
+  @@map("listing_revision")
 }
 
 /// A seller's own folder. Board 3i §2.
@@ -1659,12 +1713,24 @@ model ListingChangeRequest {
   @@map("listing_change_request")
 }
 
-/// The only three fields that queue. Adding a fourth is a product decision, and
-/// making it an enum is what forces it to be one.
+/// The only fields that queue. Adding one is a product decision, and making it
+/// an enum is what forces it to be one.
+///
+/// Board 3b Q1 made the fourth. An **additional** category is queued for the
+/// same reason the primary one is: category membership is the join the enquiry
+/// fan-out matches on and the facet buyers filter by, so adding one moves which
+/// demand a listing receives and which area pages count it. It is the seller's
+/// only self-serve route into a market they may not be licensed for.
+///
+/// `after_value` on this field carries a category id, and the listing keeps its
+/// current categories until a moderator clears it — board 3b's own sentence,
+/// "your listing stays live on its four current categories while this one is
+/// checked".
 enum ModeratedField {
   trade_name
   primary_category
   licence
+  additional_category
 
   @@map("moderated_field")
 }

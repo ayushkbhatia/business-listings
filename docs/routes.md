@@ -74,7 +74,7 @@ and it is the one that argues back.
 /dashboard/setup/products               Task 2 — template, first products     [8c]  built h8s3
 /dashboard/setup/team                   Task 3 — invite the team              [8d]  built h8s4
 /dashboard/setup/done                   Setup complete, once only             [8e]  built h8s5
-/dashboard/listing                      Listing profile                       [3b]
+/dashboard/listing                      Listing profile                       [3b]  built h3 wave 3
 /dashboard/locations                    Locations                             [3c]
 /dashboard/hours                        Hours & Ramadan                       [3d]
 /dashboard/verification                 Verification & documents              [3e]  built h3 wave 3
