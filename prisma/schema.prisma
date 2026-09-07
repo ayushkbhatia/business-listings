@@ -960,6 +960,21 @@ model Location {
   hours           Json         @default("{}")
   /// Applied automatically on announced dates.
   ramadanHours    Json?        @map("ramadan_hours")
+
+  /// The Ramadan year these hours were last confirmed for.
+  ///
+  /// Board 3d's first correction, and the field board 3a's reminder reads.
+  /// Ramadan **dates** are ours — estimated until the UAE announcement, shifted
+  /// by us, and the seller emailed. Ramadan **hours** are the seller's, and
+  /// they carry over from last year until somebody says they still hold. The
+  /// board collapsed both into one `AUTO-APPLIED` label, so a seller arriving
+  /// from 3a's "Ramadan hours for 2027 unconfirmed" card found nothing to act
+  /// on.
+  ///
+  /// Null, or a year behind the coming window, means unconfirmed. It does not
+  /// mean unset: the carried-over times still apply, because the alternative is
+  /// a listing that goes silent for a month.
+  ramadanConfirmedYear Int? @map("ramadan_confirmed_year")
   serviceRadiusKm Int?         @map("service_radius_km")
 
   /// A branch that is shut for a stated stretch — a fit-out, a relocation, a
@@ -1018,11 +1033,99 @@ model Location {
   teamMembers         TeamMember[]
   seats               User[]          @relation("SeatBranch")
   teamInvites         TeamInvite[]    @relation("InviteBranch")
+  closures            LocationClosure[]
 
   @@index([businessId])
   @@index([areaId])
   @@index([emirate])
   @@map("location")
+}
+
+/// A public holiday, as the platform maintains it.
+///
+/// Board 3d's seventh correction: the rail mixed official UAE dates with the
+/// seller's own `+ Add date` and distinguished neither, which is the same split
+/// board 3e makes between documents we verify and documents a seller uploads.
+/// These are ours. `LocationClosure` holds theirs.
+///
+/// **The promise attached to this table has an owner named in board 3d Q1**:
+/// platform-maintained, two years ahead, reviewed each January. The card says
+/// "Official UAE dates are kept current for you", and a commitment in shipped
+/// copy that nobody owns is the shape board 4e Q2 already got wrong once.
+///
+/// National, not per-branch. Board 3d Q4 recommends per-branch *deviation* —
+/// a trade counter can open on National Day when the head office does not —
+/// and that is deliberately not built: no control on the screen offers it, and
+/// it arrives later as a row per (location, holiday) rather than as a rebuild.
+model PublicHoliday {
+  id   String @id @default(cuid())
+  name String
+
+  /// Inclusive, both ends. Eid runs three or four days and is one row.
+  startsOn DateTime @map("starts_on") @db.Date
+  endsOn   DateTime @map("ends_on") @db.Date
+
+  /// A half day carries its hours, or it is not a setting the seller can see.
+  ///
+  /// Board 3d's sixth correction: Islamic New Year rendered a `Half day` pill
+  /// and a date and nothing else. A CHECK ties the pair together, so a half day
+  /// with no times cannot be stored — criterion 8.
+  halfDay   Boolean @default(false) @map("half_day")
+  openFrom  String? @map("open_from")
+  openUntil String? @map("open_until")
+
+  /// Islamic dates are estimates until they are announced, exactly as Ramadan's
+  /// are. Eid follows the same moon sighting, so a row that claimed to know
+  /// next year's date as fact would be wrong in the same way and just as
+  /// quietly. Gregorian holidays — New Year's Day, National Day — are confirmed
+  /// the moment they are entered.
+  confirmed Boolean @default(false)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([name, startsOn])
+  @@index([startsOn])
+  @@map("public_holiday")
+}
+
+/// A stretch of days one branch is shut, or open shorter, because the seller
+/// said so.
+///
+/// The seller's half of the holiday rail — `+ Add date`, and the footer's
+/// "Dates you add are yours to maintain". Per branch, because the screen is,
+/// and because a depot closing for stock-take says nothing about the showroom.
+///
+/// **Not the temporary closure.** That is `Location.closedFrom/closedUntil/
+/// closureReason`, which shipped before this board, is rendered by board 1f and
+/// is already constrained to refuse a half-set window. Board 3d's data table
+/// asks for one `location_closures` holding both, and moving the temporary
+/// closure here would be a drop beside an add — which
+/// `docs/deployments.md` § Ordering says has no safe order and must be split in
+/// two. One closure at a time per branch is also what §5 describes.
+model LocationClosure {
+  id         String @id @default(cuid())
+  locationId String @map("location_id")
+
+  startsOn DateTime @map("starts_on") @db.Date
+  endsOn   DateTime @map("ends_on") @db.Date
+
+  /// Why, in the seller's words. Buyers read this on board 1f, so it is
+  /// required for the same reason the temporary closure's is: a strip that says
+  /// a branch is shut and not why is a strip that generates a phone call.
+  reason String
+
+  /// A half day rather than a closure. Same pair, same CHECK as `PublicHoliday`.
+  openFrom  String? @map("open_from")
+  openUntil String? @map("open_until")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([locationId, startsOn])
+  @@map("location_closure")
 }
 
 /// Where a supplier says they deliver, and how fast.
@@ -4906,6 +5009,14 @@ enum NotificationEvent {
   /// Board 11b's follow-up. A buyer who has gone quiet is by definition not
   /// looking at the thread, so a message to them needs a carrier.
   message_received
+  /// Board 3d: the Ramadan window we publish has moved.
+  ///
+  /// The dates are ours and the card promises "we shift them and email you when
+  /// they move" — a commitment in shipped copy needs an emitter, or it is the
+  /// unowned-promise shape board 4e Q2 already got wrong. The seller's *hours*
+  /// are untouched by the shift, and the mail says so: a date we corrected is
+  /// not a reason to re-ask them a question they have already answered.
+  ramadan_dates_moved
   weekly_digest
 
   @@map("notification_event")

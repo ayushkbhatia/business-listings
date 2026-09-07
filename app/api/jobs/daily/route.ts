@@ -18,6 +18,7 @@ import { pruneProductEvents } from "@/lib/telemetry/record";
 import { expireInvites } from "@/lib/team/invite";
 import { sweepSetupNudges } from "@/lib/setup/nudge-job";
 import { sweepExpiringQuotes } from "@/lib/quotes/expiry-job";
+import { sweepRamadanShift } from "@/lib/trade/ramadan-shift-job";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
 
 /**
@@ -275,6 +276,19 @@ export async function GET(request: NextRequest) {
        about or a thing already done.
     */
     expiringLicences: () => sweepExpiringLicences(),
+    /*
+       Board 3d's Ramadan card promises the platform shifts its own estimated
+       dates and emails the seller when they move. Fifth carrier in this route,
+       and idempotent for the same reason as the other four — `sweepRamadanShift`
+       compares the live window against `ramadan_dates_notified` and skips any
+       business already told about this shift, so a retry finds nothing to do.
+
+       A year the platform has not published before is *baselined* rather than
+       announced: nothing has moved the first time a window appears, and mailing
+       41,000 sellers to tell them Ramadan exists would be the job's own worst
+       failure mode.
+    */
+    ramadanShift: () => sweepRamadanShift(),
   });
 
   console.info("[jobs] daily", outcome.steps);

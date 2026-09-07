@@ -92,6 +92,14 @@ describe("what an event supplies", () => {
       "quote_expiring",
       "quote_received",
       "quote_revised",
+      /*
+         Board 3d's fifth event from a schedule. The Ramadan card promises the
+         platform shifts its own estimated dates and emails the seller when
+         they move, and a promise in shipped copy with no emitter is the
+         unowned-commitment shape board 4e Q2 already got wrong.
+         `lib/trade/ramadan-shift-job.ts` carries the exactly-once guard.
+      */
+      "ramadan_dates_moved",
       "setup_nudge",
       "subscription_renewed",
     ]);
@@ -100,7 +108,7 @@ describe("what an event supplies", () => {
   it("covers every event in the enum, so none is missing a row", () => {
     // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
     // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(15);
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(16);
   });
 
   it("does not claim to emit the alert it only records", () => {

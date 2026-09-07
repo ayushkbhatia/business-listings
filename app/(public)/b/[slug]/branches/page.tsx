@@ -13,6 +13,10 @@ import {
   type BranchLocation,
 } from "@/lib/trade/branches";
 import { openingHoursSchema } from "@/lib/trade/open-now";
+import { branchClosures, publicHolidaysAround } from "@/lib/db/queries/hours";
+import { readRamadanCalendar } from "@/lib/trade/ramadan-calendar";
+import type { BranchSchedule } from "@/lib/trade/closures";
+import type { RamadanCalendar } from "@/lib/trade/hours";
 import { formatDate, formatPhone, formatShifts, toE164 } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { navPages } from "@/lib/storefront/pages";
@@ -94,6 +98,23 @@ export default async function BranchesPage({ params }: Params) {
   if (locations.length === 0) notFound();
 
   const now = new Date();
+  /*
+     Board 3d criterion 6, on the page a buyer checks before driving somewhere.
+
+     The temporary closure has always been handled above the week; these are the
+     rung below it. Without them a branch shut for Eid reports "Open until
+     18:00" here, which is the exact failure the `open now` filter's rank makes
+     expensive — it is the third most-used filter on the site.
+
+     Loaded once for the page rather than per card. The calendar is national and
+     the closures belong to these branches, so one read serves every card.
+  */
+  const [calendar, holidays] = await Promise.all([
+    readRamadanCalendar(),
+    publicHolidaysAround(now),
+  ]);
+  const closuresByBranch = await branchClosures(locations.map((location) => location.id));
+
   const { branches } = orderBranches(locations, null);
   const summary = emirateSummary(locations);
   const ramadan = ramadanActive(now);
@@ -130,8 +151,24 @@ export default async function BranchesPage({ params }: Params) {
         : business.verificationTier >= 2
           ? "verified"
           : "unverified",
-    expanded: <BranchCard location={location} now={now} expanded />,
-    compact: <BranchCard location={location} now={now} expanded={false} />,
+    expanded: (
+      <BranchCard
+        location={location}
+        now={now}
+        expanded
+        calendar={calendar}
+        dates={{ holidays, closures: closuresByBranch.get(location.id) ?? [] }}
+      />
+    ),
+    compact: (
+      <BranchCard
+        location={location}
+        now={now}
+        expanded={false}
+        calendar={calendar}
+        dates={{ holidays, closures: closuresByBranch.get(location.id) ?? [] }}
+      />
+    ),
   }));
 
   return (
@@ -333,12 +370,16 @@ function BranchCard({
   location,
   now,
   expanded,
+  calendar,
+  dates,
 }: {
   location: BranchLocation;
   now: Date;
   expanded: boolean;
+  calendar: RamadanCalendar;
+  dates: Pick<BranchSchedule, "holidays" | "closures">;
 }) {
-  const status = branchStatus(location, now);
+  const status = branchStatus(location, now, calendar, dates);
   const closure = location.closedFrom && location.closedUntil && location.closureReason
     ? { from: location.closedFrom, until: location.closedUntil, reason: location.closureReason }
     : null;

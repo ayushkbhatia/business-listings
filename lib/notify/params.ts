@@ -146,6 +146,17 @@ export const EVENT_PARAMS = {
      a wire.
   */
   product_alert_matched: [],
+  /*
+     Board 3d. The Ramadan card promises "we shift them and email you when they
+     move", and the whole point of the mail is that it is about *our* dates and
+     not their hours — so it carries the year and the corrected window and
+     nothing about what the seller should do, because the answer is nothing.
+
+     `year` as well as the two dates because a shift arriving in November is
+     about a window four months out, and a mail that opens with two bare dates
+     reads as a change to something happening now.
+  */
+  ramadan_dates_moved: ["year", "from", "to"],
   weekly_digest: [],
 } as const satisfies Record<NotificationEvent, readonly string[]>;
 

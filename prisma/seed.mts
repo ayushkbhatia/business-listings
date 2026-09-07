@@ -263,7 +263,18 @@ async function main() {
   await prisma.platformSetting.upsert({
     where: { key: RAMADAN_SETTING_KEY },
     update: {},
-    create: { key: RAMADAN_SETTING_KEY, value: FALLBACK_RAMADAN },
+    /*
+       Serialised through JSON rather than cast. `RamadanYear` carries an
+       optional `confirmed`, and Prisma will not accept an interface with
+       optional members as `InputJsonValue` — a cast would silence that and a
+       round trip proves the value really is JSON, which is what the column
+       holds. `parseRamadanCalendar` validates it back out again, and that is
+       where the guarantee actually lives.
+    */
+    create: {
+      key: RAMADAN_SETTING_KEY,
+      value: JSON.parse(JSON.stringify(FALLBACK_RAMADAN)),
+    },
   });
 
   /*
@@ -843,6 +854,7 @@ async function main() {
   await seedCertificates(prisma);
   await seedDeepCatalogue(prisma);
   await seedBranchNetwork(prisma);
+  await seedPublicHolidays(prisma);
   await seedProductDetail(prisma);
   await seedTestimonials(prisma);
   await seedTrackingStates(prisma);
@@ -6045,6 +6057,113 @@ async function seedBranchNetwork(db: Db) {
  * Appended, for the reason the two blocks above it are: the PRNG is a sequence,
  * and a draw inserted earlier renames every business generated after it.
  */
+/**
+ * The official UAE calendar, for board 3d's rail.
+ *
+ * Two years ahead, which is board 3d Q1's answer to who maintains it and how
+ * far: platform-maintained, reviewed each January. Fixed dates rather than
+ * `NOW`-relative ones, so two seeds agree and a screenshot diff shows real
+ * changes only.
+ *
+ * **The Islamic dates are `confirmed: false` and that is the point.** Eid
+ * follows the same moon sighting Ramadan does, announced a day or two before,
+ * so a row claiming to know next year's date as fact would be wrong in exactly
+ * the way the Ramadan card exists to avoid. The Gregorian ones — New Year's
+ * Day, National Day — are confirmed the moment they are entered.
+ *
+ * One of them is deliberately inside the platform's own Ramadan window, so
+ * criterion 7's collision is a state the screen can actually be seen in. It is
+ * *computed*, not asserted: the render marks `19 MAR ALSO RAMADAN` against a
+ * 2027 window that the platform's calendar does not have, and a hardcoded
+ * marker would have gone on claiming a clash that the real dates do not
+ * produce.
+ */
+async function seedPublicHolidays(db: Db) {
+  console.log("→ the official UAE calendar, for board 3d");
+
+  const rows = [
+    /*
+       Eid Al Fitr is the collision, and it is the real one.
+
+       It begins the day Ramadan ends — 8 March 2027 in `FALLBACK_RAMADAN` — so
+       criterion 7's `ALSO RAMADAN · CLOSED WINS` marker appears on this row
+       without anything being arranged to make it. An earlier version of this
+       fixture invented a February date for Commemoration Day to force the
+       state, which is a seed telling a lie about a real national holiday to
+       exercise a feature. The feature exercises itself.
+    */
+    {
+      name: "Eid Al Fitr",
+      startsOn: "2027-03-08",
+      endsOn: "2027-03-11",
+      confirmed: false,
+      half: null,
+    },
+    { name: "Eid Al Adha", startsOn: "2027-05-16", endsOn: "2027-05-19", confirmed: false, half: null },
+    { name: "UAE National Day", startsOn: "2026-12-02", endsOn: "2026-12-03", confirmed: true, half: null },
+    {
+      name: "Islamic New Year",
+      startsOn: "2027-06-17",
+      endsOn: "2027-06-17",
+      confirmed: false,
+      // Correction 6: a half day carries its hours, or it is a setting whose
+      // value the seller cannot see. The CHECK refuses one without them.
+      half: { from: "08:00", until: "12:00" },
+    },
+    { name: "New Year's Day", startsOn: "2027-01-01", endsOn: "2027-01-01", confirmed: true, half: null },
+  ];
+
+  for (const row of rows) {
+    await db.publicHoliday.upsert({
+      where: {
+        name_startsOn: { name: row.name, startsOn: new Date(`${row.startsOn}T00:00:00Z`) },
+      },
+      update: {},
+      create: {
+        name: row.name,
+        startsOn: new Date(`${row.startsOn}T00:00:00Z`),
+        endsOn: new Date(`${row.endsOn}T00:00:00Z`),
+        confirmed: row.confirmed,
+        halfDay: row.half !== null,
+        openFrom: row.half?.from ?? null,
+        openUntil: row.half?.until ?? null,
+      },
+    });
+  }
+
+  /*
+     One branch with a date of its own and one shut for a stock-take, so the
+     rail shows both halves of its ownership footer and the precedence card has
+     something above the holidays to be above.
+  */
+  const seller = await db.business.findFirst({
+    where: { slug: "al-marwan-industrial-supplies-llc" },
+    select: { id: true },
+  });
+  if (!seller) return;
+
+  const branch = await db.location.findFirst({
+    where: { businessId: seller.id, published: true, type: "depot" },
+    select: { id: true },
+  });
+  if (!branch) return;
+
+  const existing = await db.locationClosure.findFirst({
+    where: { locationId: branch.id },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  await db.locationClosure.create({
+    data: {
+      locationId: branch.id,
+      startsOn: new Date("2027-08-02T00:00:00Z"),
+      endsOn: new Date("2027-08-06T00:00:00Z"),
+      reason: "Annual stock-take",
+    },
+  });
+}
+
 async function seedProductDetail(db: Db) {
   console.log("→ documents, questions and a spec twin, for board 1g");
 

@@ -687,3 +687,47 @@ export async function onLicenceExpiring(input: {
     });
   });
 }
+
+/**
+ * The Ramadan window we publish has moved.
+ *
+ * Board 3d's card makes a promise on the platform's behalf — *"The dates are
+ * ours to get right: they follow the official UAE announcement, usually
+ * confirmed a day or two before. We shift them and email you when they move."*
+ * A commitment in shipped copy with no emitter behind it is the shape board 4e
+ * Q2 already got wrong once, so this is the emitter.
+ *
+ * **It does not touch the seller's hours, and the mail says so.** The shift is
+ * ours; re-opening their confirmation because we corrected our own estimate
+ * would be asking them a question they have already answered. Board 3d's
+ * "dates shifted after confirmation" state, in one function.
+ *
+ * Once per business per year, guarded by the caller in
+ * `lib/trade/ramadan-shift-job.ts` — `notify()` deduplicates nothing, and the
+ * sweep runs daily.
+ */
+export async function onRamadanDatesMoved(input: {
+  businessId: string;
+  year: number;
+  from: Date;
+  to: Date;
+}): Promise<void> {
+  await safely("ramadan_dates_moved", async () => {
+    const owner = await prisma.user.findFirst({
+      where: { businessId: input.businessId, roles: { has: "seller_owner" } },
+      select: { id: true },
+    });
+    if (!owner) return;
+
+    await notify({
+      event: "ramadan_dates_moved",
+      businessId: input.businessId,
+      recipientUserId: owner.id,
+      params: withParams("ramadan_dates_moved", {
+        year: String(input.year),
+        from: formatDate(input.from),
+        to: formatDate(input.to),
+      }),
+    });
+  });
+}

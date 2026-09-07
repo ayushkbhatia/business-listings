@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { Prisma } from "@/lib/db/generated/client";
 import { assertCanEditListing } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
+import { t } from "@/lib/i18n";
 import { normalise, problemsWith, type RamadanHours, type WeekHours } from "@/lib/trade/hours";
 import { describeProblemText } from "@/lib/trade/hours-copy";
 import { DESCRIPTION_LIMIT } from "./constants";
@@ -95,16 +96,19 @@ export async function saveProfile(
 ): Promise<EditResult> {
   assertCanEditListing(actor);
   if (actor.businessId !== businessId) {
-    return { ok: false, error: "You can only edit your own listing." };
+    return { ok: false, error: t("listing.not_your_listing") };
   }
 
   if (edit.displayName !== undefined && edit.displayName.trim() === "") {
-    return { ok: false, error: "Give your listing a display name buyers will recognise." };
+    return { ok: false, error: t("listing.needs_display_name") };
   }
   if (edit.description !== undefined && edit.description.length > DESCRIPTION_LIMIT) {
     return {
       ok: false,
-      error: `That description is ${edit.description.length} characters. The limit is ${DESCRIPTION_LIMIT}.`,
+      error: t("listing.description_too_long", {
+        length: edit.description.length,
+        limit: DESCRIPTION_LIMIT,
+      }),
     };
   }
   if (
@@ -112,14 +116,14 @@ export async function saveProfile(
     edit.establishedYear !== null &&
     (edit.establishedYear < 1900 || edit.establishedYear > new Date().getUTCFullYear())
   ) {
-    return { ok: false, error: "Enter the year the business was established, as four digits." };
+    return { ok: false, error: t("listing.bad_established_year") };
   }
   if (
     edit.teamSize !== undefined &&
     edit.teamSize !== null &&
     !(TEAM_SIZES as readonly string[]).includes(edit.teamSize)
   ) {
-    return { ok: false, error: "Choose a team size from the list." };
+    return { ok: false, error: t("listing.bad_team_size") };
   }
 
   await prisma.business.update({
@@ -158,7 +162,7 @@ export async function saveHours(
 ): Promise<HoursResult> {
   assertCanEditListing(actor);
   if (actor.businessId !== businessId) {
-    return { ok: false, error: "You can only edit your own listing." };
+    return { ok: false, error: t("listing.not_your_listing") };
   }
 
   const problems = problemsWith(input.hours);
@@ -185,7 +189,7 @@ export async function saveHours(
     data: { hours, ...(ramadan !== undefined ? { ramadanHours: ramadan } : {}) },
   });
 
-  if (count === 0) return { ok: false, error: "That branch cannot be found." };
+  if (count === 0) return { ok: false, error: t("listing.branch_not_found") };
   return { ok: true, applied: count };
 }
 
@@ -221,11 +225,11 @@ export async function requestModeratedChange(
 ): Promise<ChangeRequestResult> {
   assertCanEditListing(actor);
   if (actor.businessId !== businessId) {
-    return { ok: false, error: "You can only edit your own listing." };
+    return { ok: false, error: t("listing.not_your_listing") };
   }
 
   const value = afterValue.trim();
-  if (value === "") return { ok: false, error: "Enter the new value before submitting it." };
+  if (value === "") return { ok: false, error: t("listing.needs_a_value") };
 
   const business = await prisma.business.findUniqueOrThrow({
     where: { id: businessId },
@@ -250,7 +254,7 @@ export async function requestModeratedChange(
           : null;
 
   if (before !== null && before === value) {
-    return { ok: false, error: "That is what it says now. Nothing has been submitted." };
+    return { ok: false, error: t("listing.unchanged") };
   }
 
   /*
@@ -274,10 +278,10 @@ export async function requestModeratedChange(
       }),
     ]);
     if (already) {
-      return { ok: false, error: "Your listing is already under that category." };
+      return { ok: false, error: t("listing.already_in_category") };
     }
     if (held) {
-      return { ok: false, error: "That category is already waiting for review." };
+      return { ok: false, error: t("listing.category_already_queued") };
     }
   }
 
@@ -322,12 +326,12 @@ export async function withdrawChange(
 ): Promise<EditResult> {
   assertCanEditListing(actor);
   if (actor.businessId !== businessId) {
-    return { ok: false, error: "That request cannot be found." };
+    return { ok: false, error: t("listing.request_not_found") };
   }
   const { count } = await prisma.listingChangeRequest.updateMany({
     where: { id, businessId, status: "pending" },
     data: { status: "withdrawn" },
   });
-  if (count === 0) return { ok: false, error: "That request cannot be found." };
+  if (count === 0) return { ok: false, error: t("listing.request_not_found") };
   return { ok: true };
 }
