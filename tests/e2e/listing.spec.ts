@@ -102,6 +102,15 @@ test.describe("board 3b — the listing profile", () => {
   });
 });
 
+/** Board 3c's editor is a drawer now: the table lists branches, `Edit` opens one. */
+async function openFirstBranch(page: import("@playwright/test").Page) {
+  await page.getByRole("row").filter({ has: page.getByRole("button", { name: "Edit" }) })
+    .first()
+    .getByRole("button", { name: "Edit" })
+    .click();
+  await page.getByRole("dialog").waitFor();
+}
+
 test.describe("board 3c — locations", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/dashboard/locations");
@@ -110,20 +119,37 @@ test.describe("board 3c — locations", () => {
   test("says the free zone is inside its emirate, not instead of it", async ({ page }) => {
     // The README's own sentence: a JAFZA company is in Dubai *and* in a free
     // zone. Two independent facts, so two independent controls.
-    const edit = page.getByRole("button", { name: "Edit" });
-    if (await edit.first().isVisible().catch(() => false)) await edit.first().click();
+    //
+    // The *free-zone* branch, not whichever row happens to be first. This used
+    // to click `Edit` on row one and pass because the old screen rendered every
+    // branch as an open panel; board 3c's table opens one branch in a drawer,
+    // and row one is the Al Quoz head office, which is not in a free zone. The
+    // note was correctly absent and the assertion was asking the wrong branch.
+    await page
+      .getByRole("row", { name: /Jebel Ali Free Zone/ })
+      .getByRole("button", { name: "Edit" })
+      .click();
 
-    await expect(page.getByText(/is a free zone inside Dubai/)).toBeVisible();
-    await expect(page.getByText(/Buyers looking in Dubai find you/)).toBeVisible();
+    const editor = page.getByRole("dialog");
+    await expect(editor.getByText(/is a free zone inside Dubai/)).toBeVisible();
+    await expect(editor.getByText(/Buyers looking in Dubai find you/)).toBeVisible();
+
+    // Once, not twice. `EmirateAreaPicker` owns this sentence; the editor
+    // printed a second copy underneath it until this was caught.
+    await expect(editor.getByText(/is a free zone inside Dubai/)).toHaveCount(1);
   });
 
   test("offers the free-zone toggle as a filter, beside the area", async ({ page }) => {
+    // Inside the branch editor, which board 3c moved into a drawer — the table
+    // is the screen now and the fields are one branch at a time.
+    await openFirstBranch(page);
     await expect(page.getByText("Only show free zones").first()).toBeVisible();
     // Not an eighth emirate.
     await expect(page.getByRole("option", { name: "Free zones" })).toHaveCount(0);
   });
 
   test("tells a driver where to put the pin", async ({ page }) => {
+    await openFirstBranch(page);
     await expect(page.getByText(/Drag the pin to your gate, not the street/).first()).toBeVisible();
   });
 
@@ -154,9 +180,20 @@ test.describe("board 3d — hours", () => {
     await expect(page.getByLabel("Sunday Closes 2", { exact: true })).toBeVisible();
   });
 
-  test("says Ramadan applies automatically and that the dates are approximate", async ({ page }) => {
-    await expect(page.getByText(/Applied automatically for the month/)).toBeVisible();
-    await expect(page.getByText(/the exact dates follow the moon sighting/)).toBeVisible();
+  test("says whose the dates are, and that they are an estimate", async ({ page }) => {
+    /*
+       This used to assert `Applied automatically for the month` — which is the
+       `AUTO-APPLIED` framing board 3d's first correction exists to remove. It
+       collapsed two objects with two owners into one label, and it contradicted
+       board 3a's card telling the same seller their hours were unconfirmed.
+
+       The card now says both things separately: the **dates** are ours and
+       estimated until the UAE announces them, and the **hours** are the
+       seller's to confirm.
+    */
+    await expect(page.getByText(/The dates are ours to get right/)).toBeVisible();
+    await expect(page.getByText(/usually confirmed a day or two before/)).toBeVisible();
+    await expect(page.getByText(/^Estimated ·/)).toBeVisible();
   });
 
   test("asks what happens on a public holiday", async ({ page }) => {
