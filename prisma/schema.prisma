@@ -830,6 +830,8 @@ model Business {
   reviews                Review[]
   reports                SupplierReport[]         @relation("ReportSubject")
   subscription           Subscription?
+  subscriptionChanges    SubscriptionChange[]
+  paymentMethod          PaymentMethod?
   invoices               Invoice[]
   mrrMovements           MrrMovement[]
   placements             PlacementSlot[]
@@ -2942,6 +2944,92 @@ enum DunningStage {
 ///
 /// Kept because "the card failed four times" and "the card failed once and we
 /// never tried again" are different conversations to have with a seller.
+/// The card, as much of it as ever reaches us.
+///
+/// Board 3m criterion 13: *"Card details never reach our servers; only last 4,
+/// brand and expiry are stored."* `providerToken` is the PSP's handle for a card
+/// they hold; the four remaining columns exist so the rail can render
+/// `•••• 4471 · Emirates NBD · expires 09/29` without asking the PSP on every
+/// page load.
+///
+/// One per business rather than a wallet. A seller pays for one subscription
+/// and there is nothing here to split across cards — a second row would be a
+/// default-card question with no screen to answer it.
+model PaymentMethod {
+  id            String   @id @default(cuid())
+  businessId    String   @unique @map("business_id")
+  /// Whatever the PSP calls this card. Null while the console provider stands
+  /// in, which is how a seeded card renders without pretending to be chargeable.
+  providerToken String?  @map("provider_token")
+  /// As printed on the rail. The issuer, not the network — the board reads
+  /// `Emirates NBD`, which is the name a seller recognises on their statement.
+  brand         String
+  last4         String   @db.VarChar(4)
+  expiryMonth   Int      @map("expiry_month")
+  expiryYear    Int      @map("expiry_year")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("payment_method")
+}
+
+/// A plan change that has not happened yet.
+///
+/// Board 11f: *"A downgrade takes effect at the end of the period."* Nothing is
+/// charged on the day and nothing on the listing moves, so the change has to be
+/// held somewhere until the date — and held somewhere the seller can withdraw
+/// it from, which a column on `Subscription` would not be: withdrawing would
+/// mean nulling three fields and hoping nothing had read them apart.
+///
+/// ## Why the keep lists live here
+///
+/// Basic holds less than this seller has, so the screen hands over the choice —
+/// `100 of 1,204 products`, `2 of 4 branches` — and the choice is made *now* for
+/// a change that lands *later*. It belongs to the change, not to the
+/// subscription: withdraw the change and the choice goes with it.
+///
+/// Absent means "we choose", and what we choose is the oldest, matching
+/// `hideOverPlanCap`. A seller who schedules a downgrade and never opens the
+/// chooser still gets a defensible answer rather than an empty catalogue.
+///
+/// ## One pending change per business
+///
+/// Q8, and it is structural rather than remembered: a partial unique index on
+/// `business_id` where the row is neither applied nor withdrawn. Two pending
+/// changes make the effective-date arithmetic uncheckable — the second would
+/// have to know whether the first had landed to know what it was changing from.
+model SubscriptionChange {
+  id          String      @id @default(cuid())
+  businessId  String      @map("business_id")
+  fromPlanId  String      @map("from_plan_id")
+  toPlanId    String      @map("to_plan_id")
+  fromTerm    BillingTerm @map("from_term")
+  toTerm      BillingTerm @map("to_term")
+  /// End of the period being paid for, copied at schedule time. The renewal
+  /// date can move underneath a pending change — a term switch does exactly
+  /// that — and the promise on screen was the date the seller read.
+  effectiveAt DateTime    @map("effective_at")
+
+  /// Product, location and team-member ids that stay live through the change.
+  /// Null until the seller opens the chooser. See the note above.
+  keepProductIds  Json? @map("keep_product_ids")
+  keepLocationIds Json? @map("keep_location_ids")
+  keepSeatIds     Json? @map("keep_seat_ids")
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  appliedAt   DateTime? @map("applied_at")
+  withdrawnAt DateTime? @map("withdrawn_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  fromPlan Plan     @relation("ChangeFromPlan", fields: [fromPlanId], references: [id], onDelete: Restrict)
+  toPlan   Plan     @relation("ChangeToPlan", fields: [toPlanId], references: [id], onDelete: Restrict)
+
+  @@index([effectiveAt, appliedAt])
+  @@map("subscription_change")
+}
+
 model PaymentAttempt {
   id              String   @id @default(cuid())
   subscriptionId  String   @map("subscription_id")
@@ -3012,6 +3100,25 @@ model Plan {
   teamSeats           Int       @map("team_seats")
   rankingMultiplier   Float     @default(1) @map("ranking_multiplier")
   customDomain        Boolean   @default(false) @map("custom_domain")
+  /// The three on/off entitlements board 11f's grid renders beside the caps.
+  ///
+  /// A cap is a number with a meter behind it; these have no meter and are not
+  /// a cap of nought — "analytics, but zero of it" is not what the screen means.
+  /// The handoff is explicit that the config carries both kinds, and 11f is the
+  /// screen that renders the whole table: without these three columns its
+  /// Analytics, CSV import and Sponsored eligibility rows would be the
+  /// hardcoded cells criterion 5 forbids.
+  ///
+  /// Each is enforced where the thing happens, not only rendered here. An
+  /// unenforced limit on a billing screen is worse than no limit — the spec says
+  /// so about storage and it is no less true of these.
+  analytics           Boolean   @default(false)
+  csvImport           Boolean   @default(false) @map("csv_import")
+  /// Whether this plan may hold a sponsored slot. `11e` sells them and is
+  /// blocked on `12c`, so today this gates the billing line and the downgrade
+  /// copy rather than a purchase button. It is still config: placement billing
+  /// ships before placement purchase, and the grid states the eligibility now.
+  sponsoredEligible   Boolean   @default(false) @map("sponsored_eligible")
   sortOrder           Int       @default(0) @map("sort_order")
   /// Months charged for a year. Null means this plan is monthly-only.
   ///
@@ -3039,6 +3146,8 @@ model Plan {
 
   businesses    Business[]
   subscriptions Subscription[]
+  changesFrom   SubscriptionChange[] @relation("ChangeFromPlan")
+  changesTo     SubscriptionChange[] @relation("ChangeToPlan")
 
   @@map("plan")
 }
@@ -3277,23 +3386,89 @@ model PlacementSlot {
   @@map("placement_slot")
 }
 
+/// What kind of document this is.
+///
+/// Board 3m Q5: UAE VAT requires a credit note for any correction, and an
+/// issued invoice may not be edited. The two are the same table because they
+/// are the same list on the seller's screen and the same rows in the VAT
+/// return — a credit note is an invoice with a negative total and a pointer to
+/// the one it corrects, not a second document store.
+enum InvoiceDocType {
+  tax_invoice
+  credit_note
+
+  @@map("invoice_doc_type")
+}
+
 /// Subscription and placement lines only. There is no buyer money here and
 /// nothing to refund — a correction is a subscription credit.
+///
+/// ## Immutable once issued
+///
+/// Board 3m, criterion 2: *"Invoice rows render stored values and never
+/// recompute them."* Two things were recomputed and both are now frozen at
+/// issue.
+///
+/// **The totals.** `invoiceList` and `vatReturn` each summed `InvoiceLine`
+/// and applied the rate themselves, which meant the number on the seller's
+/// screen was a function of today's code rather than of what was charged. The
+/// pair that made this a joint handoff — `BL-INV-20418` reading `7,802.15` on
+/// one board and `1,783.95` on the other — is the same failure one layer up.
+///
+/// **Who it was billed to.** The name, address and TRN were read live from
+/// `Business`, so a supplier who renamed rewrote every invoice they had ever
+/// been sent. A tax document records a supply that happened to a party as they
+/// were then; it is not a view of the customer table.
 model Invoice {
-  id         String        @id @default(cuid())
-  ref        String        @unique
-  businessId String        @map("business_id")
-  vatRate    Decimal       @default(0.05) @map("vat_rate") @db.Decimal(4, 4)
-  status     InvoiceStatus @default(draft)
-  issuedAt   DateTime?     @map("issued_at")
-  dueAt      DateTime?     @map("due_at")
-  paidAt     DateTime?     @map("paid_at")
-  createdAt  DateTime      @default(now()) @map("created_at")
+  id         String         @id @default(cuid())
+  ref        String         @unique
+  businessId String         @map("business_id")
+  docType    InvoiceDocType @default(tax_invoice) @map("doc_type")
+  vatRate    Decimal        @default(0.05) @map("vat_rate") @db.Decimal(4, 4)
+  status     InvoiceStatus  @default(draft)
+  issuedAt   DateTime?      @map("issued_at")
+  dueAt      DateTime?      @map("due_at")
+  paidAt     DateTime?      @map("paid_at")
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  /// Sum of the lines, ex-VAT, in whole fils. Negative on a credit note.
+  ///
+  /// Nullable only because every invoice written before this column existed has
+  /// no stored figure and inventing one would be worse than reading it as
+  /// absent. `storedTotals()` in lib/billing/invoice.ts is the one reader, and
+  /// it falls back to the lines for those and says so.
+  subtotalFils Int? @map("subtotal_fils")
+  /// VAT at `vatRate`, rounded once per invoice — the convention `vatReturn`
+  /// already used, now stored rather than re-derived.
+  vatFils      Int? @map("vat_fils")
+  /// `subtotalFils + vatFils`. Redundant, and kept for the same reason
+  /// `MrrMovement.mrrAfterFils` is: reconciling a total against its own parts
+  /// is the only way to find the row that is wrong.
+  totalFils    Int? @map("total_fils")
+
+  /// The billed party, as they were on the day. See the note above.
+  billedToName    String? @map("billed_to_name")
+  billedToTrn     String? @map("billed_to_trn")
+  billedToAddress String? @map("billed_to_address")
+
+  /// What paid it, for the `Total paid · card ••4471` line. Brand and last four
+  /// only — criterion 13, and the same two fields `PaymentMethod` holds.
+  paidByBrand String? @map("paid_by_brand")
+  paidByLast4 String? @map("paid_by_last4")
+
+  /// The invoice this one corrects. Set on a credit note and null otherwise.
+  correctsId String? @map("corrects_id")
 
   business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
   lines    InvoiceLine[]
+  /// `Restrict` rather than `Cascade`: deleting an invoice that a credit note
+  /// corrects would leave the correction pointing at nothing, and neither
+  /// document is ours to delete once issued.
+  corrects   Invoice?  @relation("InvoiceCorrection", fields: [correctsId], references: [id], onDelete: Restrict)
+  correctedBy Invoice[] @relation("InvoiceCorrection")
 
   @@index([businessId, status])
+  @@index([businessId, issuedAt(sort: Desc)], map: "invoice_business_issued_idx")
   @@map("invoice")
 }
 
@@ -3312,6 +3487,17 @@ model InvoiceLine {
   description String
   qty         Int             @default(1)
   amountAed   Decimal         @map("amount_aed") @db.Decimal(12, 2)
+
+  /// What period this line covers, where it covers one.
+  ///
+  /// The invoice document reads `Pro subscription · 14 Aug – 13 Sep 2026`, and
+  /// board 3m Q7 settles that the placement runs on its own clock rather than
+  /// the subscription's — so the dates cannot be derived from the invoice, and
+  /// a placement line and a subscription line on the same invoice legitimately
+  /// carry different ones. Null on a line that covers no period, such as a
+  /// pro-rating credit.
+  periodStart DateTime? @map("period_start")
+  periodEnd   DateTime? @map("period_end")
 
   invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 

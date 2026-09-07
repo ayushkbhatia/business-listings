@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/client";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
 import { allowance } from "@/lib/plan/entitlements";
@@ -40,6 +41,18 @@ export default async function ImportPage() {
   ]);
 
   const room = caps ? allowance(caps, "products", used) : null;
+
+  /*
+     CSV import is a plan entitlement, and it is enforced here.
+
+     Board 11f renders `CSV import` as a row in the comparison grid, which makes
+     it config — and an entitlement a screen advertises and does not enforce is
+     the unenforced limit the spec warns about. Free does not carry it. A `404`
+     rather than a locked panel: `8c` links here from the setup flow and a Free
+     seller who follows that link should find the importer absent, not dimmed
+     with an upsell where a file picker was.
+  */
+  if (caps && !caps.csvImport) notFound();
 
   return (
     <SellerPage

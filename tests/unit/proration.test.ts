@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysRemaining, filsToAed, perDayFils, prorate } from "@/lib/billing/proration";
+import { daysRemaining, filsToAed, perDayFils, prorate, vatOn } from "@/lib/billing/proration";
 
 const RENEWS = new Date("2026-09-01T00:00:00Z");
 
@@ -16,10 +16,13 @@ describe("criterion 10 — a plan change prorates correctly", () => {
 
     expect(result.daysRemaining).toBe(12);
     expect(result.creditLine.fils).toBe(0);
-    // 349 AED over 30 days is 1163 fils a day, floored.
+    // 349 AED over 30 days is 1163 fils a day, floored — but the line is not
+    // that times twelve. It is one division over the whole span, rounded once:
+    // 349 × 12/30 = 139.60 exactly. Multiplying a floored day rate gives 139.56,
+    // and the four-fil gap is the flooring remainder times the day count.
     expect(result.chargeLine.perDayFils).toBe(1163);
-    expect(result.chargeLine.fils).toBe(1163 * 12);
-    expect(result.netFils).toBe(13_956);
+    expect(result.chargeLine.fils).toBe(13_960);
+    expect(result.netFils).toBe(13_960);
   });
 
   it("produces a credit on a downgrade, not a charge", () => {
@@ -109,5 +112,70 @@ describe("formatting money", () => {
 
   it("keeps a credit signed", () => {
     expect(filsToAed(-13_956)).toBe("-139.56");
+  });
+});
+
+describe("board 3m — the worked example, to the fil", () => {
+  /*
+   * The spec prints this arithmetic and the invoice list carries its answer as
+   * `BL-INV-18790`. Both boards had `234.00` and `−77.50` for the same 24 days,
+   * which is the third correction on the pair; this is the sum they should have
+   * shown, and it is the one number a seller can check by hand.
+   *
+   *   Pro, 24 of 31 days      299 × 24/31 =  231.48
+   *   Basic credit, 24 days    99 × 24/31 = − 76.65
+   *   VAT 5% on 154.83                    =    7.74
+   *   Due now                             =  162.57
+   */
+  const CYCLE_END = new Date("2026-06-14T00:00:00Z");
+  const UPGRADED_ON = new Date("2026-05-21T00:00:00Z");
+
+  const result = prorate({
+    fromPeriodAed: 99,
+    toPeriodAed: 299,
+    periodDays: 31,
+    renewsAt: CYCLE_END,
+    now: UPGRADED_ON,
+  });
+
+  it("counts 24 of 31 days", () => {
+    expect(result.daysRemaining).toBe(24);
+    expect(result.chargeLine.days).toBe(24);
+  });
+
+  it("charges 231.48 for the days left on Pro", () => {
+    expect(filsToAed(result.chargeLine.fils)).toBe("231.48");
+  });
+
+  it("credits 76.65 for the unused days on Basic", () => {
+    // Rounds up, from 76.6451. Flooring gives 76.64 and disagrees with the
+    // document the seller keeps by a fil.
+    expect(filsToAed(result.creditLine.fils)).toBe("76.65");
+  });
+
+  it("puts VAT on its own line and totals 162.57 incl. VAT", () => {
+    expect(filsToAed(result.netFils)).toBe("154.83");
+    expect(filsToAed(result.vatFils)).toBe("7.74");
+    expect(filsToAed(result.dueFils)).toBe("162.57");
+  });
+});
+
+describe("vatOn", () => {
+  it("rounds once, per invoice", () => {
+    // 1,699.00 ex-VAT is the subtotal on BL-INV-20418.
+    expect(vatOn(169_900)).toBe(8_495);
+    expect(vatOn(169_900) + 169_900).toBe(178_395);
+  });
+
+  it("mirrors on a credit note rather than drifting a fil", () => {
+    // Math.round(-0.5) is -0 while Math.round(0.5) is 1, so a naive round makes
+    // a correction that does not cancel the thing it corrects.
+    const net = 15_483;
+    expect(vatOn(-net)).toBe(-vatOn(net));
+  });
+
+  it("honours a stored rate rather than assuming today's", () => {
+    expect(vatOn(100_000, 0.05)).toBe(5_000);
+    expect(vatOn(100_000, 0)).toBe(0);
   });
 });

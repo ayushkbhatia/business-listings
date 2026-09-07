@@ -117,6 +117,7 @@ export async function startTrial(
         productLimit: true, locationLimit: true, photoLimit: true,
   categoryLimit: true, storageMb: true, teamSeats: true,
         rankingMultiplier: true, customDomain: true,
+        analytics: true, csvImport: true, sponsoredEligible: true,
         sortOrder: true, withdrawnAt: true,
       },
     }),

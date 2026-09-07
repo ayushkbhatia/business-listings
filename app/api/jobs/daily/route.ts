@@ -3,6 +3,7 @@ import { expireTrials } from "@/lib/billing/trial";
 import { runRenewals } from "@/lib/billing/renewal-job";
 import { runDunning } from "@/lib/billing/dunning-job";
 import { applyEndedCancellations } from "@/lib/billing/service";
+import { applyDueChanges } from "@/lib/billing/schedule";
 import { pruneAttempts } from "@/lib/auth/attempts";
 import { LONGEST_RATE_WINDOW_MS, pruneRateLimitHits } from "@/lib/rate-limit";
 import { DRAFT_KEEP_DAYS, pruneDrafts } from "@/lib/onboarding/draft";
@@ -100,6 +101,17 @@ export async function GET(request: NextRequest) {
     renewals: () => runRenewals(),
     dunning: () => runDunning(),
     endedCancellations: () => applyEndedCancellations(),
+    /*
+       Scheduled plan changes, last of the billing steps.
+
+       Board 11f: a downgrade takes effect at the end of the period, so this is
+       the step that makes the date on the button true. It runs after dunning and
+       after ended cancellations because both can move the plan underneath a
+       pending change — and a change that finds the account already on Free is
+       applied anyway, to the plan the seller actually chose. The route they took
+       to Free does not change what they asked for next.
+    */
+    scheduledChanges: () => applyDueChanges(),
     async prunedAuthAttempts() {
       const pruned = await pruneAttempts(olderThan);
       return { pruned, olderThan };

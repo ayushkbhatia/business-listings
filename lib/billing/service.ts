@@ -9,7 +9,18 @@ import {
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
 import { hideOverPlanCap, restoreHiddenByPlan } from "./plan-caps";
-import { FILS_PER_AED, filsToAed, perDayFils, prorate, type Proration } from "./proration";
+import {
+  FILS_PER_AED,
+  VAT_RATE,
+  filsToAed,
+  perDayFils,
+  prorate,
+  vatOn,
+  type Proration,
+} from "./proration";
+import { issueInvoice } from "./invoice";
+import { scheduleChange } from "./schedule";
+import { t } from "@/lib/i18n";
 import {
   advance,
   anchorDayOf,
@@ -47,11 +58,28 @@ const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
   locationLimit: true, photoLimit: true,
   categoryLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
-  customDomain: true, sortOrder: true,
+  customDomain: true, analytics: true, csvImport: true, sponsoredEligible: true,
+  sortOrder: true,
   // What a year costs, for pricing a period that is not a month. Not an
   // entitlement, so `snapshotOf` ignores it — see lib/plan/entitlements.ts.
   annualMonthsCharged: true,
 } as const;
+
+/**
+ * Which way the change goes, and therefore when it happens.
+ *
+ * Board 11f settles the asymmetry that the old board only recommended:
+ *
+ *   - **upgrade** — applies on payment, pro-rates, states the day count.
+ *   - **downgrade** — scheduled for the end of the period. Nothing charged
+ *     today, nothing on the listing moved, withdrawable until the date.
+ *
+ * By price, not by cap. A plan is dearer or it is not; comparing caps would need
+ * a rule for a plan with more products and fewer seats, and there is no such
+ * rule that a seller would recognise. Equal prices count as a downgrade, because
+ * scheduling charges nothing and applying immediately might.
+ */
+export type ChangeDirection = "upgrade" | "downgrade";
 
 export interface PlanChangeQuote {
   fromPlan: { id: string; name: string; monthlyPriceAed: number; annualMonthsCharged: number | null };
@@ -60,8 +88,20 @@ export interface PlanChangeQuote {
   term: BillingTerm;
   /** Start of the period the change lands in, so the caller can price a day of it. */
   periodStartedAt: Date;
-  proration: Proration;
-  /** "139.56", already signed. */
+  direction: ChangeDirection;
+  /**
+   * The pro-rating, on an upgrade. **Null on a downgrade**, and that is the
+   * whole of the model: a downgrade takes effect at period end, so there is no
+   * part-period to price and `Due today` reads `AED 0.00`.
+   */
+  proration: Proration | null;
+  /** When a downgrade lands. Null on an upgrade, which lands on payment. */
+  effectiveAt: Date | null;
+  /** What the new plan costs a period, VAT included. `From 14 Sep · AED 103.95`. */
+  nextPeriodFils: number;
+  /** When that first falls due. The renewal, unmoved. */
+  nextDueAt: Date;
+  /** "139.56", already signed. Zero on a downgrade. */
   netAed: string;
   /** True when the provider cannot actually take money — see provider.ts. */
   providerIsLive: boolean;
@@ -123,13 +163,39 @@ export async function quotePlanChange(
   const caps = { monthlyPriceAed: fromPlan.monthlyPriceAed, annualMonthsCharged: fromPlan.annualMonthsCharged };
   const toCapsRow = { monthlyPriceAed: toPlan.monthlyPriceAed, annualMonthsCharged: toPlan.annualMonthsCharged };
 
-  const proration = prorate({
-    fromPeriodAed: periodPriceAed(caps, term),
-    toPeriodAed: periodPriceAed(toCapsRow, term),
-    periodDays: periodDays(periodStartedAt, renewsAt),
-    renewsAt,
-    now,
-  });
+  const direction: ChangeDirection =
+    toPlan.monthlyPriceAed > fromPlan.monthlyPriceAed ? "upgrade" : "downgrade";
+
+  /*
+     Only an upgrade is priced.
+
+     A downgrade waits for the renewal, so there is no part-period to charge and
+     no unused half-month to credit. That also removes the credit this file used
+     to write: a credit on a platform that holds no funds has nowhere to go but
+     the next invoice, so applying a downgrade on the day took the plan away
+     immediately and gave the money back a month later. Waiting costs nobody
+     anything.
+  */
+  const proration =
+    direction === "upgrade"
+      ? prorate({
+          fromPeriodAed: periodPriceAed(caps, term),
+          toPeriodAed: periodPriceAed(toCapsRow, term),
+          periodDays: periodDays(periodStartedAt, renewsAt),
+          renewsAt,
+          now,
+        })
+      : null;
+
+  /*
+     What the new plan costs from the renewal, VAT included.
+
+     `From 14 Sep · AED 103.95 incl. VAT` on the board — 99 + VAT, which is the
+     figure a seller checks the downgrade against. Priced on the target plan and
+     the *current* term, because a plan change never moves the term.
+  */
+  const nextPeriodAed = toPlan.monthlyPriceAed === 0 ? 0 : periodPriceAed(toCapsRow, term);
+  const nextNetFils = Math.round(nextPeriodAed * FILS_PER_AED);
 
   return {
     ok: true,
@@ -148,27 +214,47 @@ export async function quotePlanChange(
       },
       term,
       periodStartedAt,
+      direction,
       proration,
-      netAed: filsToAed(proration.netFils),
+      effectiveAt: direction === "downgrade" ? renewsAt : null,
+      nextPeriodFils: nextNetFils + vatOn(nextNetFils),
+      nextDueAt: renewsAt,
+      netAed: filsToAed(proration?.netFils ?? 0),
       providerIsLive: paymentProvider().live,
     },
   };
 }
 
-export type ChangeResult = { ok: true; invoiceId: string | null } | { ok: false; error: string };
+export type ChangeResult =
+  | { ok: true; invoiceId: string | null; scheduled: boolean }
+  | { ok: false; error: string; code?: "quote_moved" | "already_pending" };
 
 /**
- * Move the business onto a different plan.
+ * Move the business onto a different plan — or schedule the move.
  *
- * The entitlement change and the invoice are one transaction. Charging outside
- * it, after: a provider that is slow must not hold a transaction open, and a
- * provider that fails must not leave a seller on a plan they were never charged
- * for — so the charge happens first and the switch only follows a success.
+ * Two paths, and which one runs is not a preference:
+ *
+ * **An upgrade** applies on payment. The charge happens outside the transaction
+ * and before it — a provider that is slow must not hold a transaction open, and
+ * a provider that fails must not leave a seller on a plan nobody paid for.
+ *
+ * **A downgrade** is scheduled for the end of the period and nothing is charged.
+ * See `scheduleChange` in ./schedule.
+ *
+ * ## The figure on the button is re-verified
+ *
+ * Criterion 7: *"an upgrade ... is re-verified server-side before charging. A
+ * mismatch refuses the charge."* `expectedDueFils` is what the seller was shown.
+ * It is recomputed here, from scratch, and a difference refuses rather than
+ * adjusts — a screen open across a plan-price change would otherwise charge a
+ * number the seller never agreed to, and adjusting silently is the version of
+ * that which nobody notices.
  */
 export async function changePlan(
   actor: Actor,
   businessId: string,
   toPlanId: string,
+  expectedDueFils: number | null = null,
   now = new Date(),
 ): Promise<ChangeResult> {
   assertCanChangePlan(actor);
@@ -177,19 +263,43 @@ export async function changePlan(
   if (!quoted.ok) return quoted;
   const { quote } = quoted;
 
+  if (quote.direction === "downgrade") {
+    const scheduled = await scheduleChange(actor, businessId, toPlanId, quote.term);
+    if (!scheduled.ok) {
+      return scheduled.error === "already_pending"
+        ? { ok: false, error: t("change.scheduled_already_short"), code: "already_pending" }
+        : { ok: false, error: t("change.no_subscription") };
+    }
+    return { ok: true, invoiceId: null, scheduled: true };
+  }
+
+  const dueFils = quote.proration?.dueFils ?? 0;
+
+  /*
+     What was on the button, checked against what it costs now.
+
+     Null means the caller did not quote — the confirm form always does, so this
+     is a service-level call or a test. Refusing those too would make the
+     function unusable from anywhere that has not just rendered a screen.
+  */
+  if (expectedDueFils !== null && expectedDueFils !== dueFils) {
+    return { ok: false, error: t("change.quote_moved"), code: "quote_moved" };
+  }
+
   const reference = `PLAN-${businessId.slice(-6)}-${toPlanId}-${now.getTime()}`;
 
-  // Only an upgrade reaches a provider. A downgrade produces a credit, and this
-  // platform holds no funds and pays none out — it lands on the next invoice.
-  if (quote.proration.netFils > 0) {
+  // VAT included, because that is what the seller agreed to pay. Charging the
+  // net would take 5% less than the button said and leave an invoice that does
+  // not reconcile with the card statement.
+  if (dueFils > 0) {
     const charge = await paymentProvider().charge({
       businessId,
-      fils: quote.proration.netFils,
-      description: `${quote.toPlan.name} plan, ${quote.proration.daysRemaining} days`,
+      fils: dueFils,
+      description: `${quote.toPlan.name} plan, ${quote.proration?.daysRemaining ?? 0} days`,
       reference,
     });
     if (!charge.ok) {
-      return { ok: false, error: charge.error ?? "That payment did not go through." };
+      return { ok: false, error: charge.error ?? t("change.charge_failed") };
     }
   }
 
@@ -207,7 +317,8 @@ export async function changePlan(
   ) as unknown as object;
 
   const invoiceId = await prisma.$transaction(async (tx) => {
-    const renewsAt = quote.proration.renewsAt;
+    // Unmoved by a plan change, which is the promise the screen makes.
+    const renewsAt = quote.proration?.renewsAt ?? quote.nextDueAt;
 
     await tx.business.update({ where: { id: businessId }, data: { planId: toPlanId } });
 
@@ -279,40 +390,63 @@ export async function changePlan(
       },
     });
 
-    if (quote.proration.netFils === 0) return null;
+    const proration = quote.proration;
+    if (!proration || proration.netFils === 0) return null;
 
-    const invoice = await tx.invoice.create({
-      data: {
-        ref: reference,
-        businessId,
-        status: "issued",
-        issuedAt: now,
-        lines: {
-          create: [
-            {
-              kind: "subscription",
-              description: `${quote.toPlan.name}, ${quote.proration.daysRemaining} days`,
-              amountAed: filsToAed(quote.proration.chargeLine.fils),
-            },
-            ...(quote.proration.creditLine.fils > 0
-              ? [
-                  {
-                    kind: "subscription_credit" as const,
-                    description: `${quote.fromPlan.name}, ${quote.proration.daysRemaining} unused days`,
-                    amountAed: `-${filsToAed(quote.proration.creditLine.fils)}`,
-                  },
-                ]
-              : []),
-          ],
-        },
-      },
-      select: { id: true },
+    /*
+       The invoice, with its totals, through the one issuer.
+
+       This used to build the row inline and store no totals at all, so the
+       figure on the seller's list was whatever `invoiceList` computed at read
+       time — the same class of defect as `BL-INV-20418` reading two different
+       amounts on two boards. `issueInvoice` writes the subtotal, the VAT and the
+       gross once, freezes who it was billed to, and takes the reference from the
+       `BL-INV-…` sequence rather than from an internal charge reference nobody
+       could quote at a bank.
+    */
+    const card = await tx.paymentMethod.findUnique({
+      where: { businessId },
+      select: { brand: true, last4: true },
     });
+
+    const invoice = await issueInvoice(
+      {
+        businessId,
+        issuedAt: now,
+        // Paid, because the charge above succeeded before this transaction
+        // opened. An `issued` row here would be an invoice for money already
+        // taken.
+        paidAt: now,
+        paidBy: card,
+        vatRate: proration.vatRate,
+        lines: [
+          {
+            kind: "subscription",
+            description: `${quote.toPlan.name}, ${proration.daysRemaining} of ${periodDays(quote.periodStartedAt, renewsAt)} days`,
+            fils: proration.chargeLine.fils,
+            periodStart: now,
+            periodEnd: renewsAt,
+          },
+          ...(proration.creditLine.fils > 0
+            ? [
+                {
+                  kind: "subscription_credit" as const,
+                  description: `${quote.fromPlan.name}, ${proration.daysRemaining} unused days`,
+                  fils: -proration.creditLine.fils,
+                  periodStart: now,
+                  periodEnd: renewsAt,
+                },
+              ]
+            : []),
+        ],
+      },
+      tx,
+    );
 
     return invoice.id;
   });
 
-  return { ok: true, invoiceId };
+  return { ok: true, invoiceId, scheduled: false };
 }
 
 /* ── Changing term — the same plan, paid differently ─────────────────────── */
@@ -412,6 +546,9 @@ export async function quoteTermChange(
   const nextRenewsAt = advance(now, toTerm, anchorDay);
   const newPeriodFils = Math.round(periodPriceAed(caps, toTerm) * FILS_PER_AED);
 
+  const netFils = newPeriodFils - leaving.creditLine.fils;
+  const vatFils = vatOn(netFils);
+
   const proration: Proration = {
     creditLine: leaving.creditLine,
     chargeLine: {
@@ -420,9 +557,14 @@ export async function quoteTermChange(
       days: periodDays(now, nextRenewsAt),
       perDayFils: perDayFils(periodPriceAed(caps, toTerm), periodDays(now, nextRenewsAt)),
     },
-    netFils: newPeriodFils - leaving.creditLine.fils,
+    netFils,
+    // A term change is a supply like any other and carries VAT on the net, the
+    // same convention board 3m states for everything else on this surface.
+    vatFils,
+    dueFils: netFils + vatFils,
     daysRemaining: leaving.daysRemaining,
     renewsAt: nextRenewsAt,
+    vatRate: VAT_RATE,
   };
 
   return {
@@ -543,7 +685,9 @@ export async function changeTerm(
     return invoice.id;
   });
 
-  return { ok: true, invoiceId };
+  // A term change is never scheduled: there is no period end to wait for when
+  // the period itself is what is changing.
+  return { ok: true, invoiceId, scheduled: false };
 }
 
 export interface CancellationSummary {
@@ -610,6 +754,46 @@ export async function cancelSubscription(
       lost: ["extra_seats", "ranking", "placement"],
     },
   };
+}
+
+export type ResumeResult =
+  | { ok: true; planName: string; renewsAt: Date }
+  | { ok: false; error: "not_cancelling" };
+
+/**
+ * `Resume Pro`. The way back from a scheduled cancellation.
+ *
+ * Board 3m's cancellation-scheduled state puts this in the banner that replaces
+ * the cancel card, and it costs nothing: the period is paid for, the plan never
+ * moved, and un-cancelling is two columns going back to null. There is no charge
+ * and no new period — a seller who changed their mind inside the month they had
+ * already bought has not bought anything else.
+ *
+ * Writes no MRR movement, deliberately. `applyEndedCancellations` books churn on
+ * the day the money stops, and this ran before that day: nothing was ever
+ * recorded to reverse, and writing a pair of offsetting rows would put a
+ * cancellation that did not happen into board 4g's waterfall.
+ */
+export async function resumeSubscription(
+  actor: Actor,
+  businessId: string,
+): Promise<ResumeResult> {
+  assertCanChangePlan(actor);
+  if (actor.businessId !== businessId) return { ok: false, error: "not_cancelling" };
+
+  const subscription = await prisma.subscription.findUnique({
+    where: { businessId },
+    select: { cancelledAt: true, renewsAt: true, plan: { select: { name: true } } },
+  });
+  if (!subscription?.cancelledAt) return { ok: false, error: "not_cancelling" };
+
+  await prisma.subscription.update({
+    where: { businessId },
+    // Both columns together, or the check constraint refuses the row.
+    data: { cancelledAt: null, endsAt: null, status: "active" },
+  });
+
+  return { ok: true, planName: subscription.plan.name, renewsAt: subscription.renewsAt };
 }
 
 /**
@@ -687,18 +871,24 @@ export async function applyEndedCancellations(now = new Date()) {
         data: { planId: "free" },
       });
       /*
-       * Hidden, not deleted. A seller who comes back next quarter finds their
-       * catalogue where they left it, and a seller who does not still has not
-       * lost work they did. `draft` is the state the CSV importer already uses
-       * for the same reason.
-       *
-       * The verification tier is deliberately untouched: it records what we
-       * checked, and cancelling a subscription does not un-check it.
-       */
-      await tx.product.updateMany({
-        where: { businessId: subscription.businessId, status: "live" },
-        data: { status: "draft" },
-      });
+         There was a second hide here, and it undid the first.
+
+         `hideOverPlanCap` above drafts what the Free cap has no room for and
+         leaves the ten that stay. Directly after it, this drafted *every*
+         remaining live product — so a cancelling Pro seller with 1,204 products
+         ended on Free with none live, and the call above did nothing that
+         survived the same transaction.
+
+         That is exactly the sentence board 3m's fourth correction is about,
+         reached from the opposite side: the boards claimed all 1,204 "stay saved
+         but hidden", and the code made the claim true. The rule `3f` §6 owns is
+         that **ten stay live and the seller picks which**, and criterion 9
+         restates it for the cancel path. Deleting these four lines is what makes
+         both true.
+
+         The verification tier is still deliberately untouched: it records what
+         we checked, and cancelling a subscription does not un-check it.
+      */
     });
   }
 

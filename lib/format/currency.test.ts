@@ -47,3 +47,29 @@ describe("formatAED", () => {
     expect(formatAED(15624)).toMatch(/^AED [\d,]+$/);
   });
 });
+
+describe("exact — board 3m, criterion 3", () => {
+  it("keeps the fils that display rounds away", () => {
+    // The second correction on the pair: a `THIS PERIOD` panel read `AED 1,784`
+    // over two lines summing to 1,699, so the 84.95 of VAT was invisible and the
+    // total was unreproducible.
+    expect(formatAED(1783.95, { style: "exact" })).toBe("AED 1,783.95");
+    expect(formatAED(1783.95)).toBe("AED 1,784");
+  });
+
+  it("carries the currency, unlike quote", () => {
+    expect(formatAED(313.95, { style: "exact" })).toBe("AED 313.95");
+    expect(formatAED(313.95, { style: "quote" })).toBe("313.95");
+  });
+
+  it("shows a whole amount to two places rather than dropping them", () => {
+    // `Due today AED 0.00` on board 11f. "AED 0" reads as absence rather than as
+    // a figure somebody computed.
+    expect(formatAED(0, { style: "exact" })).toBe("AED 0.00");
+  });
+
+  it("signs a credit the same way the other styles do", () => {
+    expect(formatAED(-76.65, { style: "exact" })).toBe("-AED 76.65");
+    expect(formatAED(-76.65, { style: "exact", accounting: true })).toBe("(AED 76.65)");
+  });
+});

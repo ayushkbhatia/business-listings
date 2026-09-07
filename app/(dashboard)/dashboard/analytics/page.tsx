@@ -2,6 +2,7 @@ import { ShareBars, StatCard } from "@/components/display";
 import { Card, Panel } from "@/components/structure";
 import { getAnalytics } from "@/lib/db/queries/analytics";
 import { analyticsScopeFor } from "@/lib/auth/subject";
+import { effectiveFor } from "@/lib/billing/entitlements-service";
 import { notFound } from "next/navigation";
 import { formatCount, formatPercent } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -35,6 +36,19 @@ export default async function AnalyticsPage() {
    */
   const scope = analyticsScopeFor(seat.actor);
   if (!scope) notFound();
+
+  /*
+     And the plan, which is the other half of the gate.
+
+     Board 11a locks analytics behind Basic and board 11f renders it as a row in
+     the comparison grid — which makes it config rather than a constant, and an
+     entitlement the billing screen advertises has to be enforced where the thing
+     happens. `effectiveFor` reads the seller's own snapshot, so an account
+     grandfathered onto a plan that carried analytics keeps it after a tier is
+     retuned.
+  */
+  const caps = await effectiveFor(seat.businessId);
+  if (caps && !caps.analytics) notFound();
 
   const [analytics, badges] = await Promise.all([
     getAnalytics(seat.businessId, undefined, scope),

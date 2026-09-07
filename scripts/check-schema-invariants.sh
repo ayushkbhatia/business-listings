@@ -44,4 +44,20 @@ if grep -qE '^[[:space:]]*model[[:space:]]+QuoteLine[[:space:]]*\{' <<<"$CODE"; 
   fi
 fi
 
+# Invariants Prisma has no syntax for, so a regeneration cannot express them and
+# would quietly drop them. Each is asserted against the migration that owns it.
+#
+# Board 11f Q8: one pending plan change per business. Two make the effective-date
+# arithmetic uncheckable, because the second would have to know whether the first
+# had landed to know what it was changing from.
+if grep -qE '^[[:space:]]*model[[:space:]]+SubscriptionChange[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE 'CREATE UNIQUE INDEX[^;]*"subscription_change_one_pending"' prisma/migrations; then
+    echo "   pass — one pending subscription change per business, by partial unique index"
+  else
+    echo "   FAIL — SubscriptionChange exists with no subscription_change_one_pending index."
+    echo "     Prisma cannot express a partial unique index; it lives in the migration."
+    fail=1
+  fi
+fi
+
 exit $fail

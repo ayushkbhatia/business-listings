@@ -41,6 +41,17 @@ describe("criterion 1 — every figure the page prints exists on the row", () =>
           // the page reads it to decide whether a plan can be sold by the year
           // at all, and null means it cannot.
           "annualMonthsCharged",
+          /*
+             The three on/off entitlements board 11f's grid renders beside the
+             caps. They join the list for the same reason `storageMb` did, and
+             the failure mode is the mirror image: a dropped *cap* reads as
+             unlimited through `capFor`, and a dropped *entitlement* reads as
+             `undefined` — falsy — so the plan renders as carrying less than it
+             sells. Both are a plan misdescribed by a `select`.
+          */
+          "analytics",
+          "csvImport",
+          "sponsoredEligible",
           // Board 3b folded the category cap into `PlanCaps` with the other
           // limits. It had lived on `Plan` since handoff 1 and only board 2c
           // read it, directly — so the editor would have been the second place
@@ -56,10 +67,10 @@ describe("criterion 1 — every figure the page prints exists on the row", () =>
           "productLimit",
           "rankingMultiplier",
           "sortOrder",
-          // Board 3i's storage allowance. The page does not print it yet — 11f
-          // owns the plan matrix — but `PlanCaps` requires it, and a plan
-          // object missing a cap reads as unlimited through `capFor`, which is
-          // exactly the failure this assertion exists to catch.
+          // Board 3i's storage allowance. 11f now owns the plan matrix and
+          // prints it; `PlanCaps` requires it either way, and a plan object
+          // missing a cap reads as unlimited through `capFor`, which is exactly
+          // the failure this assertion exists to catch.
           "storageMb",
           "teamSeats",
           "withdrawnAt",
