@@ -5805,10 +5805,7 @@ async function seedBranchNetwork(db: Db) {
       hours: OFFICE_WEEK,
       radius: null,
       closure: null,
-      // Board 3c's `Hidden` row. A sales office the seller keeps off the
-      // directory — and the state whose consequence the screen exists to
-      // state, because "hidden" also stops the RFQs and nobody expects that.
-      published: false,
+      published: true,
       everPublished: true,
     },
     {
@@ -5853,12 +5850,55 @@ async function seedBranchNetwork(db: Db) {
       hours: WEEK,
       radius: null,
       closure: null,
-      /*
-         Board 3c's `Draft` row: never published, no pin. Distinct from the
-         hidden office above in exactly one way that anything reads — board 3d
-         leaves it out of the branch picker, because a branch with no buyers has
-         made no claims to keep straight.
-      */
+      published: true,
+      everPublished: true,
+    },
+    /*
+       Board 3c's `Hidden` and `Draft` rows, and they are **added** rather than
+       taken from the six above.
+
+       The first version of this fixture demonstrated those two states by
+       unpublishing the Mussafah sales office and the Ajman trade counter — and
+       board 1f's acceptance test asserts on both of them by name: `Sales only`
+       on the office, `No map pin yet` on the unpinned counter, and `6 branches`
+       over the set. Three shards went red. A shared fixture is shared, and
+       taking a state away from one board to give it to another is not a
+       trade the second board gets to make.
+
+       So the flagship keeps its six published branches and gains two that no
+       buyer surface renders: `1f` filters on `published`, and board 3d's picker
+       offers the hidden one and skips the draft.
+    */
+    {
+      slug: "mussafah-m17",
+      type: "trade_counter" as const,
+      emirate: "abu_dhabi" as const,
+      addressLine: "Unit 7, Mussafah M-14 — counter, off the directory",
+      lat: 24.3488,
+      lng: 54.5121,
+      precision: "exact" as const,
+      phone: "025531191",
+      hours: WEEK,
+      radius: null,
+      closure: null,
+      // Live once, taken down. Hidden, not draft — board 3d still offers it.
+      published: false,
+      everPublished: true,
+    },
+    {
+      slug: "ajman-new-industrial-area",
+      type: "workshop" as const,
+      emirate: "ajman" as const,
+      addressLine: "Plot 3, Al Jurf Industrial 1 — being fitted out",
+      lat: null,
+      lng: null,
+      precision: null,
+      phone: null,
+      hours: WEEK,
+      radius: null,
+      closure: null,
+      // Never published, no pin. The row board 3c's issue card names and board
+      // 3d's picker leaves out.
       published: false,
       everPublished: false,
     },
