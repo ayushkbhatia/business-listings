@@ -5,6 +5,7 @@ import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { isCode, matchNeedle } from "@/lib/search/index-text";
 import { nearestKm } from "@/lib/geo/distance";
+import { measurable } from "@/lib/locations/branch";
 import {
   resolveOrigin,
   shapeOf,
@@ -448,8 +449,18 @@ export async function searchBusinesses(
          unpinned has no position. Both score as unknown rather than as far,
          because not knowing where somebody is must not read as evidence that
          they are inconvenient.
+
+         `measurable` is board 3c's third criterion and it makes the null case
+         much commoner than it looks. An approximate pin is the *area's* centre,
+         so the kilometres it yields are the distance to the area and were being
+         presented as the distance to the address. That was not a rounding
+         error: on 2026-09-07, 116 of the 118 pinned branches in production sat
+         within the seed's own jitter of their area centroid, which is to say
+         the distance signal for very nearly the whole directory was a restated
+         area filter. Unknown is the honest answer until somebody drags a
+         marker, and unknown already scores as unknown rather than as far.
       */
-      distanceKm: nearestKm(origin, business.locations),
+      distanceKm: nearestKm(origin, measurable(business.locations)),
       planMultiplier: business.plan?.rankingMultiplier ?? 1,
       // Ops moving a listing for a reason of ours, with an expiry on it. Never
       // labelled sponsored: nobody paid for this one.
@@ -601,7 +612,9 @@ export async function searchProducts(
       verificationTier: product.business.verificationTier,
       responseTimeMedianMs: product.business.responseTimeMedianMs,
       specCompleteness: product.business.specCompleteness,
-      distanceKm: nearestKm(origin, product.business.locations),
+      // The same filter as the businesses tab, and it has to be: one supplier
+      // must not be nearer on the products tab than on the one beside it.
+      distanceKm: nearestKm(origin, measurable(product.business.locations)),
       planMultiplier: product.business.plan?.rankingMultiplier ?? 1,
     }),
     weights,

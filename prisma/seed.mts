@@ -11,6 +11,7 @@ loadEnv({ path: [".env.local", ".env"], quiet: true });
 
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../lib/db/generated/client.js";
+import type { Emirate } from "../lib/db/generated/enums.js";
 import { assertLocalTarget, NonLocalTargetError } from "../lib/db/target.js";
 import {
   AREAS,
@@ -718,22 +719,68 @@ async function main() {
       });
     }
 
-    // Locations. One head office always; a second site for larger sellers. Two
-    // in every ten are deliberately unpinned — lat/lng null — so the map
-    // exclusion rule and the seller-facing gap both have real data.
+    /*
+       Locations. One head office always; a second site for larger sellers.
+
+       Three shapes of pin, because board 3c's screen has three states and each
+       carries a different consequence:
+
+         · unpinned      two in ten. lat/lng null — absent from map search, and
+                         the row the seller's issue card exists to name.
+         · approximate   the default here, and an accurate description of what
+                         this loop produces: the *area's* centroid with about
+                         600 m of jitter on it. It is not the address, so it is
+                         not measurable, and calling it `exact` is exactly the
+                         claim board 3c's third criterion refuses.
+         · exact         about half the ones *this loop* pins, standing in for
+                         a seller who dragged the marker to their gate on board
+                         2d.
+
+                         Half rather than a token few, because "measurable" has
+                         to survive being sliced. A third looked generous until
+                         `tests/integration/search-distance` asked for two
+                         measurable suppliers among the five a Dubai valve
+                         search returns and found one — the rate is over the
+                         whole seed, and any real query is a narrow cut of it.
+
+                         The area-page and pump lattices below stay largely
+                         approximate, which is correct: they are offsets around
+                         an area's centre, so the platform-wide split is much
+                         thinner than half and should be.
+    */
     const locationCount = claimed ? int(1, 3) : 1;
     for (let l = 0; l < locationCount; l += 1) {
       const la = l === 0 ? area : pick(areaPool);
       const unpinned = rnd() < 0.2;
+      /*
+         Derived from the slug, not drawn.
+
+         `rnd` is one sequence for the whole seed and every consumer downstream
+         reads the next value from it, so an extra draw here renames every
+         business generated after this loop — which is how `seedAtMonthlyCap`
+         came to look for a company that no longer existed.
+
+         So the four values below are hoisted out of the object literal in the
+         order they were evaluated in it — `type`, then the address, then the
+         two coordinates — and `placedByHand` is derived from the jitter that
+         was drawn anyway. The sequence is untouched and the split is uniform,
+         which two hashes over the slug were not: these slugs share prefixes and
+         `-llc` endings, and both attempts clustered onto one residue.
+      */
+      const type = l === 0 ? "head_office" : pick(LOCATION_TYPES.slice(1));
+      const addressLine = `Warehouse ${int(2, 48)}, Street ${int(4, 32)}, ${la.name}`;
+      const lat = unpinned ? null : Number((la.lat + (rnd() - 0.5) * 0.012).toFixed(6));
+      const lng = unpinned ? null : Number((la.lng + (rnd() - 0.5) * 0.012).toFixed(6));
+      const placedByHand = lat !== null && Math.round(lat * 1e6) % 2 === 0;
       await prisma.location.create({
         data: {
           businessId: business.id,
-          type: l === 0 ? "head_office" : pick(LOCATION_TYPES.slice(1)),
+          type,
           emirate,
           areaId: areaByslug.get(la.slug)!,
-          addressLine: `Warehouse ${int(2, 48)}, Street ${int(4, 32)}, ${la.name}`,
-          lat: unpinned ? null : Number((la.lat + (rnd() - 0.5) * 0.012).toFixed(6)),
-          lng: unpinned ? null : Number((la.lng + (rnd() - 0.5) * 0.012).toFixed(6)),
+          addressLine,
+          lat,
+          lng,
           phone: `0${pick(["4", "6", "2", "6"])}${int(2000000, 8999999)}`,
           whatsapp: claimed ? `+9715${int(0, 8)}${int(1000000, 9999999)}` : null,
           phoneVerified: claimed && rnd() < 0.8,
@@ -748,7 +795,12 @@ async function main() {
           },
           ramadanHours: claimed && rnd() < 0.5 ? { all: [{ open: "09:00", close: "15:00" }] } : undefined,
           serviceRadiusKm: rnd() < 0.5 ? int(20, 120) : null,
+          geocodePrecision: unpinned ? null : placedByHand ? "exact" : "approximate",
           published: true,
+          // Live now, so it went live at some point. Board 3c reads the pair as
+          // "published" and only ever reads this one to tell a branch that was
+          // taken down from one that was never finished.
+          publishedAt: NOW,
           // A free-zone licence sitting in a mainland area is a real data
           // pattern worth having in the set.
           ...(isFreeZoneAuthority && l === 0 ? {} : {}),
@@ -1752,10 +1804,30 @@ async function seedPumps(db: Db, catBySlug: Map<string, string>) {
             areaId: area.id,
             addressLine: `Unit ${int(1, 90)}`,
             published: true,
+            publishedAt: NOW,
             // Jittered off the area centroid, or absent entirely. Never the
             // centroid itself — that is the approximation criterion 4 forbids.
+            //
+            // Every second one is `exact`, and that is a claim about
+            // *provenance* rather than about the decimals: the column records
+            // who placed a pin, and these eight are the platform's stand-in for
+            // claimed sellers who went through board 2d and dragged the marker.
+            // The rest are `approximate` — jittered off the centroid is still
+            // *from* it, so those coordinates say which part of Dubai the
+            // seller is in and nothing finer.
+            //
+            // The split is what makes distance testable at all. These are the
+            // suppliers a `valve` search in Dubai returns, and with all twelve
+            // approximate `tests/integration/search-distance` finds one
+            // measurable row and has nothing to put in order.
             lat: unpinned || area.lat === null ? null : Number((area.lat + (rnd() - 0.5) * 0.01).toFixed(6)),
             lng: unpinned || area.lng === null ? null : Number((area.lng + (rnd() - 0.5) * 0.01).toFixed(6)),
+            geocodePrecision:
+              unpinned || area.lat === null || area.lng === null
+                ? null
+                : i % 2 === 0
+                  ? "exact"
+                  : "approximate",
           },
         },
       },
@@ -4408,11 +4480,26 @@ async function seedReviewDepth(db: Db) {
           areaId: area.id,
           addressLine: "Warehouse 11, Street 8, Al Quoz Industrial 3",
           published: true,
+          publishedAt: days(-380),
           phone: "043470112",
           whatsapp: "+971506610044",
           phoneVerified: true,
           lat: area.lat === null ? null : Number((area.lat + 0.004).toFixed(6)),
           lng: area.lng === null ? null : Number((area.lng - 0.003).toFixed(6)),
+          /*
+             `exact`, and the coordinates are still an offset from the area's
+             centre — those two facts do not conflict, because the column
+             records *who placed the pin* rather than how good it is. Nothing
+             can look at a pair of floats and tell a gate from a centroid.
+
+             This is the flagship claimed seller: Pro plan, a filled storefront,
+             a team, a licence. If any fixture supplier has been through board
+             2d and dragged their marker it is this one, and saying so is what
+             puts a second measurable supplier in the five a Dubai valve search
+             returns — which `tests/integration/search-distance` needs to have
+             anything to put in order.
+          */
+          geocodePrecision: area.lat === null || area.lng === null ? null : "exact",
           hours: {
             sun: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
             mon: [{ open: "08:00", close: "13:00" }, { open: "16:00", close: "20:00" }],
@@ -5711,10 +5798,15 @@ async function seedBranchNetwork(db: Db) {
       addressLine: "Office 402, Al Fahim Building, Mussafah M-14",
       lat: 24.3512,
       lng: 54.5089,
+      // Placed by hand: this one is 110 km from the head office and is what
+      // makes board 3c's map show a network rather than a cluster.
+      precision: "exact" as const,
       phone: "025531190",
       hours: OFFICE_WEEK,
       radius: null,
       closure: null,
+      published: true,
+      everPublished: true,
     },
     {
       /* A closure, which outranks the hours on the badge and gets its own strip. */
@@ -5724,9 +5816,18 @@ async function seedBranchNetwork(db: Db) {
       addressLine: "Plot 217, Industrial Area 12",
       lat: 25.3218,
       lng: 55.4033,
+      /*
+         Board 3c's `Approx` row, and the second line of its issue card. This is
+         the area's centre rather than the plot, so buyers browsing Sharjah find
+         it and `near me` does not — which is the sentence the seller needs and
+         the reason the fix is worth their time.
+      */
+      precision: "approximate" as const,
       phone: "065528810",
       hours: WEEK,
       radius: 40,
+      published: true,
+      everPublished: true,
       closure: {
         from: days(-6),
         until: days(24),
@@ -5744,10 +5845,62 @@ async function seedBranchNetwork(db: Db) {
       addressLine: "Shop 11, Al Jurf Industrial 1",
       lat: null,
       lng: null,
+      precision: null,
       phone: "067481120",
       hours: WEEK,
       radius: null,
       closure: null,
+      published: true,
+      everPublished: true,
+    },
+    /*
+       Board 3c's `Hidden` and `Draft` rows, and they are **added** rather than
+       taken from the six above.
+
+       The first version of this fixture demonstrated those two states by
+       unpublishing the Mussafah sales office and the Ajman trade counter — and
+       board 1f's acceptance test asserts on both of them by name: `Sales only`
+       on the office, `No map pin yet` on the unpinned counter, and `6 branches`
+       over the set. Three shards went red. A shared fixture is shared, and
+       taking a state away from one board to give it to another is not a
+       trade the second board gets to make.
+
+       So the flagship keeps its six published branches and gains two that no
+       buyer surface renders: `1f` filters on `published`, and board 3d's picker
+       offers the hidden one and skips the draft.
+    */
+    {
+      slug: "mussafah-m17",
+      type: "trade_counter" as const,
+      emirate: "abu_dhabi" as const,
+      addressLine: "Unit 7, Mussafah M-14 — counter, off the directory",
+      lat: 24.3488,
+      lng: 54.5121,
+      precision: "exact" as const,
+      phone: "025531191",
+      hours: WEEK,
+      radius: null,
+      closure: null,
+      // Live once, taken down. Hidden, not draft — board 3d still offers it.
+      published: false,
+      everPublished: true,
+    },
+    {
+      slug: "ajman-new-industrial-area",
+      type: "workshop" as const,
+      emirate: "ajman" as const,
+      addressLine: "Plot 3, Al Jurf Industrial 1 — being fitted out",
+      lat: null,
+      lng: null,
+      precision: null,
+      phone: null,
+      hours: WEEK,
+      radius: null,
+      closure: null,
+      // Never published, no pin. The row board 3c's issue card names and board
+      // 3d's picker leaves out.
+      published: false,
+      everPublished: false,
     },
   ];
 
@@ -5775,7 +5928,9 @@ async function seedBranchNetwork(db: Db) {
         hours: row.hours,
         ramadanHours: row.type === "sales_office" ? undefined : RAMADAN,
         serviceRadiusKm: row.radius,
-        published: true,
+        geocodePrecision: row.precision,
+        published: row.published,
+        publishedAt: row.everPublished ? days(-120) : null,
         closedFrom: row.closure?.from ?? null,
         closedUntil: row.closure?.until ?? null,
         closureReason: row.closure?.reason ?? null,
@@ -5799,6 +5954,57 @@ async function seedBranchNetwork(db: Db) {
   });
 
   /*
+     Board 3c §4 — the coverage chips, as taxonomy rows.
+
+     `deliveryNote` above is the sentence a supplier writes and board 1f prints.
+     These are the same claim in a form something can match on: `1h` routes RFQs
+     against them and `1b`/`1c` facet on the same areas, which is why they are
+     rows rather than the words in that note.
+
+     Two scales, both from the taxonomy. The emirate rows are the broad promise;
+     the Al Quoz row narrows it, which is the case a single scale cannot express
+     — a supplier stocked in Al Quoz genuinely does deliver there faster than
+     they deliver to Hatta, and the finer promise is the one they are selling.
+
+     The board's `Northern Emirates · 48h` chip is expanded rather than copied.
+     It is a colloquial grouping with no row behind it in any table a buyer can
+     filter on, so a chip saying it would be a promise no query could match.
+  */
+  const alQuoz = await db.area.findFirst({
+    where: { slug: "al-quoz-industrial-3" },
+    select: { id: true },
+  });
+
+  const coverage: { emirate: Emirate; areaId: string | null; hours: number }[] = [
+    { emirate: "dubai", areaId: null, hours: 24 },
+    { emirate: "dubai", areaId: alQuoz?.id ?? null, hours: 0 },
+    { emirate: "sharjah", areaId: null, hours: 24 },
+    { emirate: "abu_dhabi", areaId: null, hours: 48 },
+    { emirate: "ajman", areaId: null, hours: 48 },
+    { emirate: "ras_al_khaimah", areaId: null, hours: 48 },
+  ];
+
+  for (const row of coverage) {
+    // The Al Quoz row collapses onto the Dubai one if that area is missing from
+    // a thinner seed, and the two partial unique indexes would refuse the
+    // duplicate. Skip rather than let the seed die on a fixture detail.
+    if (row.hours === 0 && row.areaId === null) continue;
+    const existing = await db.businessCoverage.findFirst({
+      where: { businessId: seller.id, emirate: row.emirate, areaId: row.areaId },
+      select: { id: true },
+    });
+    if (existing) continue;
+    await db.businessCoverage.create({
+      data: {
+        businessId: seller.id,
+        emirate: row.emirate,
+        areaId: row.areaId,
+        leadTimeHours: row.hours,
+      },
+    });
+  }
+
+  /*
      Criterion 5 needs a supplier whose locations are *all* unpinned, so the map
      column is replaced by the explanatory panel rather than showing a partial
      map. Unpinning one branch of a multi-branch business would not reach it.
@@ -5816,7 +6022,11 @@ async function seedBranchNetwork(db: Db) {
   if (unpinnable && unpinnable._count.locations > 0) {
     await db.location.updateMany({
       where: { businessId: unpinnable.id },
-      data: { lat: null, lng: null },
+      // The precision goes with the coordinates. `location_precision_matches_pin`
+      // refuses a row that claims to know how a pin it does not have was placed,
+      // and it is right to: that row would read as `approximate` on board 3c's
+      // table while the map drew nothing.
+      data: { lat: null, lng: null, geocodePrecision: null },
     });
     console.log(`   ${unpinnable.slug} left unpinned, for the no-pins panel`);
   }

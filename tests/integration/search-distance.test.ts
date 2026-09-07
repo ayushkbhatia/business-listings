@@ -4,6 +4,7 @@ import { searchBusinesses } from "@/lib/db/queries";
 import { resolveOrigin, shapeOf, weightsForShape } from "@/lib/search/origin";
 import { DEFAULT_WEIGHTS } from "@/lib/search/ranking";
 import { EMIRATE_CENTRES, haversineKm } from "@/lib/geo/distance";
+import { measurable } from "@/lib/locations/branch";
 import type { SearchQuery } from "@/lib/search/query";
 
 /**
@@ -117,17 +118,29 @@ describe("distance actually reaches the ranking", () => {
       { weights: { ...DEFAULT_WEIGHTS, relevance: 0, verificationTier: 0, responseTime: 0, specCompleteness: 0, planTier: 0, distance: 100 } },
     );
 
+    /*
+       Reconstructed through `measurable`, which is the same filter the query
+       ranked with — board 3c's third criterion.
+
+       Reconstructing from every pinned branch instead is what this assertion
+       used to do, and it stopped agreeing the moment `geocode_precision`
+       existed: an approximate pin is the *area's* centre, so it produces a
+       plausible number that the ranking correctly refused to use. Two different
+       distances for one supplier, and the test would have been the one that was
+       wrong.
+    */
     const distances = dubai.rows.map((row) =>
       Math.min(
-        ...row.locations
+        ...measurable(row.locations)
           .filter((l) => l.lat !== null && l.lng !== null)
           .map((l) => haversineKm(EMIRATE_CENTRES.dubai!, { lat: l.lat!, lng: l.lng! })),
       ),
     );
 
     // Rows with a real distance must be in ascending order among themselves.
-    // Infinity is a supplier with no pinned branch — unknown, scored at half
-    // credit, so it legitimately sits wherever that lands it.
+    // Infinity is a supplier with no branch we may measure — unpinned, or
+    // pinned only to an area — which scores as unknown at half credit and so
+    // legitimately sits wherever that lands it.
     const known = distances.filter((km) => Number.isFinite(km));
     expect(known.length, "no pinned suppliers matched, nothing to order").toBeGreaterThan(1);
     expect(known).toEqual([...known].sort((a, b) => a - b));

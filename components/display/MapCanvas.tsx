@@ -13,7 +13,21 @@ import { circlePolygon } from "@/lib/geo/distance";
  *   moss pin      selected, or the head office
  *   ink pin       verified
  *   outlined pin  unverified or unclaimed
+ *   amber pin     a coordinate we know is approximate
  *   circle        a cluster, with its count
+ *
+ * The amber one is board 3c's addition and it is the only one that describes
+ * the *pin* rather than the supplier behind it. A branch geocoded to its area
+ * rather than its address is drawn where we believe it is and marked as a
+ * belief, which is the honest third option between placing it confidently and
+ * hiding it. The ring that would say how approximate is deliberately absent at
+ * this zoom: 1.8 km is six pixels across a 110 km view, so the dot carries the
+ * state and the caller's issue card carries the sentence.
+ *
+ * It is a fourth value rather than a second axis because the alternative was a
+ * second map component. Board 3c's rail is otherwise this one exactly —
+ * multi-pin, read-only, fitted to its bounds — and a fork would be a second pin
+ * vocabulary to keep in step with §03.5.
  *
  * A location with no coordinates never appears. It is not dropped at an area
  * centroid and it is not silently omitted from the count either — `excluded`
@@ -31,7 +45,7 @@ export interface MapPin {
   lng: number;
   label: string;
   /** Drives the pin treatment. Never a colour prop. */
-  kind: "head_office" | "verified" | "unverified";
+  kind: "head_office" | "verified" | "unverified" | "approximate";
   href?: string;
 }
 
@@ -83,6 +97,20 @@ export interface MapCanvasProps {
    * this — no internal open state, so the button and the overlay cannot disagree.
    */
   radii?: readonly { id: string; lat: number; lng: number; km: number }[];
+  /**
+   * Draw each pin's name beside it — board 3c's overview rail.
+   *
+   * Off by default, and it stays off for the three maps that had this component
+   * before. On board 1c a label per pin is two hundred labels over a clustered
+   * map; on 1f and 6a the names are already in the column beside it. On 3c the
+   * map *is* the column — five branches spread over 110 km, where "which of
+   * these is Sharjah" is the question the rail exists to answer and a hover
+   * title cannot answer it on a touch screen.
+   *
+   * The names come from `pin.label`, which every caller already sets, so this
+   * is a rendering switch rather than a second data path.
+   */
+  labelled?: boolean;
 }
 
 const DEFAULT_STYLE =
@@ -102,6 +130,7 @@ export function MapCanvas({
   styleUrl = DEFAULT_STYLE,
   radii,
   interactive = true,
+  labelled = false,
 }: MapCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -237,11 +266,29 @@ export function MapCanvas({
         if (!center && pins.length > 1) {
           const bounds = new maplibre.LngLatBounds();
           for (const pin of pins) bounds.extend([pin.lng, pin.lat]);
-          map.fitBounds(bounds, { padding: 48, maxZoom: 14, animate: false });
+          /*
+             `fitBounds` pads the *points*, and a labelled pin is much wider
+             than a point.
+
+             48 all round is right for a bare dot. With labels on, the pill runs
+             about 150 px to one side of its dot and the attribution plate sits
+             over the bottom 50 — so an edge pin fitted to 48 puts its name off
+             the frame, and the southernmost one puts it behind the licence
+             text. Asymmetric because the overflow is: sideways for the pill,
+             downwards for the plate.
+          */
+          map.fitBounds(bounds, {
+            padding: labelled
+              ? { top: 56, bottom: 84, left: 72, right: 72 }
+              : 48,
+            maxZoom: 14,
+            animate: false,
+          });
         }
       });
 
-      const elements = new Map<string, { node: HTMLElement; kind: MapPin["kind"] }>();
+      const elements = new Map<string, { dot: HTMLElement; kind: MapPin["kind"] }>();
+      const sides = labelled ? labelSides(pins) : null;
       for (const pin of pins) {
         /*
            A button where clicking one does something, a plain element where it
@@ -257,16 +304,47 @@ export function MapCanvas({
           element.setAttribute("aria-hidden", "true");
         }
         element.title = pin.label;
-        element.className = pinClass(pin.kind, pin.id === selectedIdRef.current);
-        elements.set(pin.id, { node: element, kind: pin.kind });
+
+        /*
+           Unlabelled, the element *is* the dot — which is what every caller
+           before board 3c gets, byte for byte. Labelled, the dot becomes a
+           child and the element becomes the row that holds it and its pill, so
+           the class swap on selection still has one node to write to.
+        */
+        let dot = element;
+        let anchor: "left" | "right" | "bottom" | undefined;
+        const side = sides?.get(pin.id) ?? null;
+        if (sides && side) {
+          element.className = cn(
+            "flex items-center gap-1",
+            side === "top" && "flex-col-reverse gap-0.5",
+            side === "start" && "flex-row-reverse",
+          );
+          dot = document.createElement("span");
+          const pill = document.createElement("span");
+          pill.className = cn(
+            "max-w-[9rem] truncate rounded-tag bg-card/95 px-1.5 py-0.5",
+            "font-mono text-eyebrow uppercase tracking-wide text-body shadow-raised",
+          );
+          pill.textContent = pin.label;
+          element.append(dot, pill);
+          // The dot sits on the coordinate whichever way the pill runs, so the
+          // element's anchor is the edge the dot is on.
+          anchor = side === "start" ? "right" : side === "end" ? "left" : "bottom";
+        }
+
+        dot.className = pinClass(pin.kind, pin.id === selectedIdRef.current);
+        elements.set(pin.id, { dot, kind: pin.kind });
         markersRef.current.push(
-          new maplibre.Marker({ element }).setLngLat([pin.lng, pin.lat]).addTo(map),
+          new maplibre.Marker({ element, ...(anchor ? { anchor } : {}) })
+            .setLngLat([pin.lng, pin.lat])
+            .addTo(map),
         );
       }
 
       applySelectionRef.current = (id) => {
         for (const [pinId, entry] of elements) {
-          entry.node.className = pinClass(entry.kind, pinId === id);
+          entry.dot.className = pinClass(entry.kind, pinId === id);
         }
       };
       applyRadiiRef.current = (rings) => drawRadii(map, rings);
@@ -291,7 +369,7 @@ export function MapCanvas({
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [visible, pins, styleUrl, center, zoom, interactive, label]);
+  }, [visible, pins, styleUrl, center, zoom, interactive, label, labelled]);
 
   /*
      Selection, applied to the markers already on the map.
@@ -444,8 +522,93 @@ function drawRadii(map: MapLibreMap, rings: MapCanvasProps["radii"]): void {
 
 function pinClass(kind: MapPin["kind"], selected: boolean): string {
   const base =
-    "block size-3.5 cursor-pointer rounded-pill border-2 transition-colors duration-120 ease-out";
+    "block size-3.5 shrink-0 cursor-pointer rounded-pill border-2 transition-colors duration-120 ease-out";
   if (selected || kind === "head_office") return `${base} border-moss bg-moss`;
   if (kind === "verified") return `${base} border-ink bg-ink`;
+  /*
+     Amber before outlined, so a pin that is both approximate and unverified
+     reads as approximate. The two say different things and only one of them is
+     actionable: "we are not sure where this is" is a fact about the marker the
+     reader is looking at, and it is the one that changes whether they should
+     trust the position.
+  */
+  if (kind === "approximate") return `${base} border-warn bg-warn`;
   return `${base} border-line-strong bg-card`;
+}
+
+/**
+ * Which side of the dot the label sits on.
+ *
+ * Two jobs, both from board 3c §The map. Neighbours 15 km apart are about 35 px
+ * apart at national zoom, so opposing sides keep two labels legible where one
+ * side would overlap them. And a pin on the edge of the bounds must point
+ * **inward** — an outward label on the easternmost pin is clipped by the rail
+ * however the fit is computed, and no amount of padding fixes it because the
+ * pin is at the padding.
+ *
+ * Inward is decided against the midpoint of the spread rather than the map
+ * centre, because the two differ once the fit adds padding and it is the pins
+ * that have to stay inside.
+ */
+type LabelSide = "start" | "end" | "top";
+
+/** About 15 km at this latitude — the distance the board calls "neighbours". */
+const CROWDED_DEGREES = 0.15;
+
+function labelSides(pins: readonly MapPin[]): Map<string, LabelSide | null> {
+  const sides = new Map<string, LabelSide | null>();
+  if (pins.length === 0) return sides;
+
+  const lngs = pins.map((pin) => pin.lng);
+  const mid = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+
+  const sorted = [...pins].sort((a, b) => a.lat - b.lat || a.lng - b.lng);
+  const placed: { pin: MapPin; side: LabelSide }[] = [];
+
+  for (const pin of sorted) {
+    /*
+       Which sides are already taken in this pin's neighbourhood.
+
+       Degrees rather than pixels, because the pixels depend on a zoom this
+       function does not have and the fit is computed later. Two branches 15 km
+       apart are about 35 px apart at national zoom, which is closer than one
+       label is tall.
+    */
+    const taken = new Set(
+      placed
+        .filter(
+          (entry) =>
+            Math.abs(entry.pin.lat - pin.lat) < CROWDED_DEGREES &&
+            Math.abs(entry.pin.lng - pin.lng) < CROWDED_DEGREES,
+        )
+        .map((entry) => entry.side),
+    );
+
+    /*
+       Inward first. A pin on the edge of the bounds must point back into them:
+       an outward label on the easternmost pin is clipped by the frame however
+       the fit is computed, because the pin is *at* the padding.
+    */
+    const preferred: LabelSide = pin.lng > mid ? "start" : "end";
+    const side = ([preferred, "top", preferred === "start" ? "end" : "start"] as const).find(
+      (candidate) => !taken.has(candidate),
+    );
+
+    /*
+       A fourth pin in one neighbourhood gets a dot and no label.
+
+       Two branches half a kilometre apart cannot both be named at a zoom that
+       also has to show a branch 110 km away, and a label lying across another
+       label is worse than a label that is not there — the same reasoning that
+       keeps an unpinned branch off the map rather than at its area's centre.
+       Every name is in the table beside this, and in the `sr-only` list below.
+    */
+    if (!side) {
+      sides.set(pin.id, null);
+      continue;
+    }
+    sides.set(pin.id, side);
+    placed.push({ pin, side });
+  }
+  return sides;
 }

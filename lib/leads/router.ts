@@ -212,8 +212,18 @@ async function byBranch(enquiryId: string, seats: readonly string[]): Promise<st
 
   const branchIds = scoped.map((seat) => seat.branchId).filter((id): id is string => id !== null);
   if (branchIds.length > 0) {
+    /*
+       Published only. Board 3c criterion 2: a hidden branch receives no RFQs.
+
+       It reads as a detail and is not. `deliverToArea` matching a hidden
+       branch's area would hand the lead to that branch's scoped seat — the
+       sales office the seller took off the directory precisely so that buyers
+       would stop arriving through it. The seat is still a real person with a
+       real inbox, so nothing looks broken; the enquiry simply lands at the desk
+       the seller had decided was closed.
+    */
     const branches = await prisma.location.findMany({
-      where: { id: { in: branchIds } },
+      where: { id: { in: branchIds }, published: true },
       select: { id: true, area: { select: { name: true } } },
     });
     const match = branches.find(

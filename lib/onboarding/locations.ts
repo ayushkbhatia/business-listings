@@ -355,6 +355,16 @@ export type PinResult =
  * outside the country is refused rather than stored — it is a mis-drag or a bad
  * paste, and it would put this supplier's marker in the Gulf of Oman on every
  * search that draws a map.
+ *
+ * **`exact`, because a person put it there.** Board 3c's `geocode_precision`
+ * records who placed a pin rather than how precise the decimals look — nothing
+ * can examine a pair of floats and tell a gate from an area centre. This
+ * function and board 3c's `setPin` are the only two paths where somebody did,
+ * so they are the only two that write `exact`, and everything derived from the
+ * area writes `approximate`.
+ *
+ * A CHECK ties the column to the coordinates, which is how this was found: it
+ * refused every write here the moment it went on.
  */
 export async function pinBranch(
   businessId: string,
@@ -367,7 +377,7 @@ export async function pinBranch(
   const rounded = { lat: roundCoord(lat), lng: roundCoord(lng) };
   const { count } = await prisma.location.updateMany({
     where: { id: branchId, businessId },
-    data: rounded,
+    data: { ...rounded, geocodePrecision: "exact" },
   });
   if (count === 0) return { ok: false, reason: "not_found" };
   return { ok: true, ...rounded, savedAt: new Date() };

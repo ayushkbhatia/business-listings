@@ -233,6 +233,7 @@ model Area {
   publishedAt DateTime? @map("published_at")
 
   locations Location[]
+  coverage  BusinessCoverage[]
   pages     AreaPage[]
   lists     CuratedList[]
   demand    ScopeDemand[]
@@ -782,6 +783,7 @@ model Business {
   plan                   Plan?                    @relation(fields: [planId], references: [id], onDelete: SetNull)
   team                   User[]                   @relation("BusinessTeam")
   locations              Location[]
+  coverage               BusinessCoverage[]
   products               Product[]
   productQuestions       ProductQuestion[]
   media                  Media[]
@@ -883,6 +885,31 @@ model BusinessCategory {
   @@map("business_category")
 }
 
+/// How a branch's pin was placed, and therefore what it may be used for.
+///
+/// Two values, not three. "Missing" is not a precision — it is `lat IS NULL`,
+/// which the database already records, and a third enum value would let a row
+/// claim to have no pin while carrying coordinates. A CHECK ties the two
+/// together instead: a pinned branch has a precision, an unpinned one has none.
+///
+/// `exact` means a person put the marker where the gate is — dragged on board
+/// 2d's map, or resolved to a rooftop. `approximate` means the coordinates came
+/// from the area rather than the address, so they say which part of the emirate
+/// this is and nothing finer.
+///
+/// The distinction earns its column because **only `exact` may be measured**.
+/// An area centroid ranked by distance is a number derived from a guess and
+/// presented as a fact — board 3c's third criterion, and not a hypothetical:
+/// 116 of the 118 pinned branches in production on 2026-09-07 sat within the
+/// seed's own jitter of their area's centre, and every one of them was being
+/// sorted by "distance".
+enum GeocodePrecision {
+  exact
+  approximate
+
+  @@map("geocode_precision")
+}
+
 enum LocationType {
   head_office
   warehouse
@@ -949,7 +976,31 @@ model Location {
   closedUntil   DateTime? @map("closed_until")
   closureReason String?   @map("closure_reason")
 
+  /// How the pin got where it is. Null exactly when there is no pin.
+  ///
+  /// Written by whoever placed the marker, never inferred later: a coordinate
+  /// cannot be examined afterwards to find out whether a person chose it.
+  geocodePrecision GeocodePrecision? @map("geocode_precision")
+
   published Boolean  @default(false)
+
+  /// The first time this branch was shown to buyers, and never cleared.
+  ///
+  /// It exists to separate the two ways `published = false` can be true. A
+  /// branch nobody has finished is a **draft**; one that was live and has been
+  /// taken down is **hidden**. Board 3c states different consequences for them
+  /// and board 3d acts on the difference — its branch picker offers a hidden
+  /// branch, because its hours still matter when it comes back, and skips a
+  /// draft, which has no buyers to make claims to.
+  ///
+  /// Derived rather than stored as a third status column, for the reason
+  /// `isPinned` is derived from two floats: a status enum beside the boolean is
+  /// a second answer to "can buyers see this", and the two would eventually
+  /// disagree. `AreaPage` splits `publishedAt` from `firstPublishedAt` for the
+  /// opposite reason — there, both dates are read, and here the boolean is the
+  /// live state and this is only ever the durable half.
+  publishedAt DateTime? @map("published_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   /// When this branch last changed, for the "Saved 20 seconds ago" line the
   /// onboarding step and the dashboard both carry.
@@ -972,6 +1023,62 @@ model Location {
   @@index([areaId])
   @@index([emirate])
   @@map("location")
+}
+
+/// Where a supplier says they deliver, and how fast.
+///
+/// Board 3c's fourth section, and the reason it is a table rather than a text
+/// field: these rows drive `1h`'s RFQ routing and sit beside the `1b`/`1c`
+/// facets a buyer filters on, so a typed area would match nothing and the
+/// seller would never learn why the enquiries stopped. Board 2d already holds
+/// the same rule one screen earlier — "no code path allows free-text area
+/// entry".
+///
+/// Distinct from `Location.serviceRadiusKm`, which is not a duplicate of it.
+/// A radius is geometry around one branch and answers "how far do you drive".
+/// A coverage row is a named place and a promise, and it is what a buyer reads
+/// and what a router matches. A supplier can have both, and most do: 40 km from
+/// Al Quoz, and "Sharjah, next day" for the trade they run up the E311.
+///
+/// Per business, not per branch — board 3c Q3, matching what `1h` routes on
+/// today. A Sharjah depot and an Abu Dhabi office plainly serve different
+/// radii, and the day that matters this table grows a nullable `location_id`
+/// rather than being rebuilt.
+model BusinessCoverage {
+  id         String  @id @default(cuid())
+  businessId String  @map("business_id")
+
+  /// The scope, at its coarsest. Always set, including on an area row, where it
+  /// is copied from the area — the same rule `Location` follows, written in one
+  /// place in the service so the two cannot drift. It is here rather than only
+  /// on the join so `1h` can match an emirate without one.
+  emirate Emirate
+
+  /// The area, or null for the whole emirate.
+  ///
+  /// Both scales are real and both come from the taxonomy. A supplier who
+  /// delivers anywhere in Dubai should not have to name forty areas, and one
+  /// who only serves Al Quoz should not have to claim the emirate.
+  areaId String? @map("area_id")
+
+  /// The promise, in hours. `0` is same day.
+  ///
+  /// An integer rather than a band enum because a band is a rendering of this
+  /// and not a fact about it: "24h" and "next day" are the same promise written
+  /// twice, and a new band would otherwise be a migration. The screen offers a
+  /// fixed set of values; the column stores what was chosen.
+  leadTimeHours Int @map("lead_time_hours")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  area     Area?    @relation(fields: [areaId], references: [id], onDelete: Restrict)
+
+  @@index([businessId])
+  @@index([emirate])
+  @@index([areaId])
+  @@map("business_coverage")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

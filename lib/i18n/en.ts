@@ -3696,6 +3696,10 @@ export const en = {
   "listing.field.languages": "Languages",
   "listing.field.photos": "Photos",
   "listing.field.categories_removed": "Categories",
+  /* Board 3c writes these two into the same rail. A seller looking at "what
+     changed on my listing" means their branches as much as their description. */
+  "listing.field.locations": "Locations",
+  "listing.field.coverage": "Delivery coverage",
 
   // ── Locations, board 3c ───────────────────────────────────────────────────
   "locations.title": "Locations",
@@ -3737,6 +3741,124 @@ export const en = {
   "locations.confirm_delete": "Delete this branch? Buyers will stop seeing it. This cannot be undone.",
   "locations.at_cap": "{plan} includes {cap} location. Move to {next} to add more.",
   "locations.at_cap_plural": "{plan} includes {cap} locations. Move to {next} to add more.",
+  "locations.at_cap_fix": "Move to {next}, or delete a branch you no longer trade from.",
+
+  /* ── Board 3c · the locations manager ───────────────────────────────────── */
+
+  /*
+     One count, two facts, and they reconcile with the table and the map.
+
+     The board read `4 branches` over five rows while its map counted
+     `4 PINS · 1 MISSING` — four pins *of* five branches. Both numbers were
+     defensible and neither said which arithmetic it was doing.
+  */
+  "locations.count": {
+    one: "{total} branch · {shown} shown to buyers",
+    other: "{total} branches · {shown} shown to buyers",
+  },
+  "locations.add_branch": "Add branch",
+
+  "locations.col.branch": "Branch",
+  "locations.col.type": "Type",
+  "locations.col.area": "Area",
+  "locations.col.pin": "Pin",
+  "locations.col.status": "Status",
+  "locations.table_caption": "Your branches, their pins and who can see them",
+  "locations.select_all": "Select every branch",
+  "locations.select_row": "Select {branch}",
+
+  "locations.status.published": "Published",
+  "locations.status.hidden": "Hidden",
+  "locations.status.draft": "Draft",
+
+  "locations.pin.exact": "Exact",
+  "locations.pin.approximate": "Approx",
+  "locations.pin.missing": "Missing",
+
+  /* The two sentences the board never wrote, and the reason it needed them. */
+  "locations.consequence_status": "Published branches appear on your storefront and in map search. Hidden ones stay on your account, but buyers never see them and RFQs never route to them.",
+  "locations.consequence_pin": "Only an exact pin enters distance sort. An approximate one still appears on its area page, so a buyer browsing that area finds you — a buyer sorting by distance does not.",
+  /* Two sentences rather than one with a link inside it. A sentence stitched
+     together around an interpolated element is a sentence a translator cannot
+     reorder, and Arabic is a later translation project rather than a rebuild. */
+  "locations.hours_pointer": "Opening hours are set per branch, not here.",
+  "locations.hours_link": "Set opening hours",
+
+  "locations.coverage.title": "Delivery and service coverage",
+  "locations.coverage.note": "Coverage decides which RFQs reach you, and which buyers see your delivery promise. Areas come from the same list buyers filter on — a typed area would never match one.",
+  "locations.coverage.add": "Add area",
+  "locations.coverage.none": "You have not said where you deliver. Suppliers with no coverage are matched on their branch emirate alone.",
+  "locations.coverage.remove": "Remove {scope}",
+  "locations.coverage.chip": "{scope} · {promise}",
+  "locations.coverage.whole_emirate": "{emirate}, everywhere",
+  "locations.coverage.in_emirate": "{area}, {emirate}",
+  "locations.coverage.scope_label": "Where you deliver",
+  "locations.coverage.promise_label": "How soon",
+  "locations.coverage.emirate_option": "{emirate} — everywhere",
+  /* Split in two because `Alert` refuses a "bad" notice with no way out —
+     design-system §05.1. The statement is the notice; the sentence after it is
+     the `fix`, and the component renders them as separate lines. */
+  "locations.coverage.already": "You already have a promise for that area.",
+  "locations.coverage.already_fix": "Remove the chip to change its delivery time.",
+  "locations.coverage.unknown_area": "That area is not one buyers can filter on.",
+  "locations.coverage.unknown_area_fix": "Pick an area from the list.",
+  "locations.coverage.bad_lead_time": "That is not a delivery time this screen offers.",
+  "locations.coverage.bad_lead_time_fix": "Choose one of the times in the list.",
+  "locations.coverage.redundant": "Your {emirate} promise already covers this at the same speed.",
+
+  "locations.lead.0": "Same day",
+  "locations.lead.24": "24 hours",
+  "locations.lead.48": "48 hours",
+  "locations.lead.72": "72 hours",
+  "locations.lead.168": "Within a week",
+  "locations.lead.other": "{hours} hours",
+
+  "locations.issues.title": "Pins to fix",
+  "locations.issues.missing": "{branch} has no pin. Unpinned branches do not appear in map search at all.",
+  "locations.issues.approximate": "{branch} sits on the area, not the address. Buyers browsing {area} still find it. Distance sort skips it until you drop an exact pin.",
+  "locations.issues.fix": "Fix",
+
+  "locations.map.label": "Map of your branches",
+  "locations.map.overlay": "{pinned} pinned · {missing} missing",
+  "locations.map.all_pinned": "{pinned} pinned",
+  "locations.map.empty": "No branch carries a pin yet. Drop one and it appears here.",
+
+  "locations.publish": "Publish",
+  "locations.hide": "Hide",
+  "locations.hide_confirm_title": {
+    one: "Hide {count} branch?",
+    other: "Hide {count} branches?",
+  },
+  /* Board 3c Q4: say it at the moment of hiding, not afterwards. */
+  "locations.hide_areas": {
+    one: "This is your only published branch in {areas}. Hiding it takes your listing off that area page.",
+    other: "These are your only published branches in {areas}. Hiding them takes your listing off those area pages.",
+  },
+  "locations.hide_last": "This is your last published branch. Hiding it leaves your listing with no address buyers can reach.",
+  "locations.hide_nothing_else": "Buyers stop seeing it and RFQs stop routing to it. Nothing else changes, and you can publish it again.",
+  "locations.hide_do_it": "Hide",
+  "locations.cancel": "Cancel",
+  "locations.selected": {
+    one: "{count} branch selected",
+    other: "{count} branches selected",
+  },
+  "locations.clear_selection": "Clear",
+
+  "locations.delete_last_published": "This is your last published branch, and a published listing with no address is one a buyer cannot reach.",
+  "locations.delete_last_published_fix": "Hide it instead, or publish another branch first.",
+  "locations.pin_outside_uae": "That pin is outside the UAE.",
+  "locations.pin_outside_uae_fix": "Drag it back onto the map.",
+  "locations.not_found": "That branch is no longer on your account.",
+  "locations.not_found_fix": "Reload the page to see what is there now.",
+  "locations.needs_area": "This branch has no area.",
+  "locations.needs_area_fix": "Choose the emirate and then the area buyers would filter on.",
+  "locations.needs_address": "This branch has no address.",
+  "locations.needs_address_fix": "Give the building, street and the landmark you tell drivers.",
+  "locations.staff_read_only": "You are viewing this account. Locations are edited by the supplier.",
+  /* The row action, when the seat cannot write. A button labelled `Edit` that
+     opens a form with every field disabled is a small lie, and this screen is
+     read-only for three seats: staff viewing-as, sales and finance. */
+  "locations.view": "View",
 
   // ── Hours, board 3d ───────────────────────────────────────────────────────
   "hours.title": "Hours & Ramadan",
