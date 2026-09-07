@@ -164,7 +164,18 @@ echo "→ 6. the site visit, which was withdrawn and keeps coming back"
 # It found four more the moment it ran: the gallery's own verification-filter
 # specimen still offered `Tier 3 — visited` and `Tier 4 — visited and audited`,
 # in two places, on the surface where the shipped states are meant to be checked.
-VISITS='\bsite[- ]visit|\bvisited\b|verification (site )?visit|premises (have been |been )?visit|\bfield team\b'
+#
+# Round 4 is the sentence with no keyword in it at all. Every pattern above was
+# written from wording the cut had already found, so all of them want "visit",
+# "premises" or "field team" — and none of them saw "in some cases that we have
+# stood in the building", which sat in a seeded guide callout through three
+# rounds and reached production on the one page that defines what the badge
+# covers. A claim about having been somewhere does not have to contain the word
+# "visit". A scan that only knows the wording it has already seen catches the
+# same sentence twice and a new one never, so the alternatives below are
+# paraphrases rather than variants: the ways a person writes this claim when
+# they are not thinking of it as a claim.
+VISITS='\bsite[- ]visit|\bvisited\b|verification (site )?visit|premises (have been |been )?visit|\bfield team\b|stood in the building|been to the (premises|warehouse|factory|office)|seen the stock|\bin person at (their|the)\b|walked the (floor|warehouse)'
 # The seeds too, and that is not belt-and-braces: seed copy **is** public copy.
 # Round 2 of this cut found the claim living in a seeded curated-list intro, a
 # seeded guide and the seeded verification policy — three public pages whose

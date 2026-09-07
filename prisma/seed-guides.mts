@@ -78,7 +78,25 @@ const BLOCKS = [
     kind: "callout",
     values: {
       label: "What verification is not",
-      body: "It is not a guarantee of quality, price or delivery. It is a check that the business is licensed to trade in what it says it trades in, and in some cases that we have stood in the building. Read the reviews for the rest — they come only from buyers who sent an enquiry through the platform.",
+      /*
+         Round 4 of the site-visit cut, and the clause is deleted rather than
+         rewritten.
+
+         Board 6d corrected the ladder, the heading and the summary in this
+         file and left "in some cases that we have stood in the building" — a
+         claim about having been to the premises with none of the words the
+         vocabulary scan looked for. It reached production and sat on the one
+         page that defines what the badge covers.
+
+         The first draft of this fix replaced it with "at the top rung that its
+         trading history matches what the listing claims", which is the same
+         defect in new wording: trading history is a check nobody performs, and
+         it names a rung nobody can reach. Rung 3 is reserved and unbuilt
+         (`verify.t3.checked` — "Not built yet"), and the top achievable rung
+         is 2, which is the licence. So there is no second clause to write. The
+         licence is what is checked, and the sentence says so and stops.
+      */
+      body: "It is not a guarantee of quality, price or delivery. It is a check that the business is licensed to trade in what it says it trades in. Read the reviews for the rest — they come only from buyers who sent an enquiry through the platform.",
     },
   },
   {
