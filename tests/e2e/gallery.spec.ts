@@ -26,19 +26,18 @@ import { expect, test } from "@playwright/test";
  * control's text. All five are documented in docs/contrast.md.
  */
 const KNOWN_CONTRAST_PAIRS: readonly string[] = [
-  "#7c776c on #e7ece7 @4.5:1", // muted on --ok-surface
+  "#7c776c on #e7ece7 @4.5:1", // muted on --moss-wash, via FilterChip's facet label
   "#7c776c on #f2f0ea @4.5:1", // muted on --fill
-  "#7c776c on #f3f4f2 @4.5:1", // muted on --info-surface
-  "#7c776c on #f4f9f5 @4.5:1", // muted on --ok-wash
+  "#7c776c on #f3f4f2 @4.5:1", // muted on --map-base, the map's own empty state
+  "#7c776c on #f4f9f5 @4.5:1", // muted on --ok-surface
   "#7c776c on #f6f4ee @4.5:1", // muted on --paper-sunk
-  "#7c776c on #f7f5f0 @4.5:1", // muted on --track
+  "#7c776c on #f7f5f0 @4.5:1", // muted on --placeholder-empty-b
   "#7c776c on #faf9f6 @4.5:1", // muted on --paper
   "#7c776c on #ffffff @4.5:1", // muted on --card
-  "#7e7b77 on #ffffff @4.5:1", // disabled control text on --card
+  "#7e7b77 on #ffffff @4.5:1", // --text-body at the locked Panel's opacity-70, on --card
   "#8a6d12 on #f7efdd @4.5:1", // --warn-ink on --warn-wash
-  "#8a857a on #211f1b @4.5:1", // --text-on-ink-muted on --ink
-  "#a29d92 on #e7ece7 @4.5:1", // faint on --ok-surface
-  "#a29d92 on #f3f4f2 @4.5:1", // faint on --info-surface
+  "#8a857a on #211f1b @4.5:1", // --text-on-ink-faint on --ink
+  "#a29d92 on #f3f4f2 @4.5:1", // faint on --map-base
   "#a29d92 on #f6f4ee @4.5:1", // faint on --paper-sunk
   "#a29d92 on #faf9f6 @4.5:1", // faint on --paper
   "#a29d92 on #ffffff @4.5:1", // faint on --card

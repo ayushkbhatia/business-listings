@@ -532,7 +532,7 @@ function UnpublishDialog({
       onClose={onClose}
       title={t("catalogue.unpublish.title", { count })}
       description={t("catalogue.unpublish.body", { count })}
-      closeLabel={t("catalogue.cancel")}
+      closeLabel={t("overlay.close")}
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={onClose}>
@@ -579,7 +579,7 @@ function MoveDialog({
       onClose={onClose}
       title={t("catalogue.move.title")}
       description={t("catalogue.move.body")}
-      closeLabel={t("catalogue.cancel")}
+      closeLabel={t("overlay.close")}
       size="lg"
       footer={
         <>
@@ -690,7 +690,7 @@ function NewProductDialog({
       onClose={onClose}
       title={t("catalogue.new_product")}
       description={t("catalogue.new_product_hint")}
-      closeLabel={t("catalogue.cancel")}
+      closeLabel={t("overlay.close")}
       footer={
         <>
           <Button variant="secondary" size="sm" onClick={onClose}>
