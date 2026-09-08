@@ -1,10 +1,13 @@
 import { Alert, StatusBadge } from "@/components/display";
 import { Card } from "@/components/structure";
 import { planGrid, type GridRow, type Usage } from "@/lib/billing/plan-grid";
+import { consequenceTable, type CancelFacts } from "@/lib/billing/cancel-table";
+import { formatDate } from "@/lib/format";
 import type { TaxInvoiceDocument } from "@/lib/billing/tax-invoice";
 import type { PlanCaps } from "@/lib/plan/entitlements";
 import { t } from "@/lib/i18n";
 import { InvoiceSheet } from "@/app/(dashboard)/dashboard/billing/invoice/[id]/InvoiceSheet";
+import { ConsequenceTable } from "@/app/(dashboard)/dashboard/billing/cancel/ConsequenceTable";
 import { Section, States } from "../_kit";
 
 /**
@@ -78,6 +81,43 @@ const OVER_CAP: Usage = { products: 1204, locations: 4, seats: 3, storageMb: 215
 const WITHIN: Usage = { products: 7, locations: 1, seats: 2, storageMb: 400 };
 /** Nothing yet. The cold-start state, and it must read honest rather than broken. */
 const EMPTY: Usage = { products: 0, locations: 0, seats: 1, storageMb: 0 };
+
+/**
+ * Board 11h's consequence table, in the three states it actually has.
+ *
+ * The one that would regress silently is `WITHIN`: a seller Free already holds
+ * everything of is told **nothing changes**, and the version of this table that
+ * reads its marks off a list rather than off the arithmetic would tell them ten
+ * of their seven products stay live. The board's figures are one seller's; the
+ * screen has to hold for every seller.
+ */
+function Consequences({ usage, ...over }: { usage: Usage } & Partial<CancelFacts>) {
+  const facts: CancelFacts = {
+    plan: LADDER[2]!,
+    free: LADDER[0]!,
+    usage,
+    freeStartsOn: new Date("2026-09-14T00:00:00.000Z"),
+    enquiriesLastMonth: 86,
+    verified: true,
+    reviewCount: 42,
+    domain: "shop.alwaha.ae",
+    storefrontUrl: "businesslistings.ae/b/al-waha",
+    csvImportLastUsedAt: new Date("2026-09-02T00:00:00.000Z"),
+    placement: {
+      label: t("cancel.now.sponsored", { what: "Valves & actuators, Dubai" }),
+      endsOn: new Date("2026-09-30T00:00:00.000Z"),
+    },
+    ...over,
+  };
+
+  return (
+    <ConsequenceTable
+      rows={consequenceTable(facts)}
+      planName={facts.plan.name}
+      freeStartsOn={formatDate(facts.freeStartsOn)}
+    />
+  );
+}
 
 function Grid({ usage }: { usage: Usage }) {
   const rows: GridRow[] = planGrid(LADDER, usage);
@@ -241,6 +281,33 @@ export function Billing() {
 
       <States label={t("gallery.billing.empty")} stack>
         <Grid usage={EMPTY} />
+      </States>
+
+      <States label={t("gallery.cancel.over")} stack>
+        <Consequences usage={OVER_CAP} />
+      </States>
+
+      <States label={t("gallery.cancel.within")} stack>
+        {/*
+           Free holds everything this seller has, so every row reads
+           `Unchanged` — including the two the board drew as consequences,
+           because a domain that is not in use cannot stop resolving and a
+           placement that was never booked cannot end.
+        */}
+        <Consequences usage={WITHIN} domain={null} placement={null} csvImportLastUsedAt={null} />
+      </States>
+
+      <States label={t("gallery.cancel.empty")} stack>
+        {/* The cold-start state: nothing stored, no reviews, nothing booked. */}
+        <Consequences
+          usage={EMPTY}
+          enquiriesLastMonth={0}
+          verified={false}
+          reviewCount={0}
+          domain={null}
+          placement={null}
+          csvImportLastUsedAt={null}
+        />
       </States>
 
       <States label={t("gallery.billing.plan_status")}>

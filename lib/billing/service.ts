@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import "@/lib/audit/prisma-writer";
 import {
@@ -20,7 +21,7 @@ import {
 } from "./proration";
 import { issueInvoice } from "./invoice";
 import { writeInvoicePdf } from "./issue-pdf";
-import { scheduleChange } from "./schedule";
+import { applyKeepLists, evictSeats, readIds, scheduleChange } from "./schedule";
 import { t } from "@/lib/i18n";
 import {
   advance,
@@ -228,7 +229,7 @@ export async function quotePlanChange(
 
 export type ChangeResult =
   | { ok: true; invoiceId: string | null; scheduled: boolean }
-  | { ok: false; error: string; code?: "quote_moved" | "already_pending" };
+  | { ok: false; error: string; code?: "quote_moved" | "already_pending" | "cancelling" };
 
 /**
  * Move the business onto a different plan — or schedule the move.
@@ -259,6 +260,28 @@ export async function changePlan(
   now = new Date(),
 ): Promise<ChangeResult> {
   assertCanChangePlan(actor);
+
+  /*
+     Not while a cancellation is scheduled. Boards 11h and 11j.
+
+     A downgrade would be refused anyway — the cancellation is the one pending
+     row the index allows — but an *upgrade* applies on payment and would go
+     straight through: the seller pays for Pro today and still drops to Free on
+     the date, because nothing here read `cancelledAt`. That is money taken for
+     a plan that is already ending, which is the worst version of this to be
+     wrong about.
+     `11f` renders the cancelling state and offers no plan, so the screen closes
+     the path; this closes it for anything that posts.
+  */
+  const cancelling = await prisma.subscription.findUnique({
+    where: { businessId },
+    select: { cancelledAt: true, status: true },
+  });
+  // Scheduled, not already applied. A seller coming back after their
+  // cancellation landed is a reactivation and must not be refused one.
+  if (cancelling?.cancelledAt && cancelling.status !== "cancelled") {
+    return { ok: false, error: t("change.cancelling_first"), code: "cancelling" };
+  }
 
   const quoted = await quotePlanChange(actor, businessId, toPlanId, now);
   if (!quoted.ok) return quoted;
@@ -713,71 +736,19 @@ export async function changeTerm(
   return { ok: true, invoiceId, scheduled: false };
 }
 
-export interface CancellationSummary {
-  /** What the seller keeps. Named, because the fear is that cancelling deletes. */
-  kept: string[];
-  lost: string[];
-  endsAt: Date;
-  planName: string;
-}
-
-export type CancelResult =
-  | { ok: true; summary: CancellationSummary }
-  | { ok: false; error: string };
-
 /**
- * Cancel, at period end.
+ * Cancelling moved to `./cancellation`, with boards 11h and 11j.
  *
- * Criterion 10's third part, and the one a seller is most anxious about. What
- * is kept is listed first and it is the longer list: the listing stays live on
- * Free, products are hidden rather than deleted, reviews are untouched and the
- * verification badge stays — it records what we checked, and cancelling a
- * subscription does not un-check it.
+ * `cancelSubscription` used to live here and took no reason, because there was
+ * no screen that asked for one. It also wrote `cancelledAt` / `endsAt` and
+ * nothing else — so the *"ten products stay live and you pick which"* the entry
+ * point on `3m` promised had nowhere to be recorded, and the picker `11f` built
+ * could not be reached from a cancellation at all.
  *
- * Products are hidden **at period end**, not now. A seller who cancels on the
- * 3rd has paid for the month and keeps every product visible until it runs out.
+ * `scheduleCancellation` replaces it: the same pair on `Subscription`, plus the
+ * `subscription_change` row that carries the reason and the seller's choice.
+ * Nothing calls two functions to cancel one subscription.
  */
-export async function cancelSubscription(
-  actor: Actor,
-  businessId: string,
-  now = new Date(),
-): Promise<CancelResult> {
-  assertCanChangePlan(actor);
-  if (actor.businessId !== businessId) {
-    return { ok: false, error: "You can only cancel your own subscription." };
-  }
-
-  const subscription = await prisma.subscription.findUnique({
-    where: { businessId },
-    select: { id: true, renewsAt: true, cancelledAt: true, plan: { select: { name: true } } },
-  });
-
-  if (!subscription) return { ok: false, error: "There is no subscription to cancel." };
-  if (subscription.cancelledAt) {
-    return { ok: false, error: "That subscription is already ending." };
-  }
-
-  await prisma.subscription.update({
-    where: { businessId },
-    data: {
-      cancelledAt: now,
-      // Paired with cancelledAt by a check constraint: a cancellation that does
-      // not say when it ends is one nothing can act on.
-      endsAt: subscription.renewsAt,
-      status: "active",
-    },
-  });
-
-  return {
-    ok: true,
-    summary: {
-      planName: subscription.plan.name,
-      endsAt: subscription.renewsAt,
-      kept: ["listing", "products", "reviews", "badge"],
-      lost: ["extra_seats", "ranking", "placement"],
-    },
-  };
-}
 
 export type ResumeResult =
   | { ok: true; planName: string; renewsAt: Date }
@@ -810,10 +781,29 @@ export async function resumeSubscription(
   });
   if (!subscription?.cancelledAt) return { ok: false, error: "not_cancelling" };
 
-  await prisma.subscription.update({
-    where: { businessId },
-    // Both columns together, or the check constraint refuses the row.
-    data: { cancelledAt: null, endsAt: null, status: "active" },
+  /*
+     Both halves of the cancellation, together.
+
+     `scheduleCancellation` writes the pair on `Subscription` and the pending
+     `subscription_change` row that carries the reason and the seller's picks.
+     Resuming has to take back both: a withdrawn row with `endsAt` still set is a
+     period end nothing acts on, and a cleared `endsAt` with the row still
+     pending leaves the account renewing while a cancellation waits to apply.
+
+     The choice goes with the change, which is the point of it being on the
+     change: a seller who resumes and cancels again is asked again.
+  */
+  await prisma.$transaction(async (tx) => {
+    await tx.subscription.update({
+      where: { businessId },
+      // Both columns together, or the check constraint refuses the row.
+      data: { cancelledAt: null, endsAt: null, status: "active" },
+    });
+
+    await tx.subscriptionChange.updateMany({
+      where: { businessId, kind: "cancellation", appliedAt: null, withdrawnAt: null },
+      data: { withdrawnAt: new Date() },
+    });
   });
 
   return { ok: true, planName: subscription.plan.name, renewsAt: subscription.renewsAt };
@@ -827,15 +817,39 @@ export async function resumeSubscription(
  * never imported it, so a cancelled subscription kept its plan past the period
  * end until somebody noticed.
  *
- * Separate from `cancelSubscription` because the drop happens at period end and
- * nobody is holding a request open until then. Idempotent.
+ * Separate from the confirm because the drop happens at period end and nobody
+ * is holding a request open until then. Idempotent.
+ *
+ * ## What board 11h added to it
+ *
+ * The seller's choice. `scheduleCancellation` writes a pending
+ * `subscription_change` alongside the pair on `Subscription`, and the picker on
+ * the scheduled banner writes `keepProductIds` / `keepLocationIds` /
+ * `keepSeatIds` into it — the same picker, the same columns and the same
+ * appliers a downgrade uses. This step consumes them and marks the row applied,
+ * which is why `applyDueChanges` skips cancellations: two steps applying one row
+ * would move the plan twice and book the churn twice.
+ *
+ * A seller who never opened the picker keeps the **oldest**, up to the cap.
+ * That is build note `B2`, and it is the answer the platform already gives
+ * everywhere else — `hideOverPlanCap`'s rule, and what the chooser preselects,
+ * so the screen shows exactly what will happen if nothing is touched. The spec
+ * recommends most-viewed instead; there is no per-product view count in the
+ * schema (`ListingViewDay` is per business), so most-viewed is a telemetry board
+ * rather than a default that could be set here. What matters is the part that
+ * was blocking: it is never *none*, and a paying customer's listing does not go
+ * dark.
  */
 export async function applyEndedCancellations(now = new Date()) {
-  const free = await prisma.plan.findUnique({
+  const freePlan = await prisma.plan.findUnique({
     where: { id: "free" },
-    select: { productLimit: true },
+    select: {
+      id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
+      locationLimit: true, photoLimit: true, categoryLimit: true, storageMb: true, teamSeats: true,
+      rankingMultiplier: true, customDomain: true, analytics: true, csvImport: true,
+      sponsoredEligible: true, sortOrder: true,
+    },
   });
-  const freeProductLimit = free?.productLimit ?? null;
 
   const due = await prisma.subscription.findMany({
     where: { cancelledAt: { not: null }, endsAt: { lte: now }, status: { not: "cancelled" } },
@@ -847,24 +861,115 @@ export async function applyEndedCancellations(now = new Date()) {
     },
   });
 
+  const free = freePlan
+    ? {
+        ...freePlan,
+        monthlyPriceAed: Number(freePlan.monthlyPriceAed),
+        rankingMultiplier: Number(freePlan.rankingMultiplier),
+      }
+    : null;
+
+  let choicesApplied = 0;
+
   for (const subscription of due) {
+    const pending = await prisma.subscriptionChange.findFirst({
+      where: {
+        businessId: subscription.businessId,
+        kind: "cancellation",
+        appliedAt: null,
+        withdrawnAt: null,
+      },
+      select: { id: true, keepProductIds: true, keepLocationIds: true, keepSeatIds: true },
+    });
+
+    /*
+       Seat evictions happen before the transaction, not inside it.
+
+       `removeSeat` reassigns the seat's open leads in its own transaction — 7d
+       §6.3, an orphaned lead is the same failure as an unroutable one — and
+       nesting that inside this one would hold a write transaction open across
+       an unbounded number of enquiry updates. The same call and the same
+       reasoning as `applyDueChanges`; a seat removed and a plan that then fails
+       to drop is recoverable, and a lead pointing at nobody is not.
+    */
+    if (free) {
+      await evictSeats(subscription.businessId, readIds(pending?.keepSeatIds), free.teamSeats);
+    }
+
     await prisma.$transaction(async (tx) => {
       await tx.subscription.update({
         where: { businessId: subscription.businessId },
-        data: { status: "cancelled", planId: "free" },
+        data: {
+          status: "cancelled",
+          planId: "free",
+          /*
+             The pair goes back to null, because the cancellation is no longer
+             *scheduled* — it happened, and `status` is the record that it did.
+
+             Leaving them set made "is a cancellation pending" a question no
+             reader could answer from one column: `3m` showed the `Ending` badge
+             on an account that had already ended, and a seller coming back was
+             refused a plan change on the strength of a date in the past. The
+             applied `subscription_change` row carries when it was asked for and
+             why, which is what board 4g reads.
+
+             Both together, or `subscription_cancel_pair` refuses the row.
+          */
+          cancelledAt: null,
+          endsAt: null,
+          /*
+             The snapshot goes, and this is a defect fix rather than tidying.
+
+             `effectiveCaps` prefers the snapshot over the live plan, so a Pro
+             account whose cancellation landed kept Pro's caps on every screen
+             and in every guard — `allowance()` reads the same function the
+             media upload and the seat invitation do. The row said Free and the
+             entitlements said Pro.
+
+             Cleared rather than replaced with a Free snapshot: Free is not
+             grandfathered against anything, and freezing it would hold this
+             account to today's Free numbers for good. `expireTrials` makes the
+             same call at the same moment for the same reason.
+          */
+          entitlementSnapshot: Prisma.DbNull,
+        },
       });
+
+      if (free) {
+        /*
+           Restore, then the seller's choice, then the cap. The order is
+           load-bearing and getting it wrong is silent — `applyDueChanges` has
+           the long version of why: `restoreHiddenByPlan` cannot tell the
+           platform's earlier list from the seller's new decision, so running it
+           after the keep list un-hides exactly what was just deselected.
+        */
+        await restoreHiddenByPlan(subscription.businessId, free, tx);
+
+        await applyKeepLists(tx, subscription.businessId, {
+          products: readIds(pending?.keepProductIds),
+          locations: readIds(pending?.keepLocationIds),
+        });
+      }
 
       /*
          And the half of the promise that was never kept.
 
-         `cancelSubscription` has returned `kept: ["listing", "products", ...]`
-         since handoff 5 and nothing anywhere hid a product, so a Pro seller who
+         The cancel summary has said `kept: ["listing", "products", …]` since
+         handoff 5 and nothing anywhere hid a product, so a Pro seller who
          cancelled carried a hundred and fifty live products onto Free and the
          cap the ladder rests on stopped meaning anything after the first
          downgrade. Board 2e puts the sentence in the rail — "hidden, not
          deleted" — which is criterion 20, and this is where it becomes true.
+
+         It runs after the keep list, for whoever never opened the picker and
+         for a seller who kept fewer than the cap and then added more before the
+         date. The oldest stay.
       */
-      await hideOverPlanCap(subscription.businessId, { productLimit: freeProductLimit }, tx);
+      await hideOverPlanCap(
+        subscription.businessId,
+        { productLimit: free?.productLimit ?? null },
+        tx,
+      );
 
       /*
        * Churn, dated the day the money stops rather than the day the seller
@@ -889,33 +994,33 @@ export async function applyEndedCancellations(now = new Date()) {
         occurredAt: now,
         note: "Cancellation reached its end date",
       });
+
       await tx.business.update({
         where: { id: subscription.businessId },
         data: { planId: "free" },
       });
+
+      // The row is spent. Leaving it pending would hand it to `applyDueChanges`
+      // on the next run, which would move the plan again and book the churn a
+      // second time.
+      if (pending) {
+        await tx.subscriptionChange.update({
+          where: { id: pending.id },
+          data: { appliedAt: now },
+        });
+      }
+
       /*
-         There was a second hide here, and it undid the first.
-
-         `hideOverPlanCap` above drafts what the Free cap has no room for and
-         leaves the ten that stay. Directly after it, this drafted *every*
-         remaining live product — so a cancelling Pro seller with 1,204 products
-         ended on Free with none live, and the call above did nothing that
-         survived the same transaction.
-
-         That is exactly the sentence board 3m's fourth correction is about,
-         reached from the opposite side: the boards claimed all 1,204 "stay saved
-         but hidden", and the code made the claim true. The rule `3f` §6 owns is
-         that **ten stay live and the seller picks which**, and criterion 9
-         restates it for the cancel path. Deleting these four lines is what makes
-         both true.
-
-         The verification tier is still deliberately untouched: it records what
-         we checked, and cancelling a subscription does not un-check it.
+         The verification tier is deliberately untouched: it records what we
+         checked, and cancelling a subscription does not un-check it. Board 11h
+         states it as the first row of the consequence table for that reason.
       */
     });
+
+    if (pending) choicesApplied += 1;
   }
 
-  return { dropped: due.length, ranAt: now };
+  return { dropped: due.length, choicesApplied, ranAt: now };
 }
 
 /** Invoices for the billing screen, newest first. */

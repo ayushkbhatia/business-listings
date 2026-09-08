@@ -94,6 +94,15 @@ export type ChangeRailProps =
       endsEyebrow: string;
       ends: { key: string; text: string }[];
       primaryLabel: string;
+      /**
+       * Where the primary button goes, instead of posting.
+       *
+       * Set for one case: the Free column, which is a cancellation rather than a
+       * downgrade. It routes to `11h` so the seller is asked for a reason, told
+       * what changes, and gets the banner and the email — none of which a plain
+       * scheduled change to Free would have done.
+       */
+      primaryHref?: string;
       keepCurrentLabel: string;
       withdrawLabel: string;
       withdrawNote: string | null;
@@ -319,21 +328,30 @@ export function ChangeRail(props: ChangeRailProps) {
           </Button>
         ) : (
           <>
-            <Button
-              type="button"
-              variant="primary"
-              disabled={pending}
-              onClick={() => {
-                const form = new FormData();
-                form.set("planId", props.selectedPlanId);
-                // What the button said, checked server-side against a fresh
-                // quote. A mismatch refuses the charge rather than adjusting it.
-                form.set("dueFils", String(props.dueFils));
-                run(() => confirmPlanChange(form));
-              }}
-            >
-              {props.primaryLabel}
-            </Button>
+            {props.primaryHref ? (
+              <Link
+                href={props.primaryHref}
+                className="inline-flex h-9 items-center justify-center rounded-ctl border border-moss bg-moss px-3.5 text-caption font-medium text-on-ink hover:border-moss-hover hover:bg-moss-hover focus-visible:shadow-focus focus-visible:outline-none"
+              >
+                {props.primaryLabel}
+              </Link>
+            ) : (
+              <Button
+                type="button"
+                variant="primary"
+                disabled={pending}
+                onClick={() => {
+                  const form = new FormData();
+                  form.set("planId", props.selectedPlanId);
+                  // What the button said, checked server-side against a fresh
+                  // quote. A mismatch refuses the charge rather than adjusting it.
+                  form.set("dueFils", String(props.dueFils));
+                  run(() => confirmPlanChange(form));
+                }}
+              >
+                {props.primaryLabel}
+              </Button>
+            )}
             <Link
               href="/dashboard/billing"
               className="inline-flex h-9 items-center justify-center rounded-ctl border border-line-strong bg-card text-caption text-body-ink hover:border-line-mid hover:text-ink focus-visible:shadow-focus focus-visible:outline-none"

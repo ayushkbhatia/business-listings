@@ -237,10 +237,7 @@ describe("criterion 7 — a restock watch is about one product", () => {
      * there to satisfy the old constraint would have been a lie in a table
      * somebody reports from.
      */
-    const product = await prisma.product.findFirstOrThrow({
-      where: { status: { not: "draft" } },
-      select: { id: true },
-    });
+    const product = await watchable();
     const result = await watchProduct({ productId: product.id, userId: await buyer() });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -255,11 +252,27 @@ describe("criterion 7 — a restock watch is about one product", () => {
     expect(row.notifiedAt).toBeNull();
   }, 60_000);
 
-  it("is idempotent — pressing it twice is not two messages", async () => {
-    const product = await prisma.product.findFirstOrThrow({
-      where: { status: { not: "draft" } },
+  /**
+   * A product a buyer could actually watch, picked deterministically.
+   *
+   * `findFirstOrThrow` on `status: { not: "draft" }` with no `orderBy` returns
+   * whatever Postgres hands back first, and the seed deliberately suspends one
+   * listing — so on some orderings these tests asked for a watch on a suspended
+   * business and `watchProduct` correctly refused. Ordering by id makes the
+   * choice stable, and the filter matches the one the service applies.
+   */
+  const watchable = () =>
+    prisma.product.findFirstOrThrow({
+      where: {
+        status: { not: "draft" },
+        business: { suspendedAt: null, publishedAt: { not: null } },
+      },
+      orderBy: { id: "asc" },
       select: { id: true },
     });
+
+  it("is idempotent — pressing it twice is not two messages", async () => {
+    const product = await watchable();
     const userId = await buyer();
     const first = await watchProduct({ productId: product.id, userId });
     const second = await watchProduct({ productId: product.id, userId });

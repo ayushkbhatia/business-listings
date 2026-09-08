@@ -185,13 +185,60 @@ describe("criterion 10 — a renewal that goes through", () => {
 
     const invoice = await prisma.invoice.findFirstOrThrow({
       where: { businessId: fixture.businessId },
-      select: { status: true, lines: { select: { kind: true, amountAed: true, description: true } } },
+      select: {
+        status: true,
+        paidAt: true,
+        subtotalFils: true,
+        vatFils: true,
+        totalFils: true,
+        supplierName: true,
+        billedToName: true,
+        lines: {
+          select: {
+            kind: true,
+            amountAed: true,
+            description: true,
+            vatAed: true,
+            periodStart: true,
+            periodEnd: true,
+          },
+        },
+      },
     });
-    expect(invoice.status).toBe("issued");
+    /*
+       `paid`, not `issued`. This asserted `issued` and it was asserting a
+       smaller version of the same defect the rest of this block now covers:
+       the renewal charges the card and *then* writes the invoice, so a document
+       reading "issued" is a demand for money that has already been taken.
+    */
+    expect(invoice.status).toBe("paid");
+    expect(invoice.paidAt).not.toBeNull();
+
+    /*
+       And it is a board 11g invoice rather than four columns.
+
+       This file wrote the row by hand — ref, business, status, one line — which
+       predates 11g and was never updated for it. So the invoices the platform
+       raises most often were the ones with no stored totals (every reader
+       re-derived them, and criterion 2 stopped holding), no party snapshot (a
+       rename rewrote history), no per-line VAT and no supply dates. It goes
+       through `issueInvoice` now, which is the one writer.
+    */
+    expect(invoice.subtotalFils).toBe(34_900);
+    expect(invoice.vatFils).toBe(1_745);
+    expect(invoice.totalFils).toBe(36_645);
+    expect(invoice.supplierName).not.toBeNull();
+    expect(invoice.billedToName).not.toBeNull();
+
     expect(invoice.lines).toHaveLength(1);
     expect(invoice.lines[0]!.kind).toBe("subscription");
     expect(Number(invoice.lines[0]!.amountAed)).toBe(349);
     expect(invoice.lines[0]!.description).toMatch(/one month/);
+    expect(Number(invoice.lines[0]!.vatAed)).toBe(17.45);
+    // The period the line covers, which the document prints and the board asked
+    // for: the old end is the new start, so it is exactly what was charged for.
+    expect(invoice.lines[0]!.periodStart?.getTime()).toBe(fixture.renewsAt.getTime());
+    expect(invoice.lines[0]!.periodEnd).not.toBeNull();
 
     const attempt = await prisma.paymentAttempt.findFirstOrThrow({
       where: { subscriptionId: fixture.subscriptionId },

@@ -78,6 +78,7 @@ model User {
   reviews                 Review[]
   auditEvents             AuditEvent[]
   invoiceEvents           InvoiceEvent[]
+  cancellations           SubscriptionChange[]     @relation("ChangeRequestedBy")
   reportsFiled            SupplierReport[]         @relation("ReportReporter")
   messages                Message[]
   contactReveals          ContactReveal[]
@@ -3008,6 +3009,21 @@ model SubscriptionChange {
   toPlanId    String      @map("to_plan_id")
   fromTerm    BillingTerm @map("from_term")
   toTerm      BillingTerm @map("to_term")
+  /// What this pending row is. Boards 11h and 11j.
+  ///
+  /// A cancellation *is* a scheduled move to Free — same date, same keep lists,
+  /// same withdrawal — so it is this table rather than a second mechanism
+  /// beside it. Both were built anyway before the split: `Subscription`
+  /// carried `cancelledAt` / `endsAt` and this table carried the choice, and
+  /// the two would have drifted the first time one of them was written without
+  /// the other.
+  ///
+  /// It is a column and not a derivation from `toPlanId = 'free'` because the
+  /// two are genuinely different acts: a cancellation records a reason and
+  /// stops the subscription, and a downgrade that happens to land on Free does
+  /// neither. `11f`'s Free column now routes to the cancel flow rather than
+  /// scheduling one of these silently, so the distinction has one writer.
+  kind        SubscriptionChangeKind @default(plan_change)
   /// End of the period being paid for, copied at schedule time. The renewal
   /// date can move underneath a pending change — a term switch does exactly
   /// that — and the promise on screen was the date the seller read.
@@ -3019,6 +3035,28 @@ model SubscriptionChange {
   keepLocationIds Json? @map("keep_location_ids")
   keepSeatIds     Json? @map("keep_seat_ids")
 
+  /// Why the seller is leaving. Board 11j, and the only churn signal we get.
+  ///
+  /// Nullable, and not because the screen allows it — `scheduleCancellation`
+  /// refuses without one, which is criterion 6. It is nullable because the
+  /// cancellations that existed before this board were never asked, and a
+  /// backfill that invented `something_else` for them would put made-up rows
+  /// into the one report this column exists to feed. Null reads as *not
+  /// recorded*, which is what it is.
+  ///
+  /// Never surfaced to the seller and never answered with a counter-offer —
+  /// build note B6, and the wave 4 decision it follows from. `4g` (revenue) and
+  /// `12d` (supply-gap reporting) are the two readers.
+  cancelReason CancelReason? @map("cancel_reason")
+  /// The optional free text, and the required one under `something_else`.
+  ///
+  /// Confirming is never blocked on this box except there, where it is the only
+  /// place the reason can be recorded — a check constraint says so, because the
+  /// alternative is a `something_else` row that says nothing at all.
+  cancelNote  String?   @map("cancel_note")
+  /// Who asked for it. Owner only by capability, but support needs the name.
+  requestedById String? @map("requested_by_id") @db.Uuid
+
   createdAt   DateTime  @default(now()) @map("created_at")
   appliedAt   DateTime? @map("applied_at")
   withdrawnAt DateTime? @map("withdrawn_at")
@@ -3026,9 +3064,36 @@ model SubscriptionChange {
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   fromPlan Plan     @relation("ChangeFromPlan", fields: [fromPlanId], references: [id], onDelete: Restrict)
   toPlan   Plan     @relation("ChangeToPlan", fields: [toPlanId], references: [id], onDelete: Restrict)
+  requestedBy User?  @relation("ChangeRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
 
   @@index([effectiveAt, appliedAt])
+  /// The churn read: cancellations by reason over a window, for `4g` and `12d`.
+  @@index([kind, createdAt])
   @@map("subscription_change")
+}
+
+/// A pending row is one of two acts, and they are not interchangeable.
+enum SubscriptionChangeKind {
+  plan_change
+  cancellation
+
+  @@map("subscription_change_kind")
+}
+
+/// The six on board `11j`, in the order they are asked.
+///
+/// `business_closing` is the fork rather than a reason: choosing it cancels
+/// nothing and hands the seller to `11i`, which is not built. The value exists
+/// here because the *reason* is still worth recording when `11i` lands.
+enum CancelReason {
+  too_expensive
+  not_enough_enquiries
+  poor_quality_enquiries
+  another_platform
+  business_closing
+  something_else
+
+  @@map("cancel_reason")
 }
 
 model PaymentAttempt {

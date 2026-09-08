@@ -1,5 +1,5 @@
 import "server-only";
-import { Prisma } from "@/lib/db/generated/client";
+import { Prisma, type CancelReason, type SubscriptionChangeKind } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { assertCanChangePlan } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
@@ -41,6 +41,19 @@ export type KeepKind = "products" | "locations" | "seats";
 
 export interface PendingChange {
   id: string;
+  /**
+   * Which act this row is. Boards 11h and 11j.
+   *
+   * A cancellation is a scheduled move to Free carrying the same keep lists, so
+   * it lives in this table — but it is not a downgrade and must not be rendered
+   * as one. `3m` shows the cancellation banner for one and the "moving to
+   * Basic" note for the other; `11f` offers to withdraw a plan change and sends
+   * a cancellation back to `11h`.
+   */
+  kind: SubscriptionChangeKind;
+  /** Set on a cancellation, and never surfaced to the seller. Build note B6. */
+  cancelReason: CancelReason | null;
+  cancelNote: string | null;
   fromPlan: { id: string; name: string };
   toPlan: { id: string; name: string };
   fromTerm: BillingTerm;
@@ -53,6 +66,9 @@ export interface PendingChange {
 
 const CHANGE_SELECT = {
   id: true,
+  kind: true,
+  cancelReason: true,
+  cancelNote: true,
   fromPlanId: true,
   toPlanId: true,
   fromTerm: true,
@@ -73,6 +89,9 @@ export function readIds(value: unknown): string[] | null {
 
 function toPending(row: {
   id: string;
+  kind: SubscriptionChangeKind;
+  cancelReason: CancelReason | null;
+  cancelNote: string | null;
   fromTerm: BillingTerm;
   toTerm: BillingTerm;
   effectiveAt: Date;
@@ -84,6 +103,9 @@ function toPending(row: {
 }): PendingChange {
   return {
     id: row.id,
+    kind: row.kind,
+    cancelReason: row.cancelReason,
+    cancelNote: row.cancelNote,
     fromPlan: row.fromPlan,
     toPlan: row.toPlan,
     fromTerm: row.fromTerm,
@@ -182,12 +204,23 @@ export async function withdrawChange(
   actor: Actor,
   businessId: string,
   now = new Date(),
+  kind: SubscriptionChangeKind | null = "plan_change",
 ): Promise<WithdrawResult> {
   assertCanChangePlan(actor);
   if (actor.businessId !== businessId) return { ok: false, error: "not_pending" };
 
+  /*
+     Scoped to one kind by default, and that default is `plan_change`.
+
+     `11f`'s rail and `11h`'s banner both sit over this table, and an unscoped
+     withdraw would let `Keep Pro` on the change screen silently take back a
+     *cancellation* — leaving `subscription.cancelledAt` set with nothing
+     scheduled to act on it. Resuming goes through `resumeSubscription`, which
+     clears both together. Passing null withdraws whatever is pending and is for
+     the paths that own both, such as scheduling a cancellation over a downgrade.
+  */
   const updated = await prisma.subscriptionChange.updateMany({
-    where: { businessId, appliedAt: null, withdrawnAt: null },
+    where: { businessId, appliedAt: null, withdrawnAt: null, ...(kind ? { kind } : {}) },
     data: { withdrawnAt: now },
   });
 
@@ -260,8 +293,18 @@ export interface AppliedChanges {
  * twice.
  */
 export async function applyDueChanges(now = new Date()): Promise<AppliedChanges> {
+  /*
+     Plan changes only. A cancellation is applied by `applyEndedCancellations`,
+     which runs immediately before this in the daily job.
+
+     Both would otherwise act on the same row: the cancellation step moves the
+     plan and books the churn, and this one would then apply the same move again
+     and write a second MRR movement for it. One kind, one applier — and the
+     step that owns a cancellation is the one that also has to set
+     `subscription.status` to `cancelled`, which this has no business doing.
+  */
   const due = await prisma.subscriptionChange.findMany({
-    where: { appliedAt: null, withdrawnAt: null, effectiveAt: { lte: now } },
+    where: { kind: "plan_change", appliedAt: null, withdrawnAt: null, effectiveAt: { lte: now } },
     orderBy: { effectiveAt: "asc" },
     select: {
       id: true,
@@ -382,7 +425,7 @@ export async function applyDueChanges(now = new Date()): Promise<AppliedChanges>
  * `Hidden` by the seller's own choice. So a keep list is read as *"of the things
  * that are live, these stay"*, never as *"these are live"*.
  */
-async function applyKeepLists(
+export async function applyKeepLists(
   tx: Prisma.TransactionClient,
   businessId: string,
   keep: { products: string[] | null; locations: string[] | null },
@@ -438,7 +481,7 @@ async function applyKeepLists(
  * refusal `inviteSeat` already makes at the cap, and it is the direction to be
  * wrong in.
  */
-async function evictSeats(businessId: string, keep: string[] | null, cap: number) {
+export async function evictSeats(businessId: string, keep: string[] | null, cap: number) {
   if (!keep) return;
 
   const seats = await prisma.user.findMany({

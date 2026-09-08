@@ -3,11 +3,12 @@ import { prisma } from "@/lib/db/client";
 import { assertCanManageBilling } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import { allowance, capFor, effectiveCaps, type Allowance, type PlanCaps } from "@/lib/plan/entitlements";
+import { keepsOf } from "./plan-grid";
 import { storedTotals } from "./invoice";
 import { monthlyValueFils, offersAnnual, periodPriceAed, type BillingTerm } from "./period";
 import { FILS_PER_AED, VAT_RATE, vatOn } from "./proration";
 import { nextAction, SCHEDULE, GRACE_AFTER_FINAL_DAYS, type DunningStage } from "./dunning";
-import { pendingChangeFor, type PendingChange } from "./schedule";
+import { pendingChangeFor, readIds, type KeepKind, type PendingChange } from "./schedule";
 import { paymentProvider } from "./provider";
 import { t } from "@/lib/i18n";
 import type { Usage } from "./plan-grid";
@@ -84,6 +85,15 @@ export interface FailedPayment {
   dropsOn: Date;
 }
 
+export interface PendingKeep {
+  kind: KeepKind;
+  /** How many survive the change. Never more than the seller has. */
+  keeps: number;
+  used: number;
+  /** How many the seller has ticked, or null while they have not opened it. */
+  chosen: number | null;
+}
+
 export interface BillingSummary {
   plan: PlanCaps;
   /** Null on Free, which has no subscription row. */
@@ -101,6 +111,20 @@ export interface BillingSummary {
   invoices: InvoiceRowView[];
   card: { brand: string; last4: string; expiry: string } | null;
   pendingChange: PendingChange | null;
+  /**
+   * What the pending change holds less of than the seller has, and how many
+   * they have picked so far.
+   *
+   * Empty where there is no pending change, and empty where the target plan
+   * holds everything. Board 11h's amendment to `3m` needs it: the scheduled
+   * banner carries the picker, and *"you choose which"* is only true if the
+   * banner knows which kinds there is anything to choose between.
+   *
+   * Computed here rather than on the banner so the cancellation banner and the
+   * `11f` rail read one figure — `keepsOf`, the same function the comparison
+   * grid uses, against the same usage counts.
+   */
+  pendingKeeps: PendingKeep[];
   failedPayment: FailedPayment | null;
   /**
    * The verified custom domain, where there is one.
@@ -251,6 +275,7 @@ export async function billingSummary(
         }
       : null,
     pendingChange,
+    pendingKeeps: pendingChange ? await pendingKeepsFor(pendingChange, usage) : [],
     failedPayment: failedPaymentOf(subscription, now),
     domain: business.customDomain?.verifiedAt ? business.customDomain.hostname : null,
     placements: placements.map((placement) => ({
@@ -269,6 +294,41 @@ export async function billingSummary(
     freeEnquiriesPerMonth: freePlan ? capFor(toCaps(freePlan), "enquiries") : null,
     providerIsLive: paymentProvider().live,
   };
+}
+
+/**
+ * The three choosable shortfalls on a pending change, with what has been picked.
+ *
+ * Storage is not one and never is: it does not resolve into a list of rows a
+ * seller can tick, so the media library refuses the next upload instead. Same
+ * decision, same reasoning, as `shortfallsOf` in plan-grid.
+ *
+ * A kind the target plan holds everything of is left out rather than listed as
+ * "all of them stay" — a `Choose` opening a list where every row is already kept
+ * is a control with no decision behind it.
+ */
+async function pendingKeepsFor(change: PendingChange, usage: Usage): Promise<PendingKeep[]> {
+  const plan = await prisma.plan.findUnique({
+    where: { id: change.toPlan.id },
+    select: PLAN_SELECT,
+  });
+  if (!plan) return [];
+  const caps = toCaps(plan);
+
+  const rows: { kind: KeepKind; used: number; chosen: string[] | null }[] = [
+    { kind: "products", used: usage.products, chosen: readIds(change.keepProductIds) },
+    { kind: "locations", used: usage.locations, chosen: readIds(change.keepLocationIds) },
+    { kind: "seats", used: usage.seats, chosen: readIds(change.keepSeatIds) },
+  ];
+
+  return rows
+    .map((row) => ({
+      kind: row.kind,
+      keeps: keepsOf(caps, row.kind, row.used),
+      used: row.used,
+      chosen: row.chosen ? row.chosen.length : null,
+    }))
+    .filter((row) => row.keeps < row.used);
 }
 
 function toCaps(row: {
@@ -322,7 +382,14 @@ function keepsOnFree(plan: Parameters<typeof toCaps>[0] | null, live: number): n
 }
 
 /** Seats taken, counting pending invitations. The same population board 7d meters. */
-async function seatsUsed(businessId: string, now: Date): Promise<number> {
+/**
+ * Seats taken, including invitations that have gone out and not yet lapsed.
+ *
+ * Exported because board `11h`'s consequence table counts the same thing and
+ * two counts of "seats" that differ by whether an invitation is one would put
+ * `3 with access` on one screen and `2` on another for the same account.
+ */
+export async function seatsUsed(businessId: string, now: Date): Promise<number> {
   const [people, invited] = await Promise.all([
     prisma.user.count({ where: { businessId } }),
     prisma.teamInvite.count({

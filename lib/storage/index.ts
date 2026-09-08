@@ -68,23 +68,37 @@ export async function signedReadUrl(path: string, seconds = 300): Promise<string
  * when every figure matches. A second write is a bug, and it should fail rather
  * than overwrite the evidence.
  *
- * Returns null on failure rather than throwing. The invoice itself has already
- * been written and the money has already moved; losing the whole transaction
- * because object storage was briefly unavailable would be the worse outcome. The
- * screen reads a null `pdfPath` and says the document is not available for
- * download rather than offering to invent one.
+ * Reports the failure rather than throwing. The invoice itself has already been
+ * written and the money has already moved; losing the whole transaction because
+ * object storage was briefly unavailable would be the worse outcome. The screen
+ * reads a null `pdfPath` and says the document is not available for download
+ * rather than offering to invent one.
+ *
+ * ## The reason comes back, and it used to only be logged
+ *
+ * This warned to the console and returned null. On a screen that is honest — a
+ * seller sees "not available" rather than a broken download — and in production
+ * it is invisible: a `console.warn` in a serverless function reaches nobody, so
+ * an invoice raised by the nightly renewal job with no PDF behind it was a
+ * failure with no reader. The reason now travels back to the caller, which puts
+ * it in the daily job's step report; `writeMissingInvoicePdfs` retries on the
+ * next run.
  */
-export async function putInvoicePdf(path: string, bytes: Buffer): Promise<string | null> {
+export type PutResult = { ok: true; path: string } | { ok: false; reason: string };
+
+export async function putInvoicePdf(path: string, bytes: Buffer): Promise<PutResult> {
   const admin = createAdminClient();
   const { error } = await admin.storage
     .from(INVOICE_BUCKET)
     .upload(path, bytes, { contentType: "application/pdf", upsert: false });
 
   if (error) {
-    console.warn(`[storage] could not store the invoice PDF at ${path}: ${error.message}`);
-    return null;
+    // `error`, not `warn`: an invoice with no document behind it is a thing
+    // somebody has to act on, and log levels are how that gets noticed.
+    console.error(`[storage] could not store the invoice PDF at ${path}: ${error.message}`);
+    return { ok: false, reason: error.message };
   }
-  return path;
+  return { ok: true, path };
 }
 
 /** The stored bytes, read back for the download. Null when it is not there. */
