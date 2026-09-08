@@ -53,8 +53,8 @@ const LADDER: PlanCaps[] = [
     enquiriesPerMonth: 3,
     productLimit: 10,
     locationLimit: 1,
-    teamSeats: 2,
-    storageMb: 1024,
+    teamSeats: 1,
+    storageMb: 50,
     analytics: false,
     csvImport: false,
     sortOrder: 0,
@@ -77,8 +77,15 @@ const LADDER: PlanCaps[] = [
 
 /** The board's seller: over Free on every meter. */
 const OVER_CAP: Usage = { products: 1204, locations: 4, seats: 3, storageMb: 2150 };
-/** Comfortably inside every plan. Every metered cell reads `All n`. */
-const WITHIN: Usage = { products: 7, locations: 1, seats: 2, storageMb: 400 };
+/**
+ * Comfortably inside every plan. Every metered cell reads `All n`.
+ *
+ * Moved down with the Free caps: at two seats and 400 MB this state stopped
+ * being inside Free the moment Free became one seat and 50 MB, and a fixture
+ * captioned "inside every plan" that renders two reduced rows is a state
+ * demonstrating the opposite of its own label.
+ */
+const WITHIN: Usage = { products: 7, locations: 1, seats: 1, storageMb: 20 };
 /** Nothing yet. The cold-start state, and it must read honest rather than broken. */
 const EMPTY: Usage = { products: 0, locations: 0, seats: 1, storageMb: 0 };
 

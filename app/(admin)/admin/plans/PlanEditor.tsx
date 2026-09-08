@@ -29,6 +29,7 @@ export interface PlanRowView {
   productLimit: number | null;
   locationLimit: number | null;
   photoLimit: number | null;
+  storageMb: number | null;
   teamSeats: number;
   subscriptions: number;
   grandfathered: number;
@@ -39,6 +40,7 @@ const CAPS = [
   { field: "productLimit", labelKey: "admin.plans.col.products" },
   { field: "locationLimit", labelKey: "admin.plans.col.locations" },
   { field: "photoLimit", labelKey: "admin.plans.col.photos" },
+  { field: "storageMb", labelKey: "admin.plans.col.storage" },
   { field: "teamSeats", labelKey: "admin.plans.col.seats" },
 ] as const;
 
@@ -77,6 +79,15 @@ export function PlanEditor({
       productLimit: plan.productLimit === null ? "" : String(plan.productLimit),
       locationLimit: plan.locationLimit === null ? "" : String(plan.locationLimit),
       photoLimit: plan.photoLimit === null ? "" : String(plan.photoLimit),
+      /*
+         Seeded like the rest, and the omission would not have been cosmetic.
+
+         `submit` posts every field in `CAPS`, and an empty box is `null` —
+         unlimited. A storage row that opened blank while the plan held 50 would
+         have lifted the cap the moment somebody saved a change to the enquiry
+         allowance, without either of them appearing in the reason.
+      */
+      storageMb: plan.storageMb === null ? "" : String(plan.storageMb),
       teamSeats: String(plan.teamSeats),
     });
   }
@@ -129,6 +140,13 @@ export function PlanEditor({
       numeric: true,
       hideBelow: "md",
       render: (row) => cap(row.photoLimit),
+    },
+    {
+      key: "storage",
+      header: t("admin.plans.col.storage"),
+      numeric: true,
+      hideBelow: "lg",
+      render: (row) => cap(row.storageMb),
     },
     {
       key: "seats",

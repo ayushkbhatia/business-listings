@@ -406,6 +406,43 @@ describe("grandfathering, which did not work", () => {
     expect(effective.name).toBe(moved.name);
   });
 
+  it("can set the storage cap, which had a column and no editor", async () => {
+    /*
+       `storageMb` was the one cap with a column, a snapshot key, a meter on
+       `3m`, a row on `11f`'s grid and an enforcement point in the media library
+       — and no way to set it. The value deciding whether a seller can upload
+       was reachable only by writing the row by hand, which skips the audit row
+       every other entitlement change writes.
+    */
+    const result = await editPlanEntitlements({
+      actor: actor(financeId, "staff_finance"),
+      planId,
+      changes: { storageMb: 50 },
+      applyToExisting: false,
+      reason: "Setting the storage cap so the media library has a number to enforce.",
+    });
+    expect(result).toMatchObject({ ok: true });
+
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.storageMb).toBe(50);
+  }, 60_000);
+
+  it("reads an empty storage box as unlimited, like every other cap", async () => {
+    // Null is unlimited throughout, and it is what every plan carried before
+    // this field had an editor. `capFor` guards on `=== null` for the same
+    // reason: zero is a real cap and must not read as unlimited.
+    await editPlanEntitlements({
+      actor: actor(financeId, "staff_finance"),
+      planId,
+      changes: { storageMb: null },
+      applyToExisting: false,
+      reason: "Lifting the storage cap while we decide what it should be.",
+    });
+
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.storageMb).toBeNull();
+  }, 60_000);
+
   it("leaves existing accounts alone unless somebody ticks apply-to-existing", async () => {
     const { businessId } = await payingListing("Grandfathered");
     const before = await effectiveFor(businessId);
