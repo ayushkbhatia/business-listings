@@ -197,7 +197,7 @@ describe("criterion 5 — every locked panel names what unlocks it", () => {
     });
     const overview = await getOverview(business.id);
 
-    const { cheapestPlanUnlocking, cheapestPlanWith } = await import("@/lib/plan/entitlements");
+    const { cheapestPlanUnlocking, cheapestPlanGranting } = await import("@/lib/plan/entitlements");
 
     const forEnquiries = cheapestPlanUnlocking(
       overview!.allPlans,
@@ -210,8 +210,8 @@ describe("criterion 5 — every locked panel names what unlocks it", () => {
     expect(forEnquiries?.monthlyPriceAed).toBeGreaterThan(0);
 
     // Two features that are genuinely a column, so the sentence is checkable.
-    expect(cheapestPlanWith(overview!.allPlans, "customDomain", "free")?.id).toBe("pro");
-    expect(cheapestPlanWith(overview!.allPlans, "customDomain", "free")?.id).toBe("pro");
+    expect(cheapestPlanGranting(overview!.allPlans, "customDomain", "free")?.id).toBe("pro");
+    expect(cheapestPlanGranting(overview!.allPlans, "customDomain", "free")?.id).toBe("pro");
   });
 
   it("offers nothing to a seller already on the best plan for it", async () => {
@@ -220,10 +220,10 @@ describe("criterion 5 — every locked panel names what unlocks it", () => {
       select: { id: true },
     });
     const overview = await getOverview(pro.id);
-    const { cheapestPlanWith } = await import("@/lib/plan/entitlements");
+    const { cheapestPlanGranting } = await import("@/lib/plan/entitlements");
 
     // Rendering a lock here would be an advert for something already bought.
-    expect(cheapestPlanWith(overview!.allPlans, "customDomain", "pro")).toBeNull();
+    expect(cheapestPlanGranting(overview!.allPlans, "customDomain", "pro")).toBeNull();
     expect(usageOf(overview!, "enquiries").cap).toBeNull();
   });
 });

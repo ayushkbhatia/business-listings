@@ -385,6 +385,37 @@ sum of accepted quote lines, labelled self-reported everywhere it appears.
 
 None of these are seller-editable. That is what makes them worth showing.
 
+### What they were yesterday — the `3a`/`3l` amendment
+
+Every one of the four above is a **current-value column** that the nightly jobs overwrite. The
+platform could say what a factor *is* and never what it *was*, and board `3l` had shipped a rule
+requiring the second: every attribution sentence must trace to *"a factor changed, by how much,
+in the window."*
+
+`ListingFactorDay` is the history that rule needed. One row per published listing per night,
+holding three vectors: the six normalised `scores` the ranker consumed, the `raw` measurements
+behind them, and the `weights` in force that night. Vectors rather than named columns, so a
+seventh factor is a key and not a migration.
+
+Storing the **weights per day** is the part that matters most and is easiest to miss. A staff
+slider move on board `12c` shifts every listing in a category and none of them did anything —
+and without a record of what the weights were, that fall is indistinguishable from the seller's
+own decline and gets billed to them. `lib/analytics/attribution.ts` splits the two apart
+exactly, using `w'·s' − w·s ≡ w(s' − s) + s'(w' − w)`.
+
+`CategoryRankDay` is the other half: where each listing sat in each category listing, computed
+nightly whether anybody browsed or not. It sits **beside** `CategoryPositionDay` rather than
+replacing it, because the two answer different questions — that table counts impressions, which
+only a real buyer can generate, and this one holds the position, which is true on a quiet day.
+An arrow computed across a hole in an impression-driven series is not absent, it is wrong.
+
+`total` is stored rather than derived at read time, for the same reason a count is a query and
+never a constant: a category that grew from five listings to forty would otherwise restate every
+historical rank against a set that did not exist then.
+
+Both join the 90-day prune in `lib/analytics/retention.ts`, which now covers six tables. They
+are the only two here that grow on a directory with no visitors at all.
+
 ## Platform settings
 
 ```prisma

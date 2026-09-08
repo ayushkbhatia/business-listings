@@ -53,6 +53,48 @@ test.describe("board 3a — the Pro overview", () => {
     await expect(standing.getByRole("spinbutton")).toHaveCount(0);
   });
 
+  test("carries the position card, as a real table, with no way to edit a number", async ({
+    page,
+  }) => {
+    /*
+       Board 3a's search-position card, switched on by the 3a/3l amendment. It
+       was drawn with 3a and hidden pending 3l, and when 3l landed the switch was
+       never flipped — so the table it reads spent a release with a writer and no
+       reader.
+
+       Three assertions and each is a rule rather than a detail. The region must
+       exist on the Pro fixture, because Q5 gates the card at Basic and above.
+       The rank must carry its denominator, because `#3` alone is flattery in a
+       category holding five and the cold start is what this platform launches
+       in. And nothing on it may be editable: position and attribution are
+       derived, and a seller-editable field is neither measured nor honest.
+    */
+    const card = page.getByRole("region", { name: "Where you rank" });
+    await expect(card).toBeVisible();
+
+    /*
+       Two branches and both assert something.
+
+       The first version gated on `rows.count() > 1`, which is true of a table
+       whose every row reads "Not measured" — so on CI, where the nightly job
+       has never run, it asserted a denominator that was never going to be
+       there. The seed writes nightly ranks now, but the honest shape of this
+       test is still: whichever state the card is in, that state must be
+       complete. A rank carries its denominator; an absence says which absence
+       it is rather than sitting blank.
+    */
+    const ranked = card.getByText(/#\d+ of \d+/);
+    if ((await ranked.count()) > 0) {
+      await expect(ranked.first()).toBeVisible();
+    } else {
+      await expect(card.getByText(/Not measured|Not ranked|not in a category listing/)).toBeVisible();
+    }
+
+    await expect(card.getByRole("textbox")).toHaveCount(0);
+    await expect(card.getByRole("spinbutton")).toHaveCount(0);
+    await expect(card.getByRole("combobox")).toHaveCount(0);
+  });
+
   test("is axe clean", async ({ page }) => {
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
