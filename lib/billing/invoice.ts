@@ -29,28 +29,57 @@ import { FILS_PER_AED, VAT_RATE, filsToAed, vatOn } from "./proration";
  * line by the VAT return. Nothing here changes that; it is named because it is
  * the third thing that must not move.
  *
- * ## What is not frozen
+ * **The issuer — us.** This was a constant, on the reasoning that our own
+ * details are a fact about this company rather than about the transaction. That
+ * reasoning did not survive board 11g, and it did not survive it in the most
+ * direct way possible: the issuing entity changed. `BL Directory FZ-LLC` in
+ * DMCC, with a TRN, became **Bearing Deployment Company, Inc** — Delaware,
+ * San Francisco, **no TRN at all**. A constant would have rewritten the supplier
+ * on every invoice ever issued, retrospectively, including ones a seller had
+ * already filed with their accountant.
  *
- * The issuer — us. `BL Directory FZ-LLC`, the DMCC address, our TRN. A tax
- * invoice must carry the supplier's details, but ours are a fact about this
- * company rather than about the transaction, and if they ever change it is
- * because the company changed and every document should say so. They are
- * constants in `ISSUER` below rather than columns.
+ * So `ISSUER` is now only the default for a *new* invoice. Every issued one
+ * carries its own `supplierName` / `supplierAddress` / `supplierIncorporation`,
+ * and the renderer reads those.
  */
 
 /**
- * Us, on every document we issue.
+ * Us, as of today — the default stamped onto a **new** invoice.
  *
- * A constant rather than a setting: there is one issuer, it is this company,
- * and a settings row for it would be a field somebody could get wrong on a legal
- * document. `3m`'s header prints the TRN in the chrome and `11g` prints the
- * block; both read this.
+ * Not what an existing invoice renders: that reads its own stored snapshot. The
+ * distinction is the whole of board 11g's third correction, and this entity is
+ * the proof, because it has already changed once.
+ *
+ * **No TRN.** Bearing Deployment Company is incorporated in Delaware and is not
+ * registered in the UAE, so there is no supplier tax number — and its absence is
+ * deliberate rather than missing data. With one tax number on the page an
+ * unlabelled one reads as the issuer's, which is why the recipient's is labelled
+ * `Recipient TRN` on the document.
+ *
+ * That leaves a US-registered supplier charging 5% on a document headed
+ * `TAX INVOICE`, which is spec Q3 and is a question for a tax advisor rather
+ * than a design decision. `STATUTORY_NOTE_PENDING` below is how the document
+ * says so out loud instead of inventing wording.
  */
 export const ISSUER = {
-  name: "BL Directory FZ-LLC",
-  addressLines: ["DMCC, Dubai, UAE"],
-  trn: "100 4471 2200 0003",
+  name: "Bearing Deployment Company, Inc",
+  addressLines: ["2261 Market Street STE 83655", "San Francisco CA 94114"],
+  incorporation: "Incorporated in Delaware, USA",
 } as const;
+
+/**
+ * The statutory sentence, held open.
+ *
+ * Board 11g renders a visibly marked dashed box where the VAT wording belongs,
+ * rather than inventing a sentence — because who accounts for 5% charged by a
+ * US supplier to a UAE recipient changes the heading, the footnote and possibly
+ * the VAT lines themselves.
+ *
+ * A placeholder that is *visible* is the point. A silently absent footnote looks
+ * like a finished document; this one tells anyone reading it, including the tax
+ * advisor, exactly which question is still open.
+ */
+export const STATUTORY_NOTE_PENDING = true;
 
 /** `BL-INV-20418`. The board's format, and the seller's reference on a bank line. */
 const REF_PREFIX = "BL-INV-";
@@ -80,6 +109,16 @@ export interface InvoiceLineInput {
   /** What this line covers, where it covers a period. See the schema note. */
   periodStart?: Date | null;
   periodEnd?: Date | null;
+  /**
+   * How this line is treated for VAT. Board 11g.
+   *
+   * Defaults to `standard`, which is every line we sell today. It is stored per
+   * line anyway: the first zero-rated or out-of-scope line has nowhere to go in
+   * a blended `VAT 5%` row, and a document's layout cannot change after issue.
+   */
+  taxTreatment?: "standard" | "zero_rated" | "exempt" | "out_of_scope";
+  /** The placement booking this line bills. Printed as text — `11e` has no page. */
+  bookingRef?: string | null;
 }
 
 export interface IssueInvoiceInput {
@@ -97,6 +136,21 @@ export interface IssueInvoiceInput {
   docType?: "tax_invoice" | "credit_note";
   /** Our own reference for the provider transaction, where there was one. */
   ref?: string;
+  /**
+   * Date of supply, where it differs from the date of issue.
+   *
+   * Board 11g: the board printed one date and let it stand for issue, supply and
+   * the supply period at once. Defaults to `issuedAt`, which is true of a
+   * subscription charged on the day its period opens, and is stated separately
+   * so the document does not have to imply it.
+   */
+  supplyDate?: Date | null;
+  /** `Dubai, UAE`. Where the supply is made, stored as a fact about the day. */
+  placeOfSupply?: string | null;
+  /** The provider's reference, printed under REFERENCES. */
+  pspRef?: string | null;
+  /** Ours — `SUB-4471-PRO`. */
+  subscriptionRef?: string | null;
 }
 
 export interface IssuedInvoice {
@@ -144,6 +198,23 @@ export async function issueInvoice(
   const vatFils = vatOn(subtotalFils, vatRate);
   const ref = input.ref ?? (await nextInvoiceRef(tx));
 
+  /*
+     VAT per line, and the document total is the sum of them.
+
+     `vatFils` above rounds once over the whole invoice, which is the convention
+     `vatReturn` already applied and what the seller's copy has always shown. The
+     per-line figures have to add up to it or the document contradicts its own
+     total, so the last line absorbs whatever the per-line rounding left over —
+     at most one fil, and on the line rather than in a footnote.
+  */
+  const lineVat = input.lines.map((line) => {
+    const rate = line.taxTreatment && line.taxTreatment !== "standard" ? 0 : vatRate;
+    return { rate, fils: vatOn(line.fils * (line.qty ?? 1), rate) };
+  });
+  const lineVatSum = lineVat.reduce((sum, line) => sum + line.fils, 0);
+  const lastVat = lineVat[lineVat.length - 1];
+  if (lastVat && lineVatSum !== vatFils) lastVat.fils += vatFils - lineVatSum;
+
   const invoice = await tx.invoice.create({
     data: {
       ref,
@@ -159,17 +230,36 @@ export async function issueInvoice(
       billedToName: business.displayName,
       billedToTrn: business.trn,
       billedToAddress: addressOf(business.locations[0] ?? null),
+      /*
+         Us, frozen. Board 11g's third correction, and this entity is its own
+         proof: the issuer was a UAE company with a TRN when the board was drawn
+         and is now a Delaware one with none. Reading `ISSUER` at render time
+         would have restated the supplier on every invoice ever sent.
+      */
+      supplierName: ISSUER.name,
+      supplierAddress: ISSUER.addressLines.join("\n"),
+      supplierIncorporation: ISSUER.incorporation,
+      // Three dates, separately stated. The board printed one.
+      supplyDate: input.supplyDate ?? input.issuedAt,
+      placeOfSupply: input.placeOfSupply ?? placeOf(business.locations[0] ?? null),
+      pspRef: input.pspRef ?? null,
+      subscriptionRef: input.subscriptionRef ?? null,
       paidByBrand: input.paidBy?.brand ?? null,
       paidByLast4: input.paidBy?.last4 ?? null,
       correctsId: input.correctsId ?? null,
       lines: {
-        create: input.lines.map((line) => ({
+        create: input.lines.map((line, index) => ({
           kind: line.kind,
           description: line.description,
           qty: line.qty ?? 1,
           amountAed: filsToAed(line.fils),
           periodStart: line.periodStart ?? null,
           periodEnd: line.periodEnd ?? null,
+          unitAed: filsToAed(line.fils),
+          vatRate: new Prisma.Decimal(lineVat[index]?.rate ?? vatRate),
+          vatAed: filsToAed(lineVat[index]?.fils ?? 0),
+          taxTreatment: line.taxTreatment ?? "standard",
+          bookingRef: line.bookingRef ?? null,
         })),
       },
     },
@@ -177,6 +267,11 @@ export async function issueInvoice(
   });
 
   return { ...invoice, subtotalFils, vatFils, totalFils: subtotalFils + vatFils };
+}
+
+/** `Dubai, UAE` — where the supply is made, from the seller's head office. */
+function placeOf(location: { emirate: string } | null): string | null {
+  return location ? `${emirateName(location.emirate)}, UAE` : null;
 }
 
 /**

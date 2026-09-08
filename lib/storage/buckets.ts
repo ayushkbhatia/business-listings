@@ -13,11 +13,38 @@
 
 export const MEDIA_BUCKET = "business-media";
 export const DOCUMENT_BUCKET = "business-documents";
+/**
+ * Invoice PDFs, written by us at issue. Board 11g.
+ *
+ * A third bucket rather than a folder in `business-documents`, and the reason is
+ * retention rather than tidiness. That bucket holds files a **seller uploaded**
+ * for staff to verify — a trade licence is replaceable, and a future "remove
+ * this business's uploaded documents" job would be right to sweep it. An invoice
+ * is a legal record **we issued**, which we have promised to serve byte for byte
+ * for as long as it is asked for, and it must outlive exactly that kind of job.
+ *
+ * Same access rules as documents: private, reached only through a brief signed
+ * link.
+ */
+export const INVOICE_BUCKET = "invoice-documents";
 
 /** Public read, because these render on a storefront a buyer has not signed into. */
 export const PUBLIC_BUCKETS = [MEDIA_BUCKET] as const;
 /** No public read at any URL. Reached only through a signed link, briefly. */
-export const PRIVATE_BUCKETS = [DOCUMENT_BUCKET] as const;
+export const PRIVATE_BUCKETS = [DOCUMENT_BUCKET, INVOICE_BUCKET] as const;
+
+/**
+ * Where one invoice's PDF lives, keyed by its id.
+ *
+ * Not through `safeName`: that appends a random suffix so two uploads of
+ * `licence.pdf` cannot collide, which is right for a file a seller names and
+ * wrong here. The path has to be **derivable from the invoice**, because the
+ * download reads it back and a stored path is the only thing that could point at
+ * the wrong file. The id never moves and the ref is unique.
+ */
+export function invoicePdfPath(businessId: string, invoiceId: string, ref: string): string {
+  return `${businessId}/${invoiceId}/${ref}.pdf`;
+}
 
 /**
  * One megabyte, for a stored photograph.
@@ -48,6 +75,14 @@ export const MAX_DOCUMENT_BYTES = 16 * 1024 * 1024;
  * on a warehouse connection and a slow read afterwards.
  */
 export const MAX_LICENCE_BYTES = 10 * 1024 * 1024;
+
+/**
+ * One megabyte for an invoice PDF, which is roughly thirty times what one is.
+ *
+ * A single A4 page with no embedded fonts and no images is tens of kilobytes.
+ * The ceiling is here so the bucket has one, not because anything approaches it.
+ */
+export const MAX_INVOICE_BYTES = 1024 * 1024;
 
 export const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif"] as const;
 export const DOCUMENT_TYPES = ["application/pdf", "image/jpeg", "image/png"] as const;

@@ -30,7 +30,35 @@ check() {
 }
 
 echo "→ 9. schema invariants"
-check '^[[:space:]]*(price|priceAed|unitPriceAed|currency|pricingTier)[[:space:]]' "Product carries no price field"
+
+# Scoped to the `Product` model, which is what this check has always claimed to
+# be about.
+#
+# It used to grep the whole file, so it fired on `Invoice.currency` — a field a
+# tax document is legally required to state (board 11g, criterion 5). Widening
+# the exception list would have been the wrong repair: the ban is about
+# `Product`, and a check that names one model and reads every model is one that
+# gets an exception added to it every time an unrelated table grows a column,
+# until it bans nothing.
+#
+# Scoping it also makes it stricter where it matters. `price` on `Product` was
+# only ever caught because no other model happened to use the word.
+PRODUCT=$(awk '/^model Product \{/,/^\}/' <<<"$CODE")
+
+check_in() {
+  local body="$1" pattern="$2" label="$3"
+  local hits
+  hits=$(grep -inE "$pattern" <<<"$body" || true)
+  if [ -n "$hits" ]; then
+    echo "   FAIL — $label"
+    echo "$hits" | sed 's/^/     /'
+    fail=1
+  else
+    echo "   pass — $label"
+  fi
+}
+
+check_in "$PRODUCT" '^[[:space:]]*(price|priceAed|unitPriceAed|currency|pricingTier)[[:space:]]' "Product carries no price field"
 check '^[[:space:]]*model[[:space:]]+(Order|OrderLine|Payment|Fulfilment|Fulfillment)[[:space:]]*\{' "no order/payment/fulfilment model"
 check 'payout|commissionRate|transactionFee|escrow' "no payout, commission, transaction fee or escrow"
 

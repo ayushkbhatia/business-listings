@@ -462,11 +462,18 @@ function InvoicesPanel({ summary }: { summary: BillingSummary }) {
               <tr key={invoice.id} className="border-b border-line-soft last:border-0">
                 <th scope="row" className="px-4 py-2.5 text-left font-mono text-caption font-normal text-ink">
                   {/*
-                     `11g` owns the document. Until it lands the reference is a
-                     reference and not a link — a link to a 404 is worse than a
-                     figure that does not move.
+                     Now a link. `11g` shipped the document, so the reference
+                     goes to it — it was text while that route did not exist,
+                     because a link to a 404 is worse than a figure that does
+                     not move.
                   */}
-                  {invoice.ref}
+                  <Link
+                    href={`/dashboard/billing/invoice/${invoice.id}`}
+                    className="rounded-tag underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+                    aria-label={t("billing.invoices.view", { ref: invoice.ref })}
+                  >
+                    {invoice.ref}
+                  </Link>
                 </th>
                 <td className="px-3 py-2.5 text-body-ink">
                   {invoice.issuedAt ? formatDate(invoice.issuedAt) : "—"}
@@ -491,7 +498,7 @@ function InvoicesPanel({ summary }: { summary: BillingSummary }) {
       </div>
 
       <p className="border-t border-line-soft px-4 py-2.5 text-caption text-muted">
-        {t("billing.our_trn", { trn: ISSUER.trn })}
+        {t("billing.issued_by", { name: ISSUER.name })}
       </p>
     </Panel>
   );

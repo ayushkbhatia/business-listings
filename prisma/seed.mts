@@ -3052,6 +3052,19 @@ const FREE_AT_CAP_SLUG = "al-manara-equipment-trading-llc";
  * would be a handle to something nobody holds — so it stays null and
  * `paymentProvider().live` keeps saying so on the screen.
  */
+/**
+ * The issuing entity, mirrored from `lib/billing/invoice.ts`.
+ *
+ * Repeated rather than imported: that module is `server-only` and a seed is not
+ * a request. The values are what `ISSUER` holds, and a test asserts they have
+ * not drifted apart.
+ */
+const ISSUER = {
+  name: "Bearing Deployment Company, Inc",
+  address: "2261 Market Street STE 83655\nSan Francisco CA 94114",
+  incorporation: "Incorporated in Delaware, USA",
+} as const;
+
 const CARDS = [
   { brand: "Emirates NBD", last4: "4471", expiryMonth: 9, expiryYear: 2029 },
   { brand: "Mashreq", last4: "8802", expiryMonth: 4, expiryYear: 2028 },
@@ -3071,6 +3084,26 @@ function invoiceTotals(amountAed: number) {
   const subtotalFils = Math.round(amountAed * 100);
   const vatFils = Math.sign(subtotalFils) * Math.round(Math.abs(subtotalFils) * 0.05);
   return { subtotalFils, vatFils, totalFils: subtotalFils + vatFils };
+}
+
+/**
+ * The recipient's address, as it prints on the document.
+ *
+ * Mandatory content on a tax invoice, and it was missing from every seeded one:
+ * the sheet rendered a name and a TRN with nothing between them. Built the same
+ * way `addressOf` in lib/billing/invoice.ts builds it, from the head office.
+ */
+async function billedToAddress(db: Db, businessId: string): Promise<string | null> {
+  const location = await db.location.findFirst({
+    where: { businessId, type: "head_office" },
+    select: { addressLine: true, emirate: true, area: { select: { name: true } } },
+  });
+  if (!location) return null;
+  const emirate = location.emirate
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+  return [location.addressLine, location.area.name, emirate].filter(Boolean).join(", ");
 }
 
 /** Calendar arithmetic for an invoice line's period. A month is a month. */
@@ -3803,17 +3836,40 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
         ...invoiceTotals(amount),
         billedToName: b.displayName,
         billedToTrn: b.trn ?? null,
+        billedToAddress: await billedToAddress(db, b.id),
+        /*
+           Us, as at issue. Board 11g: reading the issuer from a constant means a
+           re-registration rewrites every invoice ever sent, and this entity has
+           already been restated once — a UAE company with a TRN became a
+           Delaware one with none.
+        */
+        supplierName: ISSUER.name,
+        supplierAddress: ISSUER.address,
+        supplierIncorporation: ISSUER.incorporation,
+        // Three dates, separately stated. The board printed one and let it do
+        // the work of all three.
+        supplyDate: issuedAt,
+        placeOfSupply: "Dubai, UAE",
+        pspRef: paid ? `PSP-${8000 + i}-${20_000 + i}` : null,
+        subscriptionRef: `SUB-${card.last4}-${plan.id.toUpperCase()}`,
         paidByBrand: paid ? card.brand : null,
         paidByLast4: paid ? card.last4 : null,
         lines: {
           create: [
             {
               kind: "subscription",
-              description: `${plan.name} plan, ${periodLabel}`,
+              description: `${plan.name} subscription`,
               qty: 1,
               amountAed: String(amount),
               periodStart: issuedAt,
               periodEnd: term === "annual" ? addYears(issuedAt, 1) : addMonths(issuedAt, 1),
+              // Per line, even while every line is standard-rated: the first
+              // zero-rated or exempt line has nowhere to go in a blended row,
+              // and a document cannot be re-laid-out after issue.
+              unitAed: String(amount),
+              vatRate: "0.0500",
+              vatAed: (Math.round(amount * 100 * 0.05) / 100).toFixed(2),
+              taxTreatment: "standard",
             },
           ],
         },
@@ -3844,6 +3900,108 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
      hanging it on the one row whose term contradicts the line would make it an
      example of something else.
   */
+  /*
+     One invoice that bills a placement alongside the subscription.
+
+     Board 11g renders per-line VAT and a booking reference, and neither is
+     visible on an invoice with a single line. The placement carries its own
+     period — `PlacementSlot` has `startsOn`/`endsOn`, which is Q7's answer —
+     and its booking reference is printed as **text**, because `11e` owns the
+     detail page and is blocked on `12c`.
+  */
+  const withPlacement = paying[0]!;
+  const placementInvoiceIssued = days(-14);
+  const placementAmount = 1_400;
+  const proAmount = 899;
+  const placementSub = Math.round((proAmount + placementAmount) * 100);
+  const placementVat = Math.round(placementSub * 0.05);
+  const placementInvoice = await db.invoice.create({
+    data: {
+      ref: "BL-INV-20418",
+      businessId: withPlacement.id,
+      vatRate: "0.0500",
+      status: "paid",
+      issuedAt: placementInvoiceIssued,
+      dueAt: days(16),
+      paidAt: placementInvoiceIssued,
+      subtotalFils: placementSub,
+      vatFils: placementVat,
+      totalFils: placementSub + placementVat,
+      billedToName: withPlacement.displayName,
+      billedToTrn: withPlacement.trn ?? null,
+      billedToAddress: await billedToAddress(db, withPlacement.id),
+      supplierName: ISSUER.name,
+      supplierAddress: ISSUER.address,
+      supplierIncorporation: ISSUER.incorporation,
+      supplyDate: placementInvoiceIssued,
+      placeOfSupply: "Dubai, UAE",
+      pspRef: "PSP-8841-20418",
+      subscriptionRef: "SUB-4471-PRO",
+      paidByBrand: "Visa",
+      paidByLast4: "2318",
+      lines: {
+        create: [
+          {
+            kind: "subscription",
+            description: "Pro subscription",
+            qty: 1,
+            amountAed: String(proAmount),
+            unitAed: String(proAmount),
+            vatRate: "0.0500",
+            vatAed: (proAmount * 0.05).toFixed(2),
+            taxTreatment: "standard",
+            periodStart: placementInvoiceIssued,
+            periodEnd: addMonths(placementInvoiceIssued, 1),
+          },
+          {
+            kind: "placement",
+            description: "Sponsored placement · Valves & actuators, Dubai",
+            qty: 1,
+            amountAed: String(placementAmount),
+            unitAed: String(placementAmount),
+            vatRate: "0.0500",
+            vatAed: (placementAmount * 0.05).toFixed(2),
+            taxTreatment: "standard",
+            bookingRef: "PB-3391",
+            periodStart: placementInvoiceIssued,
+            periodEnd: addMonths(placementInvoiceIssued, 1),
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  /*
+     The delivery log. Board 11g's `DELIVERY` panel exists because accounting
+     teams ask *"did you send it, and to whom"*, and the record has to exist
+     before the question is asked.
+  */
+  const owner = await db.user.findFirst({
+    where: { businessId: withPlacement.id, roles: { has: "seller_owner" } },
+    select: { id: true, email: true },
+  });
+  await db.invoiceEvent.createMany({
+    data: [
+      {
+        invoiceId: placementInvoice.id,
+        kind: "emailed",
+        recipient: owner?.email ?? "accounts@example.ae",
+        createdAt: placementInvoiceIssued,
+      },
+      ...(owner
+        ? [
+            {
+              invoiceId: placementInvoice.id,
+              kind: "downloaded" as const,
+              actorId: owner.id,
+              createdAt: days(-3),
+            },
+          ]
+        : []),
+    ],
+  });
+
   const credited = paying[0]!;
   const correctedInvoice = await db.invoice.create({
     data: {
@@ -3857,9 +4015,24 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
       ...invoiceTotals(899),
       billedToName: credited.displayName,
       billedToTrn: credited.trn ?? null,
+      billedToAddress: await billedToAddress(db, credited.id),
+      supplierName: ISSUER.name,
+      supplierAddress: ISSUER.address,
+      supplierIncorporation: ISSUER.incorporation,
+      supplyDate: days(-40),
+      placeOfSupply: "Dubai, UAE",
       lines: {
         create: [
-          { kind: "subscription", description: "Pro plan, monthly", qty: 1, amountAed: "899.00" },
+          {
+            kind: "subscription",
+            description: "Pro subscription",
+            qty: 1,
+            amountAed: "899.00",
+            unitAed: "899.00",
+            vatRate: "0.0500",
+            vatAed: "44.95",
+            taxTreatment: "standard",
+          },
         ],
       },
     },
@@ -3890,9 +4063,24 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
       ...invoiceTotals(-119.87),
       billedToName: credited.displayName,
       billedToTrn: credited.trn ?? null,
+      billedToAddress: await billedToAddress(db, credited.id),
+      supplierName: ISSUER.name,
+      supplierAddress: ISSUER.address,
+      supplierIncorporation: ISSUER.incorporation,
+      supplyDate: days(-2),
+      placeOfSupply: "Dubai, UAE",
       lines: {
         create: [
-          { kind: "subscription_credit", description: "Credit, four days of downtime in July", qty: 1, amountAed: "-119.87" },
+          {
+            kind: "subscription_credit",
+            description: "Credit, four days of downtime in July",
+            qty: 1,
+            amountAed: "-119.87",
+            unitAed: "-119.87",
+            vatRate: "0.0500",
+            vatAed: "-5.99",
+            taxTreatment: "standard",
+          },
         ],
       },
     },

@@ -67,6 +67,9 @@ const DEFAULTS: AlertsValue = {
   escalateAfterMinutes: 120,
   nudgeEnabled: true,
   nudgeAfterHours: 24,
+  // Null, not an address. `billingRecipient()` resolves the finance seat and
+  // then the owner, which is an answer the platform already holds.
+  billingEmail: null,
 };
 
 type Tab = "notifications" | "channels";
@@ -125,6 +128,7 @@ export default async function SettingsPage({
         escalateAfterMinutes: preference.escalateAfterMinutes,
         nudgeEnabled: preference.nudgeEnabled,
         nudgeAfterHours: preference.nudgeAfterHours,
+        billingEmail: preference.billingEmail,
       }
     : DEFAULTS;
 

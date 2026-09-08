@@ -2,11 +2,12 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   DOCUMENT_BUCKET,
+  INVOICE_BUCKET,
   MEDIA_BUCKET,
-  PRIVATE_BUCKETS,
   PUBLIC_BUCKETS,
   MAX_DOCUMENT_BYTES,
   MAX_IMAGE_BYTES,
+  MAX_INVOICE_BYTES,
   DOCUMENT_TYPES,
   IMAGE_TYPES,
 } from "./buckets";
@@ -58,6 +59,42 @@ export async function signedReadUrl(path: string, seconds = 300): Promise<string
   return data?.signedUrl ?? null;
 }
 
+/**
+ * Store one invoice PDF, at issue. Board 11g.
+ *
+ * `upsert: false`. An invoice's PDF is written **once** and the whole point of
+ * storing it is that a later template cannot replace it — a regenerated file is
+ * a different document from the one the seller filed with their accountant, even
+ * when every figure matches. A second write is a bug, and it should fail rather
+ * than overwrite the evidence.
+ *
+ * Returns null on failure rather than throwing. The invoice itself has already
+ * been written and the money has already moved; losing the whole transaction
+ * because object storage was briefly unavailable would be the worse outcome. The
+ * screen reads a null `pdfPath` and says the document is not available for
+ * download rather than offering to invent one.
+ */
+export async function putInvoicePdf(path: string, bytes: Buffer): Promise<string | null> {
+  const admin = createAdminClient();
+  const { error } = await admin.storage
+    .from(INVOICE_BUCKET)
+    .upload(path, bytes, { contentType: "application/pdf", upsert: false });
+
+  if (error) {
+    console.warn(`[storage] could not store the invoice PDF at ${path}: ${error.message}`);
+    return null;
+  }
+  return path;
+}
+
+/** The stored bytes, read back for the download. Null when it is not there. */
+export async function readInvoicePdf(path: string): Promise<Buffer | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from(INVOICE_BUCKET).download(path);
+  if (error || !data) return null;
+  return Buffer.from(await data.arrayBuffer());
+}
+
 export async function removeObject(bucket: string, path: string): Promise<void> {
   const admin = createAdminClient();
   await admin.storage.from(bucket).remove([path]);
@@ -105,14 +142,30 @@ export async function ensureBuckets(): Promise<{
         allowedMimeTypes: [...IMAGE_TYPES],
       },
     })),
-    ...PRIVATE_BUCKETS.map((name) => ({
-      name,
+    {
+      name: DOCUMENT_BUCKET,
       options: {
         public: false,
         fileSizeLimit: MAX_DOCUMENT_BYTES,
         allowedMimeTypes: [...DOCUMENT_TYPES],
       },
-    })),
+    },
+    /*
+       The invoice bucket is narrower than the document one on both axes.
+
+       Only PDFs, because nothing but this writer ever puts anything in it — a
+       bucket that would accept a JPEG is a bucket somebody can put a JPEG in.
+       And a megabyte, because a one-page A4 invoice with no embedded fonts is
+       tens of kilobytes; sixteen megabytes here would be a ceiling on nothing.
+    */
+    {
+      name: INVOICE_BUCKET,
+      options: {
+        public: false,
+        fileSizeLimit: MAX_INVOICE_BYTES,
+        allowedMimeTypes: ["application/pdf"],
+      },
+    },
   ];
 
   for (const { name, options } of settings) {

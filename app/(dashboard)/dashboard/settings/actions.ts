@@ -78,6 +78,7 @@ export async function saveAlerts(formData: FormData): Promise<SaveAlertsResult> 
 
   const escalateAfterMinutes = pick(formData.get("escalateAfterMinutes"), ESCALATION_CHOICES, 120);
   const nudgeAfterHours = pick(formData.get("nudgeAfterHours"), NUDGE_CHOICES, 24);
+  const billingEmail = String(formData.get("billingEmail") ?? "").trim();
   const quietHoursEnabled = formData.get("quietHoursEnabled") === "on";
 
   /*
@@ -106,6 +107,16 @@ export async function saveAlerts(formData: FormData): Promise<SaveAlertsResult> 
     escalateAfterMinutes,
     nudgeEnabled: formData.get("nudgeEnabled") === "on",
     nudgeAfterHours,
+    /*
+       Where invoices go. Board 11g reads it and the document screen states that
+       it comes from here, so the field has to exist for that sentence to be
+       true.
+
+       Empty stores null rather than an empty string: null is the state
+       `billingRecipient()` resolves from — the finance seat, then the owner —
+       and `""` would be an address that fails to send.
+    */
+    billingEmail: billingEmail || null,
   };
 
   await prisma.notificationPreference.upsert({

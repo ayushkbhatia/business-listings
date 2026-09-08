@@ -19,6 +19,7 @@ import {
   type Proration,
 } from "./proration";
 import { issueInvoice } from "./invoice";
+import { writeInvoicePdf } from "./issue-pdf";
 import { scheduleChange } from "./schedule";
 import { t } from "@/lib/i18n";
 import {
@@ -419,6 +420,16 @@ export async function changePlan(
         paidAt: now,
         paidBy: card,
         vatRate: proration.vatRate,
+        /*
+           The references board 11g prints under the totals.
+
+           `reference` is what the provider was asked to charge against, so it is
+           the string to quote at them when a seller disputes a line. The
+           subscription one names the plan and the card, which is what a seller
+           recognises on a statement.
+        */
+        pspRef: reference,
+        subscriptionRef: `SUB-${card?.last4 ?? "0000"}-${quote.toPlan.id.toUpperCase()}`,
         lines: [
           {
             kind: "subscription",
@@ -445,6 +456,18 @@ export async function changePlan(
 
     return invoice.id;
   });
+
+  /*
+     The PDF, after the transaction commits.
+
+     Board 11g: written once at issue, and the download serves that file byte for
+     byte. Outside the transaction on purpose — object storage is a different
+     system, and holding a write transaction open across a network call is how a
+     slow bucket becomes a database incident. A failure here leaves `pdfPath`
+     null and the document screen says so; money has already moved and the
+     invoice row is what must not be lost.
+  */
+  if (invoiceId) await writeInvoicePdf(invoiceId);
 
   return { ok: true, invoiceId, scheduled: false };
 }
@@ -1012,7 +1035,6 @@ export async function issueSubscriptionCredit(input: CreditInput): Promise<Credi
   }
 
   const now = new Date();
-  const reference = `CREDIT-${business.id.slice(-6)}-${now.getTime()}`;
 
   const invoiceId = await prisma.$transaction(async (tx) =>
     staffMutation(
@@ -1024,24 +1046,35 @@ export async function issueSubscriptionCredit(input: CreditInput): Promise<Credi
         tx,
       },
       async () => {
-        const invoice = await tx.invoice.create({
-          data: {
-            ref: reference,
+        /*
+           Through `issueInvoice`, not a bare `create`.
+
+           This wrote its row inline and so carried none of what board 11g's
+           document needs: no stored totals, no supplier snapshot, and a
+           `CREDIT-…` reference rather than one from the `BL-INV-` series. It
+           was the last writer still doing that, and the tax-invoice screen would
+           have rendered it with derived figures and an empty supplier block.
+
+           A `credit_note`, with no `correctsId`: this is a goodwill credit
+           finance issues against an account rather than a correction to one
+           specific document, and a negative total on something headed
+           `TAX INVOICE` would be the wrong heading on a legal record.
+        */
+        const invoice = await issueInvoice(
+          {
             businessId: business.id,
-            status: "issued",
+            docType: "credit_note",
             issuedAt: now,
-            lines: {
-              create: [
-                {
-                  kind: "subscription_credit",
-                  description: input.description,
-                  amountAed: `-${filsToAed(input.fils)}`,
-                },
-              ],
-            },
+            lines: [
+              {
+                kind: "subscription_credit",
+                description: input.description,
+                fils: -input.fils,
+              },
+            ],
           },
-          select: { id: true, ref: true },
-        });
+          tx,
+        );
         return {
           result: invoice.id,
           before: null,
@@ -1050,6 +1083,10 @@ export async function issueSubscriptionCredit(input: CreditInput): Promise<Credi
       },
     ),
   );
+
+  // Outside the transaction, for the reason `changePlan` states: object storage
+  // is a different system and a write transaction must not wait on one.
+  await writeInvoicePdf(invoiceId);
 
   return { ok: true, invoiceId };
 }
