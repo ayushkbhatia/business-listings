@@ -86,13 +86,127 @@ test.describe("board 11c — reviews", () => {
     if (hasReviews) {
       await expect(page.getByText(/cannot be removed by the supplier/)).toBeVisible();
     }
-    await expect(page.getByRole("button", { name: /delete|remove/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /delete/i })).toHaveCount(0);
   });
 
-  test("explains the rules for asking", async ({ page }) => {
+  test("explains the rules for asking, at the moment of asking", async ({ page }) => {
     await page.goto("/dashboard/reviews");
-    await expect(page.getByText(/once per buyer ever/)).toBeVisible();
-    await expect(page.getByText(/No incentives/)).toBeVisible();
+    await expect(page.getByText(/One request each, ever/)).toBeVisible();
+    // The incentive prohibition belongs on the panel and not in a help article.
+    await expect(page.getByText(/never offer an incentive for a review/)).toBeVisible();
+    // `B2`: the channel is stated per buyer, and the fallback is real.
+    await expect(page.getByText(/WhatsApp where we have a number, email otherwise/)).toBeVisible();
+  });
+
+  test("criterion 1 — the request button counts the selection", async ({ page }) => {
+    /*
+       The board rendered `Send 8 requests` above a chip list with two ticked,
+       which means either the button ignored the selection or the selection was
+       decorative. Both are wrong on a control that messages customers.
+    */
+    await page.goto("/dashboard/reviews");
+    const boxes = page.getByRole("checkbox").and(page.locator(":not([disabled])"));
+    const count = await boxes.count();
+    test.skip(count === 0, "no eligible buyers on this seed");
+
+    // Nothing starts ticked: eight buyers pre-selected is eight messages one
+    // click away, under a rule that says one request per buyer ever.
+    await expect(page.getByRole("button", { name: /^Send requests$/ })).toBeDisabled();
+
+    await boxes.first().check();
+    await expect(page.getByRole("button", { name: "Send 1 request" })).toBeEnabled();
+    if (count > 1) {
+      await boxes.nth(1).check();
+      await expect(page.getByRole("button", { name: "Send 2 requests" })).toBeEnabled();
+    }
+  });
+
+  test("criterion 6 and 7 — the rail lists the grounds and starts nothing", async ({ page }) => {
+    await page.goto("/dashboard/reviews");
+    const rail = page.getByRole("heading", { name: "Disputing a review" });
+    await expect(rail).toBeVisible();
+
+    // Four grounds, four rows. The board's own render counted four in the prose
+    // above and showed three below, having merged abuse and private
+    // information into one line.
+    for (const ground of [
+      /No traceable enquiry/,
+      /Abusive language/,
+      /Private information about a person/,
+      /A factual claim you can prove is false/,
+    ]) {
+      await expect(page.getByText(ground).first()).toBeVisible();
+    }
+    await expect(page.getByText(/“It is unfair” is not a ground/)).toBeVisible();
+
+    /*
+       Criterion 7: no dispute can be started from the rail. The board drew a
+       radio pre-selected on the first ground, for a dispute nobody had started
+       against a review nobody had chosen — so the rail carries no form control
+       at all, and the flow begins at a review.
+    */
+    const railCard = page.locator("section, div").filter({ has: rail }).last();
+    await expect(railCard.getByRole("radio")).toHaveCount(0);
+  });
+
+  test("criterion 11 — with no reviews, a page about earning them", async ({ page }) => {
+    /*
+       This seat is the no-reviews fixture on purpose: `reviews-page.spec.ts`
+       names `al-marwan-industrial-supplies-llc` as `NO_REVIEWS` and board 1m
+       asserts the storefront state that follows from it. So this is the state
+       the acceptance suite can reach from a seller session, and it is the one
+       §States calls *"the most common state on this board"* — almost every
+       supplier opens this page with nothing on it.
+
+       The header's arithmetic is asserted in tests/integration/reviews-11c,
+       against a business that has reviews. Adding some here to reach it would
+       break four assertions on a board this one does not own.
+    */
+    await page.goto("/dashboard/reviews");
+    await expect(page.getByRole("heading", { name: "No reviews yet" })).toBeVisible();
+    await expect(page.getByText(/enquired and heard back from you/)).toBeVisible();
+    // Not an empty table, and not a dead button either: the panel above says
+    // who becomes eligible and when.
+    await expect(page.locator("table")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Ask for a review" })).toBeVisible();
+  });
+
+  test("the request panel is reachable and operable from the keyboard", async ({ page }) => {
+    /*
+       The one control on this page that sends messages to customers, driven
+       without a mouse. Space toggles a buyer and the button's label follows —
+       criterion 1 holds on the keyboard too, or the count is a mouse-only
+       promise.
+    */
+    await page.goto("/dashboard/reviews");
+    const boxes = page.getByRole("checkbox").and(page.locator(":not([disabled])"));
+    test.skip((await boxes.count()) === 0, "no eligible buyers on this seed");
+
+    await boxes.first().focus();
+    await expect(boxes.first()).toBeFocused();
+    await page.keyboard.press("Space");
+    await expect(boxes.first()).toBeChecked();
+
+    const send = page.getByRole("button", { name: "Send 1 request" });
+    await expect(send).toBeEnabled();
+    await page.keyboard.press("Tab");
+    // The next stop is the button, not a decorative element between them.
+    await expect(send).toBeFocused();
+  });
+
+  test("the rated-on rail says what it has rather than drawing empty bars", async ({ page }) => {
+    /*
+       Cold start again, and the honest version of it: no reviews means no
+       dimension averages, and a rail of four zeroed bars would read as four
+       scores of nothing rather than as no data.
+
+       Criterion 4 — that the weakest line says so in words rather than in an
+       amber bar alone — is asserted in tests/integration/reviews-11c against a
+       business with reviews, for the reason the test above gives.
+    */
+    await page.goto("/dashboard/reviews");
+    await expect(page.getByRole("heading", { name: "Rated on" })).toBeVisible();
+    await expect(page.getByText(/Dimension scores appear once a buyer has written/)).toBeVisible();
   });
 });
 

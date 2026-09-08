@@ -280,14 +280,33 @@ model Review {
   showCompanyName Boolean @default(true)
   editableUntil  DateTime           // created + 14 days
   sellerReply    String?            // one only, not editable after posting
+  sellerRepliedAt DateTime?
+  replyRemovedAt DateTime?          // board 11c B4 — staff took the reply down
+  replyRemovalReason String?        // required if replyRemovedAt set; the text stays
+  heldAt         DateTime?
+  heldReason     String?            // required if heldAt set
   removedAt      DateTime?
   removalReason  String?            // required if removedAt set
+}
+
+model ReviewDispute {
+  id         String @id @default(cuid())
+  reviewId   String
+  businessId String                 // the business the review is about, and the one disputing it
+  raisedById String                 // owner only — a dispute is a claim about a named customer
+  ground     ReviewDisputeGround    // no_traceable_enquiry | abuse | private_information | provably_false
+  detail     String                 // the case, not the label
+  outcome    ReviewDisputeOutcome?  // upheld | refused. Two, because a review cannot be corrected
+  outcomeReason String?             // required if outcome set
+  resolvedAt DateTime?
+  decidedById String?
 }
 
 model SupplierReport {
   id        String @id @default(cuid())
   subjectBusinessId String
   reporterId String?
+  reviewId  String?     // board 11c B6 — the incentivised-review log had nothing to point at
   kind      ReportKind   // closed | wrong_details | wrong_trade | claim_conflict | off_platform_payment | content | review_integrity
   detail    String?
   outcome   ReportOutcome?  // seller_corrected | upheld | no_action
@@ -296,6 +315,24 @@ model SupplierReport {
 ```
 
 Three reports on the same field auto-flag the listing. `off_platform_payment` skips the queue.
+
+**A review cannot exist without an enquiry.** `enquiryId` is `NOT NULL` and `UNIQUE` with a
+foreign key, and `canReview` admits a buyer only on an accepted quote or an enquiry this
+supplier actually replied to — there is no import, admin form or API path that produces one
+without. So the two provenance rungs (`accepted_quote`, `verified_enquiry`) are the whole
+ladder, and a third "no enquiry on record" state is unreachable rather than merely unbuilt.
+Board 11c `Q1` asked this as a blocking question; the schema had already answered it.
+
+**A dispute is not a `SupplierReport`.** A report is filed *against* a business, by a buyer or
+by the platform, carries a free-text `subjectField` for the three-strikes auto-flag, and
+resolves to one of three outcomes. A dispute is filed *by* the business, about a review, on one
+of four fixed grounds, and resolves to one of two. They render on one screen and stay two
+tables — sharing one would make `subjectBusinessId` mean the complainant on some rows and the
+accused on others.
+
+Upholding a dispute removes the review through `removeReview`, in the dispute's own
+transaction. `review.remove` is ops lead alone, so a moderator can refuse a dispute and cannot
+grant one; the console offers them the refusal control only.
 
 ## Commercials — subscription only
 

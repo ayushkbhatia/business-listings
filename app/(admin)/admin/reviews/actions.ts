@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import { requireStaff } from "@/lib/auth/staff";
-import { removeReview } from "@/lib/reviews/service";
+import { removeReview, removeSellerReply } from "@/lib/reviews/service";
+import { logIncentiveFinding } from "@/lib/reviews/disputes";
 import { isRemovalGround } from "@/lib/reviews/eligibility";
 import { t } from "@/lib/i18n";
 
@@ -62,6 +63,83 @@ export async function remove(formData: FormData): Promise<ActionResult> {
     // The storefront carries the review and its rating average.
     revalidatePath("/admin");
     return { ok: true, message: t("admin.reviews.removed") };
+  } catch (error) {
+    return refused(error);
+  }
+}
+
+/**
+ * Board 11c `B4` — taking down a supplier's reply.
+ *
+ * The review stands and the answer to it comes down, which is the opposite fact
+ * about the same row and therefore its own audit action. Same rung as removing
+ * the review: `review.remove`, ops lead. Erring higher is the safe direction
+ * for removing something a person wrote in public, and the seller does not get
+ * a second reply out of it — see `removeSellerReply`.
+ */
+export async function removeReply(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+
+  try {
+    const result = await removeSellerReply({
+      actor: seat.actor,
+      reviewId: String(formData.get("reviewId") ?? ""),
+      reason: String(formData.get("reason") ?? ""),
+    });
+
+    if (!result.ok) {
+      const written: Record<string, string> = {
+        not_found: t("admin.reviews.not_found"),
+        no_reply: t("admin.reviews.no_reply_to_remove"),
+        already_removed: t("admin.reviews.reply_already_removed"),
+      };
+      return { ok: false, error: written[result.error] ?? t("admin.reviews.not_found") };
+    }
+
+    revalidatePath("/admin/reviews");
+    revalidatePath("/admin");
+    return { ok: true, message: t("admin.reviews.reply_removed") };
+  } catch (error) {
+    return refused(error);
+  }
+}
+
+/**
+ * Board 11c `B6` — the incentivised-review log.
+ *
+ * The request panel on /dashboard/reviews has promised since board 1m that an
+ * incentivised review is *removed and logged against your account*, and there
+ * was nowhere to write the second half. This is that record: one
+ * `review_integrity` report per finding, against the business, readable in the
+ * `4h` queue.
+ *
+ * Logging and removing are two acts, deliberately. A moderator who records the
+ * finding and does not remove the review has recorded something true, and the
+ * removal has its own ground — `incentivised`, which is not one of the four a
+ * seller may dispute on, because no supplier files a dispute reporting
+ * themselves.
+ */
+export async function logIncentive(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+
+  try {
+    const result = await logIncentiveFinding({
+      actor: seat.actor,
+      reviewId: String(formData.get("reviewId") ?? ""),
+      reason: String(formData.get("reason") ?? ""),
+    });
+
+    if (!result.ok) {
+      const written: Record<string, string> = {
+        not_found: t("admin.reviews.not_found"),
+        already_logged: t("admin.reviews.incentive_already_logged"),
+      };
+      return { ok: false, error: written[result.error] ?? t("admin.reviews.not_found") };
+    }
+
+    revalidatePath("/admin/reviews");
+    revalidatePath("/admin/reports");
+    return { ok: true, message: t("admin.reviews.incentive_logged") };
   } catch (error) {
     return refused(error);
   }

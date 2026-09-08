@@ -214,6 +214,12 @@ export const CAPABILITIES = {
     source: "stated",
     why: "Board 7d, \"Request reviews from buyers\". The sales seat has it, because the person who handled the enquiry is the person who knows it went well.",
   },
+  "review.dispute": {
+    roles: ["seller_owner"],
+    audited: false,
+    source: "inferred",
+    why: "Board 11c Q4, and not a row in \u00a707 or in board 7d's table \u2014 the matrix has \"Reply to a review\" and stops there. Owner alone, one rung above `review.reply`: a reply is the business answering in public and a dispute is a formal claim it makes about a named customer, sent to our moderators with a two-working-day decision attached. A manager who may answer a review may not accuse the person who wrote it. Flag it if \u00a707 gains a row.",
+  },
   "analytics.read": {
     roles: ["seller_owner", "seller_manager", "seller_sales"],
     audited: false,

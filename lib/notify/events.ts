@@ -435,6 +435,226 @@ export async function onSellerMessage(input: {
 }
 
 /**
+ * A seller asked a buyer for a review. Board 11c, `B2`.
+ *
+ * ## The channel is decided per buyer, not per event
+ *
+ * Every other emitter in this file reads a routing matrix: a static list of
+ * channels for the event, the same for everybody. This one cannot. Board 11c's
+ * panel promises *"WhatsApp where we have a number, email otherwise"*, which is
+ * a fact about the buyer rather than about the event — and `User.phone` and
+ * `User.email` are both nullable, so a fixed matrix would either send twice to
+ * the buyers we hold both for, or send nothing to the ones we hold only an
+ * email for. `lib/reviews/channel.ts` makes the choice; this delivers it.
+ *
+ * So `channel` arrives as an argument. `requestReview` resolves it before it
+ * writes the `ReviewRequest` row and refuses when there is none — because the
+ * row is the one-per-buyer rule, and a request that recorded the ask and sent
+ * nothing would have spent a seller's single chance at that buyer on silence.
+ *
+ * Quiet hours still apply, through `route()` on a one-event matrix. A WhatsApp
+ * at two in the morning asking for a review is rude in a way the request itself
+ * is not, and this is the least urgent message the platform sends.
+ *
+ * No in-app companion, deliberately: this goes to somebody who finished a deal
+ * weeks ago and has no reason to open the site. See `requestChannelFor`.
+ */
+export async function onReviewRequested(input: {
+  enquiryId: string;
+  businessId: string;
+  channel: "whatsapp" | "email";
+}): Promise<void> {
+  await safely("review_requested", async () => {
+    const enquiry = await prisma.enquiry.findUnique({
+      where: { id: input.enquiryId },
+      select: { id: true, ref: true, buyer: { select: { id: true, phone: true, email: true } } },
+    });
+    const business = await prisma.business.findUnique({
+      where: { id: input.businessId },
+      select: { displayName: true },
+    });
+    if (!enquiry || !business) return;
+
+    const event = "review_requested" as const;
+    const decisions = route(
+      { ...BUYER_DEFAULT, matrix: { [event]: [input.channel] } },
+      { event, now: new Date() },
+    );
+    const senders = resolveNotificationSenders();
+
+    for (const decision of decisions) {
+      const template = await prisma.notificationTemplate.findFirst({
+        where: { event, channel: decision.channel, status: "live", locale: "en" },
+        orderBy: { version: "desc" },
+      });
+      /*
+         Nothing to render on the one channel we chose.
+
+         `requestReview` asked the same table which channels were live before it
+         picked, so reaching this means a template was retired between that read
+         and this one. Recording the skip is the whole point: the seller has
+         spent their one request on this buyer either way, and a delivery row
+         saying `no_template` is how anybody finds out.
+      */
+      if (!template) {
+        await prisma.notificationDelivery.create({
+          data: {
+            event,
+            channel: decision.channel,
+            status: "skipped",
+            recipientUserId: enquiry.buyer.id,
+            businessId: input.businessId,
+            enquiryId: enquiry.id,
+            reason: "no_template",
+          },
+        });
+        continue;
+      }
+
+      const rendered = render(
+        template,
+        withParams(event, {
+          businessName: business.displayName,
+          ref: enquiry.ref,
+          enquiryId: enquiry.id,
+        }),
+      );
+
+      const status =
+        decision.action !== "send"
+          ? decision.action === "defer"
+            ? "deferred"
+            : "skipped"
+          : await deliver(decision.channel, senders, rendered, enquiry.buyer);
+
+      await prisma.notificationDelivery.create({
+        data: {
+          templateId: template.id,
+          event,
+          channel: decision.channel,
+          status,
+          recipientUserId: enquiry.buyer.id,
+          businessId: input.businessId,
+          enquiryId: enquiry.id,
+          reason: decision.action === "send" ? null : decision.reason,
+          scheduledFor: decision.action === "defer" ? decision.at : null,
+          sentAt: status === "sent" ? new Date() : null,
+        },
+      });
+    }
+  });
+}
+
+/**
+ * A buyer published a review. Board 11c.
+ *
+ * The half of this board's loop that had no emitter. A seller has twenty-eight
+ * days to reply — `REPLY_WINDOW_DAYS`, measured from the review date — and the
+ * window was running against a review nobody had told them about. The seeded
+ * `review_posted` email has said *"You may reply once, and the reply cannot be
+ * edited afterwards"* since handoff 2 and had never been sent; it also carried
+ * three placeholders against an event that declared no params, so the first
+ * thing to call it would have thrown rather than sent.
+ *
+ * Seller-side, so it goes through `notify` and the business's own matrix on
+ * board 7e — and to the **owner**, not through `recipientFor`. A review is
+ * about the business rather than about a lead in somebody's inbox, and
+ * `review.reply` is owner and manager only (docs/permissions.md §2), so routing
+ * it to the sales seat that handled the enquiry would tell the one person who
+ * cannot answer it.
+ *
+ * The rating and not the words. A notification carrying a two-star review's
+ * body puts the complaint in a WhatsApp before the seller has opened the page
+ * where they can answer it, and there is no reply box in a notification.
+ */
+export async function onReviewPosted(input: { reviewId: string }): Promise<void> {
+  await safely("review_posted", async () => {
+    const review = await prisma.review.findUnique({
+      where: { id: input.reviewId },
+      select: {
+        overall: true,
+        businessId: true,
+        enquiryId: true,
+        enquiry: { select: { ref: true } },
+      },
+    });
+    if (!review) return;
+
+    const owner = await prisma.user.findFirst({
+      where: { businessId: review.businessId, roles: { has: "seller_owner" } },
+      select: { id: true },
+    });
+    if (!owner) return;
+
+    await notify({
+      event: "review_posted",
+      businessId: review.businessId,
+      recipientUserId: owner.id,
+      enquiryId: review.enquiryId,
+      params: withParams("review_posted", {
+        rating: review.overall,
+        ref: review.enquiry.ref,
+        enquiryId: review.enquiryId,
+      }),
+    });
+  });
+}
+
+/**
+ * A review dispute was decided. Board 11c `B5`.
+ *
+ * The rail tells a seller the decision takes about two working days and that
+ * *"the outcome and the reason are logged and sent to you"*. The log was the
+ * easy half; this is the half that makes the sentence true, and without it the
+ * seller's only way to find out would be to keep reopening the page.
+ *
+ * ## The outcome, not the reasoning
+ *
+ * Two params and no more. `render()` refuses a value that looks like contact
+ * details, and a moderator's reason is prose about a review that may itself be
+ * a private-information complaint — *"the body carried the buyer's mobile"* is
+ * a legitimate reason and a `MissingParamError`'s cousin waiting to happen. So
+ * the reason lives on the review card, which the action link opens, and this
+ * carries what a seller needs to know before they open it.
+ *
+ * To the **owner**, because `review.dispute` is owner-only: the seat that
+ * raised it is the only seat that could have.
+ */
+export async function onReviewDisputeDecided(input: { disputeId: string }): Promise<void> {
+  await safely("review_dispute_decided", async () => {
+    const dispute = await prisma.reviewDispute.findUnique({
+      where: { id: input.disputeId },
+      select: { businessId: true, ground: true, outcome: true, raisedById: true },
+    });
+    if (!dispute || !dispute.outcome) return;
+
+    /*
+       The owner rather than the raiser.
+
+       They are the same person today — `review.dispute` is owner-only — and
+       they will not be if 7d ever widens the row. A decision about the
+       business's public page belongs to whoever holds the business, not to
+       whoever happened to be at the keyboard.
+    */
+    const owner = await prisma.user.findFirst({
+      where: { businessId: dispute.businessId, roles: { has: "seller_owner" } },
+      select: { id: true },
+    });
+    if (!owner) return;
+
+    await notify({
+      event: "review_dispute_decided",
+      businessId: dispute.businessId,
+      recipientUserId: owner.id,
+      params: withParams("review_dispute_decided", {
+        outcome: t(`reviews.dispute.outcome.${dispute.outcome}` as "reviews.dispute.outcome.upheld"),
+        ground: t(`moderation.ground.${dispute.ground}` as "moderation.ground.abuse"),
+      }),
+    });
+  });
+}
+
+/**
  * Enough of a message to decide whether to open it, and no more.
  *
  * Cut on a word boundary rather than mid-syllable, and never padded — a preview

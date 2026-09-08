@@ -76,6 +76,8 @@ model User {
   buyerCompany            BuyerCompany?            @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
   enquiries               Enquiry[]
   reviews                 Review[]
+  disputesRaised          ReviewDispute[]          @relation("DisputeRaisedBy")
+  disputesDecided         ReviewDispute[]          @relation("DisputeDecidedBy")
   auditEvents             AuditEvent[]
   invoiceEvents           InvoiceEvent[]
   cancellations           SubscriptionChange[]     @relation("ChangeRequestedBy")
@@ -835,6 +837,7 @@ model Business {
   quotes                 Quote[]
   messages               Message[]
   reviews                Review[]
+  reviewDisputes         ReviewDispute[]
   reports                SupplierReport[]         @relation("ReportSubject")
   subscription           Subscription?
   subscriptionChanges    SubscriptionChange[]
@@ -936,19 +939,19 @@ enum LocationType {
 }
 
 model Location {
-  id              String       @id @default(cuid())
-  businessId      String       @map("business_id")
-  type            LocationType
-  emirate         Emirate
-  areaId          String       @map("area_id")
-  addressLine     String       @map("address_line")
-  lat             Float?
+  id            String       @id @default(cuid())
+  businessId    String       @map("business_id")
+  type          LocationType
+  emirate       Emirate
+  areaId        String       @map("area_id")
+  addressLine   String       @map("address_line")
+  lat           Float?
   /// Null means unpinned. Excluded from map search entirely — a location is
   /// never approximated to an area centroid, because a wrong pin is worse than
   /// no pin and the gap is surfaced to the seller instead.
-  lng             Float?
-  phone           String?
-  whatsapp        String?
+  lng           Float?
+  phone         String?
+  whatsapp      String?
   /// Whether anybody has checked this number. Read by nothing today.
   ///
   /// It used to gate display: the branches page hid an unverified number and a
@@ -969,11 +972,11 @@ model Location {
   /// branch phone matching the licence record is verified by stronger evidence
   /// than an OTP — which a landline cannot receive anyway. Until that is built
   /// this is an unread column, and that is the honest description of it.
-  phoneVerified   Boolean      @default(false) @map("phone_verified")
+  phoneVerified Boolean      @default(false) @map("phone_verified")
   /// Per-day open/close, split shifts.
-  hours           Json         @default("{}")
+  hours         Json         @default("{}")
   /// Applied automatically on announced dates.
-  ramadanHours    Json?        @map("ramadan_hours")
+  ramadanHours  Json?        @map("ramadan_hours")
 
   /// The Ramadan year these hours were last confirmed for.
   ///
@@ -989,7 +992,7 @@ model Location {
   /// mean unset: the carried-over times still apply, because the alternative is
   /// a listing that goes silent for a month.
   ramadanConfirmedYear Int? @map("ramadan_confirmed_year")
-  serviceRadiusKm Int?         @map("service_radius_km")
+  serviceRadiusKm      Int? @map("service_radius_km")
 
   /// A branch that is shut for a stated stretch — a fit-out, a relocation, a
   /// flood. Distinct from `published = false`, and deliberately so: unpublishing
@@ -1011,7 +1014,7 @@ model Location {
   /// cannot be examined afterwards to find out whether a person chose it.
   geocodePrecision GeocodePrecision? @map("geocode_precision")
 
-  published Boolean  @default(false)
+  published Boolean @default(false)
 
   /// The first time this branch was shown to buyers, and never cleared.
   ///
@@ -1040,13 +1043,13 @@ model Location {
   /// report the wrong branch's work as this one's.
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  business            Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  area                Area            @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  producedByConflicts ClaimConflict[] @relation("ConflictProducedLocation")
+  business            Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  area                Area              @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  producedByConflicts ClaimConflict[]   @relation("ConflictProducedLocation")
   contactReveals      ContactReveal[]
   teamMembers         TeamMember[]
-  seats               User[]          @relation("SeatBranch")
-  teamInvites         TeamInvite[]    @relation("InviteBranch")
+  seats               User[]            @relation("SeatBranch")
+  teamInvites         TeamInvite[]      @relation("InviteBranch")
   closures            LocationClosure[]
 
   @@index([businessId])
@@ -1162,8 +1165,8 @@ model LocationClosure {
 /// radii, and the day that matters this table grows a nullable `location_id`
 /// rather than being rebuilt.
 model BusinessCoverage {
-  id         String  @id @default(cuid())
-  businessId String  @map("business_id")
+  id         String @id @default(cuid())
+  businessId String @map("business_id")
 
   /// The scope, at its coarsest. Always set, including on an area row, where it
   /// is copied from the area — the same rule `Location` follows, written in one
@@ -1579,20 +1582,20 @@ model Document {
   ///
   /// Defaults to false. A document becomes public because somebody said so,
   /// never because it was uploaded.
-  isPublic    Boolean   @default(false) @map("is_public")
+  isPublic     Boolean   @default(false) @map("is_public")
   /// What a buyer would call it — "ISO 9001:2015", not "scan_0043_final.pdf".
   ///
   /// `filename` is whatever came off the seller's desktop and is not fit to
   /// render. Null means the row has never been prepared for the public list,
   /// which is another reason it is not on it.
-  displayName String?   @map("display_name")
+  displayName  String?   @map("display_name")
   /// Validity, rendered to the month.
   ///
   /// The board asks for the month rather than the day on purpose: a certificate
   /// that expires "March 2027" is the fact a buyer needs, and a precise date
   /// invites a page that looks wrong for the twenty-four hours around it. Null
   /// for documents that do not expire.
-  validUntil  DateTime? @map("valid_until")
+  validUntil   DateTime? @map("valid_until")
   /// The credential's own number — `CD-DXB-8842`, an ISO certificate number.
   ///
   /// Board 3e §4 gives the uploaded-by-you table a `NUMBER` column, and the
@@ -1603,7 +1606,7 @@ model Document {
   ///
   /// Never on the licence or the TRN rows. Those two read their numbers off
   /// `Business.licenceNumber` and `Business.trn`, which are licence-locked.
-  reference   String?
+  reference    String?
   /// When a moderator last looked at this document. Null means never.
   ///
   /// Board 3e §4's third state: a credential the seller has asked to publish
@@ -1619,10 +1622,10 @@ model Document {
   /// draws between `Verified by us` and `Uploaded by you`, and a review that
   /// confirmed a certificate would erase it. What a moderator decides is
   /// whether the file is the document it says it is and fit for a public page.
-  reviewedAt  DateTime? @map("reviewed_at")
+  reviewedAt   DateTime? @map("reviewed_at")
   /// Written by staff on a decision. Non-negotiable 3 — the audit row carries
   /// the same words, and this is the copy the seller reads on the row.
-  reviewReason String?  @map("review_reason")
+  reviewReason String?   @map("review_reason")
 
   businessId String? @map("business_id")
   enquiryId  String? @map("enquiry_id")
@@ -1758,6 +1761,13 @@ model Enquiry {
   /// The console groups by campaign and by source. Both are reads over the
   /// whole table with a date range, which is exactly what this is for.
   @@index([utmCampaign, createdAt])
+  /// Board 11c `B7`: who a seller may ask for a review.
+  ///
+  /// "Confirm the acceptance timestamp is stored and queryable per buyer" — it
+  /// was stored and it was not queryable. The eligible-buyer read filters on
+  /// both of these columns together and ran as a sequential scan over every
+  /// enquiry on the platform, on a page a seller opens to find two names.
+  @@index([contactReleasedToBusinessId, contactReleasedAt])
   @@map("enquiry")
 }
 
@@ -2850,44 +2860,61 @@ model Message {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model Review {
-  id              String    @id @default(cuid())
-  businessId      String    @map("business_id")
-  buyerId         String    @map("buyer_id") @db.Uuid
+  id                 String    @id @default(cuid())
+  businessId         String    @map("business_id")
+  buyerId            String    @map("buyer_id") @db.Uuid
   /// Gating: one review per enquiry, and the enquiry must exist.
-  enquiryId       String    @unique @map("enquiry_id")
-  overall         Int
-  quotedAccurate  Int       @map("quoted_accurate")
-  onTime          Int       @map("on_time")
-  asDescribed     Int       @map("as_described")
-  responsiveness  Int
-  body            String
-  showCompanyName Boolean   @default(true) @map("show_company_name")
+  enquiryId          String    @unique @map("enquiry_id")
+  overall            Int
+  quotedAccurate     Int       @map("quoted_accurate")
+  onTime             Int       @map("on_time")
+  asDescribed        Int       @map("as_described")
+  responsiveness     Int
+  body               String
+  showCompanyName    Boolean   @default(true) @map("show_company_name")
   /// created + 14 days.
-  editableUntil   DateTime  @map("editable_until")
+  editableUntil      DateTime  @map("editable_until")
   /// One only, not editable after posting. Never seller-deletable.
-  sellerReply     String?   @map("seller_reply")
-  sellerRepliedAt DateTime? @map("seller_replied_at")
+  sellerReply        String?   @map("seller_reply")
+  sellerRepliedAt    DateTime? @map("seller_replied_at")
+  /// A reply is permanent, and a reply can itself breach policy.
+  ///
+  /// Board 11c `B4`: the board considered neither a typo nor an abusive reply.
+  /// The typo stays — a reply a seller can rewrite is a reply a buyer cannot
+  /// rely on — and the abusive one comes down the way a review does: staff,
+  /// reasoned, audited.
+  ///
+  /// `sellerReply` is **not** nulled when this is set. The text is the record
+  /// of what was said, the same way a removed review keeps its body, and the
+  /// seller does not get a second reply out of it: one reply, and they used it.
+  /// Every reader hides the body when this is set and shows the neutral line
+  /// instead.
+  replyRemovedAt     DateTime? @map("reply_removed_at")
+  /// Required when replyRemovedAt is set, by a check constraint.
+  replyRemovalReason String?   @map("reply_removal_reason")
   /// Held pending a moderation decision. Board 1m: the row is replaced by a
   /// neutral line naming the hold, with no content and no rating, and the
   /// review is excluded from every average and from `AggregateRating` while it
   /// is set. A hold is reversible and a removal is not, which is why they are
   /// two columns rather than one state machine — releasing a hold restores the
   /// row exactly, and un-removing is not a thing this platform does.
-  heldAt          DateTime? @map("held_at")
+  heldAt             DateTime? @map("held_at")
   /// Required when heldAt is set, by a check constraint. A hold takes a
   /// buyer's published words off a public page, so it is a staff state change
   /// and carries a written reason like every other one.
-  heldReason      String?   @map("held_reason")
-  removedAt       DateTime? @map("removed_at")
+  heldReason         String?   @map("held_reason")
+  removedAt          DateTime? @map("removed_at")
   /// Required when removedAt is set. Enforced by a check constraint in the
   /// migration, not only by the service layer.
-  removalReason   String?   @map("removal_reason")
-  createdAt       DateTime  @default(now()) @map("created_at")
+  removalReason      String?   @map("removal_reason")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  buyer    User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
-  enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  buyer    User             @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  enquiry  Enquiry          @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   media    Media[]
+  disputes ReviewDispute[]
+  reports  SupplierReport[]
 
   /// The public read: one business, published, newest first.
   ///
@@ -2897,6 +2924,106 @@ model Review {
   /// filter is on all six of those queries rather than on some of them.
   @@index([businessId, removedAt, heldAt, createdAt])
   @@map("review")
+}
+
+/// The four grounds a review comes down on, and no fifth.
+///
+/// Board 11c: *"'It is unfair' is not a ground."* The same four the rail lists,
+/// the same four the dispute flow accepts, and the same four `REMOVAL_GROUNDS`
+/// in `lib/reviews/eligibility.ts` has held since board 1m — one list, three
+/// readers. Criterion 6 is that the rail lists exactly what the flow accepts,
+/// and the cheapest way to make that true is for both to read this.
+///
+/// They are reason codes rather than prose so the outcome log is queryable:
+/// "how many abuse disputes did we uphold last quarter" is a question a
+/// moderation queue has to be able to answer about itself.
+enum ReviewDisputeGround {
+  /// A competitor, or somebody who was never a buyer. The enquiry exists —
+  /// `Review.enquiryId` is not nullable — but the trade behind it did not.
+  no_traceable_enquiry
+  abuse
+  private_information
+  provably_false
+
+  @@map("review_dispute_ground")
+}
+
+/// Two outcomes, not three.
+///
+/// A supplier report has `seller_corrected` because a listing can be fixed. A
+/// review cannot be corrected: either it comes down or it stands. Reusing
+/// `ReportOutcome` here would have offered a moderator a third button that
+/// resolves to nothing.
+enum ReviewDisputeOutcome {
+  /// The review is removed, by the same audited path a moderator uses.
+  upheld
+  /// The review stands. The reply is still available if the window is open.
+  refused
+
+  @@map("review_dispute_outcome")
+}
+
+/// A seller's formal claim that a review should not stand. Board 11c.
+///
+/// ## Why this is not a `SupplierReport`
+///
+/// Board 11c asks for "the review-dispute type in 4h's queue", and 4h renders
+/// this beside the conduct reports — but the row is a different shape in all
+/// four of its fields. A supplier report is filed *against* a business by a
+/// buyer or by the platform, carries a free-text `subjectField` for the
+/// three-strikes auto-flag, and resolves to one of three outcomes. A dispute is
+/// filed *by* the business about a review, carries one of four fixed grounds,
+/// and resolves to one of two. Putting it in the same table would have made
+/// `subjectBusinessId` mean "the complainant" on some rows and "the accused" on
+/// others, and `priorsFor()` would have counted a seller's own disputes as
+/// reports against them.
+///
+/// ## Upholding one removes a review
+///
+/// Which is why resolution runs through `removeReview` rather than writing
+/// `removedAt` here: removing a buyer's published words is ops-lead-only and
+/// carries its own audit row, and a second route to it would be a route that
+/// keeps none of the first one's promises.
+model ReviewDispute {
+  id         String              @id @default(cuid())
+  reviewId   String              @map("review_id")
+  /// The business the review is about, and the one disputing it. Denormalised
+  /// from the review so the queue can group by seller without a join.
+  businessId String              @map("business_id")
+  /// The owner who raised it. Owner only — board 11c `Q4`: a dispute is a
+  /// formal claim the business makes about a customer.
+  raisedById String              @map("raised_by_id") @db.Uuid
+  ground     ReviewDisputeGround
+  /// What the seller says. Required: a ground on its own is a checkbox, and a
+  /// moderator deciding in two working days needs the case.
+  detail     String
+
+  outcome       ReviewDisputeOutcome?
+  /// The moderator's written reason. Required when outcome is set, by a check
+  /// constraint — the same rule every staff state change in this schema keeps.
+  outcomeReason String?               @map("outcome_reason")
+  resolvedAt    DateTime?             @map("resolved_at")
+  /// Who decided. Null while open.
+  decidedById   String?               @map("decided_by_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  raisedBy  User     @relation("DisputeRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
+  decidedBy User?    @relation("DisputeDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  /// The queue: open first, oldest first. Age before volume, like every other
+  /// queue in this console.
+  @@index([outcome, createdAt])
+  @@index([businessId, createdAt])
+  /// One open dispute per review is a partial unique index in the migration —
+  /// Prisma cannot express `WHERE resolved_at IS NULL`. A seller who disputed
+  /// on one ground and was refused may not immediately re-file on another, but
+  /// a review that was disputed, refused, and then edited by the buyer inside
+  /// their fortnight is a new set of facts, so the constraint is on *open*
+  /// rather than on ever.
+  @@map("review_dispute")
 }
 
 enum ReportKind {
@@ -2928,6 +3055,20 @@ model SupplierReport {
   kind              ReportKind
   /// Which field was reported, for the three-strikes auto-flag.
   subjectField      String?        @map("subject_field")
+  /// The review this report is about, where it is about one.
+  ///
+  /// Board 11c `B6`: the incentivised-review log. The request panel promises
+  /// that "an incentivised review is removed and logged against your account",
+  /// and until this column there was nowhere to write the finding — `kind`
+  /// carried `review_integrity` from board 1m with nothing to join it to, which
+  /// `lib/reviews/service.ts` noted as the reason a review nobody had reported
+  /// could not be reached at all.
+  ///
+  /// Nullable, because most reports are about a listing rather than a review.
+  /// `SetNull` rather than `Cascade`: removing the review is frequently the
+  /// *outcome* of the finding, and a log that deletes itself when the thing it
+  /// found is acted on is not a log.
+  reviewId          String?        @map("review_id")
   detail            String?
   outcome           ReportOutcome?
   outcomeReason     String?        @map("outcome_reason")
@@ -2936,9 +3077,11 @@ model SupplierReport {
 
   subjectBusiness Business @relation("ReportSubject", fields: [subjectBusinessId], references: [id], onDelete: Cascade)
   reporter        User?    @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
+  review          Review?  @relation(fields: [reviewId], references: [id], onDelete: SetNull)
 
   @@index([subjectBusinessId, outcome])
   @@index([kind])
+  @@index([reviewId])
   @@map("supplier_report")
 }
 
@@ -3023,12 +3166,12 @@ model PaymentMethod {
 /// changes make the effective-date arithmetic uncheckable — the second would
 /// have to know whether the first had landed to know what it was changing from.
 model SubscriptionChange {
-  id          String      @id @default(cuid())
-  businessId  String      @map("business_id")
-  fromPlanId  String      @map("from_plan_id")
-  toPlanId    String      @map("to_plan_id")
-  fromTerm    BillingTerm @map("from_term")
-  toTerm      BillingTerm @map("to_term")
+  id          String                 @id @default(cuid())
+  businessId  String                 @map("business_id")
+  fromPlanId  String                 @map("from_plan_id")
+  toPlanId    String                 @map("to_plan_id")
+  fromTerm    BillingTerm            @map("from_term")
+  toTerm      BillingTerm            @map("to_term")
   /// What this pending row is. Boards 11h and 11j.
   ///
   /// A cancellation *is* a scheduled move to Free — same date, same keep lists,
@@ -3047,7 +3190,7 @@ model SubscriptionChange {
   /// End of the period being paid for, copied at schedule time. The renewal
   /// date can move underneath a pending change — a term switch does exactly
   /// that — and the promise on screen was the date the seller read.
-  effectiveAt DateTime    @map("effective_at")
+  effectiveAt DateTime               @map("effective_at")
 
   /// Product, location and team-member ids that stay live through the change.
   /// Null until the seller opens the chooser. See the note above.
@@ -3067,24 +3210,24 @@ model SubscriptionChange {
   /// Never surfaced to the seller and never answered with a counter-offer —
   /// build note B6, and the wave 4 decision it follows from. `4g` (revenue) and
   /// `12d` (supply-gap reporting) are the two readers.
-  cancelReason CancelReason? @map("cancel_reason")
+  cancelReason  CancelReason? @map("cancel_reason")
   /// The optional free text, and the required one under `something_else`.
   ///
   /// Confirming is never blocked on this box except there, where it is the only
   /// place the reason can be recorded — a check constraint says so, because the
   /// alternative is a `something_else` row that says nothing at all.
-  cancelNote  String?   @map("cancel_note")
+  cancelNote    String?       @map("cancel_note")
   /// Who asked for it. Owner only by capability, but support needs the name.
-  requestedById String? @map("requested_by_id") @db.Uuid
+  requestedById String?       @map("requested_by_id") @db.Uuid
 
   createdAt   DateTime  @default(now()) @map("created_at")
   appliedAt   DateTime? @map("applied_at")
   withdrawnAt DateTime? @map("withdrawn_at")
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  fromPlan Plan     @relation("ChangeFromPlan", fields: [fromPlanId], references: [id], onDelete: Restrict)
-  toPlan   Plan     @relation("ChangeToPlan", fields: [toPlanId], references: [id], onDelete: Restrict)
-  requestedBy User?  @relation("ChangeRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  fromPlan    Plan     @relation("ChangeFromPlan", fields: [fromPlanId], references: [id], onDelete: Restrict)
+  toPlan      Plan     @relation("ChangeToPlan", fields: [toPlanId], references: [id], onDelete: Restrict)
+  requestedBy User?    @relation("ChangeRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
 
   @@index([effectiveAt, appliedAt])
   /// The churn read: cancellations by reason over a window, for `4g` and `12d`.
@@ -3593,14 +3736,14 @@ model Invoice {
   pdfPath  String? @map("pdf_path")
   pdfBytes Int?    @map("pdf_bytes")
 
-  business Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  lines    InvoiceLine[]
-  events   InvoiceEvent[]
+  business    Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  lines       InvoiceLine[]
+  events      InvoiceEvent[]
   /// `Restrict` rather than `Cascade`: deleting an invoice that a credit note
   /// corrects would leave the correction pointing at nothing, and neither
   /// document is ours to delete once issued.
-  corrects   Invoice?  @relation("InvoiceCorrection", fields: [correctsId], references: [id], onDelete: Restrict)
-  correctedBy Invoice[] @relation("InvoiceCorrection")
+  corrects    Invoice?       @relation("InvoiceCorrection", fields: [correctsId], references: [id], onDelete: Restrict)
+  correctedBy Invoice[]      @relation("InvoiceCorrection")
 
   @@index([businessId, status])
   @@index([businessId, issuedAt(sort: Desc)], map: "invoice_business_issued_idx")
@@ -3659,13 +3802,13 @@ model InvoiceLine {
   /// `amountAed` is the line total and stays the figure everything sums; this is
   /// what it is the total *of*. Nullable for lines written before board 11g,
   /// where the unit price is the amount because the quantity was always one.
-  unitAed  Decimal? @map("unit_aed") @db.Decimal(12, 2)
+  unitAed      Decimal?     @map("unit_aed") @db.Decimal(12, 2)
   /// The rate this line was charged at, stored. `Invoice.vatRate` is the
   /// document's default; this is what actually applied, and on a zero-rated or
   /// exempt line the two differ.
-  vatRate  Decimal? @map("vat_rate") @db.Decimal(4, 4)
+  vatRate      Decimal?     @map("vat_rate") @db.Decimal(4, 4)
   /// VAT on this line, in dirhams. Stored, never recomputed — criterion 2.
-  vatAed   Decimal? @map("vat_aed") @db.Decimal(12, 2)
+  vatAed       Decimal?     @map("vat_aed") @db.Decimal(12, 2)
   taxTreatment TaxTreatment @default(standard) @map("tax_treatment")
 
   /// The placement booking this line bills, printed under the description.
@@ -3898,15 +4041,15 @@ model ListingViewDay {
 /// no row, so movement is measured between the first and last day it was
 /// actually searched — which is the honest window rather than a padded one.
 model SearchImpressionDay {
-  businessId String   @map("business_id")
+  businessId  String   @map("business_id")
   /// Asia/Dubai, so a "day" is the day the supplier had.
-  day        DateTime @map("day") @db.Date
+  day         DateTime @map("day") @db.Date
   /// Lowercased, collapsed whitespace — the same normalisation
   /// `SearchQueryLog.normalised` uses, so the two group identically.
-  normalised String
-  impressions Int     @default(0)
+  normalised  String
+  impressions Int      @default(0)
   /// Lowest position held that day. 1 is the top of the results.
-  bestRank   Int      @map("best_rank")
+  bestRank    Int      @map("best_rank")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
@@ -3942,15 +4085,15 @@ model CategoryPositionDay {
   /// through it with a raw `ON CONFLICT`. Same shape as
   /// `subscription_change_one_pending`: an invariant the schema file cannot
   /// express, written once in SQL and asserted by `pnpm check:schema`.
-  id         String   @id @default(cuid())
-  businessId String   @map("business_id")
-  categoryId String   @map("category_id")
+  id          String   @id @default(cuid())
+  businessId  String   @map("business_id")
+  categoryId  String   @map("category_id")
   /// Null where the buyer browsed the category across the whole country.
-  emirate    Emirate?
-  day        DateTime @map("day") @db.Date
+  emirate     Emirate?
+  day         DateTime @map("day") @db.Date
   /// Lowest position held that day, as above.
-  position   Int
-  impressions Int     @default(0)
+  position    Int
+  impressions Int      @default(0)
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
@@ -5542,6 +5685,16 @@ enum NotificationEvent {
   quote_expiring
   review_posted
   review_requested
+  /// Board 11c `B5`. The dispute rail promises a decision in about two working
+  /// days and that "the outcome and the reason are logged and sent to you" —
+  /// the second half needs an emitter, or the sentence is the unowned promise
+  /// board 4e Q2 already got wrong.
+  ///
+  /// The outcome and the ground travel; the moderator's prose does not.
+  /// `render()` refuses a value that looks like contact details, and a reason
+  /// explaining that a review published somebody's mobile number would throw
+  /// rather than send. It is on the review, where the seller reads it.
+  review_dispute_decided
   document_expiring
   /// Criterion 8. A buyer whose search found nothing, told when it would not.
   product_alert_matched
@@ -5762,7 +5915,7 @@ model NotificationPreference {
   /// leave empty while the answer sits one table over.
   ///
   /// Set, it wins — an accounts inbox is not a person and cannot be a seat.
-  billingEmail    String? @map("billing_email")
+  billingEmail String? @map("billing_email")
 
   updatedAt DateTime @updatedAt @map("updated_at")
 

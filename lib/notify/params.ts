@@ -112,8 +112,36 @@ export const EVENT_PARAMS = {
      that looks like contact details, and there is nothing here it would need to.
   */
   message_received: ["businessName", "preview", "enquiryId", "shortLink"],
-  review_posted: [],
-  review_requested: [],
+  /*
+     Board 11c. Both of these were declared in the enum, seeded with **live**
+     templates carrying placeholders, and emitted by nothing — which made the
+     empty list here worse than a missing one. `render()` throws on a
+     placeholder the params do not carry, so the first thing that ever called
+     either of these was going to be a `MissingParamError`, and the seeded copy
+     had been sitting there since handoff 2 looking like a feature.
+
+     `review_posted` closes the loop this board's reply window depends on: a
+     seller has twenty-eight days to answer, measured from a review they were
+     never told about.
+
+     No buyer name on either, and no seller contact detail. `render()` refuses
+     anything that looks like contact details and there is nothing here that
+     would need to — a review request says who is asking and what deal it is
+     about, and the buyer's own name is not news to the buyer.
+  */
+  review_posted: ["rating", "ref", "enquiryId"],
+  review_requested: ["businessName", "ref", "enquiryId"],
+  /*
+     Board 11c `B5`, and the shortest param list on this page for a reason.
+
+     The rail promises the outcome and the reason. The **outcome** and the
+     ground travel here; the reason does not, and that is a decision rather than
+     an omission — `render()` refuses a value that looks like a phone number or
+     an email, and a moderator explaining that a review published somebody's
+     mobile would throw instead of sending. The prose is on the review card,
+     which is where a seller can also see what it is about.
+  */
+  review_dispute_decided: ["outcome", "ground"],
   /*
      Board 3e §5 — the sixty-day and fourteen-day notices on a trade licence.
 

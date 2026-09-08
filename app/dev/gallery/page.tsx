@@ -7,6 +7,7 @@ import { Domain } from "./_sections/Domain";
 import { Numeric } from "./_sections/Numeric";
 import { TextEntry } from "./_sections/TextEntry";
 import { Overlays } from "./_sections/Overlays";
+import { Reviews } from "./_sections/Reviews";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
 import { Tokens } from "./_sections/Tokens";
@@ -221,6 +222,8 @@ export default function Gallery() {
       <Display />
       <Domain />
       <Billing />
+
+      <Reviews />
       <Overlays />
       <Shells />
       <Tokens />

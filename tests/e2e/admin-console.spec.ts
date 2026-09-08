@@ -394,6 +394,61 @@ test.describe("boards 4f, 12d and 12f — accounts", () => {
  */
 const EXPENDABLE = "Jebel Rock Trading";
 
+test.describe("board 11c B5 — the review-dispute queue on 4h", () => {
+  /*
+     The board promised a decision in "about 2 working days" and named no queue
+     to make it in. This is the type that was missing, rendered beside the
+     conduct reports rather than mixed into them: the two row shapes differ in
+     every field, so `subjectBusinessId` would have meant the complainant on
+     some rows and the accused on others.
+  */
+  test("lists an open dispute with its ground and the words being disputed", async ({ page }) => {
+    await page.goto("/admin/reports");
+    await expect(page.getByRole("heading", { name: "Review disputes" })).toBeVisible();
+    await expect(page.getByText("Review dispute").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Decide" }).first()).toBeVisible();
+  });
+
+  test("will not decide either way without a written reason", async ({ page }) => {
+    await page.goto("/admin/reports");
+    await page.getByRole("button", { name: "Decide" }).first().click();
+
+    const uphold = page.getByRole("button", { name: "Uphold and remove" });
+    const refuse = page.getByRole("button", { name: "Refuse", exact: true });
+    await expect(uphold).toBeDisabled();
+    await expect(refuse).toBeDisabled();
+
+    // The queue's promise to a seller is "the outcome and the reason are logged
+    // and sent to you", so the reason is the gate rather than an afterthought.
+    await page.getByRole("textbox", { name: "Reason" }).last().fill("ok");
+    await expect(uphold).toBeDisabled();
+  });
+
+  test("puts the fact that answers the ground in front of the decision", async ({ page }) => {
+    /*
+       A `no_traceable_enquiry` dispute against a review attached to a quote the
+       disputing seller's own account accepted has answered itself. Derived from
+       the enquiry rather than stored, so it cannot disagree with the badge the
+       buyer sees on the storefront.
+    */
+    await page.goto("/admin/reports");
+    await page.getByRole("button", { name: "Decide" }).first().click();
+    await expect(
+      page.getByText(/came from a quote this supplier accepted|came from an enquiry this supplier answered/),
+    ).toBeVisible();
+  });
+
+  test("offers two outcomes and never a third", async ({ page }) => {
+    // A listing can be corrected and a review cannot: it comes down or it
+    // stands. `seller_corrected` is a supplier-report outcome and has no
+    // meaning here.
+    await page.goto("/admin/reports");
+    await page.getByRole("button", { name: "Decide" }).first().click();
+    const panel = page.locator("div").filter({ hasText: /Upholding removes the review/ }).last();
+    await expect(panel.getByRole("button", { name: /corrected/i })).toHaveCount(0);
+  });
+});
+
 test.describe("criterion 9 — removing a review", () => {
   /*
      `removeReview` was written, audited and capability-checked from the start
