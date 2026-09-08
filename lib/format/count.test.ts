@@ -58,3 +58,24 @@ describe("formatRating", () => {
     expect(() => formatRating(Number.POSITIVE_INFINITY)).toThrow(TypeError);
   });
 });
+
+describe("formatPercent decimals", () => {
+  it("keeps whole percents by default, as every caller before 3l wanted", () => {
+    expect(formatPercent(0.147)).toBe("15%");
+  });
+
+  it("keeps a small rate visible when a decimal is asked for", () => {
+    /*
+       Board 3l. A reveal rate of 0.5% rounds to 0% at whole precision — a stage
+       reading as having lost everybody when it converted one buyer in two
+       hundred, on the page whose whole job is proportions.
+    */
+    expect(formatPercent(0.005, { decimals: 1 })).toBe("0.5%");
+    expect(formatPercent(0.147, { decimals: 1 })).toBe("14.7%");
+    expect(formatPercent(0.446, { decimals: 1 })).toBe("44.6%");
+  });
+
+  it("pads to the asked precision so a column stays aligned", () => {
+    expect(formatPercent(0.5, { decimals: 1 })).toBe("50.0%");
+  });
+});

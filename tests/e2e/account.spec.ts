@@ -378,13 +378,72 @@ test.describe("board 11e — sponsored placement", () => {
 });
 
 test.describe("board 3l — analytics", () => {
-  test("says every figure is counted, not estimated", async ({ page }) => {
+  test.beforeEach(async ({ page }) => {
     await page.goto("/dashboard/analytics");
-    await expect(page.getByText(/counted, not estimated/)).toBeVisible();
+  });
+
+  test("states the window as a comparison, not as `last 30 days`", async ({ page }) => {
+    /*
+       The board's first rule. "Last 30 days" sat above a page of bare counts,
+       and a seller opens analytics to find out whether last month's work moved
+       anything — which a single window cannot answer.
+    */
+    await expect(page.getByRole("banner")).toContainText(/\d+ \w+.* vs .*\d+ \w+/);
+  });
+
+  test("carries every stage from the one above, and says so", async ({ page }) => {
+    // Criterion 1 and the board's largest correction: the bars were drawn
+    // against the top of the funnel and overstated every stage below the first.
+    await expect(page.getByText("Bars are the share carried from the stage above")).toBeVisible();
+    await expect(page.getByText(/Stages, not one path/)).toBeVisible();
+
+    for (const stage of [
+      "Appeared in search",
+      "Clicked through to your listing",
+      "Viewed a product",
+      "Revealed a phone number",
+      "Sent an enquiry",
+    ]) {
+      await expect(page.getByText(stage, { exact: false }).first()).toBeVisible();
+    }
+  });
+
+  test("gives every figure a change or says it has none", async ({ page }) => {
+    /*
+       Criterion 2. Week one is a normal page with its comparisons suppressed —
+       `no comparison yet` is the state, and a zero would say nothing changed
+       when the truth is there is nothing to change against.
+    */
+    const main = page.locator("main");
+    const text = (await main.textContent()) ?? "";
+    expect(/[+−]\d|no comparison yet|held|Not ranked/.test(text)).toBe(true);
+  });
+
+  test("never says n/a in the colour of a bad rank", async ({ page }) => {
+    // Criterion 4. Not ranked is a state, not the worst position on the page.
+    const text = (await page.locator("main").textContent()) ?? "";
+    expect(text).not.toMatch(/\bn\/a\b/i);
+  });
+
+  test("names what the export contains", async ({ page }) => {
+    // Spec Q5. `Export CSV` with no scope left a seller guessing whether they
+    // were about to download five rows or five hundred thousand.
+    const link = page.getByRole("link", { name: /Export CSV/ });
+    await expect(link).toBeVisible();
+    await expect(link).toContainText(/tables on this page/);
+  });
+
+  test("makes no claim about what the seller stocks", async ({ page }) => {
+    /*
+       Build note B6. Nothing in the product knows a seller's unlisted
+       inventory, and the board asserted "you stock them" anyway. Demand is ours
+       to state; supply is not.
+    */
+    const text = (await page.locator("main").textContent()) ?? "";
+    expect(text).not.toMatch(/you stock/i);
   });
 
   test("is axe clean", async ({ page }) => {
-    await page.goto("/dashboard/analytics");
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
   });

@@ -78,6 +78,16 @@ export const mayIssueSubscriptionCredit = (a: Actor) => can(a, "subscription.cre
 export const assertCanBoostPlacement = (a: Actor) => assertCan(a, "placement.boost");
 export const mayBoostPlacement = (a: Actor) => can(a, "placement.boost");
 
+/*
+   Board 7d, "See analytics": owner and manager in full, a sales seat for their
+   own leads only, finance not at all. The capability answers *may this seat
+   open the page*; `analyticsScopeFor` in lib/auth/subject.ts answers *how much
+   of it*, and the two are separate because a boolean cannot express the middle
+   row of that table.
+*/
+export const assertCanReadAnalytics = (a: Actor) => assertCan(a, "analytics.read");
+export const mayReadAnalytics = (a: Actor) => can(a, "analytics.read");
+
 export const assertCanReadRevenue = (a: Actor) => assertCan(a, "revenue.read");
 export const mayReadRevenue = (a: Actor) => can(a, "revenue.read");
 

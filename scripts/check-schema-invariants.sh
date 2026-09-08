@@ -88,4 +88,19 @@ if grep -qE '^[[:space:]]*model[[:space:]]+SubscriptionChange[[:space:]]*\{' <<<
   fi
 fi
 
+# Board 3l. `category_position_day` identifies a row by business, category, day
+# and emirate — and `emirate` is null for a country-wide browse. A null never
+# equals a null in SQL, so a plain unique index would accept two country-wide
+# rows for one business on one day and the rollup would count the same browse
+# twice for ever. Two partial indexes are the identity, and Prisma cannot
+# express either.
+if grep -q 'category_position_day_countrywide' prisma/migrations/*/migration.sql 2>/dev/null \
+   && grep -q 'category_position_day_in_emirate' prisma/migrations/*/migration.sql 2>/dev/null; then
+  echo "   pass — category positions are identified by two partial unique indexes"
+else
+  echo "   FAIL — category_position_day has lost a partial unique index."
+  echo "          Without both, a country-wide browse inserts a new row every time."
+  fail=1
+fi
+
 exit $fail
