@@ -62,11 +62,23 @@ export function ConsequenceTable({ rows, planName, freeStartsOn }: ConsequenceTa
       */}
       <div
         tabIndex={0}
-        role="region"
         /*
-           Its own name, not the table's. A region and the table inside it
-           sharing one name announces the same sentence twice; this one says
-           what the focus stop is *for*, which is the only reason it exists.
+           `group`, not `region`. A named `region` is a **landmark**, and this is
+           a scroll affordance rather than a section of the page a reader would
+           navigate to. The distinction is not academic: `/dev/gallery` renders
+           this table three times, so three regions with one name became three
+           identical entries in a screen reader's landmark list — which axe
+           calls `landmark-unique` and `tests/e2e/landmarks.spec.ts` fails on.
+
+           `group` takes a name, is not a landmark, and repeats freely. The
+           focus stop is what satisfies `scrollable-region-focusable`; the role
+           was never the part doing that work.
+        */
+        role="group"
+        /*
+           Its own name, not the table's caption. A container and the table
+           inside it sharing one name announces the same sentence twice; this
+           one says what the focus stop is *for*.
         */
         aria-label={t("cancel.table_scroll")}
         className="overflow-x-auto focus-visible:shadow-focus focus-visible:outline-none"
