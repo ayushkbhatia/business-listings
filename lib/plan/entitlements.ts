@@ -37,6 +37,15 @@ export interface PlanCaps {
   teamSeats: number;
   rankingMultiplier: number;
   customDomain: boolean;
+  /// The three on/off entitlements board 11f renders beside the caps.
+  ///
+  /// They are not caps of nought. `capFor` deliberately does not know about
+  /// them: "analytics, zero of it" is not what the screen means, and an
+  /// `allowance()` over a boolean would render a meter where there is none.
+  /// `ENTITLEMENTS` below is their equivalent of `METERED`.
+  analytics: boolean;
+  csvImport: boolean;
+  sponsoredEligible: boolean;
   sortOrder: number;
 }
 
@@ -74,6 +83,15 @@ export interface EntitlementSnapshot {
   /// promised, not a shape to rewrite.
   categoryLimit?: number | null;
   customDomain: boolean;
+  /**
+   * Frozen with the rest, and optional for the same reason `storageMb` is: a
+   * snapshot written before board 11f has no such key, and reading one must not
+   * silently take analytics away from a seller who is paying for it.
+   * `effectiveCaps` falls back to the live plan where a key is absent.
+   */
+  analytics?: boolean;
+  csvImport?: boolean;
+  sponsoredEligible?: boolean;
 }
 
 /** Everything a snapshot needs to freeze, taken from the live plan. */
@@ -89,6 +107,9 @@ export function snapshotOf(plan: PlanCaps, capturedAt: Date): EntitlementSnapsho
     storageMb: plan.storageMb,
     teamSeats: plan.teamSeats,
     customDomain: plan.customDomain,
+    analytics: plan.analytics,
+    csvImport: plan.csvImport,
+    sponsoredEligible: plan.sponsoredEligible,
   };
 }
 
@@ -130,7 +151,56 @@ export function effectiveCaps(plan: PlanCaps, snapshot: unknown): PlanCaps {
     storageMb: frozen.storageMb === undefined ? plan.storageMb : frozen.storageMb,
     teamSeats: frozen.teamSeats,
     customDomain: frozen.customDomain,
+    // Same fallback, same reason: an absent key means nothing was frozen, not
+    // that the seller was promised nothing.
+    analytics: frozen.analytics ?? plan.analytics,
+    csvImport: frozen.csvImport ?? plan.csvImport,
+    sponsoredEligible: frozen.sponsoredEligible ?? plan.sponsoredEligible,
   };
+}
+
+/**
+ * The on/off entitlements, named because a screen asks about one of them by name.
+ *
+ * The counterpart to `METERED`, and separate from it on purpose: board 11f's
+ * grid draws the two kinds in one table and the spec is explicit that the
+ * distinction "matters more than the layout". A cap has a current value and a
+ * meter; an entitlement has neither, and rendering it through `allowance()`
+ * would produce "0 of 1 analytics".
+ */
+export const ENTITLEMENTS = [
+  "analytics",
+  "csvImport",
+  "customDomain",
+  "sponsoredEligible",
+] as const;
+export type Entitlement = (typeof ENTITLEMENTS)[number];
+
+/** Whether the plan carries one. */
+export function hasEntitlement(plan: PlanCaps, what: Entitlement): boolean {
+  return plan[what];
+}
+
+/**
+ * The cheapest plan carrying an entitlement the seller does not have.
+ *
+ * Same contract as `cheapestPlanUnlocking`: null means there is nothing to sell,
+ * either because they already have it or because no dearer plan adds it.
+ */
+export function cheapestPlanGranting(
+  plans: readonly PlanCaps[],
+  what: Entitlement,
+  currentPlanId: string,
+): PlanCaps | null {
+  const current = plans.find((p) => p.id === currentPlanId);
+  if (current && hasEntitlement(current, what)) return null;
+
+  return (
+    plans
+      .filter((p) => hasEntitlement(p, what))
+      .filter((p) => p.monthlyPriceAed > (current?.monthlyPriceAed ?? 0))
+      .sort((a, b) => a.monthlyPriceAed - b.monthlyPriceAed)[0] ?? null
+  );
 }
 
 /** The capped resources. Named because a screen asks about one of them by name. */

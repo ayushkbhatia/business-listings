@@ -255,11 +255,14 @@ function storageOf(files: readonly LibraryFile[], plan: PlanCaps | null): Librar
       productLimit: null,
       locationLimit: null,
       photoLimit: null,
-    categoryLimit: null,
+      categoryLimit: null,
       storageMb: null,
       teamSeats: 0,
       rankingMultiplier: 1,
       customDomain: false,
+      analytics: false,
+      csvImport: false,
+      sponsoredEligible: false,
       sortOrder: 0,
     } satisfies PlanCaps);
 

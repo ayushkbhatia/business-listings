@@ -36,6 +36,9 @@ const PLAN_SELECT = {
   teamSeats: true,
   rankingMultiplier: true,
   customDomain: true,
+  analytics: true,
+  csvImport: true,
+  sponsoredEligible: true,
   sortOrder: true,
   annualMonthsCharged: true,
 } as const;

@@ -143,6 +143,13 @@ export const en = {
   //    so the acceptance grep has nothing to find and the catalogue is exercised.
   "gallery.tab_businesses": "Businesses",
   "gallery.tab_products": "Products",
+  "gallery.billing": "Billing · plan comparison",
+  "gallery.billing_note": "Board 11f. Every cell states what the plan keeps out of what the seller has now — one denominator per row.",
+  "gallery.billing.over": "Over the cap",
+  "gallery.billing.within": "Inside every plan",
+  "gallery.billing.empty": "Nothing yet",
+  "gallery.billing.plan_status": "Plan status",
+  "gallery.billing.failed": "Failed payment",
   "gallery.density": "Density",
   "gallery.roomy": "Roomy",
   "gallery.comfortable": "Comfortable",
@@ -4294,6 +4301,10 @@ export const en = {
   "billing.status.paid": "Paid",
   "billing.status.overdue": "Overdue",
   "billing.status.void": "Void",
+  "billing.status.active": "Active",
+  // The plan card still reads Active while a cancellation is scheduled, because
+  // it is. This is the badge for the period after the seller has said so.
+  "billing.status.ending_badge": "Ending",
   "billing.vat": "VAT at {rate}",
   "billing.our_trn": "Our TRN {trn}",
   "billing.your_trn": "Your TRN {trn}",
@@ -4337,6 +4348,216 @@ export const en = {
   "cancel.confirm": "Cancel my subscription",
   "cancel.keep": "Keep my subscription",
   "cancel.done": "Cancelled. You are on {plan} until {when}.",
+
+  // ── Board 3m · subscription and billing ───────────────────────────────────
+  //
+  // The VAT convention, in copy: prices ex-VAT, VAT always its own line, every
+  // total labelled `incl. VAT`, nothing rounded. The pair's second correction is
+  // a `THIS PERIOD` total of `AED 1,784` over two lines summing to 1,699 — a
+  // seller could not reproduce the number they owed.
+  "billing.page_title": "Subscription & billing",
+  "billing.trn_on_invoices": "TRN on invoices: {trn}",
+  "billing.trn_missing": "Add your TRN on the listing profile and it appears on every invoice from then on.",
+  "billing.plan_price": "{price} / month + VAT",
+  "billing.plan_price_annual": "{price} / year + VAT",
+  "billing.renews_on": "Renews {when}",
+  "billing.annual_offer": "Renews {when} · a year is {price} + VAT, saving {saving}",
+  "billing.switch_annual": "Switch to annual",
+  "billing.usage.products": "Products",
+  "billing.usage.branches": "Branches",
+  "billing.usage.seats": "Team seats",
+  "billing.usage.storage": "Storage",
+  "billing.usage.of": "of {cap}",
+  // Not "/ unlimited" as the board draws it: a slash is read aloud as "slash",
+  // and this sits beside "of 10" in the next cell. The house pattern for an
+  // uncapped meter is `team.seats_uncapped`, which states the number and says
+  // there is no ceiling rather than inventing a denominator.
+  "billing.usage.unlimited": "with no limit",
+
+  "billing.period.eyebrow": "This period",
+  "billing.period.subscription": "{plan} subscription",
+  "billing.period.placement": "Sponsored placement · {what}",
+  "billing.period.placement_dates": "{from} to {to}",
+  "billing.period.subtotal": "Subtotal",
+  "billing.period.vat": "VAT {rate}",
+  "billing.period.due": "Due {when}",
+  "billing.period.incl_vat": "incl. VAT",
+  // The thing sellers assume a directory does, said before they ask.
+  "billing.period.no_commission": "No commission on enquiries or on business you win. Subscription and placement only.",
+  "billing.period.first_invoice": "Your first invoice arrives on {when}, at the end of this period.",
+
+  "billing.method.eyebrow": "Payment method",
+  "billing.method.card": "•••• {last4}",
+  "billing.method.detail": "{brand} · expires {expiry}",
+  "billing.method.change": "Change",
+  "billing.method.add": "Add a card",
+  "billing.method.none": "No card on file. One is needed before the next renewal.",
+  "billing.method.direct": "Buyers pay you directly on your own terms. We never hold or route your money.",
+
+  "billing.invoices.col.invoice": "Invoice",
+  "billing.invoices.col.description": "Description",
+  "billing.invoices.none_yet": "No invoices yet. The first arrives on {when}.",
+  "billing.invoices.credit_note": "Credit note against {ref}",
+  // What a multi-line invoice is, in words. The raw `InvoiceLineKind` values
+  // were reaching the screen: `subscription + subscription_credit`.
+  "billing.invoices.plan_change": "Plan change, pro-rated",
+  "billing.invoices.kind.subscription": "Subscription",
+  "billing.invoices.kind.placement": "Sponsored placement",
+  "billing.invoices.kind.subscription_credit": "Subscription credit",
+  "billing.invoices.kind_join": " + ",
+  "billing.invoices.view": "Open invoice {ref}",
+
+  "billing.cancel.eyebrow": "Cancelling?",
+  // Matches board 11f's Free column and the rule 3f §6 owns. The old boards said
+  // all 1,204 products "stay saved but hidden", which is a different decision to
+  // put in front of somebody.
+  "billing.cancel.consequence": "You drop to Free at the end of the period. On Free, {keeps} of your {used} products stay live and you pick which — the rest are stored, not deleted. Enquiries drop to {enquiries} a month.",
+  "billing.cancel.consequence_within": "You drop to Free at the end of the period. Free holds everything you have live today, so nothing is unlisted. Enquiries drop to {enquiries} a month.",
+
+  "billing.scheduled.eyebrow": "Scheduled",
+  "billing.scheduled.downgrade": "You move to {plan} on {when}. Nothing changes before then.",
+  "billing.scheduled.review": "Review or withdraw",
+  "billing.cancelling.banner": "Your subscription ends on {when}. Until then nothing changes.",
+  "billing.cancelling.resume": "Resume {plan}",
+  "billing.resumed": "Back on {plan}. Your next payment is {when}.",
+
+  // The state neither board had, and the most consequential one on a billing
+  // surface. A seller whose card expired has not decided to leave: nothing
+  // downgrades and nothing on the listing moves during the grace period.
+  "billing.failed.title": "We could not take {amount} on {when}",
+  "billing.failed.reason": "The bank said: {reason}",
+  // Two sentences, because only one of them is conditional. Criterion 12 is a
+  // promise about what does *not* happen during the grace period, and it holds
+  // whether or not a retry is the next step — so the deadline is always stated
+  // and the retry is mentioned when there is one.
+  "billing.failed.retry": "We try the card again on {when}.",
+  "billing.failed.grace": "Your plan and your listing do not change before {deadline}.",
+  "billing.failed.no_reason": "The payment did not go through.",
+  "billing.failed.update": "Update payment method",
+
+  "billing.free.title": "You are on Free",
+  "billing.free.body": "Free is a plan, not a trial. Nothing expires, and there is nothing to pay. Compare what each plan holds against what you have now.",
+  "billing.free.compare": "Compare plans",
+
+  // ── Board 11f · change plan ───────────────────────────────────────────────
+  "change.back_short": "Billing",
+  "change.term.monthly": "Monthly",
+  // The term as a noun, for the change summary. The toggle labels above are
+  // controls and read as options; these read as a state the account is in.
+  "change.term_name.monthly": "Monthly",
+  "change.term_name.annual": "Annual",
+  "change.switch_term": "Pay {amount} and switch to {term}",
+  // A term change charges the *whole* new period, so the day count that belongs
+  // on a pro-rated line would read "365 of 365 days" here. The period is the
+  // thing being bought; naming it is what the line is for.
+  "change.summary.line_year": "{plan}, one year",
+  "change.summary.line_month": "{plan}, one month",
+  "change.term.annual": "Annual · {months} months free",
+  "change.select": "Select {plan}",
+  "change.selected": "Selected",
+  "change.current": "Current plan",
+  "change.price_free": "{price}",
+  "change.price": "{price}",
+  "change.price_vat": "+ VAT",
+  "change.grid_caption": "What each plan holds, against what you have now",
+  "change.col.feature": "What you get",
+
+  "change.row.products": "Products live",
+  "change.row.branches": "Branches published",
+  "change.row.seats": "Team seats",
+  "change.row.storage": "Storage",
+  "change.row.enquiries": "Enquiries",
+  "change.row.analytics": "Analytics",
+  "change.row.csv_import": "CSV import",
+  "change.row.custom_domain": "Custom domain",
+  "change.row.sponsored": "Sponsored eligibility",
+
+  // One denominator per row: the seller's own usage, in all three columns. The
+  // board's first correction is a seats row reading `1 of 3`, `2 of 3` and
+  // `3 of 5 used` — the third against the plan's cap rather than the seller's.
+  "change.cell.keeps": "{keeps} of {used}",
+  "change.cell.keeps_all": "All {used}",
+  "change.cell.keeps_none": "None yet",
+  "change.cell.keeps_storage": "{keeps} of {used}",
+  "change.cell.keeps_all_storage": "All {used}",
+  "change.cell.per_month": { one: "{formatted} a month", other: "{formatted} a month" },
+  "change.cell.unlimited": "Unlimited",
+  "change.cell.included": "Included",
+  "change.cell.absent": "Not on this plan",
+  "change.storage_gb": "{value} GB",
+  "change.storage_mb": "{value} MB",
+
+  "change.summary.eyebrow": "Change summary",
+  "change.summary.from_to": "{from} to {to}",
+  "change.summary.downgrade": "A downgrade takes effect at the end of the period. Your {plan} features run to {when}.",
+  "change.summary.upgrade": "{plan} starts as soon as this is paid. Your renewal date does not move.",
+  "change.summary.term": "A new period starts today, and your renewal moves to {when}.",
+  "change.summary.due_today": "Due today",
+  "change.summary.from_date": "From {when}",
+  "change.summary.line_charge": "{plan}, {days} of {total} days",
+  "change.summary.line_credit": "{plan} credit, {days} unused days",
+  "change.summary.line_vat": "VAT {rate}",
+  "change.summary.then": "Then {price} incl. VAT on {when}, and monthly on the {day} after that.",
+  "change.summary.then_annual": "Then {price} incl. VAT on {when}, and yearly after that.",
+
+  "change.keep.eyebrow": "You choose what stays live",
+  "change.keep.intro": "{plan} holds less than you have. Nothing is deleted — the rest is stored, and you pick what stays.",
+  "change.keep.products": "{keeps} of {used} products",
+  "change.keep.locations": "{keeps} of {used} branches",
+  "change.keep.seats": "{keeps} of {used} team seats",
+  "change.keep.choose": "Choose",
+  "change.keep.chosen": "{count} chosen",
+  "change.keep.auto": "Not chosen yet — the oldest stay",
+  "change.keep.auto_seats": "Not chosen yet — everyone stays, and the next invitation is refused",
+  // Q4. Storage has no chooser because a downgrade removes no files: the media
+  // library refuses the next upload until the seller is back under the cap,
+  // which is what already happens today.
+  "change.keep.storage": "{used} stored, {cap} on {plan}",
+  "change.keep.storage_note": "Files are not removed. Uploads are refused until you are back under {cap}, on the media library.",
+  "change.keep.storage_link": "Open the media library",
+
+  "change.ends.eyebrow": "Ends with {plan}",
+  "change.ends.domain": "{domain} stops resolving on {when}",
+  "change.ends.placement": "Sponsored placement · {what} runs to {when}, then ends",
+
+  "change.schedule": "Schedule downgrade to {plan}",
+  "change.upgrade_now": "Pay {amount} and move to {plan}",
+  "change.upgrade_free": "Move to {plan}",
+  "change.keep_current": "Keep {plan}",
+  "change.withdraw_note": "Withdraw any time before {when}.",
+  "change.scheduled_already": "You are already moving to {plan} on {when}. Withdraw that first to choose something else.",
+  "change.withdraw": "Withdraw the change",
+  "change.withdrawn": "Withdrawn. You stay on {plan}.",
+  "change.scheduled": "Scheduled. You move to {plan} on {when}, and nothing changes before then.",
+  "change.no_subscription": "There is no subscription to change.",
+  "change.scheduled_already_short": "A change is already scheduled. Withdraw it first.",
+  "change.charge_failed": "That payment did not go through. Nothing has changed on your account.",
+  "change.same_plan": "That is the plan you are on.",
+  // A number shown on a button is a promise. The preview is computed once for
+  // the screen and again at the charge, and a difference refuses rather than
+  // adjusts — criterion 7.
+  "change.quote_moved": "The price changed while this was open. Nothing has been charged. Check the figures and try again.",
+  "change.provider_not_live": "No card has been charged. Payment is not connected in this environment.",
+
+  "keep.title": "Choose what stays live",
+  "keep.eyebrow": "Change plan",
+  "keep.intro_products": "{plan} holds {cap} live products. Pick the ones that stay — the rest are stored, not deleted, and come back if you move up again.",
+  "keep.intro_locations": "{plan} publishes {cap} branches. Pick the ones that stay published.",
+  "keep.intro_seats": "{plan} holds {cap} team seats. Pick who keeps theirs. Anyone you do not pick loses access on {when}, and their open leads go to the unassigned queue.",
+  "keep.counter": "{chosen} of {cap} chosen",
+  "keep.over": "{over} too many. Deselect {over} to continue.",
+  "keep.save": "Save the choice",
+  "keep.saved": "Saved. {count} stay live on {when}.",
+  "keep.too_many": "That is more than {plan} holds. Deselect a few and save again.",
+  "keep.owner_kept": "The owner keeps their seat and cannot be deselected.",
+  // The head office is the address the listing resolves to. Unpublishing it
+  // would take the address off a live storefront, which is not what "choose what
+  // stays live" is offering.
+  "keep.head_office_kept": "Your head office stays published and cannot be deselected.",
+  "keep.col.name": "Name",
+  "keep.col.branch": "Address",
+  "keep.col.role": "Role",
+  "keep.col.keeps": "Stays live",
 
   // ── Team and lead routing, board 7d ───────────────────────────────────────
   "team.title": "Team",

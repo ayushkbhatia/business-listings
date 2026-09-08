@@ -349,18 +349,29 @@ describe("the VAT export", () => {
     }
   });
 
-  it("keeps a credit negative all the way through", async () => {
+  it("keeps a credit note negative all the way through", async () => {
     /*
-     * The seed has an invoice with a subscription line and a credit line. If
-     * the credit lost its sign the net would be the gross of the subscription
-     * alone and the return would overstate what is owed.
-     */
+       A correction is its own document now.
+
+       This used to read an invoice carrying a subscription line and a credit
+       line together — 899.00 less 119.87 on one row — which is the edit board 3m
+       Q5 forbids: UAE VAT requires a credit note, and an issued invoice may not
+       be changed after it is sent. The seed issues the pair, and what the return
+       has to get right is unchanged and now easier to state: a credit note
+       reduces output VAT, so every figure on its row is negative. Dropping the
+       sign would have the return overstating what is owed.
+    */
     const summary = await vatReturn(new Date("2000-01-01"), new Date(Date.now() + 86_400_000));
-    const credited = summary.rows.find((row) => row.invoiceRef === "INV-2699");
-    expect(credited).toBeDefined();
-    // 899.00 less 119.87.
-    expect(credited!.netFils).toBe(77_913);
-    expect(credited!.vatFils).toBe(Math.round(77_913 * 0.05));
+    const note = summary.rows.find((row) => row.invoiceRef === "BL-INV-20099");
+    expect(note).toBeDefined();
+    expect(note!.netFils).toBe(-11_987);
+    expect(note!.vatFils).toBe(-599);
+    expect(note!.grossFils).toBe(-12_586);
+
+    // And the invoice it corrects is still whole. An issued document does not
+    // move because a later one refers to it.
+    const original = summary.rows.find((row) => row.invoiceRef === "BL-INV-20098");
+    expect(original?.netFils).toBe(89_900);
   });
 
   it("totals to the sum of its rows", async () => {

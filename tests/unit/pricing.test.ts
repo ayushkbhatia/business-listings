@@ -45,6 +45,9 @@ function plan(over: Partial<PricingPlan> = {}): PricingPlan {
     teamSeats: 3,
     rankingMultiplier: 1.15,
     customDomain: false,
+    analytics: true,
+    csvImport: true,
+    sponsoredEligible: false,
     sortOrder: 1,
     withdrawnAt: null,
     annualMonthsCharged: 10,
@@ -57,6 +60,8 @@ const FREE = plan({
   name: "Free",
   monthlyPriceAed: 0,
   rankingMultiplier: 1,
+  analytics: false,
+  csvImport: false,
   sortOrder: 0,
   // A discount on nothing is nothing.
   annualMonthsCharged: null,
@@ -70,6 +75,7 @@ const PRO = plan({
   productLimit: null,
   rankingMultiplier: 1.35,
   customDomain: true,
+  sponsoredEligible: true,
   sortOrder: 2,
 });
 const PLANS = [FREE, BASIC, PRO];

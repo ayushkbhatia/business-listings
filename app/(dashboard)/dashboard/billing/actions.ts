@@ -5,150 +5,213 @@ import {
   cancelSubscription,
   changePlan,
   changeTerm,
-  quotePlanChange,
   quoteTermChange,
+  resumeSubscription,
 } from "@/lib/billing/service";
+import { saveKeep, withdrawChange, type KeepKind } from "@/lib/billing/schedule";
 import type { BillingTerm } from "@/lib/billing/period";
-import { filsToAed } from "@/lib/billing/proration";
-import { formatDate } from "@/lib/format";
-import type { ChangeQuote } from "./change/PlanChooser";
+import { formatAED, formatDate } from "@/lib/format";
+import { FILS_PER_AED } from "@/lib/billing/proration";
 import { t } from "@/lib/i18n";
 import { getSellerSeat } from "../_shell";
 
 /**
  * Billing mutations.
  *
- * Both call a service whose first line is `assertCanChangePlan`, so a sales
- * seat posting either of these forms directly gets a PermissionError before
- * anything is read — criterion 9, and it is a claim about refusal rather than
- * about what a screen renders.
+ * Every one calls a service whose first line is `assertCanChangePlan` or
+ * `assertCanManageBilling`, so a sales seat posting any of these forms directly
+ * gets a `PermissionError` before anything is read — criterion 9, and it is a
+ * claim about refusal rather than about what a screen renders.
+ *
+ * The two capabilities are not the same and the split is board 7d's: a finance
+ * seat reads the invoices and does not decide what the business buys. Q6 asks
+ * owner-only versus owner-and-admin and answers owner-only; `plan.change` is
+ * that half, and every action here except none of them holds it.
  */
 
-export type BillingResult = { ok: true } | { ok: false; error: string };
+export type BillingResult = { ok: true; message?: string } | { ok: false; error: string };
 
-export type QuoteActionResult =
-  | { ok: true; quote: ChangeQuote }
-  | { ok: false; error: string };
-
-/** Reads only. Nothing is charged and nothing is written until confirm. */
-export async function quoteChange(formData: FormData): Promise<QuoteActionResult> {
-  const seat = await getSellerSeat();
-  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
-
-  const result = await quotePlanChange(
-    seat.actor,
-    seat.businessId,
-    String(formData.get("planId") ?? ""),
-  );
-  if (!result.ok) return result;
-
-  const { quote } = result;
-  return {
-    ok: true,
-    quote: {
-      planId: quote.toPlan.id,
-      planName: quote.toPlan.name,
-      credit:
-        quote.proration.creditLine.fils > 0
-          ? {
-              planName: quote.fromPlan.name,
-              days: quote.proration.creditLine.days,
-              aed: filsToAed(quote.proration.creditLine.fils),
-            }
-          : null,
-      charge: {
-        planName: quote.toPlan.name,
-        days: quote.proration.chargeLine.days,
-        aed: filsToAed(quote.proration.chargeLine.fils),
-      },
-      netAed: filsToAed(Math.abs(quote.proration.netFils)),
-      netIsCharge: quote.proration.netFils >= 0,
-      renewsAt: formatDate(quote.proration.renewsAt),
-      // A plan change keeps the period. The screen says so, and it is only
-      // true of this action — see `quoteTerm` below.
-      renewalMoves: false,
-    },
-  };
+/** Both billing routes, after any write. The rail on one shows the other's state. */
+function revalidateBilling() {
+  revalidatePath("/dashboard/billing");
+  revalidatePath("/dashboard/billing/change");
+  revalidatePath("/dashboard");
 }
 
 /**
- * What switching between monthly and annual costs.
+ * Apply an upgrade, or schedule a downgrade.
  *
- * Separate from `quoteChange` because the two are different promises. A plan
- * change keeps the period and the renewal date does not move; a term change
- * cannot keep it — there is no year to be part-way through — so it credits the
- * unused days, opens a new period today, and the renewal date moves.
+ * `dueFils` is what the button said. It is posted back and re-verified against a
+ * fresh quote inside `changePlan`, and a difference refuses the charge rather
+ * than adjusting it — criterion 7. A number shown on a button is a promise.
  */
-export async function quoteTerm(formData: FormData): Promise<QuoteActionResult> {
+export async function confirmPlanChange(formData: FormData): Promise<BillingResult> {
   const seat = await getSellerSeat();
   if (!seat) return { ok: false, error: t("dev.no_seat_title") };
 
-  const to = String(formData.get("term") ?? "") as BillingTerm;
-  const result = await quoteTermChange(seat.actor, seat.businessId, to);
-  if (!result.ok) return result;
+  const planId = String(formData.get("planId") ?? "");
+  const quoted = formData.get("dueFils");
+  /*
+     Absent means the screen had nothing to quote — a downgrade, where `Due
+     today` is `AED 0.00` and no charge happens. An unparseable value is not the
+     same thing and must not fall through to "do not check": it becomes zero,
+     which `changePlan` then compares against a real figure and refuses.
+  */
+  const expectedDueFils = quoted === null ? null : Number(quoted) || 0;
 
-  const { quote } = result;
-  return {
-    ok: true,
-    quote: {
-      planId: to,
-      planName: quote.planName,
-      credit:
-        quote.proration.creditLine.fils > 0
-          ? {
-              planName: quote.planName,
-              days: quote.proration.creditLine.days,
-              aed: filsToAed(quote.proration.creditLine.fils),
-            }
-          : null,
-      charge: {
-        planName: quote.planName,
-        days: quote.proration.chargeLine.days,
-        aed: filsToAed(quote.proration.chargeLine.fils),
-      },
-      netAed: filsToAed(Math.abs(quote.proration.netFils)),
-      netIsCharge: quote.proration.netFils >= 0,
-      renewsAt: formatDate(quote.renewsAt),
-      renewalMoves: true,
-    },
-  };
+  const result = await changePlan(seat.actor, seat.businessId, planId, expectedDueFils);
+  if (!result.ok) return { ok: false, error: result.error };
+
+  revalidateBilling();
+  return { ok: true };
+}
+
+/** `Keep Pro`. Take back a scheduled change before its date. */
+export async function withdrawPlanChange(): Promise<BillingResult> {
+  const seat = await getSellerSeat();
+  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
+
+  const result = await withdrawChange(seat.actor, seat.businessId);
+  if (!result.ok) return { ok: false, error: t("change.no_subscription") };
+
+  revalidateBilling();
+  return { ok: true };
+}
+
+/**
+ * Which items survive a scheduled change.
+ *
+ * The cap is re-read here rather than taken from the form: a posted cap is a
+ * number the client chose, and the whole of this step is that the plan holds
+ * fewer than the seller has.
+ */
+export async function saveKeepChoice(formData: FormData): Promise<BillingResult> {
+  const seat = await getSellerSeat();
+  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
+
+  const kind = String(formData.get("kind") ?? "") as KeepKind;
+  if (kind !== "products" && kind !== "locations" && kind !== "seats") {
+    return { ok: false, error: t("change.no_subscription") };
+  }
+
+  const ids = formData.getAll("keep").map(String).filter(Boolean);
+  const cap = capForKind(formData);
+
+  const result = await saveKeep(seat.actor, seat.businessId, kind, ids, cap);
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.error === "too_many"
+          ? t("keep.too_many", { plan: String(formData.get("planName") ?? "") })
+          : t("change.no_subscription"),
+    };
+  }
+
+  revalidateBilling();
+  return { ok: true };
+}
+
+/**
+ * The cap the form was rendered against.
+ *
+ * Read from the form only to fail fast with a friendly message. `saveKeep`
+ * enforces it again against the plan, and that is the one that counts — this is
+ * a courtesy, not a fence.
+ */
+function capForKind(formData: FormData): number | null {
+  const raw = formData.get("cap");
+  if (raw === null || raw === "") return null;
+  const cap = Number(raw);
+  return Number.isFinite(cap) ? cap : null;
 }
 
 export async function confirmTermChange(formData: FormData): Promise<BillingResult> {
   const seat = await getSellerSeat();
   if (!seat) return { ok: false, error: t("dev.no_seat_title") };
 
-  const result = await changeTerm(
-    seat.actor,
-    seat.businessId,
-    String(formData.get("term") ?? "") as BillingTerm,
-  );
-  if (!result.ok) return result;
+  const to = String(formData.get("term") ?? "") as BillingTerm;
+  const result = await changeTerm(seat.actor, seat.businessId, to);
+  if (!result.ok) return { ok: false, error: result.error };
 
-  revalidatePath("/dashboard/billing");
-  revalidatePath("/dashboard");
+  revalidateBilling();
   return { ok: true };
 }
 
-export async function confirmPlanChange(formData: FormData): Promise<BillingResult> {
+/**
+ * What switching between monthly and annual costs, read only.
+ *
+ * Separate from the plan quote because the two are different promises. A plan
+ * change keeps the period and the renewal date does not move; a term change
+ * cannot keep it — there is no year to be part-way through — so it credits the
+ * unused days, opens a new period today, and the renewal moves.
+ */
+export type TermQuoteView = {
+  ok: true;
+  planName: string;
+  creditAed: string;
+  chargeAed: string;
+  vatAed: string;
+  dueAed: string;
+  renewsAt: string;
+} | { ok: false; error: string };
+
+export async function quoteTerm(formData: FormData): Promise<TermQuoteView> {
   const seat = await getSellerSeat();
   if (!seat) return { ok: false, error: t("dev.no_seat_title") };
 
-  const result = await changePlan(seat.actor, seat.businessId, String(formData.get("planId") ?? ""));
-  if (!result.ok) return result;
+  const to = String(formData.get("term") ?? "") as BillingTerm;
+  const result = await quoteTermChange(seat.actor, seat.businessId, to);
+  if (!result.ok) return { ok: false, error: result.error };
 
-  revalidatePath("/dashboard/billing");
-  revalidatePath("/dashboard");
-  return { ok: true };
+  const { quote } = result;
+  const aed = (fils: number) => formatAED(fils / FILS_PER_AED, { style: "exact" });
+
+  return {
+    ok: true,
+    planName: quote.planName,
+    creditAed: aed(quote.proration.creditLine.fils),
+    chargeAed: aed(quote.proration.chargeLine.fils),
+    vatAed: aed(quote.proration.vatFils),
+    dueAed: aed(quote.proration.dueFils),
+    renewsAt: formatDate(quote.renewsAt),
+  };
 }
 
+/**
+ * Cancel, at period end.
+ *
+ * The screen is board `11h` and the reason step is `11j`; neither is exported,
+ * so `3m` carries the entry point and this is what it posts to. What the entry
+ * point states — drops to Free at period end, ten products stay live and the
+ * seller picks which, the badge is unaffected — is written against those boards
+ * so they cannot contradict it when they land.
+ */
 export async function confirmCancellation(): Promise<BillingResult> {
   const seat = await getSellerSeat();
   if (!seat) return { ok: false, error: t("dev.no_seat_title") };
 
   const result = await cancelSubscription(seat.actor, seat.businessId);
-  if (!result.ok) return result;
+  if (!result.ok) return { ok: false, error: result.error };
 
-  revalidatePath("/dashboard/billing");
+  revalidateBilling();
   return { ok: true };
+}
+
+/** `Resume Pro`. Costs nothing: the period was already paid for. */
+export async function resumePlan(): Promise<BillingResult> {
+  const seat = await getSellerSeat();
+  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
+
+  const result = await resumeSubscription(seat.actor, seat.businessId);
+  if (!result.ok) return { ok: false, error: t("change.no_subscription") };
+
+  revalidateBilling();
+  return {
+    ok: true,
+    message: t("billing.resumed", {
+      plan: result.planName,
+      when: formatDate(result.renewsAt),
+    }),
+  };
 }

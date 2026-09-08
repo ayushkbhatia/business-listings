@@ -29,7 +29,8 @@ const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
   locationLimit: true, photoLimit: true,
   categoryLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
-  customDomain: true, sortOrder: true,
+  customDomain: true, analytics: true, csvImport: true, sponsoredEligible: true,
+  sortOrder: true,
 } as const;
 
 function toCaps(row: {
@@ -44,6 +45,9 @@ function toCaps(row: {
   teamSeats: number;
   rankingMultiplier: unknown;
   customDomain: boolean;
+  analytics: boolean;
+  csvImport: boolean;
+  sponsoredEligible: boolean;
   categoryLimit: number | null;
   sortOrder: number;
 }): PlanCaps {

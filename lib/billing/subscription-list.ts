@@ -68,6 +68,7 @@ export async function subscriptionList(limit = 500): Promise<SubscriptionRow[]> 
           productLimit: true, locationLimit: true, photoLimit: true,
   categoryLimit: true, storageMb: true, teamSeats: true,
           rankingMultiplier: true, customDomain: true, sortOrder: true,
+          analytics: true, csvImport: true, sponsoredEligible: true,
           annualMonthsCharged: true,
         },
       },

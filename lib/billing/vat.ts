@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { FILS_PER_AED } from "./proration";
+import { storedTotals } from "./invoice";
 
 /**
  * Board 12e — the VAT export.
@@ -53,12 +54,6 @@ export interface VatSummary {
   missingTrn: number;
 }
 
-function aedStringToFils(value: unknown): number {
-  // `Decimal(12,2)` arrives as a string or a Decimal. Through Number and
-  // rounded, because two decimal places times one hundred is exact.
-  return Math.round(Number(value) * FILS_PER_AED);
-}
-
 /**
  * Every issued invoice in the window, with its VAT.
  *
@@ -89,35 +84,47 @@ export async function vatReturn(from: Date, to: Date): Promise<VatSummary> {
           },
         },
       },
+      subtotalFils: true,
+      vatFils: true,
+      totalFils: true,
+      billedToName: true,
+      billedToTrn: true,
       lines: { select: { amountAed: true, qty: true } },
     },
   });
 
   const rows: VatRow[] = invoices.map((invoice) => {
-    const netFils = invoice.lines.reduce(
-      (sum, line) => sum + aedStringToFils(line.amountAed) * line.qty,
-      0,
-    );
-    const vatRate = Number(invoice.vatRate);
     /*
-     * Rounded per invoice, not per line. The FTA allows either as long as it is
-     * consistent; per invoice is what the seller sees on their copy, and a
-     * return that disagrees with the documents it is built from is the one that
-     * costs a morning to explain.
+     * The stored figures, through the one reader.
+     *
+     * This used to sum the lines and apply the rate itself, which made the
+     * return a second opinion about what had been charged rather than a report
+     * of it. `storedTotals` rounds per invoice — the FTA allows either as long
+     * as it is consistent, and per invoice is what the seller sees on their copy.
+     * A return that disagrees with the documents it is built from is the one
+     * that costs a morning to explain.
      */
-    const vatFils = Math.round(netFils * vatRate);
+    const totals = storedTotals(invoice);
     return {
       invoiceRef: invoice.ref,
       // Filtered on `issuedAt` above, so it is not null here.
       issuedAt: invoice.issuedAt as Date,
       businessId: invoice.businessId,
-      businessName: invoice.business.displayName,
-      trn: invoice.business.trn,
+      /*
+       * The party as they were on the day, where the invoice recorded it.
+       *
+       * A supplier who renames must not rewrite a return that has already been
+       * filed. Falling back to the live row is for invoices issued before the
+       * snapshot existed, which is the only case where the live row is the best
+       * record available.
+       */
+      businessName: invoice.billedToName ?? invoice.business.displayName,
+      trn: invoice.billedToTrn ?? invoice.business.trn,
       emirate: invoice.business.locations[0]?.emirate ?? null,
-      netFils,
-      vatFils,
-      grossFils: netFils + vatFils,
-      vatRate,
+      netFils: totals.subtotalFils,
+      vatFils: totals.vatFils,
+      grossFils: totals.totalFils,
+      vatRate: Number(invoice.vatRate),
     };
   });
 

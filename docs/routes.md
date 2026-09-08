@@ -97,11 +97,12 @@ and it is the one that argues back.
 /dashboard/questions                    Buyer questions                       [1g]  built h5
 /dashboard/team                         Team, seats & lead routing            [7d]  built h4
 /dashboard/analytics                    Analytics                             [3l]
-/dashboard/billing                      Subscription & invoices               [3m]
+/dashboard/billing                      Subscription & billing                [3m]  built h3 wave 4
 /dashboard/domain                       Your own web address                  [5e]  built h4s6
-/dashboard/billing/change               Plan change                          [11f]
-/dashboard/billing/cancel               Cancel                               [11f]
-/dashboard/invoice/:id                  Tax invoice                          [11f]
+/dashboard/billing/change               Change plan                          [11f]  built h3 wave 4
+/dashboard/billing/change/keep/:kind    Choose what stays live               [11f]  built h3 wave 4
+/dashboard/billing/cancel               Cancel                               [11h]  entry point only
+/dashboard/billing/invoice/:id          Tax invoice                          [11g]
 /dashboard/promote                      Sponsored placement                  [11e]
 /dashboard/settings                     Settings & notifications              [7e]  built h2s5 (alerts only)
 ```
@@ -177,6 +178,20 @@ else.
 /dev/gallery                            Every component, every state          built h0-h2
 /dev/notifications                      Notification templates rendered [7f]  built h2s5
 ```
+
+### Wave 4 note — the `11f` split
+
+`11f` was one board carrying plan change, cancel and a tax invoice. It is now
+four: `11f` change plan, `11g` tax invoice, `11h` cancel and `11j` cancel reason.
+Two things moved with the split and both are recorded above:
+
+- The tax invoice is at **`/dashboard/billing/invoice/:id`**, not
+  `/dashboard/invoice/:id`. It sits under the screen that lists the invoices, and
+  the old path had it a level up from everything it belongs to.
+- `/dashboard/billing/cancel` belongs to `11h`, whose spec is not exported. `3m`
+  carries the **entry point** and states what cancelling does — drop to Free at
+  period end, ten products stay live and the seller picks which, the licence
+  badge unaffected — so the boards that own the screen cannot contradict it.
 
 ## Rules
 

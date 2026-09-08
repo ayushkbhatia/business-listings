@@ -151,15 +151,50 @@ describe("criterion 10 — proration, shown before it is charged", () => {
     expect(await prisma.invoice.count({ where: { businessId } })).toBe(before);
   });
 
-  it("shows the credit and the charge as separate lines", async () => {
+  it("shows the credit and the charge as separate lines, on an upgrade", async () => {
     // Board 11f: proration shown line by line. One net figure is a number the
     // seller has to take on trust.
+    await prisma.business.update({ where: { id: businessId }, data: { planId: "free" } });
     const result = await quotePlanChange(actor, businessId, "basic");
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.quote.proration.creditLine.kind).toBe("credit");
-    expect(result.quote.proration.chargeLine.kind).toBe("charge");
+    expect(result.quote.direction).toBe("upgrade");
+    expect(result.quote.proration?.creditLine.kind).toBe("credit");
+    expect(result.quote.proration?.chargeLine.kind).toBe("charge");
     expect(result.quote.netAed).toMatch(/^-?\d+\.\d{2}$/);
+  });
+
+  it("prices nothing on a downgrade, because nothing is due today", async () => {
+    /*
+       Board 11f: `Due today AED 0.00`. A downgrade takes effect at the end of
+       the period, so there is no part-period to charge and no unused half-month
+       to credit — the proration is absent rather than zero, because zero would
+       imply an arithmetic that ran.
+    */
+    await prisma.business.update({ where: { id: businessId }, data: { planId: "pro" } });
+    const result = await quotePlanChange(actor, businessId, "basic");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.quote.direction).toBe("downgrade");
+    expect(result.quote.proration).toBeNull();
+    expect(result.quote.netAed).toBe("0.00");
+    // And it states when it lands, which is the renewal.
+    expect(result.quote.effectiveAt).not.toBeNull();
+  });
+
+  it("quotes the new plan's price from the renewal, VAT included", async () => {
+    // `From 14 Sep · AED 103.95 incl. VAT` — 99 + VAT, the figure a seller
+    // checks a downgrade against.
+    await prisma.business.update({ where: { id: businessId }, data: { planId: "pro" } });
+    const result = await quotePlanChange(actor, businessId, "basic");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const basic = await prisma.plan.findUniqueOrThrow({
+      where: { id: "basic" },
+      select: { monthlyPriceAed: true },
+    });
+    const net = Number(basic.monthlyPriceAed) * 100;
+    expect(result.quote.nextPeriodFils).toBe(net + Math.round(net * 0.05));
   });
 
   it("says the provider cannot actually take money yet", async () => {
@@ -186,10 +221,13 @@ describe("criterion 10 — proration, shown before it is charged", () => {
   });
 });
 
-describe("criterion 10 — entitlements move with the plan", () => {
+describe("criterion 10 — entitlements move with an upgrade, on payment", () => {
   it("changes the plan and the entitlements in the same request", async () => {
+    await prisma.business.update({ where: { id: businessId }, data: { planId: "free" } });
     const result = await changePlan(actor, businessId, "basic");
     expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.scheduled).toBe(false);
 
     const after = await prisma.business.findUniqueOrThrow({
       where: { id: businessId },
@@ -202,24 +240,57 @@ describe("criterion 10 — entitlements move with the plan", () => {
   });
 
   it("writes an invoice carrying both the charge and the credit", async () => {
+    await prisma.business.update({ where: { id: businessId }, data: { planId: "basic" } });
     await changePlan(actor, businessId, "pro");
     const invoice = await prisma.invoice.findFirstOrThrow({
-      where: { businessId, ref: { startsWith: "PLAN-" } },
+      where: { businessId, docType: "tax_invoice" },
       orderBy: { createdAt: "desc" },
-      select: { status: true, lines: { select: { kind: true, amountAed: true } } },
+      select: {
+        status: true,
+        subtotalFils: true,
+        vatFils: true,
+        totalFils: true,
+        ref: true,
+        lines: { select: { kind: true, amountAed: true } },
+      },
     });
 
-    expect(invoice.status).toBe("issued");
+    // Paid, because the charge succeeded before the transaction opened. An
+    // `issued` row here would be an invoice for money already taken.
+    expect(invoice.status).toBe("paid");
     expect(invoice.lines.some((l) => l.kind === "subscription")).toBe(true);
     // Coming from Basic there are unused days to credit.
     expect(invoice.lines.some((l) => l.kind === "subscription_credit")).toBe(true);
     // The credit is negative on the invoice, not a payment out. This platform
-    // holds no funds and refunds none.
+    // holds no funds and pays none out.
     const credit = invoice.lines.find((l) => l.kind === "subscription_credit");
     expect(String(credit?.amountAed)).toMatch(/^-/);
   });
 
+  it("stores the totals rather than leaving them to be recomputed", async () => {
+    /*
+       Criterion 2. `BL-INV-20418` read `AED 7,802.15` on one board and
+       `AED 1,783.95` on the other, which is what made this a joint handoff; a
+       total derived at read time is the same defect one layer down.
+    */
+    await prisma.business.update({ where: { id: businessId }, data: { planId: "basic" } });
+    await changePlan(actor, businessId, "pro");
+    const invoice = await prisma.invoice.findFirstOrThrow({
+      where: { businessId, docType: "tax_invoice" },
+      orderBy: { createdAt: "desc" },
+      select: { ref: true, subtotalFils: true, vatFils: true, totalFils: true, billedToName: true },
+    });
+
+    expect(invoice.subtotalFils).not.toBeNull();
+    expect(invoice.totalFils).toBe((invoice.subtotalFils ?? 0) + (invoice.vatFils ?? 0));
+    // The reference a seller quotes at a bank, not an internal charge id.
+    expect(invoice.ref).toMatch(/^BL-INV-\d+$/);
+    // And who it was billed to, frozen: a rename must not rewrite it.
+    expect(invoice.billedToName).not.toBeNull();
+  });
+
   it("keeps the renewal date where it was", async () => {
+    await prisma.business.update({ where: { id: businessId }, data: { planId: "free" } });
     const before = await prisma.subscription.findUniqueOrThrow({
       where: { businessId },
       select: { renewsAt: true },
@@ -231,6 +302,21 @@ describe("criterion 10 — entitlements move with the plan", () => {
     });
     // A change on the 12th does not restart the month.
     expect(after.renewsAt.toISOString()).toBe(before.renewsAt.toISOString());
+  });
+
+  it("refuses the charge when the figure on the button has moved", async () => {
+    /*
+       Criterion 7. A screen left open across a plan-price change would otherwise
+       charge a number the seller never agreed to, and adjusting it silently is
+       the version of that which nobody notices.
+    */
+    await prisma.business.update({ where: { id: businessId }, data: { planId: "free" } });
+    const before = await prisma.invoice.count({ where: { businessId } });
+    const result = await changePlan(actor, businessId, "basic", 1);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("quote_moved");
+    expect(await prisma.invoice.count({ where: { businessId } })).toBe(before);
   });
 });
 
@@ -326,8 +412,35 @@ describe("criterion 10 — cancel is at period end, and keeps what it says", () 
     // Not one product deleted. A seller who comes back next quarter finds
     // their catalogue where they left it.
     expect(after._count.products).toBe(before);
-    expect(await prisma.product.count({ where: { businessId, status: "live" } })).toBe(0);
-    expect(await prisma.product.count({ where: { businessId, status: "draft" } })).toBe(before);
+
+    /*
+       And ten stay live, not none.
+
+       This test asserted zero, and it was asserting a defect: `hideOverPlanCap`
+       drafted what Free had no room for and the four lines directly after it
+       drafted everything that was left. So the call above did nothing that
+       survived its own transaction, and a cancelling Pro seller with 1,204
+       products landed on Free with an empty storefront.
+
+       Board 3m's fourth correction is the same sentence from the design side —
+       both boards said all 1,204 products "stay saved but hidden" — and the rule
+       `3f` §6 owns is that the Free cap applies: **ten stay live and the seller
+       picks which.** Criterion 9 restates it for this path. The number is read
+       from the plan rather than written down here, because that is the whole
+       point of the plan-limit config.
+    */
+    const freeCap = (
+      await prisma.plan.findUniqueOrThrow({
+        where: { id: "free" },
+        select: { productLimit: true },
+      })
+    ).productLimit;
+    const staysLive = freeCap === null ? before : Math.min(freeCap, before);
+
+    expect(await prisma.product.count({ where: { businessId, status: "live" } })).toBe(staysLive);
+    expect(await prisma.product.count({ where: { businessId, status: "draft" } })).toBe(
+      before - staysLive,
+    );
 
     // The badge records what we checked. Cancelling a subscription does not
     // un-check it.

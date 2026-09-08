@@ -604,6 +604,9 @@ export async function readHomePlans() {
   categoryLimit: true, storageMb: true,
       enquiriesPerMonth: true,
       customDomain: true,
+      analytics: true,
+      csvImport: true,
+      sponsoredEligible: true,
     },
   });
 }

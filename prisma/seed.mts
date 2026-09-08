@@ -574,7 +574,7 @@ async function main() {
   const THEMES = ["default", "industrial", "trade", "mono", "clinic", "salon"] as const;
   const catSlugs = CATEGORIES.map((c) => c.slug);
 
-  const businesses: { id: string; slug: string; tier: number; claim: string; categorySlug: string }[] = [];
+  const businesses: Biz[] = [];
 
   for (let i = 0; i < 40; i += 1) {
     const emirate = emirates[i % emirates.length]!;
@@ -717,7 +717,15 @@ async function main() {
       },
     });
 
-    businesses.push({ id: business.id, slug, tier: effectiveTier, claim: claimStatus, categorySlug });
+    businesses.push({
+      id: business.id,
+      slug,
+      tier: effectiveTier,
+      claim: claimStatus,
+      categorySlug,
+      displayName: business.displayName,
+      trn: business.trn,
+    });
 
     // A second category for about a third of them.
     if (rnd() < 0.35) {
@@ -2190,7 +2198,17 @@ async function seedOpenRequests(db: Db) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-type Biz = { id: string; slug: string; tier: number; claim: string; categorySlug: string };
+type Biz = {
+  id: string;
+  slug: string;
+  tier: number;
+  claim: string;
+  categorySlug: string;
+  /// Frozen onto an invoice at issue, so a rename does not rewrite one. See
+  /// the `billedTo…` columns and lib/billing/invoice.ts.
+  displayName: string;
+  trn: string | null;
+};
 type Db = typeof prisma;
 
 interface ProductSeed {
@@ -3027,6 +3045,48 @@ async function seedReplyHistory(db: Db, businesses: Biz[], buyerId: string) {
 const FREE_AT_CAP_SLUG = "al-manara-equipment-trading-llc";
 
 /**
+ * The cards board 3m's rail renders. Brand and last four, and nothing else.
+ *
+ * Criterion 13: card details never reach our servers. These are the four fields
+ * a PSP hands back after it has taken the card, and a seeded `providerToken`
+ * would be a handle to something nobody holds — so it stays null and
+ * `paymentProvider().live` keeps saying so on the screen.
+ */
+const CARDS = [
+  { brand: "Emirates NBD", last4: "4471", expiryMonth: 9, expiryYear: 2029 },
+  { brand: "Mashreq", last4: "8802", expiryMonth: 4, expiryYear: 2028 },
+  { brand: "ADCB", last4: "1190", expiryMonth: 11, expiryYear: 2027 },
+] as const;
+
+/**
+ * What `issueInvoice` would have stored, computed here.
+ *
+ * The seed cannot import `lib/billing/invoice.ts` — it is `server-only` — so the
+ * arithmetic is repeated rather than shared, and it is repeated exactly:
+ * subtotal in fils, VAT rounded once per invoice, gross the sum of the two. An
+ * invoice whose stored total disagreed with its lines would fail the constraint
+ * the migration adds, which is the point of having the constraint.
+ */
+function invoiceTotals(amountAed: number) {
+  const subtotalFils = Math.round(amountAed * 100);
+  const vatFils = Math.sign(subtotalFils) * Math.round(Math.abs(subtotalFils) * 0.05);
+  return { subtotalFils, vatFils, totalFils: subtotalFils + vatFils };
+}
+
+/** Calendar arithmetic for an invoice line's period. A month is a month. */
+function addMonths(from: Date, months: number): Date {
+  const next = new Date(from);
+  next.setUTCMonth(next.getUTCMonth() + months);
+  return next;
+}
+
+function addYears(from: Date, years: number): Date {
+  const next = new Date(from);
+  next.setUTCFullYear(next.getUTCFullYear() + years);
+  return next;
+}
+
+/**
  * A free-plan supplier who has used their three enquiries and is still being
  * matched. Acceptance criterion 5 is about what that seller is shown.
  *
@@ -3677,6 +3737,12 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
             teamSeats: plan.teamSeats,
             rankingMultiplier: Number(plan.rankingMultiplier),
             customDomain: plan.customDomain,
+            // The three on/off entitlements board 11f's grid renders. Frozen
+            // with the caps, so a plan edit cannot take analytics away from
+            // somebody who is paying for it.
+            analytics: plan.analytics,
+            csvImport: plan.csvImport,
+            sponsoredEligible: plan.sponsoredEligible,
             sortOrder: plan.sortOrder,
           },
           NOW,
@@ -3694,18 +3760,61 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
     */
     const amount = term === "annual" ? Number(plan.monthlyPriceAed) * monthsCharged : Number(plan.monthlyPriceAed);
     const periodLabel = term === "annual" ? "one year" : "one month";
+
+    /*
+       The card, as much of it as ever reaches us.
+
+       Board 3m's rail renders `•••• 4471 · Emirates NBD · expires 09/29`, and
+       criterion 13 is that nothing more than this is ever stored. `providerToken`
+       stays null because no provider has issued one — `paymentProvider().live`
+       is false, and a seeded token would be a handle to a card nobody holds.
+    */
+    const card = CARDS[i % CARDS.length]!;
+    await db.paymentMethod.create({
+      data: {
+        businessId: b.id,
+        brand: card.brand,
+        last4: card.last4,
+        expiryMonth: card.expiryMonth,
+        expiryYear: card.expiryYear,
+      },
+    });
+
+    const issuedAt = days(-int(3, 40));
+    const paid = i !== 7;
     await db.invoice.create({
       data: {
-        ref: `INV-${2600 + i}`,
+        // `BL-INV-…`, the format board 3m prints and the one thing on an invoice
+        // a seller types into something else. Below the sequence's start value,
+        // so a seeded database and a fresh one do not collide on their first
+        // issue — see the migration.
+        ref: `BL-INV-${20_000 + i}`,
         businessId: b.id,
         vatRate: "0.0500",
-        status: i === 7 ? "overdue" : "paid",
-        issuedAt: days(-int(3, 40)),
+        status: paid ? "paid" : "overdue",
+        issuedAt,
         dueAt: days(i === 7 ? -6 : 12),
-        paidAt: i === 7 ? null : days(-int(1, 30)),
+        paidAt: paid ? days(-int(1, 30)) : null,
+        /*
+           Stored, not derived. Criterion 2 — an issued invoice is immutable, and
+           the pair of boards exists because one invoice number carried two
+           totals. The seed writes what `issueInvoice` would.
+        */
+        ...invoiceTotals(amount),
+        billedToName: b.displayName,
+        billedToTrn: b.trn ?? null,
+        paidByBrand: paid ? card.brand : null,
+        paidByLast4: paid ? card.last4 : null,
         lines: {
           create: [
-            { kind: "subscription", description: `${plan.name} plan, ${periodLabel}`, qty: 1, amountAed: String(amount) },
+            {
+              kind: "subscription",
+              description: `${plan.name} plan, ${periodLabel}`,
+              qty: 1,
+              amountAed: String(amount),
+              periodStart: issuedAt,
+              periodEnd: term === "annual" ? addYears(issuedAt, 1) : addMonths(issuedAt, 1),
+            },
           ],
         },
       },
@@ -3736,17 +3845,53 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
      example of something else.
   */
   const credited = paying[0]!;
-  await db.invoice.create({
+  const correctedInvoice = await db.invoice.create({
     data: {
-      ref: "INV-2699",
+      ref: "BL-INV-20098",
       businessId: credited.id,
       vatRate: "0.0500",
-      status: "issued",
-      issuedAt: days(-2),
-      dueAt: days(28),
+      status: "paid",
+      issuedAt: days(-40),
+      dueAt: days(-10),
+      paidAt: days(-38),
+      ...invoiceTotals(899),
+      billedToName: credited.displayName,
+      billedToTrn: credited.trn ?? null,
       lines: {
         create: [
           { kind: "subscription", description: "Pro plan, monthly", qty: 1, amountAed: "899.00" },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+
+  /*
+     And the correction, as its own document.
+
+     Board 3m Q5: UAE VAT requires a credit note for any correction and an issued
+     invoice may not be edited. It is the same table and the same list — negative
+     total, pointing at what it corrects — because that is what it is on the
+     seller's screen and in the VAT return, where it reduces output VAT.
+
+     This used to be a `subscription_credit` line *inside* the invoice it was
+     correcting, which is the edit the rule forbids: the document a seller had
+     already been sent would have changed underneath them.
+  */
+  await db.invoice.create({
+    data: {
+      ref: "BL-INV-20099",
+      businessId: credited.id,
+      docType: "credit_note",
+      correctsId: correctedInvoice.id,
+      vatRate: "0.0500",
+      status: "issued",
+      issuedAt: days(-2),
+      ...invoiceTotals(-119.87),
+      billedToName: credited.displayName,
+      billedToTrn: credited.trn ?? null,
+      lines: {
+        create: [
           { kind: "subscription_credit", description: "Credit, four days of downtime in July", qty: 1, amountAed: "-119.87" },
         ],
       },

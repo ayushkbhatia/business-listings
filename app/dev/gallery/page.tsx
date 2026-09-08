@@ -2,6 +2,7 @@ import { t } from "@/lib/i18n";
 import { Actions } from "./_sections/Actions";
 import { Choice } from "./_sections/Choice";
 import { Display } from "./_sections/Display";
+import { Billing } from "./_sections/Billing";
 import { Domain } from "./_sections/Domain";
 import { Numeric } from "./_sections/Numeric";
 import { TextEntry } from "./_sections/TextEntry";
@@ -219,6 +220,7 @@ export default function Gallery() {
       <Structure />
       <Display />
       <Domain />
+      <Billing />
       <Overlays />
       <Shells />
       <Tokens />

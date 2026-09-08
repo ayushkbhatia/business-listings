@@ -55,7 +55,8 @@ const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
   locationLimit: true, photoLimit: true,
   categoryLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
-  customDomain: true, sortOrder: true,
+  customDomain: true, analytics: true, csvImport: true, sponsoredEligible: true,
+  sortOrder: true,
 } as const;
 
 export async function saveLocation(formData: FormData): Promise<LocationResult> {
