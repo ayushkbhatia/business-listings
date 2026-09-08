@@ -86,14 +86,14 @@ My recommendation: **stop building features.** The next unit of work is closing 
 |---|---|---|
 | `/signin`, `/signup`, `/verify`, `/reset` | **Partial** | The code is fixed — sign-in no longer fails open, a seeded-seat signup no longer 500s, and a failed claim write repairs itself. Reaching a real person still needs SMTP and the Supabase phone provider. `pnpm dev:seat <kind>` signs you in today. |
 | `/onboarding/claim` → `profile` → `locations` → `verify` → `plan` | Wired | Full 5-step wizard. Mobile Continue button fixed and now covered in CI. |
-| `/dashboard` | Wired | Overview with real counts. |
+| `/dashboard` | Wired | Overview with real counts. Board 3a's search-position card is switched on — gated at Basic, rendered as a named locked panel on Free. |
 | `/dashboard/leads`, `/dashboard/leads/[id]/thread` | Wired | The core loop. Fan-out now descends into subcategories. |
 | `/dashboard/quotes` | Wired | Quote lines are the only place a price legally exists. |
 | `/dashboard/products` + `[id]`, `/import` | Wired | CSV import included. |
 | `/dashboard/listing`, `/media`, `/locations`, `/hours`, `/team` | Wired | The dead `mediaUrl()` export is gone; the page calls `publicUrl` directly, so images do display. |
 | `/dashboard/verification` | Built (board 3e) | Two document tables — checked by us, uploaded by you — the corrected ladder, and the 60 / 14 / 0 expiry sequence with the job behind it. Tier stays staff-only, correctly, and the screen says so. |
 | `/dashboard/billing` + `/change`, `/cancel` | Wired | No payment capture, as designed. |
-| `/dashboard/analytics` | Thin | Fed by the measurements in `/api/jobs/daily`, which run nightly. Numbers appear after the first run against real traffic; nothing to build. |
+| `/dashboard/analytics` | Wired | Fed by `/api/jobs/daily`. Query ranks now carry their denominator and their reason on the row rather than in a note under the table. |
 | `/dashboard/promote` | Wired | Boosts write audit rows. |
 | `/dashboard/reviews` | Wired | Board 11c. Request (one per buyer ever, WhatsApp where we hold a number and email otherwise), reply (one, 28-day window, not editable), dispute (four grounds, into 4h). Removal stays staff-side. |
 | `/dashboard/domain` | **Fail-closed** | The screen works; the integration cannot. Needs `VERCEL_DOMAINS_TOKEN` and `stores.businesslistings.me` provisioned — both outside the repo. Refuses rather than pretending, which is the intended behaviour until then. |

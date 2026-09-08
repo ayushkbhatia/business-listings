@@ -4,7 +4,9 @@ import { Alert, PlanBadge, StatCard, type PlanTier } from "@/components/display"
 import { CompletenessMeter, ResponseTime } from "@/components/domain";
 import { Card, Panel } from "@/components/structure";
 import { getOverview, usageOf, type Overview, type MissedEnquiryRow } from "@/lib/db/queries/overview";
-import { cheapestPlanUnlocking, cheapestPlanWith, type PlanCaps } from "@/lib/plan/entitlements";
+import { positionCard, type PositionCard, type PositionRow } from "@/lib/analytics/position";
+import { PositionValue, PositionReason } from "@/components/domain";
+import { cheapestPlanGranting, cheapestPlanUnlocking, type PlanCaps } from "@/lib/plan/entitlements";
 import { formatCount, formatDate, formatDuration, formatRelative } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { SetupChrome } from "@/lib/setup/service";
@@ -46,6 +48,13 @@ export default async function OverviewPage({
 
   const enquiries = usageOf(overview, "enquiries");
   const planTier = tierOf(overview.plan.id);
+  /*
+     Sequential, and deliberately so. Q5 gates the card at Basic, and a locked
+     panel renders no numbers — so on Free this query is not run at all rather
+     than run and thrown away. Everything above is still one round trip's worth
+     of parallel reads; this is one more, for the sellers who can see it.
+  */
+  const positions = overview.plan.analytics ? await positionCard(seat.businessId) : null;
 
   return (
     <SellerPage
@@ -103,6 +112,7 @@ export default async function OverviewPage({
         {enquiries.cap !== null && <MissedPanel overview={overview} />}
 
         <Standing overview={overview} />
+        <WhereYouRank card={positions} plan={overview} />
         <Allowances overview={overview} />
         <LockedFeatures overview={overview} />
       </div>
@@ -455,21 +465,135 @@ function Allowances({ overview }: { overview: Overview }) {
   );
 }
 
+/* ── Where you rank ──────────────────────────────────────────────────────── */
+
+/**
+ * Board `3a`'s search-position card, switched on.
+ *
+ * It was drawn with `3a` and left hidden pending `3l` — §6 of the epic: *"a card
+ * showing three dashes for three waves is worse than a card that is not there
+ * yet"*. `3l` landed and the switch was never flipped, so `CategoryRankDay`'s
+ * predecessor spent a release with a writer and no reader.
+ *
+ * Q5 gates it at Basic, and the overview's own doctrine decides how: panels are
+ * dimmed and named, never hidden. Position is the most motivating number on this
+ * screen, which is exactly why the Free seller sees that it exists.
+ */
+function WhereYouRank({ card, plan }: { card: PositionCard | null; plan: Overview }) {
+  if (!card) {
+    const analyticsPlan = cheapestPlanGranting(plan.allPlans, "analytics", plan.plan.id);
+    return (
+      <Panel title={t("position.title")} {...lockedProps(t("position.title"), analyticsPlan)}>
+        <p className="max-w-prose text-body-sm text-muted">{t("position.locked")}</p>
+      </Panel>
+    );
+  }
+
+  /*
+     Never padded. A listing in one category shows one row, and a listing in
+     none shows the sentence rather than an empty table — "you are not in a
+     category listing yet" is a state a seller can act on, and a table head over
+     nothing is not.
+  */
+  if (card.rows.length === 0) {
+    return (
+      <Panel title={t("position.title")}>
+        <p className="text-body-sm text-muted">{t("position.none")}</p>
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel
+      title={t("position.title")}
+      actions={
+        <Link
+          href="/dashboard/analytics"
+          className="rounded-tag text-caption text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+        >
+          {t("position.link")}
+        </Link>
+      }
+      padded={false}
+      footer={
+        <p className="text-caption text-muted">
+          {t("position.count", { count: card.rows.length })}
+          {card.more > 0 ? ` ${t("position.and_more", { count: card.more })}` : ""}
+        </p>
+      }
+    >
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-body-sm">
+          <caption className="sr-only">{t("position.caption")}</caption>
+          <thead>
+            <tr className="border-b border-line-soft">
+              <th scope="col" className="px-4 py-2 text-left text-eyebrow uppercase text-muted">
+                {t("position.col.category")}
+              </th>
+              <th scope="col" className="px-4 py-2 text-right text-eyebrow uppercase text-muted">
+                {t("position.col.position")}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {card.rows.map((row) => (
+              <PositionLine key={`${row.categoryId}:${row.emirate ?? ""}`} row={row} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Panel>
+  );
+}
+
+/**
+ * One category listing.
+ *
+ * The reason sits under the label rather than in a note below the table. Three
+ * rows with three reasons and one floating note cannot say which row it means,
+ * which is the defect this amendment corrects on `3l` as well.
+ */
+function PositionLine({ row }: { row: PositionRow }) {
+  const scope = row.emirate ? t(`emirate.${row.emirate}`) : t("search.scope_uae");
+  const label = `${row.categoryName} · ${scope}`;
+
+  return (
+    <tr className="border-b border-line-soft last:border-0 align-top">
+      <th scope="row" className="px-4 py-2.5 text-left font-normal text-ink">
+        {label}
+        <PositionReason
+          reason={row.reason}
+          categoryName={row.categoryName}
+          lastMeasured={row.lastMeasured}
+          state={row.state}
+        />
+      </th>
+      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+        <PositionValue
+          state={row.state}
+          rank={row.rank}
+          total={row.total}
+          movement={row.movement}
+        />
+      </td>
+    </tr>
+  );
+}
+
 /* ── Named, dimmed, priced ───────────────────────────────────────────────── */
 
 /**
  * Two features that are genuinely a column on the plan.
  *
- * Analytics and sponsored placement are boards 3l and 11e and are not built
- * yet — and, more to the point, neither is a flag the Plan table holds. Dimming
- * them here would mean inventing an entitlement and then naming a price for it,
- * which is the sort of thing a seller finds out is untrue at the moment they
- * pay. `customDomain` is a real boolean on a real row, so the line under the
- * panel is checkable — and since site visits were withdrawn it is the only one
- * left, which is why this grid now holds a single panel rather than a pair.
+ * `customDomain` is a real boolean on a real row, so the line under the panel is
+ * checkable. Analytics is now one too — board 3l shipped it — and it is locked
+ * by `WhereYouRank` above rather than here, because that panel has something to
+ * show a Free seller: the name of the number they are not being given. A row in
+ * this grid could only name the feature, which is the weaker half of the same
+ * argument.
  */
 function LockedFeatures({ overview }: { overview: Overview }) {
-  const domainPlan = cheapestPlanWith(overview.allPlans, "customDomain", overview.plan.id);
+  const domainPlan = cheapestPlanGranting(overview.allPlans, "customDomain", overview.plan.id);
 
   return (
     <div className="grid gap-5">

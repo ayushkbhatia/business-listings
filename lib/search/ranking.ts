@@ -204,9 +204,24 @@ function scorePlan(multiplier: number): number {
   return Math.min(1, Math.max(0, (multiplier - 1) / 0.35));
 }
 
-export function scoreRow(signals: RankSignals, weights: RankingWeights = DEFAULT_WEIGHTS): number {
-  const parts: [number, number][] = [
-    [weights.relevance, Math.min(1, Math.max(0, signals.relevance))],
+/** One weight, by name. */
+export type WeightKey = (typeof WEIGHT_KEYS)[number];
+
+/** Every factor, normalised to 0..1, before any weight is applied. */
+export type FactorScores = Record<WeightKey, number>;
+
+/**
+ * The six normalised scores, without the weights.
+ *
+ * Split out of `scoreRow` for the `3a`/`3l` amendment, which stores this vector
+ * per listing per day so an attribution sentence can name *which* factor moved.
+ * It has to be the ranker's own arithmetic rather than a second implementation
+ * beside it: a copy would drift, and the first symptom would be a page telling
+ * a seller their reply time cost them a place it did not cost them.
+ */
+export function factorScores(signals: RankSignals): FactorScores {
+  return {
+    relevance: Math.min(1, Math.max(0, signals.relevance)),
     /*
        Normalised against the top achievable rung — 2 — and not the 4 the ladder
        stopped having when site visits were withdrawn. Until this, the strongest
@@ -215,13 +230,17 @@ export function scoreRow(signals: RankSignals, weights: RankingWeights = DEFAULT
        directory ranked as though every verified listing were one rung short of
        something nobody can reach.
     */
-    [weights.verificationTier, trustScore(signals.verificationTier)],
-    [weights.responseTime, scoreResponseTime(signals.responseTimeMedianMs)],
-    [weights.specCompleteness, signals.specCompleteness ?? UNKNOWN],
-    [weights.distance, scoreDistance(signals.distanceKm)],
-    [weights.planTier, scorePlan(signals.planMultiplier)],
-  ];
-  const weighted = parts.reduce((total, [weight, score]) => total + weight * score, 0);
+    verificationTier: trustScore(signals.verificationTier),
+    responseTime: scoreResponseTime(signals.responseTimeMedianMs),
+    specCompleteness: signals.specCompleteness ?? UNKNOWN,
+    distance: scoreDistance(signals.distanceKm),
+    planTier: scorePlan(signals.planMultiplier),
+  };
+}
+
+export function scoreRow(signals: RankSignals, weights: RankingWeights = DEFAULT_WEIGHTS): number {
+  const scores = factorScores(signals);
+  const weighted = WEIGHT_KEYS.reduce((total, key) => total + weights[key] * scores[key], 0);
   return weighted + (signals.boostPoints ?? 0);
 }
 

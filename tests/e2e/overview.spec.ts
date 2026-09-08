@@ -53,6 +53,35 @@ test.describe("board 3a — the Pro overview", () => {
     await expect(standing.getByRole("spinbutton")).toHaveCount(0);
   });
 
+  test("carries the position card, as a real table, with no way to edit a number", async ({
+    page,
+  }) => {
+    /*
+       Board 3a's search-position card, switched on by the 3a/3l amendment. It
+       was drawn with 3a and hidden pending 3l, and when 3l landed the switch was
+       never flipped — so the table it reads spent a release with a writer and no
+       reader.
+
+       Three assertions and each is a rule rather than a detail. The region must
+       exist on the Pro fixture, because Q5 gates the card at Basic and above.
+       The rank must carry its denominator, because `#3` alone is flattery in a
+       category holding five and the cold start is what this platform launches
+       in. And nothing on it may be editable: position and attribution are
+       derived, and a seller-editable field is neither measured nor honest.
+    */
+    const card = page.getByRole("region", { name: "Where you rank" });
+    await expect(card).toBeVisible();
+
+    const rows = card.getByRole("row");
+    if ((await rows.count()) > 1) {
+      await expect(card.getByText(/#\d+ of \d+/).first()).toBeVisible();
+    }
+
+    await expect(card.getByRole("textbox")).toHaveCount(0);
+    await expect(card.getByRole("spinbutton")).toHaveCount(0);
+    await expect(card.getByRole("combobox")).toHaveCount(0);
+  });
+
   test("is axe clean", async ({ page }) => {
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);

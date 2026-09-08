@@ -323,6 +323,7 @@ model Category {
   placements        PlacementSlot[]
   importMappings    ImportMapping[]
   positionDays      CategoryPositionDay[]
+  rankDays          CategoryRankDay[]
   placementWaitlist PlacementWaitlist[]
   fieldProposals    SpecFieldProposal[]
   stagedListings    StagedListing[]
@@ -810,6 +811,8 @@ model Business {
   viewDays               ListingViewDay[]
   searchImpressionDays   SearchImpressionDay[]
   categoryPositionDays   CategoryPositionDay[]
+  categoryRankDays       CategoryRankDay[]
+  factorDays             ListingFactorDay[]
   productViewDays        ProductViewDay[]
   deviceDays             ListingDeviceDay[]
   productEvents          ProductEvent[]
@@ -4040,6 +4043,15 @@ model ListingViewDay {
 /// records a position no buyer ever saw. A query with no traffic on a day has
 /// no row, so movement is measured between the first and last day it was
 /// actually searched — which is the honest window rather than a padded one.
+///
+/// **That argument still holds here and was overturned for the other object.**
+/// The `3a`/`3l` amendment added `CategoryRankDay`, which is exactly the cron
+/// this comment rejects — and the difference is what the number is *of*. A
+/// category listing exists whether anybody browsed it or not, so ranking it
+/// nightly reports a real place in a real set. A phrase nobody typed has no
+/// results page to hold a position in, so re-running it would invent both the
+/// search and the rank. Impressions stay observed; category position is
+/// computed. Neither table has changed its mind about the other.
 model SearchImpressionDay {
   businessId  String   @map("business_id")
   /// Asia/Dubai, so a "day" is the day the supplier had.
@@ -4050,6 +4062,13 @@ model SearchImpressionDay {
   impressions Int      @default(0)
   /// Lowest position held that day. 1 is the top of the results.
   bestRank    Int      @map("best_rank")
+  /// How many listings the query returned, so the seller reads `#2 of 34`.
+  ///
+  /// Nullable, and it stays nullable: rows written before the amendment have no
+  /// denominator and inventing one for them would be exactly the hardcoded
+  /// count the honesty rules forbid. A row without it renders its rank alone
+  /// until the 30-day window has rolled past the deploy.
+  resultTotal Int?     @map("result_total")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
@@ -4146,6 +4165,103 @@ model ListingDeviceDay {
   @@id([businessId, day, device])
   @@index([day])
   @@map("listing_device_day")
+}
+
+/// Where a listing ranked in a category listing, computed nightly.
+///
+/// The amendment's `B1`, and the reason it exists is that `CategoryPositionDay`
+/// is a **counter and not a snapshot**. That table is written by
+/// `recordCategoryPositions` when a buyer loads a category page, so a category
+/// nobody browsed on Tuesday has no Tuesday row. An arrow computed across a
+/// hole in that series is not absent — it is *wrong*, because it silently
+/// compares Monday to Thursday and calls the difference a day's movement.
+///
+/// So the two tables answer two questions and neither substitutes for the
+/// other: `CategoryPositionDay` holds **impressions**, which only a real buyer
+/// can generate, and this holds the **position**, which is true whether anybody
+/// looked or not.
+///
+/// `total` is the size of the ranked set, and it is here rather than derived at
+/// read time because the set is what it was *that night*. A category that grew
+/// from five listings to forty would otherwise restate every historical rank
+/// against today's denominator, which is the same class of lie as a hardcoded
+/// count.
+model CategoryRankDay {
+  /// A surrogate, for the reason `CategoryPositionDay` documents at length:
+  /// `emirate` is nullable, it belongs in the identity, and in SQL a null never
+  /// equals a null. Two partial unique indexes in the migration, asserted by
+  /// `pnpm check:schema`.
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  categoryId String   @map("category_id")
+  /// Null is the country-wide listing — `Cold rooms · UAE` on the card.
+  emirate    Emirate?
+  day        DateTime @map("day") @db.Date
+  /// One-based. A zero would read as better than first everywhere this is
+  /// ordered, which is why the migration carries a check constraint for it.
+  position   Int
+  /// The size of the ranked set that night. `#3 of 5` renders both.
+  total      Int
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  /// The seller's read: their categories over a window.
+  @@index([businessId, day])
+  /// The prune.
+  @@index([day])
+  @@map("category_rank_day")
+}
+
+/// What the ranker saw when it placed this listing, per day.
+///
+/// The amendment's `B2`. Board `3l` shipped a rule — every attribution sentence
+/// traces to *"a factor changed, by how much, in the window"* — on top of
+/// history the platform did not keep. `Business.responseTimeMedianMs`,
+/// `profileStrength` and `specCompleteness` are current-value columns that the
+/// nightly jobs overwrite, so the platform could say what a factor **is** and
+/// never what it **was**.
+///
+/// ## Vectors, not six named columns
+///
+/// Six columns would be six migrations the first time the factor set moves, and
+/// the factor set is `12c`'s to move. `scores` and `weights` are objects keyed
+/// by `WEIGHT_KEYS`, so a seventh factor is a key and not a schema change.
+///
+/// ## The weights are stored per day, not per change
+///
+/// This is what makes state 09 free. A staff weight move on `12c` shifts every
+/// listing in a category and none of them did anything; diffing two days'
+/// `weights` is how attribution knows that, with no audit table to read and no
+/// second source to keep in step. It also means a fall caused by a slider is
+/// never billed to the seller, which is the failure this amendment exists to
+/// stop.
+///
+/// `raw` carries the display values behind the scores — a median in
+/// milliseconds, a filled ratio — because *"rose from 4h to 31h"* is a sentence
+/// about the measurement and not about its normalised 0..1 form.
+model ListingFactorDay {
+  businessId String   @map("business_id")
+  day        DateTime @map("day") @db.Date
+  /// `{ relevance, verificationTier, responseTime, specCompleteness, distance,
+  /// planTier }`, each 0..1 as `scoreRow` normalises them. Typed as
+  /// `FactorVector` in `lib/analytics/factors.ts`.
+  scores     Json
+  /// The same keys, holding what the seller would recognise: milliseconds, a
+  /// tier, a ratio. Typed as `RawFactors`.
+  raw        Json
+  /// The six weights in force that night, as `12c` had them set.
+  weights    Json
+  /// Points from a live `ListingBoost`. Added after the weighted sum, so it is
+  /// its own number here too — state 10 reads it to say a position was bought.
+  boostPoints Int     @default(0) @map("boost_points")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, day])
+  /// The prune.
+  @@index([day])
+  @@map("listing_factor_day")
 }
 
 /// Three buckets, from the user agent at beacon time.

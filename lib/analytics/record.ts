@@ -58,6 +58,15 @@ export async function recordSearchImpressions(
   at: Date = new Date(),
   /** Rank of the row before the first of these. Page two starts at 20. */
   offset = 0,
+  /**
+   * How many listings the whole query returned, not how many this page held.
+   *
+   * `#2` is flattery in a set of three, and the cold start is the state this
+   * platform launches in — so the amendment gives a query rank its denominator.
+   * Null where the caller does not know it; the column stays nullable and the
+   * row renders its rank alone rather than borrowing a number from a later day.
+   */
+  resultTotal: number | null = null,
 ): Promise<void> {
   const normalised = normaliseQuery(query);
   // A browse with no query is a category impression, not a search one — it has
@@ -76,14 +85,21 @@ export async function recordSearchImpressions(
        `unnest` pairs each id with its rank, and the whole page lands as a single
        `INSERT … ON CONFLICT`. Twenty separate upserts would be twenty round
        trips on the render path of the busiest public page in the product.
+
+       `result_total` takes the latest known denominator and never falls back to
+       null: a second search for the same phrase later in the day is the more
+       recent count of what it returns, and `coalesce` keeps the row's existing
+       number where this caller had none — so a page that cannot supply it does
+       not erase a page that could.
     */
     await prisma.$executeRaw`
-      INSERT INTO "search_impression_day" ("business_id", "day", "normalised", "impressions", "best_rank")
-      SELECT id, ${day}::date, ${normalised}, 1, rank + ${offset}
+      INSERT INTO "search_impression_day" ("business_id", "day", "normalised", "impressions", "best_rank", "result_total")
+      SELECT id, ${day}::date, ${normalised}, 1, rank + ${offset}, ${resultTotal}::int
         FROM unnest(${ids}::text[]) WITH ORDINALITY AS t(id, rank)
       ON CONFLICT ("business_id", "day", "normalised") DO UPDATE
         SET "impressions" = "search_impression_day"."impressions" + 1,
-            "best_rank"   = least("search_impression_day"."best_rank", EXCLUDED."best_rank")
+            "best_rank"   = least("search_impression_day"."best_rank", EXCLUDED."best_rank"),
+            "result_total" = coalesce(EXCLUDED."result_total", "search_impression_day"."result_total")
     `;
   } catch (cause) {
     console.error("[analytics] could not count search impressions", { normalised, cause });

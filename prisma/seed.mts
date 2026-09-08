@@ -4481,7 +4481,7 @@ async function seedAnalyticsRollups(db: Db, claimed: Biz[]) {
     "valve stem extension",
   ];
 
-  const impressions: { businessId: string; day: Date; normalised: string; impressions: number; bestRank: number }[] = [];
+  const impressions: { businessId: string; day: Date; normalised: string; impressions: number; bestRank: number; resultTotal: number }[] = [];
   const views: { businessId: string; day: Date; views: number }[] = [];
   const devices: { businessId: string; day: Date; device: "mobile" | "desktop" | "tablet"; views: number }[] = [];
   const productViews: { productId: string; businessId: string; day: Date; views: number }[] = [];
@@ -4513,12 +4513,21 @@ async function seedAnalyticsRollups(db: Db, claimed: Biz[]) {
         // the phrases it gets the most of — which is what makes the panel's
         // position column and volume column tell one story.
         const seen = Math.max(1, Math.round(int(4, 30) * trend) - index * 2);
+        const bestRank = Math.min(40, index + int(1, 6));
         impressions.push({
           businessId: business.id,
           day,
           normalised: query,
           impressions: seen,
-          bestRank: Math.min(40, index + int(1, 6)),
+          bestRank,
+          /*
+             The denominator the amendment's Q1 asks for, and it has to be at
+             least the rank it is printed beside — `#7 of 5` is not a near miss,
+             it is two numbers from different sets. A broad phrase returns more
+             than a specific one, which is why the first queries carry the
+             larger sets.
+          */
+          resultTotal: Math.max(bestRank, 90 - index * 12 + int(0, 8)),
         });
         clicks += Math.round(seen * 0.147);
       }

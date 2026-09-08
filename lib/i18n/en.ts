@@ -5237,6 +5237,98 @@ export const en = {
   "analytics.queries.not_ranked": "Not ranked",
   "analytics.queries.held": "held",
   "analytics.queries.none": "No searches have brought a buyer to you in this window yet.",
+
+  /*
+     The 3a/3l amendment — position, and why it moved.
+
+     The spec wrote these as ICU: `{count, plural, one {…} other {…}}` and
+     `{direction, select, up {Rose} other {Fell}}`. This catalogue is not ICU.
+     Plurals are a `PluralForms` object, which is the shape Arabic's six
+     categories need, and there is no `select` at all — so a sentence that
+     branches on direction is two keys rather than one string with a switch in
+     it. Typed keys are the point: a missing branch is a build error here and a
+     silently wrong sentence in ICU.
+  */
+  "position.rank": "#{rank} of {total}",
+  "position.not_ranked": "Not ranked",
+  "position.not_measured": "Not measured",
+  "position.not_measured_why": "We have not ranked this category since {date}.",
+  "position.not_measured_ever": "We have not ranked this category yet.",
+  "position.not_ranked_why": "You are not in this category listing today.",
+  "position.updated_nightly": "Updated nightly.",
+  "position.title": "Where you rank",
+  "position.caption": "Your position in each category listing you appear in",
+  "position.col.category": "Category",
+  "position.col.position": "Position",
+  "position.link": "Analytics",
+  "position.count": {
+    one: "One category, because you rank in one. Updated nightly.",
+    other: "{count} categories, because you rank in {count}. Updated nightly.",
+  },
+  "position.and_more": { one: "and one more", other: "and {count} more" },
+  "position.none": "You are not in a category listing yet.",
+  "position.locked": "See where you rank in each category listing, and what moved you.",
+
+  /*
+     Attribution. Three of these six say, in their first clause, that it was not
+     the seller — which is the rule the amendment exists to hold. None of them
+     carries an instruction: state 11 is the commonest fall on the board and
+     ending it with something to fix would fire an improvement prompt on a
+     decline the seller did not cause.
+  */
+  "attribution.seller.up":
+    "Rose {places} after your {factor} {trend} from {before} to {after}.",
+  "attribution.seller.down":
+    "Fell {places} after your {factor} {trend} from {before} to {after}.",
+  "attribution.places": { one: "1 place", other: "{count} places" },
+  "attribution.trend.up": "rose",
+  "attribution.trend.down": "fell",
+  /*
+     The same direction, as an adverb rather than a verb.
+
+     State 12 reads "...your measured reply time, up from 4 h to 1 d 7 h", where
+     state 08 reads "...after your measured reply time rose from...". Reusing
+     the verb produced "your measured reply time, rose from" — grammatical
+     nonsense that no test would have caught and the gallery showed at once.
+  */
+  "attribution.direction.up": "up",
+  "attribution.direction.down": "down",
+  "attribution.platform":
+    "We changed how search results are ordered on {date}. This affected every listing in the category.",
+  "attribution.commercial":
+    "Your paid boost for {category} ended on {date}. Before the boost this category was #{rank}.",
+  "attribution.commercial_unknown":
+    "Your paid boost for {category} ended on {date}. This position is the one you rank at without it.",
+  "attribution.competitor": {
+    one: "Your factors did not change. One supplier above you improved their {factor}.",
+    other: "Your factors did not change. {count} suppliers above you improved their {factor}.",
+  },
+  "attribution.multiple.up":
+    "{count} factors moved. Most of the rise was your {factor}, {trend} from {before} to {after}.",
+  "attribution.multiple.down":
+    "{count} factors moved. Most of the fall was your {factor}, {trend} from {before} to {after}.",
+  /*
+     Q2's other half, which the spec's string list did not carry a form for.
+     Where no single factor accounts for most of the movement the count stands
+     alone — naming an arbitrary one of three is worse than naming none, because
+     the seller acts on whichever one we printed.
+  */
+  "attribution.multiple.up_no_leader": "{count} factors moved, and no one of them carried the rise.",
+  "attribution.multiple.down_no_leader":
+    "{count} factors moved, and no one of them carried the fall.",
+  "attribution.unexplained": "We cannot explain this move. Factor history starts {date}.",
+
+  /* Lowercase: every one of them appears mid-sentence. */
+  "factors.relevance": "relevance to the query",
+  "factors.verificationTier": "verification tier",
+  "factors.responseTime": "measured reply time",
+  "factors.specCompleteness": "spec completeness",
+  "factors.distance": "distance from the buyer",
+  "factors.planTier": "plan tier",
+  "factors.value.tier": "tier {tier}",
+  "factors.value.ratio": "{percent}%",
+  "factors.value.multiplier": "×{multiplier}",
+  "factors.value.unmeasured": "not measured",
   "analytics.gap": "{count} buyers searched “{query}” and you have no product listed for it.",
   "analytics.gap_action": "Add one",
   "analytics.gap_if": "if you carry it.",

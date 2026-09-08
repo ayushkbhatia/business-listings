@@ -66,3 +66,14 @@ export { ReviewCard, ReviewHeldRow, type ReviewCardProps, type ReviewPhoto } fro
 // Board 1a. The directory home's two compositions.
 export { DirectorySearchBar, type DirectorySearchBarProps } from "./DirectorySearchBar";
 export { RfqPanel, TrustPanel, type RfqPanelProps, type RfqPanelRow } from "./RfqPanel";
+
+// The 3a/3l amendment. One component, two placements: the overview's category
+// position and the analytics panel's query position are different numbers that
+// have to render identically.
+export {
+  PositionValue,
+  PositionReason,
+  type PositionValueProps,
+  type PositionReasonProps,
+  type PositionState,
+} from "./Position";
