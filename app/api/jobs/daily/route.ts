@@ -5,6 +5,7 @@ import { runDunning } from "@/lib/billing/dunning-job";
 import { applyEndedCancellations } from "@/lib/billing/service";
 import { applyDueChanges } from "@/lib/billing/schedule";
 import { writeMissingInvoicePdfs } from "@/lib/billing/pdf-backfill";
+import { pruneAnalytics } from "@/lib/analytics/retention";
 import { pruneAttempts } from "@/lib/auth/attempts";
 import { LONGEST_RATE_WINDOW_MS, pruneRateLimitHits } from "@/lib/rate-limit";
 import { DRAFT_KEEP_DAYS, pruneDrafts } from "@/lib/onboarding/draft";
@@ -128,6 +129,17 @@ export async function GET(request: NextRequest) {
        `outstanding` in the result is the number an operator acts on.
     */
     invoicePdfs: () => writeMissingInvoicePdfs(),
+    /*
+       Board 3l's rollups, on a 90-day window — spec Q4.
+
+       The same argument as the three prunes below: these grow with *traffic*
+       rather than with sign-ups, and nothing else would ever delete from them.
+       Unlike `auth_attempt` the cutoff is not a security parameter — nothing
+       here identifies a person — it is how far back a seller's own screen can
+       look. Sixty days is the floor for the page's 30-against-30 comparison to
+       exist at all, so 90 is that plus a month of margin.
+    */
+    prunedAnalytics: () => pruneAnalytics(),
     async prunedAuthAttempts() {
       const pruned = await pruneAttempts(olderThan);
       return { pruned, olderThan };

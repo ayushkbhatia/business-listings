@@ -44,6 +44,7 @@ export const EVENT_NAMES = [
   "setup_done_exit",
   "setup_done_redirected",
   "listing_viewed",
+  "product_viewed",
   "inbox_viewed",
   "lead_opened",
   "quote_sent",
@@ -239,6 +240,24 @@ export const EVENT_SPECS = {
     emitter: "browser",
     session: "never",
     props: { businessId: "string" },
+  },
+
+  /*
+     Board 3l — the third funnel stage, which had no source of any kind.
+
+     `ProductEvent` is the seller's own setup telemetry and has never counted a
+     buyer looking at anything, so "viewed a product" sat between two measured
+     stages with nothing behind it.
+
+     `session: "never"` and no `businessId`, both deliberate. A product page is
+     public and most views happen before anybody signs in; the owning business is
+     read off the product server-side, because this endpoint is public and
+     nothing in a payload decides who a row belongs to.
+  */
+  product_viewed: {
+    emitter: "browser",
+    session: "never",
+    props: { productId: "string" },
   },
 
   /* ── Boards 3j and 11b ──

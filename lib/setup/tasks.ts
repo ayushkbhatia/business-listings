@@ -200,8 +200,5 @@ const DAY_PARTS = new Intl.DateTimeFormat("en-GB", {
  * live whenever it went live before 4am Dubai, and would do it silently on a
  * rail whose whole job is to say views are already arriving.
  */
-export function dubaiDayStart(instant: Date): Date {
-  const parts = DAY_PARTS.formatToParts(instant);
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return new Date(`${get("year")}-${get("month")}-${get("day")}T00:00:00.000Z`);
-}
+export { dubaiDayStart } from "@/lib/format";
+
