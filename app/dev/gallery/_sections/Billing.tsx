@@ -1,8 +1,10 @@
 import { Alert, StatusBadge } from "@/components/display";
 import { Card } from "@/components/structure";
 import { planGrid, type GridRow, type Usage } from "@/lib/billing/plan-grid";
+import type { TaxInvoiceDocument } from "@/lib/billing/tax-invoice";
 import type { PlanCaps } from "@/lib/plan/entitlements";
 import { t } from "@/lib/i18n";
+import { InvoiceSheet } from "@/app/(dashboard)/dashboard/billing/invoice/[id]/InvoiceSheet";
 import { Section, States } from "../_kit";
 
 /**
@@ -134,6 +136,94 @@ function Grid({ usage }: { usage: Usage }) {
   );
 }
 
+/** The board's own invoice. Two lines, so per-line VAT is visible. */
+const INVOICE: TaxInvoiceDocument = {
+  id: "inv_gallery",
+  ref: "BL-INV-20418",
+  docType: "tax_invoice",
+  status: "paid",
+  supplier: {
+    name: "Bearing Deployment Company, Inc",
+    addressLines: ["2261 Market Street STE 83655", "San Francisco CA 94114"],
+    trn: null,
+    incorporation: "Incorporated in Delaware, USA",
+  },
+  recipient: {
+    name: "Al Waha Industrial Supplies LLC",
+    addressLines: ["Warehouse 14, JAFZA South, Dubai"],
+    trn: "100 3882 1140 0003",
+    incorporation: null,
+  },
+  issuedOn: "14 Aug 2026",
+  suppliedOn: "14 Aug 2026",
+  supplyPeriod: "14 Aug 2026 – 13 Sep 2026",
+  placeOfSupply: "Dubai, UAE",
+  lines: [
+    {
+      id: "l1",
+      description: "Pro subscription",
+      detail: "14 Aug 2026 – 13 Sep 2026 · standard rate",
+      bookingRef: null,
+      qty: "1",
+      unitAed: "299.00",
+      rate: "5%",
+      vatAed: "14.95",
+      amountAed: "299.00",
+    },
+    {
+      id: "l2",
+      description: "Sponsored placement · Valves & actuators, Dubai",
+      detail: "14 Aug 2026 – 13 Sep 2026 · standard rate",
+      bookingRef: "PB-3391",
+      qty: "1",
+      unitAed: "1,400.00",
+      rate: "5%",
+      vatAed: "70.00",
+      amountAed: "1,400.00",
+    },
+  ],
+  totals: {
+    subtotalAed: "1,699.00",
+    vatAed: "84.95",
+    totalAed: "1,783.95",
+    stored: true,
+    currency: "AED",
+  },
+  payment: { paidOn: "14 Aug 2026", brand: "Visa", last4: "2318", bank: "Emirates NBD" },
+  references: { pspRef: "PSP-8841-20418", subscriptionRef: "SUB-4471-PRO" },
+  correctsRef: null,
+  pdf: { path: "x", bytes: 5482 },
+  delivery: [],
+  billingEmail: "accounts@alwaha.ae",
+};
+
+/** The same document, issued before the columns that hold half of it existed. */
+const LEGACY: TaxInvoiceDocument = {
+  ...INVOICE,
+  id: "inv_gallery_legacy",
+  ref: "BL-INV-19341",
+  suppliedOn: null,
+  supplyPeriod: null,
+  placeOfSupply: null,
+  lines: [
+    {
+      id: "l1",
+      description: "Pro plan, one month",
+      detail: "standard rate",
+      bookingRef: null,
+      qty: "1",
+      unitAed: null,
+      rate: null,
+      vatAed: null,
+      amountAed: "299.00",
+    },
+  ],
+  totals: { ...INVOICE.totals, stored: false, subtotalAed: "299.00", vatAed: "14.95", totalAed: "313.95" },
+  payment: null,
+  references: { pspRef: null, subscriptionRef: null },
+  pdf: null,
+};
+
 export function Billing() {
   return (
     <Section
@@ -160,6 +250,20 @@ export function Billing() {
         <StatusBadge tone="ok" shape="chip">
           {t("change.selected")}
         </StatusBadge>
+      </States>
+
+      <States label={t("gallery.billing.invoice")} stack>
+        <InvoiceSheet document={INVOICE} />
+      </States>
+
+      <States label={t("gallery.billing.invoice_partial")} stack>
+        {/*
+           An invoice issued before board 11g. It has no per-line VAT and no unit
+           price, and the sheet says `Not stored` rather than deriving figures
+           that would be indistinguishable from ones actually charged — which is
+           the whole of criterion 2.
+        */}
+        <InvoiceSheet document={LEGACY} />
       </States>
 
       <States label={t("gallery.billing.failed")} stack>

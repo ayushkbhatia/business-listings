@@ -44,6 +44,8 @@ export interface AlertsValue {
   escalateAfterMinutes: number;
   nudgeEnabled: boolean;
   nudgeAfterHours: number;
+  /** Board 11g reads this. Null falls back to the finance seat, then the owner. */
+  billingEmail: string | null;
 }
 
 /** What the working week says right now, resolved on the server. */
@@ -307,6 +309,22 @@ export function AlertsForm({ value, whatsappPending, goesTo, available, hours }:
                   label: t("alerts.nudge_option", { count }),
                 }))}
               />
+            </div>
+
+            <div>
+              <label htmlFor="billingEmail" className="mb-1.5 block text-body-sm text-ink">
+                {t("alerts.billing_email_label")}
+              </label>
+              <Input
+                id="billingEmail"
+                name="billingEmail"
+                type="email"
+                defaultValue={value.billingEmail ?? ""}
+                aria-describedby="billingEmail-hint"
+              />
+              <p id="billingEmail-hint" className="mt-1.5 text-caption text-muted">
+                {t("alerts.billing_email_hint")}
+              </p>
             </div>
           </div>
         </Panel>

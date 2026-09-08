@@ -149,6 +149,8 @@ export const en = {
   "gallery.billing.within": "Inside every plan",
   "gallery.billing.empty": "Nothing yet",
   "gallery.billing.plan_status": "Plan status",
+  "gallery.billing.invoice": "Tax invoice · A4",
+  "gallery.billing.invoice_partial": "Issued before 11g",
   "gallery.billing.failed": "Failed payment",
   "gallery.density": "Density",
   "gallery.roomy": "Roomy",
@@ -4306,7 +4308,11 @@ export const en = {
   // it is. This is the badge for the period after the seller has said so.
   "billing.status.ending_badge": "Ending",
   "billing.vat": "VAT at {rate}",
-  "billing.our_trn": "Our TRN {trn}",
+  // The issuing entity, not its TRN. Bearing Deployment Company is incorporated
+  // in Delaware and is not registered in the UAE, so it has none — and printing
+  // one it does not hold on a screen that lists tax invoices is the worst place
+  // to be wrong. Board 11g restated the entity; this line followed it.
+  "billing.issued_by": "Invoices are issued by {name}.",
   "billing.your_trn": "Your TRN {trn}",
   "billing.no_trn": "Add your TRN on the listing profile and it will appear on future invoices.",
   "billing.not_live": "No card has been charged. Payment is not connected in this environment.",
@@ -4558,6 +4564,109 @@ export const en = {
   "keep.col.branch": "Address",
   "keep.col.role": "Role",
   "keep.col.keeps": "Stays live",
+
+  // ── Board 11g · the tax invoice ───────────────────────────────────────────
+  //
+  // The only screen on the platform that is a legal document. Its rule: the
+  // render is not a preview of the document, it *is* the document — so anything
+  // that is a fact about the invoice belongs inside the sheet, and every panel
+  // beside it that will not reach the PDF says so on its face.
+  "invoice.title": "Tax invoice",
+  "invoice.title_credit": "Credit note",
+  "invoice.eyebrow": "Billing",
+  "invoice.back": "Billing",
+  "invoice.heading": "TAX INVOICE",
+  "invoice.heading_credit": "CREDIT NOTE",
+  "invoice.paid_badge": "Paid in full",
+  "invoice.issued_badge": "Issued",
+  "invoice.overdue_badge": "Overdue",
+
+  "invoice.billed_to": "Billed to",
+  // Labelled, always. The issuing entity holds no TRN, and with one tax number
+  // on a page an unlabelled one reads as the issuer's.
+  "invoice.recipient_trn": "Recipient TRN {trn}",
+  "invoice.dates_heading": "Dates & supply",
+  "invoice.date_of_issue": "Date of issue",
+  "invoice.date_of_supply": "Date of supply",
+  "invoice.supply_period": "Supply period",
+  "invoice.place_of_supply": "Place of supply",
+  "invoice.currency": "Currency",
+
+  "invoice.col.description": "Description",
+  "invoice.col.qty": "Qty",
+  "invoice.col.unit": "Unit {currency}",
+  "invoice.col.rate": "Rate",
+  "invoice.col.vat": "VAT {currency}",
+  "invoice.col.amount": "Amount {currency}",
+  "invoice.booking": "Booking {ref}",
+  "invoice.not_stored": "Not stored",
+
+  "invoice.subtotal": "Subtotal, excluding VAT",
+  "invoice.vat_total": "Total VAT payable",
+  "invoice.total": "Total payable, including VAT · {currency}",
+  "invoice.corrects": "Credit note against {ref}",
+  // The slot Q5 asked to be reserved, so a document sellers have downloaded does
+  // not have to be re-laid-out when 12e ships the correction.
+  "invoice.corrected_by": "Corrected by credit note {ref}",
+
+  "invoice.payment_heading": "Payment received",
+  "invoice.paid_on": "Paid in full on {when}",
+  "invoice.paid_card": "{brand} •••• {last4}",
+  "invoice.references_heading": "References",
+
+  "invoice.footnote": "All amounts are in {currency}. This document is a fixed record: a correction is issued as a credit note referencing {ref}, never as a change to this invoice.",
+  // A visibly marked placeholder, not invented wording. A US-registered supplier
+  // charging 5% to a UAE recipient is spec Q3, and the answer changes the
+  // heading, this footnote and possibly the VAT lines. A silently absent
+  // footnote would look like a finished document.
+  "invoice.statutory_pending": "Statutory VAT wording sits here, once the US-supplier / UAE-recipient treatment is settled.",
+  "invoice.page_foot": "Page {page} of {pages}",
+
+  // The three panels that are screen-only, and say so.
+  "invoice.not_in_pdf": "Not in the PDF",
+  "invoice.document_heading": "The document",
+  "invoice.document_note": "The PDF was written when this invoice was issued and stored. This screen renders that stored document at its printed size — A4 portrait, 210 × 297 mm.",
+  "invoice.document_file": "{ref}.pdf",
+  "invoice.document_meta": "Issued {when} · A4 · {size}",
+  "invoice.document_missing": "No PDF was stored for this invoice. The figures above are the record; the download is not available.",
+  "invoice.download": "Download PDF",
+
+  "invoice.delivery_heading": "Delivery",
+  "invoice.delivery.emailed": "Emailed to {who}",
+  "invoice.delivery.downloaded": "Downloaded by {who}",
+  "invoice.delivery.none": "Not sent or downloaded yet.",
+  "invoice.delivery.address_note": "The billing address comes from Settings. Sending a copy elsewhere does not change it.",
+  "invoice.email_to": "Email to {address}",
+  "invoice.email_none": "No billing address on file. Add one in Settings and this invoice can be sent.",
+  "invoice.emailed_ok": "Sent to {address}.",
+  "invoice.email_failed": "That did not send. Nothing has changed, and the invoice is unaffected.",
+  "invoice.email_no_sender": "Email is not connected in this environment, so nothing was sent.",
+  "invoice.email_bad_address": "That does not look like an email address.",
+  "invoice.email_other": "Send to another address",
+  "invoice.email_other_label": "Email address",
+  "invoice.email_send": "Send",
+  "invoice.email_cancel": "Cancel",
+  // The mail itself. A link rather than an attachment: the route behind it checks
+  // the capability on every read, where an attachment checks it once and then
+  // lives in a mailbox we do not control.
+  "invoice.email.subject": "Your invoice {ref}",
+  "invoice.email.body": "Your tax invoice {ref} is ready. It opens on your billing screen, where it can also be downloaded as a PDF.",
+  "invoice.email.action": "Open the invoice",
+
+  "invoice.covers_heading": "What this covers",
+  "invoice.covers_plan": "Plan",
+  // 11e owns the booking detail page and is blocked on 12c. Text with a stated
+  // reason, never a link to a route that does not exist.
+  "invoice.covers_no_page": "No page yet",
+  "invoice.covers_placement_note": "Placement booking detail is board 11e, blocked on 12c. Until it ships this line is text, not a link.",
+
+  "invoice.fixed_heading": "This document cannot be edited",
+  "invoice.fixed_body": "An issued invoice is a fixed record. A correction is a credit note raised against it, never a change to this document.",
+  "invoice.fixed_access": "Visible to the owner and finance seats only.",
+
+  // Board 7e's field, which 11g reads.
+  "alerts.billing_email_label": "Where invoices go",
+  "alerts.billing_email_hint": "Leave this empty and invoices go to your finance seat, or to you if there is not one.",
 
   // ── Team and lead routing, board 7d ───────────────────────────────────────
   "team.title": "Team",
