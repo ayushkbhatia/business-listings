@@ -236,9 +236,20 @@ test.describe("board 11j — reason and confirm", () => {
     await page.goto("/dashboard/billing/cancel/confirm");
   });
 
-  test("asks six reasons, and marks only the reason required", async ({ page }) => {
+  test("asks six reasons, in a group the question names", async ({ page }) => {
+    /*
+       The group and its name are the assertion, not decoration.
+
+       The legend started inside a wrapper div for the layout — legal markup
+       that silently costs a fieldset its caption, because a `<legend>` only
+       names its group as the **first child**. The six radios were announced as
+       loose controls with no question attached, and this locator is what found
+       it.
+    */
     await expect(page.getByRole("radio")).toHaveCount(6);
     const fieldset = page.getByRole("group", { name: /Why are you cancelling/ });
+    await expect(fieldset).toBeVisible();
+    // The required mark is on the reason and on nothing else.
     await expect(fieldset).toContainText("Required");
     await expect(page.locator("main")).toContainText(/One answer\. It does not change or delay/);
   });

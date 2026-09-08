@@ -46,7 +46,31 @@ export interface ConsequenceTableProps {
 export function ConsequenceTable({ rows, planName, freeStartsOn }: ConsequenceTableProps) {
   return (
     <Card surface="card" padded={false}>
-      <div className="overflow-x-auto">
+      {/*
+         Focusable, and that is not decoration.
+
+         The table scrolls sideways below about 42rem and it holds **no
+         interactive content at all** — no links, no buttons, twelve rows of
+         statements. A scrollable region with nothing focusable inside it cannot
+         be reached by keyboard: there is no way to put focus in it and no way to
+         scroll it, so the third column simply does not exist for somebody not
+         using a mouse. On the one screen where that column is the decision.
+
+         `11f`'s comparison grid has the same wrapper and passes, because every
+         plan header is a link — which is exactly why this had to be found by a
+         test on this screen rather than assumed from that one.
+      */}
+      <div
+        tabIndex={0}
+        role="region"
+        /*
+           Its own name, not the table's. A region and the table inside it
+           sharing one name announces the same sentence twice; this one says
+           what the focus stop is *for*, which is the only reason it exists.
+        */
+        aria-label={t("cancel.table_scroll")}
+        className="overflow-x-auto focus-visible:shadow-focus focus-visible:outline-none"
+      >
         <table className="w-full min-w-[42rem] border-collapse text-left">
           <caption className="sr-only">{t("cancel.table_caption")}</caption>
           <thead>
@@ -57,7 +81,13 @@ export function ConsequenceTable({ rows, planName, freeStartsOn }: ConsequenceTa
                  reader announces as nothing at all.
               */}
               <th scope="col" className="w-9 px-4 py-3">
-                <span className="sr-only">{t("cancel.legend_label")}</span>
+                {/*
+                   Named for what the column *is*, not for what the legend
+                   explains. The two were the same string, so a screen reader
+                   heard one sentence twice and neither answered the other's
+                   question.
+                */}
+                <span className="sr-only">{t("cancel.col.mark")}</span>
               </th>
               <th
                 scope="col"

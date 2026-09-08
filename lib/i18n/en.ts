@@ -4370,6 +4370,8 @@ export const en = {
 
   // The table. A real one — `<table>`, `<thead>`, `<th scope>`.
   "cancel.table_caption": "What changes if you cancel, area by area",
+  "cancel.table_scroll": "What changes — scroll sideways for the whole table",
+  "cancel.col.mark": "Change",
   "cancel.col.area": "Area",
   "cancel.col.now": "On {plan} now",
   "cancel.col.free": "On Free from {when}",

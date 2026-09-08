@@ -95,6 +95,7 @@ export function ReasonForm({
 }: ReasonFormProps) {
   const router = useRouter();
   const noteId = useId();
+  const legendId = useId();
   const [reason, setReason] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -138,9 +139,27 @@ export function ReasonForm({
     >
       <div className="flex min-w-0 flex-col gap-3.5">
         <Card surface="card" padded={false}>
-          <fieldset className="min-w-0 border-0 p-0">
-            <div className="flex flex-wrap items-baseline justify-between gap-3 border-b border-line px-4 py-3.5">
-              <legend className="float-left text-body font-medium text-ink">
+          <fieldset className="min-w-0 border-0 p-0" aria-labelledby={legendId}>
+            {/*
+               The legend is the fieldset's **first child**, and it has to be.
+
+               It was inside a wrapper div for the layout, which is legal markup
+               and silently costs the fieldset its caption: a `<legend>` only
+               names its group when it is the first child. The radios were
+               announced as six loose controls with no question attached, and
+               `getByRole("group", { name })` found nothing — which is how this
+               was caught rather than by reading it back.
+
+               So the layout lives on the legend itself. It is `display: block`
+               by default and takes flex like anything else.
+
+               `aria-labelledby` as well as the legend, and belt-and-braces is
+               the point: the name then comes from the question alone rather
+               than from the question plus the hint, and it no longer depends on
+               how a browser treats a legend that is laid out with flex.
+            */}
+            <legend className="flex w-full flex-wrap items-baseline justify-between gap-3 border-b border-line px-4 py-3.5">
+              <span id={legendId} className="text-body font-medium text-ink">
                 {labels.legend}{" "}
                 {/*
                    The required mark is on the reason and on nothing else. The
@@ -150,9 +169,9 @@ export function ReasonForm({
                 <span className="ml-1 align-middle font-mono text-eyebrow uppercase tracking-[0.1em] text-warn-ink">
                   {labels.required}
                 </span>
-              </legend>
-              <p className="text-caption text-muted">{labels.hint}</p>
-            </div>
+              </span>
+              <span className="text-caption text-muted">{labels.hint}</span>
+            </legend>
 
             <ul className="flex flex-col">
               {options.map((option) => (
