@@ -37,6 +37,16 @@ export interface PdfWriteResult {
   ok: boolean;
   /** True when the invoice already had one and nothing was written. */
   skipped: boolean;
+  /**
+   * Why it failed, where it did.
+   *
+   * Carried back rather than only logged. A `console.warn` in a serverless
+   * function reaches nobody, so a renewal that raised an invoice and could not
+   * store its document was a failure with no reader — the seller saw "not
+   * available" and nothing else did. The daily job puts this in its step report
+   * and `writeMissingInvoicePdfs` retries on the next run.
+   */
+  reason?: string;
 }
 
 export async function writeInvoicePdf(invoiceId: string): Promise<PdfWriteResult> {
@@ -45,7 +55,7 @@ export async function writeInvoicePdf(invoiceId: string): Promise<PdfWriteResult
     select: { id: true, businessId: true, ref: true, pdfPath: true, status: true },
   });
 
-  if (!invoice) return { ok: false, skipped: false };
+  if (!invoice) return { ok: false, skipped: false, reason: "no such invoice" };
   // Already written. The file on storage is the document; nothing re-renders it.
   if (invoice.pdfPath) return { ok: true, skipped: true };
   // A draft has no number a seller should quote and nothing to evidence.
@@ -59,18 +69,18 @@ export async function writeInvoicePdf(invoiceId: string): Promise<PdfWriteResult
      one table is exactly how they would come to disagree.
   */
   const document = await documentOf(invoice.businessId, invoice.id);
-  if (!document) return { ok: false, skipped: false };
+  if (!document) return { ok: false, skipped: false, reason: "the document did not resolve" };
 
   const { bytes } = invoicePdf(document);
   const path = invoicePdfPath(invoice.businessId, invoice.id, invoice.ref);
   const stored = await putInvoicePdf(path, bytes);
-  if (!stored) return { ok: false, skipped: false };
+  if (!stored.ok) return { ok: false, skipped: false, reason: stored.reason };
 
   await prisma.invoice.update({
     where: { id: invoice.id },
     // Both columns together, or the check constraint refuses the row: a path
     // with no size is a file nothing can report on.
-    data: { pdfPath: stored, pdfBytes: bytes.byteLength },
+    data: { pdfPath: stored.path, pdfBytes: bytes.byteLength },
   });
 
   return { ok: true, skipped: false };

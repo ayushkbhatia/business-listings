@@ -12,6 +12,7 @@ import {
   type TermQuoteResult,
 } from "@/lib/billing/service";
 import { planGrid, shortfallsOf, formatStorage, type GridRow } from "@/lib/billing/plan-grid";
+import { lastPaidDay } from "@/lib/billing/cancel-table";
 import { monthsFree, offersAnnual, periodPriceAed, type BillingTerm } from "@/lib/billing/period";
 import { FILS_PER_AED } from "@/lib/billing/proration";
 import type { PlanCaps } from "@/lib/plan/entitlements";
@@ -108,7 +109,17 @@ export default async function ChangePlanPage({
       ? "annual"
       : "monthly";
 
-  const pending = summary.pendingChange;
+  /*
+     A cancellation is a pending row in this table and is **not** a pending plan
+     change.
+
+     `11h` owns it, the banner on `3m` carries it, and offering `Withdraw` here
+     would take back half of it — the row goes, `subscription.endsAt` stays, and
+     the period end arrives with nothing scheduled to act on it. So the rail
+     states it and sends the seller to the banner, which is where resuming lives.
+  */
+  const cancelling = summary.pendingChange?.kind === "cancellation";
+  const pending = summary.pendingChange?.kind === "plan_change" ? summary.pendingChange : null;
   /*
      A pending change wins over the query string.
 
@@ -116,7 +127,7 @@ export default async function ChangePlanPage({
      withdraw it, not to schedule a second one — Q8, which the partial unique
      index enforces one layer down.
   */
-  const selectedId = pending?.toPlan.id ?? params.plan ?? null;
+  const selectedId = cancelling ? null : (pending?.toPlan.id ?? params.plan ?? null);
   const selected =
     plans.find((plan) => plan.id === selectedId && plan.id !== summary.plan.id) ?? null;
 
@@ -136,7 +147,7 @@ export default async function ChangePlanPage({
      moves the term, so the two are never quoted together.
   */
   const termQuote =
-    !selected && !pending && summary.term && term !== summary.term
+    !selected && !pending && !cancelling && summary.term && term !== summary.term
       ? await quoteTermChange(seat.actor, seat.businessId, term)
       : null;
 
@@ -165,11 +176,20 @@ export default async function ChangePlanPage({
             term={term}
             currentId={summary.plan.id}
             selectedId={selected?.id ?? null}
-            locked={Boolean(pending)}
+            locked={Boolean(pending) || cancelling}
           />
         </div>
 
-        <ChangeRail {...railProps(summary, selected, quote, termQuote, grid, term, pending)} />
+        <ChangeRail
+          {...(cancelling
+            ? {
+                state: "idle" as const,
+                intro: t("change.cancelling", {
+                  when: formatDate(lastPaidDay(summary.endsAt ?? summary.renewsAt ?? new Date())),
+                }),
+              }
+            : railProps(summary, selected, quote, termQuote, grid, term, pending))}
+        />
       </div>
     </SellerPage>
   );
@@ -507,7 +527,7 @@ function railProps(
     }));
 
   const storage = shortfalls.find((shortfall) => shortfall.key === "storage") ?? null;
-  const lastPaidDay = q.effectiveAt ? dayBefore(q.effectiveAt) : null;
+  const paidTo = q.effectiveAt ? lastPaidDay(q.effectiveAt) : null;
 
   return {
     state: q.direction,
@@ -519,7 +539,7 @@ function railProps(
         ? t("change.summary.upgrade", { plan: selected.name })
         : t("change.summary.downgrade", {
             plan: summary.plan.name,
-            when: formatDate(lastPaidDay ?? q.nextDueAt),
+            when: formatDate(paidTo ?? q.nextDueAt),
           }),
     dueTodayLabel: t("change.summary.due_today"),
     dueTodayAmount: aed(q.proration?.dueFils ?? 0),
@@ -590,8 +610,24 @@ function railProps(
       : null,
     endsEyebrow: t("change.ends.eyebrow", { plan: summary.plan.name }),
     ends: endsWith(summary, selected, q.effectiveAt),
+    /*
+       A downgrade to Free is a cancellation, and it goes through the flow that
+       records one.
+
+       This column was selectable and scheduled a plain plan change: no reason
+       asked, `cancelledAt` never set, and so no banner, no confirmation email
+       and no churn signal. Two routes to one outcome, one of which quietly
+       skipped every promise the other makes. Boards `11h` and `11j` are that
+       route, so the button goes there instead — the rail still prices the move
+       and states what ends, because that is what the seller came to read.
+    */
+    ...(selected.monthlyPriceAed === 0 && summary.term
+      ? { primaryHref: "/dashboard/billing/cancel" }
+      : {}),
     primaryLabel:
-      q.direction === "downgrade"
+      selected.monthlyPriceAed === 0 && summary.term
+        ? t("cancel.continue")
+        : q.direction === "downgrade"
         ? t("change.schedule", { plan: selected.name })
         : (q.proration?.dueFils ?? 0) > 0
           ? t("change.upgrade_now", {
@@ -601,18 +637,13 @@ function railProps(
           : t("change.upgrade_free", { plan: selected.name }),
     keepCurrentLabel: t("change.keep_current", { plan: summary.plan.name }),
     withdrawLabel: t("change.withdraw"),
-    withdrawNote: lastPaidDay ? t("change.withdraw_note", { when: formatDate(lastPaidDay) }) : null,
+    withdrawNote: paidTo ? t("change.withdraw_note", { when: formatDate(paidTo) }) : null,
     // Posted back and re-verified against a fresh quote. A number shown on a
     // button is a promise — criterion 7.
     dueFils: q.proration?.dueFils ?? 0,
     isPending: Boolean(pending),
     providerNote: q.providerIsLive ? null : t("change.provider_not_live"),
   };
-}
-
-/** `13 Sep` for a change effective on the 14th — the last day of what was paid for. */
-function dayBefore(date: Date): Date {
-  return new Date(date.getTime() - 86_400_000);
 }
 
 /** Whole days in the period, for `24 of 31 days`. */

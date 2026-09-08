@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 /**
- * Boards 3l, 3m, 7d, 11e, 11f, 11g and 11h, signed in as a seller.
+ * Boards 3l, 3m, 7d, 11e, 11f, 11g, 11h and 11j, signed in as a seller.
  *
  * Criteria 9 and 10 are proved in tests/integration — they are claims about
  * what services refuse and what they write, and a browser is the wrong
@@ -158,31 +158,146 @@ test.describe("board 11g — tax invoice", () => {
 });
 
 /*
-   The cancel screen is board `11h` now, and the reason step is `11j`. Neither is
-   exported, so the screen here is the one built in #12 and what it says is
-   governed by the entry point on `3m` — which states the same three things and
-   is written as a constraint on those boards so they cannot contradict it.
-*/
-test.describe("board 11h — cancel", () => {
-  test("answers the three things a seller is afraid of", async ({ page }) => {
-    await page.goto("/dashboard/billing/cancel");
+   Boards `11h` and `11j` — two routes, one flow, one spec.
 
-    const kept = page.getByRole("region", { name: "What you keep" });
-    await expect(kept).toContainText(/hidden, not deleted/);
-    await expect(kept).toContainText(/Every review stays/);
-    await expect(kept).toContainText(/verification badge stays/);
+   Nothing here confirms a cancellation. The seed rows are shared and this
+   seller is the fixture for four other blocks in this file; a spec that
+   actually cancelled would leave the account on Free and take the plan-change
+   grid, the invoice list and the tax-invoice block down with it. What is
+   asserted is everything up to the button, which is where the wording is.
+*/
+test.describe("board 11h — cancel, step 1", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/dashboard/billing/cancel");
+  });
+
+  test("the consequence table is the screen, and it is a real table", async ({ page }) => {
+    const table = page.getByRole("table", { name: /What changes if you cancel/ });
+    await expect(table).toBeVisible();
+    // Twelve areas plus the header row. Storage and CSV import are two of them,
+    // and the board omitted both while claiming to cover every area.
+    await expect(table.getByRole("row")).toHaveCount(13);
+    await expect(table.getByRole("rowheader", { name: "Storage" })).toBeVisible();
+    await expect(table.getByRole("rowheader", { name: "CSV import" })).toBeVisible();
+  });
+
+  test("dates the third column rather than heading it `on Free`", async ({ page }) => {
+    // Criterion 1: every consequence is dated, and the date comes from the
+    // period end rather than from anything written down.
+    await expect(
+      page.getByRole("columnheader", { name: /On Free from \d/ }),
+    ).toBeVisible();
+  });
+
+  test("gives the marks a key, so meaning never rests on colour", async ({ page }) => {
+    // Criterion 4, and the board's own eleventh correction: three colours and
+    // no legend made colour the only carrier of the table's meaning.
+    const legend = page.getByRole("list", { name: /What the marks mean/ });
+    await expect(legend).toContainText("Unchanged");
+    await expect(legend).toContainText(/Reduced/);
+    await expect(legend).toContainText("Ends");
+  });
+
+  test("says the paid period is not shortened and nothing is paid back", async ({ page }) => {
+    // Criterion 2, on both steps. The board never mentioned the paid period at
+    // all, on a screen whose whole subject is what happens and when.
+    await expect(page.locator("main")).toContainText(/not shortened and the unused part is not paid back/);
+  });
+
+  test("says who picks what stays live, and what happens if nobody does", async ({ page }) => {
+    // The board said "you pick which" three times and offered no picker. The
+    // choice is dated now, and build note B2 is the second sentence.
+    await expect(page.locator("main")).toContainText(/picker opens when you confirm/);
+    await expect(page.locator("main")).toContainText(/the oldest stay live/);
+  });
+
+  test("names the fork without linking to a route that does not exist", async ({ page }) => {
+    // Build note B5. `11i` is not drawn and is blocked; a live link to it is
+    // the defect corrected on `11d` and `11g`.
+    await expect(page.locator("main")).toContainText(/Closing the account removes it altogether/);
+    await expect(page.locator('main a[href*="/account/close"]')).toHaveCount(0);
   });
 
   test("makes no retention offer", async ({ page }) => {
-    await page.goto("/dashboard/billing/cancel");
-    // Board 11f is explicit. A discount at the moment somebody leaves buys a
-    // month and costs the only honest signal we get.
+    // Wave 4 ruled them out. The 86-vs-3 panel is the seller's own count from
+    // their own account, which is evidence rather than an offer.
     const text = (await page.locator("main").textContent()) ?? "";
-    expect(text).not.toMatch(/discount|special offer|wait!|are you sure/i);
+    expect(text).not.toMatch(/discount|special offer|wait!|are you sure|stay with us/i);
   });
 
   test("is axe clean", async ({ page }) => {
-    await page.goto("/dashboard/billing/cancel");
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+test.describe("board 11j — reason and confirm", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/dashboard/billing/cancel/confirm");
+  });
+
+  test("asks six reasons, in a group the question names", async ({ page }) => {
+    /*
+       The group and its name are the assertion, not decoration.
+
+       The legend started inside a wrapper div for the layout — legal markup
+       that silently costs a fieldset its caption, because a `<legend>` only
+       names its group as the **first child**. The six radios were announced as
+       loose controls with no question attached, and this locator is what found
+       it.
+    */
+    await expect(page.getByRole("radio")).toHaveCount(6);
+    const fieldset = page.getByRole("group", { name: /Why are you cancelling/ });
+    await expect(fieldset).toBeVisible();
+    // The required mark is on the reason and on nothing else.
+    await expect(fieldset).toContainText("Required");
+    await expect(page.locator("main")).toContainText(/One answer\. It does not change or delay/);
+  });
+
+  test("blocks confirming until a reason is picked, and never on the box", async ({ page }) => {
+    // Criterion 6. The free-text box is optional and stays optional.
+    const confirm = page.getByRole("button", { name: /Cancel from / });
+    await expect(confirm).toBeDisabled();
+
+    await page.getByRole("radio", { name: "Too expensive for what we use" }).check();
+    await expect(confirm).toBeEnabled();
+  });
+
+  test("makes the box required under `Something else`, and says so on the option", async ({ page }) => {
+    await expect(page.locator("main")).toContainText(/the box below becomes required/);
+
+    await page.getByRole("radio", { name: "Something else" }).check();
+    const confirm = page.getByRole("button", { name: /Cancel from / });
+    await expect(confirm).toBeDisabled();
+
+    await page.getByRole("textbox").fill("We are merging with another supplier.");
+    await expect(confirm).toBeEnabled();
+  });
+
+  test("turns the closing reason into a fork that cancels nothing", async ({ page }) => {
+    // Criterion 7. The confirm button is replaced rather than relabelled, and
+    // it is inert because `11i` does not exist.
+    await page.getByRole("radio", { name: /The business is closing/ }).check();
+    await expect(page.getByRole("button", { name: /Cancel from / })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Continue to close account" })).toBeDisabled();
+  });
+
+  test("restates step 1 under the date, with one back label", async ({ page }) => {
+    // The board headed these `WHAT YOU CONFIRMED` above four things the seller
+    // had only read, and gave one destination two labels.
+    await expect(page.locator("aside")).toContainText(/What happens on \d/);
+    const backs = page.getByRole("link", { name: "What changes" });
+    await expect(backs.first()).toBeVisible();
+  });
+
+  test("names the invoice that will not be raised", async ({ page }) => {
+    // It reconciles with `3m` because both read one figure. A screen naming a
+    // different total from the billing page is the defect that pair was drawn
+    // to fix.
+    await expect(page.locator("aside")).toContainText(/next invoice would have been AED [\d,]+\.\d\d/);
+  });
+
+  test("is axe clean", async ({ page }) => {
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
   });

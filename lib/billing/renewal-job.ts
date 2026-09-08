@@ -4,6 +4,8 @@ import { paymentProvider } from "./provider";
 import { advance, periodPriceAed, type BillingTerm } from "./period";
 import { aedToFils } from "./mrr";
 import { filsToAed } from "./proration";
+import { issueInvoice } from "./invoice";
+import { writeInvoicePdf } from "./issue-pdf";
 import { onSubscriptionRenewed } from "@/lib/notify/events";
 
 /**
@@ -50,6 +52,18 @@ export interface RenewalResult {
    * considered is otherwise indistinguishable from a job that is broken.
    */
   skippedNoProvider: number;
+  /**
+   * Renewal invoices whose PDF was written, and whose write failed.
+   *
+   * Reported rather than logged. `putInvoicePdf` returns null on a storage
+   * failure and warns to a console nobody reads — which is honest on the screen,
+   * where a null `pdfPath` renders as "the document is not available", and
+   * invisible in production, where the console is a serverless function's
+   * stderr. A step report is the thing an operator actually looks at, and
+   * `writeMissingInvoicePdfs` is what picks the failures up on the next run.
+   */
+  pdfsWritten: number;
+  pdfsFailed: number;
   ranAt: Date;
 }
 
@@ -80,6 +94,8 @@ export async function runRenewals(now: Date = new Date()): Promise<RenewalResult
   let renewed = 0;
   let failed = 0;
   let skippedNoProvider = 0;
+  let pdfsWritten = 0;
+  let pdfsFailed = 0;
 
   for (const subscription of due) {
     const term = subscription.term as BillingTerm;
@@ -195,7 +211,7 @@ export async function runRenewals(now: Date = new Date()): Promise<RenewalResult
         },
       });
 
-      if (count === 0) return false;
+      if (count === 0) return null;
 
       await tx.paymentAttempt.create({
         data: {
@@ -206,30 +222,64 @@ export async function runRenewals(now: Date = new Date()): Promise<RenewalResult
         },
       });
 
-      await tx.invoice.create({
-        data: {
-          ref: reference,
-          businessId: subscription.businessId,
-          status: "issued",
-          issuedAt: now,
-          lines: {
-            create: [
-              {
-                kind: "subscription",
-                description,
-                amountAed: filsToAed(periodFils),
-              },
-            ],
-          },
-        },
-      });
+      /*
+         Through `issueInvoice`, not a bare `create`. Board 11g, arriving late.
 
-      return true;
+         This wrote the invoice by hand: four columns, one line, and none of
+         what 11g made an invoice mean — no stored totals, so every reader
+         re-derived them and criterion 2 stopped holding on exactly the invoices
+         the platform raises most; no supplier or recipient snapshot, so a
+         rename rewrote history; no VAT per line, no supply dates, no
+         `subscriptionRef`. Nothing was wrong with it before 11g and nothing
+         updated it after.
+
+         The reference is still the deterministic one this file mints, because
+         that is what a provider's record is matched back to — `issueInvoice`
+         takes it rather than pulling a sequence number.
+      */
+      const issued = await issueInvoice(
+        {
+          businessId: subscription.businessId,
+          ref: reference,
+          issuedAt: now,
+          // The charge already succeeded; this is a receipt, not a demand.
+          paidAt: now,
+          pspRef: charge.providerRef ?? null,
+          subscriptionRef: subscription.id,
+          lines: [
+            {
+              kind: "subscription",
+              description,
+              fils: periodFils,
+              // The period this line covers. `renewsAt` was the old end and is
+              // the new start, which is exactly the period being charged for.
+              periodStart: subscription.renewsAt,
+              periodEnd: nextRenewsAt,
+            },
+          ],
+        },
+        tx,
+      );
+
+      return issued.id;
     });
 
     if (!moved) continue;
 
     renewed += 1;
+
+    /*
+       The PDF, after the transaction and never inside it.
+
+       Object storage is a network call to a different system and holding a
+       write transaction open across one is how a slow bucket becomes a database
+       incident. The failure modes point opposite ways too: an invoice without
+       its PDF is recoverable and the screen says so, while money moved with no
+       invoice row is not.
+    */
+    const pdf = await writeInvoicePdf(moved);
+    if (pdf.ok) pdfsWritten += 1;
+    else pdfsFailed += 1;
 
     /*
        The receipt, after the transaction rather than inside it.
@@ -247,5 +297,5 @@ export async function runRenewals(now: Date = new Date()): Promise<RenewalResult
     });
   }
 
-  return { considered: due.length, renewed, failed, skippedNoProvider, ranAt: now };
+  return { considered: due.length, renewed, failed, skippedNoProvider, pdfsWritten, pdfsFailed, ranAt: now };
 }

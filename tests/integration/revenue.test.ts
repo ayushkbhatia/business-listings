@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { applyEndedCancellations, cancelSubscription, changePlan } from "@/lib/billing/service";
+import { applyEndedCancellations, changePlan } from "@/lib/billing/service";
+import { scheduleCancellation } from "@/lib/billing/cancellation";
 import type { Actor } from "@/lib/auth/roles";
 import { mrrByMonth, mrrNow, reconcile, waterfall, MRR_KINDS } from "@/lib/billing/revenue";
 import { classify } from "@/lib/billing/mrr";
@@ -106,7 +107,9 @@ describe("every writer records, and the four are the whole list", () => {
 
     // Cancelling is not churn. The seller keeps what they paid for until the
     // period ends, and the money does not stop until it does.
-    const cancelled = await cancelSubscription(actor, businessId);
+    const cancelled = await scheduleCancellation(actor, businessId, {
+      reason: "not_enough_enquiries",
+    });
     expect(cancelled.ok).toBe(true);
     expect(await prisma.mrrMovement.count({ where: { businessId } })).toBe(2);
 
@@ -139,7 +142,7 @@ describe("every writer records, and the four are the whole list", () => {
     const { businessId, actor } = await freeListing();
 
     await changePlan(actor, businessId, "basic");
-    await cancelSubscription(actor, businessId);
+    await scheduleCancellation(actor, businessId, { reason: "not_enough_enquiries" });
     await prisma.subscription.update({
       where: { businessId },
       data: { endsAt: new Date(Date.now() - 60_000) },

@@ -1,7 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { PermissionError } from "@/lib/auth/errors";
-import { cancelSubscription, changePlan, invoicesFor, quotePlanChange } from "@/lib/billing/service";
+import { changePlan, invoicesFor, quotePlanChange } from "@/lib/billing/service";
+import { scheduleCancellation } from "@/lib/billing/cancellation";
 import { requestModeratedChange, saveProfile } from "@/lib/listing/service";
 import { applyImport } from "@/lib/import/service";
 import type { Actor } from "@/lib/auth/roles";
@@ -64,7 +65,9 @@ describe("criterion 9 — a sales seat is refused, server-side", () => {
   });
 
   it("cannot cancel the subscription", async () => {
-    await expect(cancelSubscription(sales, businessId)).rejects.toThrow(PermissionError);
+    await expect(
+      scheduleCancellation(sales, businessId, { reason: "too_expensive" }),
+    ).rejects.toThrow(PermissionError);
   });
 
   it("cannot read invoices", async () => {

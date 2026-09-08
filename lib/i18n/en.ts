@@ -148,6 +148,9 @@ export const en = {
   "gallery.billing.over": "Over the cap",
   "gallery.billing.within": "Inside every plan",
   "gallery.billing.empty": "Nothing yet",
+  "gallery.cancel.over": "11h — what changes, over the Free cap on every meter",
+  "gallery.cancel.within": "11h — a seller Free already holds everything of",
+  "gallery.cancel.empty": "11h — cold start: nothing stored, nothing booked",
   "gallery.billing.plan_status": "Plan status",
   "gallery.billing.invoice": "Tax invoice · A4",
   "gallery.billing.invoice_partial": "Issued before 11g",
@@ -4339,21 +4342,177 @@ export const en = {
   "change.back": "Back to subscription",
   "change.done": "You are on {plan}.",
 
+  // ── Boards 11h + 11j · cancel subscription ────────────────────────────────
+  //
+  // Two routes, one flow, and one rule underneath both: **nothing is taken away
+  // on the day the seller cancels.** The period that was paid for runs to its
+  // end and is neither shortened nor paid back; Free starts the morning after.
+  // So every consequence here is dated, and every date on both screens derives
+  // from one value — the renewal moment. There is no literal date in this file.
+  //
+  // The `ON FREE` column is the same: no cap is written down. Every figure
+  // comes through `capFor` from the plan-limit config, which is what makes
+  // `2e`, `1l`, `3m`, `11f` and this screen able to disagree about nothing.
+  // This is the only one of the five where a seller acts on the numbers
+  // irreversibly, which is why the placeholders had to be resolved first.
+  //
+  // The old single-step form's strings are gone, and two of them are why: the
+  // free-tier caps were spelled out in a sentence — "3 enquiries a month, 10
+  // products, 1 location and 2 seats" — and the seat figure was wrong as well
+  // as hardcoded. `11f`'s Free column says one seat.
+
   "cancel.title": "Cancel subscription",
-  "cancel.intro": "You are on {plan} until {when}. Nothing changes before then.",
-  "cancel.kept_heading": "What you keep",
-  "cancel.kept.listing": "Your listing stays live on Free, at the same address.",
-  "cancel.kept.products": "Your products are hidden, not deleted. They come back if you return.",
-  "cancel.kept.reviews": "Every review stays exactly as it is.",
-  "cancel.kept.badge": "Your verification badge stays. It records what we checked, and cancelling does not un-check it.",
-  "cancel.lost_heading": "What you lose on {when}",
-  "cancel.lost.extra_seats": "Team seats beyond the two Free includes.",
-  "cancel.lost.ranking": "Your ranking boost in search.",
-  "cancel.lost.placement": "Any sponsored placement.",
-  "cancel.free_caps": "Free allows 3 enquiries a month, 10 products, 1 location and 2 seats.",
-  "cancel.confirm": "Cancel my subscription",
-  "cancel.keep": "Keep my subscription",
-  "cancel.done": "Cancelled. You are on {plan} until {when}.",
+  "cancel.steps_label": "Cancelling your subscription",
+  "cancel.step.changes": "What changes",
+  "cancel.step.reason": "Reason & confirm",
+  "cancel.back.billing": "Billing",
+  "cancel.back.changes": "What changes",
+
+  // The table. A real one — `<table>`, `<thead>`, `<th scope>`.
+  "cancel.table_caption": "What changes if you cancel, area by area",
+  "cancel.table_scroll": "What changes — scroll sideways for the whole table",
+  "cancel.col.mark": "Change",
+  "cancel.col.area": "Area",
+  "cancel.col.now": "On {plan} now",
+  "cancel.col.free": "On Free from {when}",
+
+  // The legend is part of the table. Three colours with no key made colour the
+  // only carrier of the table's meaning; these are the shapes' names, and they
+  // are also each row's accessible text.
+  "cancel.legend_label": "What the marks mean",
+  "cancel.mark.unchanged": "Unchanged",
+  "cancel.mark.reduced": "Reduced — the rest is stored, not deleted",
+  "cancel.mark.ends": "Ends",
+
+  "cancel.row.listing": "Listing & badge",
+  "cancel.row.products": "Products",
+  "cancel.row.branches": "Branches",
+  "cancel.row.seats": "Team seats",
+  "cancel.row.storage": "Storage",
+  "cancel.row.enquiries": "Enquiries",
+  "cancel.row.csv_import": "CSV import",
+  "cancel.row.custom_domain": "Custom domain",
+  "cancel.row.sponsored": "Sponsored placement",
+  "cancel.row.analytics": "Analytics",
+  "cancel.row.reviews": "Reviews & replies",
+  "cancel.row.invoices": "Invoices & documents",
+
+  "cancel.now.listing": "Live",
+  "cancel.now.listing_verified": "Live · Licence verified",
+  "cancel.now.products": "{used} live",
+  "cancel.now.branches": "{used} published",
+  "cancel.now.seats": "{used} with access",
+  "cancel.now.storage": "{used} used",
+  "cancel.now.storage_none": "Nothing stored",
+  "cancel.now.enquiries_unlimited": "Unlimited · {last} last month",
+  "cancel.now.enquiries": "{cap} a month · {last} last month",
+  "cancel.now.csv_import": "Available",
+  "cancel.now.csv_import_used": "Available · last used {when}",
+  "cancel.now.custom_domain_none": "Not in use",
+  "cancel.now.sponsored": "Top slot · {what}",
+  "cancel.now.sponsored_none": "None booked",
+  "cancel.now.analytics": "Full history",
+  "cancel.now.reviews": "{count} reviews, full history",
+  "cancel.now.reviews_none": "None yet",
+  "cancel.now.invoices": "All available",
+
+  // The badge follows the licence, not the plan. First row, because it is the
+  // question sellers actually ask.
+  "cancel.free.listing": "Unchanged — your listing stays in the directory",
+  "cancel.free.listing_verified": "Unchanged — the badge follows your licence, not your plan",
+  "cancel.free.holds_all": "Unchanged",
+  // The verb agrees with Free, which is always one thing, rather than with the
+  // number — which is the seller's and changes. The board drew `1 stays
+  // published` and `2 keeps access` against its own figures, and both are wrong
+  // at any other cap: this screen renders whatever the config holds.
+  "cancel.free.products_lead": "Keeps {keeps} live",
+  "cancel.free.products": "{rest} stored, not deleted",
+  "cancel.free.branches_lead": "Keeps {keeps} published",
+  "cancel.free.branches": "{rest} stored",
+  "cancel.free.seats_lead": "Keeps {keeps} with access",
+  "cancel.free.seats": "{rest} revoked",
+  "cancel.free.storage": "{over} over, nothing deleted",
+  "cancel.free.enquiries_lead": "{cap} a month",
+  "cancel.free.enquiries": "the enquiry form then closes until the next month",
+  "cancel.free.csv_import": "No access · products edited one at a time",
+  "cancel.free.custom_domain": "Stops resolving · storefront stays at {url}",
+  "cancel.free.sponsored": "Runs to the end of its own term",
+  "cancel.free.sponsored_term": "Runs to {when} under its own term",
+  "cancel.free.analytics": "No access — your data is kept",
+
+  // The choice is scheduled, not made now: the picker opens on confirming and
+  // closes on the last paid day. It is `11f`'s mechanism, unchanged.
+  "cancel.picker_note": "Which products, which branch and which seat stay live are yours to choose. The picker opens when you confirm and closes {when}.",
+  "cancel.picker_default": "If you choose nothing, the oldest stay live and the rest are stored.",
+  "cancel.today_note": "Nothing changes today, and nothing is charged today. {plan} is paid to {paidTo} and runs to {paidTo}: that period is not shortened and the unused part is not paid back. Once you confirm, you can resume {plan} any time before {paidTo}.",
+  "cancel.nothing_reduced": "Free holds everything you have live today, so nothing is unlisted and nothing is stored away.",
+
+  // Evidence, dated, from the seller's own account. Not a retention offer: wave
+  // 4 ruled out discounts, pauses and counter-offers, and it did not rule out
+  // telling somebody what the plan they are leaving actually did.
+  "cancel.evidence": "Last month {plan} brought you {last} enquiries. On Free you would have received {free} of them.",
+  "cancel.keep_eyebrow": "What you keep",
+  "cancel.keep.listing": "A live listing at the same address, with the badge your licence earned.",
+  "cancel.keep.stored": "Every product, branch and photo — stored, not deleted.",
+  "cancel.keep.history": "Reviews, replies, enquiry history and invoices.",
+  "cancel.keep_plan": "Keep {plan}",
+  "cancel.continue": "Continue to cancel",
+
+  // The fork. `11i` is not drawn and is blocked, so the difference is stated
+  // and nothing links anywhere — a live link to a route that does not exist is
+  // the defect corrected on `11d` and `11g`.
+  "cancel.closing_eyebrow": "Closing the business instead?",
+  "cancel.closing_body": "Cancelling leaves your listing in the directory on Free. Closing the account removes it altogether.",
+  "cancel.closing_blocked": "Closing an account is not something you can do here yet. Ask us and we will do it for you.",
+
+  "cancel.if_confirm_eyebrow": "If you confirm",
+  "cancel.if_confirm.email": "A confirmation email to {email}, with the date Free starts.",
+  "cancel.if_confirm.email_none": "A confirmation email, once a billing address is set in Settings.",
+  "cancel.if_confirm.banner": "A Cancellation scheduled banner on Billing until {when}, with Resume {plan} on it.",
+
+  // Step 2. The reason is required and the box never is, except under
+  // `Something else` — where the box is the only place the reason can exist.
+  "cancel.reason.legend": "Why are you cancelling?",
+  "cancel.reason.required": "Required",
+  "cancel.reason.hint": "One answer. It does not change or delay the cancellation.",
+  "cancel.reason.too_expensive": "Too expensive for what we use",
+  "cancel.reason.not_enough_enquiries": "Not enough enquiries to justify it",
+  "cancel.reason.poor_quality_enquiries": "The enquiries we got were poor quality",
+  "cancel.reason.another_platform": "We use another platform instead",
+  "cancel.reason.business_closing": "The business is closing, or our licence has lapsed",
+  "cancel.reason.business_closing_note": "Cancelling leaves your listing in the directory on Free. Closing removes it. Choose this and the button below becomes Continue to close account — nothing is cancelled from this screen.",
+  "cancel.reason.something_else": "Something else",
+  "cancel.reason.something_else_note": "Choose this and the box below becomes required — it is the only place the reason can be recorded.",
+
+  "cancel.note.label": "What would have kept you on {plan}?",
+  "cancel.note.optional": "Optional",
+  "cancel.note.required": "Required",
+  "cancel.note.placeholder": "Answering does not change the cancellation or delay it, and confirming is never blocked on this box.",
+  "cancel.note.required_hint": "You picked Something else, so this is where the reason goes.",
+  "cancel.note.counter": "{used} of {limit}",
+
+  "cancel.happens_eyebrow": "What happens on {when}",
+  "cancel.dates_eyebrow": "Dates",
+  "cancel.dates.period": "{plan} is paid to {paidTo} and runs to {paidTo}. That period is not shortened and the unused part is not paid back. Free starts {freeFrom}.",
+  "cancel.dates.invoice": "Your next invoice would have been {amount} on {when}. It will not be raised.",
+  "cancel.dates.placement": "The sponsored placement runs to {when} under its own term.",
+  "cancel.confirm": "Cancel from {when}",
+  "cancel.confirm_closing": "Continue to close account",
+  "cancel.resume_note": "You can resume {plan} any time before {when}.",
+  "cancel.get_eyebrow": "What you get",
+  "cancel.get.email": "A confirmation email to {email}.",
+  "cancel.get.banner": "A Cancellation scheduled banner on Billing, with Resume {plan} and the picker on it. This route stops being reachable.",
+
+  "cancel.error.no_reason": "Pick a reason first. It is the one thing we ask for, and it does not change or delay the cancellation.",
+  "cancel.error.note_required": "You picked Something else, so the box below is where the reason goes.",
+  "cancel.error.already": "That subscription is already ending. Billing shows the date and how to resume.",
+  "cancel.error.none": "There is no subscription to cancel.",
+  "cancel.error.closing": "Closing an account is a different thing, and it is not built yet. Nothing was cancelled.",
+  "cancel.done": "Cancelled. {plan} runs to {paidTo} and Free starts {freeFrom}.",
+
+  "cancel.email.subject": "Your subscription is scheduled to end",
+  "cancel.email.body": "Your plan is paid to {paidTo} and runs to {paidTo}. Free starts {freeFrom}. Nothing is deleted, and you can resume any time before then.",
+  "cancel.email.action": "Open billing",
 
   // ── Board 3m · subscription and billing ───────────────────────────────────
   //
@@ -4425,6 +4584,20 @@ export const en = {
   "billing.scheduled.review": "Review or withdraw",
   "billing.cancelling.banner": "Your subscription ends on {when}. Until then nothing changes.",
   "billing.cancelling.resume": "Resume {plan}",
+  // The amendment board 11h needed. The banner said when the subscription ended
+  // and offered `Resume Pro`, and that was all — so "you pick which stay live",
+  // which `3m` and `11h` both promise, was a sentence with nowhere to act on it.
+  "billing.cancelling.choose_intro": "Choose what stays live on Free. Open until {when}; after that the oldest stay.",
+  "billing.cancelling.choose": "Choose",
+  // No verb, so the line reads the same at one as at ten. `1 of 6 branches stay
+  // published` was the first render of this panel, and a plural verb over a
+  // singular subject is the kind of wrongness a seller reads as carelessness on
+  // the screen where they are deciding what to lose.
+  "billing.cancelling.keeps.products": "Products live on Free: {keeps} of {used}",
+  "billing.cancelling.keeps.locations": "Branches published on Free: {keeps} of {used}",
+  "billing.cancelling.keeps.seats": "Seats with access on Free: {keeps} of {used}",
+  "billing.cancelling.chosen": "{count} chosen",
+  "billing.cancelling.not_chosen": "Not chosen yet — the oldest stay",
   "billing.resumed": "Back on {plan}. Your next payment is {when}.",
 
   // The state neither board had, and the most consequential one on a billing
@@ -4532,6 +4705,8 @@ export const en = {
   "change.keep_current": "Keep {plan}",
   "change.withdraw_note": "Withdraw any time before {when}.",
   "change.scheduled_already": "You are already moving to {plan} on {when}. Withdraw that first to choose something else.",
+  "change.cancelling_first": "Your subscription is already ending. Resume it on Billing first, then change the plan.",
+  "change.cancelling": "You have a cancellation scheduled. Your plan runs to {when}, and Billing is where you resume it or choose what stays live on Free.",
   "change.withdraw": "Withdraw the change",
   "change.withdrawn": "Withdrawn. You stay on {plan}.",
   "change.scheduled": "Scheduled. You move to {plan} on {when}, and nothing changes before then.",

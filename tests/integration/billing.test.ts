@@ -1,9 +1,9 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
+import { scheduleCancellation } from "@/lib/billing/cancellation";
 import { Prisma } from "@/lib/db/generated/client";
 import {
   applyEndedCancellations,
-  cancelSubscription,
   changePlan,
   quotePlanChange,
 } from "@/lib/billing/service";
@@ -321,11 +321,38 @@ describe("criterion 10 — entitlements move with an upgrade, on payment", () =>
 });
 
 describe("criterion 10 — cancel is at period end, and keeps what it says", () => {
+  /** Boards 11h and 11j: the reason is required, so every cancellation has one. */
+  const cancel = () =>
+    scheduleCancellation(actor, businessId, { reason: "not_enough_enquiries" });
+
   afterEach(async () => {
+    /*
+       The plan goes back too, and that is not tidying.
+
+       Two of these tests let the period end arrive, so `applyEndedCancellations`
+       moves the account to Free — and a subscription on a plan that costs
+       nothing has nothing to cancel, which the next test would then be doing.
+       The row it would write goes from Free to Free, and
+       `subscription_change_moves` refuses it: a change that goes nowhere is a
+       row nothing should have written.
+    */
     await prisma.subscription.updateMany({
       where: { businessId },
-      data: { cancelledAt: null, endsAt: null, status: "active" },
+      data: {
+        cancelledAt: null,
+        endsAt: null,
+        status: "active",
+        planId: originalSubscription?.planId ?? "pro",
+      },
     });
+    await prisma.business.update({
+      where: { id: businessId },
+      data: { planId: originalPlanId },
+    });
+    // The cancellation and its row are written together and have to be cleared
+    // together, or the next test finds a pending change the index refuses a
+    // second of.
+    await prisma.subscriptionChange.deleteMany({ where: { businessId } });
   });
 
   it("does not take anything away on the day it is clicked", async () => {
@@ -334,7 +361,7 @@ describe("criterion 10 — cancel is at period end, and keeps what it says", () 
       select: { renewsAt: true, planId: true },
     });
 
-    const result = await cancelSubscription(actor, businessId);
+    const result = await cancel();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
 
@@ -348,23 +375,56 @@ describe("criterion 10 — cancel is at period end, and keeps what it says", () 
     expect(after.endsAt?.toISOString()).toBe(subscription.renewsAt.toISOString());
   });
 
-  it("names what is kept, and it is the longer list", async () => {
-    // Everything a seller fears about cancelling is in this list.
-    const result = await cancelSubscription(actor, businessId);
+  it("records the reason, and the choice has somewhere to be recorded", async () => {
+    /*
+       Board 11j, and the thing the old single-step cancel had nowhere to put.
+
+       The reason is the only churn signal the product gets — `4g` and `12d` are
+       the readers — and the pending row is also what carries the seller's
+       *"which ten products stay live"* picks. One row, both jobs, which is why
+       cancelling reuses `11f`'s table rather than a second mechanism.
+    */
+    const result = await cancel();
     expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.summary.kept).toEqual(["listing", "products", "reviews", "badge"]);
-    expect(result.summary.kept.length).toBeGreaterThan(result.summary.lost.length);
+
+    const change = await prisma.subscriptionChange.findFirstOrThrow({
+      where: { businessId, appliedAt: null, withdrawnAt: null },
+      select: { kind: true, cancelReason: true, toPlanId: true, effectiveAt: true },
+    });
+    expect(change.kind).toBe("cancellation");
+    expect(change.cancelReason).toBe("not_enough_enquiries");
+    expect(change.toPlanId).toBe("free");
   });
 
   it("refuses to cancel twice", async () => {
-    await cancelSubscription(actor, businessId);
-    const again = await cancelSubscription(actor, businessId);
-    expect(again).toEqual({ ok: false, error: "That subscription is already ending." });
+    await cancel();
+    const again = await cancel();
+    expect(again).toEqual({ ok: false, error: "already_cancelling" });
+  });
+
+  it("refuses without a reason, and refuses the closing fork outright", async () => {
+    // Criterion 6 and criterion 7. Both are claims about what the *service*
+    // refuses, not about which button was grey.
+    expect(
+      await scheduleCancellation(actor, businessId, { reason: "nonsense" as never }),
+    ).toEqual({ ok: false, error: "bad_reason" });
+    expect(
+      await scheduleCancellation(actor, businessId, { reason: "business_closing" }),
+    ).toEqual({ ok: false, error: "closing_is_not_a_cancellation" });
+    expect(
+      await scheduleCancellation(actor, businessId, { reason: "something_else", note: "  " }),
+    ).toEqual({ ok: false, error: "note_required" });
+
+    // And none of the three cancelled anything.
+    const subscription = await prisma.subscription.findUniqueOrThrow({
+      where: { businessId },
+      select: { cancelledAt: true },
+    });
+    expect(subscription.cancelledAt).toBeNull();
   });
 
   it("drops to Free only once the period has run out", async () => {
-    await cancelSubscription(actor, businessId);
+    await cancel();
     // Nothing due yet.
     expect(await applyEndedCancellations(new Date())).toMatchObject({ dropped: 0 });
 
@@ -393,7 +453,7 @@ describe("criterion 10 — cancel is at period end, and keeps what it says", () 
     ).verificationTier;
 
     await prisma.product.updateMany({ where: { businessId }, data: { status: "live" } });
-    await cancelSubscription(actor, businessId);
+    await cancel();
 
     const subscription = await prisma.subscription.findUniqueOrThrow({
       where: { businessId },
@@ -448,7 +508,7 @@ describe("criterion 10 — cancel is at period end, and keeps what it says", () 
   });
 
   it("is idempotent, so the job can run every hour", async () => {
-    await cancelSubscription(actor, businessId);
+    await cancel();
     const subscription = await prisma.subscription.findUniqueOrThrow({
       where: { businessId },
       select: { endsAt: true },

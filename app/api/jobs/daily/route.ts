@@ -4,6 +4,7 @@ import { runRenewals } from "@/lib/billing/renewal-job";
 import { runDunning } from "@/lib/billing/dunning-job";
 import { applyEndedCancellations } from "@/lib/billing/service";
 import { applyDueChanges } from "@/lib/billing/schedule";
+import { writeMissingInvoicePdfs } from "@/lib/billing/pdf-backfill";
 import { pruneAttempts } from "@/lib/auth/attempts";
 import { LONGEST_RATE_WINDOW_MS, pruneRateLimitHits } from "@/lib/rate-limit";
 import { DRAFT_KEEP_DAYS, pruneDrafts } from "@/lib/onboarding/draft";
@@ -112,6 +113,21 @@ export async function GET(request: NextRequest) {
        to Free does not change what they asked for next.
     */
     scheduledChanges: () => applyDueChanges(),
+    /*
+       The invoices that have no document behind them, written again.
+
+       Last of the billing steps, because every step above it can raise one.
+       Board 11g made a failed PDF write recoverable rather than fatal — the
+       invoice commits, the file is written after, and a failure leaves
+       `pdfPath` null, which the screen reads and states. What it did not have
+       was anything that tried again, or anything that said there was something
+       to try: the failure went to a `console.warn` in a serverless function,
+       which is a message with no reader. A storage outage during the nightly
+       renewals therefore left that night's invoices undownloadable for good.
+
+       `outstanding` in the result is the number an operator acts on.
+    */
+    invoicePdfs: () => writeMissingInvoicePdfs(),
     async prunedAuthAttempts() {
       const pruned = await pruneAttempts(olderThan);
       return { pruned, olderThan };

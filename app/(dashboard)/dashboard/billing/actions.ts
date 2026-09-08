@@ -2,12 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import {
-  cancelSubscription,
   changePlan,
   changeTerm,
   quoteTermChange,
   resumeSubscription,
 } from "@/lib/billing/service";
+import {
+  isCancelReason,
+  scheduleCancellation,
+  type CancelReasonValue,
+} from "@/lib/billing/cancellation";
 import { saveKeep, withdrawChange, type KeepKind } from "@/lib/billing/schedule";
 import type { BillingTerm } from "@/lib/billing/period";
 import { formatAED, formatDate } from "@/lib/format";
@@ -179,24 +183,51 @@ export async function quoteTerm(formData: FormData): Promise<TermQuoteView> {
 }
 
 /**
- * Cancel, at period end.
+ * Cancel, at period end. Board 11j's confirm.
  *
- * The screen is board `11h` and the reason step is `11j`; neither is exported,
- * so `3m` carries the entry point and this is what it posts to. What the entry
- * point states — drops to Free at period end, ten products stay live and the
- * seller picks which, the badge is unaffected — is written against those boards
- * so they cannot contradict it when they land.
+ * The reason is required and is re-checked here rather than trusted from the
+ * form: a posted body is a value the client chose, and criterion 6 is a claim
+ * about what the *service* refuses, not about which button was grey.
+ *
+ * `business_closing` is refused rather than handled. It is the fork to `11i`
+ * and cancels nothing — the screen never posts it, and this is the fence that
+ * makes that true rather than a rule the screen happens to follow.
  */
-export async function confirmCancellation(): Promise<BillingResult> {
+export async function confirmCancellation(formData: FormData): Promise<BillingResult> {
   const seat = await getSellerSeat();
   if (!seat) return { ok: false, error: t("dev.no_seat_title") };
 
-  const result = await cancelSubscription(seat.actor, seat.businessId);
-  if (!result.ok) return { ok: false, error: result.error };
+  const reason = String(formData.get("reason") ?? "");
+  if (!isCancelReason(reason)) return { ok: false, error: t("cancel.error.no_reason") };
+
+  const result = await scheduleCancellation(seat.actor, seat.businessId, {
+    reason: reason as CancelReasonValue,
+    note: String(formData.get("note") ?? ""),
+  });
+
+  if (!result.ok) {
+    return { ok: false, error: t(CANCEL_ERROR[result.error]) };
+  }
 
   revalidateBilling();
-  return { ok: true };
+  return {
+    ok: true,
+    message: t("cancel.done", {
+      plan: seat.planName ?? "",
+      paidTo: formatDate(result.paidTo),
+      freeFrom: formatDate(result.freeStartsOn),
+    }),
+  };
 }
+
+/** One sentence per refusal, and every one of them says what to do instead. */
+const CANCEL_ERROR = {
+  no_subscription: "cancel.error.none",
+  already_cancelling: "cancel.error.already",
+  bad_reason: "cancel.error.no_reason",
+  note_required: "cancel.error.note_required",
+  closing_is_not_a_cancellation: "cancel.error.closing",
+} as const;
 
 /** `Resume Pro`. Costs nothing: the period was already paid for. */
 export async function resumePlan(): Promise<BillingResult> {

@@ -106,11 +106,20 @@ export default async function KeepPage({ params }: { params: Promise<{ kind: str
       eyebrow={t("keep.eyebrow")}
       title={t("keep.title")}
       breadcrumb={
+        /*
+           Back to where the choice was offered from.
+
+           A cancellation reaches this screen too — same picker, same columns —
+           but it is offered from the banner on `3m`, not from the comparison
+           grid. Sending somebody back to a plan-change screen they never opened
+           is the two-labels-for-one-destination defect `11h` corrected, seen
+           from the other end.
+        */
         <Link
-          href="/dashboard/billing/change"
+          href={pending.kind === "cancellation" ? "/dashboard/billing" : "/dashboard/billing/change"}
           className="rounded-tag text-caption font-medium text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
         >
-          {t("change.title")}
+          {pending.kind === "cancellation" ? t("cancel.back.billing") : t("change.title")}
         </Link>
       }
     >

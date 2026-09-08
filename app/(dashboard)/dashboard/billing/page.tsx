@@ -5,13 +5,14 @@ import { Alert, StatusBadge, type StatusTone } from "@/components/display";
 import { Card, Panel } from "@/components/structure";
 import { prisma } from "@/lib/db/client";
 import { billingSummary, type BillingSummary } from "@/lib/billing/summary";
+import { lastPaidDay } from "@/lib/billing/cancel-table";
 import { FILS_PER_AED } from "@/lib/billing/proration";
 import { ISSUER } from "@/lib/billing/invoice";
 import { formatAED, formatCount, formatDate, formatTRN } from "@/lib/format";
 import { mayChangePlan, mayManageBilling } from "@/lib/auth/guards";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
-import { CancelCard } from "./CancelCard";
+import { CancelCard, type KeepLink } from "./CancelCard";
 import { ResumeButton } from "./ResumeButton";
 
 /**
@@ -43,6 +44,29 @@ const STATUS_TONE: Record<string, StatusTone> = {
   draft: "neutral",
   void: "neutral",
 };
+
+/**
+ * The picker rows on the cancellation banner, one per kind with a shortfall.
+ *
+ * `11f`'s chooser, unchanged and at its own route. What is new is that a
+ * cancellation can now reach it: the keep lists live on the pending change and a
+ * cancellation is one, so the same screen writes into the same columns and the
+ * same appliers read them at period end.
+ */
+function keepLinks(summary: BillingSummary): KeepLink[] {
+  return summary.pendingKeeps.map((row) => ({
+    kind: row.kind,
+    href: `/dashboard/billing/change/keep/${row.kind}`,
+    label: t(`billing.cancelling.keeps.${row.kind}` as "billing.cancelling.keeps.products", {
+      keeps: formatCount(row.keeps),
+      used: formatCount(row.used),
+    }),
+    chosenLabel:
+      row.chosen === null
+        ? t("billing.cancelling.not_chosen")
+        : t("billing.cancelling.chosen", { count: formatCount(row.chosen) }),
+  }));
+}
 
 /** `1,783.95` with the currency and the fils. Criterion 3. */
 function aed(fils: number): string {
@@ -113,6 +137,13 @@ export default async function BillingPage() {
                 enquiries={formatCount(summary.freeEnquiriesPerMonth ?? 0)}
                 withinFreeCap={summary.freeKeepsProducts >= summary.usage.products}
                 endsAt={summary.endsAt ? formatDate(summary.endsAt) : null}
+                /*
+                   The picker closes on the last paid day, which is the day
+                   before Free starts — the same pair board `11h` prints on both
+                   its steps, derived from one value rather than stored twice.
+                */
+                chooseBy={summary.endsAt ? formatDate(lastPaidDay(summary.endsAt)) : null}
+                keepLinks={keepLinks(summary)}
                 resume={<ResumeButton label={t("billing.cancelling.resume", { plan: summary.plan.name })} />}
               />
             )}
@@ -225,7 +256,7 @@ function PlanCard({
                again before the date offers to withdraw rather than to schedule
                a second one. Q8.
             */}
-            {annual && term === "monthly" && !summary.pendingChange && (
+            {annual && term === "monthly" && !summary.pendingChange && !summary.endsAt && (
               <Link
                 href="/dashboard/billing/change?term=annual"
                 className={buttonClassName({ variant: "secondary", size: "sm" })}
@@ -237,13 +268,25 @@ function PlanCard({
               href="/dashboard/billing/change"
               className={buttonClassName({ variant: "secondary", size: "sm" })}
             >
-              {summary.pendingChange ? t("billing.scheduled.review") : t("billing.change")}
+              {summary.pendingChange?.kind === "plan_change"
+                ? t("billing.scheduled.review")
+                : t("billing.change")}
             </Link>
           </div>
         )}
       </div>
 
-      {summary.pendingChange && (
+      {/*
+         A *plan change* only.
+
+         A cancellation is a pending row in the same table — same date, same
+         withdrawal, same keep lists — and rendering it here as well would put
+         two banners on one screen saying the same thing in two vocabularies:
+         "you move to Free on the 14th" beside "your subscription ends on the
+         13th". The cancellation has its own banner, which also carries the
+         picker and the way back.
+      */}
+      {summary.pendingChange?.kind === "plan_change" && (
         <p className="mt-4 rounded-ctl border border-warn-line bg-warn-surface px-3.5 py-2.5 text-caption text-warn-ink">
           {t("billing.scheduled.downgrade", {
             plan: summary.pendingChange.toPlan.name,
