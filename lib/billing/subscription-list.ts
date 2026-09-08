@@ -43,6 +43,9 @@ const CAP_FIELDS = [
   "productLimit",
   "locationLimit",
   "photoLimit",
+  // Frozen in the snapshot since board 3i, and absent from this list — so an
+  // account grandfathered on a different storage cap showed no mark against it.
+  "storageMb",
   "teamSeats",
 ] as const;
 

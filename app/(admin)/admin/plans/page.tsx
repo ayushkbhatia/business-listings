@@ -33,6 +33,7 @@ export default async function PlansPage() {
     productLimit: plan.productLimit,
     locationLimit: plan.locationLimit,
     photoLimit: plan.photoLimit,
+    storageMb: plan.storageMb,
     teamSeats: plan.teamSeats,
     subscriptions: plan.subscriptions,
     grandfathered: plan.grandfathered,

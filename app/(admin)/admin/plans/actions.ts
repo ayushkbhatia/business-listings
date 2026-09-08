@@ -33,7 +33,15 @@ export async function saveEntitlements(formData: FormData): Promise<ActionResult
   const seat = await requireStaff();
 
   const changes: Parameters<typeof editPlanEntitlements>[0]["changes"] = {};
-  for (const field of ["enquiriesPerMonth", "productLimit", "locationLimit", "photoLimit"] as const) {
+  for (const field of [
+    "enquiriesPerMonth",
+    "productLimit",
+    "locationLimit",
+    "photoLimit",
+    // Nullable like the rest: an empty box is unlimited, which is what every
+    // plan carried before this field had an editor at all.
+    "storageMb",
+  ] as const) {
     const value = capFrom(formData.get(field));
     if (value !== undefined) changes[field] = value;
   }

@@ -6074,6 +6074,10 @@ export const en = {
   "admin.plans.col.products": "Products",
   "admin.plans.col.locations": "Locations",
   "admin.plans.col.photos": "Photos",
+  // Megabytes, and the unit is in the header because the field is a bare
+  // number. `50` in a column called `Storage` is ambiguous in a way the three
+  // plans on this screen would resolve differently.
+  "admin.plans.col.storage": "Storage (MB)",
   "admin.plans.col.seats": "Seats",
   "admin.plans.col.accounts": "Accounts",
   "admin.plans.col.grandfathered": "On old numbers",

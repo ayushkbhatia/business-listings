@@ -117,6 +117,16 @@ export interface EditPlanInput {
     productLimit: number | null;
     locationLimit: number | null;
     photoLimit: number | null;
+    /**
+     * Megabytes of media. Null is unlimited, like every other cap here.
+     *
+     * It was the one cap with a column, a snapshot key, a meter on `3m`, a row
+     * on `11f` and an enforcement point in the media library — and no way to
+     * set it. So the value that decides whether a seller can upload was
+     * reachable only by writing the row by hand, which skips the audit row
+     * every other entitlement change writes.
+     */
+    storageMb: number | null;
     teamSeats: number;
     customDomain: boolean;
     }>;
