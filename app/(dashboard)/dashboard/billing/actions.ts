@@ -210,14 +210,18 @@ export async function confirmCancellation(formData: FormData): Promise<BillingRe
   }
 
   revalidateBilling();
-  return {
-    ok: true,
-    message: t("cancel.done", {
-      plan: seat.planName ?? "",
-      paidTo: formatDate(result.paidTo),
-      freeFrom: formatDate(result.freeStartsOn),
-    }),
-  };
+  /*
+     No message, and that is the fix rather than an omission.
+
+     This composed `cancel.done` — "Cancelled. Pro runs to 13 Sep and Free
+     starts 14 Sep" — and `ReasonForm` redirects to /dashboard/billing without
+     reading it, so the key had no reader anywhere in the app. The destination
+     is the answer: `CancelCard`'s scheduled banner states both dates and
+     carries `Resume Pro`. A toast repeating them on arrival would be the same
+     sentence twice, and the seller has already navigated away from where it
+     would have appeared.
+  */
+  return { ok: true };
 }
 
 /** One sentence per refusal, and every one of them says what to do instead. */
@@ -227,6 +231,7 @@ const CANCEL_ERROR = {
   bad_reason: "cancel.error.no_reason",
   note_required: "cancel.error.note_required",
   closing_is_not_a_cancellation: "cancel.error.closing",
+  on_trial: "cancel.error.on_trial",
 } as const;
 
 /** `Resume Pro`. Costs nothing: the period was already paid for. */

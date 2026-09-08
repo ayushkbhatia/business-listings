@@ -11,6 +11,7 @@ import {
 } from "@/lib/photos/service";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
 import { allowance } from "@/lib/plan/entitlements";
+import { storageRoom } from "@/lib/media/service";
 import { t } from "@/lib/i18n";
 import { requireSellerSeat } from "../../_shell";
 
@@ -58,6 +59,23 @@ export async function signPhotoUpload(formData: FormData): Promise<SignResult> {
       return {
         ok: false,
         error: t("photos.error.at_cap", { plan: caps.name }),
+      };
+    }
+
+    /*
+       And the storage cap, which this path never read.
+
+       It checked the photo *count* and signed the URL, then wrote a `Media` row
+       carrying `bytes` that `storageUsedBytes` counts — so a seller could pass
+       their storage limit through the setup task and meet the refusal
+       afterwards, on the media library, for bytes this screen had let in. One
+       function now, and every writer of a counted byte calls it.
+    */
+    const room = await storageRoom(seat.businessId, caps, bytes);
+    if (room.atCap) {
+      return {
+        ok: false,
+        error: t("media.cap_reached", { cap: `${room.cap} MB`, plan: caps.name }),
       };
     }
   }

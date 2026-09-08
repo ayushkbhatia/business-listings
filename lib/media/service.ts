@@ -4,6 +4,7 @@ import { DOCUMENT_BUCKET, MEDIA_BUCKET, removeObject } from "@/lib/storage";
 import { parseFileId, type FileKind } from "./library";
 import { referencesForFile } from "./references";
 import { canDelete, type Reference } from "./state";
+import { allowance, type Allowance, type PlanCaps } from "@/lib/plan/entitlements";
 
 /**
  * Board 3i's writes, and the one refusal the board turned into a warning.
@@ -374,20 +375,64 @@ async function resequence(productId: string): Promise<void> {
 /* ── Storage ─────────────────────────────────────────────────────────────── */
 
 /**
- * Bytes this seller is holding.
+ * Bytes this seller is holding, against the storage cap. **The** definition.
  *
- * Images and documents both, because both cost money to hold and the header
- * states one figure. A buyer's review photograph is excluded — it is not the
- * seller's file and charging their allowance for it would be a bill for
- * somebody else's upload.
+ * One function because there were three, and they disagreed. This one refused
+ * an upload; `lib/billing/summary.ts` drew the meter on board 3m from all media
+ * including buyers' review photographs and no documents; `cancellation.ts`
+ * repeated the second. So the number a seller read was not the number that
+ * refused them, on a cap that had just become real — Free went to 50 MB on
+ * 8 Sep 2026 and until then nothing was measuring anything.
+ *
+ * ## A buyer's review photograph is not the seller's file
+ *
+ * Unchanged, and it is why `reviewId: null` is here rather than in the callers:
+ * charging a supplier's allowance for a photo their customer uploaded is a bill
+ * for somebody else's decision.
+ *
+ * ## Verification documents do not count either
+ *
+ * Changed. They used to, on the argument that both cost money to hold, and that
+ * argument loses to a worse consequence: **we ask for those documents.** A
+ * trade licence is uploaded because `3e` requires it, none of the three
+ * `Document` writers checks the cap, and if they did, a seller near their limit
+ * could not complete verification. A storage cap that can block a compliance
+ * upload is a cap pointed at the wrong thing.
+ *
+ * So the cap covers what a seller chose to upload, and it is enforceable in
+ * both directions: every writer of a counted byte checks it.
  */
 export async function storageUsedBytes(businessId: string): Promise<number> {
-  const [images, documents] = await Promise.all([
-    prisma.media.aggregate({
-      where: { businessId, reviewId: null },
-      _sum: { bytes: true },
-    }),
-    prisma.document.aggregate({ where: { businessId }, _sum: { bytes: true } }),
-  ]);
-  return (images._sum.bytes ?? 0) + (documents._sum.bytes ?? 0);
+  const images = await prisma.media.aggregate({
+    where: { businessId, reviewId: null },
+    _sum: { bytes: true },
+  });
+  return images._sum.bytes ?? 0;
+}
+
+/**
+ * Whether this upload fits, for every path that writes a counted byte.
+ *
+ * One function because there were two writers into `MEDIA_BUCKET` and only one
+ * of them looked. `/dashboard/media` refused over cap; `/dashboard/setup/photos`
+ * checked the *photo count* and signed the URL without ever reading the storage
+ * cap — and the `Media` row it wrote carried `bytes` that every other reader
+ * counted. So a seller could pass their storage limit through the setup task
+ * and then be refused on the media library for the bytes the setup task let in.
+ *
+ * Board 11f's own copy asserts the refusal is complete: `plan-grid.ts` says the
+ * cap "is already true today in app/(dashboard)/dashboard/media/actions.ts".
+ * It is now true in both places, and a third upload path cannot be added
+ * without meeting this.
+ *
+ * `incomingBytes` is included in the total, because the question is whether the
+ * file about to be sent fits — not whether the last one did.
+ */
+export async function storageRoom(
+  businessId: string,
+  plan: PlanCaps,
+  incomingBytes: number,
+): Promise<Allowance> {
+  const used = await storageUsedBytes(businessId);
+  return allowance(plan, "storage", Math.ceil((used + incomingBytes) / (1024 * 1024)));
 }

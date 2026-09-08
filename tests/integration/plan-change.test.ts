@@ -11,7 +11,7 @@ import {
   scheduleChange,
   withdrawChange,
 } from "@/lib/billing/schedule";
-import { changePlan } from "@/lib/billing/service";
+import { changePlan, changeTerm, quoteTermChange } from "@/lib/billing/service";
 import { creditNoteFor, issueInvoice, storedTotals } from "@/lib/billing/invoice";
 
 /**
@@ -51,6 +51,18 @@ let original: {
   entitlementSnapshot: unknown;
   hiddenByPlan: unknown;
   productStatuses: { id: string; status: ProductStatus }[];
+  /*
+     The period, because a term change moves all four of these.
+
+     `changeTerm` writes `term`, `periodStartedAt`, `renewsAt` and `anchorDay`
+     together — it opens a new period, which is the half a plan change does not
+     do. Leaving any of them behind puts this fixture on a period no other suite
+     expects, and `renewsAt` in particular is what `renewal-job` selects on.
+  */
+  term: "monthly" | "annual";
+  periodStartedAt: Date;
+  renewsAt: Date;
+  anchorDay: number;
 } | null = null;
 
 beforeAll(async () => {
@@ -60,7 +72,15 @@ beforeAll(async () => {
       id: true,
       planId: true,
       subscription: {
-        select: { planId: true, entitlementSnapshot: true, hiddenByPlan: true },
+        select: {
+          planId: true,
+          entitlementSnapshot: true,
+          hiddenByPlan: true,
+          term: true,
+          periodStartedAt: true,
+          renewsAt: true,
+          anchorDay: true,
+        },
       },
       team: { where: { roles: { has: "seller_owner" } }, select: { id: true, roles: true }, take: 1 },
       products: { select: { id: true, status: true } },
@@ -79,6 +99,10 @@ beforeAll(async () => {
     entitlementSnapshot: business.subscription.entitlementSnapshot,
     hiddenByPlan: business.subscription.hiddenByPlan,
     productStatuses: business.products,
+    term: business.subscription.term,
+    periodStartedAt: business.subscription.periodStartedAt,
+    renewsAt: business.subscription.renewsAt,
+    anchorDay: business.subscription.anchorDay,
   };
 });
 
@@ -89,8 +113,21 @@ beforeAll(async () => {
  * repurposing a shared fixture is how a board that asserts on one breaks the
  * board that asserted on it first.
  */
+/**
+ * Rows the term-change tests raise, tracked by id rather than by predicate.
+ *
+ * `deleteMany({ businessId })` would take the seed's own invoices and movements
+ * with them — the failure `seed-states-are-shared` names, and the reason this
+ * file's header already insists on pinning a fixture.
+ */
+const raisedInvoices: string[] = [];
+
 afterEach(async () => {
   await prisma.subscriptionChange.deleteMany({ where: { businessId } });
+  if (raisedInvoices.length > 0) {
+    // Lines cascade with the row; the movement is found by the invoice's window.
+    await prisma.invoice.deleteMany({ where: { id: { in: raisedInvoices.splice(0) } } });
+  }
 });
 
 afterAll(async () => {
@@ -108,6 +145,10 @@ afterAll(async () => {
         // test expects. That is the failure this restore exists to prevent.
         entitlementSnapshot: (original.entitlementSnapshot ?? Prisma.DbNull) as Prisma.InputJsonValue,
         hiddenByPlan: (original.hiddenByPlan ?? Prisma.DbNull) as Prisma.InputJsonValue,
+        term: original.term,
+        periodStartedAt: original.periodStartedAt,
+        renewsAt: original.renewsAt,
+        anchorDay: original.anchorDay,
       },
     });
     // And the catalogue, which this file drafts and re-lists.
@@ -487,5 +528,136 @@ describe("criterion 2 — an issued invoice is immutable", () => {
     const derived = storedTotals({ ...row, subtotalFils: null, vatFils: null, totalFils: null });
     expect(derived.stored).toBe(false);
     expect(derived.totalFils).toBe(31_395);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Board 11f — changing term, and the invoice it raises
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe("changing term", () => {
+  /**
+   * `changeTerm` had no test at all, which is how it kept a hand-rolled invoice
+   * through four boards.
+   *
+   * It was the last `tx.invoice.create` outside `issueInvoice`, and what that
+   * cost was not cosmetic: a `TERM-…` reference nobody could quote at a bank,
+   * `status: "issued"` on money the charge had already taken — which
+   * `invoiceList` counts into `outstandingFils`, so board 3m told the seller
+   * they owed it — no stored totals, no frozen billed party, and a null
+   * `pdfPath` that made board 11g's download route 404.
+   */
+  async function toAnnual() {
+    await onPlan("pro");
+    await prisma.subscription.updateMany({
+      where: { businessId },
+      data: {
+        term: "monthly",
+        periodStartedAt: new Date(Date.now() - 10 * 86_400_000),
+        renewsAt: new Date(Date.now() + 20 * 86_400_000),
+      },
+    });
+    const result = await changeTerm(actor, businessId, "annual");
+    if (result.ok && result.invoiceId) raisedInvoices.push(result.invoiceId);
+    return result;
+  }
+
+  it("quotes the switch before it charges for it", async () => {
+    await onPlan("pro");
+    await prisma.subscription.updateMany({ where: { businessId }, data: { term: "monthly" } });
+    const quoted = await quoteTermChange(actor, businessId, "annual");
+    expect(quoted.ok).toBe(true);
+    if (!quoted.ok) throw new Error("unreachable");
+    expect(quoted.quote.from).toBe("monthly");
+    expect(quoted.quote.to).toBe("annual");
+    // VAT on the net, the convention board 3m states for everything here.
+    expect(quoted.quote.proration.vatFils).toBeGreaterThan(0);
+  });
+
+  it("raises the invoice through the one issuer, paid and referenced", async () => {
+    const result = await toAnnual();
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("unreachable");
+    expect(result.invoiceId).not.toBeNull();
+    expect(result.scheduled).toBe(false);
+
+    const invoice = await prisma.invoice.findUniqueOrThrow({
+      where: { id: result.invoiceId! },
+      select: {
+        ref: true,
+        status: true,
+        paidAt: true,
+        subtotalFils: true,
+        vatFils: true,
+        totalFils: true,
+        billedToName: true,
+        pspRef: true,
+      },
+    });
+
+    // The reference a seller can quote at a bank, from the BL-INV sequence.
+    expect(invoice.ref).toMatch(/^BL-INV-/);
+    // Paid, because the charge succeeded before the transaction opened. An
+    // `issued` row here is an invoice for money already taken.
+    expect(invoice.status).toBe("paid");
+    expect(invoice.paidAt).not.toBeNull();
+    // Totals stored once, so two screens cannot compute two answers.
+    expect(invoice.subtotalFils).not.toBeNull();
+    expect(invoice.vatFils).not.toBeNull();
+    expect(invoice.totalFils).toBe((invoice.subtotalFils ?? 0) + (invoice.vatFils ?? 0));
+    // The billed party, frozen at issue — board 11g's rule.
+    expect(invoice.billedToName).not.toBeNull();
+    // And the provider's own reference, kept for a seller disputing a line.
+    expect(invoice.pspRef).toMatch(/^TERM-/);
+  });
+
+  it("is not counted as money the platform is still owed", async () => {
+    /*
+       The consequence, and it was on the console rather than on the seller's
+       page: `invoiceList` sums `status === "issued"` into `outstandingFils` for
+       `/admin/invoices`, so every term change used to add its own already-paid
+       amount to the figure finance reads as unpaid.
+    */
+    const result = await toAnnual();
+    if (!result.ok) throw new Error("unreachable");
+    const { invoiceList } = await import("@/lib/billing/invoice-list");
+    const list = await invoiceList();
+    const mine = list.rows.find((row) => row.id === result.invoiceId);
+    expect(mine, "the term-change invoice is on the console list").toBeDefined();
+    expect(mine!.status).not.toBe("issued");
+  });
+
+  it("stores the totals the screen reads, rather than recomputing them", async () => {
+    const result = await toAnnual();
+    if (!result.ok) throw new Error("unreachable");
+    const invoice = await prisma.invoice.findUniqueOrThrow({
+      where: { id: result.invoiceId! },
+      select: {
+        subtotalFils: true,
+        vatFils: true,
+        totalFils: true,
+        vatRate: true,
+        lines: { select: { amountAed: true, qty: true } },
+      },
+    });
+    expect(storedTotals(invoice)).not.toBeNull();
+  });
+
+  it("records the contraction, because an annual price trades revenue for cash", async () => {
+    const before = await prisma.mrrMovement.count({ where: { businessId } });
+    const result = await toAnnual();
+    if (!result.ok) throw new Error("unreachable");
+    const after = await prisma.mrrMovement.count({ where: { businessId } });
+    expect(after).toBe(before + 1);
+    // Found by its note rather than by recency: other tests in this file write
+    // movements at the same instant, and `occurredAt desc` picks between them
+    // arbitrarily.
+    const movement = await prisma.mrrMovement.findFirstOrThrow({
+      where: { businessId, note: "Moved to annual" },
+      select: { deltaFils: true, note: true },
+    });
+    // Two twelfths less recurring revenue, which is what an annual price is.
+    expect(movement.deltaFils).toBeLessThan(0);
+    await prisma.mrrMovement.deleteMany({ where: { businessId, note: "Moved to annual" } });
   });
 });

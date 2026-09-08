@@ -17,7 +17,10 @@ import {
   subcategoryChips,
   type LandingState,
 } from "@/lib/seo/landing";
+import { headers } from "next/headers";
 import { prisma } from "@/lib/db/client";
+import { isCrawler } from "@/lib/seo/crawl-policy";
+import { recordSearchImpressions } from "@/lib/analytics/record";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { Prose } from "./Blocks";
@@ -158,6 +161,43 @@ export async function LandingPage({ state, searchParams, pageCount }: LandingPag
     },
   });
   const pinned = locations.filter((row) => row.lat !== null && row.lng !== null);
+
+  /*
+     Board `3l` — this page lists businesses, so appearing on it is an impression.
+
+     It was not counted. `_results/Results.tsx` writes impressions on `/search`
+     and `/c/:category`, and the area and emirate landing pages — which are the
+     surfaces Google sends buyers to — wrote nothing, while `lib/telemetry`
+     counted a storefront view arriving from anywhere. So a seller's funnel
+     understated the stage it divides by: "clicked through to your listing" was
+     not a click-through rate.
+
+     Done now because it can only be done now. Board `3l` is explicit that
+     impressions cannot be backfilled, so adding a source later would put a step
+     change in every seller's history with no way to explain it. The pipeline
+     shipped on 8 Sep 2026 and holds no production data yet; this is the one
+     moment when widening it costs nobody a comparison.
+
+     Behind the same crawler gate, for the same reason: a bot walked 797 facet
+     permutations of the results page in 75 minutes, and counted as impressions
+     those would be a funnel whose first stage is mostly robots.
+
+     No `recordCategoryPositions` beside it. A category position is a rank
+     within one category listing, and this page's ordering is scoped to an area
+     as well — the same business is in a different position here than on
+     `/c/:category`, and writing both into one table would make the number mean
+     two things.
+  */
+  if (!isCrawler((await headers()).get("user-agent")) && results.rows.length > 0) {
+    void recordSearchImpressions(
+      results.rows.map((row) => row.id),
+      // The scope is the query on this surface: nobody typed anything, and the
+      // phrase a seller reads back should be the page they appeared on.
+      `${scope.category.name} ${scope.area?.name ?? emirateName}`,
+      undefined,
+      (page - 1) * RESULTS_PER_PAGE,
+    );
+  }
 
   const crumbs = [
     { label: t("chrome.directory"), href: "/" },

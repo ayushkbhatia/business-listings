@@ -77,6 +77,21 @@ export interface MedianNote {
   /** The cohort median, 0..1. */
   median: number;
   cohortSize: number;
+  /**
+   * Who the cohort is. Category and emirate, which is what makes it a cohort.
+   *
+   * `medianNote` computed the emirate and threw it away, and the page passed
+   * two empty strings into a sentence reading *"a {median} median for
+   * {category} in {emirate}"* — which renders as "median for  in ." `t()` only
+   * reports a param that is `undefined`, so an empty string interpolated
+   * silently and nothing failed.
+   *
+   * `emirate` is null where the seller has no published location: the cohort is
+   * then the category countrywide, and the sentence says so rather than naming
+   * a place that is not in the comparison.
+   */
+  category: string;
+  emirate: string | null;
 }
 
 export interface AnalyticsSummary {
@@ -571,10 +586,13 @@ async function medianNote(businessId: string, fromDay: Date): Promise<MedianNote
     where: { id: businessId },
     select: {
       primaryCategoryId: true,
+      // The name, because the sentence names it. Reading the id and then
+      // rendering nothing is how this shipped with two blank slots in it.
+      primaryCategory: { select: { name: true } },
       locations: { where: { published: true }, select: { emirate: true }, take: 1 },
     },
   });
-  if (!business) return null;
+  if (!business || !business.primaryCategory) return null;
 
   const emirate = business.locations[0]?.emirate ?? null;
 
@@ -628,7 +646,13 @@ async function medianNote(businessId: string, fromDay: Date): Promise<MedianNote
   const median =
     rates.length % 2 === 0 ? (rates[middle - 1]! + rates[middle]!) / 2 : rates[middle]!;
 
-  return { yours, median, cohortSize: rates.length };
+  return {
+    yours,
+    median,
+    cohortSize: rates.length,
+    category: business.primaryCategory.name,
+    emirate,
+  };
 }
 
 export { percentChange, NO_COMPARISON };

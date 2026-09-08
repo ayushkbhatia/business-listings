@@ -103,6 +103,23 @@ export async function recordSearchImpressions(
  * identity — and because a null never equals a null in SQL, the identity is two
  * partial unique indexes rather than one. The `ON CONFLICT` target has to name
  * the matching predicate, which is why this branches.
+ *
+ * ## This table has no reader yet, deliberately
+ *
+ * Nothing selects from `category_position_day` — not `analyticsSummary`, not
+ * the CSV export, not the dashboard. Its consumer is board `3a`'s search-position
+ * card, which the wave-4 plan says `3l` "switches on" and which does not exist
+ * in code.
+ *
+ * That is a capture running ahead of its reader rather than an orphan, and the
+ * order is forced: board `3l` is explicit that a position not written on the day
+ * is gone, so a table added when the card is built would start empty and the
+ * card would open on a blank month. Writing early costs one upsert per browse;
+ * writing late costs the history.
+ *
+ * If `3a`'s card is ever cut instead, this recorder and its table go with it —
+ * an unread table is a cost with no consumer, and the honest response to that
+ * is a migration, not a comment.
  */
 export async function recordCategoryPositions(
   businessIds: readonly string[],

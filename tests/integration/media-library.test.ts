@@ -418,13 +418,28 @@ describe("the library, as the screen reads it", () => {
     expect(file?.badges).not.toContain("no_alt");
   });
 
-  it("meters storage in bytes across images and documents", async () => {
+  it("meters the seller's own images, and not what we asked them for", async () => {
+    /*
+       Changed by the wave-4 fix batch, and it is a decision rather than a
+       tidy-up.
+
+       Documents used to count, on the argument that both cost money to hold.
+       They do — and we are the ones who asked for them: a trade licence is
+       uploaded because board 3e requires it, and none of the three `Document`
+       writers checks the cap. Counting them meant either a cap that could not
+       be enforced in the direction that matters, or one that could block a
+       seller near their limit from completing verification.
+
+       So the cap covers what a seller *chose* to upload. A buyer's review
+       photograph is excluded for the older version of the same reason.
+    */
     const before = await storageUsedBytes(businessId);
     await image({ bytes: 500_000 });
     await document({ bytes: 250_000 });
     const after = await storageUsedBytes(businessId);
-    expect(after - before).toBe(750_000);
+    expect(after - before).toBe(500_000);
   });
+
 
   it("keeps a file when the product carrying it is deleted", async () => {
     /*

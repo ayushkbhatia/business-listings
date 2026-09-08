@@ -174,11 +174,20 @@ function FailedPaymentBanner({ summary }: { summary: BillingSummary }) {
         amount: aed(failed.amountFils),
         when: formatDate(failed.failedOn),
       })}
-      action={
-        <Link href="/dashboard/billing#payment-method" className={buttonClassName({ variant: "primary", size: "sm" })}>
-          {t("billing.failed.update")}
-        </Link>
-      }
+      /*
+         No action, because there is not one to offer.
+
+         This was `Update payment method`, linking to `#payment-method` — a
+         panel whose own footer says no card capture exists and that the hand-off
+         to the PSP's form is not built. Honest at the destination and a dead
+         end at the button, on the one banner a seller reaches when their
+         payment has actually failed.
+
+         `Alert` takes `fix` for exactly this: what the reader does when the
+         answer is a sentence rather than a control. The control comes back the
+         day the PSP hand-off does.
+      */
+      fix={t("billing.failed.fix")}
     >
       <p>{failed.reason ? t("billing.failed.reason", { reason: failed.reason }) : t("billing.failed.no_reason")}</p>
       {failed.retryAt && (

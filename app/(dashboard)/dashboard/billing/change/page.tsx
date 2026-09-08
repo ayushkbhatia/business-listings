@@ -584,6 +584,37 @@ function railProps(
             },
           ]
         : [],
+    /*
+       The toggle is on a term this change will not be charged on.
+
+       A plan change is always quoted on the subscription's own term —
+       `quotePlanChange` reads it at lib/billing/service.ts:163 and there is no
+       shape for changing both in one transaction. So when the columns are
+       comparing annual prices and the seller is paying monthly, the rail says
+       which one the button is about and offers the other as its own step, which
+       is the `quoteTermChange` branch above with the selection cleared.
+    */
+    termMismatch:
+      summary.term && term !== summary.term
+        ? {
+            /*
+               Keyed by the term rather than interpolated.
+
+               `change.term_name.*` are toggle labels — "Monthly", "Annual" —
+               and reading them into a sentence produced "Quoted Monthly,
+               because…", which is a capital in the middle of a sentence.
+               Design system §08 is sentence case, and there are exactly two
+               combinations, so two strings say it properly.
+            */
+            note: t(
+              `change.term_mismatch.${summary.term}` as "change.term_mismatch.monthly",
+            ),
+            linkLabel: t(
+              `change.term_mismatch_link.${term}` as "change.term_mismatch_link.monthly",
+            ),
+            href: `/dashboard/billing/change?term=${term}`,
+          }
+        : null,
     keepEyebrow: t("change.keep.eyebrow"),
     keepIntro: keepRows.length > 0 ? t("change.keep.intro", { plan: selected.name }) : null,
     keepRows,

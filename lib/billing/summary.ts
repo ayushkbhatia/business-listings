@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { storageUsedBytes } from "@/lib/media/service";
 import { assertCanManageBilling } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import { allowance, capFor, effectiveCaps, type Allowance, type PlanCaps } from "@/lib/plan/entitlements";
@@ -164,7 +165,7 @@ export async function billingSummary(
 ): Promise<BillingSummary> {
   assertCanManageBilling(actor);
 
-  const [business, freePlan, invoices, products, locations, seats, media, placements, pendingChange] =
+  const [business, freePlan, invoices, products, locations, seats, storageBytes, placements, pendingChange] =
     await Promise.all([
       prisma.business.findUniqueOrThrow({
         where: { id: businessId },
@@ -216,7 +217,14 @@ export async function billingSummary(
       prisma.product.count({ where: { businessId, status: "live" } }),
       prisma.location.count({ where: { businessId, published: true } }),
       seatsUsed(businessId, now),
-      prisma.media.aggregate({ where: { businessId }, _sum: { bytes: true } }),
+      /*
+         Through the one definition, not a fourth reading of the table.
+
+         This aggregated *all* media — buyers' review photographs included — and
+         no documents, while `storageUsedBytes` refused an upload on a different
+         set. So the meter a seller read was not the number that stopped them.
+      */
+      storageUsedBytes(businessId),
       prisma.placementSlot.findMany({
         where: { businessId, OR: [{ endsOn: null }, { endsOn: { gte: now } }] },
         orderBy: { startsOn: "asc" },
@@ -242,7 +250,7 @@ export async function billingSummary(
     products,
     locations,
     seats,
-    storageMb: Math.ceil(Number(media._sum.bytes ?? 0) / (1024 * 1024)),
+    storageMb: Math.ceil(storageBytes / (1024 * 1024)),
   };
 
   const subscription = business.subscription;

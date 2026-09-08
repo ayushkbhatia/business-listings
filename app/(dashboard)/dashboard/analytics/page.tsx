@@ -77,7 +77,34 @@ export default async function AnalyticsPage() {
       activeHref="/dashboard/analytics"
       eyebrow={t("analytics.eyebrow")}
       title={t("analytics.title")}
-      meta={<span className="font-mono text-caption text-muted">{window}</span>}
+      meta={
+        <span className="font-mono text-caption text-muted">
+          {window}
+          {/*
+             Since when, where the pipeline is younger than the window.
+
+             Board 3l is explicit that impressions, clicks and product views
+             cannot be backfilled — they start the day the pipeline shipped —
+             and `docs/routes.md` says the page states it. `trackingSince` was
+             computed on every load, at the cost of two extra queries, and
+             rendered nowhere. It is the sentence that stops a seller reading a
+             young pipeline as a collapse in demand, which is the whole reason
+             the board specified it.
+
+             Only when it falls inside the window: a pipeline older than thirty
+             days is not news, and saying so every day would be noise on the one
+             page whose figures are supposed to matter.
+          */}
+          {summary.trackingSince && summary.trackingSince > summary.window.from ? (
+            <>
+              {" · "}
+              {t("analytics.tracking_since", {
+                when: formatDateShort(summary.trackingSince),
+              })}
+            </>
+          ) : null}
+        </span>
+      }
       actions={
         /*
            The button says what it writes. It read `Export CSV` on the board
@@ -172,12 +199,27 @@ function FunnelPanel({ summary }: { summary: AnalyticsSummary }) {
 
       {summary.median && (
         <p className="mt-4 border-t border-line-soft pt-3.5 text-caption leading-relaxed text-body-ink">
-          {t("analytics.median", {
-            yours: formatPercent(summary.median.yours, { decimals: 1 }),
-            median: formatPercent(summary.median.median, { decimals: 1 }),
-            category: "",
-            emirate: "",
-          })}{" "}
+          {/*
+             The cohort, named. It was two empty strings.
+
+             `t()` only reports a param that is `undefined`, so `category: ""`
+             interpolated silently and the sentence rendered as "a 14.7% median
+             for  in ." — on the one page whose argument is that its numbers are
+             true. A cohort with no name is also not a comparison a seller can
+             judge: "the median" means nothing until you know whose.
+          */}
+          {summary.median.emirate
+            ? t("analytics.median", {
+                yours: formatPercent(summary.median.yours, { decimals: 1 }),
+                median: formatPercent(summary.median.median, { decimals: 1 }),
+                category: summary.median.category,
+                emirate: t(`emirate.${summary.median.emirate}` as "emirate.dubai"),
+              })
+            : t("analytics.median_countrywide", {
+                yours: formatPercent(summary.median.yours, { decimals: 1 }),
+                median: formatPercent(summary.median.median, { decimals: 1 }),
+                category: summary.median.category,
+              })}{" "}
           <span className="text-muted">
             {t("analytics.median_cohort", { count: formatCount(summary.median.cohortSize) })}
           </span>

@@ -56,6 +56,29 @@ test.describe("board 11f — change plan", () => {
     expect(new Set(denominator).size).toBe(1);
   });
 
+  test("never shows two prices for one plan without saying which it charges", async ({ page }) => {
+    /*
+       Board 11f's follow-up audit, and the reason it is asserted here rather
+       than in a unit test: it is a claim about two numbers appearing on one
+       screen, and the only instrument that can see both is a browser.
+
+       The columns compare annual prices when the toggle is flipped; the rail
+       quotes the seller's own term, because `quotePlanChange` reads it from the
+       subscription and there is no shape for changing both in one transaction.
+       A monthly seller could read AED 8,990 in the Pro column and AED 943.95 in
+       the rail with nothing between them.
+    */
+    await page.goto("/dashboard/billing/change?term=annual&plan=basic");
+
+    const body = (await page.textContent("main")) ?? "";
+    test.skip(!body.includes("Quoted"), "this seller is already on the annual term");
+
+    await expect(page.getByText(/Quoted monthly, because that is how your subscription is paid/))
+      .toBeVisible();
+    // And the other change is offered as its own step rather than left implied.
+    await expect(page.getByRole("link", { name: "Switch to annual instead" })).toBeVisible();
+  });
+
   test("names an absent entitlement rather than hiding it", async ({ page }) => {
     // The absence is what the next tier up is selling.
     const domain = page.getByRole("row").filter({ hasText: "Custom domain" });

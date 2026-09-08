@@ -91,9 +91,7 @@ export async function signMediaUpload(formData: FormData): Promise<SignResult> {
       };
     }
 
-    const usedBytes = await media.storageUsedBytes(seat.businessId);
-    const usedMb = Math.ceil((usedBytes + bytes) / (1024 * 1024));
-    const room = allowance(plan, "storage", usedMb);
+    const room = await media.storageRoom(seat.businessId, plan, bytes);
     if (room.atCap) {
       return {
         ok: false,

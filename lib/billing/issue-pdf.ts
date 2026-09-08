@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { invoicePdfPath, putInvoicePdf } from "@/lib/storage";
-import { invoicePdf } from "./invoice-pdf";
+import { invoicePdf, InvoiceTooLongError } from "./invoice-pdf";
 import { documentOf } from "./tax-invoice";
 
 /**
@@ -71,7 +71,39 @@ export async function writeInvoicePdf(invoiceId: string): Promise<PdfWriteResult
   const document = await documentOf(invoice.businessId, invoice.id);
   if (!document) return { ok: false, skipped: false, reason: "the document did not resolve" };
 
-  const { bytes } = invoicePdf(document);
+  /*
+     A document that cannot be compliant is not written at all.
+
+     `pdfPath` is written once and never re-rendered (`upsert: false` above), so
+     anything stored here is frozen. An invoice raised before board 11g froze
+     the supplier snapshot has `supplierName` null, and `documentOf` maps that
+     to an empty string — which rendered a tax invoice with **no supplier** in
+     the head and a page foot ending in a bare separator, permanently.
+
+     The backfill in `pdf-backfill.ts` counts this as a failure and carries the
+     reason into the daily job's step report, which is how anybody finds out.
+     The screen still renders the whole document either way: a missing file is a
+     support ticket, and a frozen non-compliant one is not recoverable.
+  */
+  if (!document.supplier.name.trim()) {
+    return { ok: false, skipped: false, reason: "no supplier snapshot on the invoice" };
+  }
+
+  let bytes: Buffer;
+  try {
+    ({ bytes } = invoicePdf(document));
+  } catch (cause) {
+    /*
+       The one render error worth carrying rather than crashing on: an invoice
+       with more lines than the single sheet this writer produces. Throwing here
+       would take down whatever raised the invoice, and the money has already
+       moved by then.
+    */
+    if (cause instanceof InvoiceTooLongError) {
+      return { ok: false, skipped: false, reason: cause.message };
+    }
+    throw cause;
+  }
   const path = invoicePdfPath(invoice.businessId, invoice.id, invoice.ref);
   const stored = await putInvoicePdf(path, bytes);
   if (!stored.ok) return { ok: false, skipped: false, reason: stored.reason };

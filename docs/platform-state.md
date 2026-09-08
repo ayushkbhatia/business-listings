@@ -93,7 +93,7 @@ My recommendation: **stop building features.** The next unit of work is closing 
 | `/dashboard/listing`, `/media`, `/locations`, `/hours`, `/team` | Wired | The dead `mediaUrl()` export is gone; the page calls `publicUrl` directly, so images do display. |
 | `/dashboard/verification` | Built (board 3e) | Two document tables — checked by us, uploaded by you — the corrected ladder, and the 60 / 14 / 0 expiry sequence with the job behind it. Tier stays staff-only, correctly, and the screen says so. |
 | `/dashboard/billing` + `/change`, `/cancel` | Wired | No payment capture, as designed. |
-| `/dashboard/analytics` | Thin | Fed by the measurements in `/api/jobs/daily`, which run nightly. Numbers appear after the first run against real traffic; nothing to build. |
+| `/dashboard/analytics` | Wired | Board 3l. Four panels over a daily rollup, every figure a comparison against the previous window. **`category_position_day` is written and read by nothing**: its consumer is board 3a's search-position card, which does not exist in code. The capture runs ahead of the reader deliberately — a position not written on the day cannot be recovered — and goes with the card if the card is ever cut. |
 | `/dashboard/promote` | Wired | Boosts write audit rows. |
 | `/dashboard/reviews` | Wired | Board 11c. Request (one per buyer ever, WhatsApp where we hold a number and email otherwise), reply (one, 28-day window, not editable), dispute (four grounds, into 4h). Removal stays staff-side. |
 | `/dashboard/domain` | **Fail-closed** | The screen works; the integration cannot. Needs `VERCEL_DOMAINS_TOKEN` and `stores.businesslistings.me` provisioned — both outside the repo. Refuses rather than pretending, which is the intended behaviour until then. |

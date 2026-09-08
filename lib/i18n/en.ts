@@ -154,6 +154,8 @@ export const en = {
   "gallery.billing.plan_status": "Plan status",
   "gallery.billing.invoice": "Tax invoice · A4",
   "gallery.billing.invoice_partial": "Issued before 11g",
+  "gallery.billing.cancel_entry": "Cancel entry · board 3m",
+  "gallery.billing.cancel_scheduled": "Cancellation scheduled · the banner it becomes",
   "gallery.billing.failed": "Failed payment",
   "gallery.density": "Density",
   "gallery.roomy": "Roomy",
@@ -4522,7 +4524,20 @@ export const en = {
   // No discount figure. It is a column per plan now, and this control sits
   // above all three — naming one plan's saving here is the drift the pricing
   // page just took out of its own copy.
-  "change.term_note": "What you get is the same either way. The plan does not change, only how often it is charged, and a year costs less than twelve months of it.",
+  /*
+     Board 11f's follow-up audit. The columns compare, the rail charges, and
+     until this string they could show two different prices for one plan with
+     nothing between them saying which was which.
+
+     `change.term_note` sat here orphaned — written for the toggle in general and
+     wired to nothing. It is gone rather than pressed into service to look busy:
+     it says the plan is the same either way, which is true and is not the thing
+     a seller reading two prices needs to be told.
+  */
+  "change.term_mismatch.monthly": "Quoted monthly, because that is how your subscription is paid. The annual prices above are a comparison.",
+  "change.term_mismatch.annual": "Quoted annually, because that is how your subscription is paid. The monthly prices above are a comparison.",
+  "change.term_mismatch_link.monthly": "Switch to monthly instead",
+  "change.term_mismatch_link.annual": "Switch to annual instead",
   "change.renews_moved": "A new period starts today. Your next payment is {when}.",
   "change.confirm": "Confirm the change",
   "change.back": "Back to subscription",
@@ -4693,8 +4708,17 @@ export const en = {
   "cancel.error.note_required": "You picked Something else, so the box below is where the reason goes.",
   "cancel.error.already": "That subscription is already ending. Billing shows the date and how to resume.",
   "cancel.error.none": "There is no subscription to cancel.",
+  /*
+     Board 11c's follow-up audit. A trial is not a subscription to cancel: it
+     ends by itself into `expired` and drops to Free, and cancelling it used to
+     write `status: "active"` over the top — which took it out of the trial
+     sweep and put money on the revenue board that nobody had paid.
+  */
+  "cancel.trial.title": "There is nothing to cancel yet",
+  "cancel.trial.body": "You are on a {plan} trial. It ends on {when}, nothing is charged, and your listing moves to Free on that day.",
+  "cancel.trial.note": "If you would rather stay on the plan, add a payment method before that date. Nothing happens if you do not.",
+  "cancel.error.on_trial": "You are on a trial, which ends on its own and charges nothing. There is nothing to cancel.",
   "cancel.error.closing": "Closing an account is a different thing, and it is not built yet. Nothing was cancelled.",
-  "cancel.done": "Cancelled. {plan} runs to {paidTo} and Free starts {freeFrom}.",
 
   "cancel.email.subject": "Your subscription is scheduled to end",
   "cancel.email.body": "Your plan is paid to {paidTo} and runs to {paidTo}. Free starts {freeFrom}. Nothing is deleted, and you can resume any time before then.",
@@ -4798,7 +4822,12 @@ export const en = {
   "billing.failed.retry": "We try the card again on {when}.",
   "billing.failed.grace": "Your plan and your listing do not change before {deadline}.",
   "billing.failed.no_reason": "The payment did not go through.",
-  "billing.failed.update": "Update payment method",
+  /*
+     Not a button. The `Update payment method` control linked to a panel that
+     says card capture does not exist yet — honest where it landed and a dead
+     end where it was pressed.
+  */
+  "billing.failed.fix": "Card details are handled by our payment provider, and that hand-off is not switched on yet. Reply to the email we sent about this payment and we will take it manually.",
 
   "billing.free.title": "You are on Free",
   "billing.free.body": "Free is a plan, not a trial. Nothing expires, and there is nothing to pay. Compare what each plan holds against what you have now.",
@@ -5224,6 +5253,13 @@ export const en = {
   "analytics.stage.reveals": "Revealed a phone number",
   "analytics.stage.enquiries": "Sent an enquiry",
   "analytics.median": "Your search-to-click rate is {yours} against a {median} median for {category} in {emirate}.",
+  /*
+     The same sentence for a seller with no published location.
+
+     The cohort is then the category countrywide, and naming an emirate that is
+     not in the comparison would be worse than naming none.
+  */
+  "analytics.median_countrywide": "Your search-to-click rate is {yours} against a {median} median for {category} across the UAE.",
   "analytics.median_cohort": "Across {count} suppliers.",
   "analytics.no_cover": "Two of your most-viewed products have no cover photo: {products}.",
 
@@ -6337,6 +6373,19 @@ export const en = {
   // Megabytes, and the unit is in the header because the field is a bare
   // number. `50` in a column called `Storage` is ambiguous in a way the three
   // plans on this screen would resolve differently.
+  /*
+     The four columns board 11f compares plans on that had no editor. The
+     wave-4 fix batch: a number or a switch a seller reads on the change screen
+     and only the database could change.
+  */
+  "admin.plans.col.categories": "Categories",
+  "admin.plans.col.analytics": "Analytics",
+  "admin.plans.col.csv": "CSV import",
+  "admin.plans.col.sponsored": "Sponsored placement",
+  "admin.plans.withdraw_label": "Withdrawn from sale",
+  "admin.plans.withdraw_hint": "Nobody new can choose it and no trial can start on it. Everybody already on it stays, at the terms they have.",
+  "admin.plans.withdrawn_badge": "Withdrawn",
+  "admin.plans.col.sale": "On sale",
   "admin.plans.col.storage": "Storage (MB)",
   "admin.plans.col.seats": "Seats",
   "admin.plans.col.accounts": "Accounts",

@@ -41,10 +41,25 @@ export async function saveEntitlements(formData: FormData): Promise<ActionResult
     // Nullable like the rest: an empty box is unlimited, which is what every
     // plan carried before this field had an editor at all.
     "storageMb",
+    // The fifth cap board 11f compares plans on. Same story as storage: a
+    // column, a comparison row, and no way to set it.
+    "categoryLimit",
   ] as const) {
     const value = capFrom(formData.get(field));
     if (value !== undefined) changes[field] = value;
   }
+  /*
+     The three switches, read unconditionally.
+
+     A checkbox posts nothing when it is unticked, so reading them only when
+     present would make each one turn on and never off — a control that can
+     grant an entitlement and not withdraw it. The form always posts all three
+     fields' state by omission, and this reads the omission as `false`.
+  */
+  for (const field of ["analytics", "csvImport", "sponsoredEligible"] as const) {
+    changes[field] = formData.get(field) === "on";
+  }
+
   const seats = capFrom(formData.get("teamSeats"));
   // Seats is the one cap that is never unlimited — a plan with unlimited seats
   // is a plan with no seat pricing, which is a commercial decision and not
@@ -56,6 +71,9 @@ export async function saveEntitlements(formData: FormData): Promise<ActionResult
       actor: seat.actor,
       planId: String(formData.get("planId") ?? ""),
       changes,
+      // Board 1l criterion 12. An intent; the service stamps the date, so
+      // re-saving a withdrawn plan keeps the date it was withdrawn on.
+      withdrawn: formData.get("withdrawn") === "on",
       applyToExisting: formData.get("applyToExisting") === "on",
       reason: String(formData.get("reason") ?? ""),
     });
