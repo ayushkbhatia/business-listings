@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 /**
- * Boards 3l, 3m, 7d, 11e, 11f and 11h, signed in as a seller.
+ * Boards 3l, 3m, 7d, 11e, 11f, 11g and 11h, signed in as a seller.
  *
  * Criteria 9 and 10 are proved in tests/integration — they are claims about
  * what services refuse and what they write, and a browser is the wrong
@@ -84,6 +84,71 @@ test.describe("board 11f — change plan", () => {
     await page.getByRole("link", { name: /Select Basic/ }).click();
     await expect(page.getByText(/^From /)).toBeVisible();
     await expect(page.getByText("incl. VAT").first()).toBeVisible();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+/**
+ * Board 11g — the tax invoice.
+ *
+ * The route needs an invoice id, so it is reached the way a seller reaches it:
+ * from `3m`'s list. That also asserts the link exists, which it deliberately did
+ * not while `11g` was unbuilt — a reference pointing at a 404 is worse than one
+ * that does not move.
+ */
+test.describe("board 11g — tax invoice", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/dashboard/billing");
+    await page.getByRole("link", { name: /^Open invoice / }).first().click();
+    await expect(page.getByRole("heading", { name: /Tax invoice|Credit note/ })).toBeVisible();
+  });
+
+  test("states every mandatory field, each separately labelled", async ({ page }) => {
+    // Criterion 5. The board printed one date and let it stand for three.
+    const sheet = page.getByRole("article");
+    await expect(sheet).toContainText("Date of issue");
+    await expect(sheet).toContainText("Date of supply");
+    await expect(sheet).toContainText("Supply period");
+    await expect(sheet).toContainText("Place of supply");
+    await expect(sheet).toContainText("Currency");
+  });
+
+  test("labels the recipient's TRN, and prints no supplier one", async ({ page }) => {
+    /*
+       The issuing entity is Delaware-registered and holds no TRN. With one tax
+       number on a page an unlabelled one reads as the issuer's.
+    */
+    const sheet = page.getByRole("article");
+    await expect(sheet).toContainText(/Recipient TRN/);
+    await expect(sheet).toContainText("Bearing Deployment Company, Inc");
+    await expect(sheet).not.toContainText(/Supplier TRN/);
+  });
+
+  test("carries VAT per line rather than one blended row", async ({ page }) => {
+    // Criterion 4, and the correction that outranks the board: a blended row
+    // cannot express a zero-rated line, and a document cannot be re-laid-out.
+    const table = page.getByRole("article").getByRole("table");
+    await expect(table.getByRole("columnheader", { name: /Rate/ })).toBeVisible();
+    await expect(table.getByRole("columnheader", { name: /VAT AED/ })).toBeVisible();
+    await expect(table.getByRole("columnheader", { name: /Unit AED/ })).toBeVisible();
+  });
+
+  test("marks every panel that will not reach the PDF", async ({ page }) => {
+    // Criterion 9. The tag is the design decision rather than decoration: it is
+    // how a reader can tell what a forwarded PDF will and will not say.
+    await expect(page.getByText("Not in the PDF").first()).toBeVisible();
+  });
+
+  test("says an issued invoice cannot be edited, and offers nothing that would", async ({ page }) => {
+    // Criterion 10. The only controls are send and download, and neither writes
+    // to the document.
+    await expect(page.getByText(/This document cannot be edited/)).toBeVisible();
+    await expect(page.getByRole("article").getByRole("textbox")).toHaveCount(0);
+    await expect(page.getByRole("article").getByRole("button")).toHaveCount(0);
   });
 
   test("is axe clean", async ({ page }) => {

@@ -87,16 +87,26 @@ export function InvoiceSheet({ document }: { document: TaxInvoiceDocument }) {
             )}
           </div>
 
-          <dl className="text-caption">
+          <div className="text-caption">
             <p className="text-muted">{t("invoice.dates_heading")}</p>
-            <div className="mt-1.5 flex flex-col gap-1">
+            {/*
+               The heading sits outside the list, and each `dt`/`dd` pair is a
+               **direct** child of it.
+
+               Both were wrong first time and axe caught both: a `<p>` inside a
+               `<dl>` is a `definition-list` violation, and wrapping the pairs in
+               a second `<div>` put every `dt` two levels down, which is
+               `dlitem` — twenty nodes of it. A `<div>` around one pair is
+               allowed; a `<div>` around all of them is not.
+            */}
+            <dl className="mt-1.5 flex flex-col gap-1">
               <DateRow label={t("invoice.date_of_issue")} value={document.issuedOn} />
               <DateRow label={t("invoice.date_of_supply")} value={document.suppliedOn} />
               <DateRow label={t("invoice.supply_period")} value={document.supplyPeriod} />
               <DateRow label={t("invoice.place_of_supply")} value={document.placeOfSupply} />
               <DateRow label={t("invoice.currency")} value={currency} />
-            </div>
-          </dl>
+            </dl>
+          </div>
         </div>
       </div>
 
