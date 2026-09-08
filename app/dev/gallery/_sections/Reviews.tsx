@@ -80,6 +80,7 @@ export function Reviews() {
         />
         <ReviewCard
           review={card("b", {
+            at: "24 Aug 2026",
             provenanceLabel: t("reviewpage.provenance.verified_enquiry"),
             provenanceTone: "neutral",
             overall: 3,
@@ -96,6 +97,8 @@ export function Reviews() {
       <States label="replied · one reply, and it cannot be edited" stack>
         <ReviewCard
           review={card("c", {
+            buyerLabel: "Marina Facilities LLC",
+            at: "14 Aug 2026",
             state: "replied",
             replyOpen: false,
             sellerReply:
@@ -115,7 +118,9 @@ export function Reviews() {
       */}
       <States label="reply window closed" stack>
         <ReviewCard
-          review={card("d", { state: "window_closed", replyOpen: false, replyBy: "5 Sep 2026" })}
+          review={card("d", {
+            buyerLabel: "Al Naboodah Construction",
+            at: "2 Aug 2026", state: "window_closed", replyOpen: false, replyBy: "5 Sep 2026" })}
           mayReply
           mayDispute
           postReply={REFUSED}
@@ -131,6 +136,8 @@ export function Reviews() {
       <States label="under dispute · buyers still see it" stack>
         <ReviewCard
           review={card("e", {
+            buyerLabel: "Nakheel Community Management",
+            at: "30 Jul 2026",
             state: "under_dispute",
             dispute: {
               groundLabel: t("reviews.dispute.ground.no_traceable_enquiry"),
@@ -155,6 +162,8 @@ export function Reviews() {
       <States label="dispute refused · the review stands, with the reason" stack>
         <ReviewCard
           review={card("i", {
+            buyerLabel: "Sandpiper Property Services LLC",
+            at: "24 Jun 2026",
             state: "awaiting_reply",
             dispute: {
               groundLabel: t("reviews.dispute.ground.no_traceable_enquiry"),
@@ -179,6 +188,8 @@ export function Reviews() {
       <States label="the supplier's reply was removed" stack>
         <ReviewCard
           review={card("f", {
+            buyerLabel: "Deira Cold Store LLC",
+            at: "21 Jul 2026",
             state: "replied",
             replyOpen: false,
             sellerReply: "A reply that broke the rules.",
@@ -195,6 +206,8 @@ export function Reviews() {
       <States label="off your page · removed, and held" stack>
         <ReviewCard
           review={card("g", {
+            buyerLabel: "Northgate Facilities LLC",
+            at: "12 Jul 2026",
             state: "removed",
             replyOpen: false,
             removalGround: t("moderation.ground.provably_false"),
@@ -207,7 +220,9 @@ export function Reviews() {
           raiseDispute={REFUSED}
         />
         <ReviewCard
-          review={card("h", { state: "held", replyOpen: false })}
+          review={card("h", {
+            buyerLabel: "Bluewater Marine Services LLC",
+            at: "3 Jul 2026", state: "held", replyOpen: false })}
           mayReply
           mayDispute
           postReply={REFUSED}

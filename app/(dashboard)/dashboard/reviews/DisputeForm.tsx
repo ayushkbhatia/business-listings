@@ -22,11 +22,16 @@ import type { ReviewActionResult } from "./actions";
  */
 export function DisputeForm({
   reviewId,
+  buyerLabel,
+  reviewedOn,
   raiseDispute,
   onDone,
   onCancel,
 }: {
   reviewId: string;
+  /** Names the landmark, so a page of these is navigable. See `ReviewCard`. */
+  buyerLabel: string;
+  reviewedOn: string;
   raiseDispute: (formData: FormData) => Promise<ReviewActionResult>;
   onDone: () => void;
   onCancel: () => void;
@@ -38,6 +43,7 @@ export function DisputeForm({
   return (
     <form
       className="mt-3 rounded-card border border-line-strong bg-surface p-3"
+      aria-label={t("reviews.dispute.form", { buyer: buyerLabel, date: reviewedOn })}
       action={(formData) => {
         setError(null);
         startTransition(async () => {

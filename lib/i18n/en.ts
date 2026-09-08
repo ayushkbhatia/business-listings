@@ -2593,6 +2593,16 @@ export const en = {
   "reviews.reply": "Post reply",
   "reviews.replying": "Posting",
   "reviews.reply_label": "Your reply to this review",
+  /*
+     Landmark names. A `<form>` is a landmark and this page renders one per
+     unanswered review, so without a name the list reads "form, form, form".
+
+     Buyer **and** date, because a buyer can review the same supplier several
+     times — `Review.enquiryId` is unique per review, not per buyer — so the
+     name has to be distinct per instance the way `QuoteLineEditor` and
+     `Thread` already make theirs.
+  */
+  "reviews.reply_form": "Reply to the review from {buyer} on {date}",
   "reviews.reply_heading": "Your public reply — one only, and it cannot be edited once posted",
   "reviews.reply_placeholder": "Answer the point they made. This is public and it cannot be edited afterwards.",
   "reviews.reply_once": "One reply, and it cannot be changed once posted. Never deleted.",
@@ -2659,6 +2669,7 @@ export const en = {
   "reviews.dispute.sla": "Decided by our team in about 2 working days. We email you the outcome, and the reason is recorded on the review.",
   "reviews.dispute.start": "Dispute this review",
   "reviews.dispute.heading": "Dispute this review",
+  "reviews.dispute.form": "Dispute the review from {buyer} on {date}",
   "reviews.dispute.ground_legend": "Which ground",
   "reviews.dispute.ground_hint": "Pick the one that is true. A dispute refused on the wrong ground cannot be re-filed on the right one while it is open.",
   "reviews.dispute.detail_label": "What happened",

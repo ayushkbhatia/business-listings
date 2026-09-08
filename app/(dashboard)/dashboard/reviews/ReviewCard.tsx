@@ -231,6 +231,16 @@ export function ReviewCard({
       ) : canReplyNow ? (
         <form
           className="mt-3 rounded-card border border-line bg-surface p-3"
+          /*
+             Named, and named after *this* review.
+
+             A `<form>` is a landmark, and this page renders one per unanswered
+             review — so without a name a screen reader's landmark list reads
+             "form, form, form, form" and none of them says which buyer it
+             answers. `tests/e2e/landmarks.spec.ts` catches the duplicates on
+             /dev/gallery; the page they were duplicated on is this one.
+          */
+          aria-label={t("reviews.reply_form", { buyer: review.buyerLabel, date: review.at })}
           action={(formData) => {
             setError(null);
             startTransition(async () => {
@@ -313,6 +323,8 @@ export function ReviewCard({
       {disputing ? (
         <DisputeForm
           reviewId={review.id}
+          buyerLabel={review.buyerLabel}
+          reviewedOn={review.at}
           raiseDispute={raiseDispute}
           onDone={() => {
             setDisputing(false);

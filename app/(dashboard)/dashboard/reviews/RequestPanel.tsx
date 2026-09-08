@@ -62,6 +62,7 @@ export function RequestPanel({ buyers, reachable, sendRequests }: RequestPanelPr
   return (
     <form
       className="flex flex-col gap-3"
+      aria-label={t("reviews.request_heading")}
       action={(formData) => {
         setResult(null);
         startTransition(async () => {
