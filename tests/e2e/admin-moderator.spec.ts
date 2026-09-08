@@ -81,6 +81,21 @@ test.describe("removing a review is not a moderator's row", () => {
   test("has no control anywhere that removes a review", async ({ page }) => {
     await page.goto("/admin/reports");
     await expect(page.getByRole("button", { name: /remove/i })).toHaveCount(0);
+
+    /*
+       Including behind the review-dispute panel, which board 11c added to this
+       screen. Upholding a dispute *is* a removal, and a closed panel is not a
+       control that is absent — it is a control nobody has opened yet, which is
+       exactly the distinction `Decide` hides. So the panel is opened and asked
+       again.
+    */
+    const decide = page.getByRole("button", { name: "Decide" }).first();
+    if ((await decide.count()) > 0) {
+      await decide.click();
+      await expect(page.getByRole("button", { name: /uphold/i })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Refuse" })).toBeVisible();
+      await expect(page.getByText(/is an ops lead's decision/)).toBeVisible();
+    }
   });
 });
 

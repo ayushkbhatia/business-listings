@@ -100,6 +100,26 @@ describe("what an event supplies", () => {
          `lib/trade/ramadan-shift-job.ts` carries the exactly-once guard.
       */
       "ramadan_dates_moved",
+      /*
+         Board 11c's two, which closed the loop the reply window runs on.
+
+         Both were declared in the enum and seeded with **live** templates
+         carrying placeholders, and emitted by nothing — the worst version of
+         this shape, because `render()` throws on a placeholder the params do
+         not carry, so the first thing ever to send one would have failed rather
+         than sent. `review_posted` is what makes a twenty-eight-day reply
+         window measurable by the person it applies to; `review_requested` is
+         the seller's one ask, and its channel is resolved per buyer rather than
+         from a matrix — see lib/reviews/channel.ts.
+      */
+      /*
+         And the third, which is the promise the dispute rail makes: "decided by
+         our team in about 2 working days — the outcome and the reason are
+         logged and sent to you". The log was the easy half.
+      */
+      "review_dispute_decided",
+      "review_posted",
+      "review_requested",
       "setup_nudge",
       "subscription_renewed",
     ]);
@@ -108,7 +128,7 @@ describe("what an event supplies", () => {
   it("covers every event in the enum, so none is missing a row", () => {
     // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
     // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(16);
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(17);
   });
 
   it("does not claim to emit the alert it only records", () => {

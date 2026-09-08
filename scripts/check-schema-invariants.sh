@@ -103,4 +103,21 @@ else
   fail=1
 fi
 
+# Board 11c. One **open** dispute per review, and any number of settled ones.
+#
+# Prisma cannot express `WHERE resolved_at IS NULL`, and the plain unique index
+# it *can* express would say the wrong thing in both directions: it would let two
+# tabs file the same dispute twice — one case decided twice, on a queue whose
+# promise is a decision in two working days — and it would forbid the second,
+# legitimate dispute a buyer's edit inside their editable fortnight produces.
+if grep -qE '^[[:space:]]*model[[:space:]]+ReviewDispute[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE 'CREATE UNIQUE INDEX[^;]*"review_dispute_one_open_per_review"' prisma/migrations; then
+    echo "   pass — one open review dispute per review, by partial unique index"
+  else
+    echo "   FAIL — ReviewDispute exists with no review_dispute_one_open_per_review index."
+    echo "     Prisma cannot express a partial unique index; it lives in the migration."
+    fail=1
+  fi
+fi
+
 exit $fail

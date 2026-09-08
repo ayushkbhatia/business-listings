@@ -52,13 +52,57 @@ export function provenanceOf(review: {
 /** Board 1m: at or below this the review answers the Critical filter. */
 export const CRITICAL_AT_OR_BELOW = 3;
 
-/** The four grounds. "It is unfair" is not one of them. */
-export const REMOVAL_GROUNDS = [
+/**
+ * The four grounds a **seller** may cite. "It is unfair" is not one of them.
+ *
+ * Board 11c criterion 6: *"the dispute rail lists exactly the grounds the
+ * dispute flow accepts."* The rail renders this array, the dispute form accepts
+ * this array, the moderator's queue groups by it, and the Postgres enum
+ * `review_dispute_ground` declares the same four in the same order. One list,
+ * four readers, and a unit test that fails if the enum and this drift.
+ *
+ * The board's own render is why the criterion exists: the prose above the rail
+ * counted four while the rail below it showed three, because abuse and private
+ * information had been merged into one row. They are separate grounds with
+ * separate evidence — abuse is judged on the text, private information on what
+ * the text contains about a third party — so they are separate rows.
+ */
+export const DISPUTE_GROUNDS = [
   "no_traceable_enquiry",
   "abuse",
   "private_information",
   "provably_false",
 ] as const;
+
+export type DisputeGround = (typeof DISPUTE_GROUNDS)[number];
+
+export function isDisputeGround(value: string): value is DisputeGround {
+  return (DISPUTE_GROUNDS as readonly string[]).includes(value);
+}
+
+/**
+ * A review the platform itself found and removed. Board 11c `B6`.
+ *
+ * The request panel has promised since board 1m that *"an incentivised review
+ * is removed and logged against your account"*, and there was no ground a
+ * moderator could remove one on: the four above are the four a seller may
+ * *ask* for, and no supplier is going to file a dispute reporting themselves.
+ * So the sentence described a removal with no path to it.
+ *
+ * Held separate rather than folded into the four, which keeps criterion 6 true
+ * in both directions — the rail lists exactly what the dispute flow accepts, and
+ * this is not something the dispute flow accepts.
+ */
+export const STAFF_ONLY_GROUNDS = ["incentivised"] as const;
+
+/**
+ * Every ground a review can come down on. The seller's four, plus ours.
+ *
+ * `removeReview` takes one of these; the dispute rail takes one of the four
+ * above. Two lists with one derived from the other, so a ground can never be
+ * removable-but-undisputable by accident.
+ */
+export const REMOVAL_GROUNDS = [...DISPUTE_GROUNDS, ...STAFF_ONLY_GROUNDS] as const;
 
 export type RemovalGround = (typeof REMOVAL_GROUNDS)[number];
 
@@ -68,6 +112,138 @@ export function isRemovalGround(value: string): value is RemovalGround {
 
 /** Editable for a fortnight, then it is the record. */
 export const EDITABLE_DAYS = 14;
+
+/**
+ * How long a seller has to reply. Board 11c `Q6`: twenty-eight days, one rule.
+ *
+ * No per-plan variation, deliberately, and `Q5` is the same decision one step
+ * out: reviews are reputation rather than a paid feature, and a Free seller who
+ * cannot answer a two-star review is a punishment aimed at the buyer reading it.
+ *
+ * The board drew this as `2 AUG · 21 DAYS TO REPLY` — a countdown that had run
+ * out on 23 August against a page rendered in September, and which said nothing
+ * about what expiry meant. It is a date now, and the consequence is stated on
+ * the card: after it the reply box closes and the review stands on its own.
+ */
+export const REPLY_WINDOW_DAYS = 28;
+
+/** The day the reply box closes. Derived from the review, never stored. */
+export function replyWindowEnds(reviewCreatedAt: Date): Date {
+  return new Date(reviewCreatedAt.getTime() + REPLY_WINDOW_DAYS * 86_400_000);
+}
+
+/**
+ * Whether this review can still be answered.
+ *
+ * Criterion 9: *"closing is a state change, not a deletion."* Nothing is
+ * written when the window passes and nothing is deleted — the review stays, the
+ * card changes, and a seller who comes back in a year sees the same review with
+ * the box closed rather than a gap where one used to be.
+ *
+ * Removed and held both close it too. A held review is off the public page
+ * while a decision is made, and a reply written against something the seller
+ * cannot see is the one thing on this record that cannot be taken back.
+ */
+export function replyWindowOpen(
+  review: {
+    createdAt: Date;
+    sellerReply: string | null;
+    removedAt: Date | null;
+    heldAt: Date | null;
+  },
+  now: Date,
+): boolean {
+  if (review.sellerReply !== null) return false;
+  if (review.removedAt !== null || review.heldAt !== null) return false;
+  return replyWindowEnds(review.createdAt).getTime() > now.getTime();
+}
+
+/**
+ * The state a review card is in, on the seller's page. One of six.
+ *
+ * The board drew three — awaiting a reply, replied, and an unverified one that
+ * cannot exist — and the page has to render every state a row can actually be
+ * in. `removed` and `under_dispute` were both reachable before this board and
+ * neither was drawn; `window_closed` is `Q6` arriving.
+ *
+ * Derived from the row rather than stored, so there is no state machine to fall
+ * out of step with the columns underneath it.
+ */
+export type ReviewCardState =
+  | "removed"
+  | "held"
+  | "under_dispute"
+  | "replied"
+  | "awaiting_reply"
+  | "window_closed";
+
+export function cardStateOf(
+  review: {
+    createdAt: Date;
+    sellerReply: string | null;
+    removedAt: Date | null;
+    heldAt: Date | null;
+    hasOpenDispute: boolean;
+  },
+  now: Date,
+): ReviewCardState {
+  /*
+     Order is the precedence, and it is not alphabetical.
+
+     Removal outranks everything because the review is gone and nothing else
+     about it is actionable. A hold outranks a dispute because a hold is the
+     moderator having already acted. A dispute outranks a reply because it is
+     the thing currently in flight — a seller who replied and then disputed is
+     waiting on us, and telling them "replied" would hide that.
+  */
+  if (review.removedAt !== null) return "removed";
+  if (review.heldAt !== null) return "held";
+  if (review.hasOpenDispute) return "under_dispute";
+  if (review.sellerReply !== null) return "replied";
+  return replyWindowEnds(review.createdAt).getTime() > now.getTime()
+    ? "awaiting_reply"
+    : "window_closed";
+}
+
+export type DisputeVerdict =
+  | { ok: true }
+  | { ok: false; reason: "not_yours" | "already_removed" | "already_held" | "already_disputed" };
+
+/**
+ * May this seller dispute this review?
+ *
+ * **No deadline**, and that is a decision rather than an omission. The reply
+ * window closes because a public conversation held eleven months late is not a
+ * conversation; none of the four grounds expires the same way. A review that
+ * names a person's mobile number is a private-information problem on the day it
+ * is written and on the same day next year, and a dispute window would mean the
+ * platform declining to look at it because the seller was slow.
+ *
+ * A reply does not waive it either. §States says a refused dispute leaves the
+ * reply available if the window is open, which only makes sense if the two are
+ * independent — and the case that produces the order the other way round is
+ * ordinary: a seller answers a review politely, then finds out the reviewer was
+ * a competitor.
+ *
+ * What does block it is a decision already made or in progress. A removed
+ * review is gone, a held one is already in front of somebody, and a second open
+ * dispute on one review is the same case decided twice.
+ */
+export function canDisputeReview(
+  review: {
+    businessId: string;
+    removedAt: Date | null;
+    heldAt: Date | null;
+    hasOpenDispute: boolean;
+  },
+  businessId: string,
+): DisputeVerdict {
+  if (review.businessId !== businessId) return { ok: false, reason: "not_yours" };
+  if (review.removedAt !== null) return { ok: false, reason: "already_removed" };
+  if (review.heldAt !== null) return { ok: false, reason: "already_held" };
+  if (review.hasOpenDispute) return { ok: false, reason: "already_disputed" };
+  return { ok: true };
+}
 
 /** A seller may ask for a review about a deal this recent, and no older. */
 export const REQUEST_WINDOW_DAYS = 90;

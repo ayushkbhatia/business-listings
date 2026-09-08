@@ -1212,7 +1212,66 @@ async function seedInboxStates(db: Db) {
     }
   }
 
-  console.log(`   ${FIXTURES.length} leads across the four inbox tabs and the six pipeline ones`);
+  /*
+     One buyer this seller may still ask for a review. Board 11c §1.
+
+     The acceptance suite signs in as this seller, and the review depth lives on
+     `al-waha-industrial-supplies` — so without this the request panel is only
+     ever reachable in its exhausted state from a session no test holds, and
+     criterion 1 ("the request button's count equals the selection, always")
+     could not be asserted against a running page at all.
+
+     **With an email.** Almost every seeded buyer holds a phone and no email,
+     because that is how a buyer signs up here — and every WhatsApp template in
+     this product ships `pending_meta`, so until Meta approves them email is the
+     only carrier a review request can actually leave on. That is a true fact
+     about the platform rather than a seed artefact, and the panel reports it
+     per buyer; this fixture is the one that makes the reachable path testable
+     while the rest of the seed keeps showing the unreachable one.
+  */
+  const askable = await db.user.create({
+    data: {
+      id: uuid(347),
+      fullName: "Hessa Al Zaabi",
+      email: "hessa@example.ae",
+      phone: "+971559330114",
+      roles: ["buyer"],
+    },
+    select: { id: true },
+  });
+
+  const acceptedAt = minutesAgo(60 * 24 * 12);
+  const askableEnquiry = await db.enquiry.create({
+    data: {
+      ref: "ENQ-ALMR-ASK1",
+      buyerId: askable.id,
+      requirement: "Gate valves DN80 PN16, cast iron, for a pump room replacement",
+      closesAt: new Date(acceptedAt.getTime() + 7 * 86_400_000),
+      createdAt: new Date(acceptedAt.getTime() - 5 * 86_400_000),
+      contactReleasedToBusinessId: seller.id,
+      contactReleasedAt: acceptedAt,
+      lines: {
+        create: [{ description: "Gate valve DN80 PN16", qty: 8, sortOrder: 0 }],
+      },
+    },
+    select: { id: true },
+  });
+
+  await db.enquiryRecipient.create({
+    data: {
+      enquiryId: askableEnquiry.id,
+      businessId: seller.id,
+      state: "quoted",
+      openedAt: new Date(acceptedAt.getTime() - 4 * 86_400_000),
+      firstReplyAt: new Date(acceptedAt.getTime() - 4 * 86_400_000 + 3_600_000),
+      createdAt: new Date(acceptedAt.getTime() - 5 * 86_400_000),
+    },
+  });
+
+  console.log(
+    `   ${FIXTURES.length} leads across the four inbox tabs and the six pipeline ones, ` +
+      `plus 1 buyer this seller may ask for a review`,
+  );
 }
 
 /**
@@ -5167,13 +5226,206 @@ async function seedReviewDepth(db: Db) {
     created += 1;
   }
 
+  /*
+     Buyers who can still be asked. Board 11c §1.
+
+     Without these the request panel has no populated state anywhere in the
+     product: every accepted quote in the flagship seller's ninety-day window
+     already carries a review, so the eligible list is empty and the panel that
+     the board calls *"the only lever on this page"* renders its exhausted
+     copy on a fresh seed. `/dev/gallery` and any acceptance run would only ever
+     have seen the state that says there is nothing to do.
+
+     Three shapes rather than three rows:
+
+       - a buyer with a phone, so the panel can show the WhatsApp rung and the
+         email fallback taking over while the WhatsApp template is `pending_meta`
+       - a buyer with an email and no phone, which is the case `B2` says the
+         board's send button asserted its way past
+       - a buyer with **neither**, which is the row the panel renders disabled
+         with the reason. Both columns on `User` are nullable and always have
+         been, so this is a real state and not a contrivance — and a name that
+         quietly vanished from a list headed "3 buyers are eligible" would be
+         the reconciliation failure criterion 5 is about, one list down.
+  */
+  const ASKABLE = [
+    {
+      person: "Nadia Farouk",
+      company: "Jebel Ali Cold Chain LLC",
+      phone: "+971559214477",
+      email: "nadia@example.ae",
+      requirement: "Butterfly valves DN150, EPDM seat, for a chilled water tie-in",
+      qty: 12,
+    },
+    {
+      person: "Tarek Aboud",
+      company: null,
+      phone: null,
+      email: "tarek@example.ae",
+      requirement: "Y-strainers 2 inch, cast iron, flanged, with mesh baskets",
+      qty: 20,
+    },
+    {
+      person: "Leila Habib",
+      company: "Ras Al Khor Facilities LLC",
+      phone: null,
+      email: null,
+      requirement: "Pressure gauges 0–16 bar, bottom entry, glycerine filled",
+      qty: 30,
+    },
+  ] as const;
+
+  let askable = 0;
+  for (const [index, buyer] of ASKABLE.entries()) {
+    const companyId = buyer.company
+      ? (
+          await db.buyerCompany.create({
+            data: { name: buyer.company, emirate: "dubai" },
+            select: { id: true },
+          })
+        ).id
+      : null;
+
+    const buyerId = uuid(340 + index);
+    await db.user.create({
+      data: {
+        id: buyerId,
+        fullName: buyer.person,
+        roles: ["buyer"],
+        ...(buyer.phone ? { phone: buyer.phone } : {}),
+        ...(buyer.email ? { email: buyer.email } : {}),
+        ...(companyId ? { buyerCompanyId: companyId } : {}),
+      },
+    });
+
+    // Inside the ninety-day window, and comfortably so: a fixture that sits on
+    // the boundary is a fixture that falls out of the window while nobody is
+    // looking at it.
+    const acceptedAt = days(-(10 + index * 12));
+    const enquiry = await db.enquiry.create({
+      data: {
+        ref: `ENQ-7${(800 + index).toString().padStart(3, "0")}`,
+        buyerId,
+        requirement: buyer.requirement,
+        closesAt: new Date(acceptedAt.getTime() + 7 * 86_400_000),
+        createdAt: new Date(acceptedAt.getTime() - 6 * 86_400_000),
+        contactReleasedToBusinessId: seller.id,
+        contactReleasedAt: acceptedAt,
+        lines: { create: [{ description: buyer.requirement, qty: buyer.qty, sortOrder: 0 }] },
+      },
+      select: { id: true },
+    });
+
+    await db.enquiryRecipient.create({
+      data: {
+        enquiryId: enquiry.id,
+        businessId: seller.id,
+        // `quoted`, not a state of its own: acceptance lives on the enquiry as
+        // `contactReleasedToBusinessId`, and `RecipientState` has no
+        // `accepted` — the recipient row records what this supplier did, which
+        // was answer.
+        state: "quoted",
+        openedAt: new Date(acceptedAt.getTime() - 5 * 86_400_000),
+        firstReplyAt: new Date(acceptedAt.getTime() - 5 * 86_400_000 + 5_400_000),
+        createdAt: new Date(acceptedAt.getTime() - 6 * 86_400_000),
+      },
+    });
+    askable += 1;
+  }
+
+  /*
+     One open dispute, so board 4h's queue has a row and board 11c's
+     `Under review` card has a state.
+
+     Both surfaces were unreachable on a fresh seed otherwise: the queue on
+     `/admin/reports` rendered its empty line, and the moderator spec's
+     assertion that upholding is not offered to a moderator could not open the
+     panel it needed to look inside. A queue with no fixture row is a queue
+     nobody has ever seen work.
+
+     `no_traceable_enquiry` against a review that came from an accepted quote,
+     deliberately: it is the shape a moderator meets most often and the one the
+     panel answers on sight — the seller says the reviewer was never a buyer,
+     and their own account released contact to them.
+  */
+  /*
+     An owner, because the business with 34 reviews had nobody who could read
+     them.
+
+     `seedSeatsAndChannels` builds a team for the flagship *catalogue* seller and
+     this is the flagship *reviews* one, so `/dashboard/reviews` had no seat that
+     reached it and `/dev/seat` had to mint one on the spot every time. A
+     dispute also needs a raiser: `ReviewDispute.raisedById` is not nullable
+     because a formal claim about a customer is made by a person.
+
+     Sorts after `al-areen-industrial-supplies-llc`, which is what
+     `team-roster` and `reachable-delivery` pick with `orderBy: slug asc`
+     excluding al-marwan — so this adds a seat without moving either of them.
+  */
+  const disputeOwner = await db.user.upsert({
+    where: { id: uuid(349) },
+    update: {},
+    create: {
+      id: uuid(349),
+      fullName: "Rashed Al Waha",
+      email: "owner@al-waha.example.ae",
+      phone: "+971559440021",
+      roles: ["seller_owner"],
+      businessId: seller.id,
+    },
+    select: { id: true },
+  });
+
+  /*
+     And a routing matrix, because `notify` reads one and returns nothing
+     without it — which would make `review_posted` inert on the one business
+     that has reviews to be posted about.
+  */
+  await db.notificationPreference.upsert({
+    where: { businessId: seller.id },
+    update: {},
+    create: {
+      businessId: seller.id,
+      routing: {
+        enquiry_received: ["whatsapp", "in_app"],
+        quote_accepted: ["whatsapp", "email", "in_app"],
+        review_posted: ["email", "in_app"],
+        review_dispute_decided: ["email", "in_app"],
+        weekly_digest: ["email"],
+      },
+      quietHoursEnabled: true,
+      highValueOverrideAed: 50_000,
+      nudgeEnabled: true,
+      nudgeAfterHours: 24,
+    },
+  });
+
+  const disputeSubject = await db.review.findFirst({
+    where: { businessId: seller.id, removedAt: null, heldAt: null, sellerReply: null },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  });
+  if (disputeSubject) {
+    await db.reviewDispute.create({
+      data: {
+        reviewId: disputeSubject.id,
+        businessId: seller.id,
+        raisedById: disputeOwner.id,
+        ground: "no_traceable_enquiry",
+        detail:
+          "This account belongs to the sales manager of the trading company two units down from us in Al Quoz. There is no enquiry thread on our side and nothing was ever delivered.",
+        createdAt: days(-1),
+      },
+    });
+  }
+
   const published = REVIEW_FIXTURES.filter((row) => row.state === "published").length;
   const accepted = REVIEW_FIXTURES.filter(
     (row) => row.state === "published" && row.accepted,
   ).length;
   console.log(
     `   ${created} on ${seller.slug} — ${published} published, ${accepted} from accepted quotes, ` +
-      `${photos} photos`,
+      `${photos} photos, ${askable} buyers still askable, 1 open dispute`,
   );
 }
 
@@ -5427,6 +5679,10 @@ async function seedSellerAccounts(db: Db, businesses: Biz[]) {
           quote_accepted: ["whatsapp", "email", "in_app"],
           quote_expiring: ["in_app"],
           review_posted: ["email", "in_app"],
+          // An event absent from the matrix routes to nothing at all — a seeded
+          // template with no routing row is a feature that looks wired and is
+          // not, which is the trap board 8a's nudge already fell into.
+          review_dispute_decided: ["email", "in_app"],
           document_expiring: ["email", "in_app"],
           // Board 8a's one nudge. Routed here as well as templated, because an
           // event absent from a seller's matrix sends nothing at all — a seeded
@@ -5618,22 +5874,92 @@ const TEMPLATES: TemplateSeed[] = [
     actionPath: "/dashboard/quotes",
     status: "live",
   },
+  /*
+     Board 11c. The seller has twenty-eight days to answer, measured from the
+     review — so the copy names the window rather than leaving a deadline to be
+     discovered on the page after it has passed, which is the defect the board's
+     own expired countdown had.
+
+     The rating and not the words. A notification carrying a two-star review's
+     text puts the complaint in front of a supplier before the box they can
+     answer it in, and there is no reply box in an email.
+  */
   {
     event: "review_posted",
     channel: "email",
     subject: "A review was posted on your listing",
-    body: "A buyer left a {rating} out of 5 review after enquiry {ref}. You may reply once, and the reply cannot be edited afterwards.",
+    body: "A buyer left a {rating} out of 5 review after enquiry {ref}. You have 28 days to reply. One reply, public, and it cannot be edited afterwards.",
     actionLabel: "Read and reply",
     actionPath: "/dashboard/reviews",
     status: "live",
   },
   {
-    event: "review_requested",
+    event: "review_posted",
     channel: "in_app",
-    body: "{businessName} asked for a review of enquiry {ref}.",
+    body: "A {rating} out of 5 review landed after enquiry {ref}. 28 days to reply.",
+    actionLabel: "Read and reply",
+    actionPath: "/dashboard/reviews",
+    status: "live",
+  },
+  /*
+     Board 11c `B2` — the request channel, and the fallback that has to be real.
+
+     The panel says "WhatsApp where we have a number, email otherwise", and that
+     is a per-buyer decision made in `lib/reviews/channel.ts` rather than a
+     matrix. Both templates exist so both halves of the sentence can happen.
+
+     WhatsApp is `pending_meta` like every other WhatsApp template here — Meta
+     approves them, we do not — which is exactly why `requestChannelFor` asks
+     the template table what is live before it picks. Until approval every
+     request goes by email, and it goes rather than silently not going.
+
+     This was seeded `in_app` and live, which is the one channel a review
+     request must not use: it goes to somebody who finished a deal weeks ago and
+     has no reason to open the site, so an in-app notification for them is a
+     message filed where nobody is standing.
+  */
+  {
+    event: "review_requested",
+    channel: "email",
+    subject: "{businessName} would like your review",
+    body: "You accepted a quote from {businessName} on enquiry {ref}. If you have a minute, other buyers would find it useful to know how it went. One request only — we will not ask again.",
     actionLabel: "Write a review",
     actionPath: "/review/new?enq={enquiryId}",
     status: "live",
+  },
+  /*
+     Board 11c `B5`. The decision leaving the platform.
+
+     The outcome and the ground, and not the moderator's prose: `render()`
+     refuses a value that looks like contact details, and a reason explaining
+     that a review published somebody's mobile number would throw rather than
+     send. The reason is on the review card, which the action opens.
+  */
+  {
+    event: "review_dispute_decided",
+    channel: "email",
+    subject: "Your review dispute was decided",
+    body: "We have decided your dispute on the ground of {ground}. Outcome: {outcome}. The reason is recorded on the review.",
+    actionLabel: "Open the review",
+    actionPath: "/dashboard/reviews",
+    status: "live",
+  },
+  {
+    event: "review_dispute_decided",
+    channel: "in_app",
+    body: "Review dispute decided — {ground}. Outcome: {outcome}.",
+    actionLabel: "Open the review",
+    actionPath: "/dashboard/reviews",
+    status: "live",
+  },
+  {
+    event: "review_requested",
+    channel: "whatsapp",
+    body: "{businessName} has asked for a review of enquiry {ref}. One request only.",
+    actionLabel: "Write a review",
+    actionPath: "/review/new?enq={enquiryId}",
+    metaTemplateName: "bl_review_requested_v1",
+    status: "pending_meta",
   },
   /*
      Board 3e §5. The copy said "drops to tier 2", which was the schema's own

@@ -95,7 +95,7 @@ My recommendation: **stop building features.** The next unit of work is closing 
 | `/dashboard/billing` + `/change`, `/cancel` | Wired | No payment capture, as designed. |
 | `/dashboard/analytics` | Thin | Fed by the measurements in `/api/jobs/daily`, which run nightly. Numbers appear after the first run against real traffic; nothing to build. |
 | `/dashboard/promote` | Wired | Boosts write audit rows. |
-| `/dashboard/reviews` | Wired | Reply only. Removal is staff-side and orphaned — see findings. |
+| `/dashboard/reviews` | Wired | Board 11c. Request (one per buyer ever, WhatsApp where we hold a number and email otherwise), reply (one, 28-day window, not editable), dispute (four grounds, into 4h). Removal stays staff-side. |
 | `/dashboard/domain` | **Fail-closed** | The screen works; the integration cannot. Needs `VERCEL_DOMAINS_TOKEN` and `stores.businesslistings.me` provisioned — both outside the repo. Refuses rather than pretending, which is the intended behaviour until then. |
 | `/dashboard/setup`, `/setup/visit`, `/templates`, `/settings` | Wired | Visit scheduling exists; `recordVisit` behind it does not run — see findings. |
 
@@ -110,11 +110,11 @@ My recommendation: **stop building features.** The next unit of work is closing 
 | `/admin` | Wired | Queue counts and the day's work. |
 | `/admin/queue` + `[id]`, `/conflict/[id]` | Wired | Moderation queue with conflict resolution. |
 | `/admin/businesses` | Wired | Tier, suspend and lift all have a control, gated per row and per seat. The screen also had **no capability gate at all** — line 23 was dead code — and now has one. |
-| `/admin/reports` | Wired | Supplier reports land. `removeReview` has a screen of its own at `/admin/reviews` — reports are one route to a bad review, not the only one. `editReview` left this row: it is a buyer action, not a staff one. |
+| `/admin/reports` | Wired | Supplier reports land, and board 11c's review disputes beside them as a second queue — two row shapes, two tables, one screen. Upholding one removes the review and is ops lead only; a moderator is offered the refusal control alone. |
 | `/admin/ingest` + `[id]`, `/dedupe` | Wired | `dismissCandidate` is inside the fence, `stageRun` has an upload form, and `unmergeBusinesses` has a screen with the reader it needed. The "8,600 staged rows" in the first draft of this audit was wrong — the table is empty after a reseed. |
 | `/admin/subscriptions`, `/dunning`, `/invoices`, `/revenue`, `/tax` | Wired | `issueSubscriptionCredit` has a panel, gated on `subscription.credit` alone rather than the page's wider OR. `runDunning` runs daily. |
 | `/admin/visits` | Wired | A request links to a report at `/admin/visits/[id]`: date, three separate findings, and at least two geotagged photographs. The admin upload path it needed was built with it. |
-| `/admin/reviews` | Wired | Removal with a ground and a written reason, ops lead only. Removed reviews stay listed and marked. |
+| `/admin/reviews` | Wired | Removal with a ground and a written reason, ops lead only. Removed reviews stay listed and marked. Board 11c added two more decisions on the same rung: taking down a supplier's reply (`B4` — the text stays as the record, and there is no second reply) and logging an incentivised-review finding against the account (`B6`, which is what makes the prohibition on the request panel enforceable). |
 | `/admin/audit` | Wired | Every audited mutation appears here. `reason` is `NOT NULL` and enforced in Postgres. |
 | `/admin/content/matrix`, `/guides` + `[id]`, `/home`, `/redirects`, `/attribution` | Wired | Handoff 5's CMS. Content added here costs no deploy — use it. |
 | `/admin/categories` | Wired | Rename moves every affected URL and repoints existing redirects to avoid chains. |

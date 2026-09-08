@@ -11,6 +11,22 @@ export type AuditAction =
   | "review_removed"
   | "review_held"
   | "review_released"
+  /*
+     Board 11c `B4` and `B5`.
+
+     `review_reply_removed` is not `review_removed`: the review stands and the
+     supplier's answer to it came down, which is the opposite fact about the
+     same row. Filing both under one name would make the log unable to answer
+     the only question anybody asks it — what happened to that review.
+
+     `review_dispute_resolved` sits under `report.resolve` because deciding a
+     dispute is deciding a queue item. An upheld one also writes
+     `review_removed` under `Review:…`, so the log answers "how do we decide
+     abuse disputes" and "what happened to that review" separately.
+  */
+  | "review_reply_removed"
+  | "review_dispute_resolved"
+  | "incentive_logged"
   | "question_removed"
   | "credit_issued"
   | "suspend"
@@ -94,6 +110,24 @@ export type AuditedCapability = keyof typeof ACTION_FOR_CAPABILITY;
  */
 export const PAIRED_ACTIONS = {
   "review.hold": ["review_held", "review_released"],
+  /*
+     Board 11c `B4`. Taking down a seller's reply is held at the same rung as
+     removing the review — erring higher is the safe direction for removing
+     something a person wrote in public, which is the call `question.remove`
+     already makes for the same reason — and the two are told apart by the
+     action rather than by a second capability nobody would be able to describe
+     the difference between.
+  */
+  "review.remove": ["review_removed", "review_reply_removed"],
+  /*
+     Board 11c `B5` and `B6`. A supplier report, a review dispute and an
+     incentive finding are three row shapes on one screen and one rung, and the
+     log has to say which happened: `SupplierReport:…` and `ReviewDispute:…` are
+     different subjects, and `incentive_logged` *creates* a queue item where the
+     other two close one. Filing a finding under `report_resolved` would say the
+     opposite of what occurred.
+  */
+  "report.resolve": ["report_resolved", "review_dispute_resolved", "incentive_logged"],
   "taxonomy.write": [
     "taxonomy_changed",
     "rule_proposed",

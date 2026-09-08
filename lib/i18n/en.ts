@@ -441,7 +441,7 @@ export const en = {
   "admin.dedupe.reversible_empty.body": "A merge can be reversed for thirty days. None made in that time is still open.",
   "admin.reviews.title": "Reviews",
   "admin.reviews.eyebrow": "Trust",
-  "admin.reviews.meta": "{count} published, {removed} removed",
+  "admin.reviews.meta": "{count} published, {removed} removed · showing the {shown} most recent",
   "admin.reviews.kind": "Review",
   "admin.reviews.remove": "Remove",
   "admin.reviews.removed": "Removed. The rating average is recalculated without it.",
@@ -455,6 +455,42 @@ export const en = {
   "admin.reviews.ground.abuse": "Abuse",
   "admin.reviews.ground.private_information": "Private information",
   "admin.reviews.ground.provably_false": "Provably false",
+  /*
+     Board 11c `B6`. Not one of the four a seller may cite — no supplier files a
+     dispute reporting themselves — so it lives here beside the removal grounds
+     and not on the rail. The request panel has promised since board 1m that an
+     incentivised review is removed; this is the ground that removes it.
+  */
+  "admin.reviews.ground.incentivised": "Incentivised by the supplier",
+  // ── Board 11c B4 and B6, on the same screen as the removal control ──
+  "admin.reviews.remove_reply": "Remove the reply",
+  "admin.reviews.reply_removed": "The supplier's reply is off the page. The review stands.",
+  "admin.reviews.reply_removed_on": "Reply removed {date}",
+  "admin.reviews.reply_already_removed": "That reply has already been removed.",
+  "admin.reviews.no_reply_to_remove": "There is no reply on that review.",
+  "admin.reviews.log_incentive": "Log an incentive finding",
+  "admin.reviews.incentive_note": "This records a finding against the supplier's account and puts it in the reports queue. It does not remove the review — remove it separately, on the incentivised ground, if that is the decision.",
+  "admin.reviews.incentive_permanent": "The finding stays on the account. It is what makes the prohibition on the request panel enforceable rather than a warning.",
+  "admin.reviews.incentive_logged": "Logged against the account and queued in reports.",
+  "admin.reviews.incentive_already_logged": "A finding is already recorded against this review.",
+
+  // ── Board 11c B5 — the review-dispute queue, on 4h ──
+  "admin.disputes.heading": "Review disputes",
+  "admin.disputes.description": "A supplier says a review should not stand. Four grounds, two outcomes, decided in about two working days.",
+  "admin.disputes.kind": "Review dispute",
+  "admin.disputes.empty": "No open disputes.",
+  "admin.disputes.decide": "Decide",
+  "admin.disputes.uphold": "Uphold and remove",
+  "admin.disputes.refuse": "Refuse",
+  "admin.disputes.upheld": "Upheld. The review is removed and the supplier has been told.",
+  "admin.disputes.refused": "Refused. The review stands and the supplier has been told.",
+  "admin.disputes.pick_an_outcome": "Uphold it or refuse it. There is no third outcome — a review cannot be corrected.",
+  "admin.disputes.age": "{date} · {days} days open",
+  "admin.disputes.raised_by": "Raised by {name}",
+  "admin.disputes.from_accepted_quote": "This review came from a quote this supplier accepted. The buyer is traceable.",
+  "admin.disputes.from_confirmed_enquiry": "This review came from an enquiry this supplier answered. No quote was accepted.",
+  "admin.disputes.refuse_only": "Upholding a dispute removes the review, which is an ops lead's decision. Refusing leaves it standing and the supplier can still reply if their window is open. Either way the reason goes to them.",
+  "admin.disputes.note": "Upholding removes the review, which is an ops lead decision. Refusing leaves it standing and the supplier can still reply if their window is open. Either way the reason goes to them.",
   "admin.reviews.pick_ground": "Pick a ground for the removal.",
   "admin.reviews.not_found": "That review is not here.",
   "admin.reviews.already_removed": "Somebody already removed that review.",
@@ -2514,30 +2550,165 @@ export const en = {
   "reviews.title": "Reviews",
   "reviews.subtitle": { one: "{count} review", other: "{count} reviews" },
   "reviews.average": "{score} out of 5",
+  "reviews.rated": "Rated {score} out of 5",
+  /*
+     The header, reconciled. Criterion 5.
+
+     The board read "4.8 average of 126 reviews · 94 from a verified enquiry, 32
+     unverified", and there is no such thing as the second number — every review
+     on this platform has an enquiry, because `Review.enquiryId` is NOT NULL.
+     The split that is real is the provenance ladder board 1m already shows the
+     buyer, and these two numbers add up to the first one.
+  */
+  "reviews.header_split": "{accepted} from an accepted quote, {enquiry} from a confirmed enquiry",
+  "reviews.header_count": { one: "{count} on your page", other: "{count} on your page" },
+  "reviews.header_off_page": { one: "{count} off it", other: "{count} off it" },
+  "reviews.overall_is_answered": "Buyers rate each line separately and give an overall score of their own. The number above is that score, not the average of the four.",
+
+  "reviews.tab.on_page": "On your page",
+  "reviews.tab.accepted_quote": "Accepted quote",
+  "reviews.tab.verified_enquiry": "Confirmed enquiry",
+  "reviews.tab.needs_reply": "Needs a reply",
+  "reviews.tab.off_page": "Off your page",
+  "reviews.list_heading": "Recent reviews",
+  "reviews.needs_reply_count": { one: "{count} needs a reply", other: "{count} need a reply" },
+  "reviews.none_in_filter": "No reviews in this view. Every review you have is under On your page.",
+  /*
+     The seller-side names for the four dimensions.
+
+     Short, because they sit in a 344px rail beside a score. Board 10f asks the
+     buyer the same four as sentences — "The price was what they quoted" — and
+     that is the right shape for somebody answering a question and the wrong one
+     for somebody reading a column of averages.
+  */
+  "reviews.dimension.quotedAccurate": "Quoted accurately",
+  "reviews.dimension.onTime": "Delivered on time",
+  "reviews.dimension.asDescribed": "As described",
+  "reviews.dimension.responsiveness": "Answered quickly",
+
   "reviews.empty_title": "No reviews yet",
-  "reviews.empty_body": "A review can only come from a buyer who accepted one of your quotes. Ask one below.",
-  "reviews.reply": "Reply",
+  "reviews.empty_body": "A review can only come from a buyer who enquired and heard back from you, or who accepted one of your quotes. Nobody can leave one any other way, which is why the ones you do get are worth reading.",
+  "reviews.empty_next": { one: "Ask the {count} buyer in the panel above. That is the only lever on this page — the rest is won on the enquiry.", other: "Ask the {count} buyers in the panel above. That is the only lever on this page — the rest is won on the enquiry." },
+
+  "reviews.reply": "Post reply",
   "reviews.replying": "Posting",
   "reviews.reply_label": "Your reply to this review",
+  "reviews.reply_heading": "Your public reply — one only, and it cannot be edited once posted",
   "reviews.reply_placeholder": "Answer the point they made. This is public and it cannot be edited afterwards.",
   "reviews.reply_once": "One reply, and it cannot be changed once posted. Never deleted.",
-  "reviews.replied": "You replied {when}",
+  "reviews.replied": "Your reply · {when}",
+  "reviews.reply_by": "Reply by {date}",
+  "reviews.reply_consequence": "After {date} the reply box closes and the review stands on its own.",
+  "reviews.reply_closed": "Reply window closed {date}",
+  "reviews.reply_closed_body": "The review stays. Nothing was deleted — the twenty-eight days for answering it have passed.",
+  "reviews.reply_removed": "Your reply was removed by the review team",
+  "reviews.reply_removed_body": "A reply is public and permanent, so it is held to the same rules as the review. There is no second reply.",
+  "reviews.reply_error.window_closed": "The reply window closed on this review. It stays as it is.",
+  "reviews.reply_error.already_replied": "You have already replied to this review. One reply, ever.",
+  "reviews.reply_error.removed": "This review is not on your page at the moment, so there is nothing to reply to.",
+  "reviews.reply_error.not_yours": "That review is not on your listing.",
+  "reviews.reply_error.empty": "Write the reply before posting it.",
+
   "reviews.removed": "Removed by the review team",
-  "reviews.removed_reason": "Reason: {reason}",
-  "reviews.not_deletable": "A review cannot be removed by the supplier it is about. Report one you believe breaks the rules and a person reads it.",
-  "reviews.report": "Report this review",
+  "reviews.held": "Being checked by our team",
+  "reviews.held_body": "It is off your public page and out of your average while somebody reads it. Nothing is decided yet.",
+  "reviews.not_deletable": "A review cannot be removed by the supplier it is about. Dispute one you believe breaks the rules and a person reads it.",
   "reviews.dimension_scores": "Scores by dimension",
 
+  // ── The request panel ──
   "reviews.request_heading": "Ask for a review",
-  "reviews.request_body": "Only buyers who accepted a quote in the last {days} days, and once per buyer ever. No incentives — an incentivised review is removed and logged against the account.",
-  "reviews.request_send": "Ask {name}",
-  "reviews.request_sending": "Asking",
-  "reviews.request_sent": "Asked {when}",
-  "reviews.request_none": "Nobody to ask right now. A buyer becomes askable when they accept one of your quotes.",
+  "reviews.request_body": { one: "{count} buyer is eligible: they accepted a quote in the last {days} days and have not been asked before. One request each, ever.", other: "{count} buyers are eligible: they accepted a quote in the last {days} days and have not been asked before. One request each, ever." },
+  "reviews.request_send": { one: "Send {count} request", other: "Send {count} requests" },
+  "reviews.request_send_none": "Send requests",
+  "reviews.request_sending": "Sending",
+  "reviews.request_select": "Buyers to ask",
+  "reviews.request_channel_note": "Sent to the contact on the enquiry — WhatsApp where we have a number, email otherwise.",
+  "reviews.request_channel.whatsapp": "WhatsApp",
+  "reviews.request_channel.email": "Email",
+  "reviews.request_unreachable": "No contact we can send to",
+  "reviews.request_unreachable_note": { one: "{count} eligible buyer has no phone or email we can send to, so they cannot be asked.", other: "{count} eligible buyers have no phone or email we can send to, so they cannot be asked." },
+  "reviews.request_incentive": "We never offer an incentive for a review and neither can you: an incentivised review is removed and logged against your account.",
+  "reviews.request_result": { one: "{count} request sent.", other: "{count} requests sent." },
+  "reviews.request_partial": "{sent} sent, {failed} could not be sent.",
+  "reviews.request_none_selected": "Tick the buyers you want to ask.",
+  /*
+     The two empty states §States separates, and they are not the same page.
+
+     A seller with accepted quotes and nobody left to ask has done the work; a
+     seller with none has a dead button and is owed the reason rather than the
+     button. The second links to `3k`, which is where the quotes they have sent
+     are waiting to be accepted.
+  */
+  "reviews.request_exhausted": "Nobody to ask right now. Every buyer who accepted a quote in the last {days} days has either been asked or has written one.",
+  "reviews.request_no_quotes": "No buyer has accepted a quote from you yet, so there is nobody to ask. A buyer becomes eligible the day they accept, and leaves the window {days} days later.",
+  "reviews.request_no_quotes_link": "Open quotes sent",
   "reviews.request_error.already_asked": "You have already asked this buyer. One per buyer, ever.",
   "reviews.request_error.too_old": "That deal is more than {days} days old. The window for asking has closed.",
   "reviews.request_error.already_reviewed": "They have already written one.",
   "reviews.request_error.no_accepted_quote": "That enquiry has no accepted quote.",
+  "reviews.request_error.unreachable": "We hold no phone number or email for that buyer, so nothing would have been sent. Your one request to them is unused.",
+
+  // ── The dispute rail, and the flow it does not start ──
+  "reviews.dispute.rail_title": "Disputing a review",
+  "reviews.dispute.rail_body": "We remove a review on four grounds. Start a dispute from the review itself.",
+  "reviews.dispute.ground.no_traceable_enquiry": "No traceable enquiry — a competitor, or someone who was never a buyer",
+  "reviews.dispute.ground.abuse": "Abusive language",
+  "reviews.dispute.ground.private_information": "Private information about a person",
+  "reviews.dispute.ground.provably_false": "A factual claim you can prove is false",
+  "reviews.dispute.not_a_ground": "“It is unfair” is not a ground. A reply is public and permanent; a refused dispute changes nothing and costs you two days.",
+  "reviews.dispute.sla": "Decided by our team in about 2 working days. We email you the outcome, and the reason is recorded on the review.",
+  "reviews.dispute.start": "Dispute this review",
+  "reviews.dispute.heading": "Dispute this review",
+  "reviews.dispute.ground_legend": "Which ground",
+  "reviews.dispute.ground_hint": "Pick the one that is true. A dispute refused on the wrong ground cannot be re-filed on the right one while it is open.",
+  "reviews.dispute.detail_label": "What happened",
+  "reviews.dispute.detail_hint": "Give the moderator the case, not the label. Twenty characters at least.",
+  "reviews.dispute.submit": "Send the dispute",
+  "reviews.dispute.sending": "Sending",
+  "reviews.dispute.cancel": "Cancel",
+  "reviews.dispute.owner_only": "Disputing a review is the owner's to do. A dispute is a formal claim your business makes about a customer.",
+  // Lowercase: they are read inside a sentence — "Dispute refused · 8 Sep" on
+  // the card, "Outcome: refused" in the mail. Sentence case, design system §08.
+  "reviews.dispute.outcome.upheld": "upheld",
+  "reviews.dispute.outcome.refused": "refused",
+  "reviews.dispute.open": "Under review",
+  "reviews.dispute.open_body": "Disputed on {ground}. Buyers still see this review unchanged while we decide — hiding it would make disputing a way to take reviews down.",
+  "reviews.dispute.decided": "Dispute {outcome} · {date}",
+  "reviews.dispute.refused_body": "The review stands. You can still reply if the window is open, and you can dispute it again on a different ground if the facts change.",
+  "reviews.dispute.error.detail_too_short": "Say what happened. Twenty characters at least.",
+  "reviews.dispute.error.invalid_ground": "Pick one of the four grounds.",
+  "reviews.dispute.error.already_disputed": "There is already an open dispute on this review.",
+  "reviews.dispute.error.already_removed": "That review has already been removed.",
+  "reviews.dispute.error.already_held": "That review is already with our team.",
+  "reviews.dispute.error.not_yours": "That review is not on your listing.",
+  "reviews.dispute.error.not_found": "That review no longer exists.",
+
+  // ── Rated on ──
+  "reviews.rated_on": "Rated on",
+  "reviews.weakest": "weakest",
+  "reviews.no_scores": "Dimension scores appear once a buyer has written a review.",
+  /*
+     Board 11c `B3`, built rather than softened.
+
+     The board asserted "Two reviews mention brand substitution" over a product
+     that did no text analysis at all. It does now — a fixed vocabulary of
+     operational complaints in lib/reviews/themes.ts — and the sentence names
+     the count so the seller can go and read the two.
+  */
+  "reviews.theme": { one: "{count} review mentions {theme}.", other: "{count} reviews mention {theme}." },
+  "reviews.theme_note": "That is a process fix, not a review problem.",
+  "reviews.theme.brand_substitution": "brand substitution",
+  "reviews.theme.stock_accuracy": "stock that was not there",
+  "reviews.theme.late_delivery": "late delivery",
+  "reviews.theme.short_delivery": "short delivery",
+  "reviews.theme.wrong_item": "the wrong item arriving",
+  "reviews.theme.paperwork_missing": "missing paperwork",
+  "reviews.theme.damaged_on_arrival": "damage on arrival",
+  "reviews.theme.slow_to_reply": "slow replies",
+  "reviews.theme.price_changed": "the price changing after the quote",
+
+  "reviews.more_title": "How you get more",
+  "reviews.more_body": "A buyer becomes eligible when they accept your quote, and leaves the window {days} days later. Asking is the only lever here — the rest is won on the enquiry.",
 
   // ── Moderation and audit, tier 4 ──
   "moderation.kind.review": "Review",
@@ -2549,11 +2720,15 @@ export const en = {
   "moderation.ground.private_information": "Private information",
   "moderation.ground.provably_false": "Provably false factual claim",
   "moderation.ground.off_platform_payment": "Off-platform payment",
+  "moderation.ground.incentivised": "Incentivised by the supplier",
   // Keyed to the ReportOutcome enum, so t(`report.outcome.${value}`) is total.
   "report.outcome.seller_corrected": "Supplier corrected it",
   "report.outcome.upheld": "Upheld",
   "report.outcome.no_action": "No action",
   "audit.action.review_removed": "Review removed",
+  "audit.action.review_reply_removed": "Supplier reply removed",
+  "audit.action.review_dispute_resolved": "Review dispute decided",
+  "audit.action.incentive_logged": "Incentivised review logged",
   "audit.action.tier_change": "Verification tier changed",
   "audit.action.suspend": "Business suspended",
   "audit.action.credit_issued": "Subscription credit issued",

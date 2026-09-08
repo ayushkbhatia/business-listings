@@ -200,6 +200,12 @@ describe("every row cites the document", () => {
        evidence the product does not gather. The grant was narrowed to the ops
        lead, which is a departure from the document and so is marked inferred
        rather than left claiming the document says it.
+
+       `review.dispute` joined on board 11c, whose `Q4` asks who may raise one.
+       Board 7d's table has "Reply to a review" and stops there, so there is no
+       row to cite. Owner alone, one rung above `review.reply`: a reply is the
+       business answering in public, and a dispute is a formal claim it makes
+       about a named customer with a two-working-day decision attached.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
@@ -208,6 +214,7 @@ describe("every row cites the document", () => {
       "business.merge",
       "business.verification_tier.write",
       "question.remove",
+      "review.dispute",
       "review.hold",
       "staff.manage",
     ]);

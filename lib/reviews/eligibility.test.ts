@@ -1,16 +1,24 @@
 import { describe, expect, it } from "vitest";
+import { ReviewDisputeGround } from "@/lib/db/generated/enums";
 import {
+  DISPUTE_GROUNDS,
   EDITABLE_DAYS,
   PROVENANCE,
   provenanceOf,
   REMOVAL_GROUNDS,
+  REPLY_WINDOW_DAYS,
   REQUEST_WINDOW_DAYS,
+  canDisputeReview,
   canRequestReview,
   canReview,
+  cardStateOf,
   editableUntil,
+  isDisputeGround,
   isEditable,
   isRemovalGround,
   ratingsAreValid,
+  replyWindowEnds,
+  replyWindowOpen,
   type EnquiryForReview,
 } from "./eligibility";
 
@@ -174,9 +182,12 @@ describe("the editing window", () => {
   });
 });
 
-describe("the four grounds for removal", () => {
-  it("are exactly four", () => {
-    expect([...REMOVAL_GROUNDS]).toEqual([
+describe("the four grounds a seller may cite", () => {
+  it("are exactly four, in the order the rail lists them", () => {
+    // Criterion 6: the rail lists exactly what the dispute flow accepts. Both
+    // read this array, and the Postgres enum declares the same four in the same
+    // order so a queue grouped by ground reads in the same sequence.
+    expect([...DISPUTE_GROUNDS]).toEqual([
       "no_traceable_enquiry",
       "abuse",
       "private_information",
@@ -187,8 +198,36 @@ describe("the four grounds for removal", () => {
   it("do not include a seller disliking it", () => {
     // The README is explicit: "It is unfair" is not one of them.
     for (const notAGround of ["unfair", "competitor", "bad_for_business", "disputed"]) {
+      expect(isDisputeGround(notAGround), notAGround).toBe(false);
       expect(isRemovalGround(notAGround), notAGround).toBe(false);
     }
+  });
+
+  it("cannot be used to dispute a review as incentivised", () => {
+    /*
+       Board 11c `B6`. Staff remove an incentivised review on a ground of their
+       own; no supplier files a dispute reporting themselves, and offering the
+       ground on the rail would be inviting one to.
+    */
+    expect(isDisputeGround("incentivised")).toBe(false);
+    expect(isRemovalGround("incentivised")).toBe(true);
+  });
+
+  it("is the same list Postgres holds, in the same order", () => {
+    /*
+       Criterion 6, at the level below the screen. The rail renders
+       `DISPUTE_GROUNDS`, the form accepts it, the queue groups by it and the
+       column stores `review_dispute_ground` — and declaration order is sort
+       order in Postgres, so a queue grouped by ground and the rail listing them
+       01–04 read in the same sequence without either sorting by hand.
+    */
+    expect(Object.values(ReviewDisputeGround)).toEqual([...DISPUTE_GROUNDS]);
+  });
+
+  it("are a prefix of the grounds staff can remove on", () => {
+    // One list derived from the other, so a ground can never become removable
+    // and undisputable — or the reverse — by somebody editing one array.
+    expect([...REMOVAL_GROUNDS].slice(0, DISPUTE_GROUNDS.length)).toEqual([...DISPUTE_GROUNDS]);
   });
 });
 
@@ -231,5 +270,135 @@ describe("asking for a review", () => {
       ok: false,
       reason: "already_reviewed",
     });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Board 11c — the reply window, the card states, and disputing
+// ─────────────────────────────────────────────────────────────────────────────
+
+const POSTED = new Date("2026-08-28T09:00:00+04:00");
+const OPEN_ROW = {
+  createdAt: POSTED,
+  sellerReply: null,
+  removedAt: null,
+  heldAt: null,
+} as const;
+
+describe("the reply window", () => {
+  it("is twenty-eight days from the review, for every plan", () => {
+    // Q6: one rule, no per-plan variation. Q5 is the same decision one step
+    // out — reviews are reputation, and gating a reply punishes the buyer.
+    expect(REPLY_WINDOW_DAYS).toBe(28);
+    expect(replyWindowEnds(POSTED).toISOString()).toBe(
+      new Date("2026-09-25T05:00:00.000Z").toISOString(),
+    );
+  });
+
+  it("is open the day before it closes and shut the day after", () => {
+    expect(replyWindowOpen(OPEN_ROW, new Date("2026-09-24T09:00:00+04:00"))).toBe(true);
+    expect(replyWindowOpen(OPEN_ROW, new Date("2026-09-26T09:00:00+04:00"))).toBe(false);
+  });
+
+  it("is shut once the seller has used their one reply", () => {
+    expect(
+      replyWindowOpen(
+        { ...OPEN_ROW, sellerReply: "Thank you" },
+        new Date("2026-08-29T09:00:00+04:00"),
+      ),
+    ).toBe(false);
+  });
+
+  it("is shut on a held review, whatever the date says", () => {
+    /*
+       A held review is off the public page and may never come back. A reply
+       written against something the seller cannot see is a reply they cannot
+       mean, and it is the one thing on this record that cannot be taken back.
+    */
+    expect(replyWindowOpen({ ...OPEN_ROW, heldAt: POSTED }, POSTED)).toBe(false);
+    expect(replyWindowOpen({ ...OPEN_ROW, removedAt: POSTED }, POSTED)).toBe(false);
+  });
+});
+
+describe("which state a card is in", () => {
+  const base = { ...OPEN_ROW, hasOpenDispute: false };
+  const inWindow = new Date("2026-09-01T09:00:00+04:00");
+  const afterWindow = new Date("2026-10-01T09:00:00+04:00");
+
+  it("is awaiting a reply inside the window and closed outside it", () => {
+    expect(cardStateOf(base, inWindow)).toBe("awaiting_reply");
+    expect(cardStateOf(base, afterWindow)).toBe("window_closed");
+  });
+
+  it("is replied once there is a reply, in the window or out of it", () => {
+    const replied = { ...base, sellerReply: "Fair point" };
+    expect(cardStateOf(replied, inWindow)).toBe("replied");
+    expect(cardStateOf(replied, afterWindow)).toBe("replied");
+  });
+
+  it("puts an open dispute in front of a reply", () => {
+    /*
+       Precedence, and it is not alphabetical. A seller who replied and then
+       disputed is waiting on us, and "replied" would hide the thing that is
+       actually in flight.
+    */
+    expect(
+      cardStateOf({ ...base, sellerReply: "Fair point", hasOpenDispute: true }, inWindow),
+    ).toBe("under_dispute");
+  });
+
+  it("puts a hold in front of a dispute, and a removal in front of everything", () => {
+    expect(cardStateOf({ ...base, heldAt: POSTED, hasOpenDispute: true }, inWindow)).toBe("held");
+    expect(
+      cardStateOf({ ...base, removedAt: POSTED, heldAt: POSTED, hasOpenDispute: true }, inWindow),
+    ).toBe("removed");
+  });
+});
+
+describe("who may dispute what", () => {
+  const review = {
+    businessId: "biz_1",
+    removedAt: null,
+    heldAt: null,
+    hasOpenDispute: false,
+  } as const;
+
+  it("allows a seller to dispute a review on their own listing", () => {
+    expect(canDisputeReview(review, "biz_1")).toEqual({ ok: true });
+  });
+
+  it("refuses somebody else's review", () => {
+    expect(canDisputeReview(review, "biz_2")).toEqual({ ok: false, reason: "not_yours" });
+  });
+
+  it("refuses a second open dispute on one review", () => {
+    // The same case decided twice, on the queue whose promise is a single
+    // answer in two working days. The partial unique index is under this.
+    expect(canDisputeReview({ ...review, hasOpenDispute: true }, "biz_1")).toEqual({
+      ok: false,
+      reason: "already_disputed",
+    });
+  });
+
+  it("refuses a decision already made or in progress", () => {
+    expect(canDisputeReview({ ...review, removedAt: POSTED }, "biz_1")).toEqual({
+      ok: false,
+      reason: "already_removed",
+    });
+    expect(canDisputeReview({ ...review, heldAt: POSTED }, "biz_1")).toEqual({
+      ok: false,
+      reason: "already_held",
+    });
+  });
+
+  it("has no deadline, unlike the reply", () => {
+    /*
+       Deliberate. A public conversation held eleven months late is not a
+       conversation, which is why the reply window closes; none of the four
+       grounds expires the same way. A review naming somebody's mobile number is
+       a private-information problem on the day it is written and on the same
+       day next year.
+    */
+    expect(canDisputeReview(review, "biz_1")).toEqual({ ok: true });
   });
 });

@@ -88,6 +88,24 @@ export const mayBoostPlacement = (a: Actor) => can(a, "placement.boost");
 export const assertCanReadAnalytics = (a: Actor) => assertCan(a, "analytics.read");
 export const mayReadAnalytics = (a: Actor) => can(a, "analytics.read");
 
+/*
+   Board 7d's three review rows, which the seller dashboard had been answering
+   with `listing.edit` — a capability about editing the listing profile.
+
+   That is over-tight in one direction and loose in the other: a sales seat
+   holds "Request reviews from buyers" in the matrix and `listing.edit` denied
+   it, and board 11c's `Q4` puts a dispute above a reply, which one capability
+   cannot express. Three rows, three functions, named for what they permit.
+*/
+export const assertCanReplyToReviews = (a: Actor) => assertCan(a, "review.reply");
+export const mayReplyToReviews = (a: Actor) => can(a, "review.reply");
+
+export const assertCanRequestReviews = (a: Actor) => assertCan(a, "review.request");
+export const mayRequestReviews = (a: Actor) => can(a, "review.request");
+
+export const assertCanDisputeReviews = (a: Actor) => assertCan(a, "review.dispute");
+export const mayDisputeReviews = (a: Actor) => can(a, "review.dispute");
+
 export const assertCanReadRevenue = (a: Actor) => assertCan(a, "revenue.read");
 export const mayReadRevenue = (a: Actor) => can(a, "revenue.read");
 

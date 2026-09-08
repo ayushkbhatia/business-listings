@@ -3,11 +3,13 @@ import { Panel } from "@/components/structure";
 import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
 import { offPlatformReports, openReports, priorsFor } from "@/lib/reports/service";
-import { formatCount } from "@/lib/format";
+import { openDisputes } from "@/lib/reviews/disputes";
+import { formatCount, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { ReportTable, type ReportRow } from "./ReportTable";
-import { resolve } from "./actions";
+import { DisputeQueue, type DisputeQueueRow } from "./DisputeQueue";
+import { decideDispute, resolve } from "./actions";
 
 /**
  * Board 4h — supplier reports.
@@ -29,9 +31,10 @@ export default async function ReportsPage() {
   const seat = await requireStaff();
   if (!can(seat.actor, "report.resolve")) notFound();
 
-  const [reports, skipped, badges] = await Promise.all([
+  const [reports, skipped, disputes, badges] = await Promise.all([
     openReports(200),
     offPlatformReports(50),
+    openDisputes(100),
     getAdminNavBadges(seat),
   ]);
 
@@ -49,6 +52,20 @@ export default async function ReportsPage() {
       };
     }),
   );
+
+  const disputeRows: DisputeQueueRow[] = disputes.map((dispute) => ({
+    id: dispute.id,
+    businessName: dispute.businessName,
+    businessSlug: dispute.businessSlug,
+    ground: dispute.ground,
+    detail: dispute.detail,
+    reviewBody: dispute.reviewBody,
+    reviewOverall: dispute.reviewOverall,
+    buyerName: dispute.buyerName,
+    fromAcceptedQuote: dispute.fromAcceptedQuote,
+    createdAt: formatDate(dispute.createdAt),
+    ageDays: dispute.ageDays,
+  }));
 
   return (
     <AdminPage
@@ -71,6 +88,26 @@ export default async function ReportsPage() {
       <p className="mt-[var(--gutter)] max-w-prose text-caption text-muted">
         {t("admin.reports.note")}
       </p>
+
+      {/*
+         Board 11c `B5`. A second queue on this screen rather than a fifth
+         `ReportKind`: a dispute is filed by a business about a review and
+         resolves to one of two outcomes, and a supplier report is filed against
+         a business about a listing and resolves to one of three. One page, two
+         row shapes, and `priorsFor()` still counting only what was reported.
+      */}
+      <div className="mt-[var(--gutter)]">
+        <Panel
+          title={t("admin.disputes.heading")}
+          description={t("admin.disputes.description")}
+        >
+          <DisputeQueue
+            rows={disputeRows}
+            decide={decideDispute}
+            mayUphold={can(seat.actor, "review.remove")}
+          />
+        </Panel>
+      </div>
 
       <div className="mt-[var(--gutter)]">
         <Panel title={t("admin.reports.skipped_heading")}>
