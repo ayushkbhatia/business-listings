@@ -4995,19 +4995,93 @@ export const en = {
   "promote.queue_position": "{n} ahead of you",
 
   // ── Analytics, board 3l ───────────────────────────────────────────────────
+  // ── Board 3l · analytics ──────────────────────────────────────────────────
+  //
+  // The rule the page runs on: **every number is a comparison or it is
+  // decoration**. A count with nothing beside it cannot answer the only
+  // question a seller opens analytics to ask — did what I did last month work.
+  // So every stage, product row and region carries its change, and the two
+  // comparisons that are not self-referential are labelled as what they are.
+  //
+  // Nothing here is estimated, and where a source started after the window
+  // opened the page says `tracking since` rather than showing a rise from zero
+  // that is really the pipeline switching on.
+
   "analytics.title": "Analytics",
   "analytics.eyebrow": "Growth",
-  "analytics.intro": "Where your enquiries come from, over the last 90 days. Every figure here is counted, not estimated.",
-  "analytics.enquiries": "Enquiries received",
-  "analytics.quoted": "Quoted",
-  "analytics.accepted": "Accepted",
-  "analytics.quote_rate": "Of the enquiries you received",
-  "analytics.accept_rate": "Of the quotes you sent",
-  "analytics.by_area": "Where buyers are",
-  "analytics.by_category": "What they asked for",
-  "analytics.no_data": "Nothing to show yet",
-  "analytics.no_data_body": "Figures appear here once you have received enquiries. Nothing is estimated, so an empty chart means an empty period.",
-  "analytics.window": "Last 90 days",
+  "analytics.window": "{from} vs {previous}",
+  "analytics.export": "Export CSV — the four tables on this page",
+
+  // Week one is a normal page with its comparisons suppressed, not an error.
+  "analytics.no_comparison": "no comparison yet",
+  "analytics.tracking_since": "tracking since {when}",
+  "analytics.week_one": "This is your first period, so there is nothing to compare against yet. Every figure below is counted; the changes appear once a second period closes.",
+
+  // The setup-gap state. Every cause of an empty analytics page is a setup gap,
+  // which is why it sends the seller to 8a rather than explaining a chart.
+  "analytics.no_data": "Nothing measured yet",
+  "analytics.no_data_body": "Figures appear here once buyers start finding you. Impressions and views are counted from the day tracking starts and cannot be filled in backwards, so this page begins the day your listing does.",
+  "analytics.no_data_action": "Finish your setup",
+
+  // 1 · Where buyers drop off
+  "analytics.funnel.title": "Where buyers drop off",
+  "analytics.funnel.bars": "Bars are the share carried from the stage above",
+  // A share above 100% is real: these are stages, not one path, so more buyers
+  // can do a later thing than the earlier one. The bar cannot draw past full,
+  // so the word carries what the width cannot.
+  "analytics.funnel.over": "— more than the stage above",
+  "analytics.funnel.note": "Stages, not one path — a buyer can send an enquiry without revealing a number.",
+  "analytics.funnel.caption": "Buyer stages, with the share carried from the stage above",
+  "analytics.stage.impressions": "Appeared in search",
+  "analytics.stage.clicks": "Clicked through to your listing",
+  "analytics.stage.product_views": "Viewed a product",
+  "analytics.stage.reveals": "Revealed a phone number",
+  "analytics.stage.enquiries": "Sent an enquiry",
+  "analytics.median": "Your search-to-click rate is {yours} against a {median} median for {category} in {emirate}.",
+  "analytics.median_cohort": "Across {count} suppliers.",
+  "analytics.no_cover": "Two of your most-viewed products have no cover photo: {products}.",
+
+  // 2 · What buyers searched to reach you
+  "analytics.queries.title": "What buyers searched to reach you",
+  "analytics.queries.note": "Your position for the query, and how it moved in {days} days.",
+  "analytics.queries.caption": "Search queries you appeared for, with position and movement",
+  "analytics.queries.col.query": "Query",
+  "analytics.queries.col.volume": "Vol",
+  "analytics.queries.col.position": "Position",
+  "analytics.queries.not_ranked": "Not ranked",
+  "analytics.queries.held": "held",
+  "analytics.queries.none": "No searches have brought a buyer to you in this window yet.",
+  "analytics.gap": "{count} buyers searched “{query}” and you have no product listed for it.",
+  "analytics.gap_action": "Add one",
+  "analytics.gap_if": "if you carry it.",
+
+  // 3 · Top products by enquiry
+  "analytics.products.title": "Top products by enquiry",
+  "analytics.products.note": "Change is against the previous {days} days",
+  "analytics.products.caption": "Your most-enquired products, with views and conversion",
+  "analytics.products.col.product": "Product",
+  "analytics.products.col.views": "Views",
+  "analytics.products.col.enquiries": "Enq",
+  "analytics.products.col.conversion": "Conversion",
+  "analytics.products.no_cover": "no cover photo",
+  "analytics.products.out_of_stock": "out of stock {days} days",
+  "analytics.products.none": "No product has been viewed in this window yet.",
+
+  // 4 · Where enquiries come from
+  "analytics.regions.title": "Where enquiries come from",
+  "analytics.regions.label": "Share of enquiries by emirate",
+  // The honest bucket. The composer asks for a delivery emirate and a buyer may
+  // leave it, and a guessed country would be a claim rather than a measurement.
+  "analytics.regions.not_stated": "Not stated",
+  "analytics.regions.none": "No enquiries in this window yet.",
+  "analytics.device": "Device",
+  "analytics.device.mobile": "mobile",
+  "analytics.device.desktop": "desktop",
+  "analytics.device.tablet": "tablet",
+  "analytics.device.none": "No listing views to split yet.",
+
+  // The plan gate. Board 11f's tier table is the source and it says Basic.
+  "analytics.locked_reason": "Analytics",
 
 
   // ── Onboarding, boards 2a to 2e ───────────────────────────────────────────

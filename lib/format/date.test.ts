@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatCountdown, formatDate, formatDateRange, formatDateShort, formatDateTime, formatDuration, formatMonth, formatRelative, isWithinRelativeWindow } from "./date";
+import { dubaiDayStart, formatCountdown, formatDate, formatDateRange, formatDateShort, formatDateTime, formatDuration, formatMonth, formatRelative, isWithinRelativeWindow } from "./date";
 
 const AUG_14 = new Date("2026-08-14T09:30:00+04:00");
 
@@ -197,5 +197,54 @@ describe("formatMonth", () => {
     // Same contract as every other formatter here: a bad input is a throw, not
     // a quietly wrong month on somebody's certificate.
     expect(() => formatMonth("not a date")).toThrow(TypeError);
+  });
+});
+
+describe("dubaiDayStart", () => {
+  it("returns the Dubai calendar day as the UTC midnight a date column holds", () => {
+    /*
+       A `date` column has no time zone and Prisma reads one back as UTC
+       midnight. Building the value any other way makes a row that is correct on
+       one connection and off by one on another, depending on the session's
+       `TimeZone`.
+    */
+    expect(dubaiDayStart(new Date("2026-09-08T06:00:00.000Z")).toISOString()).toBe(
+      "2026-09-08T00:00:00.000Z",
+    );
+  });
+
+  it("puts the small hours in Dubai on the Dubai day, not the UTC one", () => {
+    /*
+       The whole reason this exists. Dubai is UTC+4, so 22:00 UTC is already
+       tomorrow for the supplier — and a view counted against the UTC day would
+       land in yesterday's bucket every evening.
+    */
+    expect(dubaiDayStart(new Date("2026-09-08T21:30:00.000Z")).toISOString()).toBe(
+      "2026-09-09T00:00:00.000Z",
+    );
+    expect(dubaiDayStart(new Date("2026-09-08T19:59:00.000Z")).toISOString()).toBe(
+      "2026-09-08T00:00:00.000Z",
+    );
+  });
+
+  it("crosses a month and a year boundary without special-casing either", () => {
+    expect(dubaiDayStart(new Date("2026-08-31T20:00:00.000Z")).toISOString()).toBe(
+      "2026-09-01T00:00:00.000Z",
+    );
+    expect(dubaiDayStart(new Date("2026-12-31T20:00:00.000Z")).toISOString()).toBe(
+      "2027-01-01T00:00:00.000Z",
+    );
+  });
+
+  it("is stable across a UTC leap day", () => {
+    expect(dubaiDayStart(new Date("2028-02-29T12:00:00.000Z")).toISOString()).toBe(
+      "2028-02-29T00:00:00.000Z",
+    );
+  });
+
+  it("is idempotent — a day start maps to itself", () => {
+    // The read side hands it values that already came out of a date column.
+    const day = dubaiDayStart(new Date("2026-09-08T06:00:00.000Z"));
+    expect(dubaiDayStart(day).toISOString()).toBe(day.toISOString());
   });
 });

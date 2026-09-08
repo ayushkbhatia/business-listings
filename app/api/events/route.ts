@@ -4,6 +4,8 @@ import { getActor } from "@/lib/auth/session";
 import { checkRate, RATE_POLICIES, recordHit, requesterKey, type RateBucket } from "@/lib/rate-limit";
 import { isBrowserEmitted, requiresSession, validateEvent } from "@/lib/telemetry/events";
 import { recordEvent, recordListingView } from "@/lib/telemetry/record";
+import { deviceFrom } from "@/lib/analytics/device";
+import { recordListingDevice, recordProductView } from "@/lib/analytics/record";
 import { isSessionId } from "@/lib/telemetry/session";
 
 /**
@@ -134,8 +136,38 @@ export async function POST(request: NextRequest) {
     if (typeof businessId === "string") viewed.add(businessId);
   }
 
+  /*
+     The device the view happened on, beside the view itself.
+
+     Board `3l`'s split, and it is read from the request's own user agent rather
+     than from the payload: a client that reports its own device class can
+     report anything, and the server already has the header. Written beside
+     `recordListingView` so the split covers exactly the views that were
+     counted, rather than a second population gated differently.
+  */
+  const device = deviceFrom(request.headers.get("user-agent"));
+
   for (const businessId of viewed) {
     await recordListingView(businessId);
+    await recordListingDevice(businessId, device);
+  }
+
+  /*
+     Product views — the funnel stage that had no source of any kind.
+
+     Same shape and same reasoning as the listing view above: one per product
+     per request, and the business is read off the product server-side rather
+     than taken from the payload.
+  */
+  const productsViewed = new Set<string>();
+  for (const event of accepted) {
+    if (event.name !== "product_viewed") continue;
+    const productId = event.props["productId"];
+    if (typeof productId === "string") productsViewed.add(productId);
+  }
+
+  for (const productId of productsViewed) {
+    await recordProductView(productId);
   }
 
   const owned = accepted.filter((event) => requiresSession(event.name));

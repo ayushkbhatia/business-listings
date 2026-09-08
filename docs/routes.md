@@ -96,7 +96,8 @@ and it is the one that argues back.
 /dashboard/reviews                      Reviews                              [11c]  built h2s6
 /dashboard/questions                    Buyer questions                       [1g]  built h5
 /dashboard/team                         Team, seats & lead routing            [7d]  built h4
-/dashboard/analytics                    Analytics                             [3l]
+/dashboard/analytics                    Analytics                             [3l]  built h3 wave 4
+/dashboard/analytics/export             The four tables as one CSV            [3l]  built h3 wave 4
 /dashboard/billing                      Subscription & billing                [3m]  built h3 wave 4
 /dashboard/domain                       Your own web address                  [5e]  built h4s6
 /dashboard/billing/change               Change plan                          [11f]  built h3 wave 4
@@ -180,6 +181,31 @@ else.
 /dev/gallery                            Every component, every state          built h0-h2
 /dev/notifications                      Notification templates rendered [7f]  built h2s5
 ```
+
+### Wave 4 note — board `3l` introduced an event pipeline
+
+`3l` is the first board whose dependency is **capture** rather than a query.
+Three of its five funnel stages had no source at all: `SearchQueryLog` recorded
+what a buyer typed and never which businesses were returned, and nothing
+anywhere counted a buyer looking at a product.
+
+- Four daily rollups — `search_impression_day`, `category_position_day`,
+  `product_view_day`, `listing_device_day` — pruned at 90 days by the daily job.
+  The grain is a business, a day, and whatever the panel groups by, so a search
+  returning twenty listings costs twenty upserts rather than twenty rows.
+- `search_impression_day` doubles as the **query** position snapshot;
+  `category_position_day` is the **category** one that board `3a`'s card reads.
+  Two objects, two tables, deliberately — a rank for a typed phrase and a rank
+  in a category listing are different numbers.
+- Search impressions are written server-side behind the crawler gate that
+  already guards `recordSearch`; product views go through the beacon, like
+  `listing_viewed`. A render is not a visit and a crawler is not a buyer.
+- **Nothing backfills.** Reveals and enquiries have history; impressions, clicks
+  and product views start the day the pipeline ships, which the page states as
+  `tracking since`.
+- `Enquiry.emirate` is new. The composer always collected it and `fanout` always
+  routed on it; the write kept only the free-text area beside it. A null renders
+  as `Not stated` rather than a country guessed from an IP.
 
 ### Wave 4 note — the `11f` split
 

@@ -1,4 +1,5 @@
 import "server-only";
+import type { Emirate } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { createProvisionalIdentity } from "@/lib/auth/flow";
 import { normaliseIdentifier } from "@/lib/auth/identity";
@@ -357,6 +358,20 @@ export async function createEnquiry(
         buyerCompanyId: input.buyerCompanyId ?? null,
         requirement: input.requirement.trim(),
         deliverToArea: input.deliverToArea ?? null,
+        /*
+           The emirate the composer already asked for, finally stored.
+
+           `fanout` two hundred lines up has always routed on this — *"same
+           emirate is a real delivery difference in the UAE, not a nicety"* —
+           and the write kept only the free-text `deliverToArea` beside it. So
+           the one piece of geography a buyer actually states was used to pick
+           recipients and then thrown away, and board `3l`'s *"where enquiries
+           come from"* panel had nothing left but a country guessed from an IP.
+
+           A null is a real answer the panel renders as **Not stated**, not a
+           gap to fill in with a guess.
+        */
+        emirate: (input.emirate as Emirate | null | undefined) ?? null,
         neededBy: input.neededBy ?? null,
         termsWanted: (input.termsWanted as never) ?? null,
         closesAt,

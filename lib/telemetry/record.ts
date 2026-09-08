@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { UAE_TIME_ZONE } from "@/lib/format/locale";
+import { dubaiDayStart } from "@/lib/format";
 import { validateEvent, type EventName, type EventPropsInput } from "./events";
 
 /**
@@ -102,25 +102,14 @@ export async function pruneProductEvents(olderThan: Date): Promise<number> {
  * on another. UTC midnight is the value Prisma reads a `date` column back as,
  * so writing and reading agree by construction.
  *
- * **There is a twin, and it is not an oversight yet.** `dubaiDayStart` in
- * `lib/setup/tasks.ts` is this function, reached independently for the read side
- * of the same column. Neither file can hold the single copy: this one is
- * `server-only` and that one is pure and unit-tested. The home is
- * `lib/format/date.ts`, which owns every other Dubai-zone date decision — moving
- * it there and deleting both is a follow-up, not a thing to leave to whoever
- * next notices.
+ * **The twin is gone.** This and `dubaiDayStart` in `lib/setup/tasks.ts` were
+ * the same function reached independently for the write and read sides of one
+ * column. Board `3l` needed a third caller, so both now delegate to
+ * `lib/format/date.ts`, which owns every other Dubai-zone date decision. The
+ * alias stays because this name is what the writers in this file read as.
  */
-export function dubaiDay(at: Date = new Date()): Date {
-  const parts = new Intl.DateTimeFormat("en-GB", {
-    timeZone: UAE_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(at);
+export const dubaiDay = dubaiDayStart;
 
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return new Date(`${get("year")}-${get("month")}-${get("day")}T00:00:00.000Z`);
-}
 
 /**
  * Count one storefront view, on the day the supplier had.

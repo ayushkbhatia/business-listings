@@ -101,6 +101,15 @@ function seedNow(): Date {
   return new Date(`${today}T12:00:00+04:00`);
 }
 const days = (n: number) => new Date(NOW.getTime() + n * 86_400_000);
+/**
+ * Midnight in Dubai, which is what a `@db.Date` column holds.
+ *
+ * Board 3l's rollups are keyed by day, and a value with a time on it lands on
+ * whatever day UTC happens to agree with — off by one every evening, because
+ * Dubai is UTC+4.
+ */
+const dayOnly = (at: Date) =>
+  new Date(`${new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Dubai" }).format(at)}T00:00:00.000Z`);
 const hours = (n: number) => new Date(NOW.getTime() + n * 3_600_000);
 
 /**
@@ -2154,6 +2163,17 @@ async function seedOpenRequests(db: Db) {
         buyerId: buyer.id,
         requirement: want.requirement,
         deliverToArea: want.area,
+        /*
+           The emirate board 3l's fourth panel reads.
+
+           The composer has always asked for it and `fanout` has always routed
+           on it; until this board the write kept only the free text beside it.
+           Seeded on most enquiries and deliberately not all — a buyer may skip
+           it, the column is nullable, and the panel renders the remainder as
+           "Not stated" rather than guessing. A seed where every row is filled
+           would hide the state the screen has to handle.
+        */
+        emirate: rnd() < 0.82 ? pick(["dubai", "dubai", "dubai", "sharjah", "abu_dhabi", "ajman"] as const) : null,
         // Open, which is the whole point. Two weeks out from when it was sent.
         closesAt: new Date(createdAt.getTime() + 14 * 24 * 3_600_000),
         createdAt,
@@ -2914,6 +2934,26 @@ async function linkQuoteLinesToCatalogue(db: Db, businessIds: string[]) {
       const size = /\bDN\d{2,4}\b/.exec(line.description)?.[0] ?? null;
       const { best } = matchLine({ description: line.description, size }, catalogue);
       if (best) await db.quoteLine.update({ where: { id: line.id }, data: { productId: best.product.id } });
+    }
+
+    /*
+       And the enquiry lines, which board 3l's third panel counts.
+
+       `EnquiryLine.productId` is nullable and the seed had never set one, so
+       "Top products by enquiry" rendered every conversion as 0.0% — a panel
+       that works against a fixture that cannot exercise it. The same matcher,
+       the same catalogue and the same floor as the quote lines above, because
+       an enquiry line and a quote line are the same sentence at two moments.
+    */
+    const enquiryLines = await db.enquiryLine.findMany({
+      where: { enquiry: { recipients: { some: { businessId } } }, productId: null },
+      select: { id: true, description: true, size: true },
+    });
+
+    for (const line of enquiryLines) {
+      const size = line.size ?? /\bDN\d{2,4}\b/.exec(line.description)?.[0] ?? null;
+      const { best } = matchLine({ description: line.description, size }, catalogue);
+      if (best) await db.enquiryLine.update({ where: { id: line.id }, data: { productId: best.product.id } });
     }
   }
 }
@@ -4356,6 +4396,108 @@ async function seedTrust(db: Db, businesses: Biz[], opsLeadId: string, moderator
   });
 }
 
+/**
+ * Board 3l's rollups, over the last sixty days.
+ *
+ * Sixty rather than thirty, deliberately: the page compares thirty days against
+ * the thirty before, and a seed that fills only the current window would render
+ * every change as *no comparison yet* — the week-one state — and hide the whole
+ * of what the board is about.
+ *
+ * The shape matters more than the volume. Each business gets a funnel that
+ * narrows, because a funnel where a later stage exceeds an earlier one is not a
+ * funnel and would make the carried-share bars nonsense. The rates are roughly
+ * the board's own: about one in seven impressions clicks through, about four in
+ * ten of those reach a product, and enquiries are a thin slice of the rest.
+ */
+async function seedAnalyticsRollups(db: Db, claimed: Biz[]) {
+  console.log("→ analytics rollups: impressions, product views, devices");
+
+  const QUERIES = [
+    "grooved butterfly valve dubai",
+    "grooved coupling supplier uae",
+    "ul fm valve dn100",
+    "stainless fasteners al quoz",
+    "skf bearing distributor",
+    "valve stem extension",
+  ];
+
+  const impressions: { businessId: string; day: Date; normalised: string; impressions: number; bestRank: number }[] = [];
+  const views: { businessId: string; day: Date; views: number }[] = [];
+  const devices: { businessId: string; day: Date; device: "mobile" | "desktop" | "tablet"; views: number }[] = [];
+  const productViews: { productId: string; businessId: string; day: Date; views: number }[] = [];
+
+  // Only the sellers a demo actually opens. Sixty days times six queries times
+  // forty listings is a quarter of a million rows nobody looks at.
+  const tracked = claimed.slice(0, 12);
+
+  for (const business of tracked) {
+    const products = await db.product.findMany({
+      where: { businessId: business.id, status: "live" },
+      orderBy: { createdAt: "asc" },
+      take: 6,
+      select: { id: true },
+    });
+
+    for (let back = 0; back < 60; back += 1) {
+      const day = dayOnly(days(-back));
+      /*
+         A gentle upward drift, so the current window beats the previous one and
+         the page has a change worth rendering. Without it every delta is zero,
+         which reads as "nothing you did mattered" rather than as seeded data.
+      */
+      const trend = 1 + (60 - back) / 200;
+
+      let clicks = 0;
+      for (const [index, query] of QUERIES.entries()) {
+        // The first queries are the popular ones, and a listing ranks better on
+        // the phrases it gets the most of — which is what makes the panel's
+        // position column and volume column tell one story.
+        const seen = Math.max(1, Math.round(int(4, 30) * trend) - index * 2);
+        impressions.push({
+          businessId: business.id,
+          day,
+          normalised: query,
+          impressions: seen,
+          bestRank: Math.min(40, index + int(1, 6)),
+        });
+        clicks += Math.round(seen * 0.147);
+      }
+
+      views.push({ businessId: business.id, day, views: clicks });
+
+      // The board's split, which is the argument for the mobile pass.
+      devices.push({ businessId: business.id, day, device: "mobile", views: Math.round(clicks * 0.68) });
+      devices.push({ businessId: business.id, day, device: "desktop", views: Math.round(clicks * 0.31) });
+      devices.push({ businessId: business.id, day, device: "tablet", views: Math.max(0, clicks - Math.round(clicks * 0.68) - Math.round(clicks * 0.31)) });
+
+      /*
+         Product views sum to the stage rate, not to more than it.
+
+         The first version gave each product `clicks * 0.446 / (index + 1)` and
+         summed six of them — a harmonic series, so the stage came out at 108.8%
+         of the clicks above it and the funnel rendered "more than the stage
+         above" on seeded data that was simply wrong. The weights are normalised
+         now, so the stage is 44.6% of clicks however many products a seller has.
+      */
+      const weights = products.map((_, index) => 1 / (index + 1));
+      const weightTotal = weights.reduce((sum, weight) => sum + weight, 0);
+      for (const [index, product] of products.entries()) {
+        const share = weightTotal > 0 ? weights[index]! / weightTotal : 0;
+        const seen = Math.round(clicks * 0.446 * share);
+        if (seen > 0) productViews.push({ productId: product.id, businessId: business.id, day, views: seen });
+      }
+    }
+  }
+
+  await db.searchImpressionDay.createMany({ data: impressions, skipDuplicates: true });
+  await db.listingViewDay.createMany({ data: views, skipDuplicates: true });
+  await db.listingDeviceDay.createMany({ data: devices.filter((row) => row.views > 0), skipDuplicates: true });
+  await db.productViewDay.createMany({ data: productViews, skipDuplicates: true });
+
+  console.log(`   ${impressions.length} impression rows across ${tracked.length} sellers`);
+}
+
 async function seedSignals(db: Db, businesses: Biz[], buyerId: string, catBySlug: Map<string, string>) {
   console.log("→ reveals, zero-result queries, saved searches");
   const claimed = businesses.filter((b) => b.claim === "claimed");
@@ -4373,6 +4515,8 @@ async function seedSignals(db: Db, businesses: Biz[], buyerId: string, catBySlug
     });
   }
   await db.contactReveal.createMany({ data: reveals });
+
+  await seedAnalyticsRollups(db, claimed);
 
   // These feed the admin gap report and the recruitment call list in handoff 4.
   // Nothing reads them yet; writing them now means the report has history the

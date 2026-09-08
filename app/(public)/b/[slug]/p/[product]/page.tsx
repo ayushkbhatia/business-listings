@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Breadcrumb, Panel, PublicShell } from "@/components/structure";
+import { PageEvent } from "@/components/telemetry";
 import { ImagePlaceholder, LogoTile, StatusBadge, type StatusTone } from "@/components/display";
 import { ResponseTime, SpecTable, VerificationBadge, tierSpec } from "@/components/domain";
 import { getBusinessBySlug, getProductBySlug } from "@/lib/db/queries";
@@ -258,6 +259,15 @@ export default async function ProductPage({ params }: Params) {
       breadcrumb={<Breadcrumb label={t("gallery.breadcrumb_label")} items={crumbs} />}
       footer={<DirectoryFooter />}
     >
+      {/*
+         Board 3l's third funnel stage. Counted from the browser rather than
+         from this render, which is the same rule the storefront's
+         `listing_viewed` follows: the framework may serve this page from a
+         cache, so a render is not a visit, and a crawler that runs no
+         JavaScript is not a buyer.
+      */}
+      <PageEvent name="product_viewed" props={{ productId: product.id }} />
+
       <JsonLd
         data={{
           "@context": "https://schema.org",

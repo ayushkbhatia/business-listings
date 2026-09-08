@@ -199,3 +199,35 @@ export function formatDuration(ms: number): string {
   const h = Math.floor((ms % DAY) / HOUR);
   return h === 0 ? `${d} d` : `${d} d ${h} h`;
 }
+
+/**
+ * Midnight in Dubai, as the instant Postgres stores in a `date` column.
+ *
+ * The home the two copies of this were waiting for. `dubaiDay` in
+ * `lib/telemetry/record.ts` and `dubaiDayStart` in `lib/setup/tasks.ts` were the
+ * same function reached independently for the write and read sides of the same
+ * column, and neither file could hold the single copy — one is `server-only`,
+ * the other is pure and unit-tested. Board `3l` needed a third caller, which is
+ * the moment that comment named.
+ *
+ * ## Why the result is a UTC instant and not a local one
+ *
+ * A `date` column has no time zone, and Prisma reads one back as UTC midnight.
+ * Building the value any other way makes a row that is correct on one
+ * connection and off by one on another, depending on the session's `TimeZone` —
+ * the kind of wrong that appears only in production and only near midnight.
+ *
+ * Asia/Dubai has no daylight saving, so a "day" here is a fixed 24 hours and the
+ * supplier's day is the same length as the calendar's.
+ */
+export function dubaiDayStart(instant: Date = new Date()): Date {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: UAE_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(instant);
+
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return new Date(`${get("year")}-${get("month")}-${get("day")}T00:00:00.000Z`);
+}

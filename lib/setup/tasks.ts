@@ -1,4 +1,3 @@
-import { UAE_TIME_ZONE } from "@/lib/format/locale";
 import type { StrengthItem, WeightKey } from "@/lib/metrics/profile-strength";
 import { PHOTO_MINUTES, PHOTO_TARGET } from "@/lib/photos/targets";
 
@@ -184,13 +183,6 @@ export function setupBoard(facts: SetupTaskFacts): SetupBoard {
 // Days
 // ─────────────────────────────────────────────────────────────────────────────
 
-const DAY_PARTS = new Intl.DateTimeFormat("en-GB", {
-  timeZone: UAE_TIME_ZONE,
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
 /**
  * The Dubai calendar day an instant falls in, as the UTC midnight Prisma stores
  * a `@db.Date` at.
@@ -199,9 +191,11 @@ const DAY_PARTS = new Intl.DateTimeFormat("en-GB", {
  * so comparing it against a raw `publishedAt` would drop the day a listing went
  * live whenever it went live before 4am Dubai, and would do it silently on a
  * rail whose whole job is to say views are already arriving.
+ *
+ * Re-exported rather than defined. This and `dubaiDay` in
+ * `lib/telemetry/record.ts` were the same function in two files — the read and
+ * write sides of one column — with a comment naming `lib/format/date.ts` as the
+ * home and calling the move a follow-up. Board `3l` was the third caller.
  */
-export function dubaiDayStart(instant: Date): Date {
-  const parts = DAY_PARTS.formatToParts(instant);
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return new Date(`${get("year")}-${get("month")}-${get("day")}T00:00:00.000Z`);
-}
+export { dubaiDayStart } from "@/lib/format";
+

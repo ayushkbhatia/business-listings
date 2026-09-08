@@ -320,6 +320,7 @@ model Category {
   products          Product[]
   placements        PlacementSlot[]
   importMappings    ImportMapping[]
+  positionDays      CategoryPositionDay[]
   placementWaitlist PlacementWaitlist[]
   fieldProposals    SpecFieldProposal[]
   stagedListings    StagedListing[]
@@ -805,6 +806,10 @@ model Business {
   teamInvites            TeamInvite[]
   shortlistedBy          Shortlist[]
   viewDays               ListingViewDay[]
+  searchImpressionDays   SearchImpressionDay[]
+  categoryPositionDays   CategoryPositionDay[]
+  productViewDays        ProductViewDay[]
+  deviceDays             ListingDeviceDay[]
   productEvents          ProductEvent[]
   catalogueImports       CatalogueImportRequest[]
   /// Board 6b. Membership of a curated list, and any drift against its snapshot.
@@ -1254,6 +1259,7 @@ model Product {
   business      Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   importRun     ImportRun?        @relation(fields: [importRunId], references: [id], onDelete: SetNull)
   importChanges ImportRunChange[]
+  viewDays      ProductViewDay[]
   category      Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   media         ProductMedia[]
   documents     ProductDocument[]
@@ -1687,6 +1693,20 @@ model Enquiry {
   buyerCompanyId String?       @map("buyer_company_id")
   requirement    String
   deliverToArea  String?       @map("deliver_to_area")
+  /// Where the goods are going, as the buyer picked it on the composer.
+  ///
+  /// Board `3l`'s fourth panel. The RFQ form has always collected this and
+  /// `lib/enquiry/fanout.ts` has always routed on it — *"same emirate is a real
+  /// delivery difference in the UAE, not a nicety"* — and the write threw it
+  /// away, keeping only the free-text `deliverToArea` beside it. So the one
+  /// piece of first-party geography the buyer actually states was the one thing
+  /// not stored.
+  ///
+  /// Nullable, and the null is a real answer: *Not stated*. The alternative
+  /// offered for this panel was a country guessed from the buyer's IP, which is
+  /// a claim rather than a measurement — and a directory whose only asset is
+  /// that its numbers are true does not guess where a customer is.
+  emirate        Emirate?
   neededBy       DateTime?     @map("needed_by")
   termsWanted    PaymentTerms? @map("terms_wanted")
   closesAt       DateTime      @map("closes_at")
@@ -3854,6 +3874,148 @@ model ListingViewDay {
 
   @@id([businessId, day])
   @@map("listing_view_day")
+}
+
+/// Where a listing appeared in search, rolled up per query per day.
+///
+/// Board `3l`. Two of its four panels — *"appeared in search"* and *"what
+/// buyers searched to reach you"* — had no source at all: `SearchQueryLog`
+/// records what was typed and how many results came back, and never which
+/// businesses were in them.
+///
+/// **Rolled up at write time, not one row per impression.** This directory is
+/// built to be crawled: one search returning twenty listings would be twenty
+/// rows, most of them written for a bot. The grain is the smallest one any
+/// surface asks a question at — a business, a query, a day — so a page of
+/// twenty results costs twenty upserts and a thousand repeat searches cost
+/// nothing more.
+///
+/// **`bestRank` is the position snapshot.** Board `3l`'s `B2` asks for a daily
+/// position table, and this is it: the best position the listing actually held
+/// for that query on that day, observed during a real search. The alternative
+/// was a cron that re-runs every tracked query against the ranker, which
+/// records a position no buyer ever saw. A query with no traffic on a day has
+/// no row, so movement is measured between the first and last day it was
+/// actually searched — which is the honest window rather than a padded one.
+model SearchImpressionDay {
+  businessId String   @map("business_id")
+  /// Asia/Dubai, so a "day" is the day the supplier had.
+  day        DateTime @map("day") @db.Date
+  /// Lowercased, collapsed whitespace — the same normalisation
+  /// `SearchQueryLog.normalised` uses, so the two group identically.
+  normalised String
+  impressions Int     @default(0)
+  /// Lowest position held that day. 1 is the top of the results.
+  bestRank   Int      @map("best_rank")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, day, normalised])
+  /// The seller's read: their queries over a window, biggest first.
+  @@index([businessId, day])
+  /// The prune.
+  @@index([day])
+  @@map("search_impression_day")
+}
+
+/// Where a listing ranked inside a category and emirate, per day.
+///
+/// The **second** of board `3l`'s two position objects, and the one board `3a`'s
+/// hidden card reads. They are not the same number and the spec is explicit:
+/// `3a` is your rank in a category listing (`Cold rooms · UAE — #11`), and
+/// `SearchImpressionDay` is your rank for a free-text query somebody typed
+/// (`skf bearing distributor — #14`). One table for both would put two
+/// different questions behind one answer and let the two boards disagree with
+/// each other while reading the same row.
+model CategoryPositionDay {
+  /// A surrogate, because the natural key contains a nullable column.
+  ///
+  /// `emirate` is null when the buyer browsed the category across the whole
+  /// country, and that is a real scope rather than missing data — so it belongs
+  /// in the identity. Prisma refuses an `@@id` over an optional field, and a
+  /// plain unique index would not help either: in SQL a null never equals a
+  /// null, so two country-wide rows for one business on one day would both be
+  /// accepted.
+  ///
+  /// The identity is therefore a unique index over
+  /// `coalesce(emirate::text, '')` in the migration, and the rollup upserts
+  /// through it with a raw `ON CONFLICT`. Same shape as
+  /// `subscription_change_one_pending`: an invariant the schema file cannot
+  /// express, written once in SQL and asserted by `pnpm check:schema`.
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  categoryId String   @map("category_id")
+  /// Null where the buyer browsed the category across the whole country.
+  emirate    Emirate?
+  day        DateTime @map("day") @db.Date
+  /// Lowest position held that day, as above.
+  position   Int
+  impressions Int     @default(0)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, day])
+  @@index([day])
+  @@map("category_position_day")
+}
+
+/// Product views, rolled up per product per day.
+///
+/// The third funnel stage, which had no source: `ProductEvent` is the seller's
+/// own setup telemetry and has never counted a buyer looking at a product.
+/// Same grain and same reasoning as `ListingViewDay` — counted from the
+/// browser, so a cached render is not a visit and a crawler that runs no
+/// JavaScript is not a buyer.
+model ProductViewDay {
+  productId  String   @map("product_id")
+  /// Denormalised so the seller's read never joins through `product`.
+  businessId String   @map("business_id")
+  day        DateTime @map("day") @db.Date
+  views      Int      @default(0)
+
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([productId, day])
+  @@index([businessId, day])
+  @@index([day])
+  @@map("product_view_day")
+}
+
+/// What a listing was viewed on, per day.
+///
+/// Its own table rather than a column on `ListingViewDay`, because adding one
+/// would move that table's primary key — a rewrite of a table that is already
+/// counting, to answer a question only one panel asks.
+///
+/// The board's 68% mobile against a buyer web designed at 1440px is the
+/// strongest argument in the product for the mobile pass, which is why the
+/// split stays on the page rather than coming off it.
+model ListingDeviceDay {
+  businessId String     @map("business_id")
+  day        DateTime   @map("day") @db.Date
+  device     DeviceKind
+  views      Int        @default(0)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, day, device])
+  @@index([day])
+  @@map("listing_device_day")
+}
+
+/// Three buckets, from the user agent at beacon time.
+///
+/// Deliberately coarse. A device string is a fingerprinting surface and the
+/// only question any screen asks of it is whether the buyer web needs a mobile
+/// pass, which three buckets answer.
+enum DeviceKind {
+  mobile
+  desktop
+  tablet
+
+  @@map("device_kind")
 }
 
 /// What somebody did, so a screen can be judged rather than guessed at.

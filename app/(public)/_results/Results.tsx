@@ -1,4 +1,6 @@
 import { headers } from "next/headers";
+import type { Emirate } from "@/lib/db/generated/client";
+import { recordCategoryPositions, recordSearchImpressions } from "@/lib/analytics/record";
 import { FilterRail } from "@/components/structure";
 import { t } from "@/lib/i18n";
 import {
@@ -147,6 +149,60 @@ export async function Results({ query, basePath, category, tray = [], search = "
       total,
       category?.id ?? null,
     );
+
+    /*
+       Board `3l` — who appeared, and where.
+
+       `recordSearch` beside this has always written *what* was typed and how
+       many results came back, and never which businesses were in them. So two
+       of the four analytics panels — "appeared in search" and "what buyers
+       searched to reach you" — had no source at all, and a seller could not be
+       told they were on page four for a phrase they thought they owned.
+
+       Behind the same crawler gate and for the same reason. A bot walked 797
+       facet permutations of this page in 75 minutes on 2026-09-04; counted as
+       impressions those would be a funnel whose first stage is mostly robots,
+       on the one screen whose entire job is to be accurate about proportions.
+
+       The rank is the row's position on the page plus the page offset, so a
+       listing on page two is ranked in the twenties rather than in the ones.
+       Products are not counted: a product hit is a different object from a
+       listing appearing in search, and folding them together would double the
+       first funnel stage for any seller who ranks for both.
+    */
+    if (businesses && businesses.rows.length > 0) {
+      /*
+         `PAGE_SIZE`, not `rows.length`. The last page is usually short, and
+         multiplying by what it happens to hold would rank its first row as if
+         the pages before it had been short too — a listing on the last page of
+         a 47-result search would come out ranked seventh.
+      */
+      const offset = (query.page - 1) * PAGE_SIZE;
+      const ranked = businesses.rows.map((row) => row.id);
+
+      if (query.q.trim()) {
+        void recordSearchImpressions(ranked, query.q, undefined, offset);
+      }
+      /*
+         A category page is the *other* position object — board `3a`'s card
+         reads it, and it is not the same number as a rank for a typed phrase.
+         Only where the page actually has a category: a bare `/search` has no
+         category listing to hold a position in.
+      */
+      if (category?.id) {
+        void recordCategoryPositions(
+          ranked,
+          category.id,
+          // `SearchQuery.emirate` is a string off the URL; the column is the
+          // enum. The cast is safe because the query parser has already
+          // rejected anything that is not one — an unparsed value never
+          // reaches a result set to be counted.
+          (query.emirate as Emirate | undefined) ?? null,
+          undefined,
+          offset,
+        );
+      }
+    }
   }
 
   let suggestion = null;

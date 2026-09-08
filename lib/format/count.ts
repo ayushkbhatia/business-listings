@@ -48,12 +48,26 @@ export function formatRating(value: number): string {
 }
 
 /** `30%` from 0.3. Whole percent; a directory has no use for 30.4% of a listing. */
-export function formatPercent(ratio: number): string {
+export interface PercentOptions {
+  /**
+   * How many decimals to keep. Zero by default, which is what every caller
+   * before board `3l` wanted.
+   *
+   * That board needs one: its funnel rates are 14.7%, 44.6%, 16.7% and 34.9%,
+   * and a reveal rate of 0.5% rounds to **0%** — a stage that reads as having
+   * lost everybody when it converted one buyer in two hundred. On a page whose
+   * whole job is to be accurate about proportions, the rounding is the defect.
+   */
+  decimals?: number;
+}
+
+export function formatPercent(ratio: number, { decimals = 0 }: PercentOptions = {}): string {
   if (!Number.isFinite(ratio)) {
     throw new TypeError(`formatPercent received a value that is not a finite number: ${String(ratio)}`);
   }
   return new Intl.NumberFormat(UAE_LOCALE, {
     style: "percent",
-    maximumFractionDigits: 0,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   }).format(ratio);
 }
