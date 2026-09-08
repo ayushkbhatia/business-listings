@@ -61,6 +61,10 @@ beforeAll(async () => {
      its second run sees the first run's history and "week one" stops being week
      one — which is exactly the failure that has bitten this repo repeatedly,
      found here on the second `vitest run` rather than in CI a week later.
+
+     It does take the seed's nightly ranks with it, which board 3a's e2e card
+     assertion reads. In CI that is harmless — `verify` and `acceptance` are
+     separate jobs against separate databases. Locally, reseed between the two.
   */
   await prisma.categoryRankDay.deleteMany({});
   await prisma.listingFactorDay.deleteMany({});

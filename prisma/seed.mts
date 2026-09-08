@@ -4485,12 +4485,97 @@ async function seedAnalyticsRollups(db: Db, claimed: Biz[]) {
   const views: { businessId: string; day: Date; views: number }[] = [];
   const devices: { businessId: string; day: Date; device: "mobile" | "desktop" | "tablet"; views: number }[] = [];
   const productViews: { productId: string; businessId: string; day: Date; views: number }[] = [];
+  /*
+     The 3a/3l amendment's two tables.
+
+     Without these the acceptance suite only ever sees board 3a's card in its
+     `Not measured` state — the nightly job has never run on a fresh database,
+     so every row reads "we have not ranked this category yet". That is a real
+     state and the least interesting one, and it left the shipped behaviour —
+     a rank, a movement and a reason — untested end to end.
+  */
+  const ranked: { businessId: string; categoryId: string; order: number; total: number }[] = [];
+  const ranks: {
+    businessId: string;
+    categoryId: string;
+    emirate: Emirate | null;
+    day: Date;
+    position: number;
+    total: number;
+  }[] = [];
+  const factorDays: {
+    businessId: string;
+    day: Date;
+    scores: Record<string, number>;
+    raw: Record<string, number | null>;
+    weights: Record<string, number>;
+    boostPoints: number;
+  }[] = [];
 
   // Only the sellers a demo actually opens. Sixty days times six queries times
   // forty listings is a quarter of a million rows nobody looks at.
   const tracked = claimed.slice(0, 12);
 
-  for (const business of tracked) {
+  /*
+     The ranked set each tracked seller sits in.
+
+     Country-wide, because that is the scope board 3a falls back to when no
+     buyer has browsed a category — and the seed writes no category impressions,
+     so it is the scope the card will choose.
+  */
+  const HOUR = 3_600_000;
+  /*
+     Where a tracked seller sits in its category on a given night.
+
+     The first of them declines: their measured reply time goes from four hours
+     to thirty-one inside the last fortnight, and this is what walks them down
+     the ordering when it does. `back` counts backwards from today, so a smaller
+     `back` is more recent.
+  */
+  const sortKey = (entry: { order: number }, back: number): number =>
+    entry.order + (entry.order === 0 && back < 15 ? 4 : 0);
+
+  const SEED_WEIGHTS = {
+    relevance: 34,
+    verificationTier: 22,
+    responseTime: 18,
+    specCompleteness: 12,
+    distance: 8,
+    planTier: 6,
+  };
+
+  for (const [rank, business] of tracked.entries()) {
+    // The category id, which `Biz` carries only as a slug. One lookup per
+    // tracked seller — twelve of them, against a seed that walks 41,000 rows.
+    const { primaryCategoryId } = await db.business.findUniqueOrThrow({
+      where: { id: business.id },
+      select: { primaryCategoryId: true },
+    });
+    /*
+       The real size of the set, not a constant.
+
+       A seeded `of 16` over a category holding three published listings is the
+       hardcoded count the honesty rules forbid, and it would contradict every
+       other number on the site that counts the same category. This is what the
+       nightly job would find.
+    */
+    const categorySize = await db.business.count({
+      where: {
+        suspendedAt: null,
+        publishedAt: { not: null },
+        OR: [
+          { primaryCategoryId },
+          { categories: { some: { categoryId: primaryCategoryId } } },
+        ],
+      },
+    });
+    ranked.push({
+      businessId: business.id,
+      categoryId: primaryCategoryId,
+      order: rank,
+      total: Math.max(1, categorySize),
+    });
+
     const products = await db.product.findMany({
       where: { businessId: business.id, status: "live" },
       orderBy: { createdAt: "asc" },
@@ -4534,6 +4619,40 @@ async function seedAnalyticsRollups(db: Db, claimed: Biz[]) {
 
       views.push({ businessId: business.id, day, views: clicks });
 
+      /*
+         A position, and the factors behind it, for every night in the window.
+
+         The first seller declines: their measured reply time goes from four
+         hours to thirty-one over the window, and their rank falls with it. That
+         is the one fixture that exercises a *reason* — the other eleven hold,
+         which is itself the commonest state and worth having on the page.
+
+         `back` counts backwards from today, so a smaller `back` is more recent.
+      */
+      const declining = rank === 0;
+      factorDays.push({
+        businessId: business.id,
+        day,
+        scores: {
+          relevance: 1,
+          verificationTier: 1,
+          responseTime: declining && back < 15 ? 0.2 : 1,
+          specCompleteness: 0.74,
+          distance: 0.5,
+          planTier: 1,
+        },
+        raw: {
+          relevance: 1,
+          verificationTier: 2,
+          responseTimeMedianMs: declining && back < 15 ? 31 * HOUR : 4 * HOUR,
+          specCompleteness: 0.74,
+          distanceKm: null,
+          planMultiplier: 1.35,
+        },
+        weights: SEED_WEIGHTS,
+        boostPoints: 0,
+      });
+
       // The board's split, which is the argument for the mobile pass.
       devices.push({ businessId: business.id, day, device: "mobile", views: Math.round(clicks * 0.68) });
       devices.push({ businessId: business.id, day, device: "desktop", views: Math.round(clicks * 0.31) });
@@ -4558,12 +4677,52 @@ async function seedAnalyticsRollups(db: Db, claimed: Biz[]) {
     }
   }
 
+  /*
+     Positions come from sorting the set, never from a seller's index.
+
+     Two tracked sellers can share a primary category, and `index + 1` put two
+     listings at the same place in the same set on the same day. A position *is*
+     an ordering, so the decline has to move a seller through that ordering
+     rather than being added to their number after the fact.
+  */
+  const groups = new Map<string, typeof ranked>();
+  for (const entry of ranked) {
+    const bucket = groups.get(entry.categoryId);
+    if (bucket) bucket.push(entry);
+    else groups.set(entry.categoryId, [entry]);
+  }
+
+  for (let back = 0; back < 60; back += 1) {
+    const day = dayOnly(days(-back));
+    for (const [categoryId, members] of groups) {
+      const ordered = [...members].sort(
+        (a, b) => sortKey(a, back) - sortKey(b, back) || a.businessId.localeCompare(b.businessId),
+      );
+      for (const [index, member] of ordered.entries()) {
+        ranks.push({
+          businessId: member.businessId,
+          categoryId,
+          emirate: null,
+          day,
+          // Never past the end of the set: `#7 of 5` is two numbers from
+          // different sets, and the table carries a check constraint for it.
+          position: Math.min(member.total, index + 1),
+          total: member.total,
+        });
+      }
+    }
+  }
+
+  await db.categoryRankDay.createMany({ data: ranks, skipDuplicates: true });
+  await db.listingFactorDay.createMany({ data: factorDays, skipDuplicates: true });
   await db.searchImpressionDay.createMany({ data: impressions, skipDuplicates: true });
   await db.listingViewDay.createMany({ data: views, skipDuplicates: true });
   await db.listingDeviceDay.createMany({ data: devices.filter((row) => row.views > 0), skipDuplicates: true });
   await db.productViewDay.createMany({ data: productViews, skipDuplicates: true });
 
-  console.log(`   ${impressions.length} impression rows across ${tracked.length} sellers`);
+  console.log(
+    `   ${impressions.length} impression rows, ${ranks.length} nightly ranks across ${tracked.length} sellers`,
+  );
 }
 
 async function seedSignals(db: Db, businesses: Biz[], buyerId: string, catBySlug: Map<string, string>) {

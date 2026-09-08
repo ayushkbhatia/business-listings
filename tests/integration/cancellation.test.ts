@@ -409,15 +409,31 @@ describe("what else is refused while it is scheduled", () => {
        path read `cancelledAt`.
     */
     await cancel();
+
+    /*
+       Counted against what was there a moment ago, not against a wall clock.
+
+       This assertion used to read `issuedAt >= now - 60_000`, which is a
+       sixty-second window over a *shared seeded supplier* — this file borrows
+       `harbour-point-trading-llc` rather than building its own, and so does
+       `analytics-summary.test.ts`. Anything that invoiced that supplier inside
+       the minute counted, whoever wrote it, including rows this file's own flow
+       produces. It failed intermittently on a full `pnpm verify` and passed on
+       eight consecutive standalone runs, which is the signature of a race
+       rather than a bug in the thing being tested.
+
+       The claim is "the refused plan change charged nothing", so the honest
+       measure is this supplier's own invoices before and after the call.
+    */
+    const before = await prisma.invoice.count({ where: { businessId } });
+
     const result = await changePlan(owner, businessId, "pro");
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.code).toBe("cancelling");
 
     // And nothing was charged for it.
-    expect(
-      await prisma.invoice.count({ where: { businessId, issuedAt: { gte: new Date(Date.now() - 60_000) } } }),
-    ).toBe(0);
+    expect(await prisma.invoice.count({ where: { businessId } })).toBe(before);
   });
 });
 

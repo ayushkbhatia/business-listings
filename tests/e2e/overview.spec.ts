@@ -72,9 +72,22 @@ test.describe("board 3a — the Pro overview", () => {
     const card = page.getByRole("region", { name: "Where you rank" });
     await expect(card).toBeVisible();
 
-    const rows = card.getByRole("row");
-    if ((await rows.count()) > 1) {
-      await expect(card.getByText(/#\d+ of \d+/).first()).toBeVisible();
+    /*
+       Two branches and both assert something.
+
+       The first version gated on `rows.count() > 1`, which is true of a table
+       whose every row reads "Not measured" — so on CI, where the nightly job
+       has never run, it asserted a denominator that was never going to be
+       there. The seed writes nightly ranks now, but the honest shape of this
+       test is still: whichever state the card is in, that state must be
+       complete. A rank carries its denominator; an absence says which absence
+       it is rather than sitting blank.
+    */
+    const ranked = card.getByText(/#\d+ of \d+/);
+    if ((await ranked.count()) > 0) {
+      await expect(ranked.first()).toBeVisible();
+    } else {
+      await expect(card.getByText(/Not measured|Not ranked|not in a category listing/)).toBeVisible();
     }
 
     await expect(card.getByRole("textbox")).toHaveCount(0);
