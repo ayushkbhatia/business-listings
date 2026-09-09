@@ -1,0 +1,32 @@
+-- D3's second half: the table goes.
+--
+-- Decision D3, 9 Sep 2026: no shared attribute vocabulary. Comparison stays at
+-- business level, so there is nothing for a seller-invented field to be
+-- promoted into and no merge for `spec_field_proposal` to feed.
+--
+-- WHY THIS IS SAFE, AND WHY IT IS A SEPARATE MIGRATION
+--
+-- A drop is the mirror of an add: the code that reads a table has to stop
+-- reading it in a deploy that is already live before the table can go, or a
+-- running server queries a relation that is not there. #154 removed
+-- `fieldProposals` and `noteProposedField` and rebuilt `/admin/spec-library`'s
+-- panel on `SellerTemplate.ownFields`, and that is deployed. This is the
+-- follow-up it named.
+--
+-- WHAT IS BEING LOST
+--
+-- Nothing that was ever written. The table had a reader — the spec-library
+-- panel — and no writer: `noteProposedField` claimed in its own docblock to be
+-- "called from the catalogue import and the product editor" and had no caller
+-- anywhere in the tree. Production carries zero rows, which is the only number
+-- it could carry.
+--
+-- The question the panel asked is still answered, and answered better: sellers
+-- put invented fields in `SellerTemplate.ownFields`, so the count comes from
+-- where the fields actually are rather than from a column nothing incremented.
+--
+-- `proposal_state` goes with it. It was declared for this table's `state`
+-- column and nothing else in the schema referenced it.
+
+DROP TABLE IF EXISTS "spec_field_proposal";
+DROP TYPE IF EXISTS "proposal_state";

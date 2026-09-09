@@ -63,7 +63,7 @@ so it changes to:
 |---|---|---|---|
 | **D1** Plan-limit config | Ratify the seven numbers | **Shipped** | migration `20260928090000_plan_caps_ratified` |
 | **D2** Placement term | The slot belongs to the subscription | **Shipped** | #152 |
-| **D3** Attribute dictionary | **No.** Comparison stays at business level | **Shipped** | proposals panel rebuilt on real data; table drop owed |
+| **D3** Attribute dictionary | **No.** Comparison stays at business level | **Shipped** | panel rebuilt on real data (#154); table dropped (#155) |
 | **D4** Enquiry cap | Keep it, stack the leads, **paywall the unlock**. Buyers never see capacity | **Settled, deferred** | GTM work, later |
 | **D5** Services | **Their own screens**, per subcategory | **Settled** | `docs/services-spec.md`, awaiting handoffs |
 | **D6** Guide bylines | A named editor now, more names later | **Shipped** | #153 — Ayush Bhatia, Founder |
@@ -73,7 +73,8 @@ Two of the answers changed what was proposed, and both changes matter:
 - **D3 came back "no".** The attribute-dictionary migration is off the plan entirely. `10d`
   stays as it is — ten fixed business attributes — and `10c`'s facet rail can still work inside
   a scoped category, because `SpecField` remains per-template. What is now dead rather than
-  half-built: `SpecFieldProposal` and its counter, which had no writer anyway. Retire them.
+  half-built: `SpecFieldProposal` and its counter, which had no writer anyway. Retired — the
+  panel was rebuilt on `SellerTemplate.ownFields` in #154 and the table dropped in #155.
 - **D4 is not the ratification it was offered as.** The cap stays and buyers still never see it
   — but a capped seller's enquiries **stack up behind a subscription paywall** rather than being
   written off as missed. `MissedEnquiry` already is that stack; what is missing is the
