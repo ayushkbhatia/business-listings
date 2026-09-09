@@ -21,6 +21,17 @@
 -- has no plan row gets one instead of silently staying empty, and a second run
 -- is a no-op rather than an error.
 --
+-- STORAGE IS A REDUCTION ON THE TWO PAID PLANS, AND IT IS DELIBERATE
+--
+-- Production has `storage_mb` NULL on Basic and Pro, which reads as unlimited.
+-- Free is already correct and is unchanged by this file.
+--
+-- 300 MB and 500 MB, decided by the owner on 9 Sep 2026. All eight paying
+-- subscriptions fall back to the live plan for storage — none of their
+-- entitlement snapshots carries a `storageMb` key — so this caps accounts that
+-- currently have no cap. Every one of them is at 0 bytes with no media rows, so
+-- nothing is over the new limit and no upload is refused by it today.
+--
 -- WHAT THIS DOES NOT TOUCH
 --
 -- `entitlement_snapshot` on `subscription`. A seller who signed up on different
@@ -38,8 +49,8 @@ INSERT INTO "plan" (
   "annual_months_charged"
 ) VALUES
   ('free',  'Free',    0, 3,    10,  1,  30,  3,    50, 1, 1,  1.00, false, false, false, false, 0, NULL),
-  ('basic', 'Basic', 349, 40,  150,  3,  40,  NULL, 5120, 3, 3,  1.15, false, true,  true,  false, 1, 10),
-  ('pro',   'Pro',   899, NULL, NULL, 10, 200, NULL, 10240, NULL, 10, 1.35, true,  true,  true,  true,  2, 10)
+  ('basic', 'Basic', 349, 40,  150,  3,  40,  NULL, 300, 3, 3,  1.15, false, true,  true,  false, 1, 10),
+  ('pro',   'Pro',   899, NULL, NULL, 10, 200, NULL, 500, NULL, 10, 1.35, true,  true,  true,  true,  2, 10)
 ON CONFLICT ("id") DO UPDATE SET
   "name"                  = EXCLUDED."name",
   "monthly_price_aed"     = EXCLUDED."monthly_price_aed",
