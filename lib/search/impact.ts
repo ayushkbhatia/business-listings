@@ -61,19 +61,35 @@ export interface ImpactPreview {
   /** Distinct categories with any movement. */
   categoriesMoved: number;
   /**
-   * Distinct businesses holding a listing in an affected category.
+   * The most sellers who can see the note, which is everyone who moves.
    *
-   * The disclosure is scoped to the category, not to the listings that moved —
-   * state 09 says *"this affected every listing in the category"* — so this is
-   * every seller in a moved category, and it is the number on the button.
+   * The spec put the category's whole membership on the button — 431 sellers
+   * across four moved categories — on the reading that state 09 says *"this
+   * affected every listing in the category"*. The shipped attribution does not
+   * work that way: `attribute()` returns no reason at all when a position did
+   * not change, so a seller who held their place is told nothing however much
+   * the category moved around them.
+   *
+   * So the button states the movers and says *up to*: it is an upper bound
+   * rather than a promise, because state 09 also has to beat the seller's own
+   * drift before it is the sentence chosen. A label claiming 431 where 180 can
+   * possibly see it would be the board's own biggest number being its least
+   * true one.
    */
   sellersTold: number;
+  /**
+   * Distinct businesses holding a listing in an affected category.
+   *
+   * Not the button's number — see above — but the scope the disclosure
+   * describes, and what the panel beside it states.
+   */
+  sellersInScope: number;
   /**
    * `(category, business)` memberships across the affected categories.
    *
    * Carried so the board can never render a count above a shorter list:
-   * `sellersTold` is distinct businesses over the same set, so it cannot exceed
-   * this, and the assertion is in the tests rather than in a reviewer's head.
+   * `sellersTold` ≤ `sellersInScope` ≤ this, and all three are asserted in the
+   * tests rather than left to a reviewer's eye.
    */
   scopedListings: number;
   /** Listings past `MAX_LISTINGS`, named rather than silently dropped. */
@@ -275,7 +291,8 @@ export async function runImpact(input: ImpactInput, now = new Date()): Promise<I
     rows: rowsOut,
     listingsMoved: movedBusinesses.size,
     categoriesMoved: movedCategories.size,
-    sellersTold: membership.sellers,
+    sellersTold: movedBusinesses.size,
+    sellersInScope: membership.sellers,
     scopedListings: membership.memberships,
     unread,
     ranAt: now.toISOString(),

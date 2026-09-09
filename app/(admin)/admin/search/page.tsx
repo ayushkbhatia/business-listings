@@ -222,6 +222,7 @@ export default async function SearchPage({
                   <Panel eyebrow={t("ranking.disclosure")}>
                     <p className="max-w-prose text-caption text-body">
                       {t("ranking.disclosure_body", {
+                        scope: t("ranking.count.sellers", { count: preview.sellersInScope }),
                         count: t("ranking.count.sellers", { count: preview.sellersTold }),
                         when: formatDate(new Date(preview.ranAt)),
                       })}

@@ -264,7 +264,13 @@ describe("the impact preview", () => {
       redistribute(DEFAULT_WEIGHTS, "verificationTier", 40),
     );
 
-    expect(preview.sellersTold).toBeLessThanOrEqual(preview.scopedListings);
+    // sellersTold ≤ sellersInScope ≤ scopedListings, and the button states the
+    // first. The spec put the category's whole membership on the button; the
+    // shipped attribution tells nobody whose position did not change, so the
+    // number on the control is the movers and the label says "up to".
+    expect(preview.sellersTold).toBeLessThanOrEqual(preview.sellersInScope);
+    expect(preview.sellersInScope).toBeLessThanOrEqual(preview.scopedListings);
+    expect(preview.sellersTold).toBe(preview.listingsMoved);
     // And every row's moving count is inside its own scope.
     for (const row of preview.rows) {
       expect(row.moving).toBeGreaterThan(0);

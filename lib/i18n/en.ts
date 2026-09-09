@@ -6621,7 +6621,7 @@ export const en = {
   "ranking.step.preview_fresh": "Fresh · {when}",
   "ranking.step.preview_body": "{categories} move, {listings}. Sampled nightly, exhaustive on demand.",
   "ranking.step.publish": "Publish",
-  "ranking.step.publish_body": "Reorders results and tells {count}.",
+  "ranking.step.publish_body": "Reorders results and tells up to {count}.",
   "ranking.step.publish_blocked": "Publish needs a fresh preview.",
   "ranking.count.categories": { one: "1 category", other: "{count} categories" },
   "ranking.count.listings": { one: "1 listing", other: "{count} listings" },
@@ -6630,10 +6630,10 @@ export const en = {
   "ranking.rerun_preview": "Run it again",
   "ranking.discard": "Discard draft",
   "ranking.discarded": "Draft discarded. The live weights never moved.",
-  "ranking.publish": "Publish — {count} told",
+  "ranking.publish": "Publish — up to {count} told",
   "ranking.save": "Save draft",
   "ranking.draft_saved": "Draft saved. Search results are unchanged until you publish.",
-  "ranking.published": "Published. Search results reorder on the next request, and {count} will see a note on their dashboard.",
+  "ranking.published": "Published. Search results reorder on the next request, and up to {count} will see a note on their dashboard.",
   "ranking.preview_ran": "Preview ran. {categories} move, {listings}.",
   "ranking.not_yours": "Ranking and boosts are an ops lead decision.",
   "ranking.read_only": "You can read these numbers and not change them. They are how anyone here answers a seller asking why they moved.",
@@ -6664,7 +6664,7 @@ export const en = {
 
   // What the sellers read.
   "ranking.disclosure": "What publishing tells sellers",
-  "ranking.disclosure_body": "{count} will read “We changed how search results are ordered on {when}. This affected every listing in the category.” on their dashboard, against the categories opposite.",
+  "ranking.disclosure_body": "{scope} hold a listing in the categories that move. The note — “We changed how search results are ordered on {when}. This affected every listing in the category.” — reaches the {count} whose position actually changes, and nobody who held their place.",
   "ranking.disclosure_note": "They are not told which weight moved or by how much. Only a publish fires it — saving a draft tells nobody, and the count is derived from the preview, so it moves when the draft does.",
 
   // The zero-result count. Same label as the console metric that routes here.
