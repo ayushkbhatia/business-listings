@@ -1,15 +1,19 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { searchBusinesses } from "@/lib/db/queries";
+import { boostList, boostListing } from "@/lib/search/boosts";
+import { runImpact } from "@/lib/search/impact";
 import {
-  boostList,
-  boostListing,
+  discardDraft,
+  draftState,
   liveBrowseRelevanceMode,
   liveWeights,
-  setWeights,
+  publishDraft,
+  saveDraft,
+  storePreview,
   MAX_BOOST_DAYS,
 } from "@/lib/search/settings";
-import { DEFAULT_WEIGHTS } from "@/lib/search/ranking";
+import { DEFAULT_WEIGHTS, redistribute, type RankingWeights } from "@/lib/search/ranking";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
 
@@ -25,9 +29,37 @@ import type { Actor, Role } from "@/lib/auth/roles";
 
 const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 
+/**
+ * Save, preview, publish — the three steps board 12c split apart.
+ *
+ * There is no single call that puts a vector live any more, and there should
+ * not be: a second route to the outcome would keep none of the first one's
+ * promises. Every test that needs the live weights moved goes the whole way
+ * round, which is also the cheapest proof that the whole way round works.
+ */
+async function publish(
+  by: Actor,
+  next: RankingWeights,
+  reason: string,
+  mode?: string,
+): Promise<void> {
+  const browseMode = mode ?? (await liveBrowseRelevanceMode());
+  const saved = await saveDraft(by, next, browseMode, reason);
+  if (!saved.ok) throw new Error(`draft refused: ${saved.error}`);
+
+  const [live, liveMode] = await Promise.all([liveWeights(), liveBrowseRelevanceMode()]);
+  const preview = await runImpact({ draft: next, draftMode: browseMode as never, live, liveMode });
+  await storePreview(next, browseMode as never, preview);
+
+  const published = await publishDraft(by, reason);
+  if (!published.ok) throw new Error(`publish refused: ${published.error}`);
+}
+
 let opsLeadId: string;
 let financeId: string;
 const madeBoosts: string[] = [];
+/** The publish rows that were here before this file ran. See `afterAll`. */
+let publishesBefore: string[] = [];
 
 beforeAll(async () => {
   opsLeadId = (
@@ -46,10 +78,19 @@ beforeAll(async () => {
       select: { id: true },
     })
   ).id;
+
+  publishesBefore = (await prisma.rankingPublish.findMany({ select: { id: true } })).map(
+    (row) => row.id,
+  );
 });
 
 afterAll(async () => {
   await prisma.listingBoost.deleteMany({ where: { id: { in: madeBoosts } } });
+  await prisma.rankingDraft.deleteMany({});
+  // Only what this file published. `deleteMany({})` here ate the seed's own
+  // row, and the history tab then read "Nothing published yet" on a freshly
+  // seeded database.
+  await prisma.rankingPublish.deleteMany({ where: { id: { notIn: publishesBefore } } });
   // And back to the numbers the migration seeded, whatever the tests did.
   await prisma.rankingWeights.update({ where: { id: "current" }, data: DEFAULT_WEIGHTS });
   await prisma.$disconnect();
@@ -108,30 +149,30 @@ describe("an absent sort is the ranking, never a different order", () => {
 
 describe("criterion 5 — weights reorder live results", () => {
   it("reads the stored weights, not the constant", async () => {
-    await setWeights(
+    await publish(
       actor(opsLeadId, "staff_ops_lead"),
-      { ...DEFAULT_WEIGHTS, verificationTier: 40 },
+      redistribute(DEFAULT_WEIGHTS, "verificationTier", 40),
       "Leaning harder on verification while the directory is young.",
     );
 
     const stored = await liveWeights();
     expect(stored.verificationTier).toBe(40);
     expect(stored).not.toEqual(DEFAULT_WEIGHTS);
-  }, 60_000);
+  }, 120_000);
 
   it("changes the order of a real search when the weights change", async () => {
     /*
      * The criterion, run against the query the public site uses. Two weight
      * sets that disagree about what matters should not produce the same page.
      */
-    await setWeights(
+    await publish(
       actor(opsLeadId, "staff_ops_lead"),
       { relevance: 10, verificationTier: 90, responseTime: 0, specCompleteness: 0, distance: 0, planTier: 0 },
       "Verification above everything, to see the order move.",
     );
     const byTier = await searchBusinesses(query);
 
-    await setWeights(
+    await publish(
       actor(opsLeadId, "staff_ops_lead"),
       { relevance: 10, verificationTier: 0, responseTime: 90, specCompleteness: 0, distance: 0, planTier: 0 },
       "Reply speed above everything, to see the order move back.",
@@ -142,7 +183,7 @@ describe("criterion 5 — weights reorder live results", () => {
     const first = byTier.rows.map((row) => row.id);
     const second = bySpeed.rows.map((row) => row.id);
     expect(first).not.toEqual(second);
-  }, 120_000);
+  }, 180_000);
 
   /**
    * Board 6a acceptance 8, and the reason the browse mode exists.
@@ -157,17 +198,17 @@ describe("criterion 5 — weights reorder live results", () => {
    * change. This is that being false.
    */
   it("a page with no query reorders when a weight moves", async () => {
-    await setWeights(
+    await publish(
       actor(opsLeadId, "staff_ops_lead"),
-      { relevance: 34, verificationTier: 60, responseTime: 0, specCompleteness: 0, distance: 0, planTier: 0 },
+      { relevance: 34, verificationTier: 66, responseTime: 0, specCompleteness: 0, distance: 0, planTier: 0 },
       "Verification above everything on the landing pages.",
       "redistribute",
     );
     const byTier = await searchBusinesses(query, { browse: true });
 
-    await setWeights(
+    await publish(
       actor(opsLeadId, "staff_ops_lead"),
-      { relevance: 34, verificationTier: 0, responseTime: 60, specCompleteness: 0, distance: 0, planTier: 0 },
+      { relevance: 34, verificationTier: 0, responseTime: 66, specCompleteness: 0, distance: 0, planTier: 0 },
       "Reply speed above everything on the landing pages.",
       "redistribute",
     );
@@ -175,44 +216,47 @@ describe("criterion 5 — weights reorder live results", () => {
 
     expect(byTier.rows.length).toBeGreaterThan(1);
     expect(byTier.rows.map((row) => row.id)).not.toEqual(bySpeed.rows.map((row) => row.id));
-  }, 120_000);
+  }, 180_000);
 
   it("records the browse mode on the same audited row as the weights", async () => {
     const lead = actor(opsLeadId, "staff_ops_lead");
-    expect(
-      await setWeights(lead, await liveWeights(), "Switching how relevance is read.", "category_depth"),
-    ).toMatchObject({ ok: true });
+
+    /*
+       A publish that moves no weight and only flips the mode is a real publish:
+       it reorders every area and emirate landing page while the six numbers
+       stay where they are. `saveDraft` has to accept it, and the history row
+       has to record it, or the change is invisible to everything downstream.
+    */
+    await publish(lead, await liveWeights(), "Switching how relevance is read.", "category_depth");
     expect(await liveBrowseRelevanceMode()).toBe("category_depth");
 
     // Not a third answer. Leaving the weight to multiply zero is not one of the
     // two, and neither is anything somebody types into the column by hand.
     expect(
-      await setWeights(lead, await liveWeights(), "Trying a mode that does not exist.", "whatever"),
+      await saveDraft(lead, await liveWeights(), "whatever", "Trying a mode that does not exist."),
     ).toMatchObject({ ok: false, error: "unknown_browse_mode" });
 
-    /*
-       An omitted mode leaves the stored one alone rather than resetting it —
-       every existing caller of `setWeights` passes none, and a silent reset to
-       the default on each weight change would undo a staff decision nobody
-       would think to look for.
-    */
-    await setWeights(
+    // A weight change with the mode left alone keeps the stored mode. A silent
+    // reset to the default on each weight change would undo a staff decision
+    // nobody would think to look for.
+    await publish(
       lead,
-      { ...(await liveWeights()), specCompleteness: 11 },
+      redistribute(await liveWeights(), "specCompleteness", 11),
       "Moving a weight without touching the mode.",
     );
     expect(await liveBrowseRelevanceMode()).toBe("category_depth");
 
-    await setWeights(lead, await liveWeights(), "Back to the recommendation.", "redistribute");
-  }, 120_000);
+    await publish(lead, await liveWeights(), "Back to the recommendation.", "redistribute");
+  }, 180_000);
 
-  it("refuses a set that would rank everything equally", async () => {
-    const result = await setWeights(
+  it("refuses a set that does not add to 100", async () => {
+    const result = await saveDraft(
       actor(opsLeadId, "staff_ops_lead"),
       { relevance: 0, verificationTier: 0, responseTime: 0, specCompleteness: 0, distance: 0, planTier: 0 },
+      "redistribute",
       "Trying to zero everything.",
     );
-    expect(result).toMatchObject({ ok: false, error: "all_zero" });
+    expect(result).toMatchObject({ ok: false, error: "total_not_100" });
   }, 60_000);
 
   it("caps what money can buy, in the database as well as the service", async () => {
@@ -220,9 +264,10 @@ describe("criterion 5 — weights reorder live results", () => {
      * A directory that sells its way to the top is one nobody comes back to,
      * and the subscription only holds if being found is worth paying for.
      */
-    const refused = await setWeights(
+    const refused = await saveDraft(
       actor(opsLeadId, "staff_ops_lead"),
-      { ...DEFAULT_WEIGHTS, planTier: 40 },
+      { relevance: 30, verificationTier: 20, responseTime: 5, specCompleteness: 5, distance: 0, planTier: 40 },
+      "redistribute",
       "Trying to make the plan the main signal.",
     );
     expect(refused).toMatchObject({ ok: false, error: "plan_tier_too_high" });
@@ -232,11 +277,42 @@ describe("criterion 5 — weights reorder live results", () => {
     ).rejects.toThrow(/plan_tier_is_capped/);
   }, 60_000);
 
+  /**
+   * `B9`. The ceiling was checked against the authored number, and
+   * `redistribute` lifts plan tier's *effective* weight on every landing page
+   * without anybody touching the plan slider. At relevance 50 with plan at 6 the
+   * effective weight is 12, and the cap was breached by moving a slider that has
+   * nothing to do with plan.
+   */
+  it("holds the plan ceiling on the effective browse vector, not only the authored one", async () => {
+    const refused = await saveDraft(
+      actor(opsLeadId, "staff_ops_lead"),
+      { relevance: 50, verificationTier: 22, responseTime: 12, specCompleteness: 6, distance: 4, planTier: 6 },
+      "redistribute",
+      "Raising relevance a long way, with plan left where it is.",
+    );
+    expect(refused).toMatchObject({ ok: false, error: "browse_plan_tier_too_high" });
+
+    // The same vector is fine where the browse pages score category depth
+    // instead, because then nothing is redistributed into plan.
+    const allowed = await saveDraft(
+      actor(opsLeadId, "staff_ops_lead"),
+      { relevance: 50, verificationTier: 22, responseTime: 12, specCompleteness: 6, distance: 4, planTier: 6 },
+      "category_depth",
+      "The same weights, with the landing pages scoring category depth.",
+    );
+    expect(allowed).toMatchObject({ ok: true });
+
+    await discardDraft(actor(opsLeadId, "staff_ops_lead"), "Clearing the test draft.");
+    expect(await draftState()).toBeNull();
+  }, 60_000);
+
   it("refuses a moderator and finance — ranking is ops", async () => {
     await expect(
-      setWeights(
+      saveDraft(
         actor(financeId, "staff_finance"),
-        { ...DEFAULT_WEIGHTS, relevance: 30 },
+        redistribute(DEFAULT_WEIGHTS, "relevance", 30),
+        "redistribute",
         "Not my row.",
       ),
     ).rejects.toBeInstanceOf(PermissionError);
@@ -316,7 +392,7 @@ describe("criterion 5 — a boost needs a reason and an expiry", () => {
   }, 60_000);
 
   it("lifts a listing in a real search while it is live, and stops when it expires", async () => {
-    await setWeights(
+    await publish(
       actor(opsLeadId, "staff_ops_lead"),
       DEFAULT_WEIGHTS,
       "Back to the defaults for the boost test.",

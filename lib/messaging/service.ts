@@ -106,8 +106,8 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
      * for. Then:
      *
      *   - the median first reply buyers see as a band on 1b/1c measures a robot;
-     *   - the 18 of 100 ranking points for reply time are won by installing a
-     *     template;
+     *   - the ranking points for reply time, whatever board 12c has them set
+     *     to, are won by installing a template;
      *   - board 3a's median card, 3k's speed card and 7d's per-seat medians all
      *     report a number no human produced.
      *

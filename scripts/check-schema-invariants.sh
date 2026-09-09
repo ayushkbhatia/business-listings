@@ -156,4 +156,28 @@ if grep -qE '^[[:space:]]*model[[:space:]]+ListingFactorDay[[:space:]]*\{' <<<"$
   fi
 fi
 
+# Board 12c Q7. A boost names a listing or a category, never both and never
+# neither. Prisma expresses neither half: the relation is two optional foreign
+# keys, which permits a row with both set — a boost that lifts one supplier and
+# every supplier in a category at once, with one points value and no way to say
+# which it meant — and a row with neither, which is a boost that boosts nothing
+# and still spends a business's budget when the cap counts it.
+if grep -qE '^[[:space:]]*model[[:space:]]+ListingBoost[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE '"listing_boost_one_target"' prisma/migrations; then
+    echo "   pass — a boost names exactly one of a listing and a category"
+  else
+    echo "   FAIL — listing_boost has lost its one-target check."
+    echo "          Prisma cannot express it; two optional relations permit both and neither."
+    fail=1
+  fi
+
+  if grep -rqE '"listing_boost_emirate_needs_category"' prisma/migrations; then
+    echo "   pass — a boost emirate only narrows a category boost"
+  else
+    echo "   FAIL — listing_boost has lost its emirate check."
+    echo "          An emirate on a listing-targeted boost says nothing the listing does not."
+    fail=1
+  fi
+fi
+
 exit $fail

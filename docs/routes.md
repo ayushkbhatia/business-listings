@@ -121,7 +121,7 @@ and it is the one that argues back.
 /admin/ingest                           Licence importer                     [12a]  built h4s2
 /admin/ingest/:id                       One import run                       [12a]  built h4s2
 /admin/ingest/dedupe                    Dedupe & merge                       [12b]  built h4s2
-/admin/search                           Ranking, boosts, routing             [12c]  built h4s8
+/admin/search                           Ranking, boosts, weight history      [12c]  built h4s8
 /admin/categories                       Taxonomy                              [4d]  rename h5s6
 /admin/spec-library                     Spec library                          [4e]  built h4e
 /admin/spec-library/:id                 One template's fields                 [4e]  built h4e

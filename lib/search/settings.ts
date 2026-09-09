@@ -3,36 +3,49 @@ import { prisma } from "@/lib/db/client";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
+import { dubaiDayStart } from "@/lib/format";
+import { t } from "@/lib/i18n";
 import {
   DEFAULT_BROWSE_RELEVANCE_MODE,
   DEFAULT_WEIGHTS,
   isBrowseRelevanceMode,
-  MAX_BOOST_DAYS,
-  MAX_BOOST_POINTS,
   PLAN_TIER_CEILING,
   WEIGHT_KEYS,
+  WEIGHT_TOTAL,
+  weightsForBrowse,
+  weightsTotal,
   type BrowseRelevanceMode,
   type RankingWeights,
 } from "./ranking";
+import type { ImpactPreview } from "./impact";
 
 /**
- * Board 12c — the ranking, as something staff can change.
+ * Board 12c — the ranking, as something staff can change and then publish.
  *
- * `DEFAULT_WEIGHTS` has been a constant since handoff 1 and `searchBusinesses`
- * has always taken a `weights` option that no caller passed. Criterion 5 asks
- * that weights reorder live results, which they could not: there was nothing to
- * write to and nothing reading it.
+ * ## Why there is a draft
  *
- * ## Boosts
+ * There was not one. `saveWeights` wrote straight to `RankingWeights:current`
+ * and the copy said so — *"Saved. Search results reorder on the next request."*
+ * A staff member had no way to look at a change before every buyer did, and the
+ * spec's *"can weights change without firing the disclosure?"* was therefore not
+ * a flag to add but four pieces of work: split save from publish, put an impact
+ * preview between them, refuse to publish on a stale or running preview, and
+ * fire the seller disclosure from the publish and from nothing else.
  *
- * A boost is ops moving a listing for a reason of ours. It is never labelled
- * sponsored, because nobody paid for it — a sold slot is a `PlacementSlot`, is
- * one per results page, and carries a label.
+ * ## What fires the disclosure
  *
- * Both the reason and the expiry are NOT NULL in the database. The failure mode
- * of a manual override is not that somebody abuses it; it is that somebody
- * helps a supplier out for a fortnight and the results are still bent three
- * years later, with nobody able to say why.
+ * Nothing here sends a message. The position amendment shipped first, in PR 146,
+ * and state 09 — *"We changed how search results are ordered on 9 Sep"* — is
+ * derived by `lib/analytics/attribution.ts` from the weights stored on each
+ * night's `ListingFactorDay`. So the disclosure is fired by the live vector
+ * moving, which is exactly what a publish does and exactly what saving a draft
+ * does not. Criterion 5 is structural rather than a notification, which is the
+ * stronger version of it: there is no code path that could send the sentence
+ * without the ranking having actually changed.
+ *
+ * What the publish adds is the *claim*: the seller count that labelled the
+ * button is written to the history row, so what an ops lead was told they were
+ * about to do is recoverable afterwards.
  */
 
 // Re-exported so server callers have one import. The values live in
@@ -44,6 +57,7 @@ export {
   MAX_BOOST_POINTS,
   PLAN_TIER_CEILING,
   WEIGHT_KEYS,
+  WEIGHT_TOTAL,
   type BrowseRelevanceMode,
 } from "./ranking";
 
@@ -90,8 +104,9 @@ export async function liveBrowseRelevanceMode(): Promise<BrowseRelevanceMode> {
 
 export type WeightsRefusal =
   | "out_of_range"
-  | "all_zero"
+  | "total_not_100"
   | "plan_tier_too_high"
+  | "browse_plan_tier_too_high"
   | "unknown_browse_mode"
   | "nothing_changed";
 
@@ -99,60 +114,362 @@ export type WeightsResult =
   | { ok: true }
   | { ok: false; error: WeightsRefusal; message: string };
 
-const WEIGHT_MESSAGE: Record<WeightsRefusal, string> = {
-  out_of_range: "Each weight is a whole number from 0 to 100.",
-  all_zero: "They cannot all be nought. Everything would rank equally, which is no ranking at all.",
-  plan_tier_too_high: `Plan tier stops at ${PLAN_TIER_CEILING}. Above that the results start reading as bought, and a directory that sells its way to the top is one nobody comes back to.`,
-  unknown_browse_mode:
-    "A page with no query either redistributes the relevance points or scores them as category-match depth. There is no third answer, and leaving the weight to multiply zero is not one of the two.",
-  nothing_changed: "Those are the numbers it already has.",
-};
+function refusal(error: WeightsRefusal, params?: Record<string, string | number>): WeightsResult {
+  return { ok: false, error, message: t(`ranking.refuse.${error}` as never, params) };
+}
 
-export async function setWeights(
-  actor: Actor,
-  next: RankingWeights,
-  reason: string,
-  /**
-   * The browse mode, when the editor is submitting one.
-   *
-   * Optional so every existing caller and test keeps working; when it is
-   * absent the stored mode is left exactly where it is rather than reset to
-   * the default, which would silently undo a staff decision on every weight
-   * change.
-   */
-  browseMode?: string,
-): Promise<WeightsResult> {
+/**
+ * Everything a vector must be true of before it can be a draft or go live.
+ *
+ * Pure, and checked on save as well as on publish. A draft that cannot be
+ * published is a trap: the refusal belongs where the number was typed.
+ */
+export function validateWeights(next: RankingWeights, browseMode: string): WeightsResult {
   for (const key of WEIGHT_KEYS) {
     const value = next[key];
     if (!Number.isInteger(value) || value < 0 || value > 100) {
-      return { ok: false, error: "out_of_range", message: WEIGHT_MESSAGE.out_of_range };
+      return refusal("out_of_range");
     }
   }
-  if (WEIGHT_KEYS.every((key) => next[key] === 0)) {
-    return { ok: false, error: "all_zero", message: WEIGHT_MESSAGE.all_zero };
+
+  const total = weightsTotal(next);
+  if (total !== WEIGHT_TOTAL) {
+    return refusal("total_not_100", { total, expected: WEIGHT_TOTAL });
   }
+
   if (next.planTier > PLAN_TIER_CEILING) {
-    return {
-      ok: false,
-      error: "plan_tier_too_high",
-      message: WEIGHT_MESSAGE.plan_tier_too_high,
-    };
+    return refusal("plan_tier_too_high", { ceiling: PLAN_TIER_CEILING });
   }
-  if (browseMode !== undefined && !isBrowseRelevanceMode(browseMode)) {
+
+  if (!isBrowseRelevanceMode(browseMode)) {
+    return refusal("unknown_browse_mode");
+  }
+
+  /*
+     `B9`, and the one thing this pass found by drawing a control that was
+     already on the screen.
+
+     `redistribute` spreads relevance's points across the other five in
+     proportion, which lifts plan tier's *effective* weight on every area and
+     emirate landing page — the highest-traffic template in the product. The
+     ceiling was checked against the authored number, so at relevance 50 the
+     effective plan weight is 12 and the cap is breached by moving a slider that
+     has nothing to do with plan, on a screen reporting plan tier as 6 the whole
+     time.
+
+     The refusal names relevance rather than plan, because relevance is what the
+     staff member moved and plan is where it landed. Telling somebody their plan
+     weight is too high when they did not touch it is a refusal they cannot act
+     on.
+  */
+  const browse = weightsForBrowse(next, browseMode);
+  if (browse.planTier > PLAN_TIER_CEILING) {
+    return refusal("browse_plan_tier_too_high", {
+      ceiling: PLAN_TIER_CEILING,
+      effective: browse.planTier,
+      authored: next.planTier,
+    });
+  }
+
+  return { ok: true };
+}
+
+function vectorOf(row: {
+  relevance: number;
+  verificationTier: number;
+  responseTime: number;
+  specCompleteness: number;
+  distance: number;
+  planTier: number;
+}): RankingWeights {
+  return {
+    relevance: row.relevance,
+    verificationTier: row.verificationTier,
+    responseTime: row.responseTime,
+    specCompleteness: row.specCompleteness,
+    distance: row.distance,
+    planTier: row.planTier,
+  };
+}
+
+function sameVector(a: RankingWeights, b: RankingWeights): boolean {
+  return WEIGHT_KEYS.every((key) => a[key] === b[key]);
+}
+
+/**
+ * What step 2 of the publish strip says.
+ *
+ * `stale` is a comparison and not a timer: the preview stores the exact vector
+ * it describes, and the draft moving past it is the only thing that can make it
+ * stale. A timestamp would have made criterion 7 a race between two clocks.
+ */
+export type PreviewState = "none" | "running" | "stale" | "fresh";
+
+export interface DraftView {
+  weights: RankingWeights;
+  browseMode: BrowseRelevanceMode;
+  savedAt: Date;
+  savedBy: string;
+  previewState: PreviewState;
+  previewRanAt: Date | null;
+  /** Null unless the state is `fresh` — a stale preview is not shown as a result. */
+  preview: ImpactPreview | null;
+}
+
+function previewStateOf(row: {
+  weights: RankingWeights;
+  browseMode: string;
+  previewStartedAt: Date | null;
+  previewRanAt: Date | null;
+  previewFor: unknown;
+}): PreviewState {
+  if (row.previewStartedAt && !row.previewRanAt) return "running";
+  if (!row.previewRanAt || !row.previewFor) return "none";
+
+  const against = row.previewFor as Partial<RankingWeights> & { browseRelevanceMode?: string };
+  const sameWeights = WEIGHT_KEYS.every((key) => against[key] === row.weights[key]);
+  const sameMode = against.browseRelevanceMode === row.browseMode;
+  return sameWeights && sameMode ? "fresh" : "stale";
+}
+
+export async function draftState(): Promise<DraftView | null> {
+  const row = await prisma.rankingDraft.findUnique({
+    where: { id: "current" },
+    include: { savedBy: { select: { fullName: true, email: true } } },
+  });
+  if (!row) return null;
+
+  const weights = vectorOf(row);
+  const state = previewStateOf({
+    weights,
+    browseMode: row.browseRelevanceMode,
+    previewStartedAt: row.previewStartedAt,
+    previewRanAt: row.previewRanAt,
+    previewFor: row.previewFor,
+  });
+
+  return {
+    weights,
+    browseMode: isBrowseRelevanceMode(row.browseRelevanceMode)
+      ? row.browseRelevanceMode
+      : DEFAULT_BROWSE_RELEVANCE_MODE,
+    savedAt: row.savedAt,
+    savedBy: row.savedBy.fullName ?? row.savedBy.email ?? "",
+    previewState: state,
+    previewRanAt: row.previewRanAt,
+    preview: state === "fresh" ? (row.preview as unknown as ImpactPreview) : null,
+  };
+}
+
+/**
+ * Save the draft. Search is unchanged until somebody publishes it.
+ *
+ * Audited like every other staff state change, with a written reason: a draft
+ * is a decision somebody made, and the fact that it is not live yet does not
+ * make it nobody's.
+ */
+export async function saveDraft(
+  actor: Actor,
+  next: RankingWeights,
+  browseMode: string,
+  reason: string,
+): Promise<WeightsResult> {
+  const valid = validateWeights(next, browseMode);
+  if (!valid.ok) return valid;
+
+  const [live, liveMode, existing] = await Promise.all([
+    liveWeights(),
+    liveBrowseRelevanceMode(),
+    prisma.rankingDraft.findUnique({ where: { id: "current" } }),
+  ]);
+
+  const currentDraft = existing ? vectorOf(existing) : null;
+  const currentMode = existing?.browseRelevanceMode ?? liveMode;
+  if (currentDraft && sameVector(currentDraft, next) && currentMode === browseMode) {
+    return refusal("nothing_changed");
+  }
+  if (!currentDraft && sameVector(live, next) && liveMode === browseMode) {
+    return refusal("nothing_changed");
+  }
+
+  await prisma.$transaction(async (tx) =>
+    staffMutation(
+      {
+        actor,
+        capability: "search.ranking.write",
+        subject: "RankingDraft:current",
+        reason,
+        tx,
+      },
+      async () => {
+        await tx.rankingDraft.upsert({
+          where: { id: "current" },
+          create: {
+            id: "current",
+            ...next,
+            browseRelevanceMode: browseMode,
+            savedById: actor.id,
+          },
+          update: {
+            ...next,
+            browseRelevanceMode: browseMode,
+            savedById: actor.id,
+            savedAt: new Date(),
+            /*
+               The preview describes the draft it was run against, and the draft
+               has just moved. Clearing the run marks it stale rather than
+               deleting it, because `previewFor` is what proves the staleness and
+               the board says so out loud on step 2.
+            */
+            previewStartedAt: null,
+          },
+        });
+        return {
+          result: null,
+          before: currentDraft
+            ? { ...currentDraft, browseRelevanceMode: currentMode }
+            : { ...live, browseRelevanceMode: liveMode },
+          after: { ...next, browseRelevanceMode: browseMode },
+        };
+      },
+    ),
+  );
+
+  return { ok: true };
+}
+
+/**
+ * Throw the draft away.
+ *
+ * On the board beside publish, because a draft that cannot be abandoned is a
+ * draft nobody will risk making.
+ */
+export async function discardDraft(actor: Actor, reason: string): Promise<WeightsResult> {
+  const existing = await prisma.rankingDraft.findUnique({ where: { id: "current" } });
+  if (!existing) return refusal("nothing_changed");
+
+  await prisma.$transaction(async (tx) =>
+    staffMutation(
+      {
+        actor,
+        capability: "search.ranking.write",
+        subject: "RankingDraft:current",
+        reason,
+        tx,
+      },
+      async () => {
+        await tx.rankingDraft.delete({ where: { id: "current" } });
+        return {
+          result: null,
+          before: { ...vectorOf(existing), browseRelevanceMode: existing.browseRelevanceMode },
+          after: null,
+        };
+      },
+    ),
+  );
+
+  return { ok: true };
+}
+
+/** Record that a preview run has started, so step 2 can say `running`. */
+export async function markPreviewRunning(): Promise<void> {
+  await prisma.rankingDraft.update({
+    where: { id: "current" },
+    data: { previewStartedAt: new Date(), previewRanAt: null },
+  });
+}
+
+/**
+ * Clear a run marker after a failed preview.
+ *
+ * A run that threw must not leave the board reading `running` for ever. The
+ * draft is untouched, so this returns the state to `stale` or `none`, which is
+ * what it truthfully is. Swallows a missing row: a draft discarded while its
+ * preview was running is not an error to report to anybody.
+ */
+export async function clearPreviewRun(): Promise<void> {
+  await prisma.rankingDraft
+    .update({ where: { id: "current" }, data: { previewStartedAt: null } })
+    .catch(() => undefined);
+}
+
+/**
+ * Store a finished preview against the exact draft it describes.
+ *
+ * The vector is written with the result rather than read back later: between
+ * the run starting and the row being written the draft may have moved, and a
+ * preview filed against the newer vector would claim to describe a draft it had
+ * never seen.
+ */
+export async function storePreview(
+  against: RankingWeights,
+  browseMode: BrowseRelevanceMode,
+  preview: ImpactPreview,
+): Promise<void> {
+  await prisma.rankingDraft.update({
+    where: { id: "current" },
+    data: {
+      previewStartedAt: null,
+      previewRanAt: new Date(),
+      previewFor: { ...against, browseRelevanceMode: browseMode },
+      preview: preview as unknown as object,
+    },
+  });
+}
+
+export type PublishRefusal =
+  | "no_draft"
+  | "preview_missing"
+  | "preview_running"
+  | "preview_stale"
+  | WeightsRefusal;
+
+export type PublishResult =
+  | { ok: true; sellersTold: number }
+  | { ok: false; error: PublishRefusal; message: string };
+
+/**
+ * Promote the draft to live, and record what it was claimed to do.
+ *
+ * The order inside the transaction matters only in that all four happen or none
+ * do: the live row moves, the history row is written, the draft is cleared, and
+ * `staffMutation` files the audit row with the written reason.
+ *
+ * Publishing on a stale or running preview is refused rather than warned about.
+ * A count from a superseded draft is worse than no count, because it is the only
+ * thing standing between a staff member and several hundred dashboards.
+ */
+export async function publishDraft(
+  actor: Actor,
+  reason: string,
+  now = new Date(),
+): Promise<PublishResult> {
+  const draft = await draftState();
+  if (!draft) return { ok: false, error: "no_draft", message: t("ranking.refuse.no_draft") };
+
+  if (draft.previewState === "running") {
+    return { ok: false, error: "preview_running", message: t("ranking.refuse.preview_running") };
+  }
+  if (draft.previewState === "stale") {
+    return { ok: false, error: "preview_stale", message: t("ranking.refuse.preview_stale") };
+  }
+  if (draft.previewState === "none" || !draft.preview) {
+    return { ok: false, error: "preview_missing", message: t("ranking.refuse.preview_missing") };
+  }
+
+  const valid = validateWeights(draft.weights, draft.browseMode);
+  if (!valid.ok) return { ok: false, error: valid.error, message: valid.message };
+
+  const [live, liveMode] = await Promise.all([liveWeights(), liveBrowseRelevanceMode()]);
+  if (sameVector(live, draft.weights) && liveMode === draft.browseMode) {
     return {
       ok: false,
-      error: "unknown_browse_mode",
-      message: WEIGHT_MESSAGE.unknown_browse_mode,
+      error: "nothing_changed",
+      message: t("ranking.refuse.nothing_changed"),
     };
   }
 
-  const current = await liveWeights();
-  const currentMode = await liveBrowseRelevanceMode();
-  const moved = WEIGHT_KEYS.filter((key) => current[key] !== next[key]);
-  const modeMoved = browseMode !== undefined && browseMode !== currentMode;
-  if (moved.length === 0 && !modeMoved) {
-    return { ok: false, error: "nothing_changed", message: WEIGHT_MESSAGE.nothing_changed };
-  }
+  const preview = draft.preview;
 
   await prisma.$transaction(async (tx) =>
     staffMutation(
@@ -164,154 +481,98 @@ export async function setWeights(
         tx,
       },
       async () => {
-        const mode = browseMode ?? currentMode;
         await tx.rankingWeights.upsert({
           where: { id: "current" },
-          create: { id: "current", ...next, browseRelevanceMode: mode },
-          update: { ...next, browseRelevanceMode: mode },
+          create: {
+            id: "current",
+            ...draft.weights,
+            browseRelevanceMode: draft.browseMode,
+          },
+          update: { ...draft.weights, browseRelevanceMode: draft.browseMode },
         });
+
+        await tx.rankingPublish.create({
+          data: {
+            day: dubaiDayStart(now),
+            publishedAt: now,
+            ...draft.weights,
+            browseRelevanceMode: draft.browseMode,
+            reason,
+            categoriesMoved: preview.categoriesMoved,
+            listingsMoved: preview.listingsMoved,
+            sellersTold: preview.sellersTold,
+            publishedById: actor.id,
+          },
+        });
+
+        await tx.rankingDraft.delete({ where: { id: "current" } });
+
         return {
           result: null,
-          before: {
-            ...Object.fromEntries(moved.map((key) => [key, current[key]])),
-            ...(modeMoved ? { browseRelevanceMode: currentMode } : {}),
-          },
-          after: {
-            ...Object.fromEntries(moved.map((key) => [key, next[key]])),
-            ...(modeMoved ? { browseRelevanceMode: browseMode } : {}),
-          },
+          before: { ...live, browseRelevanceMode: liveMode },
+          after: { ...draft.weights, browseRelevanceMode: draft.browseMode },
         };
       },
     ),
   );
 
-  return { ok: true };
+  return { ok: true, sellersTold: preview.sellersTold };
 }
 
-export type BoostRefusal = "not_found" | "points_out_of_range" | "expiry_in_the_past" | "expiry_too_far";
-
-export type BoostResult =
-  | { ok: true; id: string }
-  | { ok: false; error: BoostRefusal; message: string };
-
-const BOOST_MESSAGE: Record<BoostRefusal, string> = {
-  not_found: "That listing is not here.",
-  points_out_of_range: `A boost is 1 to ${MAX_BOOST_POINTS} points. More than that replaces the ranking rather than nudging it.`,
-  expiry_in_the_past: "An expiry in the past is a boost that never applies.",
-  expiry_too_far: `A boost runs for at most ${MAX_BOOST_DAYS} days. Renew it if it is still the right call then.`,
-};
-
-export interface BoostInput {
-  actor: Actor;
-  businessId: string;
-  points: number;
-  reason: string;
-  expiresAt: Date;
-}
-
-export async function boostListing(input: BoostInput, now = new Date()): Promise<BoostResult> {
-  const business = await prisma.business.findUnique({
-    where: { id: input.businessId },
-    select: { id: true, displayName: true },
-  });
-  if (!business) return { ok: false, error: "not_found", message: BOOST_MESSAGE.not_found };
-
-  if (!Number.isInteger(input.points) || input.points < 1 || input.points > MAX_BOOST_POINTS) {
-    return {
-      ok: false,
-      error: "points_out_of_range",
-      message: BOOST_MESSAGE.points_out_of_range,
-    };
-  }
-  if (input.expiresAt <= now) {
-    return { ok: false, error: "expiry_in_the_past", message: BOOST_MESSAGE.expiry_in_the_past };
-  }
-  if (input.expiresAt.getTime() - now.getTime() > MAX_BOOST_DAYS * 86_400_000) {
-    return { ok: false, error: "expiry_too_far", message: BOOST_MESSAGE.expiry_too_far };
-  }
-
-  const id = await prisma.$transaction(async (tx) =>
-    staffMutation(
-      {
-        actor: input.actor,
-        capability: "placement.boost",
-        subject: `Business:${business.id}`,
-        reason: input.reason,
-        tx,
-      },
-      async () => {
-        const row = await tx.listingBoost.create({
-          data: {
-            businessId: business.id,
-            points: input.points,
-            // The same words as the audit row. A boost read from the listing
-            // should not need the audit log to explain itself.
-            reason: input.reason,
-            expiresAt: input.expiresAt,
-            createdById: input.actor.id,
-          },
-          select: { id: true },
-        });
-        return {
-          result: row.id,
-          before: null,
-          after: { points: input.points, expiresAt: input.expiresAt.toISOString() },
-        };
-      },
-    ),
-  );
-
-  return { ok: true, id };
-}
-
-export interface BoostView {
+export interface PublishRecord {
   id: string;
-  businessId: string;
-  businessName: string;
-  points: number;
+  publishedAt: Date;
+  weights: RankingWeights;
+  browseMode: string;
   reason: string;
-  expiresAt: Date;
-  expired: boolean;
+  author: string;
+  categoriesMoved: number | null;
+  listingsMoved: number | null;
+  sellersTold: number | null;
+  /** What each weight was on the publish before this one. Null on the first. */
+  moved: Partial<Record<keyof RankingWeights | "browseRelevanceMode", string>> | null;
 }
 
-/** Boosts, live ones first. Expired ones stay visible — they explain history. */
-export async function boostList(now = new Date()): Promise<BoostView[]> {
-  const rows = await prisma.listingBoost.findMany({
-    orderBy: [{ expiresAt: "desc" }],
-    take: 200,
-    select: {
-      id: true,
-      businessId: true,
-      points: true,
-      reason: true,
-      expiresAt: true,
-      business: { select: { displayName: true } },
-    },
+/**
+ * The Weight history tab.
+ *
+ * Each row carries what moved relative to the publish before it, computed here
+ * rather than stored: a stored diff and a stored vector are two facts that can
+ * disagree, and only one of them is the thing that went live.
+ */
+export async function publishHistory(take = 50): Promise<PublishRecord[]> {
+  const rows = await prisma.rankingPublish.findMany({
+    orderBy: { publishedAt: "desc" },
+    take: take + 1,
+    include: { publishedBy: { select: { fullName: true, email: true } } },
   });
 
-  return rows.map((row) => ({
-    id: row.id,
-    businessId: row.businessId,
-    businessName: row.business.displayName,
-    points: row.points,
-    reason: row.reason,
-    expiresAt: row.expiresAt,
-    expired: row.expiresAt <= now,
-  }));
-}
+  return rows.slice(0, take).map((row, index) => {
+    const previous = rows[index + 1];
+    const weights = vectorOf(row);
+    const moved: Record<string, string> = {};
 
-/** Live boost points per business, for the ranking to add on. */
-export async function liveBoosts(now = new Date()): Promise<Map<string, number>> {
-  const rows = await prisma.listingBoost.findMany({
-    where: { expiresAt: { gt: now } },
-    select: { businessId: true, points: true },
+    if (previous) {
+      for (const key of WEIGHT_KEYS) {
+        if (previous[key] !== weights[key]) moved[key] = `${previous[key]} → ${weights[key]}`;
+      }
+      if (previous.browseRelevanceMode !== row.browseRelevanceMode) {
+        moved["browseRelevanceMode"] =
+          `${t(`ranking.browse.${previous.browseRelevanceMode}` as never)} → ${t(`ranking.browse.${row.browseRelevanceMode}` as never)}`;
+      }
+    }
+
+    return {
+      id: row.id,
+      publishedAt: row.publishedAt,
+      weights,
+      browseMode: row.browseRelevanceMode,
+      reason: row.reason,
+      author: row.publishedBy.fullName ?? row.publishedBy.email ?? "",
+      categoriesMoved: row.categoriesMoved,
+      listingsMoved: row.listingsMoved,
+      sellersTold: row.sellersTold,
+      moved: previous ? moved : null,
+    };
   });
-
-  const byBusiness = new Map<string, number>();
-  for (const row of rows) {
-    // Two live boosts on one listing add up, and the cap on each is what keeps
-    // the total sane. Somebody stacking five is visible on the screen.
-    byBusiness.set(row.businessId, (byBusiness.get(row.businessId) ?? 0) + row.points);
-  }
-  return byBusiness;
 }
