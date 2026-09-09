@@ -550,7 +550,10 @@ export async function readNewCatalogueProducts(take = 5) {
       createdAt: { gte: ago(7) },
       business: { ...PUBLIC_BUSINESS, verificationTier: { gte: VERIFIED_TIER } },
     },
-    orderBy: { createdAt: "desc" },
+    // `id` last: a seller who imported a catalogue this week has one
+    // `created_at` across the whole file, and this row is an editorial slot —
+    // it should show the same five products to two visitors a second apart.
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: take * 8,
     include: {
       category: { select: { id: true, name: true } },

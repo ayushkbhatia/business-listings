@@ -244,7 +244,10 @@ export async function productBoardFor(
     }),
     prisma.product.findMany({
       where: { businessId },
-      orderBy: { createdAt: "asc" },
+      // `id` last, so the board does not reshuffle between two loads. An
+      // imported catalogue ties on `created_at` to a row, and a list somebody
+      // clicks through must not reorder under them.
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       select: {
         id: true,
         name: true,

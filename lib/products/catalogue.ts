@@ -86,7 +86,18 @@ export async function getCatalogueView(
   const [products, hiddenByPlan] = await Promise.all([
     prisma.product.findMany({
       where: { businessId },
-      orderBy: [{ updatedAt: "desc" }],
+      /*
+         `id` last, because `updatedAt` does not order these rows.
+
+         `updated_at` is `TIMESTAMP(3)`, and a bulk edit — an import, a category
+         reassign, a plan cap hiding forty products — stamps every row it
+         touches inside one transaction with one value. On the seeded database
+         172 of 226 products already share an `updated_at` with another, in
+         groups of up to eight. With the keys equal Postgres is free to return
+         them in any order, and the slice below then scans an arbitrary
+         `SCAN_CEILING` of them.
+      */
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       take: SCAN_CEILING + 1,
       select: ROW_SELECT,
     }),

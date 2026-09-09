@@ -259,7 +259,14 @@ async function sectionData(
     }),
     prisma.product.findMany({
       where: { businessId, status: "live" },
-      orderBy: [{ availability: "asc" }, { createdAt: "desc" }],
+      /*
+         `id` last. An imported catalogue shares one `created_at` across every
+         row of the file — `CURRENT_TIMESTAMP` is the transaction's start time —
+         so without it *which twelve products a buyer sees* is whatever order
+         the scan happened to produce, and it can differ between two loads of
+         the same storefront.
+      */
+      orderBy: [{ availability: "asc" }, { createdAt: "desc" }, { id: "desc" }],
       take: 12,
       select: {
         id: true, slug: true, name: true, sku: true, availability: true,
