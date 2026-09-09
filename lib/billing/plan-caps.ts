@@ -43,8 +43,34 @@ import { capFor, type PlanCaps } from "@/lib/plan/entitlements";
  * it does not promise that both are hidden, and neither does this.
  */
 
-/** The order a cap keeps. See `hideOverPlanCap`. */
-const KEEP_ORDER = { createdAt: "asc" } as const;
+/**
+ * The order a cap keeps. See `hideOverPlanCap`.
+ *
+ * Oldest first, and then by id, because `createdAt` alone does not order these
+ * rows. `Product.created_at` is `TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP`, and
+ * `CURRENT_TIMESTAMP` in Postgres is the *transaction's* start time — so every
+ * product a CSV import creates carries the identical timestamp, since the
+ * importer writes them all in one `createMany` inside one transaction
+ * (`lib/import/service.ts`). A tight creation loop ties too, at millisecond
+ * resolution. With the timestamps equal, Postgres was free to return them in
+ * any order, and "the oldest stay" picked an arbitrary subset of an import —
+ * differently on each call, so the chooser could preselect one set and the
+ * applier hide another.
+ *
+ * `id` breaks it. A cuid carries a millisecond prefix and a per-process
+ * counter, so ids minted in one run sort in the order they were minted: the
+ * tiebreak is not merely stable, it agrees with insertion order for exactly the
+ * case that produced the tie.
+ *
+ * Exported because the chooser on `/dashboard/billing/change/keep/products`
+ * preselects with it. The screen is a promise about what happens if the seller
+ * touches nothing, and two orderings would make that promise on one query and
+ * keep it on another.
+ */
+export const KEEP_ORDER: Prisma.ProductOrderByWithRelationInput[] = [
+  { createdAt: "asc" },
+  { id: "asc" },
+];
 
 export interface CapOutcome {
   /** How many products this call hid. Zero on a plan that caps nothing. */

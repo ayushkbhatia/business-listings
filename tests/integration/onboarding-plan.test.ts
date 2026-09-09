@@ -181,22 +181,47 @@ describe("criterion 13 — the trial ends by dropping, never by suspending", () 
 });
 
 describe("criterion 20 — hidden, not deleted", () => {
-  /** Products beyond whatever cap the test is about. */
+  /**
+   * Fixture rows are numbered, not timestamped.
+   *
+   * `Date.now()` was both the name and the slug, and two products created in
+   * the same millisecond shared a slug — which `@@unique([businessId, slug])`
+   * only forgave because the `-${i}` suffix differed inside one call. Across
+   * two calls in one millisecond it would not have.
+   */
+  let stockUpRun = 0;
+
+  /**
+   * Products beyond whatever cap the test is about.
+   *
+   * `createdAt` is written rather than defaulted. These tests say "the oldest
+   * stay", so the fixture has to establish which is oldest, and
+   * `DEFAULT CURRENT_TIMESTAMP` at `TIMESTAMP(3)` does not: a tight loop lands
+   * two rows in one millisecond often enough to have failed a full suite run
+   * once. Spacing them a second apart states the intent instead of racing for
+   * it. The tie itself is a case in its own right — see the test below that
+   * creates one deliberately.
+   */
   async function stockUp(count: number): Promise<string[]> {
     const category = await prisma.category.findFirstOrThrow({
       where: { children: { none: {} } },
       select: { id: true },
     });
+    const run = (stockUpRun += 1);
+    // Newer than anything the seed wrote, the way `now()` was — the first test
+    // in this block leaves the seeded products live and counts what survives.
+    const base = Date.now() + run * 60_000;
     const ids: string[] = [];
     for (let i = 0; i < count; i += 1) {
       const product = await prisma.product.create({
         data: {
           businessId: seller.id,
           categoryId: category.id,
-          name: `Cap fixture ${Date.now()}-${i}`,
-          slug: `cap-fixture-${Date.now()}-${i}`,
+          name: `Cap fixture ${run}-${i}`,
+          slug: `cap-fixture-${run}-${i}`,
           status: "live",
           availability: "in_stock",
+          createdAt: new Date(base + i * 1_000),
         },
         select: { id: true },
       });
@@ -243,6 +268,69 @@ describe("criterion 20 — hidden, not deleted", () => {
       select: { id: true },
     });
     expect(live.map((row) => row.id)).toEqual([made[0]]);
+  });
+
+  /**
+   * The case the importer actually produces.
+   *
+   * `Product.created_at` is `TIMESTAMP(3) DEFAULT CURRENT_TIMESTAMP`, and
+   * `CURRENT_TIMESTAMP` in Postgres is the transaction's start time — so the
+   * CSV importer, which writes a whole file with one `createMany` inside one
+   * transaction, gives every product in the run the identical timestamp. Not
+   * two of them in a fast loop: all of them, every time.
+   *
+   * `KEEP_ORDER` sorted on `created_at` alone, which left "the oldest stay"
+   * with nothing to decide on, so the cap hid an arbitrary subset of an import
+   * — a different subset between two calls, which is how the chooser could
+   * preselect one set and the applier hide another.
+   *
+   * The ids here are written rather than generated, and the rows are inserted
+   * newest-first, because that is what makes this a test rather than a coin
+   * toss. `hideOverPlanCap` reads through the `business_id` index, and a bitmap
+   * heap scan hands its rows back in physical order — so inserting backwards
+   * puts the newest first in the scan, and an untiebroken sort keeps exactly
+   * the wrong two, every run. Left to the default cuid and a plain creation
+   * loop it failed about one run in three, which is the flake this came from.
+   */
+  it("breaks a createdAt tie by id, because an import ties every row it writes", async () => {
+    await prisma.product.updateMany({ where: { businessId: seller.id }, data: { status: "draft" } });
+    const category = await prisma.category.findFirstOrThrow({
+      where: { children: { none: {} } },
+      select: { id: true },
+    });
+    const sameMs = new Date("2026-03-01T09:00:00.000Z");
+    const made = ["00", "01", "02", "03"].map((n) => `cap-tie-fixture-${n}`);
+    for (const id of [...made].reverse()) {
+      await prisma.product.create({
+        data: {
+          id,
+          businessId: seller.id,
+          categoryId: category.id,
+          name: `Tie fixture ${id}`,
+          slug: id,
+          status: "live",
+          availability: "in_stock",
+          createdAt: sameMs,
+        },
+      });
+      madeProducts.push(id);
+    }
+
+    await prisma.subscription.create({
+      data: {
+        businessId: seller.id,
+        planId: "free",
+        renewsAt: new Date(Date.now() + 30 * 86_400_000),
+      },
+    });
+
+    await hideOverPlanCap(seller.id, { productLimit: 2 });
+    const live = await prisma.product.findMany({
+      where: { businessId: seller.id, status: "live" },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    });
+    expect(live.map((row) => row.id)).toEqual([made[0], made[1]]);
   });
 
   it("records what it hid, so an upgrade restores those and not the seller's own drafts", async () => {
