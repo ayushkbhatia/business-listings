@@ -195,8 +195,20 @@ per the working agreement: one production deploy, not twelve.
   `selection.recipients`, which is the matcher's top N and would have silently dropped a supplier
   the buyer deliberately ticked. `takeSlot` reads `sponsoredEligible` through `effectiveFor`, so a
   Free-plan owner is refused by name and a grandfathered seller keeps what they bought.
-- [ ] **1.7 Decide: ship the custom-domain middleware, or stop selling it.** Still yours. `5e` is
-  step 8.1 either way.
+- [x] **1.7 Decided, 9 Sep 2026: custom domains are cut.** Not "build the middleware later" —
+  removed entirely, and every trace with it. Production holds zero `custom_domain` rows, so no
+  customer loses anything; Pro advertises it and nobody has ever used it.
+
+  **The cut is two PRs, in this order, and the order is not optional.** A drop is the mirror of an
+  additive migration: the code that reads the column has to stop reading it *first*, or live code
+  queries a column that is gone. So — one PR removing `/dashboard/domain`, `lib/domains/`, the
+  sweep's `domains` step, the plan-grid row, the entitlement, the strings and the tests, leaving
+  the schema alone; then, once that deploy is live, a second PR dropping `CustomDomain` and
+  `Plan.customDomain`. The second stops for a person under *How work lands*.
+
+  Touches ~45 files. Also removes `5e` from Phase 8, one column from the plan comparison table,
+  and one of the five unwritable Plan fields from 6.1. The eight existing entitlement snapshots
+  name `customDomain` in frozen JSON; the key goes inert and is harmless.
 
 **Owed to production, and not carried by this branch.** The two content corrections in 1.5 are
 seed edits, and a seed does not run against production. The `LegalPage` row holding the
