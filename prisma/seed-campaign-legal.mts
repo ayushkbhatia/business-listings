@@ -109,23 +109,23 @@ means and who can move one.
 **Not verified.** Nothing on the listing has been checked by us. Most listings start here,
 because most are imported from public licence records before anybody claims them.
 
-**Licence on file.** A trade licence number has been recorded. Recorded is not checked.
+**Claimed.** Somebody at the business has proved the listing is theirs, by uploading a trade
+licence or by answering the number on the public register. Claimed is not checked: it says who
+is speaking, not that what they say has been verified.
 
 **Licence verified.** The trade licence has been checked against the issuing authority — the
-relevant DED or free zone. This is the first rung that counts as verified anywhere on the
-site, in a filter, in a count, or on a curated list.
+relevant DED or free zone. This is the top rung, and the first that counts as verified anywhere
+on the site, in a filter, in a count, or on a curated list.
 
-**Audited.** Trading history and buyer outcomes checked by us — enquiries answered, quotes
-sent, reply times. Measured rather than claimed, which is what a top rung has to be. The
-smallest group by a wide margin.
-
-The ladder used to carry a rung above licence verified that rested on somebody from this
-company physically attending the address. We do not gather that evidence any more, so the rung
-is gone: a badge whose requirement nobody performs means whatever staff decide on the day.
+The ladder stops there, and has stopped there since 5 September 2026. It used to carry a rung
+above licence verified. That rung held three different claims in three months — somebody from
+this company attending the address, then trading history audited, then trade references — and
+we do not gather any of that evidence. A badge whose requirement nobody performs means whatever
+staff decide on the day, so the rung is gone rather than reserved.
 
 **Expiry.** A UAE trade licence is renewed annually. On the day one expires, that supplier's
-tier drops to licence verified — no grace period, no warning. It goes back up when the renewed
-licence is checked.
+tier drops to claimed — no grace period, no warning. It goes back up when the renewed licence
+is checked.
 
 **Who can move a tier.** Only our operations lead. There is no field in the seller dashboard,
 no setting behind a subscription, and no API path. Every change writes an audit record with a

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { crawlRel } from "@/lib/seo/crawl-policy";
 import { Card } from "@/components/structure";
@@ -143,6 +144,7 @@ export function ListingCard({
   const spec = tierSpec(business.verificationTier);
   const link = href ?? `/b/${business.slug}`;
   const unclaimed = context === "unclaimed";
+  const claimHref = `/onboarding/claim?q=${encodeURIComponent(business.displayName)}`;
 
   const verification = (
     <VerificationBadge
@@ -778,13 +780,25 @@ export function ListingCard({
             <div className="mt-3 rounded-chip border border-line bg-paper-sunk p-3">
               <p className="text-caption text-body">{t("listing.unclaimed_title")}</p>
               <p className="mt-1 text-caption text-muted">{t("listing.unclaimed_body")}</p>
+              {/*
+                 The sibling of the pair on `10g`'s page composition, and it has
+                 to match it — both were `disabled` under a stale enquiry
+                 tooltip, on a card that carries no enquiry action by design.
+                 `crawlRel` because a distinct `?q=` per card, across a results
+                 page of them, is the crawl shape `lib/seo/crawl-policy.ts` was
+                 written about.
+              */}
               <div className="mt-2 flex flex-wrap gap-2">
-                <Button size="sm" variant="secondary" disabled title={t("enquiry.disabled")}>
+                <Link
+                  href={claimHref}
+                  rel={crawlRel(claimHref)}
+                  className={buttonClassName({ size: "sm", variant: "secondary" })}
+                >
                   {t("listing.claim_cta")}
-                </Button>
-                <Button size="sm" variant="link" disabled title={t("enquiry.disabled")}>
+                </Link>
+                <Link href="/verification-policy" className={buttonClassName({ variant: "link" })}>
                   {t("listing.report")}
-                </Button>
+                </Link>
               </div>
             </div>
           )}

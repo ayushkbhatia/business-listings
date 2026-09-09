@@ -172,6 +172,44 @@ export function ParentLink({ name, slug }: { name: string; slug: string }) {
   );
 }
 
+/** `**a lead-in**`, the one inline mark the authored bodies use. */
+const BOLD = /\*\*(.+?)\*\*/g;
+
+/**
+ * The lead-in each clause of a legal page opens with, as emphasis rather than
+ * as four asterisks.
+ *
+ * All four legal pages are written as `**Not verified.** Nothing on the
+ * listing…`, and this rendered the text verbatim — so every one of them
+ * published raw markdown, forty-four markers between them, on the pages a
+ * reader goes to when they want to know exactly what we promise. Nothing else
+ * `Prose` renders carries a `**`: the campaign body, the area and emirate
+ * intros and the category intros have none, so this changes the four pages it
+ * was written for and no others.
+ *
+ * Deliberately only bold. `_Article.tsx` does the same one-mark job for links
+ * in a guide; a real markdown parser on a field a person types into is a
+ * different decision, with a sanitiser attached to it.
+ */
+function Emphasised({ text }: { text: string }) {
+  const parts: React.ReactNode[] = [];
+  let last = 0;
+
+  for (const match of text.matchAll(BOLD)) {
+    const at = match.index;
+    if (at > last) parts.push(text.slice(last, at));
+    parts.push(
+      <strong key={at} className="font-medium text-ink">
+        {match[1]}
+      </strong>,
+    );
+    last = at + match[0].length;
+  }
+  if (last < text.length) parts.push(text.slice(last));
+
+  return <>{parts}</>;
+}
+
 /**
  * An authored intro, as the paragraphs it was written in.
  *
@@ -190,7 +228,7 @@ export function Prose({ text }: { text: string }) {
     <div className="mt-4 flex max-w-[var(--measure-prose)] flex-col gap-3">
       {paragraphs.map((paragraph, i) => (
         <p key={i} className="text-prose text-prose">
-          {paragraph}
+          <Emphasised text={paragraph} />
         </p>
       ))}
     </div>

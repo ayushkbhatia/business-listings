@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
+import { assertCanMergeBusinesses } from "@/lib/auth/guards";
 import { requireStaff } from "@/lib/auth/staff";
 import {
   dismissCandidate,
@@ -21,9 +22,21 @@ function refused(error: unknown): ActionResult {
   throw error;
 }
 
+/**
+ * `findCandidates` writes. It creates `MergeCandidate` rows, and the cap it
+ * enforces means a run can also drop pairs a later run will not re-propose —
+ * so it is a mutation with a lasting effect on what this queue holds, not a
+ * read. It resolved a seat and then discarded it in a `finally`, which left
+ * every staff seat able to rewrite the merge queue.
+ *
+ * `business.merge` is the right grant because it is the capability every other
+ * action on this screen already asserts; nobody who cannot merge has any use
+ * for a candidate list they cannot act on.
+ */
 export async function rescan(): Promise<ActionResult> {
   const seat = await requireStaff();
   try {
+    assertCanMergeBusinesses(seat.actor);
     const scan = await findCandidates();
     revalidatePath("/admin/ingest/dedupe");
     return {

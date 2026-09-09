@@ -132,7 +132,15 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
     labelKey: "nav.group.growth",
     items: [
       { key: "analytics", labelKey: "nav.analytics", href: "/dashboard/analytics" },
-      { key: "promote", labelKey: "nav.promote", href: "/dashboard/promote" },
+      // Named its capability late. Every other entry in this file states the
+      // grant that opens it; this one did not, so the row rendered for seats
+      // the route now 404s.
+      {
+        key: "promote",
+        labelKey: "nav.promote",
+        href: "/dashboard/promote",
+        capability: "placement.purchase",
+      },
     ],
   },
   {

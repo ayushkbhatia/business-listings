@@ -2,6 +2,9 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { assertCanBuyPlacement } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
+import { effectiveFor } from "@/lib/billing/entitlements-service";
+import { hasEntitlement } from "@/lib/plan/entitlements";
+import { t } from "@/lib/i18n";
 
 /**
  * Sponsored placement. Board 11e.
@@ -105,7 +108,29 @@ export async function takeSlot(
 ): Promise<PlacementResult> {
   assertCanBuyPlacement(actor);
   if (actor.businessId !== businessId) {
-    return { ok: false, error: "You can only buy placement for your own business." };
+    return { ok: false, error: t("promote.refuse.not_yours") };
+  }
+
+  /*
+     The plan gate, which this route did not have.
+
+     `placement.purchase` says the seat may buy for its own business. It says
+     nothing about whether the business's plan includes the thing being bought,
+     and nothing here asked. So a Free-plan owner could take a slot —
+     `sponsoredEligible` is seeded false for Free, has an editor at
+     /admin/plans, renders as a row on the plan comparison grid, is promised in
+     onboarding copy, and was read by nothing on the one route that sells it.
+     `tests/integration/commercials.test.ts:566` already asserts in its own name
+     that "sponsoredEligible gates the placement screen".
+
+     Through `effectiveFor` rather than off `business.plan`, so a seller who
+     bought eligibility and was later moved off it by a plan edit keeps what
+     they paid for — the same grandfathering every other entitlement gets.
+  */
+  const plan = await effectiveFor(businessId);
+  if (!plan) return { ok: false, error: t("promote.refuse.no_plan") };
+  if (!hasEntitlement(plan, "sponsoredEligible")) {
+    return { ok: false, error: t("promote.refuse.plan", { plan: plan.name }) };
   }
 
   const existing = await prisma.placementSlot.findFirst({
@@ -120,7 +145,7 @@ export async function takeSlot(
 
   if (existing) {
     if (existing.businessId === businessId) {
-      return { ok: false, error: "You already hold that slot." };
+      return { ok: false, error: t("promote.refuse.already_yours") };
     }
     /*
      * Not an auction. A queue, in the order people joined it.

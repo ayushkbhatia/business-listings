@@ -10,6 +10,25 @@ import { quoteTotalAed } from "@/lib/quote/money";
  * those were sent to them. A supplier sees one first name.
  */
 
+/**
+ * The segment in `/enquiry/:id/...` is a reference or an id, and both resolve.
+ *
+ * `getTrackingByRef` established this for the parent route and wrote down why:
+ * the reference is what the SMS and the email print and what a buyer reads back
+ * to somebody, and the id is what every link already sent out carries. The two
+ * child routes did not inherit it, so the tracking page's own Compare and
+ * "View accepted" buttons — built from `tracking.ref` — resolved against an
+ * id-only `where` and 404'd. No test caught it because every e2e navigates by
+ * the seed's raw id.
+ *
+ * The buyer id stays inside the `where` rather than being checked afterwards.
+ * A reference is four digits and guessable; an unknown one and somebody else's
+ * enquiry have to return the same null, or the 404 becomes a confirmation.
+ */
+function byRefOrId(buyerId: string, refOrId: string) {
+  return { OR: [{ ref: refOrId }, { id: refOrId }], buyerId };
+}
+
 export interface BuyerQuoteLine {
   id: string;
   description: string;
@@ -59,7 +78,7 @@ export interface BuyerEnquiry {
  */
 export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promise<BuyerEnquiry | null> {
   const enquiry = await prisma.enquiry.findFirst({
-    where: { id: enquiryId, buyerId },
+    where: byRefOrId(buyerId, enquiryId),
     select: {
       id: true,
       ref: true,
@@ -201,7 +220,7 @@ export async function getBuyerEnquiries(buyerId: string): Promise<BuyerEnquiryRo
 /** The accepted supplier's own contact details, for the buyer who accepted. */
 export async function getAcceptedRecord(buyerId: string, enquiryId: string) {
   const enquiry = await prisma.enquiry.findFirst({
-    where: { id: enquiryId, buyerId, contactReleasedToBusinessId: { not: null } },
+    where: { ...byRefOrId(buyerId, enquiryId), contactReleasedToBusinessId: { not: null } },
     select: {
       id: true,
       ref: true,

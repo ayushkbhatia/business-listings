@@ -289,7 +289,7 @@ export const en = {
   "console.metric.past_due": "Subscriptions past due",
   "console.metric.unpaid": "Invoices issued and unpaid",
   "console.metric.reports": "Supplier reports open",
-  "console.metric.expiring": "Tier 3+ licences expiring in 30 days",
+  "console.metric.expiring": "Verified licences expiring in 30 days",
 
   "admin.queue.title": "Approval queue",
   "admin.queue.eyebrow": "Moderation",
@@ -399,6 +399,10 @@ export const en = {
   "admin.businesses.title": "Businesses",
   "admin.businesses.eyebrow": "Accounts",
   "admin.businesses.meta": "{count} listings, {claimed} claimed",
+  // Said only when the table is holding fewer rows than the count above it, so
+  // the two numbers cannot be read as disagreeing. Search and pagination are
+  // board 4f's own work (step 4.5); this stops the header lying until they land.
+  "admin.businesses.showing": "showing the first {count}",
   "admin.businesses.caption": "Businesses and their account health",
   "admin.businesses.col.business": "Business",
   "admin.businesses.col.plan": "Plan",
@@ -581,8 +585,13 @@ export const en = {
 
   "admin.audit.title": "Audit log",
   "admin.audit.eyebrow": "Platform",
-  "admin.audit.meta_all": "{count} entries, every actor",
-  "admin.audit.meta_own": "{count} of your own entries",
+  // "{count} entries" over a `limit: 200` said 200 entries on a log holding
+  // any number above that, and would have kept saying it. Named as a window
+  // rather than a total: true at every size, and true without a second query
+  // that would have to re-derive `auditScopeFor`'s narrowing to stay honest.
+  // The count and the pagination it needs are board 4i's own work (step 7.1).
+  "admin.audit.meta_all": "The {count} most recent entries, every actor",
+  "admin.audit.meta_own": "The {count} most recent of your own entries",
   "admin.audit.scope_own": "You see your own actions. Reading the whole log is an ops lead row.",
   "admin.audit.caption": "Staff actions, newest first",
   "admin.audit.col.when": "When",
@@ -5208,6 +5217,10 @@ export const en = {
   "promote.buy": "Take this slot",
   "promote.yours": "Yours until {when}",
   "promote.queue_position": "{n} ahead of you",
+  "promote.refuse.not_yours": "You can only buy placement for your own business.",
+  "promote.refuse.already_yours": "You already hold that slot.",
+  "promote.refuse.no_plan": "This business is not on a plan, so it cannot take a slot.",
+  "promote.refuse.plan": "Sponsored placement is not included on {plan}. Change plan to take a slot.",
 
   // ── Analytics, board 3l ───────────────────────────────────────────────────
   // ── Board 3l · analytics ──────────────────────────────────────────────────
@@ -6419,6 +6432,7 @@ export const en = {
   "admin.revenue.nrr": "Net revenue retention {rate}",
   "admin.revenue.no_rate": "No opening balance to measure against",
   "admin.revenue.reconciled": "Ledger and subscriptions agree at {amount}",
+  "admin.revenue.not_reconciled": "Ledger says {amount}, and does not agree",
   "admin.revenue.unreconciled": "Ledger says {ledger}, subscriptions say {live}. Difference {difference}.",
   "admin.revenue.unreconciled_body": "A plan moved without a movement row, or a plan price was edited after the fact. Both are findable: compare mrr_movement against subscription for the accounts that changed.",
   "admin.revenue.definition": "MRR counts subscriptions that are active or past due. Not trials, which have taken no money, and not cancellations, which show as churn on the day the money stops. Nothing on this page counts what buyers pay suppliers: those payments happen directly between the two of them, the platform is never party to them, and there is no take rate on them. Quoted value is self-reported and lives on marketplace health.",

@@ -232,6 +232,27 @@ export async function recentMerges(now = new Date(), limit = 50) {
   });
 }
 
+/**
+ * How many open candidates there are in each band.
+ *
+ * A count, because the header was a slice. `admin.dedupe.meta` reads
+ * "{certain} safe to merge, {probable} need a decision" and both figures came
+ * from filtering the 200 rows the table had already fetched — so "200 safe to
+ * merge" was what the screen said whether the queue held 200 or 4,000, and
+ * "safe to merge" is not a sentence to be approximately right about.
+ *
+ * Grouped rather than counted twice: the bands partition the same predicate.
+ */
+export async function openCandidateCounts(): Promise<{ certain: number; probable: number }> {
+  const grouped = await prisma.mergeCandidate.groupBy({
+    by: ["band"],
+    where: { dismissedAt: null, mergeId: null },
+    _count: { _all: true },
+  });
+  const of = (band: string) => grouped.find((row) => row.band === band)?._count._all ?? 0;
+  return { certain: of("certain"), probable: of("probable") };
+}
+
 export async function openCandidates(band?: "certain" | "probable", limit = 100) {
   return prisma.mergeCandidate.findMany({
     where: { dismissedAt: null, mergeId: null, ...(band ? { band } : {}) },

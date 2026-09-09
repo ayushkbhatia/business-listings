@@ -105,7 +105,16 @@ export default async function QueuePage() {
   // Late first, then oldest within each band. The banding is the ordering.
   rows.sort((a, b) => Number(b.late) - Number(a.late) || b.ageDays - a.ageDays);
 
-  const oldest = rows[0]?.ageDays ?? 0;
+  /*
+     The maximum, not the head of the sort.
+
+     The sort is late-first and only then oldest, and "late" is measured against
+     a per-kind SLA — `SLA_DAYS.claim` is not `SLA_DAYS.listing`. So a claim
+     four days old can sort above a credential six days old, and reading
+     `rows[0].ageDays` reported the queue as younger than it was, in exactly the
+     case where somebody is looking at this header to decide what is behind.
+  */
+  const oldest = rows.reduce((max, row) => Math.max(max, row.ageDays), 0);
 
   return (
     <AdminPage

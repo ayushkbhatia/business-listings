@@ -74,13 +74,21 @@ export default async function ReportsPage() {
       activeHref="/admin/reports"
       title={t("admin.reports.title")}
       eyebrow={t("admin.reports.eyebrow")}
+      /*
+         Nothing, when there is nothing. This rendered unconditionally, so an
+         empty queue read "0 open, oldest 0 days" — and the oldest of no reports
+         is not zero days, it is not a quantity. The designed empty state below
+         is what an empty queue is supposed to say.
+      */
       meta={
-        <span className="text-caption text-muted">
-          {t("admin.reports.meta", {
-            open: formatCount(rows.length),
-            days: String(rows[0]?.ageDays ?? 0),
-          })}
-        </span>
+        rows.length > 0 ? (
+          <span className="text-caption text-muted">
+            {t("admin.reports.meta", {
+              open: formatCount(rows.length),
+              days: String(rows[0]!.ageDays),
+            })}
+          </span>
+        ) : undefined
       }
     >
       <ReportTable rows={rows} resolve={resolve} />

@@ -113,7 +113,18 @@ export default async function RevenuePage() {
           face="sans"
           label={t("admin.revenue.mrr")}
           value={aed(now.mrrFils)}
-          caption={t("admin.revenue.reconciled", { amount: aed(reconciliation.ledgerFils) })}
+          /*
+             Conditional, because it was not. The caption stated "Ledger and
+             subscriptions agree at {amount}" unconditionally, eight lines under
+             an Alert that renders only when they do NOT agree — so the one page
+             state that matters said both things at once, and the reassuring one
+             was the larger of the two.
+          */
+          caption={
+            reconciliation.agrees
+              ? t("admin.revenue.reconciled", { amount: aed(reconciliation.ledgerFils) })
+              : t("admin.revenue.not_reconciled", { amount: aed(reconciliation.ledgerFils) })
+          }
         />
         <StatCard
           face="sans"

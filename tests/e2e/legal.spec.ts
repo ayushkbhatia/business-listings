@@ -304,3 +304,29 @@ test.describe("the legal template", () => {
     expect(shadow).not.toBe("none");
   });
 });
+
+test.describe("the lead-ins are emphasis, not asterisks", () => {
+  /*
+     The two policies rendered by `Prose`, and only those two.
+
+     `/terms`, `/privacy` and `/cookies` are boards 13f-13h: they draw clauses
+     from `lib/legal/documents.ts` and take only the dates from the row, so the
+     `**` in their stored `body` never reaches a page. The two below render the
+     stored body directly, and rendered it verbatim — publishing `**Not
+     verified.**` with the asterisks in it, on the pages a reader opens when
+     they want to know exactly what we promise.
+
+     Worth writing down while it is in view: `legal_page.body` for terms and
+     privacy is written by the seed and read by nothing. That is `13i`'s to
+     settle (step 1.5 in docs/build-plan.md), not this test's.
+  */
+  for (const path of ["/verification-policy", "/review-policy"]) {
+    test(`${path} publishes no raw markdown`, async ({ page }) => {
+      await page.goto(path);
+      const body = (await page.locator("main").innerText()) ?? "";
+      expect(body).not.toContain("**");
+      // And the mark became a real one, rather than being stripped.
+      await expect(page.locator("main strong").first()).toBeVisible();
+    });
+  }
+});
