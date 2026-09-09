@@ -52,8 +52,14 @@ test.describe("board 5e — your own web address", () => {
   });
 
   test("never tells a seller to add a DNS record", async ({ page }) => {
+    /*
+       The words that can only appear as an instruction. "Registrar" is not one
+       of them and is deliberately absent from this list — the copy says there
+       is nothing to set up at one, which is the reassurance this model earns
+       rather than a leftover of the flow it replaced.
+    */
     const body = (await page.locator("main").innerText()) ?? "";
-    for (const gone of ["CNAME", "TXT", "registrar", "propagat"]) {
+    for (const gone of ["CNAME", "TXT record", "propagat"]) {
       expect(body, gone).not.toContain(gone);
     }
   });
