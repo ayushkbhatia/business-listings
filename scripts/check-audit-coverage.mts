@@ -85,6 +85,10 @@ const EXEMPT = new Map<string, string>([
     "`recordSearch` appends a row to the search log on every public search. It is a buyer typing into a box, not a staff decision, and `AuditEvent.actorId` is NOT NULL because the audit log should hold decisions only. Its sibling `recordZeroResult` in queries/search.ts is the same write for the same reason.",
   ],
   [
+    "lib/placement/term.ts",
+    "A slot ending because the subscription under it ended. The three callers are the cancellation applier, the scheduled-change applier and the dunning drop, all of them crons following a published sequence — the same shape as `lib/verification/expiry-job.ts`, which CLAUDE.md names as correct without an audit row. `AuditEvent.actorId` is NOT NULL because the log holds decisions, and nobody decided this: the seller decided to cancel, and that decision is already logged where it was made. The `PlacementSlot` row keeps its own dates, and a credit note is a numbered document, so both halves stay evidenced.",
+  ],
+  [
     "lib/crm/call-list.ts",
     "`logCall` records a phone call that happened outside the system. It changes nothing about the directory, and the CallOutcome row carries the staff id and the timestamp — it is the record, not a change needing one.",
   ],

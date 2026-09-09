@@ -57,16 +57,30 @@ so it changes to:
 
 ## 2 · The six decisions
 
-| # | Verdict | Cost | Deferrable |
-|---|---|---|---|
-| **D1** Plan-limit config | **Settled in code — ratify** | migration | yes |
-| **D2** Placement term | Open — recommendation below | writer, no schema change | **no** |
-| **D3** Attribute dictionary | Open — recommendation below | model change | yes, expensively |
-| **D4** Enquiry cap | **Settled in code — ratify** | writer | yes |
-| **D5** Services & booking | Open — recommendation below | migration | **no** |
-| **D6** Editorial attribution | Answered twice, contradictorily, in public | copy only | no — it is live |
+**All six answered by the owner on 9 Sep 2026.**
 
-### D1 · Plan-limit config — ratify
+| # | Decision | Answer | Status |
+|---|---|---|---|
+| **D1** Plan-limit config | Ratify the seven numbers | **Settled** | one migration owed |
+| **D2** Placement term | The slot belongs to the subscription | **Settled** | build, no schema change |
+| **D3** Attribute dictionary | **No.** Comparison stays at business level | **Settled** | nothing to build; retire the dead pieces |
+| **D4** Enquiry cap | Keep it, stack the leads, **paywall the unlock**. Buyers never see capacity | **Settled, deferred** | GTM work, later |
+| **D5** Services | **Their own screens**, per subcategory | **Settled** | `docs/services-spec.md`, awaiting handoffs |
+| **D6** Guide bylines | A named editor now, more names later | **Settled** | needs one real name |
+
+Two of the answers changed what was proposed, and both changes matter:
+
+- **D3 came back "no".** The attribute-dictionary migration is off the plan entirely. `10d`
+  stays as it is — ten fixed business attributes — and `10c`'s facet rail can still work inside
+  a scoped category, because `SpecField` remains per-template. What is now dead rather than
+  half-built: `SpecFieldProposal` and its counter, which had no writer anyway. Retire them.
+- **D4 is not the ratification it was offered as.** The cap stays and buyers still never see it
+  — but a capped seller's enquiries **stack up behind a subscription paywall** rather than being
+  written off as missed. `MissedEnquiry` already is that stack; what is missing is the
+  notification, the unlock and the wording. It is the go-to-market engine and it is scheduled
+  later, by the owner's own instruction.
+
+### D1 · Plan-limit config — **settled: ratify the seven numbers**
 
 Free today is **1 category, 1 branch, 10 products, 30 photos, 3 enquiries a month, 1 seat, 50 MB**
 (`prisma/seed-data.mts:13`). Real columns on `plan`, staff-editable at `/admin/plans` with a
@@ -79,7 +93,7 @@ hosts. Three conditional patches have already moved production away from the see
 Free row gives **2 seats and unlimited storage**. The storefront's three-photo Free cut is a
 constant in a page file (`app/(public)/b/[slug]/page.tsx:338`), not a column.
 
-### D2 · Placement term — recommend: the slot belongs to the subscription
+### D2 · Placement term — **settled: the slot belongs to the subscription**
 
 Only a `sponsoredEligible` plan may take a slot; it bills as a line on that subscription's
 invoice; it ends the day that subscription ends (cancel, downgrade off eligibility, or dunning
@@ -91,7 +105,12 @@ booking, and `lib/billing/provider.ts` has none live. One shipped screen already
 answers at once — `lib/billing/cancel-table.ts:375-385` prints "Runs to 30 Sep 2026 under its own
 term" in the Free column and stamps the row `ends`, rendered as a red ✕.
 
-### D3 · Attribute dictionary — recommend: one controlled vocabulary, keyed on the name
+### D3 · Attribute dictionary — **settled: no**
+
+Comparison stays at business level. Everything below is the case that was put and refused;
+it is kept because the reasoning is what a future reversal would have to argue against.
+
+#### The case that was made and declined
 
 > Every measurable thing a buyer can filter or compare on gets one platform-owned name that means
 > the same thing in every category. A seller may rename it on their own pages and may still add
@@ -109,7 +128,14 @@ subcategories. `lib/spec/versions.ts:687` already warns what it costs at 40,000 
 Two things the owner is also approving: indexed facet URLs change shape and need redirects, and
 ops gains a standing job — deciding what an attribute is, once, for every category.
 
-### D4 · Enquiry cap — ratify: it is neither block nor hold
+### D4 · Enquiry cap — **settled: keep it, stack the leads, paywall the unlock**
+
+See `memory/enquiries-stack-behind-the-paywall.md`. The cap is a matching filter and buyers
+never see it — that half was ratified. The half that changed: a capped seller's enquiries
+accumulate and are unlocked by subscribing, rather than being reported as missed. Deferred to
+the GTM work by the owner.
+
+#### What was ratified
 
 It is a **seller-side matching filter**. A capped supplier is silently left out of the recipient
 list and told afterwards on their own dashboard. Never buyer-facing, never a hold, never counted
@@ -120,7 +146,12 @@ against contact reveals. The only public sentence it produces is the honest all-
 against anything. And the cap does not hold: `lib/enquiry/service.ts:319-330` intersects the
 buyer's chosen ids against the raw uncapped pool instead of the capped selection.
 
-### D5 · Services & booking — recommend: one nullable field on `Category`, no booking
+### D5 · Services — **settled: their own screens, split per subcategory**
+
+Specified in `docs/services-spec.md` — nine screens, four of them new designs, plus three
+pieces of work with no design attached. Awaiting design handoffs screen by screen.
+
+#### The model
 
 Add one setting saying whether a trade is sold **by the item or by the job**. Set it on the ~420
 subcategories, not the 13 sectors — IT holds Servers & storage next to Cybersecurity. Blank
@@ -136,7 +167,10 @@ count and hardcodes `inStockLineCount` to 0; `lib/enquiry/fanout.ts:182` weights
 the score. A freight forwarder caps at 0.46 where a goods supplier reaches 0.80. **This decides
 who receives an enquiry.**
 
-### D6 · Editorial attribution — recommend: a real name, or none
+### D6 · Editorial attribution — **settled: a named editor now, more names later**
+
+One real name and one real role, entered in the admin. Content, not code — a revalidation
+rather than a deploy. **Still owed by the owner: the name.**
 
 Publish under a real named member of staff entered in the admin; where no name is supplied, leave
 the byline empty so the page credits Business Listings, which the code already does. Needs one

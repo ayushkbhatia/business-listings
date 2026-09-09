@@ -1,4 +1,9 @@
 import "server-only";
+import {
+  creditUnusedPlacement,
+  endPlacementsFor,
+  type EndedPlacement,
+} from "@/lib/placement/term";
 import { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import "@/lib/audit/prisma-writer";
@@ -899,6 +904,16 @@ export async function applyEndedCancellations(now = new Date()) {
     : null;
 
   let choicesApplied = 0;
+  let placementsEnded = 0;
+  /*
+     Collected inside the loop and credited after it.
+
+     Issuing a credit note is a document with its own reference sequence, and a
+     failure to write one must not roll the cancellation back: a seller whose
+     slot ended and whose credit did not issue is a support ticket, while a
+     cancellation that silently un-cancelled itself is a billing incident.
+  */
+  const endedPlacements: { businessId: string; ended: EndedPlacement[] }[] = [];
 
   for (const subscription of due) {
     const pending = await prisma.subscriptionChange.findFirst({
@@ -1040,6 +1055,23 @@ export async function applyEndedCancellations(now = new Date()) {
       }
 
       /*
+         The sponsored slot goes with the subscription that bought it. D2.
+
+         Inside this transaction, because a cancelled account still holding the
+         top of a category is the failure the decision exists to prevent — and
+         because Free is not `sponsoredEligible`, so leaving it would put a slot
+         on an account that could not buy one.
+
+         `endPlacementsFor` also tells whoever is first in the queue. That is
+         the half a per-file ender would forget.
+      */
+      const ended = await endPlacementsFor(tx, subscription.businessId, now, "cancelled");
+      if (ended.length > 0) {
+        placementsEnded += ended.length;
+        endedPlacements.push({ businessId: subscription.businessId, ended });
+      }
+
+      /*
          The verification tier is deliberately untouched: it records what we
          checked, and cancelling a subscription does not un-check it. Board 11h
          states it as the first row of the consequence table for that reason.
@@ -1049,7 +1081,11 @@ export async function applyEndedCancellations(now = new Date()) {
     if (pending) choicesApplied += 1;
   }
 
-  return { dropped: due.length, choicesApplied, ranAt: now };
+  for (const row of endedPlacements) {
+    await creditUnusedPlacement(row.ended, row.businessId, now);
+  }
+
+  return { dropped: due.length, choicesApplied, placementsEnded, ranAt: now };
 }
 
 /** Invoices for the billing screen, newest first. */

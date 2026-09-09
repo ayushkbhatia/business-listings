@@ -1122,11 +1122,36 @@ export async function getSponsoredBusinessId(
     where: {
       categoryId: { in: categoryIds },
       startsOn: { lte: now },
-      OR: [{ endsOn: null }, { endsOn: { gte: now } }],
-      ...(emirate ? { OR: [{ emirate: emirate as never }, { emirate: null }] } : {}),
+      /*
+         Both conditions, as `AND`, because they were both `OR`.
+
+         Two `OR` keys in one object literal is one `OR` key: the second
+         overwrote the first, so with an emirate filter set the expiry check
+         vanished entirely and a slot that ended months ago still took the top
+         of the page. Silent, and only on the filtered path — which is the path
+         a buyer who knows what they want actually uses.
+      */
+      AND: [
+        { OR: [{ endsOn: null }, { endsOn: { gte: now } }] },
+        ...(emirate ? [{ OR: [{ emirate: emirate as never }, { emirate: null }] }] : []),
+      ],
       business: PUBLIC_BUSINESS,
     },
-    orderBy: { monthlyPriceAed: "desc" },
+    /*
+       First in, not highest bidder.
+
+       This ordered by price descending, which is an auction — and the product
+       says the opposite in three places: `lib/placement/service.ts` opens with
+       "Not auctioned. A queue, in the order people joined it", the seller is
+       told the same on `/dashboard/promote`, and the buyer is told sponsored
+       placement "never outranks a verified supplier on a filter they set".
+
+       One slot per scope is the rule, so this ordering should almost never
+       decide anything. It decides something exactly when the rule has been
+       broken — two overlapping slots — and on that day the answer has to be the
+       published one rather than the profitable one.
+    */
+    orderBy: { startsOn: "asc" },
     select: { businessId: true },
   });
   return slot?.businessId ?? null;

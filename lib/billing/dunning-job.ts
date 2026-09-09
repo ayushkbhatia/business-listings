@@ -1,4 +1,9 @@
 import "server-only";
+import {
+  creditUnusedPlacement,
+  endPlacementsFor,
+  type EndedPlacement,
+} from "@/lib/placement/term";
 import { prisma } from "@/lib/db/client";
 import { paymentProvider } from "./provider";
 import { nextAction, SCHEDULE, type DunningStage } from "./dunning";
@@ -30,6 +35,8 @@ export interface DunningResult {
   retried: number;
   notified: number;
   dropped: number;
+  /** Sponsored slots ended with the accounts that lapsed. D2. */
+  placementsEnded: number;
   ranAt: Date;
 }
 
@@ -53,6 +60,10 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
   let retried = 0;
   let notified = 0;
   let dropped = 0;
+  let placementsEnded = 0;
+  // Credited after the loop. Same reasoning as `applyEndedCancellations`: a
+  // credit note that fails to write must not roll back the drop.
+  const endedPlacements: { businessId: string; ended: EndedPlacement[] }[] = [];
 
   for (const subscription of overdue) {
     /*
@@ -219,10 +230,30 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
           occurredAt: now,
           note: `Dunning drop after ${SCHEDULE.final} days past due`,
         });
+
+        /*
+           And the sponsored slot, which the drop to Free cannot leave standing.
+           D2: the slot belongs to the subscription, and this subscription has
+           just stopped paying for one.
+
+           The third of the three enders, and the reason there is only one
+           function: this file's whole discipline is that a lapse takes the plan
+           and nothing else — not the listing, not the products, not the badge.
+           A slot is the exception, because it is the plan, sold by the month.
+        */
+        const ended = await endPlacementsFor(tx, subscription.businessId, now, "lapsed");
+        if (ended.length > 0) {
+          placementsEnded += ended.length;
+          endedPlacements.push({ businessId: subscription.businessId, ended });
+        }
       });
       dropped += 1;
     }
   }
 
-  return { considered: overdue.length, retried, notified, dropped, ranAt: now };
+  for (const row of endedPlacements) {
+    await creditUnusedPlacement(row.ended, row.businessId, now);
+  }
+
+  return { considered: overdue.length, retried, notified, dropped, placementsEnded, ranAt: now };
 }

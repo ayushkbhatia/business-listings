@@ -4652,8 +4652,17 @@ export const en = {
   "cancel.free.enquiries": "the enquiry form then closes until the next month",
   "cancel.free.csv_import": "No access · products edited one at a time",
   "cancel.free.custom_domain": "Stops resolving · storefront stays at {url}",
-  "cancel.free.sponsored": "Runs to the end of its own term",
-  "cancel.free.sponsored_term": "Runs to {when} under its own term",
+  /*
+     Rewritten for D2, 9 Sep 2026. Both strings said the placement runs to the
+     end of "its own term" — while the row beside them was marked `ends`, in red,
+     with the word "Ends" in its accessible text. One row, two answers, and the
+     reassuring one was the larger.
+
+     The slot belongs to the subscription now, so it ends when the subscription
+     does, and the unused days come back on a credit note rather than silently.
+  */
+  "cancel.free.sponsored": "Ends with the subscription",
+  "cancel.free.sponsored_term": "Ends {when}, with the subscription. Unused days come back as a credit.",
   "cancel.free.analytics": "No access — your data is kept",
 
   // The choice is scheduled, not made now: the picker opens on confirming and
@@ -5223,6 +5232,17 @@ export const en = {
   "promote.buy": "Take this slot",
   "promote.yours": "Yours until {when}",
   "promote.queue_position": "{n} ahead of you",
+  // The queue's whole point, and until D2 nothing said it: `notifiedAt` was
+  // written by nothing and read by nothing, so a seller sat in a queue for a
+  // slot that had been free for a month.
+  "promote.freed": "The slot you queued for is free. It is first come, so it may not stay that way.",
+  "promote.freed_badge": "Free now",
+  // The line on the credit note a seller keeps when their slot ends before its
+  // thirty days are up. Names the days rather than the reason: a credit note is
+  // an accounting document and "cancelled" belongs in the account history, not
+  // on the invoice.
+  "placement.invoice_line": "Sponsored placement, {category}",
+  "placement.credit_line": "Sponsored placement, {days} unused days",
   "promote.refuse.not_yours": "You can only buy placement for your own business.",
   "promote.refuse.already_yours": "You already hold that slot.",
   "promote.refuse.no_plan": "This business is not on a plan, so it cannot take a slot.",

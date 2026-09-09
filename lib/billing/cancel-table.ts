@@ -372,14 +372,26 @@ function placementRow(facts: CancelFacts): ConsequenceRow {
     };
   }
 
+  /*
+     D2, and the row that used to state both answers at once.
+
+     It said the placement "runs to {when} under its own term" in the Free
+     column and stamped the row `ends` — rendered as a red cross with the word
+     "Ends" carried in its accessible text. Free is not `sponsoredEligible`, so
+     the mark was always `ends`, and the sentence beside it always disagreed.
+     A unit test asserted the sentence and asserted the mark for the *absent*
+     placement, which is how it shipped.
+
+     The date is `freeStartsOn`, not the slot's own `endsOn`: the subscription's
+     end is what ends the slot now, and this file already declares that every
+     date on both screens derives from that one.
+  */
   return {
     key: "sponsored",
     area: t("cancel.row.sponsored"),
     now: facts.placement.label,
     freeLead: null,
-    free: facts.placement.endsOn
-      ? t("cancel.free.sponsored_term", { when: formatDate(facts.placement.endsOn) })
-      : t("cancel.free.sponsored"),
+    free: t("cancel.free.sponsored_term", { when: formatDate(facts.freeStartsOn) }),
     mark: facts.free.sponsoredEligible ? "unchanged" : "ends",
     choose: null,
   };

@@ -199,9 +199,31 @@ describe("the rows that state a consequence the seller will not have", () => {
     expect(row(FACTS, "custom_domain")?.free).toContain("businesslistings.ae/b/al-waha");
   });
 
-  it("says the placement runs to its own term, and states no collision", () => {
-    // Q1, four boards deep. The booking's date, not the subscription's.
-    expect(row(FACTS, "sponsored")?.free).toContain("30 Sep 2026");
+  it("says the placement ends with the subscription, on the subscription's date", () => {
+    /*
+       D2, 9 Sep 2026, and this test used to assert the opposite in its own
+       name: "the booking's date, not the subscription's".
+
+       The row said the placement "runs to 30 Sep 2026 under its own term" and
+       was stamped `ends` — a red cross with the word "Ends" in its accessible
+       text — because Free is not sponsored-eligible and the mark was therefore
+       always `ends`. One row, two answers. This test asserted the sentence, and
+       asserted the mark only for the *absent* placement, which is the gap the
+       contradiction shipped through.
+
+       Both halves now, on the row that has a placement.
+    */
+    const sponsored = row(FACTS, "sponsored");
+    // 14 Sep is `freeStartsOn`. 30 Sep was the slot's own term and is gone.
+    expect(sponsored?.free).toContain("14 Sep 2026");
+    expect(sponsored?.free).not.toContain("30 Sep 2026");
+    expect(sponsored?.free).not.toContain("own term");
+    expect(sponsored?.mark).toBe("ends");
+    // And the seller is told the unused days come back, because they do.
+    expect(sponsored?.free).toContain("credit");
+
+    // No placement is still no change, which is a different row and a different
+    // sentence rather than this one with a null in it.
     expect(row({ ...FACTS, placement: null }, "sponsored")?.mark).toBe("unchanged");
   });
 });

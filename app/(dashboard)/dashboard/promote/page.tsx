@@ -107,6 +107,7 @@ export default async function PromotePage() {
             categoryId: slot.categoryId,
             categoryName: slot.categoryName,
             mine: slot.mine,
+            freed: slot.freed,
             takenUntil: slot.takenUntil ? formatDate(slot.takenUntil) : null,
             queued: slot.queued,
             ahead: slot.ahead,
