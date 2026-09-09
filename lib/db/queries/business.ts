@@ -3,6 +3,7 @@ import { cache } from "react";
 import { prisma } from "@/lib/db/client";
 import { resolveTemplate } from "@/lib/spec/resolve";
 import { VERIFIED_TIER } from "@/lib/verification";
+import { hostnameFor } from "@/lib/domains/label";
 
 /**
  * Server-side reads for the public directory.
@@ -56,9 +57,43 @@ export const STOREFRONT_TAB_COUNTS = {
   reviews: { where: { removedAt: null, heldAt: null } },
 } as const;
 
+/**
+ * One storefront, by the slug in its URL or by the label on its own web address.
+ *
+ * Both, because a seller's subdomain is served by rewriting
+ * `indushydraulics.businesslistings.me/…` to `/b/indushydraulics/…` in
+ * `proxy.ts`, and the label is not the slug — hyphens come out of it, so
+ * `indus-hydraulics` becomes `indushydraulics`. The proxy cannot translate one
+ * to the other: it runs at the edge with no database, which is what
+ * `lib/domains/label.ts` is shaped around.
+ *
+ * Resolving both here rather than in the route means the six storefront pages
+ * — overview, catalogue, branches, reviews, a product, an authored page — each
+ * work on a seller's own address without knowing that addresses exist. They all
+ * already call this.
+ *
+ * One `OR`, not two queries: a miss on the slug is the common case for a label
+ * and a second round trip on every one of those requests is a cost the whole
+ * subdomain pays. `subdomain.hostname` is unique and `slug` is unique, so the
+ * two can never both match different rows.
+ *
+ * `/b/indushydraulics` therefore also renders on the directory's own host. That
+ * is a second URL for one storefront, and the remedy is the one the canonical
+ * decision of 9 Sep 2026 chose: every storefront page declares
+ * `businesslistings.me/b/<slug>` as its canonical, from `business.slug` rather
+ * than from the route parameter. The sitemap never advertises a label, so the
+ * duplicate is reachable only by typing it.
+ *
+ * The relation is still called `customDomain`: renaming the model and its table
+ * to match the product it now is belongs with the column drop, which is a
+ * migration and a separate PR.
+ */
 export async function getBusinessBySlug(slug: string) {
   const business = await prisma.business.findFirst({
-    where: { slug, ...PUBLIC_BUSINESS },
+    where: {
+      OR: [{ slug }, { customDomain: { hostname: hostnameFor(slug) } }],
+      ...PUBLIC_BUSINESS,
+    },
     include: {
       primaryCategory: true,
       categories: { include: { category: true } },

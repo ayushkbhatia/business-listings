@@ -4462,8 +4462,14 @@ export const en = {
   "pricing.row.ranking_note":
     "On the plan-tier component of the ranking only, which is {points} of {total} points. The other {others} are relevance, verification tier, response time, spec completeness and distance, and no plan changes any of them.",
   "pricing.row.custom_domain": "Your own web address",
+  /*
+     Was "an address you own". It is an address we give, and the difference is
+     the whole of what changed on 9 Sep 2026: no domain to buy, no records to
+     add, nothing to wait for. Naming the shape — a label under our own domain —
+     is what stops a Pro seller expecting to point yourcompany.ae at us.
+  */
   "pricing.row.custom_domain_note":
-    "Your storefront on an address you own, with the platform one still working.",
+    "yourcompany.businesslistings.me, live the moment you take it. Nothing to buy and nothing to set up. Your directory address keeps working and keeps its search ranking.",
   "pricing.cell.multiplier": "{multiplier}×",
   "pricing.cell.included": "Included",
   "pricing.cell.absent": "Not included",
@@ -7082,51 +7088,33 @@ export const en = {
   "nav.domain": "Web address",
   "domain.title": "Your own web address",
   "domain.eyebrow": "Storefront",
-  "domain.add_title": "Point your own address at your storefront",
-  "domain.add_hint": "A subdomain of a domain you already own, like shop.yourcompany.ae. Your Business Listings address keeps working either way — it has the search ranking, and this one goes on the business card.",
-  "domain.hostname": "Web address",
-  "domain.hostname_hint": "A subdomain, not the bare domain. Registrars cannot point a bare domain at us.",
-  "domain.add": "Add it",
-  "domain.added": "Added. The two records below are what your DNS needs.",
+  /*
+     Board 5e's copy, rewritten for the second model.
+
+     The first sold a subdomain of a domain the seller owns, pointed at us with
+     a CNAME and a TXT record. Twenty-eight of the strings below described that
+     flow — records to copy, propagation, a 24-hour clock, five named failure
+     causes and a certificate we had no way to issue. A seller gets a label
+     under our own zone now, so none of it has anything to describe.
+
+     Nothing here says "custom domain". It is their address on our directory,
+     and calling it a domain would invite the question this model exists to stop
+     answering: which domain, and who verifies it.
+  */
+  "domain.explain": "Your storefront on an address you can read out over the phone. It sits under businesslistings.me, it works the moment you take it, and there is nothing to set up at a registrar.",
+  "domain.hostname": "Your address",
+  "domain.proposed": "The address you would get",
+  "domain.proposed_hint": "Taken from your listing name, so it matches the storefront somebody lands on. Change your listing name and this stays as it is — an address that moves is an address nobody can print.",
+  "domain.claim": "Take this address",
+  "domain.added": "It is live. Try it.",
+  "domain.live_note": "Your Business Listings address keeps working and keeps the search ranking it has built. This one is the one to print.",
   "domain.remove": "Give up this address",
-  "domain.removed": "Removed. Your Business Listings address is unaffected.",
-  "domain.records_caption": "The two DNS records to add, and whether each has appeared",
-  "domain.col.type": "Type",
-  "domain.col.name": "Name",
-  "domain.col.value": "Value",
-  "domain.col.state": "Found?",
-  "domain.record.found": "Found",
-  "domain.record.waiting": "Waiting",
-  "domain.record.wrong_value": "Different value",
-  "domain.status.pending": "Waiting for DNS",
-  "domain.status.partial": "One record found",
-  "domain.status.verified": "Live",
-  "domain.status.failed": "Not resolving",
-  "domain.status.revoked": "Stopped resolving",
-  "domain.explain.pending": "Add both records at your registrar. They usually appear within an hour, sometimes sooner.",
-  "domain.explain.partial": "One of the two is up. This is normal — DNS does not propagate evenly, and the other usually follows within the hour. Nothing needs changing.",
-  "domain.explain.verified": "Both records resolve. Your storefront answers on this address and on your Business Listings one.",
-  "domain.explain.failed": "A day has passed and the records are not both resolving.",
-  "domain.explain.revoked": "This address was live and has stopped resolving. Your Business Listings address is still serving your storefront, so nothing is down — but this one will not answer until the records are back.",
-  "domain.failed_lead": "The records are not both resolving.",
-  "domain.cause.no_records_at_all": "Neither record has appeared. Check they were saved at the registrar for the right domain.",
-  "domain.cause.cname_only": "The CNAME is there and the TXT record is not. Add the TXT record shown below.",
-  "domain.cause.txt_only": "The TXT record is there and the CNAME is not. Add the CNAME shown below.",
-  "domain.cause.cname_points_elsewhere": "The CNAME exists but points somewhere else. Change its value to the one shown below.",
-  "domain.cause.txt_value_stale": "The TXT record exists with a different value, usually from an earlier attempt. Replace it with the one shown below.",
-  "domain.no_issuer": "The records are correct. The certificate has not been issued yet, so this address will not load over HTTPS.",
-  "domain.no_issuer_fix": "We are finishing that part. Your Business Listings address is unaffected and is serving over HTTPS as usual.",
-  "domain.last_checked": "Last checked {when}",
-  "domain.email_records": "Email these records to my IT person",
-  "domain.email_subject": "DNS records for {hostname}",
-  "domain.email_body": "Please add these two DNS records for {hostname}:\n\n{records}\n\nThey point our storefront at our own web address. Nothing else changes.",
-  "domain.both_addresses": "Both addresses stay live. The Business Listings one keeps the search ranking it has built; this one is the one to print.",
-  "domain.error.not_a_hostname": "That is not a web address we can use. It looks like shop.yourcompany.ae.",
-  "domain.error.apex": "Use a subdomain like shop.yourcompany.ae rather than the bare domain. A bare domain cannot carry the record type this needs, and most registrars will not let you add it.",
-  "domain.error.ours": "That is one of ours. Use an address on a domain you own.",
+  "domain.remove_hint": "It stops working straight away, and somebody else could take it. Your storefront and its search ranking are unaffected.",
+  "domain.removed": "Given up. Your storefront is unaffected.",
   "domain.error.not_entitled": "Your own web address is on the Pro plan.",
-  "domain.error.taken": "Another business is already using that address.",
+  "domain.error.taken": "Another business already has that address. Ask us and we will sort it out.",
   "domain.error.already": "You already have one. Give that one up first.",
+  "domain.error.unusable": "Your listing name cannot make a web address. Ask us and we will sort it out.",
   "domain.locked": "Your own web address is part of Pro.",
   "domain.meta_title": "Web address",
 

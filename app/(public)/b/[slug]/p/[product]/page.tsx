@@ -89,8 +89,19 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return {
     title,
     description,
-    alternates: { canonical: `/b/${slug}/p/${productSlug}` },
-    openGraph: { title, description, type: "website", url: `/b/${slug}/p/${productSlug}` },
+    /*
+       From the business's own slug, never from the route parameter — see the
+       note on the storefront overview. A seller's web address rewrites to
+       `/b/<label>`, and a canonical built from the parameter would have that
+       address declare itself canonical.
+    */
+    alternates: { canonical: `/b/${product.business.slug}/p/${productSlug}` },
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      url: `/b/${product.business.slug}/p/${productSlug}`,
+    },
   };
 }
 

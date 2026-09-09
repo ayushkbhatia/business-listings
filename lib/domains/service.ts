@@ -1,23 +1,12 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
 import { prisma } from "@/lib/db/client";
 import { assertCanManageBilling } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
-import { certificateIssuer, checkRecords, dnsResolver } from "./ports";
-import {
-  checkHostname,
-  domainState,
-  normaliseHostname,
-  recordsFor,
-  type DnsRecord,
-  type DomainStatus,
-  type FailureCause,
-  type HostnameRefusal,
-} from "./state";
+import { checkLabel, hostnameFor, labelFor, SUBDOMAIN_ZONE, type LabelRefusal } from "./label";
 
 /**
- * Board 5e — custom domains.
+ * Board 5e — a seller's own web address.
  *
  * A Pro entitlement. `Plan.customDomain` has been a real boolean since handoff
  * 3 with nothing behind it, and the pricing page has been selling "your own web
@@ -26,64 +15,118 @@ import {
  * The entitlement is read from the subscription's snapshot rather than the plan
  * row, so a seller who signed up when Basic included it keeps it — which is
  * what grandfathering is for and why the snapshot carries caps.
+ *
+ * ## What this used to be
+ *
+ * It was written for a domain the seller owns and points at us: a CNAME, a TXT
+ * record with a random token, per-record propagation states, a 24-hour give-up
+ * clock, five named failure causes, an hourly DNS poll and a certificate we had
+ * no provider to issue. Half of it was `live: false` ports refusing honestly,
+ * because the two things it needed — a Vercel domains token and a provisioned
+ * `stores.businesslistings.me` — were never going to arrive.
+ *
+ * On 9 Sep 2026 the product changed: a seller gets a label under our own zone.
+ * `indus-hydraulics` becomes `indushydraulics.businesslistings.me`. We own the
+ * zone, so there is nothing for anyone to verify, nothing to poll, and one
+ * wildcard certificate covers every seller who will ever have one.
+ *
+ * All of that machinery is gone rather than kept for a bring-your-own-domain
+ * that may never come back. The precedent is this project's own: the site-visit
+ * rung and the trade-references rung were deleted rather than reserved, on the
+ * grounds that a thing nobody performs means whatever somebody decides on the
+ * day they find it.
+ *
+ * ## What it is not
+ *
+ * It is not a second identity. The label is derived from the slug, so there is
+ * no name to moderate, nothing to squat, and nothing that can drift away from
+ * `displayName`. `lib/domains/label.ts` holds those rules, and holds them
+ * separately because `proxy.ts` has to apply them at the edge with no database
+ * to ask.
  */
 
-/** Where a seller's CNAME points. Not a URL: it is a DNS name. */
-export const DOMAIN_TARGET = process.env["NEXT_PUBLIC_DOMAIN_TARGET"] ?? "stores.businesslistings.me";
+export { SUBDOMAIN_ZONE };
 
-/** Our own domain, so a seller cannot point one of ours at another of ours. */
-const OUR_DOMAIN = DOMAIN_TARGET.split(".").slice(-2).join(".");
+export type ClaimRefusal = LabelRefusal | "not_entitled" | "taken" | "already_have_one";
 
-export type AddRefusal = HostnameRefusal | "not_entitled" | "taken" | "already_have_one";
-
-export interface DomainView {
+export interface SubdomainView {
+  /** The label alone, which is the part a seller chose nothing about. */
+  label: string;
+  /** The whole address, which is what they read out. */
   hostname: string;
-  status: DomainStatus;
-  cnameState: string;
-  txtState: string;
-  records: DnsRecord[];
-  addedAt: Date;
-  lastCheckedAt: Date | null;
-  verifiedAt: Date | null;
-  failureCause: FailureCause | null;
-  /** False while no certificate provider is configured. */
-  certificateLive: boolean;
-  certificateRef: string | null;
+  claimedAt: Date;
 }
 
-export async function domainFor(businessId: string): Promise<DomainView | null> {
-  const domain = await prisma.customDomain.findUnique({ where: { businessId } });
-  if (!domain) return null;
-
+function viewOf(row: { hostname: string; addedAt: Date }): SubdomainView {
   return {
-    hostname: domain.hostname,
-    status: domain.status,
-    cnameState: domain.cnameState,
-    txtState: domain.txtState,
-    records: recordsFor(domain.hostname, domain.token, DOMAIN_TARGET),
-    addedAt: domain.addedAt,
-    lastCheckedAt: domain.lastCheckedAt,
-    verifiedAt: domain.verifiedAt,
-    failureCause: (domain.failureCause as FailureCause | null) ?? null,
-    certificateLive: certificateIssuer().live,
-    certificateRef: domain.certificateRef,
+    label: row.hostname.split(".")[0] ?? row.hostname,
+    hostname: row.hostname,
+    claimedAt: row.addedAt,
   };
 }
 
-export type AddResult = { ok: true; domain: DomainView } | { ok: false; error: AddRefusal };
+/** The address this business holds, or null where it holds none. */
+export async function subdomainFor(businessId: string): Promise<SubdomainView | null> {
+  const row = await prisma.customDomain.findUnique({
+    where: { businessId },
+    select: { hostname: true, addedAt: true },
+  });
+  return row ? viewOf(row) : null;
+}
 
 /**
- * Claim a hostname.
+ * The address a business would be given, before it asks for one.
  *
- * Does not check DNS. The seller has not been given the records yet, so there
- * is nothing to find — the first poll happens after they have somewhere to copy
- * them from.
+ * The screen shows this so a seller can see what they are about to get rather
+ * than agreeing to a surprise, and it is the same computation `claimSubdomain`
+ * runs — one function, so the preview cannot promise an address the claim then
+ * refuses.
  */
-export async function addDomain(
-  actor: Actor,
+export async function proposedFor(
   businessId: string,
-  input: string,
-): Promise<AddResult> {
+): Promise<{ label: string; hostname: string; refusal: ClaimRefusal | null }> {
+  const business = await prisma.business.findUniqueOrThrow({
+    where: { id: businessId },
+    select: { slug: true },
+  });
+  const label = labelFor(business.slug);
+  const refusal = await refusalFor(businessId, label);
+  return { label, hostname: hostnameFor(label), refusal };
+}
+
+async function refusalFor(businessId: string, label: string): Promise<ClaimRefusal | null> {
+  const bad = checkLabel(label);
+  if (bad) return bad;
+
+  const [existing, taken] = await Promise.all([
+    prisma.customDomain.findUnique({ where: { businessId }, select: { id: true } }),
+    prisma.customDomain.findUnique({
+      where: { hostname: hostnameFor(label) },
+      select: { businessId: true },
+    }),
+  ]);
+  if (existing) return "already_have_one";
+  // `labelFor` is lossy — `indus-hydraulics` and `indushydraulics` flatten to
+  // the same label — so a collision is possible and is refused rather than
+  // resolved with a suffix. A supplier handed a near-miss of the address they
+  // were shown would print the one they were shown.
+  if (taken) return "taken";
+  return null;
+}
+
+export type ClaimResult =
+  | { ok: true; subdomain: SubdomainView }
+  | { ok: false; error: ClaimRefusal };
+
+/**
+ * Take the address.
+ *
+ * Nothing to verify and nothing to wait for: the zone is ours, the wildcard
+ * record already answers, and `proxy.ts` serves the storefront from the moment
+ * the row exists. A seller who claims one can read it out on the phone the same
+ * minute, which is the difference this model makes.
+ */
+export async function claimSubdomain(actor: Actor, businessId: string): Promise<ClaimResult> {
   assertCanManageBilling(actor);
   if (actor.businessId !== businessId) return { ok: false, error: "not_entitled" };
 
@@ -92,120 +135,54 @@ export async function addDomain(
   // it keeps it even after the plan changed.
   if (!caps?.customDomain) return { ok: false, error: "not_entitled" };
 
-  const hostname = normaliseHostname(input);
-  const refusal = checkHostname(hostname, OUR_DOMAIN);
+  const business = await prisma.business.findUniqueOrThrow({
+    where: { id: businessId },
+    select: { slug: true },
+  });
+  const label = labelFor(business.slug);
+
+  const refusal = await refusalFor(businessId, label);
   if (refusal) return { ok: false, error: refusal };
 
-  const [existing, taken] = await Promise.all([
-    prisma.customDomain.findUnique({ where: { businessId }, select: { id: true } }),
-    prisma.customDomain.findUnique({ where: { hostname }, select: { businessId: true } }),
-  ]);
-  if (existing) return { ok: false, error: "already_have_one" };
-  if (taken) return { ok: false, error: "taken" };
-
+  const hostname = hostnameFor(label);
   await prisma.customDomain.create({
     data: {
       businessId,
       hostname,
-      // 24 bytes of randomness. A token somebody can guess is a domain somebody
-      // else can verify.
-      token: randomBytes(24).toString("base64url"),
+      /*
+         The columns the DNS model needed and this one does not.
+
+         `token` is `NOT NULL` and there is no longer anything to put in it, so
+         it is written empty rather than given a plausible-looking secret that
+         verifies nothing. `status` goes straight to `verified` because there is
+         no state between asking and having. All four come out with the model
+         rename, in the migration that follows this change.
+      */
+      token: "",
+      status: "verified",
+      verifiedAt: new Date(),
     },
   });
 
-  return { ok: true, domain: (await domainFor(businessId))! };
+  return { ok: true, subdomain: (await subdomainFor(businessId))! };
 }
 
-export async function removeDomain(actor: Actor, businessId: string): Promise<{ ok: boolean }> {
+/**
+ * Give it up.
+ *
+ * The address stops resolving immediately — `proxy.ts` rewrites to `/b/<label>`
+ * and the storefront resolver finds nothing, so the host 404s. The storefront
+ * itself is untouched: it was always at `/b/<slug>` and that is where its
+ * canonical always pointed, which is the whole reason the canonical decision
+ * went the way it did.
+ */
+export async function releaseSubdomain(
+  actor: Actor,
+  businessId: string,
+): Promise<{ ok: boolean }> {
   assertCanManageBilling(actor);
   if (actor.businessId !== businessId) return { ok: false };
 
-  const domain = await prisma.customDomain.findUnique({
-    where: { businessId },
-    select: { certificateRef: true },
-  });
-  if (domain?.certificateRef) await certificateIssuer().revoke(domain.certificateRef);
-
   await prisma.customDomain.deleteMany({ where: { businessId } });
   return { ok: true };
-}
-
-export interface PollResult {
-  checked: number;
-  verified: number;
-  revoked: number;
-  failed: number;
-  ranAt: Date;
-}
-
-const HOUR_MS = 3_600_000;
-
-/**
- * The poller. Board 5e's third step, every sixty seconds.
- *
- * A verified domain is still checked — that is the only way `revoked` is ever
- * reached, and criterion 8 asks for it. A failed one is not: the cause has been
- * named and re-checking on a loop would keep overwriting it with the same
- * answer while the seller reads it.
- */
-export async function pollDomains(now = new Date(), limit = 100): Promise<PollResult> {
-  const due = await prisma.customDomain.findMany({
-    where: { status: { in: ["pending", "partial", "verified", "revoked"] } },
-    orderBy: [{ lastCheckedAt: { sort: "asc", nulls: "first" } }],
-    take: limit,
-  });
-
-  const resolver = dnsResolver();
-  const issuer = certificateIssuer();
-  let verified = 0;
-  let revoked = 0;
-  let failed = 0;
-
-  for (const domain of due) {
-    const records = await checkRecords(resolver, domain.hostname, domain.token, DOMAIN_TARGET);
-    const hours = (now.getTime() - domain.addedAt.getTime()) / HOUR_MS;
-    const state = domainState(records, hours, domain.verifiedAt !== null);
-
-    /*
-     * The certificate is asked for once, when the records first both resolve.
-     * With the console issuer this always fails and `certificateRef` stays
-     * null, which is exactly what the screens read to say the records are
-     * correct and nothing has been issued.
-     */
-    let certificateRef = domain.certificateRef;
-    if (state.status === "verified" && !certificateRef && issuer.live) {
-      const issued = await issuer.issue(domain.hostname);
-      if (issued.ok) certificateRef = issued.reference ?? null;
-    }
-
-    await prisma.customDomain.update({
-      where: { id: domain.id },
-      data: {
-        status: state.status,
-        cnameState: records.cname,
-        txtState: records.txt,
-        lastCheckedAt: now,
-        verifiedAt: state.status === "verified" ? (domain.verifiedAt ?? now) : domain.verifiedAt,
-        failureCause: state.cause ?? null,
-        certificateRef,
-      },
-    });
-
-    if (state.status === "verified" && !domain.verifiedAt) verified += 1;
-    if (state.status === "revoked" && domain.status !== "revoked") revoked += 1;
-    if (state.status === "failed") failed += 1;
-  }
-
-  return { checked: due.length, verified, revoked, failed, ranAt: now };
-}
-
-/** Which business a request on a custom hostname belongs to. */
-export async function businessForHostname(hostname: string): Promise<string | null> {
-  const domain = await prisma.customDomain.findFirst({
-    // Only a verified one serves. A pending domain that resolved early would
-    // otherwise serve a storefront before we had confirmed it belongs to them.
-    where: { hostname: normaliseHostname(hostname), status: "verified" },
-    select: { business: { select: { slug: true } } },
-  });
-  return domain?.business.slug ?? null;
 }

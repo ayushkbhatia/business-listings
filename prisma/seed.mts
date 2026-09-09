@@ -25,6 +25,7 @@ import {
 } from "./seed-data.mjs";
 import { DN_SYNONYMS } from "../lib/trade/nominal-size.js";
 import { EXPIRED_LICENCE_TIER } from "../lib/verification.js";
+import { hostnameFor, labelFor } from "../lib/domains/label.js";
 // The key and the estimates from the module that owns both — a typo here would
 // be a row nothing reads.
 import { FALLBACK_RAMADAN, RAMADAN_SETTING_KEY } from "../lib/trade/hours.js";
@@ -3988,6 +3989,31 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
       monthlyPriceAed: 1200,
       startsOn: days(-20),
       endsOn: days(40),
+    },
+  });
+
+  /*
+     A seller's own web address, board 5e.
+
+     Seeded because the screen has two states and a fresh database would only
+     ever show one of them. `lib/domains/label.ts` derives the label the same
+     way the claim does, so the seeded row is the row the button would write
+     rather than a hand-typed approximation of it.
+
+     `verified` with no token: the zone is ours, so there is nothing to check
+     and no secret to hold. Those columns come out with the model rename.
+  */
+  const addressed = await db.business.findUniqueOrThrow({
+    where: { id: sponsor.id },
+    select: { slug: true },
+  });
+  await db.customDomain.create({
+    data: {
+      businessId: sponsor.id,
+      hostname: hostnameFor(labelFor(addressed.slug)),
+      token: "",
+      status: "verified",
+      verifiedAt: days(-18),
     },
   });
 

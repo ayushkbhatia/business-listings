@@ -85,12 +85,22 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   return {
     title: `${business.displayName} — ${business.primaryCategory.name}`,
     description,
-    alternates: { canonical: `/b/${slug}` },
+    /*
+       From `business.slug`, never from the route parameter.
+
+       A storefront answers on two paths since 9 Sep 2026: its slug, and the
+       label on the seller's own web address, which `proxy.ts` rewrites to
+       `/b/<label>`. Building the canonical from the parameter would have each
+       address declare itself canonical, which is the whole of what a canonical
+       is for. `metadataBase` is `NEXT_PUBLIC_SITE_URL`, so this resolves to the
+       directory's host whichever one served the page.
+    */
+    alternates: { canonical: `/b/${business.slug}` },
     openGraph: {
       title: business.displayName,
       description,
       type: "website",
-      url: `/b/${slug}`,
+      url: `/b/${business.slug}`,
     },
     // An unclaimed page is thin by nature and honest about it. It stays
     // indexable — 30,000 of them are how a supplier first finds us — but it
