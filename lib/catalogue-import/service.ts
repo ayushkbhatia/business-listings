@@ -112,7 +112,9 @@ export async function conciergeOfferFor(businessId: string): Promise<ConciergeOf
     readCataloguePricing(),
     prisma.catalogueImportRequest.findFirst({
       where: { businessId, status: { not: "cancelled" } },
-      orderBy: { createdAt: "desc" },
+      // `id` last: this row is the state the screen renders, so a tie would put
+      // two different answers behind one refresh.
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: {
         id: true,
         status: true,

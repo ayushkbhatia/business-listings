@@ -116,7 +116,9 @@ export async function getBusinessBySlug(slug: string) {
       locations: {
         where: { published: true },
         include: { area: true },
-        orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+        // `id` last: branches added together tie on `created_at`, and this
+        // is the order a buyer reads a supplier's addresses in.
+        orderBy: [{ type: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       },
       media: { orderBy: { sortOrder: "asc" } },
       _count: { select: STOREFRONT_TAB_COUNTS },
@@ -149,7 +151,13 @@ export async function getBusinessProducts(
       // Board 3i: the first row of the join is the primary image, and one file
       // may serve several products. `take: 1` on a sorted join is still the
       // cover for a card.
-      media: { orderBy: { sortOrder: "asc" }, take: 1, include: { media: true } },
+      // `mediaId` last: `ProductMedia.sortOrder` is `@default(0)`, so an
+      // unordered product is one tie and the card's image is arbitrary.
+      media: {
+        orderBy: [{ sortOrder: "asc" }, { mediaId: "asc" }],
+        take: 1,
+        include: { media: true },
+      },
     },
     // In stock first: a buyer scanning a catalogue is looking for what they can
     // have now, and made-to-order below it is still a useful answer.

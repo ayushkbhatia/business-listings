@@ -557,7 +557,13 @@ export async function readNewCatalogueProducts(take = 5) {
     take: take * 8,
     include: {
       category: { select: { id: true, name: true } },
-      media: { orderBy: { sortOrder: "asc" }, take: 1, include: { media: true } },
+      // `mediaId` last, for the same reason the row's own order needs `id`:
+      // `ProductMedia.sortOrder` is `@default(0)` and ties across the product.
+      media: {
+        orderBy: [{ sortOrder: "asc" }, { mediaId: "asc" }],
+        take: 1,
+        include: { media: true },
+      },
       business: { select: { slug: true, displayName: true, verificationTier: true } },
     },
   });

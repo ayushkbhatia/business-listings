@@ -214,9 +214,20 @@ export async function productBoardFor(
   now: Date = new Date(),
 ): Promise<ProductBoard> {
   const [sheet, products, caps, used] = await Promise.all([
+    /*
+       `id` last, so the board does not swap spec sheets between two loads.
+
+       This is a tiebreak, not the answer to the larger question underneath it.
+       `SellerTemplate` is unique on `[businessId, platformTemplateId]`, so a
+       seller trading in two categories legitimately has two — and "the most
+       recently created" is standing in for "the one for this product's
+       category", which is what `lib/spec/resolve.ts` exists to answer. Making
+       the choice deterministic is worth doing on its own; it does not make it
+       right.
+    */
     prisma.sellerTemplate.findFirst({
       where: { businessId },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: {
         id: true,
         name: true,

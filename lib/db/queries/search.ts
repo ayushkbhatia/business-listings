@@ -254,7 +254,20 @@ const BUSINESS_INCLUDE = {
      which is what tells a buyer scanning twenty rows that this supplier is the
      right kind of supplier.
   */
-  media: { where: { kind: "gallery" }, orderBy: { sortOrder: "asc" }, take: 1 },
+  // `id` last. This one is `Business.media` — the supplier's own gallery, not
+  // a product join — but `Media.sortOrder` is `@default(0)` just the same, so
+  // which photograph a result card shows would otherwise move between searches.
+  media: {
+    where: { kind: "gallery" },
+    /*
+       Cast, because `BUSINESS_INCLUDE` is `as const` and that makes this array
+       a readonly tuple, which Prisma's mutable `orderBy` will not accept — and
+       a rejected include degrades the inferred result type rather than erroring
+       here, which is how it takes `BusinessResult`'s relations with it.
+    */
+    orderBy: [{ sortOrder: "asc" }, { id: "asc" }] as Prisma.MediaOrderByWithRelationInput[],
+    take: 1,
+  },
   categories: { include: { category: { select: { name: true } } }, take: 5 },
   _count: {
     select: {

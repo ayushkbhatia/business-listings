@@ -330,7 +330,10 @@ export async function sweepAlerts(now: Date = new Date()): Promise<SweepResult> 
             : {}),
         },
       },
-      orderBy: { createdAt: "asc" },
+      // `id` last. This id is written to `matchedProductId` and named in the
+      // buyer's alert, and an imported catalogue ties on `created_at` across
+      // the whole file — so "the first match" needs something to decide on.
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       select: { id: true },
     });
     if (!product) continue;

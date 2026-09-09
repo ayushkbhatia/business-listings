@@ -249,7 +249,10 @@ async function sectionData(
         verifiedAt: true, responseTimeMedianMs: true, establishedYear: true,
         locations: {
           where: { published: true },
-          orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+          // Same order the storefront's own loader uses — see
+          // lib/db/queries/business.ts. `id` last so the branch list does not
+          // reorder between two loads of one page.
+          orderBy: [{ type: "asc" }, { createdAt: "asc" }, { id: "asc" }],
           select: {
             id: true, type: true, emirate: true, addressLine: true, phone: true,
             area: { select: { name: true, lat: true, lng: true } },

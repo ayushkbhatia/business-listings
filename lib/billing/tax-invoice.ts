@@ -341,14 +341,20 @@ export async function billingRecipient(businessId: string): Promise<string | nul
       where: { businessId },
       select: { billingEmail: true },
     }),
+    /*
+       `id` last, on both. Seats invited in one batch share a `created_at`, and
+       this decides which address a tax invoice is sent to — a document, not a
+       listing. "The longest-standing finance seat" has to name one seat every
+       time it is asked, not one of two.
+    */
     prisma.user.findFirst({
       where: { businessId, roles: { has: "seller_finance" } },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       select: { email: true },
     }),
     prisma.user.findFirst({
       where: { businessId, roles: { has: "seller_owner" } },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       select: { email: true },
     }),
   ]);

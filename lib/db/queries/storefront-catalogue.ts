@@ -491,7 +491,9 @@ async function getPage(
     specValues: true,
     category: { select: { name: true } },
     media: {
-      orderBy: { sortOrder: "asc" as const },
+      // `mediaId` last: `sortOrder` is `@default(0)` and ties until a seller
+      // reorders, which most never do.
+      orderBy: [{ sortOrder: "asc" as const }, { mediaId: "asc" as const }],
       take: 1,
       select: { media: { select: { storagePath: true } } },
     },
