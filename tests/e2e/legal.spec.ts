@@ -304,3 +304,21 @@ test.describe("the legal template", () => {
     expect(shadow).not.toBe("none");
   });
 });
+
+test.describe("the lead-ins are emphasis, not asterisks", () => {
+  /*
+     All four legal pages are written as `**Not verified.** Nothing on the
+     listing…`, and `Prose` rendered the source verbatim — forty-four raw
+     markers across the four, on the pages a reader opens when they want to know
+     exactly what we promise.
+  */
+  for (const path of ["/terms", "/privacy", "/verification-policy", "/review-policy"]) {
+    test(`${path} publishes no raw markdown`, async ({ page }) => {
+      await page.goto(path);
+      const body = (await page.locator("main").innerText()) ?? "";
+      expect(body).not.toContain("**");
+      // And the mark became a real one, rather than being stripped.
+      await expect(page.locator("main strong").first()).toBeVisible();
+    });
+  }
+});
