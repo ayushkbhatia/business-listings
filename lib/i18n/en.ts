@@ -8100,7 +8100,18 @@ export const en = {
   "guides.how_row_quarter": "Reviewed this quarter, of those carrying a review window",
   "guides.how_row_overdue": "Past their review window, and still published",
   "guides.how_author": "Who writes them",
-  "guides.how_author_body": "Guides are written and checked in-house by the team that runs verification. They do not yet carry an individual byline — naming a person is an editorial decision that has not been taken, and inventing one would be the first false thing on a page about checking facts.",
+  /*
+     Board 6d Q1, answered 9 Sep 2026. This said guides carry no individual
+     byline "because naming a person is an editorial decision that has not been
+     taken" — which was true of the decision and false of the seed, where four
+     guides were published under a person who did not exist.
+
+     A real name settles both halves. What the sentence still has to do is say
+     what a byline on this site means, because a name over an article about
+     licensing and VAT is a claim: it names who stands behind it, not who typed
+     it.
+  */
+  "guides.how_author_body": "Guides are written and checked in-house by the team that runs verification, and published under a named member of staff. The byline says who stands behind the article, not who typed it: if something here is wrong, that is the person it is wrong for. More names appear as the team writing them grows.",
   "guides.how_back": "Back to the guides",
   "guides.title": "Guides",
   "guides.eyebrow": "Guides",

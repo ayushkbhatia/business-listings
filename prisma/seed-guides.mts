@@ -325,28 +325,28 @@ export async function seedGuides(db: PrismaClient) {
   });
 
   /*
-     Board 6d Q1 — "who is the author?" — is still unanswered, and until it is
-     answered these stay null.
+     Board 6d Q1 — "who is the author?" — answered by the owner on 9 Sep 2026:
+     a named editor now, more names later.
 
-     They held "Rana Habib, Verification lead" for exercise value: a name and a
+     These held "Rana Habib, Verification lead" for exercise value: a name and a
      role so the byline strip and the `Person` schema had something to render.
-     What that actually did was publish a fabricated person on four live guides,
-     in every seeded environment, emitted as schema.org `Person` with a
+     What that actually did was publish a fabricated person on four guides, in
+     every seeded environment, emitted as schema.org `Person` with a
      credentialed job title — while `/guides/how-we-check` told the same reader,
      in prose, that guides carry no individual byline because "inventing one
      would be the first false thing on a page about checking facts".
 
-     Both were published. Both could not be true, and the invented one was the
-     one search engines were being handed.
+     A real person, so both are true at once for the first time. The founder
+     fronts the guides while there is one editorial voice; the how-we-check page
+     says so, and says the byline names who stands behind the article rather
+     than who typed it.
 
-     Null is not a gap. The page and the JSON-LD both already fall back to the
-     organisation, which is what the how-we-check page describes, so the
-     unanswered state now renders as the honest thing rather than the convenient
-     one. When D6 lands, one real name goes here — or into the admin, where it
-     costs a revalidation instead of a deploy.
+     Here *and* editable at `/admin/content/guides/:id`, which is where a second
+     name goes when there is one — content, so it costs a revalidation rather
+     than a deploy. This constant is only what a fresh database starts with.
   */
-  const BYLINE: string | null = null;
-  const BYLINE_ROLE: string | null = null;
+  const BYLINE: string | null = "Ayush Bhatia";
+  const BYLINE_ROLE: string | null = "Founder";
 
   const ladder = await db.guide.upsert({
     where: { slug: "what-supplier-verification-actually-proves" },

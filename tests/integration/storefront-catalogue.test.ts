@@ -293,8 +293,29 @@ describe("criterion 7 — a restock watch is about one product", () => {
      * The sweep used to skip any alert with no query tokens, so a watch would
      * have sat open forever. This is the branch that fixes it.
      */
+    /*
+       Constrained and ordered, because it was neither.
+
+       `watchProduct` refuses `not_found` when the product's business is
+       suspended or unpublished, and this picked the first live in-stock product
+       with no `orderBy` — an arbitrary row, because Postgres returns heap order
+       for an unordered `findFirst` and the seed writes most products in one
+       `createMany` with one timestamp. Other files in this suite suspend
+       businesses. So whether this test passed depended on which row the heap
+       happened to hand back, and any change to the database's write history
+       could flip it. It has now failed twice that way, in two different
+       sessions, on changes that touched neither products nor alerts.
+
+       The `business` filter is the same one `watchProduct` applies, so the
+       fixture cannot be a product the function under test will refuse.
+    */
     const product = await prisma.product.findFirstOrThrow({
-      where: { status: "live", availability: { not: "out_of_stock" } },
+      where: {
+        status: "live",
+        availability: { not: "out_of_stock" },
+        business: { suspendedAt: null, publishedAt: { not: null } },
+      },
+      orderBy: { id: "asc" },
       select: { id: true, availability: true },
     });
     const userId = await buyer();
