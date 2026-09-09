@@ -13,6 +13,7 @@ import {
 const FREE: PlanCaps = {
   id: "free", name: "Free", monthlyPriceAed: 0, enquiriesPerMonth: 3, productLimit: 10,
   locationLimit: 1, photoLimit: 5,
+  publicPhotoLimit: null,
   categoryLimit: null, storageMb: 1024, teamSeats: 1, rankingMultiplier: 1, customDomain: false,
   analytics: false, csvImport: false, sponsoredEligible: false,
   sortOrder: 0,
@@ -20,6 +21,7 @@ const FREE: PlanCaps = {
 const BASIC: PlanCaps = {
   id: "basic", name: "Basic", monthlyPriceAed: 349, enquiriesPerMonth: 40, productLimit: 150,
   locationLimit: 3, photoLimit: 40,
+  publicPhotoLimit: null,
   categoryLimit: null, storageMb: 1024, teamSeats: 3, rankingMultiplier: 1.15, customDomain: false,
   analytics: true, csvImport: true, sponsoredEligible: false,
   sortOrder: 1,
@@ -27,6 +29,7 @@ const BASIC: PlanCaps = {
 const PRO: PlanCaps = {
   id: "pro", name: "Pro", monthlyPriceAed: 899, enquiriesPerMonth: null, productLimit: null,
   locationLimit: 10, photoLimit: 200,
+  publicPhotoLimit: null,
   categoryLimit: null, storageMb: 1024, teamSeats: 10, rankingMultiplier: 1.35, customDomain: true,
   analytics: true, csvImport: true, sponsoredEligible: true,
   sortOrder: 2,

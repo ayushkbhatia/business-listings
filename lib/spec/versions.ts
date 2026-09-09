@@ -679,55 +679,21 @@ export function proposalKey(label: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-/**
- * What sellers keep inventing, ranked by how many of them invented it.
- *
- * "Fields that appear often enough get promoted" was not a countable thing
- * while `SellerTemplate.fieldMappings` was an opaque Json blob — this is the
- * count. It is what stops 40,000 businesses inventing 40,000 attribute names.
- *
- * There is no `promote` beside it, and the absence is deliberate. Board 4e §7:
- * promotion is a **merge** into an attribute in the dictionary, mapping the
- * seller fields whose type and unit match and leaving the rest seller-owned.
- * The dictionary has a nav item, a header button and no board in the 95, so
- * there is nowhere for a merge to write — and a `Promote` button that writes
- * one of seven labels into a definition 412 sellers already have their own
- * version of is the same one-click defect the board was corrected for.
- */
-export async function fieldProposals(categoryId?: string) {
-  return prisma.specFieldProposal.findMany({
-    where: { state: "proposed", ...(categoryId ? { categoryId } : {}) },
-    orderBy: [{ businessCount: "desc" }, { createdAt: "asc" }],
-    select: {
-      id: true,
-      key: true,
-      sampleLabel: true,
-      businessCount: true,
-      createdAt: true,
-      category: { select: { id: true, name: true } },
-    },
-  });
-}
+/*
+   `fieldProposals` and `noteProposedField` were here, and are gone.
 
-/**
- * Records that one more business is using a field by this name.
- *
- * Called from the catalogue import and the product editor when a seller maps a
- * column to something the platform template does not have. Idempotent per
- * business by construction: the count is recomputed from the seller templates
- * rather than incremented, so a seller saving twice does not vote twice.
- */
-export async function noteProposedField(
-  categoryId: string,
-  label: string,
-  businessCount: number,
-): Promise<void> {
-  const key = proposalKey(label);
-  if (!key) return;
+   D3, answered 9 Sep 2026: no shared attribute vocabulary, so there is nothing
+   for a seller-invented field to be promoted into.
 
-  await prisma.specFieldProposal.upsert({
-    where: { categoryId_key: { categoryId, key } },
-    create: { categoryId, key, sampleLabel: label.trim(), businessCount },
-    update: { businessCount },
-  });
-}
+   They would have gone anyway. `noteProposedField` claimed in its own docblock
+   to be "called from the catalogue import and the product editor" and had no
+   caller anywhere in the tree, so `SpecFieldProposal` was a table with a reader
+   and no writer — and the count it served was a number nothing had ever
+   counted. `lib/spec/library.ts` measures the same question from
+   `SellerTemplate.ownFields`, where sellers actually put the fields, so the
+   screen keeps its panel and the panel starts being true.
+
+   The table itself is dropped in the migration that follows this change: a drop
+   is the mirror of an add, so the code that reads it stops first.
+*/
+

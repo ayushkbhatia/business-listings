@@ -3867,6 +3867,7 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
             productLimit: plan.productLimit,
             locationLimit: plan.locationLimit,
             photoLimit: plan.photoLimit,
+            publicPhotoLimit: null,
             storageMb: plan.storageMb,
             teamSeats: plan.teamSeats,
             rankingMultiplier: Number(plan.rankingMultiplier),

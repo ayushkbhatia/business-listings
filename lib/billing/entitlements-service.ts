@@ -27,7 +27,7 @@ import { effectiveCaps, snapshotOf, type PlanCaps } from "@/lib/plan/entitlement
 
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
-  locationLimit: true, photoLimit: true,
+  locationLimit: true, photoLimit: true, publicPhotoLimit: true,
   categoryLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
   customDomain: true, analytics: true, csvImport: true, sponsoredEligible: true,
   sortOrder: true,
@@ -44,6 +44,7 @@ function toCaps(row: {
   productLimit: number | null;
   locationLimit: number | null;
   photoLimit: number | null;
+  publicPhotoLimit: number | null;
   storageMb: number | null;
   teamSeats: number;
   rankingMultiplier: unknown;
@@ -129,6 +130,7 @@ export interface EditPlanInput {
     productLimit: number | null;
     locationLimit: number | null;
     photoLimit: number | null;
+    publicPhotoLimit: number | null;
     /**
      * Megabytes of media. Null is unlimited, like every other cap here.
      *

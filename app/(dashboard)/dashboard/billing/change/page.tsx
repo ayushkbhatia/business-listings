@@ -52,7 +52,7 @@ export const dynamic = "force-dynamic";
 
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
-  locationLimit: true, photoLimit: true, categoryLimit: true, storageMb: true, teamSeats: true,
+  locationLimit: true, photoLimit: true, publicPhotoLimit: true, categoryLimit: true, storageMb: true, teamSeats: true,
   rankingMultiplier: true, customDomain: true, analytics: true, csvImport: true,
   sponsoredEligible: true, sortOrder: true, annualMonthsCharged: true, withdrawnAt: true,
 } as const;

@@ -41,6 +41,7 @@ function plan(over: Partial<PricingPlan> = {}): PricingPlan {
     productLimit: 150,
     locationLimit: 3,
     photoLimit: 40,
+    publicPhotoLimit: null,
     categoryLimit: null, storageMb: 1024,
     teamSeats: 3,
     rankingMultiplier: 1.15,

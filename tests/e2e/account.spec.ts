@@ -30,8 +30,21 @@ test.describe("board 11f — change plan", () => {
   test("renders the whole ladder, with the seller's own column marked", async ({ page }) => {
     const grid = page.getByRole("table", { name: /What each plan holds/ });
     await expect(grid).toBeVisible();
-    // Nine rows: four meters, then enquiries and four entitlements.
-    await expect(grid.getByRole("row")).toHaveCount(10);
+    /*
+       Eleven rows and a header. Nine until D1 on 9 Sep 2026, which added
+       photographs and extra categories to the meters.
+
+       `METERED` had carried both since board 3b and the grid rendered neither,
+       so the screen a seller reads before changing plan omitted two of the
+       seven caps they are choosing between — and Free is tightest on exactly
+       those two.
+
+       The count is asserted rather than the contents because it is the cheap
+       half of "the ladder is whole": a row silently dropped from the grid is a
+       cap the seller is not shown, which is the failure this number exists to
+       catch. `tests/unit/plan-grid.test.ts` asserts which rows they are.
+    */
+    await expect(grid.getByRole("row")).toHaveCount(12);
     await expect(grid.getByText("Current plan")).toBeVisible();
   });
 

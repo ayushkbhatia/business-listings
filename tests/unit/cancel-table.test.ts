@@ -25,6 +25,7 @@ function plan(over: Partial<PlanCaps> = {}): PlanCaps {
     productLimit: null,
     locationLimit: null,
     photoLimit: null,
+    publicPhotoLimit: null,
     categoryLimit: null,
     storageMb: null,
     teamSeats: 10,
@@ -59,7 +60,7 @@ const FREE = plan({
 const FACTS: CancelFacts = {
   plan: plan(),
   free: FREE,
-  usage: { products: 1204, locations: 4, seats: 3, storageMb: 2150 },
+  usage: { products: 1204, locations: 4, photos: 0, categories: 0, seats: 3, storageMb: 2150 },
   freeStartsOn: new Date("2026-09-14T00:00:00.000Z"),
   enquiriesLastMonth: 86,
   verified: true,
@@ -245,7 +246,7 @@ describe("the rail restates the table rather than deriving its own version", () 
   it("is empty for a seller Free already holds everything of", () => {
     const tiny: CancelFacts = {
       ...FACTS,
-      usage: { products: 2, locations: 1, seats: 1, storageMb: 10 },
+      usage: { products: 2, locations: 1, photos: 0, categories: 0, seats: 1, storageMb: 10 },
       enquiriesLastMonth: 1,
       domain: null,
       placement: null,

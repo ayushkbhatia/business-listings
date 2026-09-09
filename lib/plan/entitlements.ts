@@ -25,6 +25,15 @@ export interface PlanCaps {
   productLimit: number | null;
   locationLimit: number | null;
   photoLimit: number | null;
+  /// How many gallery photographs a public storefront shows. Null is all.
+  ///
+  /// Deliberately *not* in the entitlement snapshot. The rest of `PlanCaps` is
+  /// what a seller bought and keeps; this is a rule about what a visitor sees
+  /// today, and freezing it would leave a grandfathered storefront rendering to
+  /// a cut nobody can find in the plan table. `effectiveCaps` spreads the live
+  /// plan and overrides only the frozen keys, so leaving it out is the whole
+  /// implementation.
+  publicPhotoLimit: number | null;
   /// Additional categories a listing may carry. Null is unlimited.
   ///
   /// It has existed on `Plan` since handoff 1 and only board 2c read it, and

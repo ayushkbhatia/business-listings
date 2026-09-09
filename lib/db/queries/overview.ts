@@ -76,7 +76,7 @@ const PLAN_SELECT = {
   enquiriesPerMonth: true,
   productLimit: true,
   locationLimit: true,
-  photoLimit: true,
+  photoLimit: true, publicPhotoLimit: true,
   categoryLimit: true, storageMb: true,
   teamSeats: true,
   rankingMultiplier: true,

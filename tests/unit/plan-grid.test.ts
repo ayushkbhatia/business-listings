@@ -18,6 +18,7 @@ function plan(over: Partial<PlanCaps> = {}): PlanCaps {
     productLimit: 100,
     locationLimit: 2,
     photoLimit: 40,
+    publicPhotoLimit: null,
     categoryLimit: 3,
     storageMb: 5 * 1024,
     teamSeats: 2,
@@ -54,6 +55,8 @@ const PRO = plan({
   enquiriesPerMonth: null,
   productLimit: null,
   locationLimit: null,
+  photoLimit: null,
+  categoryLimit: null,
   teamSeats: 5,
   storageMb: 10 * 1024,
   customDomain: true,
@@ -64,7 +67,14 @@ const PRO = plan({
 const PLANS = [FREE, BASIC, PRO];
 
 /** The seller on the board: 1,204 products, 4 branches, 3 seats, 2.1 GB. */
-const USAGE: Usage = { products: 1204, locations: 4, seats: 3, storageMb: Math.round(2.1 * 1024) };
+const USAGE: Usage = {
+  products: 1204,
+  locations: 4,
+  photos: 46,
+  categories: 5,
+  seats: 3,
+  storageMb: Math.round(2.1 * 1024),
+};
 
 const cellsFor = (key: string) => {
   const row = planGrid(PLANS, USAGE).find((candidate) => candidate.key === key);
@@ -175,10 +185,18 @@ describe("entitlements are not caps of nought", () => {
     ]);
   });
 
-  it("draws nine rows, four metered and five not", () => {
+  it("draws eleven rows, six metered and five not", () => {
+    /*
+       Nine until D1, which added photographs and extra categories.
+
+       `METERED` had carried both since board 3b and this grid rendered neither,
+       so the screen a seller reads before changing plan could not show them two
+       of the seven caps they are choosing between — and Free is tightest on
+       exactly those two.
+    */
     const grid = planGrid(PLANS, USAGE);
-    expect(grid).toHaveLength(9);
-    expect(grid.filter((row) => row.kind === "meter")).toHaveLength(4);
+    expect(grid).toHaveLength(11);
+    expect(grid.filter((row) => row.kind === "meter")).toHaveLength(6);
     expect(grid.filter((row) => row.kind === "entitlement")).toHaveLength(5);
   });
 });
@@ -196,6 +214,8 @@ describe("shortfalls — what the seller chooses between", () => {
     expect(shortfalls.map((shortfall) => shortfall.key)).toEqual([
       "products",
       "locations",
+      "photos",
+      "categories",
       "seats",
     ]);
     expect(shortfalls.find((s) => s.key === "products")).toMatchObject({
@@ -209,6 +229,23 @@ describe("shortfalls — what the seller chooses between", () => {
     // Pro keeps all four, so the panel does not render at all rather than
     // rendering four rows saying "all of them".
     expect(shortfallsOf(grid, "pro", USAGE)).toEqual([]);
+  });
+
+  it("does not offer to choose between photographs or categories", () => {
+    /*
+       D1 added both meters and `choosable` was `key !== "storage"`, which was
+       true of the four rows that existed and became a lie the moment there were
+       six. `SubscriptionChange` carries keep lists for products, locations and
+       seats and for nothing else, so a picker for these two would be a control
+       with nothing behind it — the seller is told, not asked.
+    */
+    const shortfalls = shortfallsOf(grid, "basic", USAGE);
+    expect(shortfalls.find((s) => s.key === "photos")).toMatchObject({ choosable: false });
+    expect(shortfalls.find((s) => s.key === "categories")).toMatchObject({ choosable: false });
+    // And the three that do have one still do.
+    for (const key of ["products", "locations", "seats"]) {
+      expect(shortfalls.find((s) => s.key === key), key).toMatchObject({ choosable: true });
+    }
   });
 
   it("marks storage as not choosable, on the plan that is short of it", () => {

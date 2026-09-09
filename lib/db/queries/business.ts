@@ -101,7 +101,12 @@ export async function getBusinessBySlug(slug: string) {
       // storefront, `rankingMultiplier` nothing here — but see the note in
       // lib/db/queries/search.ts: a bare `plan: true` on a public route is how
       // an unapplied billing migration became a 500 on every category page.
-      plan: { select: { id: true, rankingMultiplier: true } },
+      // Three columns, named. `id` decides the Pro chip, `rankingMultiplier`
+      // nothing here, and `publicPhotoLimit` the storefront's photo cut — which
+      // was a constant in the page file until D1. A bare `plan: true` on a
+      // public route is how an unapplied billing migration became a 500 on
+      // every category page, so this stays a named list.
+      plan: { select: { id: true, rankingMultiplier: true, publicPhotoLimit: true } },
       locations: {
         where: { published: true },
         include: { area: true },

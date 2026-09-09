@@ -128,7 +128,7 @@ export type CancellationOutcome =
 
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
-  locationLimit: true, photoLimit: true, categoryLimit: true, storageMb: true, teamSeats: true,
+  locationLimit: true, photoLimit: true, publicPhotoLimit: true, categoryLimit: true, storageMb: true, teamSeats: true,
   rankingMultiplier: true, customDomain: true, analytics: true, csvImport: true,
   sponsoredEligible: true, sortOrder: true, annualMonthsCharged: true,
 } as const;
@@ -172,7 +172,21 @@ export async function cancellationView(
   const since = monthStart(now);
   const lastMonthStart = new Date(Date.UTC(since.getUTCFullYear(), since.getUTCMonth() - 1, 1));
 
-  const [business, freePlan, products, locations, seats, storageBytes, enquiries, importRun, placement, pending, recipient] =
+  const [
+    business,
+    freePlan,
+    products,
+    locations,
+    photos,
+    categories,
+    seats,
+    storageBytes,
+    enquiries,
+    importRun,
+    placement,
+    pending,
+    recipient,
+  ] =
     await Promise.all([
       prisma.business.findUniqueOrThrow({
         where: { id: businessId },
@@ -198,6 +212,10 @@ export async function cancellationView(
       prisma.plan.findUnique({ where: { id: "free" }, select: PLAN_SELECT }),
       prisma.product.count({ where: { businessId, status: "live" } }),
       prisma.location.count({ where: { businessId, published: true } }),
+      // The two the grid gained in D1. Counted here too so the cancellation
+      // table and the change table are measuring the same seller.
+      prisma.media.count({ where: { businessId, kind: "gallery" } }),
+      prisma.businessCategory.count({ where: { businessId } }),
       seatsUsed(businessId, now),
       /*
          Through the one definition, not a fourth reading of the table.
@@ -277,6 +295,8 @@ export async function cancellationView(
   const usage: Usage = {
     products,
     locations,
+    photos,
+    categories,
     seats,
     storageMb: Math.ceil(storageBytes / (1024 * 1024)),
   };

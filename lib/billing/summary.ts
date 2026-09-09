@@ -32,7 +32,7 @@ import type { Usage } from "./plan-grid";
 
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
-  locationLimit: true, photoLimit: true, categoryLimit: true, storageMb: true, teamSeats: true,
+  locationLimit: true, photoLimit: true, publicPhotoLimit: true, categoryLimit: true, storageMb: true, teamSeats: true,
   rankingMultiplier: true, customDomain: true, analytics: true, csvImport: true,
   sponsoredEligible: true, sortOrder: true, annualMonthsCharged: true,
 } as const;
@@ -165,7 +165,19 @@ export async function billingSummary(
 ): Promise<BillingSummary> {
   assertCanManageBilling(actor);
 
-  const [business, freePlan, invoices, products, locations, seats, storageBytes, placements, pendingChange] =
+  const [
+    business,
+    freePlan,
+    invoices,
+    products,
+    locations,
+    photos,
+    categories,
+    seats,
+    storageBytes,
+    placements,
+    pendingChange,
+  ] =
     await Promise.all([
       prisma.business.findUniqueOrThrow({
         where: { id: businessId },
@@ -216,6 +228,12 @@ export async function billingSummary(
       }),
       prisma.product.count({ where: { businessId, status: "live" } }),
       prisma.location.count({ where: { businessId, published: true } }),
+      // The two caps the grid could not draw before D1. Gallery photographs
+      // only — a logo and a cover are not what `photoLimit` meters — and extra
+      // categories, which excludes the primary one the listing cannot be
+      // without.
+      prisma.media.count({ where: { businessId, kind: "gallery" } }),
+      prisma.businessCategory.count({ where: { businessId } }),
       seatsUsed(businessId, now),
       /*
          Through the one definition, not a fourth reading of the table.
@@ -249,6 +267,8 @@ export async function billingSummary(
   const usage: Usage = {
     products,
     locations,
+    photos,
+    categories,
     seats,
     storageMb: Math.ceil(storageBytes / (1024 * 1024)),
   };
@@ -348,6 +368,7 @@ function toCaps(row: {
   productLimit: number | null;
   locationLimit: number | null;
   photoLimit: number | null;
+  publicPhotoLimit: number | null;
   categoryLimit: number | null;
   storageMb: number | null;
   teamSeats: number;
@@ -377,7 +398,8 @@ function freeOr(plan: Parameters<typeof toCaps>[0] | null): PlanCaps {
   if (plan) return toCaps(plan);
   return {
     id: "free", name: "Free", monthlyPriceAed: 0, enquiriesPerMonth: 0, productLimit: 0,
-    locationLimit: 0, photoLimit: 0, categoryLimit: 0, storageMb: 0, teamSeats: 1,
+    locationLimit: 0, photoLimit: 0, publicPhotoLimit: 0, categoryLimit: 0, storageMb: 0,
+    teamSeats: 1,
     rankingMultiplier: 1, customDomain: false, analytics: false, csvImport: false,
     sponsoredEligible: false, sortOrder: 0,
   };

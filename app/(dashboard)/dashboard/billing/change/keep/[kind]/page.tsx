@@ -64,7 +64,7 @@ export default async function KeepPage({ params }: { params: Promise<{ kind: str
       where: { id: pending.toPlan.id },
       select: {
         id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
-        locationLimit: true, photoLimit: true, categoryLimit: true, storageMb: true,
+        locationLimit: true, photoLimit: true, publicPhotoLimit: true, categoryLimit: true, storageMb: true,
         teamSeats: true, rankingMultiplier: true, customDomain: true, analytics: true,
         csvImport: true, sponsoredEligible: true, sortOrder: true,
       },
