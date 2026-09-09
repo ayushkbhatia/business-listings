@@ -11,6 +11,7 @@ import {
 } from "@/lib/billing/cancellation";
 import { applyEndedCancellations, changePlan, resumeSubscription } from "@/lib/billing/service";
 import { applyDueChanges, saveKeep } from "@/lib/billing/schedule";
+import { KEEP_ORDER } from "@/lib/billing/plan-caps";
 import { billingSummary } from "@/lib/billing/summary";
 import { effectiveCaps } from "@/lib/plan/entitlements";
 
@@ -330,9 +331,18 @@ describe("the choice, and what happens if nobody makes one", () => {
        preselects, so the screen shows what will happen if nothing is touched.
     */
     await prisma.product.updateMany({ where: { businessId }, data: { status: "live" } });
+    /*
+       `KEEP_ORDER`, not a second `{ createdAt: "asc" }`.
+
+       This seller's seeded products are written in one batch and share a
+       `created_at` to the millisecond, so a copy of the rule with no tiebreak
+       names a different "oldest" than the applier does and the assertion fails
+       on rows the cap handled correctly. Which is the defect this is testing
+       for, seen from the other side: one rule, one definition.
+    */
     const oldest = await prisma.product.findMany({
       where: { businessId },
-      orderBy: { createdAt: "asc" },
+      orderBy: KEEP_ORDER,
       select: { id: true },
     });
 

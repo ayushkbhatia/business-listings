@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/client";
 import { mayChangePlan } from "@/lib/auth/guards";
 import { pendingChangeFor } from "@/lib/billing/schedule";
+import { KEEP_ORDER } from "@/lib/billing/plan-caps";
 import { capFor, type Metered } from "@/lib/plan/entitlements";
 import { formatCount, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -176,9 +177,16 @@ function introFor(kind: Kind, planName: string, cap: number | null, effectiveAt:
  */
 async function optionsFor(kind: Kind, businessId: string): Promise<KeepOption[]> {
   if (kind === "products") {
+    /*
+       `KEEP_ORDER`, not a second copy of it. The preselect below slices this
+       list at the cap and calls the result what happens if the seller touches
+       nothing — so it has to be the order `hideOverPlanCap` will actually
+       apply, down to the tiebreak. `createdAt` alone does not settle it: an
+       import gives every one of its products the same timestamp.
+    */
     const products = await prisma.product.findMany({
       where: { businessId, status: "live" },
-      orderBy: { createdAt: "asc" },
+      orderBy: KEEP_ORDER,
       select: { id: true, name: true, sku: true },
     });
     return products.map((product) => ({
@@ -192,7 +200,10 @@ async function optionsFor(kind: Kind, businessId: string): Promise<KeepOption[]>
   if (kind === "locations") {
     const locations = await prisma.location.findMany({
       where: { businessId, published: true },
-      orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+      // Same tiebreak, same reason: branches added together tie on `createdAt`,
+      // and a preselect that reshuffles between two loads of one screen is not
+      // a default the seller can reason about.
+      orderBy: [{ type: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       select: { id: true, type: true, addressLine: true, area: { select: { name: true } } },
     });
     return locations.map((location) => ({
@@ -213,7 +224,7 @@ async function optionsFor(kind: Kind, businessId: string): Promise<KeepOption[]>
 
   const seats = await prisma.user.findMany({
     where: { businessId },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: { id: true, fullName: true, email: true, roles: true },
   });
   return seats.map((person) => ({
