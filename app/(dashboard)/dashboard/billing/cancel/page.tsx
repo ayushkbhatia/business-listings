@@ -68,6 +68,49 @@ export default async function CancelPage() {
      flow that has already run would offer to schedule a cancellation over one
      that exists, which the partial unique index would refuse anyway.
   */
+  /*
+     A trial, which is not a subscription to cancel.
+
+     It ends on its own date into `expired` and drops the business to Free, and
+     `expireTrials` writes no churn movement because nobody paid. Letting the
+     flow through wrote `status: "active"` over the trial — out of that sweep,
+     into `mrrNow` as revenue nobody had paid, and a full-value churn at trial
+     end. So the seller who clicked Cancel on `3m` gets the sentence instead of
+     the table, and the service refuses it too.
+  */
+  if (view.kind === "trial") {
+    return (
+      <SellerPage
+        seat={seat}
+        badges={badges}
+        activeHref="/dashboard/billing"
+        eyebrow={t("billing.eyebrow")}
+        title={t("cancel.title")}
+        breadcrumb={
+          <Link
+            href="/dashboard/billing"
+            className="rounded-tag text-caption font-medium text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+          >
+            {t("cancel.back.billing")}
+          </Link>
+        }
+      >
+        <Card padded>
+          <h2 className="text-h3 text-ink">{t("cancel.trial.title")}</h2>
+          <p className="mt-2 max-w-[var(--measure-prose)] text-body-sm text-muted">
+            {t("cancel.trial.body", {
+              plan: view.planName,
+              when: formatDate(view.trialEndsOn),
+            })}
+          </p>
+          <p className="mt-2 max-w-[var(--measure-prose)] text-body-sm text-muted">
+            {t("cancel.trial.note")}
+          </p>
+        </Card>
+      </SellerPage>
+    );
+  }
+
   if (view.scheduled) redirect("/dashboard/billing");
 
   const freeStartsOn = formatDate(view.freeStartsOn);

@@ -555,3 +555,127 @@ describe("grandfathering, which did not work", () => {
     expect(result).toMatchObject({ ok: false, error: "nothing_changed" });
   });
 });
+
+describe("the columns board 11f compares plans on, and could not change", () => {
+  /**
+   * The wave-4 fix batch. `/admin/plans` posted six of the Plan table's
+   * thirteen config columns.
+   *
+   * `categoryLimit`, `analytics`, `csvImport` and `sponsoredEligible` are each
+   * rendered as their own comparison row on board 11f — a seller reads them
+   * against the plan they are considering — and each was reachable only by
+   * writing the row by hand, which skips the audit row every other entitlement
+   * change writes. `analytics` gates /dashboard/analytics and its export,
+   * `csvImport` gates the import mapper, `sponsoredEligible` gates the
+   * placement screen: three live gates nobody could open or close.
+   */
+  const staff = () => actor(financeId, "staff_finance");
+
+  it("sets the fifth numeric cap", async () => {
+    const result = await editPlanEntitlements({
+      actor: staff(),
+      planId,
+      changes: { categoryLimit: 7 },
+      applyToExisting: false,
+      reason: "Holding this tier to seven categories while we watch how it is used.",
+    });
+    expect(result).toMatchObject({ ok: true });
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.categoryLimit).toBe(7);
+  }, 60_000);
+
+  it("turns each of the three entitlements on and off again", async () => {
+    // Off is the half that mattered: a checkbox posts nothing when unticked, so
+    // reading the switches only when present would have made every one of them
+    // a grant that could never be withdrawn.
+    await editPlanEntitlements({
+      actor: staff(),
+      planId,
+      changes: { analytics: true, csvImport: true, sponsoredEligible: true },
+      applyToExisting: false,
+      reason: "Opening analytics, the importer and placement on this tier.",
+    });
+    let plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect([plan.analytics, plan.csvImport, plan.sponsoredEligible]).toEqual([true, true, true]);
+
+    await editPlanEntitlements({
+      actor: staff(),
+      planId,
+      changes: { analytics: false, csvImport: false, sponsoredEligible: false },
+      applyToExisting: false,
+      reason: "Closing all three again while the tier is repriced.",
+    });
+    plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect([plan.analytics, plan.csvImport, plan.sponsoredEligible]).toEqual([false, false, false]);
+  }, 60_000);
+
+  it("withdraws a plan from sale, and puts it back", async () => {
+    /*
+       Board 1l criterion 12. `Plan.withdrawnAt` had five readers —
+       `isPurchasable`, the onboarding plan step, the trial gate, 11f's change
+       screen and the plan-cohort metric — and no writer at all.
+    */
+    const withdrawn = await editPlanEntitlements({
+      actor: staff(),
+      planId,
+      changes: {},
+      withdrawn: true,
+      applyToExisting: false,
+      reason: "Taking this tier off sale while the pricing is reworked.",
+    });
+    expect(withdrawn).toMatchObject({ ok: true });
+
+    let plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.withdrawnAt).not.toBeNull();
+    const stampedAt = plan.withdrawnAt!;
+
+    // Saving again while it is still withdrawn moves nothing — the date is when
+    // it was withdrawn, not when it was last edited.
+    const again = await editPlanEntitlements({
+      actor: staff(),
+      planId,
+      changes: {},
+      withdrawn: true,
+      applyToExisting: false,
+      reason: "Saving the same state again, which should change nothing.",
+    });
+    expect(again).toMatchObject({ ok: false, error: "nothing_changed" });
+    plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.withdrawnAt?.toISOString()).toBe(stampedAt.toISOString());
+
+    const restored = await editPlanEntitlements({
+      actor: staff(),
+      planId,
+      changes: {},
+      withdrawn: false,
+      applyToExisting: false,
+      reason: "Back on sale now the pricing is settled.",
+    });
+    expect(restored).toMatchObject({ ok: true });
+    plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.withdrawnAt).toBeNull();
+  }, 60_000);
+
+  it("carries the withdrawal through to the screen that reads it", async () => {
+    await editPlanEntitlements({
+      actor: staff(),
+      planId,
+      changes: {},
+      withdrawn: true,
+      applyToExisting: false,
+      reason: "Off sale, to check the console renders it.",
+    });
+    const library = await planLibrary();
+    const row = library.find((plan) => plan.id === planId);
+    expect(row?.withdrawnAt).not.toBeNull();
+
+    await editPlanEntitlements({
+      actor: staff(),
+      planId,
+      changes: {},
+      withdrawn: false,
+      applyToExisting: false,
+      reason: "And back, so the fixture leaves as it arrived.",
+    });
+  }, 60_000);
+});

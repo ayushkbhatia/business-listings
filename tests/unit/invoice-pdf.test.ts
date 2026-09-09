@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { A4, pdfString, renderPdf, textWidth, wrap } from "@/lib/billing/pdf";
-import { invoicePdf } from "@/lib/billing/invoice-pdf";
+import { invoicePdf, InvoiceTooLongError } from "@/lib/billing/invoice-pdf";
 import type { TaxInvoiceDocument } from "@/lib/billing/tax-invoice";
 
 /**
@@ -257,5 +257,94 @@ describe("renderPdf", () => {
   it("writes a page even with no ops", () => {
     const bytes = renderPdf([]);
     expect(read(bytes)).toContain("/MediaBox");
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Board 11g's follow-up audit — the render *is* the document
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Every text operation the layout emits, in order. `read` is defined above. */
+function textOps(document: TaxInvoiceDocument): string[] {
+  return [...read(invoicePdf(document).bytes).matchAll(/\((.*?)\) Tj/g)].map((m) => m[1]!);
+}
+
+describe("the document says everything the screen says", () => {
+  it("prints a row for a date that was never stored, rather than dropping it", () => {
+    /*
+       `InvoiceSheet` renders "Not stored" in each of these rows and the PDF used
+       to `continue` past them — so the screen and the file disagreed about how
+       many claims the invoice makes, on the one board whose rule is that they
+       are one object. Three of the five are separately mandatory on a UAE tax
+       document, and a heading that is simply absent reads as an oversight
+       rather than as a gap.
+    */
+    const ops = textOps({
+      ...DOCUMENT,
+      suppliedOn: null,
+      supplyPeriod: null,
+      placeOfSupply: null,
+    });
+    for (const label of ["Date of supply", "Supply period", "Place of supply"]) {
+      expect(ops, label).toContain(label);
+    }
+    expect(ops.filter((op) => op === "Not stored")).toHaveLength(3);
+  });
+
+  it("says which invoice a credit note corrects", () => {
+    // The one divergence of the three that is a compliance problem: a credit
+    // note that references no invoice is not a credit note.
+    const ops = textOps({
+      ...DOCUMENT,
+      docType: "credit_note",
+      correctsRef: "BL-INV-20418",
+    });
+    expect(ops).toContain("Credit note against BL-INV-20418");
+  });
+
+  it("carries the status the sheet renders as a badge", () => {
+    expect(textOps({ ...DOCUMENT, status: "paid" })).toContain("PAID IN FULL");
+    expect(textOps({ ...DOCUMENT, status: "overdue" })).toContain("OVERDUE");
+    expect(textOps({ ...DOCUMENT, status: "issued" })).toContain("ISSUED");
+  });
+});
+
+describe("the page foot tells the truth about the sheet", () => {
+  it("claims one page, because one page is what it emits", () => {
+    expect(textOps(DOCUMENT)).toContain("PAGE 1 OF 1");
+  });
+
+  it("refuses a document that would not fit rather than losing its lines", () => {
+    /*
+       The foot used to print `PAGE 1 OF ${ceil(lines / 14)}` while `renderPdf`
+       emitted a single page object, so a thirty-line invoice claimed three pages
+       and put two of them at negative y — off the sheet, silently, and frozen,
+       because `writeInvoicePdf` never re-renders.
+
+       Unreachable today: every invoice this platform issues has one or two
+       lines. That is the argument for a guard rather than for building
+       pagination into a hand-rolled writer for a case that does not exist.
+    */
+    const long = {
+      ...DOCUMENT,
+      lines: Array.from({ length: 30 }, (_, index) => ({
+        ...DOCUMENT.lines[0]!,
+        id: `l${index}`,
+        description: `Line ${index + 1}`,
+      })),
+    };
+    expect(() => invoicePdf(long)).toThrow(InvoiceTooLongError);
+  });
+
+  it("renders a document that exactly fills the sheet", () => {
+    const full = {
+      ...DOCUMENT,
+      lines: Array.from({ length: 14 }, (_, index) => ({
+        ...DOCUMENT.lines[0]!,
+        id: `l${index}`,
+        description: `Line ${index + 1}`,
+      })),
+    };
+    expect(invoicePdf(full).pages).toBe(1);
   });
 });

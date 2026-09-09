@@ -55,6 +55,16 @@ const RULE = 0.82;
 /** How many line rows fit on a sheet before it has to paginate. */
 const ROWS_PER_PAGE = 14;
 
+/**
+ * What the sheet prints where a mandatory field was never stored.
+ *
+ * The same words `InvoiceSheet` uses (`invoice.not_stored`). Not read from the
+ * catalogue: this writer produces a document, not a screen, and a stored PDF
+ * must not change its wording the day somebody edits a UI string. The pair is
+ * asserted in tests/unit/invoice-pdf.
+ */
+const NOT_STORED = "Not stored";
+
 export interface RenderedInvoice {
   bytes: Buffer;
   pages: number;
@@ -67,18 +77,54 @@ export interface RenderedInvoice {
  * reports and reading it back off storage to find out would be a second source
  * for one number.
  */
-export function invoicePdf(document: TaxInvoiceDocument): RenderedInvoice {
-  const pages = Math.max(1, Math.ceil(document.lines.length / ROWS_PER_PAGE));
-  /*
-     One page for now, and the pagination is real rather than aspirational.
+/**
+ * Raised when a document cannot be rendered onto the one sheet this writer
+ * produces. Board 11g's follow-up audit.
+ *
+ * The foot used to print `PAGE 1 OF ${ceil(lines / 14)}` while `renderPdf`
+ * emitted a single page object — so a thirty-line invoice claimed three pages
+ * and put two of them at negative `y`, off the sheet, with the lines silently
+ * gone. The old comment beside it called the pagination "real rather than
+ * aspirational", which is exactly the shape of claim this batch is about.
+ *
+ * Refusing is the right failure. A missing PDF is a support ticket and the
+ * screen still renders the whole document; a tax invoice that quietly dropped
+ * two thirds of its lines is a different kind of problem, and it would be
+ * frozen — `writeInvoicePdf` never re-renders.
+ */
+export class InvoiceTooLongError extends Error {
+  readonly code = "invoice_exceeds_one_page";
+  constructor(readonly lines: number) {
+    super(
+      `An invoice of ${lines} lines does not fit the single sheet this writer produces ` +
+        `(${ROWS_PER_PAGE} maximum). Multi-page rendering is not built.`,
+    );
+    this.name = "InvoiceTooLongError";
+  }
+}
 
-     Every invoice this platform issues has one or two lines, so a second sheet
-     is unreachable today. `pageCount` still says `PAGE 1 OF 1` from a computed
-     total rather than a literal, because the day a placement invoice runs to
-     fifteen lines the foot has to be right without anybody remembering it.
+export function invoicePdf(document: TaxInvoiceDocument): RenderedInvoice {
+  /*
+     One sheet, and the foot says so because it is true.
+
+     Every invoice this platform issues has one or two lines, so the refusal
+     below is unreachable today — which is the argument for a guard rather than
+     for building pagination into a hand-rolled PDF writer for a case that does
+     not exist.
   */
+  if (document.lines.length > ROWS_PER_PAGE) {
+    throw new InvoiceTooLongError(document.lines.length);
+  }
+  const pages = 1;
   const ops = layout(document, pages);
   return { bytes: renderPdf(ops), pages };
+}
+
+/** The badge `InvoiceSheet` renders, as the document's own word for it. */
+function statusLabel(status: TaxInvoiceDocument["status"]): string {
+  if (status === "paid") return "PAID IN FULL";
+  if (status === "overdue") return "OVERDUE";
+  return "ISSUED";
 }
 
 function layout(document: TaxInvoiceDocument, pages: number): PdfOp[] {
@@ -117,6 +163,18 @@ function layout(document: TaxInvoiceDocument, pages: number): PdfOp[] {
 
   y += 16;
   text(document.ref, COL.amount, 10.5, "mono", { align: "right" });
+
+  /*
+     Paid, issued or overdue — the badge `InvoiceSheet` renders beside the
+     reference, on the document as well.
+
+     Board 11g's rule is that the render *is* the document, and the status is
+     the first thing a person looks for on an invoice they have been handed. It
+     was on the screen and absent from the file, so the two answered a different
+     question about the same row.
+  */
+  y += 13;
+  text(statusLabel(document.status), COL.amount, 8, "bold", { align: "right", grey: MUTED });
 
   for (const line of [document.supplier.name, ...document.supplier.addressLines]) {
     text(line, MARGIN.x, 8, "regular", { grey: MUTED });
@@ -177,9 +235,17 @@ function layout(document: TaxInvoiceDocument, pages: number): PdfOp[] {
   text("Dates & supply", PARTY.datesX, 8, "regular", { grey: MUTED, at: dy });
   dy += 13;
   for (const [label, value] of dates) {
-    if (!value) continue;
+    /*
+       An absent date is a row that says so, not a row that is missing.
+
+       This used to `continue`, while InvoiceSheet renders the same row reading
+       "Not stored" — so the screen and the document disagreed about how many
+       claims the invoice makes, on the one board whose central rule is that the
+       render *is* the document. A reader comparing the two would find a
+       mandatory heading on one and nothing on the other.
+    */
     text(label, PARTY.datesX, 9, "regular", { grey: MUTED, at: dy });
-    text(value, COL.amount, 9, "regular", { align: "right", at: dy });
+    text(value ?? NOT_STORED, COL.amount, 9, "regular", { align: "right", at: dy });
     dy += 12;
   }
 
@@ -289,6 +355,20 @@ function layout(document: TaxInvoiceDocument, pages: number): PdfOp[] {
     `correction is issued as a credit note referencing ${document.ref}, never as a change to ` +
     `this invoice.`;
   let ny = footTop;
+
+  /*
+     Which invoice this credit note corrects.
+
+     `InvoiceSheet` has printed it since board 11g and the PDF never did — so a
+     credit note downloaded from this platform named no invoice at all, which is
+     the one divergence of the three that is a compliance problem rather than a
+     cosmetic one. A credit note that does not reference its invoice is not a
+     credit note.
+  */
+  if (document.correctsRef) {
+    text(`Credit note against ${document.correctsRef}`, MARGIN.x, 8.5, "bold", { at: ny });
+    ny += 14;
+  }
   for (const line of wrap(note, A4.width - MARGIN.x * 2, 8, "regular")) {
     text(line, MARGIN.x, 8, "regular", { grey: MUTED, at: ny });
     ny += 11;

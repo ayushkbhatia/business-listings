@@ -8,7 +8,9 @@ import type { PlanCaps } from "@/lib/plan/entitlements";
 import { t } from "@/lib/i18n";
 import { InvoiceSheet } from "@/app/(dashboard)/dashboard/billing/invoice/[id]/InvoiceSheet";
 import { ConsequenceTable } from "@/app/(dashboard)/dashboard/billing/cancel/ConsequenceTable";
-import { Section, States } from "../_kit";
+import { CancelCard } from "@/app/(dashboard)/dashboard/billing/CancelCard";
+import { Button } from "@/components/primitives";
+import { Frame, Section, States } from "../_kit";
 
 /**
  * Board 11f's comparison grid, in every state it has.
@@ -340,15 +342,77 @@ export function Billing() {
         <InvoiceSheet document={LEGACY} />
       </States>
 
+      {/*
+         Board 3m's cancel entry, and the banner it becomes. Neither had a story.
+
+         The banner is the harder of the two to reach: `account.spec.ts` records
+         that no acceptance test confirms a cancellation, because doing so drops
+         the shared fixture seller to Free and takes the plan grid, the invoice
+         list and the tax-invoice block with it. So its markup — the keep-picker
+         rows, the dated `choose by` line, the resume island — was rendered by
+         no test and no story at all.
+      */}
+      <States label={t("gallery.billing.cancel_entry")} stack>
+        <Frame width="34rem">
+          <CancelCard
+            keeps="10"
+            used="1,204"
+            enquiries="3"
+            withinFreeCap={false}
+            endsAt={null}
+            chooseBy={null}
+            keepLinks={[]}
+            resume={null}
+          />
+        </Frame>
+      </States>
+
+      <States label={t("gallery.billing.cancel_scheduled")} stack>
+        <Frame width="34rem">
+          <CancelCard
+            keeps="10"
+            used="1,204"
+            enquiries="3"
+            withinFreeCap={false}
+            endsAt="14 Sep 2026"
+            chooseBy="13 Sep 2026"
+            keepLinks={[
+              {
+                kind: "products",
+                label: "10 of 1,204 products stay live",
+                href: "/dashboard/billing/change/keep/products",
+                chosenLabel: "Not chosen — the newest 10 stay",
+              },
+              {
+                kind: "locations",
+                label: "1 of 4 branches stays published",
+                href: "/dashboard/billing/change/keep/locations",
+                chosenLabel: "1 chosen",
+              },
+            ]}
+            resume={
+              <Button variant="secondary" size="sm">
+                {t("billing.cancelling.resume", { plan: "Pro" })}
+              </Button>
+            }
+          />
+        </Frame>
+      </States>
+
       <States label={t("gallery.billing.failed")} stack>
         <Alert
           tone="bad"
           title={t("billing.failed.title", { amount: "AED 943.95", when: "4 Sep 2026" })}
-          // A `bad` notice owes the reader a way out — design-system §05.1, and
-          // `Alert` warns in development when neither is given. The real banner
-          // on `3m` passes `action`, which is the `Update payment method`
-          // button; the gallery has no route to send it to, so it states the fix.
-          fix={t("billing.failed.update")}
+          /*
+             A `bad` notice owes the reader a way out — design-system §05.1, and
+             `Alert` warns in development when neither is given.
+
+             The real banner on `3m` passes the same `fix` now. It used to pass
+             an `Update payment method` button pointing at `#payment-method`, a
+             panel whose own footer says card capture is not built: honest where
+             it landed and a dead end where it was pressed.
+          */
+          fix={t("billing.failed.fix")}
         >
           <p>{t("billing.failed.reason", { reason: "Card expired" })}</p>
           <p className="mt-1">{t("billing.failed.retry", { when: "11 Sep 2026" })}</p>

@@ -23,6 +23,17 @@ export function ResumeButton({ label }: { label: string }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  /*
+     The sentence the action already composed and nobody rendered.
+
+     `resumePlan` returns `t("billing.resumed", { plan, when })` and this read
+     only `result.ok`, so the key had no reader anywhere in the app and passed
+     CI — no gate scans for an orphaned string. `router.refresh()` does show the
+     state move: the scheduled banner reverts to the cancel card. What it never
+     said is the thing the seller came to find out, which is the date the plan
+     now renews on.
+  */
+  const [done, setDone] = useState<string | null>(null);
 
   return (
     <div>
@@ -35,8 +46,10 @@ export function ResumeButton({ label }: { label: string }) {
           setError(null);
           startTransition(async () => {
             const result = await resumePlan();
-            if (result.ok) router.refresh();
-            else setError(result.error);
+            if (result.ok) {
+              setDone(result.message ?? null);
+              router.refresh();
+            } else setError(result.error);
           });
         }}
       >
@@ -45,6 +58,11 @@ export function ResumeButton({ label }: { label: string }) {
       {error && (
         <p role="alert" className="mt-2 text-caption text-bad-ink">
           {error}
+        </p>
+      )}
+      {done && (
+        <p role="status" className="mt-2 text-caption text-ok-ink">
+          {done}
         </p>
       )}
     </div>

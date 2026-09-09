@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
 import { planLibrary } from "@/lib/billing/entitlements-service";
-import { formatCount } from "@/lib/format";
+import { formatCount, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { saveEntitlements } from "./actions";
@@ -35,6 +35,13 @@ export default async function PlansPage() {
     photoLimit: plan.photoLimit,
     storageMb: plan.storageMb,
     teamSeats: plan.teamSeats,
+    categoryLimit: plan.categoryLimit,
+    analytics: plan.analytics,
+    csvImport: plan.csvImport,
+    sponsoredEligible: plan.sponsoredEligible,
+    // Serialised, because the editor is a client component and a Date is not
+    // the thing to send across that boundary for a value it only renders.
+    withdrawnAt: plan.withdrawnAt ? formatDate(plan.withdrawnAt) : null,
     subscriptions: plan.subscriptions,
     grandfathered: plan.grandfathered,
   }));

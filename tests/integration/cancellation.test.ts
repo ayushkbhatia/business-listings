@@ -101,6 +101,10 @@ afterEach(async () => {
       cancelledAt: null,
       endsAt: null,
       status: "active",
+      // And out of the trial the last block puts it in — `trialing` left behind
+      // would take this fixture out of every other suite's `active` assumption
+      // and into `expireTrials`, which drops it to Free on the next sweep.
+      trialEndsAt: null,
       planId: originalPlanId,
       renewsAt: originalRenewsAt,
       entitlementSnapshot: Prisma.DbNull,
@@ -127,11 +131,27 @@ afterAll(async () => {
 const cancel = (reason: (typeof CANCEL_REASONS)[number] = "too_expensive", note?: string) =>
   scheduleCancellation(owner, businessId, note === undefined ? { reason } : { reason, note });
 
+/**
+ * The view, narrowed to the cancellable outcome.
+ *
+ * `cancellationView` returns a union since board 11c's follow-up audit — a
+ * trial is its own outcome rather than a null, because a seller who clicked
+ * Cancel deserves the sentence rather than a 404. Every assertion below is
+ * about the cancellable branch, and this fails loudly rather than returning
+ * early: `if (!view) return` is a test that reports a pass and proves nothing.
+ */
+async function cancellable(actor = owner) {
+  const view = await cancellationView(actor, businessId);
+  expect(view, "expected a cancellable subscription").not.toBeNull();
+  if (!view || view.kind !== "cancellable") {
+    throw new Error(`expected a cancellable outcome, got ${view ? view.kind : "null"}`);
+  }
+  return view;
+}
+
 describe("criterion 1 — every date comes from one value", () => {
   it("dates the cancellation from the renewal, and the paid period from the day before", async () => {
-    const view = await cancellationView(owner, businessId);
-    expect(view).not.toBeNull();
-    if (!view) return;
+    const view = await cancellable();
 
     expect(view.freeStartsOn.toISOString()).toBe(originalRenewsAt.toISOString());
     expect(view.freeStartsOn.getTime() - view.paidTo.getTime()).toBe(24 * 60 * 60 * 1000);
@@ -524,11 +544,78 @@ describe("criterion 9 — owner only, and unreachable once it is done", () => {
     // Criterion 10. `cancellationView` reports the scheduled state, and both
     // routes redirect to billing on it.
     await cancel();
-    const view = await cancellationView(owner, businessId);
-    expect(view?.scheduled).not.toBeNull();
+    const view = await cancellable();
+    expect(view.scheduled).not.toBeNull();
 
     await applyEndedCancellations(new Date(originalRenewsAt.getTime() + 1000));
     // Now on Free with a cancelled subscription: there is nothing left to cancel.
     expect(await cancellationView(owner, businessId)).toBeNull();
+  });
+});
+
+describe("a trial is not a subscription to cancel", () => {
+  /**
+   * Board 11c's follow-up audit, and the worst of the batch: it put money on the
+   * revenue board that nobody had paid.
+   *
+   * `scheduleCancellation` excluded only `cancelled` and `expired`, so a
+   * `trialing` subscription passed both guards and `:393` wrote
+   * `status: "active"` over it. Three consequences, all of them silent:
+   * `expireTrials` selects `status: "trialing"` and never saw it again;
+   * `mrrNow` counts `active`, so a trial started counting as recurring revenue;
+   * and `applyEndedCancellations` then booked a churn `MrrMovement` at the full
+   * monthly value — the exact row `trial.ts` refuses to write for a trial that
+   * simply ends.
+   */
+  const trialEndsAt = new Date(Date.now() + 9 * 86_400_000);
+
+  async function onTrial() {
+    await prisma.subscription.updateMany({
+      where: { businessId },
+      data: { status: "trialing", trialEndsAt, cancelledAt: null, endsAt: null },
+    });
+  }
+
+  it("tells the seller rather than 404ing at them", async () => {
+    await onTrial();
+    const view = await cancellationView(owner, businessId);
+    expect(view).not.toBeNull();
+    expect(view?.kind).toBe("trial");
+    if (view?.kind !== "trial") throw new Error("unreachable");
+    // The date the sentence names, from the subscription rather than invented.
+    expect(view.trialEndsOn.toISOString()).toBe(trialEndsAt.toISOString());
+  });
+
+  it("is refused by the service, not only by the screen", async () => {
+    await onTrial();
+    expect(await cancel("too_expensive")).toEqual({ ok: false, error: "on_trial" });
+  });
+
+  it("leaves the trial where the sweep can still find it", async () => {
+    await onTrial();
+    await cancel("too_expensive");
+
+    const after = await prisma.subscription.findUniqueOrThrow({
+      where: { businessId },
+      select: { status: true, cancelledAt: true, endsAt: true, trialEndsAt: true },
+    });
+    // Still a trial, still ending on its own date, and nothing scheduled.
+    expect(after.status).toBe("trialing");
+    expect(after.cancelledAt).toBeNull();
+    expect(after.endsAt).toBeNull();
+    expect(after.trialEndsAt).not.toBeNull();
+
+    // No change row, so nothing for the daily job to apply.
+    const changes = await prisma.subscriptionChange.count({
+      where: { businessId, appliedAt: null, withdrawnAt: null },
+    });
+    expect(changes).toBe(0);
+  });
+
+  it("books no revenue movement for money nobody paid", async () => {
+    const before = await prisma.mrrMovement.count({ where: { businessId } });
+    await onTrial();
+    await cancel("too_expensive");
+    expect(await prisma.mrrMovement.count({ where: { businessId } })).toBe(before);
   });
 });

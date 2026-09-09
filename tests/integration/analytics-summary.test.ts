@@ -249,3 +249,179 @@ describe("who may read it", () => {
     expect(await analyticsSummary(owner, stranger.id, NOW)).toBeNull();
   });
 });
+
+describe("the cohort median names whose median it is", () => {
+  /**
+   * The wave-4 fix batch, and the reason it shipped broken: **no test ever
+   * rendered a non-null median.**
+   *
+   * `medianNote` computed the emirate and threw it away, and the page passed
+   * `category: ""` and `emirate: ""` into *"a {median} median for {category} in
+   * {emirate}"*. `t()` only reports a param that is `undefined`, so two empty
+   * strings interpolated in silence and the sentence rendered as "median for
+   * in ." — on the one page whose argument is that its numbers are true.
+   *
+   * ## Why this builds its own listing
+   *
+   * `MIN_MEDIAN_COHORT` is eight, and the floor is a policy decision rather
+   * than a statistical one: a median over three suppliers plus your own number
+   * tells you most of a competitor's. No seeded business with an owner seat has
+   * eight peers in its category and emirate — the only cohort that size is the
+   * HVAC block, and those listings have no team. So the subject is made here,
+   * inside that cohort, and removed again.
+   */
+  const MADE = `zz-3l-median-${Date.now()}`;
+  let subjectId = "";
+  let subjectOwner: Actor;
+  let peerIds: string[] = [];
+  let day = new Date();
+  let previousDay = new Date();
+
+  async function build(): Promise<boolean> {
+    const dubaiPeers = await prisma.business.findMany({
+      where: {
+        publishedAt: { not: null },
+        suspendedAt: null,
+        locations: { some: { published: true, emirate: "dubai" } },
+      },
+      orderBy: { slug: "asc" },
+      select: { id: true, primaryCategoryId: true },
+    });
+    const byCategory = new Map<string, string[]>();
+    for (const peer of dubaiPeers) {
+      byCategory.set(peer.primaryCategoryId, [
+        ...(byCategory.get(peer.primaryCategoryId) ?? []),
+        peer.id,
+      ]);
+    }
+    const biggest = [...byCategory.entries()].sort((a, b) => b[1].length - a[1].length)[0];
+    if (!biggest || biggest[1].length < 8) return false;
+    const [categoryId, peers] = biggest;
+    peerIds = peers.slice(0, 10);
+
+    const area = await prisma.area.findFirstOrThrow({
+      where: { emirate: "dubai" },
+      select: { id: true },
+    });
+
+    const made = await prisma.business.create({
+      data: {
+        tradeName: MADE,
+        displayName: MADE,
+        slug: MADE,
+        licenceNumber: `MED-${Date.now().toString().slice(-8)}`,
+        licenceAuthority: "DED",
+        licenceExpiry: new Date(Date.now() + 300 * 86_400_000),
+        primaryCategoryId: categoryId,
+        claimStatus: "claimed",
+        planId: "pro",
+        publishedAt: new Date(),
+        locations: {
+          create: {
+            type: "head_office",
+            emirate: "dubai",
+            areaId: area.id,
+            addressLine: "Unit 1, Street 1",
+            published: true,
+          },
+        },
+      },
+      select: { id: true },
+    });
+    subjectId = made.id;
+
+    const user = await prisma.user.create({
+      data: {
+        id: crypto.randomUUID(),
+        fullName: "Median Fixture Owner",
+        roles: ["seller_owner"],
+        businessId: subjectId,
+      },
+      select: { id: true, roles: true },
+    });
+    subjectOwner = actorFromDevSeller({
+      userId: user.id,
+      roles: user.roles,
+      businessId: subjectId,
+    });
+
+    day = dubaiDayStart(new Date(NOW.getTime() - 5 * 86_400_000));
+    /*
+       And a day in the *previous* window, for the subject.
+
+       `analyticsSummary` suppresses the median when the previous period is
+       empty — week one is a state, not an error, and a cohort comparison on a
+       page that has no comparison of its own would be the one figure making a
+       claim the rest of the page refuses to. So the fixture has to be in its
+       second window before the note renders at all.
+    */
+    previousDay = dubaiDayStart(new Date(NOW.getTime() - 40 * 86_400_000));
+
+    for (const [index, id] of [subjectId, ...peerIds].entries()) {
+      await prisma.searchImpressionDay.create({
+        data: {
+          businessId: id,
+          day,
+          normalised: `${MADE}-${index}`,
+          impressions: 100,
+          bestRank: 1,
+        },
+      });
+      await prisma.listingViewDay.upsert({
+        where: { businessId_day: { businessId: id, day } },
+        create: { businessId: id, day, views: 10 + index },
+        update: { views: 10 + index },
+      });
+    }
+
+    await prisma.searchImpressionDay.create({
+      data: {
+        businessId: subjectId,
+        day: previousDay,
+        normalised: `${MADE}-prev`,
+        impressions: 80,
+        bestRank: 2,
+      },
+    });
+    await prisma.listingViewDay.upsert({
+      where: { businessId_day: { businessId: subjectId, day: previousDay } },
+      create: { businessId: subjectId, day: previousDay, views: 8 },
+      update: { views: 8 },
+    });
+    return true;
+  }
+
+  async function tearDown() {
+    if (!subjectId) return;
+    await prisma.searchImpressionDay.deleteMany({
+      where: { normalised: { startsWith: MADE } },
+    });
+    await prisma.listingViewDay.deleteMany({
+      where: { businessId: { in: [subjectId, ...peerIds] }, day: { in: [day, previousDay] } },
+    });
+    await prisma.user.deleteMany({ where: { businessId: subjectId } });
+    await prisma.business.delete({ where: { id: subjectId } });
+    subjectId = "";
+  }
+
+  it("carries the category and the emirate the comparison is against", async () => {
+    const built = await build();
+    try {
+      expect(built, "the seed should hold one Dubai category with eight listings").toBe(true);
+
+      const summary = await analyticsSummary(subjectOwner, subjectId, NOW);
+      expect(summary?.median, "the cohort should clear the floor").not.toBeNull();
+      /*
+         Neither is empty, which is the whole defect. An empty string is not a
+         missing param, so nothing failed and the sentence rendered with a gap
+         in it — the reason this needed a test that gets as far as a median at
+         all rather than one that asserts the null.
+      */
+      expect(summary!.median!.category.trim().length).toBeGreaterThan(0);
+      expect(summary!.median!.emirate).toBe("dubai");
+      expect(summary!.median!.cohortSize).toBeGreaterThanOrEqual(8);
+    } finally {
+      await tearDown();
+    }
+  });
+});

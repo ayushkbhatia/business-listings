@@ -86,6 +86,18 @@ export type ChangeRailProps =
       fromDateAmount: string;
       inclVat: string;
       lines: QuoteLine[];
+      /**
+       * Said when the billing-period toggle is on a term the seller is not
+       * paying on. Board 11f's follow-up audit.
+       *
+       * The columns compare annual prices when the toggle is flipped, and the
+       * quote beside them is for the seller's own term — so a monthly seller
+       * could read AED 8,990 in the Pro column and AED 943.95 in this rail and
+       * have no way to tell which one the button charges. The screen already
+       * knew: the comment above `termQuote` in page.tsx says the two "are never
+       * quoted together". It just never said it where a seller was looking.
+       */
+      termMismatch: { note: string; linkLabel: string; href: string } | null;
       keepEyebrow: string;
       keepIntro: string | null;
       keepRows: KeepRow[];
@@ -247,6 +259,18 @@ export function ChangeRail(props: ChangeRailProps) {
             </dd>
           </div>
         </div>
+
+        {props.termMismatch && (
+          <p className="mt-3.5 border-t border-line pt-3.5 text-caption leading-relaxed text-warn-ink">
+            {props.termMismatch.note}{" "}
+            <Link
+              href={props.termMismatch.href}
+              className="underline underline-offset-2 hover:text-ink"
+            >
+              {props.termMismatch.linkLabel}
+            </Link>
+          </p>
+        )}
       </Card>
 
       {(props.keepIntro || props.storageNote) && (

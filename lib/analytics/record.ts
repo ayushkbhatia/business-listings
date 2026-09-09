@@ -119,6 +119,26 @@ export async function recordSearchImpressions(
  * identity — and because a null never equals a null in SQL, the identity is two
  * partial unique indexes rather than one. The `ON CONFLICT` target has to name
  * the matching predicate, which is why this branches.
+ *
+ * ## What reads it, and what it is *not* the source of
+ *
+ * `lib/analytics/position.ts` reads it, and reads it for one thing: **which
+ * scope a seller is browsed in**. A Dubai supplier may be browsed country-wide
+ * in one category and filtered to Dubai in another, and only impressions know
+ * which — so this supplies the scope and `CategoryRankDay`'s nightly snapshot
+ * supplies the position.
+ *
+ * That division matters and it is the 3a/3l amendment's whole argument. This is
+ * a **counter**: it writes when a real buyer loads a page, behind the crawler
+ * gate. A category nobody browsed on Tuesday has no Tuesday row, so a movement
+ * computed across that hole compares Monday to Thursday and calls it a day. The
+ * snapshot exists because a position has to be computed whether anybody looked
+ * or not; this exists because a snapshot cannot know where somebody looked
+ * *from*.
+ *
+ * It spent a release written and read by nothing, which is worth remembering
+ * rather than tidying away: board `3a`'s card was hidden pending `3l`, `3l`
+ * landed, and the switch was not flipped until the amendment.
  */
 export async function recordCategoryPositions(
   businessIds: readonly string[],

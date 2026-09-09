@@ -53,6 +53,14 @@ export default async function CancelConfirmPage() {
   ]);
 
   if (!view) redirect("/dashboard/billing");
+  /*
+     A trial has no reason to give and nothing to confirm.
+
+     Step 1 is where the sentence lives — the trial ends on its own date and
+     nothing is charged — so this route sends the seller back to read it rather
+     than asking them why they are cancelling something that is already ending.
+  */
+  if (view.kind === "trial") redirect("/dashboard/billing/cancel");
   // Criterion 10. Once it is scheduled, this route stops being reachable and
   // the banner on billing is where the seller acts from.
   if (view.scheduled) redirect("/dashboard/billing");

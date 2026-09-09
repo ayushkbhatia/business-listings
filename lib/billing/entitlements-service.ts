@@ -31,6 +31,9 @@ const PLAN_SELECT = {
   categoryLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
   customDomain: true, analytics: true, csvImport: true, sponsoredEligible: true,
   sortOrder: true,
+  // Not a cap and not in `PlanCaps` — read so the withdrawal can be compared by
+  // value rather than written blind. See `withdrawalMoved`.
+  withdrawnAt: true,
 } as const;
 
 function toCaps(row: {
@@ -63,6 +66,8 @@ export interface PlanRow extends PlanCaps {
   subscriptions: number;
   /** How many of those are grandfathered on different numbers. */
   grandfathered: number;
+  /** Board 1l criterion 12. Null means on sale. Not a cap, so not in PlanCaps. */
+  withdrawnAt: Date | null;
 }
 
 /**
@@ -101,7 +106,14 @@ export async function planLibrary(): Promise<PlanRow[]> {
         grandfathered += 1;
       }
     }
-    return { ...caps, subscriptions: plan.subscriptions.length, grandfathered };
+    return {
+      ...caps,
+      // Not a cap, so it is not in `caps` — carried through for the screen,
+      // which now has a control for it. See `EditPlanInput.withdrawnAt`.
+      withdrawnAt: plan.withdrawnAt,
+      subscriptions: plan.subscriptions.length,
+      grandfathered,
+    };
   });
 }
 
@@ -128,8 +140,45 @@ export interface EditPlanInput {
      */
     storageMb: number | null;
     teamSeats: number;
+    /**
+     * Categories a listing may claim. The fifth numeric cap.
+     *
+     * Board 11f renders it as its own comparison row, so a seller reads it —
+     * and until this batch nobody could change it without writing the row by
+     * hand, which skips the audit row every other entitlement change writes.
+     */
+    categoryLimit: number | null;
     customDomain: boolean;
+    /*
+       The three switches board 11f renders beside the caps.
+
+       Same argument as `storageMb` above: each is a row a seller compares plans
+       on, each is read by real code — `analytics` gates /dashboard/analytics and
+       its export, `csvImport` gates the mapper, `sponsoredEligible` gates the
+       placement screen — and none had a writer.
+    */
+    analytics: boolean;
+    csvImport: boolean;
+    sponsoredEligible: boolean;
     }>;
+  /**
+   * Withdraw the plan from sale, or put it back. Board 1l criterion 12.
+   *
+   * Beside `changes` rather than inside it, because it is not an entitlement:
+   * it changes nothing for anybody already on the plan, and it must not reach
+   * `snapshotOf`. What it changes is whether the plan can be *bought*.
+   *
+   * Five surfaces read `Plan.withdrawnAt` — `isPurchasable`, the onboarding
+   * plan step, the trial gate, `11f`'s change screen and the plan-cohort
+   * metric — and nothing wrote it, so a plan could be taken off sale only in
+   * the database.
+   *
+   * An intent rather than a date: the column stores *when*, and that is this
+   * function's to stamp. A caller-supplied date is a date somebody could
+   * choose, and re-saving an already-withdrawn plan would move it — which
+   * would make "withdrawn on the 14th" mean the date of the last edit.
+   */
+  withdrawn?: boolean;
   /**
    * Rewrite the snapshots of everybody already on this plan.
    *
@@ -178,6 +227,15 @@ export async function editPlanEntitlements(
   const moved = (Object.keys(input.changes) as (keyof PlanCaps)[]).filter(
     (key) => before[key] !== after[key],
   );
+  /*
+     Withdrawal counts as a change, and it is a change of *state* rather than of
+     date: on-sale to withdrawn, or back. Re-saving a plan that is already
+     withdrawn moves nothing, which is what keeps `nothing_changed` honest and
+     keeps the original date on the row.
+  */
+  const withdrawalMoved =
+    input.withdrawn !== undefined && input.withdrawn !== (plan.withdrawnAt !== null);
+  if (withdrawalMoved) moved.push("withdrawnAt" as keyof PlanCaps);
   if (moved.length === 0) {
     return {
       ok: false,
@@ -196,7 +254,13 @@ export async function editPlanEntitlements(
         tx,
       },
       async () => {
-        await tx.plan.update({ where: { id: plan.id }, data: input.changes });
+        await tx.plan.update({
+          where: { id: plan.id },
+          data: {
+            ...input.changes,
+            ...(withdrawalMoved ? { withdrawnAt: input.withdrawn ? now : null } : {}),
+          },
+        });
 
         let updated = 0;
         if (input.applyToExisting) {

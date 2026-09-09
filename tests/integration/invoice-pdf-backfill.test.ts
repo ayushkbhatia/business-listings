@@ -195,3 +195,49 @@ describe("what the sweep reports", () => {
     expect(result.capped).toBe(false);
   });
 });
+
+describe("a document that cannot be compliant is never frozen", () => {
+  /**
+   * Board 11g's follow-up audit.
+   *
+   * `writeInvoicePdf` refused a draft and nothing else, and `pdfPath` is written
+   * once and never re-rendered. So an invoice raised before board 11g froze the
+   * supplier snapshot — `supplierName` null, which `documentOf` maps to an empty
+   * string — was rendered with **no supplier in the head** and then frozen that
+   * way, permanently, by a backfill whose whole purpose was to repair the
+   * absence of a document.
+   */
+  it("refuses an invoice with no supplier snapshot, with a reason somebody can read", async () => {
+    const invoice = await issue();
+    await prisma.invoice.update({
+      where: { id: invoice.id },
+      data: { supplierName: null },
+    });
+
+    const result = await writeInvoicePdf(invoice.id);
+    expect(result.ok).toBe(false);
+    expect(result.skipped).toBe(false);
+    expect(result.reason).toContain("supplier");
+
+    const after = await prisma.invoice.findUniqueOrThrow({
+      where: { id: invoice.id },
+      select: { pdfPath: true, pdfBytes: true },
+    });
+    // Nothing written, so the next run can still repair it once the snapshot is
+    // there. A frozen bad document could not be.
+    expect(after.pdfPath).toBeNull();
+    expect(after.pdfBytes).toBeNull();
+  });
+
+  it("carries that refusal into the sweep's own report rather than losing it", async () => {
+    // The sweep counts it as a failure with its reason, which is what puts it
+    // in the daily job's step report. A silent skip would leave an invoice with
+    // no document and nobody looking for it.
+    const invoice = await issue();
+    await prisma.invoice.update({ where: { id: invoice.id }, data: { supplierName: null } });
+
+    const result = await writeMissingInvoicePdfs(50);
+    expect(result.failed).toBeGreaterThan(0);
+    expect(result.reasons.join(" ")).toContain("supplier");
+  });
+});

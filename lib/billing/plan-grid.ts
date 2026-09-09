@@ -275,10 +275,15 @@ export function shortfallsOf(
          The other three resolve to rows the seller can pick between — this
          product or that one — and picking is a real act with a real result. A
          gigabyte does not: files are removed on board 3i and a downgrade removes
-         none of them. What actually happens is that the media library refuses
-         the next upload until the seller is back under the cap, which is
-         already true today in `app/(dashboard)/dashboard/media/actions.ts` and
-         is what the panel says instead of offering a chooser.
+         none of them. What actually happens is that the next upload is refused
+         until the seller is back under the cap — `storageRoom` in
+         `lib/media/service.ts`, which both writers into the media bucket call.
+
+         That claim used to name only `app/(dashboard)/dashboard/media/actions.ts`,
+         and it was half true: the setup-photos task checked the *photo count*
+         and signed the URL without reading the storage cap at all, then wrote a
+         row whose bytes every other reader counted. One function now, so a
+         third upload path cannot be added without meeting it.
       */
       choosable: row.key !== "storage",
     });

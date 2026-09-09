@@ -31,6 +31,12 @@ export interface PlanRowView {
   photoLimit: number | null;
   storageMb: number | null;
   teamSeats: number;
+  categoryLimit: number | null;
+  analytics: boolean;
+  csvImport: boolean;
+  sponsoredEligible: boolean;
+  /** Board 1l criterion 12. Null means on sale. */
+  withdrawnAt: string | null;
   subscriptions: number;
   grandfathered: number;
 }
@@ -42,6 +48,28 @@ const CAPS = [
   { field: "photoLimit", labelKey: "admin.plans.col.photos" },
   { field: "storageMb", labelKey: "admin.plans.col.storage" },
   { field: "teamSeats", labelKey: "admin.plans.col.seats" },
+  /*
+     The fifth numeric cap, added by the wave-4 fix batch.
+
+     Board 11f renders `categoryLimit` as its own comparison row, so a seller
+     reads it against the plan they are considering — and it had no editor, no
+     `EditPlanInput` field and no other writer. A number a seller compares plans
+     on that only the database can change is the same defect `storageMb` had.
+  */
+  { field: "categoryLimit", labelKey: "admin.plans.col.categories" },
+] as const;
+
+/**
+ * The three entitlements that are switches rather than numbers.
+ *
+ * Each gates real code — `analytics` the analytics page and its CSV export,
+ * `csvImport` the import mapper, `sponsoredEligible` the placement screen — and
+ * each is a row on board 11f's comparison. None of them had a writer.
+ */
+const SWITCHES = [
+  { field: "analytics", labelKey: "admin.plans.col.analytics" },
+  { field: "csvImport", labelKey: "admin.plans.col.csv" },
+  { field: "sponsoredEligible", labelKey: "admin.plans.col.sponsored" },
 ] as const;
 
 const MIN_REASON = 4;
@@ -63,6 +91,8 @@ export function PlanEditor({
   const [reason, setReason] = useState("");
   const [applyToExisting, setApply] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({});
+  const [switches, setSwitches] = useState<Record<string, boolean>>({});
+  const [withdrawn, setWithdrawn] = useState(false);
   const [result, setResult] = useState<ActionResult | null>(null);
   const [pending, startTransition] = useTransition();
   const reasonId = useId();
@@ -89,7 +119,14 @@ export function PlanEditor({
       */
       storageMb: plan.storageMb === null ? "" : String(plan.storageMb),
       teamSeats: String(plan.teamSeats),
+      categoryLimit: plan.categoryLimit === null ? "" : String(plan.categoryLimit),
     });
+    setSwitches({
+      analytics: plan.analytics,
+      csvImport: plan.csvImport,
+      sponsoredEligible: plan.sponsoredEligible,
+    });
+    setWithdrawn(plan.withdrawnAt !== null);
   }
 
   function submit() {
@@ -99,6 +136,12 @@ export function PlanEditor({
     form.set("reason", reason);
     if (applyToExisting) form.set("applyToExisting", "on");
     for (const { field } of CAPS) form.set(field, values[field] ?? "");
+    // Posted as present/absent, the way a checkbox arrives in a form. The
+    // action reads all three unconditionally so an unticked one is `false`
+    // rather than "unchanged" — a switch that could only ever be turned on
+    // would be worse than none.
+    for (const { field } of SWITCHES) if (switches[field]) form.set(field, "on");
+    if (withdrawn) form.set("withdrawn", "on");
 
     startTransition(async () => {
       const outcome = await save(form);
@@ -154,6 +197,19 @@ export function PlanEditor({
       numeric: true,
       hideBelow: "lg",
       render: (row) => formatCount(row.teamSeats),
+    },
+    {
+      key: "sale",
+      header: t("admin.plans.col.sale"),
+      hideBelow: "lg",
+      render: (row) =>
+        row.withdrawnAt === null ? (
+          <span className="text-faint">—</span>
+        ) : (
+          <span className="text-warn-ink">
+            {t("admin.plans.withdrawn_badge")} · {row.withdrawnAt}
+          </span>
+        ),
     },
     {
       key: "accounts",
@@ -226,6 +282,36 @@ export function PlanEditor({
                 />
               </div>
             ))}
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2 border-t border-line pt-4">
+            {SWITCHES.map(({ field, labelKey }) => (
+              <Checkbox
+                key={field}
+                checked={switches[field] ?? false}
+                onChange={(event) =>
+                  setSwitches((current) => ({ ...current, [field]: event.target.checked }))
+                }
+                label={t(labelKey)}
+              />
+            ))}
+          </div>
+
+          {/*
+             Board 1l criterion 12, which had five readers and no writer.
+
+             Separate from the caps by a rule rather than by layout: withdrawing
+             changes nothing for anybody already on the plan and must not reach
+             the entitlement snapshot. What it changes is whether the plan can
+             be bought.
+          */}
+          <div className="mt-4 border-t border-line pt-4">
+            <Checkbox
+              checked={withdrawn}
+              onChange={(event) => setWithdrawn(event.target.checked)}
+              label={t("admin.plans.withdraw_label")}
+              description={t("admin.plans.withdraw_hint")}
+            />
           </div>
 
           <p className="mt-3 max-w-prose text-caption text-muted">

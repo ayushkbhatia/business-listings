@@ -700,36 +700,65 @@ export async function changeTerm(
 
     if (quote.proration.netFils === 0) return null;
 
-    const invoice = await tx.invoice.create({
-      data: {
-        ref: reference,
-        businessId,
-        status: "issued",
-        issuedAt: now,
-        lines: {
-          create: [
-            {
-              kind: "subscription",
-              description: `${quote.planName}, ${toTerm === "annual" ? "one year" : "one month"}`,
-              amountAed: filsToAed(quote.proration.chargeLine.fils),
-            },
-            ...(quote.proration.creditLine.fils > 0
-              ? [
-                  {
-                    kind: "subscription_credit" as const,
-                    description: `${quote.planName}, ${quote.proration.daysRemaining} unused days`,
-                    amountAed: `-${filsToAed(quote.proration.creditLine.fils)}`,
-                  },
-                ]
-              : []),
-          ],
-        },
-      },
-      select: { id: true },
+    /*
+       Through `issueInvoice`, like every other invoice on this platform.
+
+       This built the row inline until board 11c's follow-up audit, and it was
+       the last `tx.invoice.create` outside the issuer. What that cost: a
+       `TERM-…` reference nobody could quote at a bank, `status: "issued"` on an
+       invoice for money the charge above had *already taken* — which
+       `invoiceList` counts into `outstandingFils`, so `/admin/invoices` showed
+       the platform owed money it had collected — no stored totals, no frozen
+       billed party, and a null `pdfPath` that made board 11g's download route
+       404. Every one of those is a promise board 11g makes about the document,
+       kept on one path and not the other.
+    */
+    const card = await tx.paymentMethod.findUnique({
+      where: { businessId },
+      select: { brand: true, last4: true },
     });
+
+    const invoice = await issueInvoice(
+      {
+        businessId,
+        issuedAt: now,
+        // Paid, because the charge succeeded before this transaction opened.
+        paidAt: now,
+        paidBy: card,
+        vatRate: quote.proration.vatRate,
+        pspRef: reference,
+        subscriptionRef: `SUB-${card?.last4 ?? "0000"}-${plan.id.toUpperCase()}`,
+        lines: [
+          {
+            kind: "subscription",
+            description: `${quote.planName}, ${toTerm === "annual" ? "one year" : "one month"}`,
+            fils: quote.proration.chargeLine.fils,
+            periodStart: now,
+            periodEnd: quote.renewsAt,
+          },
+          ...(quote.proration.creditLine.fils > 0
+            ? [
+                {
+                  kind: "subscription_credit" as const,
+                  description: `${quote.planName}, ${quote.proration.daysRemaining} unused days`,
+                  fils: -quote.proration.creditLine.fils,
+                  periodStart: now,
+                  periodEnd: quote.renewsAt,
+                },
+              ]
+            : []),
+        ],
+      },
+      tx,
+    );
 
     return invoice.id;
   });
+
+  // The PDF after the transaction commits, for the reason `changePlan` gives:
+  // object storage is a different system, and holding a write transaction open
+  // across a network call is how a slow bucket becomes a database incident.
+  if (invoiceId) await writeInvoicePdf(invoiceId);
 
   // A term change is never scheduled: there is no period end to wait for when
   // the period itself is what is changing.

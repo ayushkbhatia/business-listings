@@ -1,6 +1,7 @@
 import "server-only";
 import { Prisma, type CancelReason } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
+import { storageUsedBytes } from "@/lib/media/service";
 import { assertCanChangePlan } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import { effectiveCaps, monthStart, type PlanCaps } from "@/lib/plan/entitlements";
@@ -106,6 +107,25 @@ export interface CancellationView {
   nothingReduced: boolean;
 }
 
+/**
+ * What the two cancel routes get back. Board 11c's follow-up audit.
+ *
+ * `cancellationView` returned `CancellationView | null` and the routes 404'd on
+ * the null, which was right for a seller already on Free and wrong for one on a
+ * **trial**: they reached the page from the Cancel card on `3m` and met a
+ * not-found. Worse, `scheduleCancellation` accepted them — its guards excluded
+ * only `cancelled` and `expired` — and wrote `status: "active"`, which took the
+ * subscription out of `expireTrials`, started counting it in `mrrNow` for money
+ * nobody had paid, and then booked a full-value churn movement at trial end.
+ *
+ * A trial already ends by itself into `expired` and drops to Free. So
+ * cancelling one is asking for exactly what is going to happen, and the honest
+ * answer is a sentence rather than a state change.
+ */
+export type CancellationOutcome =
+  | ({ kind: "cancellable" } & CancellationView)
+  | { kind: "trial"; planName: string; trialEndsOn: Date };
+
 const PLAN_SELECT = {
   id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
   locationLimit: true, photoLimit: true, categoryLimit: true, storageMb: true, teamSeats: true,
@@ -131,7 +151,9 @@ function toCaps(row: PlanRow): PlanCaps {
  *
  * Returns null where there is nothing to cancel — a seller already on Free, or
  * one whose cancellation has already landed. Both routes 404 on it, which is
- * criterion 9's second half and criterion 10.
+ * criterion 9's second half and criterion 10. A **trial** comes back as its own
+ * outcome rather than as a null: there is something to say, and a 404 to a
+ * seller who clicked Cancel on `3m` says none of it.
  *
  * Owner only. The permission matrix gives *Change plan or cancel* to the owner
  * and to nobody else, and `11f` fences the same capability the same way — the
@@ -143,14 +165,14 @@ export async function cancellationView(
   actor: Actor,
   businessId: string,
   now = new Date(),
-): Promise<CancellationView | null> {
+): Promise<CancellationOutcome | null> {
   assertCanChangePlan(actor);
   if (actor.businessId !== businessId) return null;
 
   const since = monthStart(now);
   const lastMonthStart = new Date(Date.UTC(since.getUTCFullYear(), since.getUTCMonth() - 1, 1));
 
-  const [business, freePlan, products, locations, seats, media, enquiries, importRun, placement, pending, recipient] =
+  const [business, freePlan, products, locations, seats, storageBytes, enquiries, importRun, placement, pending, recipient] =
     await Promise.all([
       prisma.business.findUniqueOrThrow({
         where: { id: businessId },
@@ -164,6 +186,7 @@ export async function cancellationView(
             select: {
               term: true,
               status: true,
+              trialEndsAt: true,
               renewsAt: true,
               cancelledAt: true,
               endsAt: true,
@@ -176,7 +199,14 @@ export async function cancellationView(
       prisma.product.count({ where: { businessId, status: "live" } }),
       prisma.location.count({ where: { businessId, published: true } }),
       seatsUsed(businessId, now),
-      prisma.media.aggregate({ where: { businessId }, _sum: { bytes: true } }),
+      /*
+         Through the one definition, not a fourth reading of the table.
+
+         This aggregated *all* media — buyers' review photographs included — and
+         no documents, while `storageUsedBytes` refused an upload on a different
+         set. So the meter a seller read was not the number that stopped them.
+      */
+      storageUsedBytes(businessId),
       /*
          Last *calendar* month, not the last thirty days.
 
@@ -219,6 +249,28 @@ export async function cancellationView(
   if (Number(business.plan.monthlyPriceAed) === 0) return null;
   if (!freePlan) return null;
 
+  /*
+     A trial is not a subscription to cancel.
+
+     `expireTrials` ends it into `expired` and drops the business to Free on its
+     own date, and writes no churn movement because nobody paid. Letting the
+     cancel flow through instead wrote `status: "active"` over the trial — which
+     took it out of that sweep, started counting it as recurring revenue in
+     `mrrNow`, and then booked a churn at the full monthly value the trial had
+     never generated.
+
+     So the routes render a sentence and write nothing. Same shape as the
+     already-on-Free case above; the difference is that this one has something
+     worth saying, so it is a state rather than a 404.
+  */
+  if (subscription.status === "trialing" && subscription.trialEndsAt) {
+    return {
+      kind: "trial",
+      planName: business.plan.name,
+      trialEndsOn: subscription.trialEndsAt,
+    };
+  }
+
   const plan = effectiveCaps(toCaps(business.plan), subscription.entitlementSnapshot);
   const free = toCaps(freePlan);
 
@@ -226,7 +278,7 @@ export async function cancellationView(
     products,
     locations,
     seats,
-    storageMb: Math.ceil(Number(media._sum.bytes ?? 0) / (1024 * 1024)),
+    storageMb: Math.ceil(storageBytes / (1024 * 1024)),
   };
 
   const facts: CancelFacts = {
@@ -258,6 +310,7 @@ export async function cancellationView(
   const rows = consequenceTable(facts);
 
   return {
+    kind: "cancellable",
     planName: business.plan.name,
     term: subscription.term,
     freeStartsOn: subscription.renewsAt,
@@ -304,7 +357,9 @@ export type ScheduleCancelResult =
         | "already_cancelling"
         | "bad_reason"
         | "note_required"
-        | "closing_is_not_a_cancellation";
+        | "closing_is_not_a_cancellation"
+        /** A trial ends by itself. See the guard, and `expireTrials`. */
+        | "on_trial";
     };
 
 /**
@@ -365,6 +420,19 @@ export async function scheduleCancellation(
   if (!subscription) return { ok: false, error: "no_subscription" };
   if (subscription.status === "cancelled" || subscription.status === "expired") {
     return { ok: false, error: "no_subscription" };
+  }
+  /*
+     A trial, refused here and not only on the screen.
+
+     `cancellationView` renders the sentence; this is the half that matters,
+     because the screen is not what protects the record. Writing a cancellation
+     over a trial set `status: "active"` — the subscription left `expireTrials`,
+     entered `mrrNow` as recurring revenue nobody had paid, and a churn movement
+     at the full monthly value followed at trial end. Three wrong numbers on the
+     revenue board from one seller pressing a button.
+  */
+  if (subscription.status === "trialing") {
+    return { ok: false, error: "on_trial" };
   }
   // A subscription on a plan that costs nothing has nothing to cancel, and the
   // change row it would write goes from Free to Free — which the
