@@ -76,7 +76,7 @@ export const SURFACE_GROUPS: readonly SurfaceGroup[] = [
       { href: "/dashboard/analytics", what: "Where enquiries come from" },
       { href: "/dashboard/promote", what: "Boosts and placements" },
       { href: "/dashboard/billing", what: "Subscription" },
-      { href: "/dashboard/domain", what: "Custom domain" },
+      { href: "/dashboard/domain", what: "Their own web address", board: "5e" },
       { href: "/dashboard/team", what: "Seats, roles, lead routing", board: "7d" },
       { href: "/dashboard/settings", what: "Alerts and quiet hours" },
     ],

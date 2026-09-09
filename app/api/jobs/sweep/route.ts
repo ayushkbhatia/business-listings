@@ -1,7 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { deliverQueued, flushDeferred } from "@/lib/notify/service";
 import { sweepAlerts } from "@/lib/alerts/service";
-import { pollDomains } from "@/lib/domains/service";
 import { sweepEscalations } from "@/lib/enquiry/escalation-job";
 import { sweepFollowUps } from "@/lib/messaging/follow-up";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
@@ -11,11 +10,15 @@ import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
  * does not grow with the directory.
  *
  * Escalating unanswered enquiries, sending the follow-ups sellers armed,
- * releasing notifications held back for UAE quiet hours, matching saved buyer
- * alerts against newly listed products, and polling custom-domain DNS. Each
- * reads a bounded set — leads past their threshold, follow-ups due, deferred
- * deliveries, alerts not yet notified, domains awaiting verification — so this
- * run costs roughly the same at five thousand listings as at five hundred.
+ * releasing notifications held back for UAE quiet hours, and matching saved
+ * buyer alerts against newly listed products. Each reads a bounded set — leads
+ * past their threshold, follow-ups due, deferred deliveries, alerts not yet
+ * notified — so this run costs roughly the same at five thousand listings as at
+ * five hundred.
+ *
+ * A fifth step polled custom-domain DNS hourly until 9 Sep 2026. A seller's web
+ * address is a label under our own zone now, so there is no record anywhere
+ * that anybody has to wait for and nothing left to poll.
  *
  * The heading used to say "three of them" over a list that had grown to five.
  * A count written into prose beside a list that grows is a number that goes
@@ -109,14 +112,6 @@ export async function GET(request: NextRequest) {
        measurements did not.
     */
     alerts: () => sweepAlerts(),
-    /*
-       Board 5e asks for a check every sixty seconds and this is hourly, which
-       is a real gap already — a seller who has just pointed their DNS watches
-       "Waiting" for longer than the board describes. Daily would make that a
-       day. Only businesses with a custom domain are read, and that is a paid
-       feature, so the query is small however large the directory gets.
-    */
-    domains: () => pollDomains(),
   });
 
   console.info("[jobs] sweep", outcome.steps);

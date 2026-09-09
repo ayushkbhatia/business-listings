@@ -65,7 +65,17 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
       name: business.displayName,
       count: business.locations.length,
     }),
-    alternates: { canonical: `/b/${slug}/branches` },
+    /*
+       From `business.slug`, never from the route parameter.
+
+       A storefront answers on two paths since 9 Sep 2026: its slug, and the
+       label on the seller's own web address, which `proxy.ts` rewrites to
+       `/b/<label>`. Building the canonical from the parameter would have each
+       address declare itself canonical, which is the whole of what a canonical
+       is for. `metadataBase` is `NEXT_PUBLIC_SITE_URL`, so this resolves to the
+       directory's host whichever one served the page.
+    */
+    alternates: { canonical: `/b/${business.slug}/branches` },
   };
 }
 

@@ -35,10 +35,11 @@ and add it*.
    buyer half in its Phase 5 and calls it the largest coherent gap. Every route exists. The
    tracking page's own Compare button 404s, and the live review-request email links a URL that
    `tests/e2e/reviews.spec.ts:40` *asserts* returns 404. It moves to Phase 3.
-3. **The storefront builder is one shipped system with one fatal gap.** Eight "from scratch"
-   boards are a working sector-scoped tool with fifteen renderers and a publish path with an
-   integration test. There is no `middleware.ts` at the repo root, so a verified custom domain
-   serves nothing — while `Plan.customDomain` is an entitlement on the pricing grid.
+3. **The storefront builder is one shipped system, and its gap was smaller than reported.** Eight
+   "from scratch" boards are a working sector-scoped tool with fifteen renderers and a publish
+   path with an integration test. Nothing served a hostname — but the claim that no middleware
+   existed was wrong: Next renames it `proxy.ts` here, and that file was already wired. Closed on
+   9 Sep 2026 by the subdomain work.
 4. **Half the dependency graph is not load-bearing.** Twenty-one boards report `blockedBy:
    nothing`. `10a` does not wait on `4d`. `10c` is not gated on D3 — it has no facet rail at all.
    `10d` compares ten fixed business attributes and touches the dictionary nowhere. Three real
@@ -195,20 +196,17 @@ per the working agreement: one production deploy, not twelve.
   `selection.recipients`, which is the matcher's top N and would have silently dropped a supplier
   the buyer deliberately ticked. `takeSlot` reads `sponsoredEligible` through `effectiveFor`, so a
   Free-plan owner is refused by name and a grandfathered seller keeps what they bought.
-- [x] **1.7 Decided, 9 Sep 2026: custom domains are cut.** Not "build the middleware later" —
-  removed entirely, and every trace with it. Production holds zero `custom_domain` rows, so no
-  customer loses anything; Pro advertises it and nobody has ever used it.
+- [x] **1.7 Decided, 9 Sep 2026, twice.** First the feature was cut; the cut branch was
+  deleted before anything shipped. The standing decision is the second one: **domains stay, as a
+  label under our own zone.** `indus-hydraulics` gets
+  `indushydraulics.businesslistings.me`. Pro only, label derived from the slug, `/b/<slug>` stays
+  canonical.
 
-  **The cut is two PRs, in this order, and the order is not optional.** A drop is the mirror of an
-  additive migration: the code that reads the column has to stop reading it *first*, or live code
-  queries a column that is gone. So — one PR removing `/dashboard/domain`, `lib/domains/`, the
-  sweep's `domains` step, the plan-grid row, the entitlement, the strings and the tests, leaving
-  the schema alone; then, once that deploy is live, a second PR dropping `CustomDomain` and
-  `Plan.customDomain`. The second stops for a person under *How work lands*.
-
-  Touches ~45 files. Also removes `5e` from Phase 8, one column from the plan comparison table,
-  and one of the five unwritable Plan fields from 6.1. The eight existing entitlement snapshots
-  name `customDomain` in frozen JSON; the key goes inert and is harmless.
+  **And a correction to this document's own finding.** §1 correction 3 said there was "no
+  `middleware.ts` at the repo root". The filename was right and the conclusion was wrong: this
+  Next version renames middleware to **`proxy.ts`**, which exists, runs on every non-static
+  request and already returns the response a hostname rewrite hooks into. `5e` was never missing
+  its infrastructure — it was missing forty lines in a file that was already wired.
 
 **Owed to production, and not carried by this branch.** The two content corrections in 1.5 are
 seed edits, and a seed does not run against production. The `LegalPage` row holding the
@@ -320,8 +318,13 @@ reader and three levels of tests. **The staff half has nothing at all.**
 **Invert the epic's order.** `5c`, `5g`, `5h` and most of `5d` are export-against-tree; `5e` is
 the only large piece and the only one selling something it does not deliver.
 
-- [ ] **8.1 `5e`** — no `middleware.ts` at the root, so nothing serves a verified hostname. No
-  staff surface either.
+- [x] **8.1 `5e`** — done, as subdomains rather than as bring-your-own-domain. `proxy.ts` matches
+  `<label>.businesslistings.me` and rewrites to `/b/<label>`; `getBusinessBySlug` resolves a label
+  as well as a slug, so all six storefront routes work on a seller's address without knowing
+  addresses exist. The DNS half — records, propagation states, the give-up clock, five failure
+  causes, the hourly poll and a certificate we could not issue — is deleted rather than kept for a
+  bring-your-own that may not return. **Still outside the repo:** the wildcard DNS record and the
+  wildcard domain on Vercel.
 - [ ] **8.2 `5f`** — the public page filters `header` and `enquiry_form` out of the template run
   and the builder canvas applies no such filter.
 - [ ] **8.3 `5b`** — five of eight theme columns reach no storefront, including a density

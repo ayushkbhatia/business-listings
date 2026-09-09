@@ -100,6 +100,7 @@ and it is the one that argues back.
 /dashboard/analytics/export             The four tables as one CSV            [3l]  built h3 wave 4
 /dashboard/billing                      Subscription & billing                [3m]  built h3 wave 4
 /dashboard/domain                       Your own web address                  [5e]  built h4s6
+                                        <label>.businesslistings.me, rewritten by proxy.ts to /b/<label>
 /dashboard/billing/change               Change plan                          [11f]  built h3 wave 4
 /dashboard/billing/change/keep/:kind    Choose what stays live               [11f]  built h3 wave 4
 /dashboard/billing/cancel               Cancel — what changes                [11h]  built h3 wave 4

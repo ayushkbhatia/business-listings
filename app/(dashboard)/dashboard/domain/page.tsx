@@ -1,12 +1,10 @@
-import { Alert } from "@/components/display";
 import { Panel } from "@/components/structure";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
-import { domainFor } from "@/lib/domains/service";
-import { formatDate } from "@/lib/format";
+import { proposedFor, subdomainFor } from "@/lib/domains/service";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
-import { claimDomain, dropDomain } from "./actions";
-import { DomainPanel, type DomainRecordView } from "./DomainPanel";
+import { claimAddress, dropAddress } from "./actions";
+import { AddressPanel } from "./DomainPanel";
 
 /**
  * Board 5e, from the seller's side.
@@ -15,42 +13,33 @@ import { DomainPanel, type DomainRecordView } from "./DomainPanel";
  * so a seller grandfathered on a plan that included this keeps it. The locked
  * state names the plan rather than hiding the feature — the same rule the rest
  * of the dashboard follows.
+ *
+ * Two states, where there used to be six. The address is a label under our own
+ * zone, so there is nothing to verify and no waiting: a seller either has it or
+ * has not asked for it yet. The screen this replaced spent most of its height
+ * on DNS records to copy, per-record propagation, a 24-hour clock and a named
+ * failure cause — all of which belonged to a domain somebody else controlled.
  */
 export const metadata = { title: t("domain.meta_title") };
 export const dynamic = "force-dynamic";
 
 export default async function DomainPage() {
   const seat = await requireSellerSeat();
-  const [caps, domain, badges] = await Promise.all([
+  const [caps, held, badges] = await Promise.all([
     effectiveFor(seat.businessId),
-    domainFor(seat.businessId),
+    subdomainFor(seat.businessId),
     getNavBadges(seat.businessId),
   ]);
 
-  const records: DomainRecordView[] = (domain?.records ?? []).map((record) => ({
-    type: record.type,
-    name: record.name,
-    value: record.value,
-    state: record.type === "CNAME" ? (domain?.cnameState ?? "waiting") : (domain?.txtState ?? "waiting"),
-  }));
-
   /*
-   * A mailto, not a message we send. It goes from the seller to somebody who
-   * will recognise their name — a DNS change request arriving from a directory
-   * they have never heard of is a DNS change request that gets deleted.
-   */
-  const mailtoHref = domain
-    ? `mailto:?subject=${encodeURIComponent(
-        t("domain.email_subject", { hostname: domain.hostname }),
-      )}&body=${encodeURIComponent(
-        t("domain.email_body", {
-          hostname: domain.hostname,
-          records: domain.records
-            .map((record) => `${record.type}  ${record.name}  ${record.value}`)
-            .join("\n"),
-        }),
-      )}`
-    : "";
+     What they would get, computed only when they might take it.
+
+     `proposedFor` runs the same derivation and the same refusals as the claim
+     does, so the address on the screen is the address the button produces — a
+     preview computed a second way is how a screen comes to promise something
+     the write then refuses.
+  */
+  const proposed = !held && caps?.customDomain ? await proposedFor(seat.businessId) : null;
 
   return (
     <SellerPage
@@ -64,30 +53,20 @@ export default async function DomainPage() {
         // Named, not hidden. A feature somebody cannot see is a feature they
         // cannot decide they want.
         <Panel title={t("domain.title")} locked={{ label: t("domain.locked") }}>
-          <p className="max-w-prose text-body-sm text-prose">{t("domain.add_hint")}</p>
+          <p className="max-w-prose text-body-sm text-prose">{t("domain.explain")}</p>
         </Panel>
       ) : (
-        <>
-          <DomainPanel
-            hostname={domain?.hostname ?? null}
-            status={domain?.status ?? "pending"}
-            records={records}
-            failureCause={domain?.failureCause ?? null}
-            certificateLive={domain?.certificateLive ?? false}
-            lastChecked={domain?.lastCheckedAt ? formatDate(domain.lastCheckedAt) : null}
-            mailtoHref={mailtoHref}
-            claim={claimDomain}
-            drop={dropDomain}
-          />
-
-          {domain?.status === "revoked" && (
-            <div className="mt-[var(--gutter)]">
-              <Alert tone="warn" live="off" fix={t("domain.explain.revoked")}>
-                {t("domain.status.revoked")}
-              </Alert>
-            </div>
-          )}
-        </>
+        <AddressPanel
+          hostname={held?.hostname ?? null}
+          proposedHostname={proposed?.hostname ?? null}
+          // A refusal is shown before the button rather than after it. The two
+          // that can happen — the label is taken, or the slug cannot make one —
+          // are both things a seller can do nothing about, so offering a button
+          // that will refuse would be offering a dead control.
+          refusal={proposed?.refusal ?? null}
+          claim={claimAddress}
+          drop={dropAddress}
+        />
       )}
     </SellerPage>
   );

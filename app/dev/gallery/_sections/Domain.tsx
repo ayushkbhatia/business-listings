@@ -1421,7 +1421,10 @@ const COMPARISON_ROWS = [
   {
     key: "custom_domain",
     header: "Your own web address",
-    note: "Your storefront on an address you own, with the platform one still working.",
+    note:
+      "yourcompany.businesslistings.me, live the moment you take it. Nothing to buy " +
+      "and nothing to set up. Your directory address keeps working and keeps its " +
+      "search ranking.",
     cells: [
       { planId: "free", label: "Not included", state: "absent" as const },
       { planId: "basic", label: "Not included", state: "absent" as const },
