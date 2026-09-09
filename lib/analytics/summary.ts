@@ -5,6 +5,8 @@ import { assertCanReadAnalytics } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import { analyticsScopeFor, type AnalyticsScope } from "@/lib/auth/subject";
 import { dubaiDayStart } from "@/lib/format";
+import { queryReason } from "./position";
+import type { Attribution } from "./attribution";
 import {
   funnel,
   medianIsShowable,
@@ -38,13 +40,29 @@ import {
  * three stages could not be backfilled.
  */
 
+/** A day in milliseconds. Asia/Dubai has no daylight saving, so this is exact. */
+const DAY_MS = 86_400_000;
+
 export interface QueryRow {
   /** As buyers typed it, normalised. What the panel renders. */
   query: string;
   volume: number;
   /** Best position held in the window. Null is *not ranked*, not a bad rank. */
   position: number | null;
+  /**
+   * How many listings the query returned. Null on a row written before the
+   * amendment gave the table a denominator — those show their rank alone
+   * rather than borrowing a count from a later day.
+   */
+  total: number | null;
   movement: Delta;
+  /**
+   * Why it moved, attached to this row rather than floating under the table.
+   *
+   * A note below the table reads correctly while exactly one row has a reason,
+   * and cannot say which row it means as soon as two do.
+   */
+  reason: Attribution;
 }
 
 export interface ProductRow {
@@ -265,6 +283,9 @@ async function queryRows(
       where: { businessId, day: { gte: fromDay } },
       _sum: { impressions: true },
       _min: { bestRank: true },
+      // The most recent count of what the phrase returns, not the largest the
+      // set has ever been. A category that shed listings did shed them.
+      _max: { resultTotal: true, day: true },
       orderBy: { _sum: { impressions: "desc" } },
       take: TOP_QUERIES,
     }),
@@ -277,12 +298,44 @@ async function queryRows(
 
   const before = new Map(previous.map((row) => [row.normalised, row._min.bestRank]));
 
-  return current.map((row) => ({
-    query: row.normalised,
-    volume: row._sum.impressions ?? 0,
-    position: row._min.bestRank,
-    movement: placeChange(row._min.bestRank, before.get(row.normalised) ?? null),
-  }));
+  /*
+     The two nights the two ranks were measured near.
+
+     This panel compares a window against the window before it, which is board
+     3l's own rule and not the card's first-snapshot-in-window rule — the two
+     boards ask different questions and the amendment did not change either. So
+     the factor rows to diff are the window boundaries: the last night of the
+     previous window against the most recent night of this one.
+  */
+  const previousLastDay = new Date(fromDay.getTime() - DAY_MS);
+
+  /*
+     One attribution read per row, and only for rows that actually moved.
+
+     `queryReason` returns `none` without touching the database where there is
+     nothing to compare, so a week-one page costs nothing extra — and a page of
+     held positions costs nothing extra either, which is most pages.
+  */
+  return Promise.all(
+    current.map(async (row) => {
+      const was = before.get(row.normalised) ?? null;
+      return {
+        query: row.normalised,
+        volume: row._sum.impressions ?? 0,
+        position: row._min.bestRank,
+        total: row._max.resultTotal ?? null,
+        movement: placeChange(row._min.bestRank, was),
+        reason: await queryReason({
+          businessId,
+          normalised: row.normalised,
+          from: was === null ? null : previousLastDay,
+          to: row._max.day ?? fromDay,
+          positionBefore: was,
+          positionAfter: row._min.bestRank,
+        }),
+      };
+    }),
+  );
 }
 
 /**

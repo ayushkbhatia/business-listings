@@ -14,6 +14,10 @@ export { RatingMarks, type RatingMarksProps } from "./RatingMarks";
 export { StepProgress, type StepProgressProps } from "./StepProgress";
 export { StackedBar, type StackedBarProps, type StackedSegment } from "./StackedBar";
 export { FunnelBars, type FunnelBarsProps, type FunnelStage } from "./FunnelBars";
+// Board 3l's delta, moved here by the 3a/3l amendment: two boards now render a
+// movement, and a component that lives inside one board's route cannot be the
+// one the other uses.
+export { Delta, type DeltaProps } from "./Delta";
 export { ShareBars, type ShareBarsProps, type ShareRow } from "./ShareBars";
 export { Waterfall, type WaterfallProps, type WaterfallStep } from "./Waterfall";
 export { ImagePlaceholder, type ImagePlaceholderProps, type PlaceholderKind } from "./ImagePlaceholder";

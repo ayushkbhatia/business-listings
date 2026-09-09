@@ -58,6 +58,15 @@ export async function recordSearchImpressions(
   at: Date = new Date(),
   /** Rank of the row before the first of these. Page two starts at 20. */
   offset = 0,
+  /**
+   * How many listings the whole query returned, not how many this page held.
+   *
+   * `#2` is flattery in a set of three, and the cold start is the state this
+   * platform launches in — so the amendment gives a query rank its denominator.
+   * Null where the caller does not know it; the column stays nullable and the
+   * row renders its rank alone rather than borrowing a number from a later day.
+   */
+  resultTotal: number | null = null,
 ): Promise<void> {
   const normalised = normaliseQuery(query);
   // A browse with no query is a category impression, not a search one — it has
@@ -76,14 +85,21 @@ export async function recordSearchImpressions(
        `unnest` pairs each id with its rank, and the whole page lands as a single
        `INSERT … ON CONFLICT`. Twenty separate upserts would be twenty round
        trips on the render path of the busiest public page in the product.
+
+       `result_total` takes the latest known denominator and never falls back to
+       null: a second search for the same phrase later in the day is the more
+       recent count of what it returns, and `coalesce` keeps the row's existing
+       number where this caller had none — so a page that cannot supply it does
+       not erase a page that could.
     */
     await prisma.$executeRaw`
-      INSERT INTO "search_impression_day" ("business_id", "day", "normalised", "impressions", "best_rank")
-      SELECT id, ${day}::date, ${normalised}, 1, rank + ${offset}
+      INSERT INTO "search_impression_day" ("business_id", "day", "normalised", "impressions", "best_rank", "result_total")
+      SELECT id, ${day}::date, ${normalised}, 1, rank + ${offset}, ${resultTotal}::int
         FROM unnest(${ids}::text[]) WITH ORDINALITY AS t(id, rank)
       ON CONFLICT ("business_id", "day", "normalised") DO UPDATE
         SET "impressions" = "search_impression_day"."impressions" + 1,
-            "best_rank"   = least("search_impression_day"."best_rank", EXCLUDED."best_rank")
+            "best_rank"   = least("search_impression_day"."best_rank", EXCLUDED."best_rank"),
+            "result_total" = coalesce(EXCLUDED."result_total", "search_impression_day"."result_total")
     `;
   } catch (cause) {
     console.error("[analytics] could not count search impressions", { normalised, cause });
@@ -104,22 +120,25 @@ export async function recordSearchImpressions(
  * partial unique indexes rather than one. The `ON CONFLICT` target has to name
  * the matching predicate, which is why this branches.
  *
- * ## This table has no reader yet, deliberately
+ * ## What reads it, and what it is *not* the source of
  *
- * Nothing selects from `category_position_day` — not `analyticsSummary`, not
- * the CSV export, not the dashboard. Its consumer is board `3a`'s search-position
- * card, which the wave-4 plan says `3l` "switches on" and which does not exist
- * in code.
+ * `lib/analytics/position.ts` reads it, and reads it for one thing: **which
+ * scope a seller is browsed in**. A Dubai supplier may be browsed country-wide
+ * in one category and filtered to Dubai in another, and only impressions know
+ * which — so this supplies the scope and `CategoryRankDay`'s nightly snapshot
+ * supplies the position.
  *
- * That is a capture running ahead of its reader rather than an orphan, and the
- * order is forced: board `3l` is explicit that a position not written on the day
- * is gone, so a table added when the card is built would start empty and the
- * card would open on a blank month. Writing early costs one upsert per browse;
- * writing late costs the history.
+ * That division matters and it is the 3a/3l amendment's whole argument. This is
+ * a **counter**: it writes when a real buyer loads a page, behind the crawler
+ * gate. A category nobody browsed on Tuesday has no Tuesday row, so a movement
+ * computed across that hole compares Monday to Thursday and calls it a day. The
+ * snapshot exists because a position has to be computed whether anybody looked
+ * or not; this exists because a snapshot cannot know where somebody looked
+ * *from*.
  *
- * If `3a`'s card is ever cut instead, this recorder and its table go with it —
- * an unread table is a cost with no consumer, and the honest response to that
- * is a migration, not a comment.
+ * It spent a release written and read by nothing, which is worth remembering
+ * rather than tidying away: board `3a`'s card was hidden pending `3l`, `3l`
+ * landed, and the switch was not flipped until the amendment.
  */
 export async function recordCategoryPositions(
   businessIds: readonly string[],

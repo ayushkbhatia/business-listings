@@ -3,7 +3,7 @@ import {
   allowance,
   capFor,
   cheapestPlanUnlocking,
-  cheapestPlanWith,
+  cheapestPlanGranting,
   monthStart,
   snapshotOf,
   type PlanCaps,
@@ -95,13 +95,13 @@ describe("what to offer, if anything", () => {
   });
 
   it("offers the cheapest plan carrying a feature", () => {
-    expect(cheapestPlanWith(PLANS, "customDomain", "free")?.id).toBe("pro");
-    expect(cheapestPlanWith(PLANS, "customDomain", "basic")?.id).toBe("pro");
+    expect(cheapestPlanGranting(PLANS, "customDomain", "free")?.id).toBe("pro");
+    expect(cheapestPlanGranting(PLANS, "customDomain", "basic")?.id).toBe("pro");
   });
 
   it("offers nothing for a feature the seller already has", () => {
     // Rendering a lock here would be an advert for something already bought.
-    expect(cheapestPlanWith(PLANS, "customDomain", "pro")).toBeNull();
+    expect(cheapestPlanGranting(PLANS, "customDomain", "pro")).toBeNull();
   });
 });
 

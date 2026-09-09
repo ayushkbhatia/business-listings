@@ -9,7 +9,8 @@ import { mayReadAnalytics } from "@/lib/auth/guards";
 import { formatCount, formatDateShort, formatPercent } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
-import { Delta } from "./Delta";
+import { Delta } from "@/components/display";
+import { PositionReason, PositionValue } from "@/components/domain";
 
 /**
  * Board `3l` — analytics.
@@ -343,26 +344,33 @@ function QueriesPanel({ summary }: { summary: AnalyticsSummary }) {
 
 function QueryLine({ row }: { row: QueryRow }) {
   return (
-    <tr className="border-b border-line-soft last:border-0">
+    <tr className="border-b border-line-soft last:border-0 align-top">
       <th scope="row" className="px-4 py-2.5 text-left font-normal text-ink">
         {row.query}
+        {/*
+           The reason moved onto its row by the 3a/3l amendment. It used to sit
+           in a note under the table, which reads correctly while exactly one
+           row has one and cannot say which row it means as soon as two do.
+        */}
+        <PositionReason reason={row.reason} />
       </th>
       <td className="px-3 py-2.5 text-right tabular-nums text-body-ink">
         {formatCount(row.volume)}
       </td>
-      <td className="px-4 py-2.5 text-right tabular-nums">
-        {row.position === null ? (
-          /*
-             Not ranked is a state, not a bad rank. The board coloured `n/a` the
-             same red as `#14`, which reads as the worst position on the page
-             rather than as an absence — criterion 4.
-          */
-          <span className="text-muted">{t("analytics.queries.not_ranked")}</span>
-        ) : (
-          <span className="text-ink">
-            #{formatCount(row.position)} <Delta delta={row.movement} better="down" />
-          </span>
-        )}
+      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+        {/*
+           The same component board 3a's card renders. Not ranked stays a state
+           and not a bad rank — the board coloured `n/a` the same red as `#14`,
+           which reads as the worst position on the page rather than as an
+           absence — and the denominator is the amendment's Q1: `#2` alone is
+           flattery in a set of three.
+        */}
+        <PositionValue
+          state={row.position === null ? "not_ranked" : "ranked"}
+          rank={row.position}
+          total={row.total}
+          movement={row.movement}
+        />
       </td>
     </tr>
   );

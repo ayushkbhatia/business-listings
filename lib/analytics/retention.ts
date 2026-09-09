@@ -10,11 +10,18 @@ import { dubaiDayStart } from "@/lib/format";
  * the floor for the comparison to exist at all; 90 leaves a month of margin and
  * makes a quarter view possible later without a second retention decision.
  *
- * These four tables grow with *traffic* rather than with sign-ups, which is the
+ * Four of these six grow with *traffic* rather than with sign-ups, which is the
  * property that decides whether something needs a prune. `search_impression_day`
  * is the one to watch: its grain is a business, a day and a distinct query, so
  * it grows with the variety of what buyers type rather than with how often they
  * type it.
+ *
+ * The two the amendment added grow with **supply and time instead**, which is a
+ * different and more predictable shape — and a reason they need this more, not
+ * less. `category_rank_day` and `listing_factor_day` are written every night
+ * whether anybody browsed or not, so they accrue on a quiet directory exactly as
+ * fast as on a busy one. Without a prune they are the only tables here that grow
+ * on a platform with no visitors at all.
  *
  * Not a security parameter, unlike `auth_attempt` — nothing here identifies a
  * person. `SearchImpressionDay` holds a phrase and a rank with no actor, and
@@ -28,6 +35,8 @@ export const KEEP_DAYS = 90;
 export interface AnalyticsPruneResult {
   searchImpressions: number;
   categoryPositions: number;
+  categoryRanks: number;
+  factorDays: number;
   productViews: number;
   devices: number;
   /** The day at and before which rows were removed. */
@@ -50,19 +59,37 @@ export async function pruneAnalytics(
   const olderThan = dubaiDayStart(new Date(now.getTime() - keepDays * 86_400_000));
   const where = { day: { lt: olderThan } };
 
-  const [searchImpressions, categoryPositions, productViews, devices] = await Promise.all([
-    prisma.searchImpressionDay.deleteMany({ where }),
-    prisma.categoryPositionDay.deleteMany({ where }),
-    prisma.productViewDay.deleteMany({ where }),
-    prisma.listingDeviceDay.deleteMany({ where }),
-  ]);
+  const [searchImpressions, categoryPositions, categoryRanks, factorDays, productViews, devices] =
+    await Promise.all([
+      prisma.searchImpressionDay.deleteMany({ where }),
+      prisma.categoryPositionDay.deleteMany({ where }),
+      prisma.categoryRankDay.deleteMany({ where }),
+      prisma.listingFactorDay.deleteMany({ where }),
+      prisma.productViewDay.deleteMany({ where }),
+      prisma.listingDeviceDay.deleteMany({ where }),
+    ]);
 
   return {
     searchImpressions: searchImpressions.count,
     categoryPositions: categoryPositions.count,
+    categoryRanks: categoryRanks.count,
+    factorDays: factorDays.count,
     productViews: productViews.count,
     devices: devices.count,
     olderThan,
     ranAt: now,
   };
+}
+
+/**
+ * The earliest day any factor history could still exist for.
+ *
+ * State 13 — *"We cannot explain this move. Factor history starts 10 Jun"* —
+ * prints a date, and the amendment's `B7` says it is read rather than
+ * hardcoded. For a listing older than the window that date is this boundary;
+ * for a newer one it is their own first night, which is why the reader takes
+ * the later of the two rather than this alone.
+ */
+export function historyBoundary(now: Date = new Date(), keepDays: number = KEEP_DAYS): Date {
+  return dubaiDayStart(new Date(now.getTime() - keepDays * 86_400_000));
 }

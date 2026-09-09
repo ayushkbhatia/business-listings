@@ -6,6 +6,7 @@ import { applyEndedCancellations } from "@/lib/billing/service";
 import { applyDueChanges } from "@/lib/billing/schedule";
 import { writeMissingInvoicePdfs } from "@/lib/billing/pdf-backfill";
 import { pruneAnalytics } from "@/lib/analytics/retention";
+import { runPositionSnapshots } from "@/lib/analytics/snapshot-job";
 import { pruneAttempts } from "@/lib/auth/attempts";
 import { LONGEST_RATE_WINDOW_MS, pruneRateLimitHits } from "@/lib/rate-limit";
 import { DRAFT_KEEP_DAYS, pruneDrafts } from "@/lib/onboarding/draft";
@@ -219,6 +220,28 @@ export async function GET(request: NextRequest) {
        neither reads the tier.
     */
     expiredLicences: () => sweepExpiredLicences(),
+    /*
+       The nightly position snapshot — the 3a/3l amendment's B1 and B2.
+
+       **After all three of the steps above, and that is load-bearing.** It
+       stores what the ranker saw, and the ranker reads `responseTimeMedianMs`,
+       `specCompleteness` and `verificationTier` — the two measurements write the
+       first two and the licence sweep writes the third. Running this first would
+       archive yesterday's numbers under today's date every night, so a seller
+       whose licence lapsed on Tuesday would be told on Wednesday that nothing
+       about them had changed.
+
+       Its position relative to `prunedAnalytics`, which runs earlier in this
+       object, is immaterial: the cutoff is ninety days back and tonight's rows
+       are never near it. Stated because "after the prune" looks like an
+       ordering claim and is not one.
+
+       Board 3l's counters stay where they are, on the render path. They count
+       impressions, which only a real buyer generates; this counts position,
+       which is true whether anybody looked or not. That is the whole point of
+       the amendment and the reason the two are not one job.
+    */
+    positionSnapshots: () => runPositionSnapshots(),
     /*
        Board 1i criterion 14. An enquiry that closed with nothing back is a
        supply signal, and it is written here rather than when a buyer opens the

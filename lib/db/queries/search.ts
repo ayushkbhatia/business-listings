@@ -40,7 +40,15 @@ import { VERIFIED_TIER } from "@/lib/verification";
  * what lets a DN100 query reach a product the seller typed as 4".
  */
 
-const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } } as const;
+/**
+ * What "in the directory" means, in one place.
+ *
+ * Exported for the nightly snapshot job, which has to rank exactly the set a
+ * buyer would see. A second copy of this predicate would drift the first time
+ * one of them gained a clause, and the symptom would be a seller told they rank
+ * #7 of 61 on a page that shows 58 listings.
+ */
+export const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } } as const;
 
 export const PAGE_SIZE = 20;
 

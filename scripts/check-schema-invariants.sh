@@ -120,4 +120,40 @@ if grep -qE '^[[:space:]]*model[[:space:]]+ReviewDispute[[:space:]]*\{' <<<"$COD
   fi
 fi
 
+# The 3a + 3l amendment. `category_rank_day` carries the same nullable-emirate
+# identity for the same reason, and one more invariant of its own: a rank cannot
+# exceed its denominator. `#7 of 5` is not a near miss — it is a job that ranked
+# one set and counted another, and both numbers render as numbers.
+if grep -qE '^[[:space:]]*model[[:space:]]+CategoryRankDay[[:space:]]*\{' <<<"$CODE"; then
+  if grep -q 'category_rank_day_countrywide' prisma/migrations/*/migration.sql 2>/dev/null \
+     && grep -q 'category_rank_day_in_emirate' prisma/migrations/*/migration.sql 2>/dev/null; then
+    echo "   pass — nightly category ranks are identified by two partial unique indexes"
+  else
+    echo "   FAIL — category_rank_day has lost a partial unique index."
+    echo "          Without both, the nightly job inserts a second country-wide row each run."
+    fail=1
+  fi
+
+  if grep -rqE '"category_rank_day_rank_within_total"' prisma/migrations; then
+    echo "   pass — a nightly rank cannot exceed its own denominator"
+  else
+    echo "   FAIL — category_rank_day has lost its rank-within-total check."
+    fail=1
+  fi
+fi
+
+# The amendment's B2. Attribution reads the weights that were in force on the
+# day, not the weights that are in force now. Without the column a staff slider
+# move on 12c is indistinguishable from the seller's own decline, and every such
+# fall is billed to the seller — the defect the amendment exists to stop.
+if grep -qE '^[[:space:]]*model[[:space:]]+ListingFactorDay[[:space:]]*\{' <<<"$CODE"; then
+  if grep -qE '^[[:space:]]*weights[[:space:]]+Json' <<<"$CODE"; then
+    echo "   pass — factor history stores the weights in force that day"
+  else
+    echo "   FAIL — ListingFactorDay has no weights vector."
+    echo "          Attribution cannot then tell a staff weight change from a seller's decline."
+    fail=1
+  fi
+fi
+
 exit $fail

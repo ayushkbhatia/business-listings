@@ -181,7 +181,7 @@ export async function Results({ query, basePath, category, tray = [], search = "
       const ranked = businesses.rows.map((row) => row.id);
 
       if (query.q.trim()) {
-        void recordSearchImpressions(ranked, query.q, undefined, offset);
+        void recordSearchImpressions(ranked, query.q, undefined, offset, businesses.total);
       }
       /*
          A category page is the *other* position object — board `3a`'s card

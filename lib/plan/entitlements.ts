@@ -291,28 +291,6 @@ export function cheapestPlanUnlocking(
   return better[0] ?? null;
 }
 
-/**
- * The cheapest plan carrying a boolean feature the seller does not have.
- * Same contract as above: null means nothing to sell.
- */
-export function cheapestPlanWith(
-  plans: readonly PlanCaps[],
-  // One feature left since site visits were withdrawn. Kept as a union rather
-  // than inlined, because the next boolean entitlement wants this shape back.
-  feature: "customDomain",
-  currentPlanId: string,
-): PlanCaps | null {
-  const current = plans.find((p) => p.id === currentPlanId);
-  if (current?.[feature]) return null;
-
-  return (
-    plans
-      .filter((p) => p[feature])
-      .filter((p) => p.monthlyPriceAed > (current?.monthlyPriceAed ?? 0))
-      .sort((a, b) => a.monthlyPriceAed - b.monthlyPriceAed)[0] ?? null
-  );
-}
-
 /** First day of the month a date falls in, in UTC. The cap is calendar-monthly. */
 export function monthStart(now: Date): Date {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
