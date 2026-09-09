@@ -161,7 +161,8 @@ function SetupBanner({ setup }: { setup: SetupChrome }) {
  * Board 3a §2's licence row, and the most consequential item on this screen.
  *
  * `verificationTier` drops to 1 automatically the day the licence expires,
- * which costs 22 of 100 ranking weight and the badge on every public card. The
+ * which costs the whole verification weight — whatever board 12c has it set to
+ * — and the badge on every public card. The
  * row states the consequence rather than the date, because "expires 12 Oct"
  * reads as administrative and the loss does not.
  *

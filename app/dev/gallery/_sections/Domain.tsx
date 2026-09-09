@@ -1409,9 +1409,9 @@ const COMPARISON_ROWS = [
     key: "ranking",
     header: "Search ranking weight",
     note:
-      "On the plan-tier component of the ranking only, which is 6 of 100 points. The other 94 " +
-      "are relevance, verification tier, response time, spec completeness and distance, and no " +
-      "plan changes any of them.",
+      "On the plan-tier component of the ranking only, and it is deliberately the smallest of " +
+      "the six. The rest are relevance, verification tier, response time, spec completeness and " +
+      "distance, and no plan changes any of them.",
     cells: [
       { planId: "free", label: "1×", state: "value" as const },
       { planId: "basic", label: "1.15×", state: "value" as const },

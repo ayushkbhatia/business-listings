@@ -8,6 +8,7 @@ import { Numeric } from "./_sections/Numeric";
 import { TextEntry } from "./_sections/TextEntry";
 import { Overlays } from "./_sections/Overlays";
 import { Position } from "./_sections/Position";
+import { Ranking } from "./_sections/Ranking";
 import { Reviews } from "./_sections/Reviews";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
@@ -223,6 +224,7 @@ export default function Gallery() {
       <Display />
       <Domain />
       <Position />
+      <Ranking />
       <Billing />
 
       <Reviews />

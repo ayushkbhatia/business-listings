@@ -321,15 +321,29 @@ test.describe("board 12c — ranking and boosts", () => {
   test("shows the six weights that decide the order", async ({ page }) => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Ranking & boosts");
     for (const name of [
-      "Text match",
+      "Relevance to the query",
       "Verification tier",
-      "Reply speed",
+      "Measured reply time",
       "Spec completeness",
-      "Distance",
-      "Plan",
     ]) {
-      await expect(page.getByLabel(name, { exact: true })).toBeVisible();
+      await expect(page.getByRole("slider", { name, exact: true })).toBeVisible();
     }
+
+    /*
+       The two pinned ones carry their hint in the label, so the accessible name
+       is the factor and the hint together. Asserted as written rather than as
+       the factor alone: the separator between them is text, not margin, and
+       that is the defect this catches if somebody puts it back.
+    */
+    await expect(page.getByRole("slider", { name: "Distance from the buyer · pinned" })).toBeVisible();
+    await expect(
+      page.getByRole("slider", { name: "Plan tier · pinned, ceiling 10" }),
+    ).toBeVisible();
+  });
+
+  test("the six add to a hundred, and the panel says why", async ({ page }) => {
+    await expect(page.getByText(/Six factors · live total 100/)).toBeVisible();
+    await expect(page.getByText(/The six always add to 100/)).toBeVisible();
   });
 
   test("says why the plan weight has a ceiling", async ({ page }) => {
@@ -340,23 +354,82 @@ test.describe("board 12c — ranking and boosts", () => {
     await expect(page.getByText(/results start reading as bought/).first()).toBeVisible();
   });
 
-  test("will not save a ranking change without a reason", async ({ page }) => {
-    await expect(page.getByRole("button", { name: "Save the weights" })).toBeDisabled();
-    await page.getByLabel("Why").fill("Leaning harder on verification while the directory is young.");
-    await expect(page.getByRole("button", { name: "Save the weights" })).toBeEnabled();
+  /**
+   * `B9`. The ceiling is on the effective browse vector, and the board says so
+   * before anybody presses anything — the live weights already take plan tier
+   * from 6 to 9 on a page with no search box.
+   */
+  test("shows what the weights become on a page with no search box", async ({ page }) => {
+    await expect(page.getByText(/Effective on browse pages/)).toBeVisible();
+    await expect(page.getByText(/without anyone having moved the plan slider/)).toBeVisible();
+  });
+
+  test("will not save a draft without a reason", async ({ page }) => {
+    await expect(page.getByRole("button", { name: "Save draft" })).toBeDisabled();
+    await page
+      .getByLabel("Why", { exact: false })
+      .first()
+      .fill("Leaning harder on verification while the directory is young.");
+    await expect(page.getByRole("button", { name: "Save draft" })).toBeEnabled();
+  });
+
+  /**
+   * The three steps, in the state a board with no draft is actually in. Publish
+   * is the control that reorders every result on the platform, so what it says
+   * when it cannot be pressed is worth asserting.
+   */
+  test("publish is three steps, and says what is missing", async ({ page }) => {
+    await expect(page.getByText("No draft", { exact: true })).toBeVisible();
+    await expect(page.getByText(/Search is running on the live weights/)).toBeVisible();
+    await expect(page.getByText("Publish needs a fresh preview.")).toBeVisible();
+  });
+
+  test("counts the searches that found nothing, and routes them to the CRM", async ({ page }) => {
+    await expect(page.getByRole("heading", { name: "Searches that found nothing" })).toBeVisible();
+    await expect(page.getByRole("link", { name: /Work the gaps as a call list/ })).toHaveAttribute(
+      "href",
+      "/admin/crm",
+    );
   });
 
   test("says a boost is not a sponsored slot", async ({ page }) => {
+    await page.goto("/admin/search?tab=boosts");
     await expect(page.getByText(/never labelled sponsored/)).toBeVisible();
   });
 
   test("keeps expired boosts on the list, and says why", async ({ page }) => {
+    await page.goto("/admin/search?tab=boosts");
     await expect(page.getByText(/record of why the results looked the way they did/)).toBeVisible();
   });
 
-  test("is axe clean", async ({ page }) => {
-    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
-    expect(results.violations).toEqual([]);
+  /**
+   * Board 12c Q7, on the screen. A boost is points added to a hundred-point
+   * scale, not a percentage of it — the first render drew `+15%` and taught the
+   * wrong model of the thing it was drawing.
+   */
+  test("boosts are points, with a budget a business can spend", async ({ page }) => {
+    await page.goto("/admin/search?tab=boosts");
+    await expect(page.getByText(/pts/).first()).toBeVisible();
+    await expect(page.getByText(/A business can hold 25 points at once/)).toBeVisible();
+    await expect(
+      page.getByText(/Removing a business from results is a suspension, taken on Businesses/),
+    ).toBeVisible();
+  });
+
+  test("the weight history is published changes only", async ({ page }) => {
+    await page.goto("/admin/search?tab=history");
+    await expect(page.getByRole("heading", { name: "Weight history" })).toBeVisible();
+    await expect(
+      page.getByText(/A draft that was never published is not here/),
+    ).toBeVisible();
+  });
+
+  test("is axe clean on all three tabs", async ({ page }) => {
+    for (const tab of ["", "?tab=boosts", "?tab=history"]) {
+      await page.goto(`/admin/search${tab}`);
+      const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+      expect(results.violations, tab || "?tab=weights").toEqual([]);
+    }
   });
 });
 

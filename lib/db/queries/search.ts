@@ -13,7 +13,8 @@ import {
   type QueryShape,
   type SortOrigin,
 } from "@/lib/search/origin";
-import { liveBoosts, liveBrowseRelevanceMode, liveWeights } from "@/lib/search/settings";
+import { liveBoosts } from "@/lib/search/boosts";
+import { liveBrowseRelevanceMode, liveWeights } from "@/lib/search/settings";
 import {
   placeSponsored,
   rank,

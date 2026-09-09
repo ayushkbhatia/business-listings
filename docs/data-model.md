@@ -416,6 +416,65 @@ historical rank against a set that did not exist then.
 Both join the 90-day prune in `lib/analytics/retention.ts`, which now covers six tables. They
 are the only two here that grow on a directory with no visitors at all.
 
+## The ranking, and how a change to it reaches a buyer
+
+```prisma
+model RankingWeights { id "current"; six Int; browseRelevanceMode String }   // live
+model RankingDraft   { id "current"; six Int; browseRelevanceMode String;    // unpublished
+                       savedById; savedAt;
+                       previewStartedAt; previewRanAt; previewFor Json; preview Json }
+model RankingPublish { id; day Date; publishedAt; six Int;                   // history
+                       browseRelevanceMode; reason;
+                       categoriesMoved; listingsMoved; sellersTold; publishedById }
+```
+
+Board `12c`. Three rows for one number set, and the split is the point.
+
+**`RankingWeights` is what every buyer is ranked by.** One row, read by `searchBusinesses`,
+the landing templates, `/pricing`'s plan-share claim and the nightly snapshot. Nothing writes
+it but a publish.
+
+**`RankingDraft` is what an ops lead is working on.** Saving it moves nothing a buyer sees,
+which is what makes *"publishing fires the seller disclosure and saving does not"* structural
+rather than a flag: the disclosure is derived by `lib/analytics/attribution.ts` from the
+weights each night's `ListingFactorDay` was scored under, so it can only fire once the live
+row has actually moved.
+
+`previewFor` holds the exact vector the stored preview describes. Staleness is that
+comparison and not a timestamp — the draft moving past it is the only thing that can
+invalidate a preview, and a count from a superseded draft is worse than no count.
+
+**`RankingPublish` is one row per publish, not one per day.** The spec asked for a day grain
+so the position amendment could diff consecutive rows; that reader shipped first and reads
+`ListingFactorDay.weights` instead. Two publishes in one afternoon are two decisions with two
+written reasons, and a row keyed by day keeps only the second. `day` survives as a column for
+the 90-day prune and the history tab's grouping.
+
+`sellersTold` is the number that was on the button when it was pressed, kept as the claim that
+was made rather than recomputed later against a directory that has moved.
+
+### Boosts name a listing or a category, never both
+
+```prisma
+model ListingBoost {
+  businessId  String?      // exactly one of these two, by check constraint
+  categoryId  String?
+  emirate     Emirate?     // narrows a category boost only
+  points      Int          // 1..25, added to the weighted sum
+  reason      String       // NOT NULL
+  expiresAt   DateTime     // NOT NULL, at most 90 days
+}
+```
+
+`listing_boost_one_target` is a check constraint because Prisma has no syntax for it: two
+optional relations permit a row with both set — one points value meaning two things — and a
+row with neither.
+
+**The cap is 25 points per business, summing every live boost that reaches it**, its own and
+the category boosts it falls under. Counting the category ones is what stops the cap being
+walked around by aiming one category higher instead of one listing. A boost only ever raises;
+removing a business from results is `business.suspend` on `/admin/businesses`.
+
 ## Platform settings
 
 ```prisma

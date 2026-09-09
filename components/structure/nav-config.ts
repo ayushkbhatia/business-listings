@@ -252,7 +252,14 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     key: "demand",
     labelKey: "nav.group.demand",
     items: [
-      { key: "search", labelKey: "nav.search_ranking", href: "/admin/search", capability: "search.ranking.write" },
+      /*
+         No capability. Board 12c's states table asks that every staff seat can
+         read the weights — they are how anyone here answers a seller asking why
+         they moved — while `search.ranking.write` still gates every control on
+         the screen. Gating the nav item as well would render it locked and make
+         the read impossible, which is the permission the table does not ask for.
+      */
+      { key: "search", labelKey: "nav.search_ranking", href: "/admin/search" },
       {
         key: "storefront-templates",
         labelKey: "nav.storefront_templates",

@@ -119,6 +119,8 @@ model User {
   templateVersions        TemplateVersion[]
   specRevisions           SellerTemplateRevision[] @relation("TemplateRevisionAuthor")
   boostsCreated           ListingBoost[]
+  rankingDrafts           RankingDraft[]           @relation("RankingDraftAuthor")
+  rankingPublishes        RankingPublish[]         @relation("RankingPublisher")
   settingsWritten         PlatformSetting[]        @relation("SettingWriter")
   askedQuestions          ProductQuestion[]
   leadsAssigned           EnquiryRecipient[]       @relation("LeadAssignee")
@@ -332,6 +334,7 @@ model Category {
   emiratePages      EmiratePage[]
   scopeDemand       ScopeDemand[]
   ruleChanges       PublishRuleChange[]
+  boosts            ListingBoost[]
   campaignCtas      Campaign[]             @relation("CampaignCtaCategory")
   productAlerts     ProductAlert[]
   curatedLists      CuratedList[]
@@ -3582,10 +3585,33 @@ model RankingWeights {
 /// ops moving a listing for a reason of ours, and it is never labelled as
 /// sponsored because nobody paid for it.
 model ListingBoost {
-  id          String   @id @default(cuid())
-  businessId  String   @map("business_id")
+  id String @id @default(cuid())
+
+  /// The listing this boost names, where it names one.
+  ///
+  /// Nullable since board `12c`'s second pass, because a boost may instead
+  /// target a whole category — *"thin supply, surfacing the few we have"* is a
+  /// statement about a category and not about one supplier. Exactly one of
+  /// `businessId` and `categoryId` is set, enforced by the
+  /// `listing_boost_one_target` check constraint in the migration: Prisma has
+  /// no syntax for it, so it is asserted by `pnpm check:schema` instead.
+  businessId  String? @map("business_id")
+  /// The category this boost lifts, where it lifts a category.
+  categoryId  String? @map("category_id")
+  /// Narrows a category boost to one emirate. Null means the whole country.
+  ///
+  /// Meaningless on a business-targeted boost and rejected there: a boost on a
+  /// named listing already knows where that listing trades.
+  emirate     Emirate?
+
   /// Added to the computed score. Bounded in the service, because a boost that
   /// can outrank everything is a boost that replaces the ranking.
+  ///
+  /// The service also bounds the **sum** a business may hold at
+  /// `MAX_BOOST_POINTS`, counting the category boosts it falls under. Board
+  /// `12c` Q7: without that, five stacked boosts is +125 against weights that
+  /// total 100, which is not a nudge but a replacement of the ranking — and the
+  /// cap is bypassed entirely by aiming at the category instead of the listing.
   points      Int
   /// Never null. The whole point.
   reason      String
@@ -3593,12 +3619,125 @@ model ListingBoost {
   createdById String   @map("created_by_id") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at")
 
-  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  createdBy User     @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  business  Business? @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category  Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  createdBy User      @relation(fields: [createdById], references: [id], onDelete: Restrict)
 
   @@index([businessId, expiresAt], map: "listing_boost_business_idx")
+  @@index([categoryId, expiresAt], map: "listing_boost_category_idx")
   @@index([expiresAt], map: "listing_boost_expiry_idx")
   @@map("listing_boost")
+}
+
+/// The weights an ops lead is working on, before anybody outside sees them.
+///
+/// Board `12c` §Publish. Until this table there was no draft: `saveWeights`
+/// wrote straight to `RankingWeights:current` and the copy said so — *"Saved.
+/// Search results reorder on the next request."* A staff member had no way to
+/// look at a change before every buyer did.
+///
+/// One row, `id = "current"`, for the same reason the live weights are one row:
+/// there is one ranking. A second concurrent draft would need an owner, a
+/// merge and a rule for which one publish means, and none of those are
+/// questions this board should be asking.
+///
+/// ## The preview lives here too
+///
+/// Criterion 7 — *publish is impossible on a stale or running preview* — needs
+/// staleness to be a fact rather than a guess, so the vector the preview was
+/// computed against is stored beside the preview itself. The draft moving is
+/// what makes the preview stale; nothing else can, and the comparison is
+/// exact rather than a timestamp race.
+model RankingDraft {
+  id String @id @default("current")
+
+  relevance        Int
+  verificationTier Int @map("verification_tier")
+  responseTime     Int @map("response_time")
+  specCompleteness Int @map("spec_completeness")
+  distance         Int
+  planTier         Int @map("plan_tier")
+
+  browseRelevanceMode String @default("redistribute") @map("browse_relevance_mode")
+
+  savedById String   @map("saved_by_id") @db.Uuid
+  savedAt   DateTime @default(now()) @map("saved_at")
+
+  /// Set when a preview starts, cleared when it finishes. Non-null with no
+  /// `previewRanAt` after it means the run is still going.
+  previewStartedAt DateTime? @map("preview_started_at")
+  previewRanAt     DateTime? @map("preview_ran_at")
+  /// The exact draft the stored preview describes — six weights and the mode.
+  /// Compared field by field with the draft above; unequal means stale.
+  previewFor       Json?     @map("preview_for")
+  /// The rows the board renders: category, listings moving, biggest fall, who
+  /// gains. Stored rather than recomputed because the publish that follows must
+  /// tell sellers the same number the ops lead read.
+  preview          Json?
+
+  savedBy User @relation("RankingDraftAuthor", fields: [savedById], references: [id], onDelete: Restrict)
+
+  @@map("ranking_draft")
+}
+
+/// Every published ranking change, with the vector that went live.
+///
+/// Board `12c` `B2` and criterion 4. `RankingWeights` is a single mutable row,
+/// so before this the platform could say what the ranking *is* and never what
+/// it *was*, and `staffMutation` recorded only the weights that moved rather
+/// than the vector they moved to.
+///
+/// ## One row per publish, not one per day
+///
+/// The spec asks for one row per day, and the reason it gives is that the
+/// position amendment derives state 09 by diffing consecutive rows. That
+/// reader shipped first, in PR 146, and it does not read this table: it diffs
+/// `ListingFactorDay.weights`, which the nightly snapshot already writes per
+/// listing per day. So the per-day grain buys nothing and costs the thing
+/// criterion 4 actually asks for — two publishes in one afternoon are two
+/// decisions, by possibly two people, each with its own written reason, and a
+/// row keyed by day keeps only the second.
+///
+/// `day` is kept as a column for the 90-day prune and for the history tab's
+/// grouping. It is not the identity.
+model RankingPublish {
+  id String @id @default(cuid())
+
+  /// Dubai-day start, for the prune and the grouping. Not unique.
+  day         DateTime @map("day") @db.Date
+  publishedAt DateTime @default(now()) @map("published_at")
+
+  relevance        Int
+  verificationTier Int @map("verification_tier")
+  responseTime     Int @map("response_time")
+  specCompleteness Int @map("spec_completeness")
+  distance         Int
+  planTier         Int @map("plan_tier")
+
+  /// In the vector because a publish that moves no weight and flips this still
+  /// reorders every area and emirate landing page — the highest-traffic
+  /// template in the product. A six-integer history would record that change
+  /// as no change at all.
+  browseRelevanceMode String @map("browse_relevance_mode")
+
+  /// The written reason, as every staff state change carries.
+  reason String
+
+  /// What the impact preview said this publish would do, kept as the claim that
+  /// was made rather than recomputed later against a directory that has moved.
+  /// Null on a publish taken with no preview, which the service refuses — so in
+  /// practice only on rows written before that refusal existed.
+  categoriesMoved Int? @map("categories_moved")
+  listingsMoved   Int? @map("listings_moved")
+  /// The number on the button when it was pressed. Criterion 6.
+  sellersTold     Int? @map("sellers_told")
+
+  publishedById String @map("published_by_id") @db.Uuid
+  publishedBy   User   @relation("RankingPublisher", fields: [publishedById], references: [id], onDelete: Restrict)
+
+  @@index([publishedAt], map: "ranking_publish_at_idx")
+  @@index([day], map: "ranking_publish_day_idx")
+  @@map("ranking_publish")
 }
 
 model PlacementSlot {

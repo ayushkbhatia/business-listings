@@ -23,6 +23,14 @@ import { dubaiDayStart } from "@/lib/format";
  * fast as on a busy one. Without a prune they are the only tables here that grow
  * on a platform with no visitors at all.
  *
+ * **`ranking_publish` is deliberately not here**, though board `12c` `B2` asked
+ * for it. Every table above grows with traffic or with time; that one grows with
+ * staff decisions, at a handful a year, and it is the only record of why the
+ * ranking is what it is. Pruning it would delete the answer to *"who moved this,
+ * when, and why"* ninety days after anybody could still be asking — which is the
+ * question `AuditEvent` is never pruned for either. The `day` column it carries
+ * is for the history tab's grouping, not for a cutoff.
+ *
  * Not a security parameter, unlike `auth_attempt` — nothing here identifies a
  * person. `SearchImpressionDay` holds a phrase and a rank with no actor, and
  * `ListingDeviceDay` holds one of three words. The cutoff is how far back a

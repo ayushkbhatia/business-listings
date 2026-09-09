@@ -881,6 +881,7 @@ async function main() {
      `main` gave them means this branch changes no slug either of them pins.
   */
   await seedReviewDepth(prisma);
+  await seedRankingBoard(prisma);
   await seedModerationQueue(prisma);
   /*
      Board 3j's four tabs, against rows that actually exist.
@@ -5748,6 +5749,116 @@ async function seedModerationQueue(db: Db) {
   console.log(`   ${written} on ${host.slug}, which is suspended`);
 }
 
+/**
+ * Board 12c, so it is not four empty panels on a fresh database.
+ *
+ * Three things the screen cannot produce for itself: live boosts of both kinds,
+ * one pair that stacks so the budget line has something to say, and a published
+ * change so the history tab is a history rather than an empty state. Every
+ * board that is fed by a mutation shows only its empty state until somebody
+ * performs the mutation, and nobody performs one on a fresh checkout.
+ *
+ * No draft is seeded. A draft is one ops lead's unfinished work, and starting
+ * every developer and every acceptance shard inside somebody else's half-made
+ * decision would make the first state anybody sees the wrong one.
+ */
+async function seedRankingBoard(db: Db) {
+  console.log("→ boosts and a published weight change, for board 12c");
+
+  const opsLead = await db.user.findFirst({
+    where: { roles: { has: "staff_ops_lead" } },
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
+  if (!opsLead) {
+    console.log("   skipped — no ops lead in this seed");
+    return;
+  }
+
+  const day = (days: number) => new Date(Date.now() + days * 86_400_000);
+
+  /*
+     A category boost and a listing boost on a member of that category, so the
+     stacking line has a pair to describe — "18 of 25, stacks with …" is the
+     only part of the budget a staff member sees before they hit it.
+  */
+  const thin = await db.business.findFirst({
+    where: { publishedAt: { not: null }, claimStatus: "claimed" },
+    orderBy: { slug: "asc" },
+    select: { id: true, primaryCategoryId: true },
+  });
+  if (!thin) {
+    console.log("   skipped — no published listing in this seed");
+    return;
+  }
+
+  await db.listingBoost.create({
+    data: {
+      categoryId: thin.primaryCategoryId,
+      points: 15,
+      reason: "Thin supply — surfacing the few we have while recruitment catches up.",
+      expiresAt: day(21),
+      createdById: opsLead.id,
+    },
+  });
+
+  await db.listingBoost.create({
+    data: {
+      businessId: thin.id,
+      points: 8,
+      reason: "Goodwill after a six-day outage on their storefront.",
+      expiresAt: day(6),
+      createdById: opsLead.id,
+    },
+  });
+
+  // Expired, and kept. It is the record of why the results looked the way they
+  // did, which is the whole argument for not deleting them.
+  const other = await db.business.findFirst({
+    where: { publishedAt: { not: null }, id: { not: thin.id } },
+    orderBy: { slug: "desc" },
+    select: { id: true },
+  });
+  if (other) {
+    await db.listingBoost.create({
+      data: {
+        businessId: other.id,
+        points: 10,
+        reason: "Recruited into a thin category, first 30 days.",
+        expiresAt: day(-3),
+        createdById: opsLead.id,
+      },
+    });
+  }
+
+  /*
+     One published change, so the history tab has a row and the live weights are
+     something somebody decided rather than something that has always been true.
+     The vector is the shipped default, and the row says so.
+  */
+  const publishedAt = new Date(Date.now() - 9 * 86_400_000);
+  await db.rankingPublish.create({
+    data: {
+      day: new Date(Date.UTC(publishedAt.getUTCFullYear(), publishedAt.getUTCMonth(), publishedAt.getUTCDate())),
+      publishedAt,
+      relevance: 34,
+      verificationTier: 22,
+      responseTime: 18,
+      specCompleteness: 12,
+      distance: 8,
+      planTier: 6,
+      browseRelevanceMode: "redistribute",
+      reason: "The weights the directory launched on, recorded so the history has a floor.",
+      categoriesMoved: null,
+      listingsMoved: null,
+      sellersTold: null,
+      publishedById: opsLead.id,
+    },
+  });
+
+  console.log("   3 boosts (one on a category, one expired) and 1 published vector");
+}
+
 main()
   .then(async () => {
     const counts = {
@@ -5770,6 +5881,8 @@ main()
       auditEvents: await prisma.auditEvent.count(),
       contactReveals: await prisma.contactReveal.count(),
       zeroResults: await prisma.zeroResultQuery.count(),
+      boosts: await prisma.listingBoost.count(),
+      rankingPublishes: await prisma.rankingPublish.count(),
       guides: await prisma.guide.count(),
       areaPages: await prisma.areaPage.count(),
       curatedLists: await prisma.curatedList.count(),

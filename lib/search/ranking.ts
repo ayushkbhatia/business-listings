@@ -90,7 +90,8 @@ export function isBrowseRelevanceMode(value: string): value is BrowseRelevanceMo
  * zero there is nothing to redistribute into and the relevance points are
  * dropped rather than parked somewhere arbitrary — a config of "relevance
  * only" on a page with no query is a config with no ranking in it, and
- * `setWeights` already refuses the all-zero case that would produce it.
+ * `validateWeights` already refuses the all-zero case that would produce it —
+ * it cannot total 100.
  */
 export function weightsForBrowse(
   weights: RankingWeights,
@@ -126,6 +127,119 @@ export function weightsForBrowse(
     next[entry.key] = weights[entry.key] + entry.whole + (extra.get(entry.key) ?? 0);
   }
   return next;
+}
+
+/**
+ * The six always add to this.
+ *
+ * Board `12c` second pass, criterion 2. The shipped model was six independent
+ * integers and the panel said so — *"what matters is the ratio between them,
+ * not the total"* — which is true of the ordering and false of everything
+ * measured against it.
+ *
+ * A boost is added to the weighted sum rather than multiplied into it, and
+ * `RankSignals.boostPoints` says why: *"five points is five points, whatever
+ * the weights happen to be this week."* That only holds while the scale is
+ * fixed. On a free total, the same 25-point boost is a quarter of the ranking
+ * at a total of 100 and a sixth of it at 150, so a cap written once in points
+ * quietly means something different every time somebody moves a slider.
+ *
+ * `weightsForBrowse` already assumed it: its largest-remainder rounding exists
+ * to preserve the total so that a score from a landing page sits on the same
+ * scale as a score from a search. This makes that a rule rather than a
+ * workaround.
+ */
+export const WEIGHT_TOTAL = 100;
+
+/**
+ * The factors a redistribution may not move.
+ *
+ * Distance is pinned because it is the one weight that scores an *unknown* at
+ * half credit for most buyers, so moving it moves everybody by the same amount
+ * and nobody relative to anybody. Plan tier is pinned because it is the
+ * commercial one: a redistribution that quietly raised it would be the exact
+ * thing `PLAN_TIER_CEILING` exists to prevent, arrived at sideways.
+ */
+export const PINNED_KEYS = ["distance", "planTier"] as const satisfies readonly WeightKey[];
+
+export function weightsTotal(weights: RankingWeights): number {
+  return WEIGHT_KEYS.reduce((total, key) => total + weights[key], 0);
+}
+
+/**
+ * Move one weight and take the difference out of the others in proportion.
+ *
+ * The editor's whole interaction. Six sliders and a *must total 100* rule with
+ * no mechanism is the most important behaviour on the board left undefined —
+ * the first render stated the rule and drew nothing that obeyed it.
+ *
+ * Three properties, each asserted in the unit tests:
+ *
+ *   · the total is `WEIGHT_TOTAL` afterwards, always;
+ *   · pinned factors absorb nothing, in either direction;
+ *   · a factor staff set to nought stays at nought. Redistributing *into* a
+ *     signal somebody deliberately switched off makes the editor a suggestion,
+ *     which is the objection `weightsForBrowse` already records.
+ *
+ * Rounding is by largest remainder, for the reason it is there: `Math.round`
+ * per weight loses or invents points depending on the numbers, and a total that
+ * is 99 on some drafts and 101 on others is not a rule.
+ *
+ * Where the absorbers cannot cover the move — every other unpinned weight is
+ * already nought, or the move is larger than they hold between them — the moved
+ * weight is clamped to what they *can* cover rather than the total being broken.
+ * The editor then shows a number lower than the one dragged for, which is
+ * honest: there is nowhere left for the points to come from.
+ */
+export function redistribute(
+  weights: RankingWeights,
+  key: WeightKey,
+  value: number,
+): RankingWeights {
+  const pinned = new Set<WeightKey>(PINNED_KEYS);
+  const absorbers = WEIGHT_KEYS.filter((other) => other !== key && !pinned.has(other));
+  const pool = absorbers.reduce((total, other) => total + weights[other], 0);
+
+  // A pinned weight is set directly and nothing else moves — the total is then
+  // wrong, and `setWeights` refuses it. Pinned means "not part of the give and
+  // take", not "uneditable": the ceiling copy on plan tier would be a lie if
+  // the slider could not be moved at all.
+  if (pinned.has(key)) return { ...weights, [key]: value };
+
+  const headroom = weights[key] + pool;
+  const next = Math.max(0, Math.min(value, headroom));
+  const remaining = pool - (next - weights[key]);
+
+  const result: RankingWeights = { ...weights, [key]: next };
+  if (absorbers.length === 0) return result;
+
+  if (pool === 0) {
+    // Nothing to take from and nothing to give back to. `next` is clamped to
+    // `weights[key]` above in that case, so this is the identity.
+    return result;
+  }
+
+  const exact = absorbers.map((other) => ({
+    key: other,
+    share: (weights[other] * remaining) / pool,
+  }));
+  const whole = exact.map((entry) => ({ ...entry, floor: Math.floor(entry.share) }));
+  let left = remaining - whole.reduce((total, entry) => total + entry.floor, 0);
+
+  const order = [...whole].sort(
+    (a, b) => (b.share - b.floor) - (a.share - a.floor) || weights[b.key] - weights[a.key],
+  );
+  const extra = new Map<WeightKey, number>(order.map((entry) => [entry.key, 0]));
+  for (const entry of order) {
+    if (left <= 0) break;
+    extra.set(entry.key, 1);
+    left -= 1;
+  }
+
+  for (const entry of whole) {
+    result[entry.key] = entry.floor + (extra.get(entry.key) ?? 0);
+  }
+  return result;
 }
 
 /** Above this the results stop being useful and buyers notice inside a week. */
@@ -226,7 +340,7 @@ export function factorScores(signals: RankSignals): FactorScores {
        Normalised against the top achievable rung — 2 — and not the 4 the ladder
        stopped having when site visits were withdrawn. Until this, the strongest
        verification a supplier can hold contributed three quarters of the
-       verification weight, which is 22 of 100 on this scale: the whole
+       verification weight, whatever staff have it set to on board 12c: the whole
        directory ranked as though every verified listing were one rung short of
        something nobody can reach.
     */

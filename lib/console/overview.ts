@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { zeroResultCount } from "@/lib/search/zero-results";
 import { CREDENTIAL_REVIEW_DAYS } from "@/lib/verification";
 
 // Re-exported so callers keep one import. The function itself lives outside
@@ -145,7 +146,13 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
     // the taxonomy screen to the same numbers.
     prisma.category.count({ where: { parentId: { not: null } } }),
     prisma.product.count({ where: { status: "live", specValues: { equals: {} } } }),
-    prisma.zeroResultQuery.count(),
+    /*
+       Thirty days, not all time. Board 12c's right rail is where this metric's
+       link lands and it states the same label, so the two have to be the same
+       number — and an all-time count of zero-result searches only ever goes up,
+       which makes it a milestone rather than a queue.
+    */
+    zeroResultCount(),
 
     prisma.business.count({ where: { planId: "free", claimStatus: "claimed" } }),
     prisma.business.count({ where: { claimStatus: "unclaimed" } }),

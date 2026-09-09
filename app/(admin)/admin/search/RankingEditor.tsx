@@ -1,107 +1,100 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { Alert, StatusBadge } from "@/components/display";
-import { Button, Input, Label, Textarea } from "@/components/primitives";
-import { DataTable, Panel, type Column } from "@/components/structure";
-// From `ranking.ts`, which is pure. `settings.ts` is server-only.
+import { useMemo, useState, useTransition } from "react";
+import { Alert } from "@/components/display";
+import { Button, Label, SegmentedControl, Textarea } from "@/components/primitives";
+import { Panel } from "@/components/structure";
 import {
   BROWSE_RELEVANCE_MODES,
+  PINNED_KEYS,
   PLAN_TIER_CEILING,
+  redistribute,
   WEIGHT_KEYS,
+  WEIGHT_TOTAL,
   weightsForBrowse,
+  weightsTotal,
   type BrowseRelevanceMode,
   type RankingWeights,
+  type WeightKey,
 } from "@/lib/search/ranking";
-import { SegmentedControl } from "@/components/primitives";
 import { t } from "@/lib/i18n";
+import { RankingSlider } from "./RankingSlider";
 import type { ActionResult } from "./actions";
 
 /**
- * Board 12c — what decides the order, and who we moved by hand.
+ * Board 12c — what decides the order, and what relevance means without a query.
  *
- * The plan weight has a ceiling in the database as well as here, and the copy
- * says why: a directory that sells its way to the top is one nobody comes back
- * to, and the subscription only holds if being found is worth paying for.
+ * ## Two rules that were not on the shipped screen
+ *
+ * **The six add to 100.** They did not: the panel said *"what matters is the
+ * ratio between them, not the total"*, which is true of the ordering and false
+ * of everything measured against it. A boost is added to the weighted sum
+ * rather than multiplied into it, so a 25-point boost is a quarter of the
+ * ranking at a total of 100 and a sixth of it at 150. Moving one slider now
+ * lowers the others in proportion, and `redistribute` is the same pure function
+ * the service validates against, so the editor cannot drift from the rule.
+ *
+ * **Pinned factors absorb nothing.** Distance because it scores an unknown at
+ * half credit for most buyers and therefore moves everybody equally; plan tier
+ * because it is the commercial one, and a redistribution that quietly raised it
+ * would be the ceiling defeated sideways. Both stay editable — the cap's copy
+ * would be a lie beside a slider nobody can move — they are simply not part of
+ * the give and take.
  */
 
-export interface BoostRowView {
-  id: string;
-  businessName: string;
-  points: string;
-  reason: string;
-  expires: string;
-  expired: boolean;
-}
+const PINNED = new Set<WeightKey>(PINNED_KEYS);
 
-const MIN_REASON = 4;
+export interface RankingEditorProps {
+  /** The draft where one exists, otherwise the live weights. */
+  weights: RankingWeights;
+  browseMode: BrowseRelevanceMode;
+  /** True when the numbers above are a saved draft rather than the live row. */
+  isDraft: boolean;
+  mayWrite: boolean;
+  saveDraft: (formData: FormData) => Promise<ActionResult>;
+}
 
 export function RankingEditor({
   weights,
   browseMode,
-  boosts,
-  saveWeights,
-  addBoost,
-}: {
-  weights: Record<string, number>;
-  /** Board 6a §Ranking — what relevance means on a page with no query. */
-  browseMode: BrowseRelevanceMode;
-  boosts: readonly BoostRowView[];
-  saveWeights: (formData: FormData) => Promise<ActionResult>;
-  addBoost: (formData: FormData) => Promise<ActionResult>;
-}) {
-  const [values, setValues] = useState<Record<string, string>>(
-    Object.fromEntries(WEIGHT_KEYS.map((key) => [key, String(weights[key] ?? 0)])),
-  );
+  isDraft,
+  mayWrite,
+  saveDraft,
+}: RankingEditorProps) {
+  const [values, setValues] = useState<RankingWeights>(weights);
   const [mode, setMode] = useState<BrowseRelevanceMode>(browseMode);
   const [reason, setReason] = useState("");
-  const [businessId, setBusinessId] = useState("");
-  const [points, setPoints] = useState("5");
-  const [expiresAt, setExpires] = useState("");
   const [result, setResult] = useState<ActionResult | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const ready = reason.trim().length >= MIN_REASON;
+  const total = weightsTotal(values);
+  const effective = useMemo(() => weightsForBrowse(values, mode), [values, mode]);
+  const ready = reason.trim().length >= 4 && total === WEIGHT_TOTAL;
 
-  function send(action: (formData: FormData) => Promise<ActionResult>, fields: Record<string, string>) {
+  /*
+     `B9`. `redistribute` lifts plan tier's effective weight on every landing
+     page without anyone touching the plan slider — to 9 on the live weights,
+     and past the ceiling at higher relevance. The service refuses it; the
+     editor has to say so before the save, or the refusal arrives attached to a
+     slider the staff member did not move.
+  */
+  const breachesBrowseCeiling = effective.planTier > PLAN_TIER_CEILING;
+
+  function move(key: WeightKey, next: number) {
+    setValues((current) => redistribute(current, key, next));
+  }
+
+  function send() {
     const form = new FormData();
     form.set("reason", reason);
-    for (const [key, value] of Object.entries(fields)) form.set(key, value);
+    form.set("browseRelevanceMode", mode);
+    for (const key of WEIGHT_KEYS) form.set(key, String(values[key]));
     startTransition(async () => {
-      const outcome = await action(form);
+      const outcome = await saveDraft(form);
       setResult(outcome);
       if (outcome.ok) setReason("");
     });
   }
-
-  const columns: Column<BoostRowView>[] = [
-    { key: "business", header: t("ranking.col.business"), render: (row) => row.businessName },
-    {
-      key: "points",
-      header: t("ranking.col.points"),
-      numeric: true,
-      width: "6rem",
-      render: (row) => row.points,
-    },
-    { key: "reason", header: t("ranking.col.reason"), render: (row) => row.reason },
-    {
-      key: "expires",
-      header: t("ranking.col.expires"),
-      mono: true,
-      width: "8rem",
-      render: (row) => row.expires,
-    },
-    {
-      key: "state",
-      header: t("ranking.col.state"),
-      width: "7rem",
-      render: (row) => (
-        <StatusBadge tone={row.expired ? "neutral" : "ok"}>
-          {row.expired ? t("ranking.expired") : t("ranking.live")}
-        </StatusBadge>
-      ),
-    },
-  ];
 
   return (
     <div className="flex flex-col gap-[var(--gutter)]">
@@ -111,46 +104,41 @@ export function RankingEditor({
         </Alert>
       )}
 
-      <div className="flex flex-col gap-1">
-        <Label
-          htmlFor="ranking-reason"
-          requirement="required"
-          requirementLabel={t("field.required")}
-        >
-          {t("builder.reason_label")}
-        </Label>
-        <Textarea
-          id="ranking-reason"
-          rows={2}
-          value={reason}
-          onChange={(event) => setReason(event.target.value)}
-        />
-      </div>
-
-      <Panel title={t("ranking.weights")} description={t("ranking.weights_hint")}>
-        <div className="grid gap-4 sm:grid-cols-3">
+      <Panel
+        title={t("ranking.weights")}
+        description={t("ranking.weights_hint")}
+        eyebrow={t(isDraft ? "ranking.weights_total" : "ranking.weights_total_live", { total })}
+      >
+        <div className="flex flex-col gap-5">
           {WEIGHT_KEYS.map((key) => (
-            <div key={key} className="flex flex-col gap-1">
-              <Label
-                htmlFor={`weight-${key}`}
-                {...(key === "planTier" ? { hint: t("ranking.plan_cap") } : {})}
-              >
-                {t(`ranking.weight.${key}` as never)}
-              </Label>
-              <Input
-                id={`weight-${key}`}
-                inputMode="numeric"
-                value={values[key] ?? "0"}
-                onChange={(event) =>
-                  setValues((current) => ({ ...current, [key]: event.target.value }))
-                }
-              />
-              {key === "planTier" && Number(values[key]) > PLAN_TIER_CEILING && (
-                <p className="text-caption text-bad-ink">{t("ranking.plan_cap")}</p>
-              )}
-            </div>
+            <RankingSlider
+              key={key}
+              label={t(`ranking.weight.${key}` as never)}
+              value={values[key]}
+              onChange={(next) => move(key, next)}
+              disabled={!mayWrite}
+              {...(key === "planTier" ? { ceiling: PLAN_TIER_CEILING } : {})}
+              {...(PINNED.has(key)
+                ? {
+                    hint:
+                      key === "planTier"
+                        ? t("ranking.weight.pinned_capped", { ceiling: PLAN_TIER_CEILING })
+                        : t("ranking.weight.pinned"),
+                  }
+                : {})}
+              {...(key === "responseTime" ? { note: t("ranking.weight.response_note") } : {})}
+              {...(key === "planTier" ? { note: t("ranking.plan_cap") } : {})}
+            />
           ))}
         </div>
+
+        {total !== WEIGHT_TOTAL && (
+          <div className="mt-4">
+            <Alert tone="bad" live="polite">
+              {t("ranking.refuse.total_not_100", { total, expected: WEIGHT_TOTAL })}
+            </Alert>
+          </div>
+        )}
 
         {/*
            Board 6a §Ranking, on the screen that owns the weights.
@@ -158,13 +146,9 @@ export function RankingEditor({
            The landing pages rank on this same config and have no search box, so
            the relevance weight above has nothing to score against. Left alone it
            multiplies zero: somebody moves a 34-point slider and nothing changes
-           on a few hundred pages. The spec asks for the decision to be recorded
-           here rather than implied by a route.
-
-           The preview is the whole reason this control is here rather than in a
-           settings file. "Redistribute" is an abstraction until you see that
-           verification goes from 22 to 35, which is what makes the choice
-           arguable.
+           on a few hundred pages. The preview is the whole reason this control is
+           here rather than in a settings file — "redistribute" is an abstraction
+           until you see verification go from 22 to 34.
         */}
         <div className="mt-6 border-t border-line pt-4">
           {/*
@@ -173,7 +157,8 @@ export function RankingEditor({
              is how a group ends up announced as its first option.
           */}
           <p className="text-caption font-medium text-ink">{t("ranking.browse_mode")}</p>
-          <p className="mt-0.5 text-caption text-muted">{t("ranking.browse_hint")}</p>
+          <p className="mt-0.5 max-w-prose text-caption text-body">{t("ranking.browse_hint")}</p>
+
           <div className="mt-2">
             <SegmentedControl
               label={t("ranking.browse_mode")}
@@ -185,98 +170,101 @@ export function RankingEditor({
               }))}
             />
           </div>
-          <p className="mt-2 max-w-prose text-caption text-muted">
-            {t("ranking.browse_preview", { preview: previewOf(values, mode) })}
+
+          <div className="mt-3 rounded-panel border border-line bg-fill p-3">
+            <p className="font-mono text-eyebrow uppercase text-body">
+              {t("ranking.browse_preview")}
+            </p>
+            <p className="mt-1 font-mono text-body-sm tabular-nums text-ink">
+              {WEIGHT_KEYS.filter((key) => effective[key] > 0)
+                .map((key) => `${t(`ranking.weight.${key}` as never)} ${effective[key]}`)
+                .join(" · ")}
+            </p>
+            <p className="mt-1.5 max-w-prose text-caption text-body">{effectiveNote(effective, values)}</p>
+          </div>
+
+          {breachesBrowseCeiling && (
+            <div className="mt-3">
+              <Alert tone="bad" live="polite">
+                {t("ranking.refuse.browse_plan_tier_too_high", {
+                  ceiling: PLAN_TIER_CEILING,
+                  effective: effective.planTier,
+                  authored: values.planTier,
+                })}
+              </Alert>
+            </div>
+          )}
+        </div>
+
+        {mayWrite ? (
+          <div className="mt-6 flex flex-col gap-3 border-t border-line pt-4">
+            <div className="flex flex-col gap-1">
+              <Label
+                htmlFor="ranking-reason"
+                requirement="required"
+                requirementLabel={t("field.required")}
+              >
+                {t("builder.reason_label")}
+              </Label>
+              <Textarea
+                id="ranking-reason"
+                rows={2}
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+              />
+            </div>
+            <div>
+              <Button disabled={!ready || pending || breachesBrowseCeiling} onClick={send}>
+                {t("ranking.save")}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="mt-6 max-w-prose border-t border-line pt-4 text-caption text-body">
+            {t("ranking.read_only")}
           </p>
-        </div>
-
-        <div className="mt-4">
-          <Button
-            disabled={!ready || pending}
-            onClick={() =>
-              send(saveWeights, {
-                ...(values as Record<string, string>),
-                browseRelevanceMode: mode,
-              })
-            }
-          >
-            {t("ranking.save")}
-          </Button>
-        </div>
+        )}
       </Panel>
-
-      <Panel title={t("ranking.add_boost")} description={t("ranking.boosts_hint")}>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="boost-business">{t("ranking.business_id")}</Label>
-            <Input
-              id="boost-business"
-              mono
-              value={businessId}
-              onChange={(event) => setBusinessId(event.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="boost-points" hint={t("ranking.points_hint")}>
-              {t("ranking.points")}
-            </Label>
-            <Input
-              id="boost-points"
-              inputMode="numeric"
-              value={points}
-              onChange={(event) => setPoints(event.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="boost-expires" hint={t("ranking.expires_hint")}>
-              {t("ranking.expires")}
-            </Label>
-            <Input
-              id="boost-expires"
-              type="date"
-              value={expiresAt}
-              onChange={(event) => setExpires(event.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="mt-4">
-          <Button
-            disabled={!ready || pending || !businessId.trim() || !expiresAt}
-            onClick={() => send(addBoost, { businessId, points, expiresAt })}
-          >
-            {t("ranking.boost")}
-          </Button>
-        </div>
-      </Panel>
-
-      <DataTable
-        caption={t("ranking.boosts")}
-        columns={columns}
-        rows={boosts}
-        rowKey={(row) => row.id}
-        stickyHeader
-        empty={
-          <div className="text-center">
-            <p className="text-body-sm text-body">{t("ranking.boosts_empty")}</p>
-          </div>
-        }
-      />
     </div>
   );
 }
 
 /**
- * What the six weights become on a page with no query.
+ * The sentence under the effective vector.
  *
- * Computed by the same pure function the ranking runs, not restated: a preview
- * that agreed with the ranking only until somebody changed one of them would be
- * worse than no preview, because it would be believed.
+ * Two facts, both derived: which factor leads a browse page, and where plan
+ * tier landed. The second is the one worth saying — it moves without anybody
+ * touching its slider, and that is exactly the property `B9` is about.
+ *
+ * *Overtakes* is only written where a factor actually overtook another. The
+ * first version of this line said it whenever the mode redistributed, which on
+ * the live weights read *"Verification tier overtakes Measured reply time"*
+ * about a pair that was already in that order and stayed in it. A sentence that
+ * describes a change nothing made is the same defect as a padded row.
  */
-function previewOf(values: Record<string, string>, mode: BrowseRelevanceMode): string {
-  const current = Object.fromEntries(
-    WEIGHT_KEYS.map((key) => [key, Number(values[key] ?? 0) || 0]),
-  ) as unknown as RankingWeights;
-  const next = weightsForBrowse(current, mode);
-  return WEIGHT_KEYS.map((key) => `${t(`ranking.weight.${key}` as never)} ${next[key]}`).join(" · ");
+function effectiveNote(effective: RankingWeights, authored: RankingWeights): string {
+  const others = WEIGHT_KEYS.filter((key) => key !== "relevance");
+  const leaderOf = (weights: RankingWeights) =>
+    [...others].sort((a, b) => weights[b] - weights[a])[0];
+
+  const was = leaderOf(authored);
+  const now = leaderOf(effective);
+  const planMoved = effective.planTier !== authored.planTier;
+
+  if (!planMoved && was === now) return t("ranking.effective_flat");
+
+  if (was !== now && was && now) {
+    return t("ranking.effective_note", {
+      leader: t(`ranking.weight.${now}` as never),
+      runner_up: t(`ranking.weight.${was}` as never),
+      authored: authored.planTier,
+      effective: effective.planTier,
+    });
+  }
+
+  return t("ranking.effective_leads", {
+    leader: t(`ranking.weight.${now}` as never),
+    authored: authored.planTier,
+    effective: effective.planTier,
+  });
 }
