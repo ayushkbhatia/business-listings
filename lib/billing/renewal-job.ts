@@ -1,4 +1,5 @@
 import "server-only";
+import { t } from "@/lib/i18n";
 import { prisma } from "@/lib/db/client";
 import { paymentProvider } from "./provider";
 import { advance, periodPriceAed, type BillingTerm } from "./period";
@@ -109,9 +110,52 @@ export async function runRenewals(now: Date = new Date()): Promise<RenewalResult
       ),
     );
 
-    // A free subscription has nothing to renew, and a zero-fils attempt row
-    // would fail `payment_attempt_amount_is_positive` anyway.
-    if (periodFils <= 0) continue;
+    /*
+       The sponsored slots this account holds, billed on the same invoice. D2.
+
+       "The slot belongs to the subscription" is not only about when it ends. A
+       placement that is never billed is a thing we sell and never charge for —
+       `lib/billing/invoice.ts` carried the admission in a comment for months —
+       and the term question cannot be answered honestly while the money
+       question is unanswered.
+
+       Priced through `periodPriceAed`, the same helper the plan uses, so an
+       annual account gets the annual treatment on the placement too. Choosing
+       differently would mean a seller on a ten-month year paying twelve months
+       of placement, which is a discount that stops at an arbitrary line.
+
+       Read before the charge, because the invoice has to equal what was taken.
+       An invoice that lists more than the card was charged is the reconciliation
+       failure board 4g exists to catch.
+    */
+    const slots = await prisma.placementSlot.findMany({
+      where: {
+        businessId: subscription.businessId,
+        startsOn: { lte: now },
+        OR: [{ endsOn: null }, { endsOn: { gt: now } }],
+      },
+      select: { id: true, monthlyPriceAed: true, category: { select: { name: true } } },
+    });
+
+    const placements = slots.map((slot) => ({
+      id: slot.id,
+      categoryName: slot.category.name,
+      fils: aedToFils(
+        periodPriceAed(
+          {
+            monthlyPriceAed: Number(slot.monthlyPriceAed),
+            annualMonthsCharged: subscription.plan.annualMonthsCharged,
+          },
+          term,
+        ),
+      ),
+    }));
+    const placementFils = placements.reduce((total, slot) => total + slot.fils, 0);
+    const chargeFils = periodFils + placementFils;
+
+    // A free subscription with no placement has nothing to renew, and a
+    // zero-fils attempt row would fail `payment_attempt_amount_is_positive`.
+    if (chargeFils <= 0) continue;
 
     const provider = paymentProvider();
 
@@ -149,7 +193,7 @@ export async function runRenewals(now: Date = new Date()): Promise<RenewalResult
 
     const charge = await provider.charge({
       businessId: subscription.businessId,
-      fils: periodFils,
+      fils: chargeFils,
       description,
       reference,
     });
@@ -159,7 +203,7 @@ export async function runRenewals(now: Date = new Date()): Promise<RenewalResult
         await tx.paymentAttempt.create({
           data: {
             subscriptionId: subscription.id,
-            amountFils: periodFils,
+            amountFils: chargeFils,
             succeeded: false,
             providerMessage: charge.error ?? null,
           },
@@ -216,7 +260,7 @@ export async function runRenewals(now: Date = new Date()): Promise<RenewalResult
       await tx.paymentAttempt.create({
         data: {
           subscriptionId: subscription.id,
-          amountFils: periodFils,
+          amountFils: chargeFils,
           succeeded: true,
           providerMessage: charge.providerRef ?? null,
         },
@@ -256,10 +300,41 @@ export async function runRenewals(now: Date = new Date()): Promise<RenewalResult
               periodStart: subscription.renewsAt,
               periodEnd: nextRenewsAt,
             },
+            /*
+               One line per slot, named by its category.
+
+               Separate lines rather than one summed "Sponsored placement",
+               because a seller holding two reads the invoice to check they are
+               paying for the two they think they hold — and `4g` can only
+               report placement revenue per category if the line says which.
+            */
+            ...placements.map((slot) => ({
+              kind: "placement" as const,
+              description: t("placement.invoice_line", { category: slot.categoryName }),
+              fils: slot.fils,
+              periodStart: subscription.renewsAt,
+              periodEnd: nextRenewsAt,
+            })),
           ],
         },
         tx,
       );
+
+      /*
+         And the slots run to the same date the subscription now does.
+
+         This is what "the slot belongs to the subscription" means at the level
+         of a row: one end date, moved by one event, so the two can never
+         disagree. It also removes the thirty-day clock as a second source of
+         truth — `takeSlot` still writes a thirty-day `endsOn` for a slot bought
+         mid-period, and the first renewal after that aligns it.
+      */
+      if (placements.length > 0) {
+        await tx.placementSlot.updateMany({
+          where: { id: { in: placements.map((slot) => slot.id) } },
+          data: { endsOn: nextRenewsAt },
+        });
+      }
 
       return issued.id;
     });

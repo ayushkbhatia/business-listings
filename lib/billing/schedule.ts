@@ -1,4 +1,9 @@
 import "server-only";
+import {
+  creditUnusedPlacement,
+  endPlacementsFor,
+  type EndedPlacement,
+} from "@/lib/placement/term";
 import { Prisma, type CancelReason, type SubscriptionChangeKind } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { assertCanChangePlan } from "@/lib/auth/guards";
@@ -278,6 +283,8 @@ const PLAN_SELECT = {
 export interface AppliedChanges {
   applied: number;
   ranAt: Date;
+  /** Sponsored slots ended by a downgrade off eligibility. D2. */
+  placementsEnded: number;
 }
 
 /**
@@ -322,6 +329,10 @@ export async function applyDueChanges(now = new Date()): Promise<AppliedChanges>
   });
 
   let applied = 0;
+  let placementsEnded = 0;
+  // Credited after the loop, outside the transaction. See the note on the same
+  // pattern in `applyEndedCancellations`.
+  const endedPlacements: { businessId: string; ended: EndedPlacement[] }[] = [];
 
   for (const change of due) {
     const toPlan: PlanCaps & { annualMonthsCharged: number | null } = {
@@ -404,6 +415,23 @@ export async function applyDueChanges(now = new Date()): Promise<AppliedChanges>
         note: `Scheduled change to ${toPlan.name} reached its date`,
       });
 
+      /*
+         A downgrade off `sponsoredEligible` takes the slot with it. D2.
+
+         Only when the new plan does not carry it, so an upgrade and a sideways
+         move leave the placement alone — this is the plan losing the
+         entitlement, not any plan change at all. `toPlan` is the snapshot being
+         frozen onto the subscription three statements above, so it is the same
+         answer every screen will give afterwards.
+      */
+      if (!toPlan.sponsoredEligible) {
+        const ended = await endPlacementsFor(tx, change.businessId, now, "downgraded");
+        if (ended.length > 0) {
+          placementsEnded += ended.length;
+          endedPlacements.push({ businessId: change.businessId, ended });
+        }
+      }
+
       await tx.subscriptionChange.update({
         where: { id: change.id },
         data: { appliedAt: now },
@@ -413,7 +441,11 @@ export async function applyDueChanges(now = new Date()): Promise<AppliedChanges>
     applied += 1;
   }
 
-  return { applied, ranAt: now };
+  for (const row of endedPlacements) {
+    await creditUnusedPlacement(row.ended, row.businessId, now);
+  }
+
+  return { applied, placementsEnded, ranAt: now };
 }
 
 /**

@@ -14,6 +14,8 @@ export interface SlotRow {
   takenUntil: string | null;
   queued: boolean;
   ahead: number;
+  /** Queued for it, and it has come free since. */
+  freed: boolean;
   monthlyPriceAed: number;
 }
 
@@ -62,9 +64,11 @@ export function SlotList({ slots, takeAction, leaveAction }: SlotListProps) {
               <span className="mt-0.5 block text-caption text-muted">
                 {slot.mine
                   ? t("promote.yours", { when: slot.takenUntil ?? "—" })
-                  : slot.takenUntil
-                    ? t("promote.taken", { when: slot.takenUntil })
-                    : t("promote.available", { price: formatCount(slot.monthlyPriceAed) })}
+                  : slot.freed
+                    ? t("promote.freed")
+                    : slot.takenUntil
+                      ? t("promote.taken", { when: slot.takenUntil })
+                      : t("promote.available", { price: formatCount(slot.monthlyPriceAed) })}
               </span>
             </div>
 
@@ -73,6 +77,29 @@ export function SlotList({ slots, takeAction, leaveAction }: SlotListProps) {
                 <StatusBadge tone="ok" shape="chip" size="sm">
                   {t("plan.current")}
                 </StatusBadge>
+              ) : slot.freed ? (
+                /*
+                   Queued, and it came free. The whole point of a queue is that
+                   the person at the front finds out — `notifiedAt` was written
+                   by nothing and read by nothing until D2, so a seller could
+                   sit second in a queue of one for a slot that had been
+                   available for a month.
+
+                   A primary action rather than a notice: they already said they
+                   wanted this, so the screen offers the thing they asked for.
+                */
+                <>
+                  <StatusBadge tone="ok" shape="chip" size="sm">
+                    {t("promote.freed_badge")}
+                  </StatusBadge>
+                  <Button
+                    size="sm"
+                    disabled={pending}
+                    onClick={() => run(takeAction, slot.categoryId)}
+                  >
+                    {t("promote.buy")}
+                  </Button>
+                </>
               ) : slot.queued ? (
                 <>
                   <span className="text-caption text-muted">

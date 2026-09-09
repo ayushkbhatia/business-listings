@@ -41,6 +41,14 @@ export interface SlotView {
   queued: boolean;
   /** How many are ahead of them. Only meaningful when `queued`. */
   ahead: number;
+  /**
+   * They queued for this, and it has since come free.
+   *
+   * `PlacementWaitlist.notifiedAt` had no writer and no reader for as long as
+   * the model existed. `endPlacementsFor` writes it the moment a slot ends;
+   * this is the half that means somebody finds out.
+   */
+  freed: boolean;
   monthlyPriceAed: number;
 }
 
@@ -62,31 +70,58 @@ export async function slotsFor(
         startsOn: { lte: now },
         OR: [{ endsOn: null }, { endsOn: { gt: now } }],
       },
-      select: { categoryId: true, emirate: true, businessId: true, endsOn: true },
+      select: {
+        categoryId: true,
+        emirate: true,
+        businessId: true,
+        endsOn: true,
+        monthlyPriceAed: true,
+      },
     }),
     prisma.placementWaitlist.findMany({
       where: { categoryId: { in: [...categoryIds] } },
       orderBy: { createdAt: "asc" },
-      select: { categoryId: true, emirate: true, businessId: true },
+      select: { categoryId: true, emirate: true, businessId: true, notifiedAt: true },
     }),
   ]);
 
   return categories.map((category) => {
-    // Emirate-less for now: a slot is bought per category nationally until the
-    // per-emirate picker exists, and the model already carries the column.
-    const slot = held.find((h) => h.categoryId === category.id && h.emirate === null);
-    const line = queue.filter((q) => q.categoryId === category.id && q.emirate === null);
+    /*
+       Any slot in this category, whatever emirate it is scoped to.
+
+       This looked only at `emirate === null`. Buying is still national-only —
+       the per-emirate picker is board `11e`'s own work — but *reading* had the
+       same blind spot, and the two are not the same mistake. The seed carries a
+       Dubai slot at AED 1,200; the seller holding it was shown the category as
+       "Available, AED 450 a month" and could have bought a second, national
+       slot on top of the one they already had.
+
+       So: the screen sees what exists, and the purchase stays national until
+       the picker lands.
+    */
+    const slot = held.find((h) => h.categoryId === category.id);
+    const line = queue.filter((q) => q.categoryId === category.id);
     const position = line.findIndex((q) => q.businessId === businessId);
 
     return {
       categoryId: category.id,
       categoryName: category.name,
-      emirate: null,
+      emirate: slot?.emirate ?? null,
       mine: slot?.businessId === businessId,
       takenUntil: slot && slot.businessId !== businessId ? (slot.endsOn ?? null) : null,
       queued: position >= 0,
       ahead: position >= 0 ? position : line.length,
-      monthlyPriceAed: SLOT_MONTHLY_AED,
+      // Told, and actually free. Both, because a slot can be taken again
+      // between the notification and the seller opening this screen, and
+      // "it is yours to take" over a slot somebody else now holds is worse
+      // than never having said anything.
+      freed: position >= 0 && Boolean(line[position]?.notifiedAt) && !slot,
+      /*
+         What this slot costs, from the row where one is sold and from the list
+         price where none is. A held slot priced from the constant told the
+         seller holding the seeded 1,200 slot that it cost 450.
+      */
+      monthlyPriceAed: slot ? Number(slot.monthlyPriceAed) : SLOT_MONTHLY_AED,
     };
   });
 }
@@ -133,10 +168,17 @@ export async function takeSlot(
     return { ok: false, error: t("promote.refuse.plan", { plan: plan.name }) };
   }
 
+  /*
+     Anybody's live slot in this category, in any emirate.
+
+     Not `emirate: null`. A business already holding an emirate-scoped slot here
+     would otherwise pass this check and buy the national one on top, ending up
+     paying twice to sit in one place — which the seeded Dubai slot made a live
+     case rather than a hypothetical.
+  */
   const existing = await prisma.placementSlot.findFirst({
     where: {
       categoryId,
-      emirate: null,
       startsOn: { lte: now },
       OR: [{ endsOn: null }, { endsOn: { gt: now } }],
     },
@@ -165,6 +207,15 @@ export async function takeSlot(
     }
     return { ok: true, queued: true };
   }
+
+  /*
+     Off the queue, because they are no longer waiting for it.
+
+     Deleted rather than left with `notifiedAt` set: a row in a queue for a slot
+     you already hold is a row that would put you second in line for your own
+     placement the next time it frees.
+  */
+  await prisma.placementWaitlist.deleteMany({ where: { businessId, categoryId } });
 
   await prisma.placementSlot.create({
     data: {
