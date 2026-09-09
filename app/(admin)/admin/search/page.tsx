@@ -189,7 +189,11 @@ export default async function SearchPage({
                   saveDraft={saveDraftWeights}
                 />
 
-                {preview && <ImpactTable rows={impactRows} unread={preview.unread} />}
+                {preview && (
+                  <Panel title={t("ranking.impact")} description={t("ranking.impact_hint")}>
+                    <ImpactTable rows={impactRows} unread={preview.unread} />
+                  </Panel>
+                )}
               </div>
 
               <aside className="flex flex-col gap-[var(--gutter)]">

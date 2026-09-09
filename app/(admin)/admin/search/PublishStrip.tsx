@@ -130,8 +130,19 @@ export function PublishStrip({
           ? { label: t("ranking.step.preview_running"), tone: "neutral" as const }
           : { label: t("ranking.step.preview_none"), tone: "neutral" as const };
 
+  /*
+     A `role="group"`, not a `<section aria-label>`.
+
+     A named section is a landmark, and a landmark is a page region a screen
+     reader user navigates *between*. This is three steps inside one — naming it
+     as a region put "Publish" in the landmark list beside Main and the
+     navigation, and the gallery, which renders the strip in six states, turned
+     that into six identical entries. `group` names the thing without claiming it
+     is a destination.
+  */
   return (
-    <section
+    <div
+      role="group"
       aria-label={t("ranking.step.publish")}
       className="rounded-panel border border-line bg-card p-4"
     >
@@ -239,6 +250,6 @@ export function PublishStrip({
           </div>
         </div>
       )}
-    </section>
+    </div>
   );
 }

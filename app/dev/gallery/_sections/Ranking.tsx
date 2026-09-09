@@ -212,6 +212,10 @@ export function Ranking() {
           </div>
         </States>
 
+        {/*
+           No `Panel` around either. It is the page's chrome, and two of them
+           here would be two landmarks called "What publishing would change".
+        */}
         <States label="impact" stack>
           <div className="w-full">
             <ImpactTable rows={IMPACT_ROWS} unread={0} />

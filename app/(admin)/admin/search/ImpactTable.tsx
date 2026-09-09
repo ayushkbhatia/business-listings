@@ -1,6 +1,6 @@
 "use client";
 
-import { DataTable, Panel, type Column } from "@/components/structure";
+import { DataTable, type Column } from "@/components/structure";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
@@ -17,6 +17,12 @@ import { t } from "@/lib/i18n";
  * is the one thing this project will not do, and an impact preview that listed
  * every category with three dashes against most of them would be worse than
  * shorter — it would read as an impact.
+ *
+ * The `Panel` around it belongs to the page, not to this component. `Panel`
+ * with a title is a landmark, and a component that carries its own means the
+ * gallery cannot show two of its states without putting two identically named
+ * regions in the landmark list — which is what the acceptance suite caught.
+ * Page chrome is the page's to supply.
  */
 
 export interface ImpactRowView {
@@ -71,7 +77,7 @@ export function ImpactTable({ rows, unread }: ImpactTableProps) {
   ];
 
   return (
-    <Panel title={t("ranking.impact")} description={t("ranking.impact_hint")}>
+    <>
       <DataTable
         caption={t("ranking.impact.caption")}
         columns={columns}
@@ -92,6 +98,6 @@ export function ImpactTable({ rows, unread }: ImpactTableProps) {
           {t("ranking.impact.unread", { count: formatCount(unread) })}
         </p>
       )}
-    </Panel>
+    </>
   );
 }
