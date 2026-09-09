@@ -291,7 +291,18 @@ export async function saveGuide(input: SaveGuideInput): Promise<GuideResult<{ id
   const existing = input.id
     ? await prisma.guide.findUnique({
         where: { id: input.id },
-        select: { id: true, slug: true, title: true, publishedAt: true },
+        // `byline` and `bylineRole` are here for the audit row, not for the
+        // write. Board 6d's answer names a real person on a published article,
+        // and a change of credit that leaves no record is the one edit on this
+        // screen somebody could make and deny.
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+          byline: true,
+          bylineRole: true,
+          publishedAt: true,
+        },
       })
     : null;
   if (input.id && !existing) return refuse("not_found");
@@ -350,12 +361,33 @@ export async function saveGuide(input: SaveGuideInput): Promise<GuideResult<{ id
           await tx.guide.update({ where: { id: existing.id }, data });
           return {
             result: existing.id,
-            before: { slug: existing.slug, title: existing.title },
-            after: { slug, title, words: guideWords(blocks) },
+            before: {
+              slug: existing.slug,
+              title: existing.title,
+              byline: existing.byline,
+              bylineRole: existing.bylineRole,
+            },
+            after: {
+              slug,
+              title,
+              words: guideWords(blocks),
+              byline: data.byline,
+              bylineRole: data.bylineRole ?? null,
+            },
           };
         }
         const row = await tx.guide.create({ data, select: { id: true } });
-        return { result: row.id, before: null, after: { slug, title, words: guideWords(blocks) } };
+        return {
+          result: row.id,
+          before: null,
+          after: {
+            slug,
+            title,
+            words: guideWords(blocks),
+            byline: data.byline,
+            bylineRole: data.bylineRole ?? null,
+          },
+        };
       },
     ),
   );

@@ -171,6 +171,42 @@ describe("saving", () => {
     expect(audit?.actorId).toBe(opsLeadId);
   }, 60_000);
 
+  it("records a change of credit, because it is a decision somebody made", async () => {
+    /*
+       Board 6d, answered 9 Sep 2026: guides publish under a named member of
+       staff. That makes the byline a claim — a name over an article about
+       licensing and VAT says who stands behind it — and a claim that can be
+       changed with no record is the one edit on this screen somebody could make
+       and then deny.
+
+       The audit row carried slug, title and word count and not this.
+    */
+    const fixture = await draft("credit-audited", longBody());
+
+    const result = await saveGuide({
+      actor: lead(),
+      id: fixture.id,
+      slug: fixture.slug,
+      title: "What verification proves",
+      summary: "Four rungs and what each one checks against.",
+      byline: "Ayush Bhatia",
+      bylineRole: "Founder",
+      ctaCategoryId: null,
+      blocks: longBody(),
+      reason: "Naming the editor.",
+    });
+    expect(result.ok).toBe(true);
+
+    const audit = await prisma.auditEvent.findFirst({
+      where: { subject: `Guide:${fixture.slug}` },
+      orderBy: { createdAt: "desc" },
+    });
+    // Both sides, so the row says what it was as well as what it became — an
+    // "after" alone cannot tell a correction from a first naming.
+    expect(audit?.before).toMatchObject({ byline: null });
+    expect(audit?.after).toMatchObject({ byline: "Ayush Bhatia", bylineRole: "Founder" });
+  }, 60_000);
+
   it("refuses a slug that is not one", async () => {
     for (const bad of ["Not A Slug", "trailing-", "has_underscore", "", "has/slash"]) {
       const result = await saveGuide({

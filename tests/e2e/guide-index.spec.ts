@@ -133,11 +133,20 @@ test.describe("the page a reader sees", () => {
 });
 
 test.describe("the author page the strip links to", () => {
-  test("resolves, and states what is not known rather than inventing it", async ({ page }) => {
+  test("resolves, and says what a byline on this site actually means", async ({ page }) => {
     await page.goto("/guides/how-we-check");
     await expect(page.getByRole("heading", { level: 1 })).toContainText(/how we check/i);
-    // Board 6d Q1 is unanswered. The page says so instead of naming somebody.
-    await expect(page.getByText(/do not yet carry an individual byline/i)).toBeVisible();
+    /*
+       Board 6d Q1 was answered on 9 Sep 2026 — a named editor now, more names
+       later. This asserted the opposite: that guides "do not yet carry an
+       individual byline", which was true of the decision and false of the seed,
+       where four guides were published under a person who did not exist.
+
+       What the page owes now is not the absence of a name but the meaning of
+       one, because a byline over an article about licensing and VAT is a claim.
+    */
+    await expect(page.getByText(/stands behind the article, not who typed it/i)).toBeVisible();
+    await expect(page.getByText(/do not yet carry an individual byline/i)).toHaveCount(0);
   });
 
   test("axe clean", async ({ page }) => {
