@@ -115,7 +115,6 @@ model User {
   viewAsSessions          ViewAsSession[]          @relation("ViewAsStaff")
   callsMade               CallOutcome[]            @relation("CallStaff")
   candidatesDismissed     MergeCandidate[]         @relation("CandidateDismissedBy")
-  proposalsDecided        SpecFieldProposal[]      @relation("ProposalDecidedBy")
   templateVersions        TemplateVersion[]
   specRevisions           SellerTemplateRevision[] @relation("TemplateRevisionAuthor")
   boostsCreated           ListingBoost[]
@@ -327,7 +326,6 @@ model Category {
   positionDays      CategoryPositionDay[]
   rankDays          CategoryRankDay[]
   placementWaitlist PlacementWaitlist[]
-  fieldProposals    SpecFieldProposal[]
   stagedListings    StagedListing[]
   guideCtas         Guide[]                @relation("GuideCtaCategory")
   areaPages         AreaPage[]
@@ -461,7 +459,6 @@ model SpecField {
   sortOrder       Int       @default(0) @map("sort_order")
 
   template  SpecTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  proposals SpecFieldProposal[]
 
   @@unique([templateId, key])
   @@index([templateId, isFilterable])
@@ -2270,20 +2267,6 @@ model ClaimConflict {
   @@map("claim_conflict")
 }
 
-enum ProposalState {
-  proposed
-  promoted
-  declined
-
-  @@map("proposal_state")
-}
-
-/// A field enough sellers invented that it should be in the shared template.
-///
-/// `SellerTemplate.fieldMappings` is an opaque Json blob, so "appears often
-/// enough" was not a countable thing. One row per (category, normalised key)
-/// with a business count makes it one — and that promotion path is what stops
-/// 40,000 businesses inventing 40,000 attribute names.
 /// A licence-authority export, staged.
 ///
 /// Nothing here publishes itself. A run parses, categorises what it can, queues
@@ -2572,30 +2555,6 @@ model CallOutcome {
 
   @@index([businessId, createdAt(sort: Desc)], map: "call_outcome_business_idx")
   @@map("call_outcome")
-}
-
-model SpecFieldProposal {
-  id              String        @id @default(cuid())
-  categoryId      String        @map("category_id")
-  /// Lowercased and punctuation-stripped, so "Wall Thk." and "wall thk" are one
-  /// proposal. The label a seller actually typed is kept beside it.
-  key             String
-  sampleLabel     String        @map("sample_label")
-  businessCount   Int           @default(0) @map("business_count")
-  state           ProposalState @default(proposed)
-  promotedFieldId String?       @map("promoted_field_id")
-  decidedById     String?       @map("decided_by_id") @db.Uuid
-  decidedAt       DateTime?     @map("decided_at")
-  reason          String?
-  createdAt       DateTime      @default(now()) @map("created_at")
-
-  category      Category   @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  promotedField SpecField? @relation(fields: [promotedFieldId], references: [id], onDelete: SetNull)
-  decidedBy     User?      @relation("ProposalDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
-
-  @@unique([categoryId, key], map: "spec_field_proposal_category_key_key")
-  @@index([state, businessCount(sort: Desc)], map: "spec_field_proposal_ranked_idx")
-  @@map("spec_field_proposal")
 }
 
 model MissedEnquiry {
