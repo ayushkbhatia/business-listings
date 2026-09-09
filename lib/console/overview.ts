@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { zeroResultCount } from "@/lib/search/zero-results";
-import { CREDENTIAL_REVIEW_DAYS } from "@/lib/verification";
+import { CREDENTIAL_REVIEW_DAYS, VERIFIED_TIER } from "@/lib/verification";
 
 // Re-exported so callers keep one import. The function itself lives outside
 // this module because it is pure and `server-only` is not testable in jsdom.
@@ -176,11 +176,23 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
     prisma.subscription.count({ where: { status: "past_due" } }),
     prisma.invoice.count({ where: { status: "issued", paidAt: null } }),
 
-    // Tier 3 and 4 rest on a licence. One that expires drops the tier, and the
-    // seller finds out from the badge rather than from us unless somebody looks.
+    /*
+       Verification rests on a licence. One that expires drops the tier, and the
+       seller finds out from the badge rather than from us unless somebody looks.
+
+       This asked for `gte: 3` against a ladder that ends at 2 — `VerificationTier`
+       is `0 | 1 | 2`, `TOP_ACHIEVABLE_TIER` is `VERIFIED_TIER`, and the database
+       CHECK is `BETWEEN 0 AND 2`. No row could ever match, so the trust panel
+       showed 0 for every day it has shipped and no expiring licence has ever
+       surfaced on it. The number was structurally zero rather than measured, and
+       a metric that cannot be non-zero is worse than an absent one: it reads as
+       "nothing to do here".
+
+       Bound to the constant now, so the ladder cannot move away from it again.
+    */
     prisma.business.count({
       where: {
-        verificationTier: { gte: 3 },
+        verificationTier: { gte: VERIFIED_TIER },
         licenceExpiry: { lt: new Date(now.getTime() + 30 * DAY_MS) },
       },
     }),

@@ -97,11 +97,23 @@ describe("the buyer's ticks decide who it reaches", () => {
        ranked next, delivering to somebody the buyer never ticked — possibly one
        they had deliberately unticked.
     */
+    /*
+       On a plan with no monthly cap, deliberately.
+
+       The cap is applied to a chosen id now — it was not, and the composer's
+       path was where it leaked. So a fixture that picks whoever comes first can
+       pick a seller who is at their ceiling, and the send then correctly
+       refuses with `no_recipients`: the test would be asserting the cap rather
+       than the thing it is about, and only on the runs where the arithmetic
+       happened to land that way. Pro is the seeded plan with `enquiriesPerMonth`
+       null.
+    */
     const candidates = await prisma.business.findMany({
       where: {
         publishedAt: { not: null },
         suspendedAt: null,
         claimStatus: "claimed",
+        plan: { enquiriesPerMonth: null },
         products: { some: { categoryId, status: { not: "draft" } } },
       },
       select: { id: true },

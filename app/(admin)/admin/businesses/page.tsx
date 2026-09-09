@@ -26,7 +26,22 @@ export default async function BusinessesPage() {
   // gating is per row and per action, below.
   const seat = await requireStaff();
 
-  const [businesses, badges] = await Promise.all([
+  /*
+     The two figures in the header are queries, not slices of this page.
+
+     They were `rows.length` and `rows.filter(state === "live").length` over a
+     `take: 300`, printed into "{count} listings, {claimed} claimed" — so the
+     screen that owns suspension across a directory its own copy calls 41,000
+     listings reported "300 listings" and would have kept saying it. Every
+     number is a query; a page cap wearing a total is the version of that rule
+     this project keeps breaking.
+
+     `claimed` also counted the wrong set. `state` is a precedence chain where
+     `suspendedAt` wins, then `mergedIntoId`, so a claimed business that had
+     been suspended stopped being claimed as far as the header was concerned.
+     Claim status is its own column and is what the word means.
+  */
+  const [businesses, badges, listingCount, claimedCount] = await Promise.all([
     prisma.business.findMany({
       orderBy: [{ suspendedAt: { sort: "desc", nulls: "last" } }, { displayName: "asc" }],
       take: 300,
@@ -43,6 +58,8 @@ export default async function BusinessesPage() {
       },
     }),
     getAdminNavBadges(seat),
+    prisma.business.count(),
+    prisma.business.count({ where: { claimStatus: "claimed" } }),
   ]);
 
   /*
@@ -77,8 +94,6 @@ export default async function BusinessesPage() {
     maySuspend,
   }));
 
-  const claimed = rows.filter((row) => row.state === "live").length;
-
   return (
     <AdminPage
       seat={seat}
@@ -89,9 +104,15 @@ export default async function BusinessesPage() {
       meta={
         <span className="text-caption text-muted">
           {t("admin.businesses.meta", {
-            count: formatCount(rows.length),
-            claimed: formatCount(claimed),
+            count: formatCount(listingCount),
+            claimed: formatCount(claimedCount),
           })}
+          {listingCount > rows.length && (
+            <>
+              {" · "}
+              {t("admin.businesses.showing", { count: formatCount(rows.length) })}
+            </>
+          )}
         </span>
       }
     >

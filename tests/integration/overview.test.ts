@@ -135,6 +135,69 @@ describe("criterion 5 — a skipped seller is recorded, not just skipped", () =>
     expect(row.reason).toBe("at_monthly_cap");
   });
 
+  it("keeps the cap when the buyer ticked the capped seller themselves", async () => {
+    /*
+       The path the composer actually takes, and the one the cap did not survive.
+
+       `createEnquiry` intersected `chosenBusinessIds` with `candidates` — the
+       raw pool, before `selectRecipients` applies the monthly cap — so a capped
+       seller who was ticked on the form got an `EnquiryRecipient` row anyway,
+       and a `MissedEnquiry` row for the same enquiry saying they had been passed
+       over. `RfqComposer` always sends chosen ids, so this was the normal path
+       and not an edge of it.
+
+       Pinning (the test above) went through the matcher and was correct
+       throughout; only the buyer's explicit choice was trusted. The two have to
+       agree, because to a seller they are the same event.
+    */
+    const capped = await prisma.business.findUniqueOrThrow({
+      where: { slug: FREE_AT_CAP_SLUG },
+      select: { id: true },
+    });
+
+    // Who the matcher would have picked, so the enquiry has somewhere to go
+    // once the capped seller is refused. Learned rather than assumed: the seed's
+    // membership of this category is shared with other boards and moves.
+    const scout = await createEnquiry({
+      buyerId,
+      categoryId,
+      requirement: "Gate valves DN150 for a chilled-water riser in Al Quoz.",
+      lines: [{ description: "Resilient seated gate valve DN150", qty: 6 }],
+      fanoutTo: 3,
+      closesInDays: 7,
+    });
+    expect(scout.ok).toBe(true);
+    if (!scout.ok) return;
+    createdEnquiryIds.push(scout.enquiryId);
+
+    const eligible = scout.recipients.map((r) => r.businessId).filter((id) => id !== capped.id);
+    expect(eligible.length).toBeGreaterThan(0);
+
+    const result = await createEnquiry({
+      buyerId,
+      categoryId,
+      requirement: "Gate valves DN150, flanged, second riser.",
+      lines: [{ description: "Resilient seated gate valve DN150", qty: 6 }],
+      fanoutTo: 5,
+      closesInDays: 7,
+      chosenBusinessIds: [capped.id, ...eligible],
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    createdEnquiryIds.push(result.enquiryId);
+
+    expect(result.recipients.map((r) => r.businessId)).not.toContain(capped.id);
+    expect(result.recipients.length).toBeGreaterThan(0);
+
+    // The row is the thing that mattered: a recipient row is an enquiry the
+    // seller can answer, and answering past the cap is what the cap forbids.
+    const seat = await prisma.enquiryRecipient.count({
+      where: { enquiryId: result.enquiryId, businessId: capped.id },
+    });
+    expect(seat).toBe(0);
+  });
+
   it("puts the new miss on the seller's overview, with its line items", async () => {
     const capped = await prisma.business.findUniqueOrThrow({
       where: { slug: FREE_AT_CAP_SLUG },

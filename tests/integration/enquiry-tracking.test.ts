@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { getTrackingByRef } from "@/lib/db/queries/enquiry-tracking";
+import { getAcceptedRecord, getBuyerEnquiry } from "@/lib/db/queries/enquiry";
 import { nudge } from "@/lib/enquiry/nudge";
 import { reviseRequirement } from "@/lib/enquiry/revise";
 import { recordZeroQuote, sweepZeroQuoteEnquiries, ZERO_QUOTE_TAB } from "@/lib/enquiry/zero-quote";
@@ -105,6 +106,59 @@ describe("reading an enquiry", () => {
     // Every link already in an inbox carries the id.
     const enquiry = await makeEnquiry();
     expect(await getTrackingByRef(buyerId, enquiry.id)).not.toBeNull();
+  });
+
+  it("resolves the same two identifiers on the pages the tracking page links to", async () => {
+    /*
+       The tracking page's own buttons 404'd.
+
+       `getTrackingByRef` accepted both from the start and wrote down why: the
+       reference is what the SMS and the email print, the id is what the links
+       already sent out carry. Its two child routes did not inherit that, so
+       `/enquiry/:id/compare` and `/enquiry/:id/accepted` resolved by id alone —
+       while the page building those links interpolates `tracking.ref`.
+
+       Nothing caught it because every e2e navigates by the seed's raw id, which
+       is the one identifier that always worked. Both, on both routes, from now
+       on.
+    */
+    const enquiry = await makeEnquiry();
+
+    expect(await getBuyerEnquiry(buyerId, enquiry.ref)).not.toBeNull();
+    expect(await getBuyerEnquiry(buyerId, enquiry.id)).not.toBeNull();
+
+    // Still nobody else's, by either. The buyer id is inside the `where` rather
+    // than checked afterwards, so an unknown reference and somebody else's
+    // enquiry stay the same answer — a four-digit reference is guessable.
+    expect(await getBuyerEnquiry(otherBuyerId, enquiry.ref)).toBeNull();
+    expect(await getBuyerEnquiry(buyerId, "ENQ-does-not-exist")).toBeNull();
+
+    // `/accepted` narrows further: it is null until contact is released, and
+    // that is true whichever identifier asks.
+    expect(await getAcceptedRecord(buyerId, enquiry.ref)).toBeNull();
+    expect(await getAcceptedRecord(buyerId, enquiry.id)).toBeNull();
+
+    await prisma.quote.create({
+      data: {
+        ref: `${PREFIX}q${Date.now().toString(36)}`,
+        enquiryId: enquiry.id,
+        businessId: businessIds[0]!,
+        status: "accepted",
+        sentAt: new Date(),
+        acceptedAt: new Date(),
+      },
+    });
+    await prisma.enquiry.update({
+      where: { id: enquiry.id },
+      data: {
+        contactReleasedToBusinessId: businessIds[0]!,
+        contactReleasedAt: new Date(),
+      },
+    });
+
+    expect(await getAcceptedRecord(buyerId, enquiry.ref)).not.toBeNull();
+    expect(await getAcceptedRecord(buyerId, enquiry.id)).not.toBeNull();
+    expect(await getAcceptedRecord(otherBuyerId, enquiry.ref)).toBeNull();
   });
 });
 

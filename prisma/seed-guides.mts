@@ -325,14 +325,28 @@ export async function seedGuides(db: PrismaClient) {
   });
 
   /*
-     Board 6d Q1 is unanswered — "who is the author?" — and the recommendation
-     is a named person with a role, because an anonymous byline on an article
-     instructing buyers about licensing and VAT is a rankings cost as well as a
-     trust one. Seeded with a name and a role so the strip and the `Person`
-     schema are exercised; the real name is an editorial decision.
+     Board 6d Q1 — "who is the author?" — is still unanswered, and until it is
+     answered these stay null.
+
+     They held "Rana Habib, Verification lead" for exercise value: a name and a
+     role so the byline strip and the `Person` schema had something to render.
+     What that actually did was publish a fabricated person on four live guides,
+     in every seeded environment, emitted as schema.org `Person` with a
+     credentialed job title — while `/guides/how-we-check` told the same reader,
+     in prose, that guides carry no individual byline because "inventing one
+     would be the first false thing on a page about checking facts".
+
+     Both were published. Both could not be true, and the invented one was the
+     one search engines were being handed.
+
+     Null is not a gap. The page and the JSON-LD both already fall back to the
+     organisation, which is what the how-we-check page describes, so the
+     unanswered state now renders as the honest thing rather than the convenient
+     one. When D6 lands, one real name goes here — or into the admin, where it
+     costs a revalidation instead of a deploy.
   */
-  const BYLINE = "Rana Habib";
-  const BYLINE_ROLE = "Verification lead";
+  const BYLINE: string | null = null;
+  const BYLINE_ROLE: string | null = null;
 
   const ladder = await db.guide.upsert({
     where: { slug: "what-supplier-verification-actually-proves" },

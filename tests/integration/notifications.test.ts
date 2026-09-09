@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { deliverQueued, flushDeferred, notify } from "@/lib/notify/service";
 import { contactShape, placeholdersIn, render } from "@/lib/notify/render";
+import { buyerActionUrl } from "@/lib/notify/events";
 
 /**
  * Acceptance criterion 8, at the level the checkpoint asks for:
@@ -336,5 +337,68 @@ describe("criterion 10 — quiet hours, through the service", () => {
       params: { ref: "ENQ-1" },
     });
     expect(outcomes).toEqual([]);
+  });
+});
+
+describe("a buyer notification carries the token the buyer surface needs", () => {
+  /**
+   * The defect this pins is the one the e2e suite had already written down as
+   * expected behaviour.
+   *
+   * Most buyers have no account. Every buyer surface identifies them by the
+   * claim token their enquiry was created with, read from `?t=`, and a page
+   * reached without one calls `notFound()`. Every link in every buyer
+   * notification was built without it — so the live review-request template,
+   * `"/review/new?enq={enquiryId}"`, 404'd for exactly the buyer it was written
+   * for, and `tests/e2e/reviews.spec.ts` asserts that 404 on that URL.
+   *
+   * The route's behaviour there is right; the link was wrong. Stamped at the
+   * one place every buyer delivery passes through rather than in each template,
+   * because the templates are rows in a database and the ones in production
+   * cannot be edited by a commit.
+   */
+  const provisional = { claimToken: "tok_abc123", isProvisional: true };
+  const claimed = { claimToken: "tok_abc123", isProvisional: false };
+
+  it("puts the claim token on a buyer path, as a query the page reads", () => {
+    const url = buyerActionUrl("/review/new?enq=cmt7", provisional);
+    expect(url).toContain("enq=cmt7");
+    expect(url).toContain("t=tok_abc123");
+    // Appended to the existing query, not opened as a second one.
+    expect(url).not.toContain("?t=");
+  });
+
+  it("opens the query where the path has none", () => {
+    expect(buyerActionUrl("/enquiry/cmt7/compare", provisional)).toContain("?t=tok_abc123");
+  });
+
+  it("adds nothing once the account is claimed, because the token is dead", () => {
+    expect(buyerActionUrl("/enquiry/cmt7/compare", claimed)).not.toContain("t=");
+  });
+
+  it("adds nothing for a buyer who never had one", () => {
+    const url = buyerActionUrl("/enquiry/cmt7/compare", { claimToken: null, isProvisional: true });
+    expect(url).not.toContain("t=");
+  });
+
+  it("keeps a bearer secret off a path that has no use for it", () => {
+    // Not every action path is a buyer surface, and a token on `/pricing` is a
+    // secret in a URL that buys nothing.
+    expect(buyerActionUrl("/pricing", provisional)).not.toContain("t=");
+  });
+
+  it("covers every buyer actionPath the seeded templates carry", async () => {
+    const rows = await prisma.notificationTemplate.findMany({
+      where: {
+        status: "live",
+        event: { in: ["quote_received", "quote_revised", "message_received", "review_requested"] },
+        actionPath: { not: null },
+      },
+      select: { event: true, actionPath: true },
+    });
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(buyerActionUrl(row.actionPath!, provisional), row.event).toContain("t=tok_abc123");
+    }
   });
 });

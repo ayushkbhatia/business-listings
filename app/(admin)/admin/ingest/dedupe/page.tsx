@@ -1,7 +1,12 @@
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
-import { openCandidates, recentMerges, REVERSIBLE_DAYS } from "@/lib/dedupe/service";
+import {
+  openCandidateCounts,
+  openCandidates,
+  recentMerges,
+  REVERSIBLE_DAYS,
+} from "@/lib/dedupe/service";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
@@ -24,10 +29,11 @@ export default async function DedupePage() {
   if (!can(seat.actor, "business.merge")) notFound();
 
   const now = new Date();
-  const [candidates, merges, badges] = await Promise.all([
+  const [candidates, merges, badges, bandCounts] = await Promise.all([
     openCandidates(undefined, 200),
     recentMerges(now),
     getAdminNavBadges(seat),
+    openCandidateCounts(),
   ]);
 
   const rows: CandidateRow[] = candidates.map((candidate) => ({
@@ -49,7 +55,6 @@ export default async function DedupePage() {
     enquiriesAtRisk: candidate.absorb._count.recipients,
   }));
 
-  const certain = rows.filter((row) => row.band === "certain").length;
 
   const mergeRows: MergeRow[] = merges.map((row) => ({
     id: row.id,
@@ -74,8 +79,8 @@ export default async function DedupePage() {
       meta={
         <span className="text-caption text-muted">
           {t("admin.dedupe.meta", {
-            certain: formatCount(certain),
-            probable: formatCount(rows.length - certain),
+            certain: formatCount(bandCounts.certain),
+            probable: formatCount(bandCounts.probable),
           })}
         </span>
       }

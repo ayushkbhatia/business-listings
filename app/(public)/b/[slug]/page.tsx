@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
-import { Button } from "@/components/primitives";
+import { Button, buttonClassName } from "@/components/primitives";
 import { Breadcrumb, Card, KeyValuePanel, Panel, PublicShell } from "@/components/structure";
 import { ListingCard, tierSpec } from "@/components/domain";
 import { getBusinessBySlug, getSimilarClaimedBusinesses } from "@/lib/db/queries";
@@ -11,6 +12,7 @@ import { t } from "@/lib/i18n";
 import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
+import { crawlRel } from "@/lib/seo/crawl-policy";
 import { StorefrontHeader, storefrontCrumbs } from "./_storefront";
 import { renderSection } from "@/components/storefront";
 import { storefrontPlan } from "@/lib/storefront/loader";
@@ -659,6 +661,7 @@ async function ClaimedStorefront({ business }: { business: Business }) {
 
 async function UnclaimedStorefront({ business }: { business: Business }) {
   const head = business.locations[0];
+  const claimHref = `/onboarding/claim?q=${encodeURIComponent(business.displayName)}`;
   const similar = await getSimilarClaimedBusinesses(
     { id: business.primaryCategoryId, parentId: business.primaryCategory.parentId },
     business.id,
@@ -715,13 +718,35 @@ async function UnclaimedStorefront({ business }: { business: Business }) {
             <p className="max-w-[var(--measure-prose)] text-prose text-prose">
               {t("listing.unclaimed_body")}
             </p>
+            {/*
+               Both of these were `disabled` with the tooltip "Enquiries open in
+               the next release" — stale, and wrong twice: this page has no
+               enquiry action by design, and the claim flow shipped long ago.
+               `2a` names the claim prompt on an unclaimed listing as one of its
+               four entry points and already reads a pre-filled `q`, so the
+               destination and the intent existed and only the href was absent.
+
+               Report goes where its two siblings go — the footer's "Report a
+               listing" and the storefront rail's "Report an issue" both point
+               at the policy. Board `13c` replaces all three at once.
+
+               `crawlRel` on the claim link because this composition renders on
+               roughly 30,000 pages, each producing a distinct `?q=` URL into a
+               noindex funnel step. That is the shape `lib/seo/crawl-policy.ts`
+               exists to stop, and it derives the answer from the href rather
+               than trusting anyone to remember.
+            */}
             <div className="mt-3 flex flex-wrap gap-2">
-              <Button disabled title={t("enquiry.disabled")}>
+              <Link
+                href={claimHref}
+                rel={crawlRel(claimHref)}
+                className={buttonClassName()}
+              >
                 {t("listing.claim_cta")}
-              </Button>
-              <Button variant="link" disabled title={t("enquiry.disabled")}>
+              </Link>
+              <Link href="/verification-policy" className={buttonClassName({ variant: "link" })}>
                 {t("listing.report")}
-              </Button>
+              </Link>
             </div>
           </Panel>
 

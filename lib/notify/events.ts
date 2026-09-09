@@ -303,7 +303,16 @@ export async function onQuoteSent(input: {
   await safely("quote_received", async () => {
     const enquiry = await prisma.enquiry.findUnique({
       where: { id: input.enquiryId },
-      select: { id: true, ref: true, buyer: { select: { id: true, phone: true, email: true } } },
+      select: { id: true, ref: true, buyer: {
+        select: {
+          id: true,
+          phone: true,
+          email: true,
+          // `buyerActionUrl` needs both: the token, and whether it still works.
+          claimToken: true,
+          isProvisional: true,
+        },
+      } },
     });
     const business = await prisma.business.findUnique({
       where: { id: input.businessId },
@@ -381,7 +390,16 @@ export async function onSellerMessage(input: {
   await safely("message_received", async () => {
     const enquiry = await prisma.enquiry.findUnique({
       where: { id: input.enquiryId },
-      select: { id: true, buyer: { select: { id: true, phone: true, email: true } } },
+      select: { id: true, buyer: {
+        select: {
+          id: true,
+          phone: true,
+          email: true,
+          // `buyerActionUrl` needs both: the token, and whether it still works.
+          claimToken: true,
+          isProvisional: true,
+        },
+      } },
     });
     const business = await prisma.business.findUnique({
       where: { id: input.businessId },
@@ -467,7 +485,16 @@ export async function onReviewRequested(input: {
   await safely("review_requested", async () => {
     const enquiry = await prisma.enquiry.findUnique({
       where: { id: input.enquiryId },
-      select: { id: true, ref: true, buyer: { select: { id: true, phone: true, email: true } } },
+      select: { id: true, ref: true, buyer: {
+        select: {
+          id: true,
+          phone: true,
+          email: true,
+          // `buyerActionUrl` needs both: the token, and whether it still works.
+          claimToken: true,
+          isProvisional: true,
+        },
+      } },
     });
     const business = await prisma.business.findUnique({
       where: { id: input.businessId },
@@ -833,11 +860,56 @@ function taskList(tasks: readonly Task[]): string {
   return new Intl.ListFormat(UAE_LOCALE, { style: "long", type: "conjunction" }).format(names);
 }
 
+/** The buyer surfaces that resolve a provisional identity from `?t=`. */
+const TOKENED_PREFIXES = ["/enquiry/", "/review/"] as const;
+
+/**
+ * The claim token, onto the link the buyer is about to be sent.
+ *
+ * Most buyers have no account — that is the product's stated default, and
+ * `lib/auth/flow.ts` treats it as the normal case rather than the exception.
+ * Every buyer surface identifies them by the claim token their enquiry was
+ * created with, read from `?t=` by `resolveBuyerId`, and a page reached without
+ * one calls `notFound()`.
+ *
+ * Every link in every buyer notification was built without it. So the live
+ * review-request email pointed at `/review/new?enq=…` and 404'd for exactly the
+ * buyer it was written for — and `tests/e2e/reviews.spec.ts` asserted that 404
+ * as the expected behaviour, which is why it survived. The tracking page had
+ * the same `withToken` helper inline all along; the notifications never got it.
+ *
+ * Stamped here rather than in each template, because the templates are rows in
+ * a database and the ones in production cannot be edited by a commit. Here it
+ * covers every buyer event, including the ones not seeded yet.
+ *
+ * Only on the two buyer prefixes, and only while the buyer is provisional: a
+ * bearer secret does not belong on a link to a page that has no use for it, and
+ * the token stops working the moment the account is claimed.
+ */
+export function buyerActionUrl(
+  actionPath: string,
+  buyer: { claimToken: string | null; isProvisional: boolean },
+): string {
+  const tokened =
+    buyer.isProvisional &&
+    buyer.claimToken &&
+    TOKENED_PREFIXES.some((prefix) => actionPath.startsWith(prefix))
+      ? `${actionPath}${actionPath.includes("?") ? "&" : "?"}t=${buyer.claimToken}`
+      : actionPath;
+  return absoluteUrl(tokened);
+}
+
 async function deliver(
   channel: "whatsapp" | "sms" | "email" | "in_app",
   senders: ReturnType<typeof resolveNotificationSenders>,
   rendered: ReturnType<typeof render>,
-  buyer: { id: string; phone: string | null; email: string | null },
+  buyer: {
+    id: string;
+    phone: string | null;
+    email: string | null;
+    claimToken: string | null;
+    isProvisional: boolean;
+  },
 ): Promise<"sent" | "failed" | "skipped"> {
   const sender = senders[channel];
   if (!sender) return "skipped";
@@ -850,7 +922,7 @@ async function deliver(
     subject: rendered.subject,
     body: rendered.body,
     actionLabel: rendered.actionLabel,
-    actionUrl: rendered.actionPath ? absoluteUrl(rendered.actionPath) : null,
+    actionUrl: rendered.actionPath ? buyerActionUrl(rendered.actionPath, buyer) : null,
     recipientUserId: buyer.id,
   });
   return result.delivered ? "sent" : "failed";

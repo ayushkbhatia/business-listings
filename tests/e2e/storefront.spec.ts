@@ -91,11 +91,42 @@ test.describe("one route, two compositions", () => {
   test("an unclaimed business renders the 10g composition from the same route", async ({ page }) => {
     await page.goto(`/b/${UNCLAIMED}`);
     await expect(page.getByText("This listing has not been claimed")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Claim this listing" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Report this listing" })).toBeVisible();
     // No tabs, no catalogue, no verification panel — the unclaimed composition
     // states what is unverified rather than listing checks nobody ran.
     await expect(page.getByRole("heading", { name: "What we checked" })).toHaveCount(0);
+  });
+
+  test("its two calls to action go somewhere", async ({ page }) => {
+    /*
+       Both were `<button disabled>` under the tooltip "Enquiries open in the
+       next release" — stale, and wrong twice: this page has no enquiry action
+       by design, and the claim flow shipped long ago. This test asserted the
+       buttons existed, which is how a dead control on roughly 30,000 pages
+       stayed green.
+
+       Links, not buttons: they navigate, so a middle click opens a tab and a
+       screen reader announces them as links.
+    */
+    await page.goto(`/b/${UNCLAIMED}`);
+
+    const claim = page.getByRole("link", { name: "Claim this listing" }).first();
+    await expect(claim).toBeVisible();
+    await expect(claim).toBeEnabled();
+    // Pre-filled, so the claimant does not retype the name they just read.
+    // `2a` already reads `?q=` and names this as one of its four entry points.
+    await expect(claim).toHaveAttribute("href", /\/onboarding\/claim\?q=./);
+    // Roughly 30,000 of these pages, each a distinct `?q=` into a noindex
+    // funnel step. That is the shape lib/seo/crawl-policy.ts exists to stop.
+    await expect(claim).toHaveAttribute("rel", /nofollow/);
+
+    const report = page.getByRole("link", { name: "Report this listing" }).first();
+    await expect(report).toBeVisible();
+    // Where its two siblings go — the footer's "Report a listing" and the
+    // storefront rail's "Report an issue". Board 13c replaces all three.
+    await expect(report).toHaveAttribute("href", "/verification-policy");
+
+    await claim.click();
+    await expect(page).toHaveURL(/\/onboarding\/claim\?q=/);
   });
 
   test("an unclaimed listing invents nothing", async ({ page }) => {

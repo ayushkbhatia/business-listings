@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/client";
+import { mayBuyPlacement } from "@/lib/auth/guards";
 import { catalogueGapSummary } from "@/lib/products/catalogue";
 import { slotsFor } from "@/lib/placement/service";
 import { Panel } from "@/components/structure";
@@ -25,6 +27,17 @@ const RULES = ["labelled", "never_outranks", "one_slot"] as const;
 
 export default async function PromotePage() {
   const seat = await requireSellerSeat();
+  /*
+     The route gate the screen never had.
+
+     `takeSlot` asserts `placement.purchase` and the page asserted nothing, so a
+     seat that cannot buy still read the whole screen — every slot, who holds
+     it, and the price — and got a refusal only after pressing the button.
+     `notFound` rather than a disabled page, the same answer `analytics` gives a
+     seat without `analytics.read`: a screen somebody cannot use is a screen
+     that does not exist for them.
+  */
+  if (!mayBuyPlacement(seat.actor)) notFound();
 
   const [business, catalogue, badges] = await Promise.all([
     prisma.business.findUniqueOrThrow({

@@ -322,9 +322,27 @@ export async function createEnquiry(
      Intersected rather than trusted: the ids arrive from a form and a seller
      who has hit their cap since the page rendered must still be excluded, or
      the cap is advisory. Nobody is added who was not ticked.
+
+     That is what the comment said and not what the code did. It filtered
+     `candidates` — the raw pool `findFanoutCandidates` returns, before any cap
+     is applied — so the cap was advisory on the only path that matters:
+     `RfqComposer` always sends `chosenBusinessIds`, so every enquiry from the
+     composer took this branch. A capped seller got an `EnquiryRecipient` row
+     and a `skipped` record for the same enquiry, and their monthly ceiling
+     meant nothing.
+
+     Excluded by `selection.skipped` rather than by `selection.recipients`.
+     `recipients` is `ranked.slice(0, want)` — the top N the matcher would have
+     picked on its own — and intersecting with that would silently drop a
+     supplier the buyer deliberately ticked because they placed eleventh.
+     `skipped` is the cap decision and nothing else, which is the only part of
+     the matcher's judgement that should override the buyer's.
   */
+  const capped = new Set(selection.skipped.map((s) => s.businessId));
   const recipients = input.chosenBusinessIds
-    ? candidates.filter((c) => input.chosenBusinessIds!.includes(c.businessId)).slice(0, MAX_RECIPIENTS)
+    ? candidates
+        .filter((c) => input.chosenBusinessIds!.includes(c.businessId) && !capped.has(c.businessId))
+        .slice(0, MAX_RECIPIENTS)
     : selection.recipients;
   if (recipients.length === 0) return { ok: false, error: "no_recipients" };
 
