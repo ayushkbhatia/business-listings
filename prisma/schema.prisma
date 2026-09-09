@@ -3309,6 +3309,16 @@ model Plan {
   productLimit        Int?      @map("product_limit")
   locationLimit       Int?      @map("location_limit")
   photoLimit          Int?      @map("photo_limit")
+  /// How many gallery photographs a *public* storefront shows on this plan.
+  /// Null is all of them.
+  ///
+  /// Separate from `photoLimit`, which is what a seller may upload. Board 1d
+  /// cuts a Free storefront to three photographs, and that three was a
+  /// `FREE_PHOTO_LIMIT` constant in a page file keyed on `plan.id === "free"` —
+  /// a number nobody could change without a deploy, on a plan whose identity
+  /// was matched by string. D1, 9 Sep 2026: every plan number lives on this
+  /// table and nowhere else.
+  publicPhotoLimit    Int?      @map("public_photo_limit")
   /// Megabytes of storage. Null means unlimited.
   ///
   /// Board 3i §1: the header reads `2.1 GB of 10 GB used`, and per board 3f §6

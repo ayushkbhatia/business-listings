@@ -346,40 +346,73 @@ export interface ProposedField {
 }
 
 /**
- * What sellers keep inventing, with the spread that makes it a merge.
+ * What sellers keep inventing, measured from what they actually invented.
  *
- * The board's `Promote` was one click into a definition 412 sellers already
- * have their own version of — 7 labels, 3 types, 2 unit conventions between
- * them — so there was no single value for the button to write. The spread is
- * queried here because it is the fact that decides the shape of the control,
- * and a row that states it is honest whether or not a merge exists to run.
+ * ## Why this no longer reads `SpecFieldProposal`
+ *
+ * D3, answered 9 Sep 2026: **no shared attribute vocabulary.** Comparison stays
+ * at business level, so there is no dictionary for a seller-invented field to be
+ * promoted into and no merge for this panel to lead to.
+ *
+ * That settled what to do about `SpecFieldProposal`, which was already a table
+ * in trouble. It had a reader — this function, on `/admin/spec-library` — and
+ * **no writer**: `noteProposedField` existed, claimed in its own docblock to be
+ * "called from the catalogue import and the product editor", and had no caller
+ * anywhere in the tree. So the panel rendered a permanently empty table on every
+ * real database, and the number `businessCount` reported was a number nothing
+ * had ever counted.
+ *
+ * The data it wanted was already here. Sellers put their invented fields in
+ * `SellerTemplate.ownFields`, which is where the old version read the *spread*
+ * from while taking the count from a table nobody wrote to. So the count comes
+ * from the same place as the spread now, and the panel is real for the first
+ * time.
+ *
+ * ## What it is for, with no promote at the end of it
+ *
+ * Knowing what sellers keep inventing is worth a screen whether or not we ever
+ * fold it into a platform field. Twelve suppliers calling something "Wall
+ * thickness" is a fact about the catalogue — it says the template is missing
+ * something buyers care about. What D3 removed is the *promotion*, not the
+ * question, and there was never a `Promote` button here: board 4e §7 wanted a
+ * merge into a dictionary, and one-click writing of one label into a definition
+ * twelve sellers have their own version of was the defect the board was
+ * corrected for.
  */
 export const proposedFields = cache(async (): Promise<ProposedField[]> => {
-  const proposals = await prisma.specFieldProposal.findMany({
-    where: { state: "proposed" },
-    orderBy: [{ businessCount: "desc" }, { createdAt: "asc" }],
+  const clones = await prisma.sellerTemplate.findMany({
     select: {
-      id: true,
-      key: true,
-      sampleLabel: true,
-      businessCount: true,
-      categoryId: true,
-      category: { select: { name: true } },
+      businessId: true,
+      ownFields: true,
+      platformTemplate: { select: { categories: { select: { categoryId: true } } } },
     },
   });
-  if (proposals.length === 0) return [];
+  if (clones.length === 0) return [];
 
   /*
-     The spread has to be measured, not stored: `SpecFieldProposal` keeps one
-     sample label and a count, and the count of *distinct* labels is the number
-     that says the promotion is a merge. Read from the clones themselves, which
-     is where the seven labels actually are.
-  */
-  const clones = await prisma.sellerTemplate.findMany({
-    select: { ownFields: true, platformTemplate: { select: { categories: { select: { categoryId: true } } } } },
-  });
+     Keyed on category and normalised field name, which is the pair the old
+     table was unique on — so the same rows come out, counted rather than
+     remembered.
 
-  const spread = new Map<string, { labels: Set<string>; types: Set<string>; units: Set<string> }>();
+     `businesses` is a Set of ids, not a running total. A seller whose template
+     serves three subcategories contributes one business to each of them and not
+     three to any; a seller who saves twice does not vote twice. The old
+     `businessCount` column carried whatever was last written to it, which on a
+     real database was nothing at all.
+  */
+  const buckets = new Map<
+    string,
+    {
+      categoryId: string;
+      key: string;
+      sampleLabel: string;
+      businesses: Set<string>;
+      labels: Set<string>;
+      types: Set<string>;
+      units: Set<string>;
+    }
+  >();
+
   for (const clone of clones) {
     const categoryIds = clone.platformTemplate.categories.map((link) => link.categoryId);
     for (const own of readOwnFields(clone.ownFields)) {
@@ -388,28 +421,46 @@ export const proposedFields = cache(async (): Promise<ProposedField[]> => {
       for (const categoryId of categoryIds) {
         const bucket = `${categoryId}:${key}`;
         const entry =
-          spread.get(bucket) ?? { labels: new Set(), types: new Set(), units: new Set() };
+          buckets.get(bucket) ??
+          {
+            categoryId,
+            key,
+            sampleLabel: own.label.trim(),
+            businesses: new Set<string>(),
+            labels: new Set<string>(),
+            types: new Set<string>(),
+            units: new Set<string>(),
+          };
+        entry.businesses.add(clone.businessId);
         entry.labels.add(own.label.trim());
         entry.types.add(own.type);
         entry.units.add(own.unit ?? "");
-        spread.set(bucket, entry);
+        buckets.set(bucket, entry);
       }
     }
   }
+  if (buckets.size === 0) return [];
 
-  return proposals.map((proposal) => {
-    const entry = spread.get(`${proposal.categoryId}:${proposal.key}`);
-    return {
-      id: proposal.id,
-      key: proposal.key,
-      sampleLabel: proposal.sampleLabel,
-      categoryName: proposal.category.name,
-      businesses: proposal.businessCount,
-      labels: entry?.labels.size ?? 1,
-      types: entry?.types.size ?? 1,
-      units: entry?.units.size ?? 1,
-    };
+  const categories = await prisma.category.findMany({
+    where: { id: { in: [...new Set([...buckets.values()].map((b) => b.categoryId))] } },
+    select: { id: true, name: true },
   });
+  const nameOf = new Map(categories.map((category) => [category.id, category.name]));
+
+  return [...buckets.values()]
+    .map((entry) => ({
+      // Deterministic, and derived rather than stored: there is no row to carry
+      // an id, and the pair is what the old table was unique on anyway.
+      id: `${entry.categoryId}:${entry.key}`,
+      key: entry.key,
+      sampleLabel: entry.sampleLabel,
+      categoryName: nameOf.get(entry.categoryId) ?? "",
+      businesses: entry.businesses.size,
+      labels: entry.labels.size,
+      types: entry.types.size,
+      units: entry.units.size,
+    }))
+    .sort((a, b) => b.businesses - a.businesses || a.key.localeCompare(b.key));
 });
 
 /* ── One template, and what publishing its draft would cost ──────────────── */

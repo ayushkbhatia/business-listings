@@ -22,7 +22,7 @@ const PLAN_SELECT = {
   productLimit: true,
   categoryLimit: true,
   locationLimit: true,
-  photoLimit: true,
+  photoLimit: true, publicPhotoLimit: true,
   storageMb: true,
   teamSeats: true,
   rankingMultiplier: true,

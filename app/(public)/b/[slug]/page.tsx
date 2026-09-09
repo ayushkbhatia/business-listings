@@ -347,9 +347,22 @@ async function ClaimedStorefront({ business }: { business: Business }) {
   */
   const freePlan = (business.plan?.id ?? "free") === "free";
 
-  const FREE_PHOTO_LIMIT = 3;
+  /*
+     From the plan row, not from a constant here. D1, 9 Sep 2026.
+
+     This was `const FREE_PHOTO_LIMIT = 3`, gated on `plan.id === "free"` — a
+     plan number that lived in a page file, on a plan identified by string
+     comparison. Two defects in three lines: nobody could change the cut without
+     a deploy, and a second free-shaped plan would have rendered as Pro.
+
+     `publicPhotoLimit` is null on the paid plans, which means all of them, so
+     the null check is the whole of the paid path. A listing with no plan row is
+     treated as Free — most are unclaimed imports, and defaulting the other way
+     would hand the best storefront to every listing nobody has claimed.
+  */
+  const publicPhotoLimit = business.plan?.publicPhotoLimit ?? (freePlan ? 3 : null);
   const allPhotos = business.media.filter((item) => item.kind === "gallery");
-  const photos = freePlan ? allPhotos.slice(0, FREE_PHOTO_LIMIT) : allPhotos;
+  const photos = publicPhotoLimit === null ? allPhotos : allPhotos.slice(0, publicPhotoLimit);
 
   return (
     <PublicShell

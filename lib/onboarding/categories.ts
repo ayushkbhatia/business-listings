@@ -1,4 +1,5 @@
 import "server-only";
+import { effectiveFor } from "@/lib/billing/entitlements-service";
 import { prisma } from "@/lib/db/client";
 
 /**
@@ -83,13 +84,22 @@ export async function addExtraCategory(
   businessId: string,
   categoryId: string,
 ): Promise<AddCategoryResult> {
-  const [business, category] = await Promise.all([
+  /*
+     The allowance comes through `effectiveFor`, not off the live plan row. D1.
+
+     This read `business.plan.categoryLimit` directly, which is the one cap of
+     the seven that skipped the snapshot — so a seller who signed up when their
+     plan allowed three extra categories lost two of them the moment staff
+     edited the plan, silently, with no other cap behaving that way. Every other
+     gate in the product resolves through `effectiveCaps`; this is the last one
+     that did not.
+  */
+  const [business, category, caps] = await Promise.all([
     prisma.business.findUnique({
       where: { id: businessId },
       select: {
         primaryCategoryId: true,
         licenceActivity: true,
-        plan: { select: { categoryLimit: true } },
         categories: { select: { categoryId: true } },
       },
     }),
@@ -97,6 +107,7 @@ export async function addExtraCategory(
       where: { id: categoryId },
       select: { id: true, name: true, synonyms: true, parent: { select: { name: true } } },
     }),
+    effectiveFor(businessId),
   ]);
   if (!business || !category) return { ok: false, reason: "not_found" };
   if (business.primaryCategoryId === categoryId) return { ok: false, reason: "is_primary" };
@@ -104,11 +115,7 @@ export async function addExtraCategory(
     return { ok: false, reason: "already_there" };
   }
 
-  const allowance = allowanceFor(
-    business.plan?.categoryLimit ?? null,
-    "",
-    business.categories.length,
-  );
+  const allowance = allowanceFor(caps?.categoryLimit ?? null, "", business.categories.length);
   if (!allowance.canAddMore) return { ok: false, reason: "at_cap" };
 
   /*

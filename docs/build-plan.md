@@ -61,12 +61,12 @@ so it changes to:
 
 | # | Decision | Answer | Status |
 |---|---|---|---|
-| **D1** Plan-limit config | Ratify the seven numbers | **Settled** | one migration owed |
-| **D2** Placement term | The slot belongs to the subscription | **Settled** | build, no schema change |
-| **D3** Attribute dictionary | **No.** Comparison stays at business level | **Settled** | nothing to build; retire the dead pieces |
+| **D1** Plan-limit config | Ratify the seven numbers | **Shipped** | migration `20260928090000_plan_caps_ratified` |
+| **D2** Placement term | The slot belongs to the subscription | **Shipped** | #152 |
+| **D3** Attribute dictionary | **No.** Comparison stays at business level | **Shipped** | proposals panel rebuilt on real data; table drop owed |
 | **D4** Enquiry cap | Keep it, stack the leads, **paywall the unlock**. Buyers never see capacity | **Settled, deferred** | GTM work, later |
 | **D5** Services | **Their own screens**, per subcategory | **Settled** | `docs/services-spec.md`, awaiting handoffs |
-| **D6** Guide bylines | A named editor now, more names later | **Settled** | needs one real name |
+| **D6** Guide bylines | A named editor now, more names later | **Shipped** | #153 — Ayush Bhatia, Founder |
 
 Two of the answers changed what was proposed, and both changes matter:
 

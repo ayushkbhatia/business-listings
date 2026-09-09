@@ -86,6 +86,10 @@ export interface Usage {
   seats: number;
   /** Megabytes of media stored. */
   storageMb: number;
+  /** Gallery photographs on the listing. */
+  photos: number;
+  /** Extra categories beyond the primary one. */
+  categories: number;
 }
 
 /**
@@ -97,6 +101,18 @@ export interface Usage {
 const METER_ROWS = [
   { key: "products", metered: "products" as Metered, header: "change.row.products" },
   { key: "locations", metered: "locations" as Metered, header: "change.row.branches" },
+  /*
+     Photos and categories, added by D1 on 9 Sep 2026.
+
+     `METERED` has carried both since board 3b and this grid rendered neither,
+     so the screen a seller reads before changing plan could not show them two
+     of the seven caps they are choosing between — and the Free column was the
+     one that suffered, because those two are where Free is tightest. A
+     comparison grid that omits the caps that bite is a comparison that flatters
+     the plan somebody is about to leave.
+  */
+  { key: "photos", metered: "photos" as Metered, header: "change.row.photos" },
+  { key: "categories", metered: "categories" as Metered, header: "change.row.categories" },
   { key: "seats", metered: "seats" as Metered, header: "change.row.seats" },
   { key: "storage", metered: "storage" as Metered, header: "change.row.storage" },
 ] as const;
@@ -109,9 +125,27 @@ const ENTITLEMENT_ROWS = [
 ] as const;
 
 /** Which `Usage` field a metered row counts. */
+/**
+ * The meters a seller is offered a keep list for.
+ *
+ * A positive list, and it was `key !== "storage"` — which was true of the four
+ * rows that existed and became a lie the moment D1 added two more. Only
+ * products, locations and seats have a picker: `SubscriptionChange` carries
+ * `keepProductIds`, `keepLocationIds` and `keepSeatIds`, and `applyKeepLists`
+ * reads the first two while `evictSeats` reads the third.
+ *
+ * There is no keep list for photographs or for extra categories, so offering to
+ * choose between them would be a control with nothing behind it. They render as
+ * a shortfall the seller is told about and not asked about, which is what
+ * storage already does and for the same reason.
+ */
+const CHOOSABLE = new Set(["products", "locations", "seats"]);
+
 const USED_BY: Record<string, (usage: Usage) => number> = {
   products: (u) => u.products,
   locations: (u) => u.locations,
+  photos: (u) => u.photos,
+  categories: (u) => u.categories,
   seats: (u) => u.seats,
   storage: (u) => u.storageMb,
 };
@@ -285,7 +319,7 @@ export function shortfallsOf(
          row whose bytes every other reader counted. One function now, so a
          third upload path cannot be added without meeting it.
       */
-      choosable: row.key !== "storage",
+      choosable: CHOOSABLE.has(row.key),
     });
   }
 

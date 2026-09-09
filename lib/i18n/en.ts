@@ -4414,6 +4414,9 @@ export const en = {
   "plan.ranking": "Ranked {multiplier}× in search",
   "plan.ranking_none": "A lift in search ranking",
   "plan.custom_domain": "Your own web address",
+  // Three is the ratified Free allowance as of D1, so this sentence is true
+  // rather than a leftover — and it is checked by the seed and the migration
+  // that write `enquiries_per_month = 3`.
   "plan.summary.free": "Be listed, and answer three enquiries a month.",
   "plan.summary.basic": "For a supplier answering enquiries most weeks.",
   "plan.summary.pro": "For a supplier whose catalogue is how they get found.",
@@ -4881,6 +4884,8 @@ export const en = {
   "change.col.feature": "What you get",
 
   "change.row.products": "Products live",
+  "change.row.photos": "Photographs on the listing",
+  "change.row.categories": "Extra categories",
   "change.row.branches": "Branches published",
   "change.row.seats": "Team seats",
   "change.row.storage": "Storage",

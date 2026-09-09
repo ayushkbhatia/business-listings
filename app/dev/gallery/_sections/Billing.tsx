@@ -34,6 +34,7 @@ function plan(over: Partial<PlanCaps>): PlanCaps {
     productLimit: 150,
     locationLimit: 3,
     photoLimit: 40,
+    publicPhotoLimit: null,
     categoryLimit: 3,
     storageMb: 5 * 1024,
     teamSeats: 3,
@@ -78,7 +79,7 @@ const LADDER: PlanCaps[] = [
 ];
 
 /** The board's seller: over Free on every meter. */
-const OVER_CAP: Usage = { products: 1204, locations: 4, seats: 3, storageMb: 2150 };
+const OVER_CAP: Usage = { products: 1204, locations: 4, photos: 0, categories: 0, seats: 3, storageMb: 2150 };
 /**
  * Comfortably inside every plan. Every metered cell reads `All n`.
  *
@@ -87,9 +88,9 @@ const OVER_CAP: Usage = { products: 1204, locations: 4, seats: 3, storageMb: 215
  * captioned "inside every plan" that renders two reduced rows is a state
  * demonstrating the opposite of its own label.
  */
-const WITHIN: Usage = { products: 7, locations: 1, seats: 1, storageMb: 20 };
+const WITHIN: Usage = { products: 7, locations: 1, photos: 0, categories: 0, seats: 1, storageMb: 20 };
 /** Nothing yet. The cold-start state, and it must read honest rather than broken. */
-const EMPTY: Usage = { products: 0, locations: 0, seats: 1, storageMb: 0 };
+const EMPTY: Usage = { products: 0, locations: 0, photos: 0, categories: 0, seats: 1, storageMb: 0 };
 
 /**
  * Board 11h's consequence table, in the three states it actually has.

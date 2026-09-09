@@ -64,6 +64,17 @@ describe("criterion 1 — every figure the page prints exists on the row", () =>
           "monthlyPriceAed",
           "name",
           "photoLimit",
+          /*
+             Added by D1, 9 Sep 2026. `PricingPlan` extends `PlanCaps`, so the
+             select carries it whether or not the page prints it — and this list
+             exists to record the shape rather than to approve of it.
+
+             The page does not render it yet. "Free storefronts show three
+             photographs" is a real differentiator now that it is a column
+             rather than a constant in a page file, and putting it on the public
+             pricing table is a design change rather than a config one.
+          */
+          "publicPhotoLimit",
           "productLimit",
           "rankingMultiplier",
           "sortOrder",
