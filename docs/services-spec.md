@@ -140,9 +140,18 @@ What replaces the line table:
   units, number of vehicles. **This is the hard part of the design** and the reason this is a
   new screen rather than a variant
 
-**Open question for the handoff:** is the sizing question per-subcategory (a controlled set we
-maintain), or one free-text "scale" field? The first is better data and is a second dictionary
-to own; the second ships. **This is the one decision in this document that is not yet taken.**
+**Settled 9 Sep 2026: one free-text "scale" field.** Not a controlled set per subcategory.
+
+The controlled version is better data and is a second dictionary for ops to own, on top of the
+~420 `tradeKind` rows this document already asks them to set. Free text ships, and the volume
+that would justify the structure does not exist yet — there is no service enquiry to learn the
+shape from. Add structure where the traffic argues for it, per subcategory, rather than
+inventing 420 sizing questions in advance and being wrong about most of them.
+
+What that means for the design: one field, labelled by the subcategory so the buyer knows what
+kind of answer is wanted, with a placeholder that names the unit that trade actually uses —
+square metres for cleaning, headcount for manpower supply, vehicles for transport. The label
+and placeholder are per-subcategory copy; the stored value is a string.
 
 **Acceptance:** median time from opening the composer to sending stays inside `1h`'s 54-minute
 promise. No field asks a quantity. Fan-out still reaches 3–8 suppliers.
@@ -229,8 +238,8 @@ six variants can follow in any order, and three of them are mostly copy.
 
 ---
 
-## 6 · The one thing I need before S2
+## 6 · Nothing outstanding
 
-Whether the sizing question is a controlled set per subcategory or one free-text field. Every
-other open point in this document is mine to resolve; that one changes the data model and the
-ops workload, so it is yours.
+The one open question — how the composer asks "how big is this job" — was settled on
+9 Sep 2026 as a free-text scale field. See S2. Everything else in this document is mine to
+resolve as the handoffs arrive.
