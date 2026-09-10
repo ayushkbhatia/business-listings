@@ -18,7 +18,7 @@ function candidate(over: Partial<FanoutCandidate> & { businessId: string }): Fan
     displayName: over.businessId,
     categoryIds: [CATEGORY],
     primaryCategoryId: CATEGORY,
-    emirate: "dubai",
+    emirates: ["dubai"],
     verificationTier: 2,
     responseTimeMedianMs: 4 * 3_600_000,
     matchedLineCount: 3,
@@ -102,9 +102,59 @@ describe("who ranks first", () => {
   });
 
   it("prefers the same emirate, which is a delivery difference and not a nicety", () => {
-    const far = candidate({ businessId: "far", emirate: "abu_dhabi" });
-    const near = candidate({ businessId: "near", emirate: "dubai" });
+    const far = candidate({ businessId: "far", emirates: ["abu_dhabi"] });
+    const near = candidate({ businessId: "near", emirates: ["dubai"] });
     expect(scoreCandidate(near, REQUEST)).toBeGreaterThan(scoreCandidate(far, REQUEST));
+  });
+
+  it("scores an uncounted shelf as unknown, not as empty", () => {
+    /*
+       The defect this replaced: `findFanoutCandidates` wrote a literal `0`
+       into `inStockLineCount` for every candidate on every enquiry, and the
+       stock term is 0.2 of the score. Nothing has ever counted it, so the
+       whole directory was scored as having nothing on the shelf and no
+       supplier of any kind could reach the top of the term.
+
+       Between the two measurements it is meant to sit between, and strictly:
+       an unmeasured shelf must not beat a counted full one, or the fix would
+       pay sellers to leave the field unfilled.
+    */
+    const uncounted = candidate({ businessId: "uncounted", inStockLineCount: null });
+    const empty = candidate({ businessId: "empty", inStockLineCount: 0 });
+    const stocked = candidate({ businessId: "stocked", inStockLineCount: 3 });
+    expect(scoreCandidate(uncounted, REQUEST)).toBeGreaterThan(scoreCandidate(empty, REQUEST));
+    expect(scoreCandidate(uncounted, REQUEST)).toBeLessThan(scoreCandidate(stocked, REQUEST));
+  });
+
+  it("scores an unmatched catalogue as unknown, not as nothing to quote", () => {
+    // The same rule on the larger term. Reached once `tradeKind` lets the
+    // producer tell "sells nothing we can match" from "sells by the job".
+    const unmatched = candidate({ businessId: "unmatched", matchedLineCount: null });
+    const nothing = candidate({ businessId: "nothing", matchedLineCount: 0 });
+    expect(scoreCandidate(unmatched, REQUEST)).toBeGreaterThan(scoreCandidate(nothing, REQUEST));
+  });
+
+  it("counts every emirate a seller serves, not the first branch that loaded", () => {
+    /*
+       A Sharjah warehouse promising next-day Dubai. `BusinessCoverage` is
+       where that promise lives and the fan-out read none of it, so this
+       supplier scored 0.35 on locality for the emirate their own storefront
+       says they deliver to.
+    */
+    const covers = candidate({ businessId: "covers", emirates: ["sharjah", "dubai"] });
+    const doesNot = candidate({ businessId: "elsewhere", emirates: ["sharjah"] });
+    expect(scoreCandidate(covers, REQUEST)).toBeGreaterThan(scoreCandidate(doesNot, REQUEST));
+    expect(scoreCandidate(covers, REQUEST)).toBe(
+      scoreCandidate(candidate({ businessId: "only_dubai" }), REQUEST),
+    );
+  });
+
+  it("scores a seller with no stated location as unknown, not as far away", () => {
+    // Empty used to fall through to the out-of-emirate penalty, which told a
+    // listing with no branch and no coverage that it was in the wrong place.
+    const unstated = candidate({ businessId: "unstated", emirates: [] });
+    const elsewhere = candidate({ businessId: "elsewhere", emirates: ["fujairah"] });
+    expect(scoreCandidate(unstated, REQUEST)).toBeGreaterThan(scoreCandidate(elsewhere, REQUEST));
   });
 
   it("scores an unmeasured reply time as unknown, not as slow", () => {

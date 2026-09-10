@@ -8,6 +8,11 @@ sequenced).
 Read this file before starting any board. Each phase names its steps, and each step names the
 file and line the work is anchored to. When a step lands, tick it here in the same commit.
 
+**The service track is sequenced separately.** `docs/services-build-plan.md` audits the 28 `-s`
+boards the 11 Sep epic (`docs/epic-2026-09-11.md`) added, against the tree at `d5455a8`. None of
+them is built. That document also records four corrections to that epic and the one contradiction
+between this file and `docs/services-spec.md` that has to be settled before any of them start.
+
 ---
 
 ## 1 · The finding
@@ -154,14 +159,31 @@ pieces of work with no design attached. Awaiting design handoffs screen by scree
 
 #### The model
 
-Add one setting saying whether a trade is sold **by the item or by the job**. Set it on the ~420
+Add one setting saying whether a trade is sold **by the item or by the job**. Set it on the
 subcategories, not the 13 sectors — IT holds Servers & storage next to Cybersecurity. Blank
-inherits from the parent; `lib/taxonomy/sector.ts:44-55` already walks the tree that way.
+inherits from the parent.
 
-A service supplier keeps the same catalogue table. The row reads "Annual statutory audit, made to
-order" instead of "DN100 gate valve, 240 in stock". **Explicitly out of scope:** no calendar, no
-appointment, no slot, no availability window. The conversion event stays the enquiry. "Booking" is
-not available as a word — it already means a sponsored placement and is printed on tax invoices.
+Two corrections to what this paragraph said before 11 Sep 2026, both from the audit in
+`docs/services-build-plan.md`:
+
+- **It is 440 `Category` rows — 13 sectors and 427 subcategories — not "~420".** One sector,
+  `pumps-and-motors`, has no children at all, so a per-subcategory-only screen cannot set it.
+- **`lib/taxonomy/sector.ts:44-55` is not the precedent claimed here.** It walks `parentId` to the
+  root and returns an id; it never looks for the nearest non-null value of a *field*, and it does
+  one `findUnique` per level. The null-inheriting resolver has to be written, not copied.
+
+**Settled 11 Sep 2026: a service is its own entity, not a catalogue row.** This paragraph used to
+say a service supplier keeps the same catalogue table. That contradicted `docs/services-spec.md`
+§3, which gives services their own editor and their own public page, and the owner settled it in
+the spec's favour. The reason is not aesthetic: `Product` carries `availability`, `stockQty`,
+`minOrderQty`, `sku` and `specValues`, all NOT NULL or defaulted and all rendered by shipped
+components, and every one of them is a lie about a service — while `Product` has readers in search,
+fan-out, the storefront, the importer, the media library, quotes and four scheduled jobs. A `kind`
+discriminator makes each of those grow a branch.
+
+**Explicitly out of scope:** no calendar, no appointment, no slot, no availability window. The
+conversion event stays the enquiry. "Booking" is not available as a word — it already means a
+sponsored placement and is printed on tax invoices.
 
 **The cost of leaving it:** `lib/enquiry/service.ts:184` sets `matchedLineCount` from product
 count and hardcodes `inStockLineCount` to 0; `lib/enquiry/fanout.ts:182` weights those at 54% of

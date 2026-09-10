@@ -20,6 +20,18 @@ import { trustScore } from "@/lib/verification";
 export const MIN_RECIPIENTS = 1;
 export const MAX_RECIPIENTS = 8;
 
+/**
+ * What an unmeasured signal scores: the midpoint, never zero.
+ *
+ * The rule this file already applied to `speed` and applies nowhere else. A
+ * seller with no reply history is unknown, not slow; a seller whose stock
+ * nobody has counted is unknown, not empty; a seller whose working emirates we
+ * never asked for is unknown, not far away. Scoring absence of evidence as
+ * evidence of absence makes cold start permanent, and it charges the whole
+ * penalty to the listings least able to argue with it.
+ */
+const UNMEASURED = 0.5;
+
 /** The default the composer offers: "also send to N similar suppliers". */
 export const DEFAULT_FANOUT = 5;
 
@@ -30,15 +42,44 @@ export interface FanoutCandidate {
   /** Subcategory ids this business is listed under. */
   categoryIds: readonly string[];
   primaryCategoryId: string;
-  emirate: string;
+  /**
+   * Every emirate this seller serves — their published branches and every
+   * emirate they have claimed coverage in.
+   *
+   * Plural, and it used to be one string. `findFanoutCandidates` took the first
+   * published location with `take: 1` and no `orderBy`, so for a supplier with
+   * two branches the locality term was whichever row Postgres handed back —
+   * a coin flip, re-flipped on every enquiry. And `BusinessCoverage`, whose own
+   * schema comment says it is "what `1h` routes on today", was read by nothing:
+   * a Sharjah depot that promises next-day Dubai scored as out-of-emirate on
+   * every Dubai enquiry.
+   *
+   * Empty means we do not know where they work, which is not the same as
+   * knowing they are elsewhere. See `locality` in `scoreCandidate`.
+   */
+  emirates: readonly string[];
   /** 0..4. Platform-owned. */
   verificationTier: number;
   /** Median enquiry-to-first-reply. Null when there is not enough to measure. */
   responseTimeMedianMs: number | null;
-  /** How many of the enquiry's lines this seller has something for. */
-  matchedLineCount: number;
-  /** Of those, how many are in stock rather than made to order. */
-  inStockLineCount: number;
+  /**
+   * How many of the enquiry's lines this seller has something for.
+   *
+   * Null when nobody has matched the lines against a catalogue, which is the
+   * only honest answer this layer can give today.
+   */
+  matchedLineCount: number | null;
+  /**
+   * Of those, how many are in stock rather than made to order.
+   *
+   * Null when unmeasured — and it is unmeasured for every candidate on every
+   * enquiry, because no caller has ever filled it in. It was a hardcoded `0`,
+   * which is not "we did not look": it is a measurement, and it says this
+   * seller has nothing on the shelf. `stock` carries 0.2 of the score, so a
+   * fifth of the vector multiplied a claim about the whole directory that
+   * nobody had ever checked, and no supplier of any kind could rise above.
+   */
+  inStockLineCount: number | null;
   /** Null means unlimited. */
   enquiriesPerMonth: number | null;
   /** Recipient rows already created for this business this calendar month. */
@@ -118,8 +159,14 @@ export function scoreCandidate(candidate: FanoutCandidate, request: FanoutReques
   const lines = Math.max(1, request.lineCount);
 
   // Can they answer it at all? The largest term by far.
-  const coverage = Math.min(1, candidate.matchedLineCount / lines);
-  const stock = Math.min(1, candidate.inStockLineCount / lines);
+  const coverage =
+    candidate.matchedLineCount === null
+      ? UNMEASURED
+      : Math.min(1, candidate.matchedLineCount / lines);
+  const stock =
+    candidate.inStockLineCount === null
+      ? UNMEASURED
+      : Math.min(1, candidate.inStockLineCount / lines);
 
   /*
      Exactly what was asked for scores highest; a subcategory of it is close
@@ -136,8 +183,25 @@ export function scoreCandidate(candidate: FanoutCandidate, request: FanoutReques
           ? 0.7
           : 0;
 
-  // Same emirate is a real delivery difference in the UAE, not a nicety.
-  const locality = request.emirate === null ? 0.5 : candidate.emirate === request.emirate ? 1 : 0.35;
+  /*
+     Same emirate is a real delivery difference in the UAE, not a nicety.
+
+     Any emirate they serve, not the first branch row that happened to load.
+     A supplier's coverage rows are the promise a buyer reads on their
+     storefront, so scoring them out of an emirate they have publicly said they
+     deliver to contradicts their own listing.
+
+     Three outcomes, not two: they serve it, they serve somewhere and not here,
+     or we do not know where they serve. The third used to fall through to the
+     out-of-emirate penalty, which told a listing with no branch and no coverage
+     that it was in the wrong place.
+  */
+  const locality =
+    request.emirate === null || candidate.emirates.length === 0
+      ? UNMEASURED
+      : candidate.emirates.includes(request.emirate)
+        ? 1
+        : 0.35;
 
   /*
      Platform-owned, so it is safe to rank on.
@@ -157,7 +221,7 @@ export function scoreCandidate(candidate: FanoutCandidate, request: FanoutReques
    */
   const speed =
     candidate.responseTimeMedianMs === null
-      ? 0.5
+      ? UNMEASURED
       : Math.max(0, 1 - candidate.responseTimeMedianMs / (24 * 3_600_000));
 
   /*

@@ -38,6 +38,8 @@ function stamp() {
 }
 
 let areaId: string;
+/** A second emirate, so a branch can sit somewhere the enquiry is not. */
+let sharjahAreaId: string;
 let buyerId: string;
 
 /** A capped plan and an uncapped one, read from the real catalogue. */
@@ -51,6 +53,7 @@ let catOrder: string;
 let catCoverage: string;
 let catCap: string;
 let catEmpty: string;
+let catWhere: string;
 
 /** The subject of the cap tests. Its plan and its month are set per test. */
 let subjectId: string;
@@ -69,6 +72,10 @@ async function addSupplier(fields: {
   planId?: string | null;
   /** A live catalogue is what the query layer reads as "can answer these lines". */
   catalogue?: boolean;
+  /** Where the branch is. Dubai unless a test is about being somewhere else. */
+  branchIn?: "dubai" | "sharjah";
+  /** Emirates claimed on `BusinessCoverage`, which is a promise, not a place. */
+  covers?: readonly ("dubai" | "sharjah" | "abu_dhabi")[];
 }): Promise<string> {
   const id = stamp();
   const tier = fields.tier ?? 2;
@@ -94,13 +101,20 @@ async function addSupplier(fields: {
         create: [
           {
             type: "warehouse",
-            emirate: "dubai",
-            areaId,
+            emirate: fields.branchIn ?? "dubai",
+            areaId: fields.branchIn === "sharjah" ? sharjahAreaId : areaId,
             addressLine: "Unit 4, RFQ fan-out test",
             published: true,
           },
         ],
       },
+      ...(fields.covers?.length
+        ? {
+            coverage: {
+              create: fields.covers.map((emirate) => ({ emirate, leadTimeHours: 24 })),
+            },
+          }
+        : {}),
       ...(fields.catalogue === false
         ? {}
         : {
@@ -218,6 +232,11 @@ beforeAll(async () => {
   });
   areaId = area.id;
 
+  const sharjahArea = await prisma.area.create({
+    data: { slug: `${PREFIX}area-shj`, emirate: "sharjah", name: "RFQ fan-out test area, Sharjah" },
+  });
+  sharjahAreaId = sharjahArea.id;
+
   const buyer = await prisma.user.findFirstOrThrow({
     where: { roles: { has: "buyer" }, isProvisional: false },
     select: { id: true },
@@ -240,13 +259,14 @@ beforeAll(async () => {
   cappedPlanLimit = capped!.enquiriesPerMonth!;
   uncappedPlanId = uncapped!.id;
 
-  [catMany, catOrder, catCoverage, catCap, catEmpty] = await Promise.all([
+  [catMany, catOrder, catCoverage, catCap, catEmpty, catWhere] = await Promise.all([
     addCategory("many"),
     addCategory("order"),
     addCategory("coverage"),
     addCategory("cap"),
     addCategory("empty"),
-  ]) as [string, string, string, string, string];
+    addCategory("where"),
+  ]) as [string, string, string, string, string, string];
 
   // Twelve identical suppliers: more than the ceiling, so the ceiling is what
   // decides the count and not the size of the pool.
@@ -359,6 +379,82 @@ describe("criterion 7 — the order the buyer sees them in", () => {
     const live = new Map(counts.map((row) => [row.businessId, row._count._all]));
     expect(live.get(order[0]!.businessId) ?? 0).toBeGreaterThan(0);
     expect(live.get(order[1]!.businessId) ?? 0).toBe(0);
+  });
+});
+
+describe("where a supplier works, as they stated it", () => {
+  /*
+     `BusinessCoverage` is where a supplier says which emirates they serve, and
+     until this change the fan-out read none of it. It had one writer (the
+     coverage panel on `3c`), two dashboard readers, and the consumer named in
+     its own schema comment — "what `1h` routes on today" — was not among them.
+
+     What the matcher read instead was the first published location, fetched
+     with `take: 1` and no `orderBy`. So a supplier's locality term was decided
+     by whichever branch row Postgres handed back, and a supplier who had told
+     us in their own listing that they deliver next-day to Dubai scored the
+     out-of-emirate penalty on every Dubai enquiry.
+  */
+  let coversDubai: string;
+  let sharjahOnly: string;
+  let noWhere: string;
+
+  beforeAll(async () => {
+    coversDubai = await addSupplier({
+      categoryId: catWhere,
+      branchIn: "sharjah",
+      covers: ["dubai"],
+    });
+    sharjahOnly = await addSupplier({ categoryId: catWhere, branchIn: "sharjah" });
+    noWhere = await addSupplier({ categoryId: catWhere, branchIn: "sharjah" });
+    // Alike on every other ranked column, so locality is the only thing left
+    // that can separate them — then strip the third of any stated location.
+    await prisma.location.deleteMany({ where: { businessId: noWhere } });
+  });
+
+  it("reads the coverage table at all, which is the whole defect", async () => {
+    /*
+       Asserted on the candidate rather than on the order, deliberately. Under
+       the old code these three fixtures tie on every ranked column — all of
+       them out-of-emirate — so an ordering assertion passes or fails on the id
+       tiebreak and proves nothing either way. What changed is what the matcher
+       knows about them, so that is what this checks.
+    */
+    const candidates = await findFanoutCandidates({
+      categoryId: catWhere,
+      categoryIds: await descendantsOf(catWhere),
+      emirate: "dubai",
+      lineCount: 2,
+      want: MAX_RECIPIENTS,
+    });
+    const emiratesOf = (id: string) =>
+      [...(candidates.find((c) => c.businessId === id)?.emirates ?? [])].sort();
+
+    expect(emiratesOf(coversDubai), "the branch and the promise, both").toEqual([
+      "dubai",
+      "sharjah",
+    ]);
+    expect(emiratesOf(sharjahOnly), "a branch and no promise").toEqual(["sharjah"]);
+    expect(emiratesOf(noWhere), "neither — and empty, not a blank string").toEqual([]);
+  });
+
+  it("ranks a stated coverage promise as same-emirate, whatever the branch says", async () => {
+    const order = await preview(catWhere);
+    expect(order[0]!.businessId, "the Sharjah depot that covers Dubai").toBe(coversDubai);
+    expect(order.findIndex((r) => r.businessId === sharjahOnly)).toBeGreaterThan(0);
+  });
+
+  it("scores a listing with no stated location as unknown, not as far away", async () => {
+    /*
+       An imported listing with no branch and no coverage. It used to fall
+       through the `candidate.emirate === request.emirate` comparison against
+       an empty string and take the out-of-emirate penalty, which is a claim
+       about where they are made from the fact that nobody had asked.
+    */
+    const order = await preview(catWhere);
+    const rank = (id: string) => order.findIndex((r) => r.businessId === id);
+    expect(rank(noWhere)).toBeGreaterThanOrEqual(0);
+    expect(rank(noWhere), "unknown beats known-to-be-elsewhere").toBeLessThan(rank(sharjahOnly));
   });
 });
 
