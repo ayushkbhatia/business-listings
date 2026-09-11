@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/db/client";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Alert } from "@/components/display";
@@ -46,6 +47,23 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Where verify hands off — board `2b-s`.
+ *
+ * The fork only where it is unanswered. A seller who has already said what they
+ * sell continues to profile as they always did, and a published one is never
+ * routed into a funnel screen whose only job would be to bounce them to
+ * Settings.
+ */
+async function afterVerify(businessId: string): Promise<string> {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { sellsKind: true, publishedAt: true },
+  });
+  const unanswered = business?.sellsKind === "unset" && business.publishedAt === null;
+  return unanswered ? "/onboarding/kind" : "/onboarding/profile";
+}
+
 export default async function VerifyPage({
   searchParams,
 }: {
@@ -62,12 +80,25 @@ export default async function VerifyPage({
   const state = await verifyStateFor(businessRef, actor.id);
   if (!state) redirect("/onboarding/claim");
 
+  // Where this step hands off, computed once and used by both the redirect
+  // below and the Continue link at the bottom, so the two cannot disagree.
+  const next = await afterVerify(state.businessId);
+
   /*
      Criterion 11. A supplier who reaches this URL on the back button after being
      verified must not be able to submit again: a second queue row on a settled
      listing is work for a reviewer that answers a question already answered.
   */
-  if (await alreadyVerified(state.businessId)) redirect("/onboarding/profile");
+  /*
+     Board 2b-s sits here: at the end of verify, after ownership is proven and
+     before profile. It is not a step — it is the fork, and nothing in profile
+     can be configured until it is answered.
+
+     Only where it is unanswered. A seller who has already been through it goes
+     straight on as before, and a published one is not dragged through a funnel
+     screen that would only bounce them to Settings.
+  */
+  if (await alreadyVerified(state.businessId)) redirect(await afterVerify(state.businessId));
 
   // The one figure with a cache, composed here rather than inside the service —
   // `unstable_cache` only runs inside a request.
@@ -88,7 +119,7 @@ export default async function VerifyPage({
         <OnboardingSplit aside={<VerifySidebar reviewCount={reviewCount} contested={state.contested} />}>
           <Heading state={state} />
           <div className="mt-6">
-            <Submitted state={state} />
+            <Submitted state={state} next={next} />
           </div>
         </OnboardingSplit>
       </>
@@ -181,7 +212,7 @@ function Heading({ state }: { state: VerifyState }) {
  * fills in their profile while the queue works, and a screen that made them wait
  * would turn four working hours into four hours of nothing happening.
  */
-function Submitted({ state }: { state: VerifyState }) {
+function Submitted({ state, next }: { state: VerifyState; next: string }) {
   const routeLabel =
     state.submittedRoute === "phone_callback"
       ? t("verify.submitted_route.phone_callback")
@@ -220,7 +251,7 @@ function Submitted({ state }: { state: VerifyState }) {
       )}
 
       <div>
-        <Link href="/onboarding/profile" className={buttonClassName({ size: "lg" })}>
+        <Link href={next} className={buttonClassName({ size: "lg" })}>
           {t("verify.continue")}
         </Link>
       </div>

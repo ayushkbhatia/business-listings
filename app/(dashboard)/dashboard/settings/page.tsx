@@ -15,8 +15,9 @@ import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 import { AlertsForm, type AlertsValue } from "./AlertsForm";
 import { AutoReplyForm } from "./AutoReplyForm";
 import { ChannelsCard } from "./ChannelsCard";
+import { SellsKindCard } from "./SellsKindCard";
 import { ReachabilityRail } from "./_reachability";
-import { confirmChannelCode, dropChannel, sendChannelCode } from "./actions";
+import { confirmChannelCode, dropChannel, sendChannelCode, changeSellsKindAction } from "./actions";
 import { EVENTS, GOES_TO } from "./matrix";
 
 /**
@@ -103,6 +104,10 @@ export default async function SettingsPage({
       select: {
         autoReplyEnabled: true,
         autoReplyBody: true,
+        // Board 2b-s: what this seller says they sell, and whether the change
+        // is a live one.
+        sellsKind: true,
+        publishedAt: true,
         locations: {
           where: { published: true },
           select: { hours: true, ramadanHours: true },
@@ -251,6 +256,24 @@ export default async function SettingsPage({
             )}
           </>
         )}
+
+        {/*
+           Board 2b-s B5. The onboarding screen promises "you can switch in
+           Settings at any time", and B5 says not to ship that copy without the
+           behaviour. This is it, and the confirmation says the thing a seller
+           actually wants to know: nothing is converted or deleted.
+
+           Outside the tab split deliberately. What a business sells is neither
+           a notifications setting nor a channels one, and a fact about the
+           business that only appears under one tab is a fact most sellers never
+           find — which would make the onboarding promise false in practice
+           while being true in the code.
+        */}
+        <SellsKindCard
+          current={business.sellsKind === "unset" ? null : business.sellsKind}
+          published={business.publishedAt !== null}
+          change={changeSellsKindAction}
+        />
 
         {/*
            The other half of the handoff, named. This screen decides how a seat

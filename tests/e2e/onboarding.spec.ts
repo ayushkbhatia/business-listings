@@ -51,6 +51,27 @@ test.describe("board 2b — prove ownership", () => {
     await expect(page).toHaveURL(/\/onboarding\/profile/);
   });
 
+  test("does not route a published seller through the fork", async ({ page }) => {
+    /*
+       Board 2b-s sits between verify and profile, and only for a business still
+       in the funnel.
+
+       This is a regression test with a scar. Every business that existed before
+       `sellsKind` shipped is published and `unset` — the migration adds no
+       backfill on purpose, because inferring a kind onto a live listing is the
+       `offering_type` mistake the service track exists to avoid. A first cut
+       gated profile on `unset` alone, which sent every one of them
+       profile → kind → settings and made the profile step unreachable for the
+       whole directory. An e2e run found it; no unit test would have.
+    */
+    await page.goto("/onboarding/verify");
+    await expect(page).toHaveURL(/\/onboarding\/profile/);
+
+    // And the profile step itself renders rather than bouncing.
+    await page.goto("/onboarding/profile");
+    await expect(page).toHaveURL(/\/onboarding\/profile/);
+  });
+
   test("names the licensed entity, with its legal suffix", async ({ page }) => {
     /*
      * The documented exception to the display-name rule, and the only element on

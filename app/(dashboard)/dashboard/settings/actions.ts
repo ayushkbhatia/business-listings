@@ -12,6 +12,7 @@ import {
 } from "@/lib/team/channels";
 import { recordEvent } from "@/lib/telemetry/record";
 import { t } from "@/lib/i18n";
+import { changeSellsKind, isSellsChoice } from "@/lib/onboarding/kind";
 import { getSellerSeat } from "../_shell";
 import { ALWAYS_IN_APP, CHANNELS, ESCALATION_CHOICES, EVENTS, NUDGE_CHOICES } from "./matrix";
 
@@ -281,4 +282,45 @@ export async function dropChannel(formData: FormData): Promise<ChannelActionResu
 function pick<T extends number>(value: FormDataEntryValue | null, allowed: readonly T[], fallback: T): T {
   const parsed = Number(value);
   return allowed.includes(parsed as T) ? (parsed as T) : fallback;
+}
+
+/**
+ * Change how this business sells — board `2b-s` B5.
+ *
+ * The behaviour the onboarding copy promises. Gated on `listing.edit` rather
+ * than on `routing.manage` like the rest of this file: this is a fact about
+ * what the business is, not about where its messages go, and it is the same
+ * capability that guards every other change to the listing itself.
+ */
+export async function changeSellsKindAction(
+  formData: FormData,
+): Promise<{ ok: boolean; message: string }> {
+  const seat = await getSellerSeat();
+  if (!seat) return { ok: false, message: t("dev.no_seat_title") };
+  assertCan(seat.actor, "listing.edit");
+
+  const kind = String(formData.get("kind") ?? "");
+  if (!isSellsChoice(kind)) return { ok: false, message: t("kind.error_generic") };
+
+  const result = await changeSellsKind(seat.businessId, kind);
+  if (!result.ok) return { ok: false, message: t("kind.error_generic") };
+  if (!result.changed) return { ok: false, message: t("kind.settings_same") };
+
+  /*
+     Every surface that branches on the kind, so the seller does not have to
+     reload to find their dashboard changed under them.
+  */
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/setup");
+  revalidatePath("/dashboard/listing");
+
+  // The short form: this sentence names the kind mid-clause, and the option
+  // titles are whole sentences of their own.
+  const label =
+    kind === "services"
+      ? t("kind.short_services")
+      : kind === "goods"
+        ? t("kind.short_goods")
+        : t("kind.short_both");
+  return { ok: true, message: t("kind.settings_saved", { kind: label }) };
 }

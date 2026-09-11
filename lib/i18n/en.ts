@@ -5443,7 +5443,75 @@ export const en = {
 
   // ── Onboarding, boards 2a to 2e ───────────────────────────────────────────
   "onboarding.sequence": "Set up your listing",
+  // Board 2b-s — how does this business sell? A confirmation, not an interrogation.
+  "kind.title": "{name} is yours. How does it sell?",
+  "kind.intro": "This is the one answer everything else is built on — the fields you fill in, the dashboard you get, and what a buyer is asked when they enquire. We have read it off your licence, so most sellers carry on.",
+  "kind.verified": "Ownership verified",
+  "kind.evidence_eyebrow": "From your licence",
+  "kind.evidence_source": "{number}, {authority}.",
+  "kind.evidence_none": "Your licence does not state a trading activity we can read, so we have not guessed. Pick the one that describes you.",
+  "kind.evidence_undecided": "We hold your trades but have not yet recorded how each is sold, so there is nothing to recommend. Pick the one that describes you.",
+  "kind.evidence_no_categories": "No trades are on your listing yet, so there is nothing to read. Pick the one that describes you, and choose your trades next.",
+  "kind.read_as": "We read this as {kinds}.",
+  "kind.read_goods": "goods",
+  "kind.read_services": "services",
+  "kind.read_both": "both",
+  "kind.matches": "Matches your licence",
+  "kind.services_title": "We sell services",
+  "kind.services_lead": "Work priced by the job, the visit, the return or the month.",
+  "kind.services_1": "A service list with scope, exclusions and turnaround",
+  "kind.services_2": "Credentials and coverage areas instead of stock and branches",
+  "kind.services_3": "Buyers send a brief; you reply with a proposal",
+  "kind.goods_title": "We sell products",
+  "kind.goods_lead": "Things with a part number, a specification and a stock level.",
+  "kind.goods_1": "A product catalogue with SKUs and spec tables",
+  "kind.goods_2": "Branches, stock levels and a CSV import",
+  "kind.goods_3": "Buyers send quantities; you reply with unit prices",
+  "kind.both_title": "We do both",
+  "kind.both_lead": "You supply equipment and you service it, or you sell licences and consult.",
+  "kind.both_1": "Both a catalogue and a service list, kept separate",
+  "kind.both_2": "Buyers see two sections on your storefront and enquire against one",
+  "kind.both_3": "Roughly twice the setup, so pick it only if you mean it",
+  "kind.continue_services": "Continue as a services business",
+  "kind.continue_goods": "Continue as a products business",
+  "kind.continue_both": "Continue as both",
+  "kind.continue_none": "Pick one to continue",
+  "kind.next": "Next: what you do, in your words",
+  "kind.decides_eyebrow": "What this answer decides",
+  "kind.decides_setup": "Setup",
+  "kind.decides_setup_body": "Four tasks, and whether task 1 asks for photographs or credentials",
+  "kind.decides_dashboard": "Dashboard",
+  "kind.decides_dashboard_body": "Services and coverage, or catalogue and branches",
+  "kind.decides_storefront": "Storefront",
+  "kind.decides_storefront_body": "A scope list or a product grid",
+  "kind.decides_enquiries": "Enquiries",
+  "kind.decides_enquiries_body": "Whether a buyer is asked for a quantity or a scope",
+  "kind.cost_eyebrow": "Changeable, but not free",
+  "kind.cost_body": "You can switch in Settings at any time. Once you have published, switching rewrites your catalogue — a product with a stock level has no scope, and a service has no SKU, so nothing carries across. Better to get it right here.",
+  "kind.agree_body": "Your answer and the trades you pick next have to agree. If you say products and then choose Audit & assurance, we will ask again rather than quietly override you.",
+  "kind.error_generic": "That did not save. Try again.",
+
+  // The Settings path the onboarding copy promises — board 2b-s B5.
+  "kind.settings_title": "How this business sells",
+  "kind.settings_body": "Changing this changes which screens you get — the setup tasks, the dashboard nav, and what a buyer is asked when they enquire.",
+  "kind.settings_current": "Today: {kind}",
+  "kind.settings_unset": "Not answered yet",
+  "kind.settings_change": "Change how this business sells",
+  "kind.settings_confirm_title": "Change how this business sells",
+  "kind.settings_keeps": "Nothing you have entered is converted or deleted. A product keeps its stock level and a service keeps its scope; whatever the other kind does not have stays empty for you to fill.",
+  "kind.settings_published": "Your listing is live, so this change takes effect the next time each of your screens renders.",
+  "kind.settings_go": "Change it",
+  "kind.settings_cancel": "Cancel",
   /*
+     Short forms, for sentences that name the kind mid-clause. The option
+     titles are whole sentences — "We sell services" — and reading one back
+     inside another produced "You now sell We sell services."
+  */
+  "kind.short_services": "services",
+  "kind.short_goods": "products",
+  "kind.short_both": "both products and services",
+  "kind.settings_saved": "Saved. You now sell {kind}.",
+  "kind.settings_same": "That is already how this business sells.",  /*
      One word each, and the same five words on all four renders of this funnel.
      A step chain is read at a glance between fields; "Prove it is yours" is a
      sentence, and five sentences across a 60px bar is a paragraph nobody reads.
