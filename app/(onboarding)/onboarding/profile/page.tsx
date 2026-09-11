@@ -38,6 +38,35 @@ export const dynamic = "force-dynamic";
 
 export default async function ProfileStepPage() {
   const actor = await requireClaimant("profile");
+
+  /*
+     Board 2b-s AC1: "No seller reaches Profile with `sellsKind = unset`."
+
+     Enforced on the way in rather than trusted to the link that got them here.
+     A seller who bookmarked this URL, or was sent one, would otherwise fill in a
+     profile shaped for the wrong kind of business and find out at the setup hub.
+
+     **Unpublished only, and the condition is load-bearing.** AC1 is about the
+     funnel, and a published business is not in it. Every business that existed
+     before this column shipped is published with `sellsKind = unset` — the
+     migration adds no backfill, because inferring a kind onto a live listing is
+     the `offering_type` mistake board 2b-s was written to avoid. Bouncing on
+     `unset` alone therefore sent every existing seller profile → kind →
+     settings, because `/onboarding/kind` sends a published seller to Settings,
+     and the profile step became unreachable for the whole directory.
+
+     An e2e run found it. The unit of the rule is the funnel, so the condition is
+     the same one `afterVerify` uses.
+  */
+  if (actor.businessId) {
+    const answered = await prisma.business.findUnique({
+      where: { id: actor.businessId },
+      select: { sellsKind: true, publishedAt: true },
+    });
+    if (answered?.sellsKind === "unset" && answered.publishedAt === null) {
+      redirect("/onboarding/kind");
+    }
+  }
   if (!actor.businessId) redirect("/onboarding/claim");
 
   const state = await profileStateFor(actor.businessId);
