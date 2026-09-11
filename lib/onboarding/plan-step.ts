@@ -7,6 +7,7 @@ import { trialStateFor, TRIAL_DAYS, TRIAL_PLAN_ID, type TrialState } from "@/lib
 import { planCohortFor, type PlanCohort } from "@/lib/metrics/plan-cohort";
 import { setupStateFor, type SetupState } from "./service";
 import { setupClauses, type Clause } from "./recommendation";
+import type { SellsKind } from "@/lib/db/generated/enums";
 
 /**
  * Board 2e — everything the plan step renders, in one read.
@@ -57,6 +58,8 @@ export interface PlanStepState {
   businessId: string;
   slug: string;
   displayName: string;
+  /** What the seller said on `2b-s`. The step rail renames step 4 on it. */
+  sellsKind: SellsKind;
   /** Criterion 1: the listing is live before this page loads. */
   liveAt: Date;
 
@@ -105,6 +108,9 @@ export async function planStepStateFor(
       displayName: true,
       planId: true,
       publishedAt: true,
+      // Board `2d-s`: the step rail calls step 4 "Coverage" for a seller who
+      // sells work, and it has to say the same thing on all five steps.
+      sellsKind: true,
       primaryCategoryId: true,
       primaryCategory: { select: { name: true } },
       categories: {
@@ -174,6 +180,7 @@ export async function planStepStateFor(
     businessId: business.id,
     slug: business.slug,
     displayName: business.displayName,
+    sellsKind: business.sellsKind,
     liveAt: business.publishedAt,
     plans: offers,
     alreadyPaid: paid

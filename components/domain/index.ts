@@ -77,3 +77,22 @@ export {
   type PositionReasonProps,
   type PositionState,
 } from "./Position";
+
+// Board `2c-s`. The services field set, shared by the onboarding profile step
+// and the dashboard's listing screen so a change to one is a change to both.
+export {
+  ServiceProfileFields,
+  type ServiceProfileFieldsProps,
+  type ServiceProfileValue,
+  type SectorOption,
+} from "./ServiceProfileFields";
+
+// Board `2d-s`. Coverage: how the work reaches the client, where it happens,
+// and which free zones the firm is registered in. Mounted by the onboarding
+// coverage step and by the dashboard's locations screen.
+export {
+  CoverageFields,
+  type CoverageFieldsProps,
+  type CoverageChipView,
+  type FreeZoneView,
+} from "./CoverageFields";

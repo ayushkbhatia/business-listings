@@ -121,12 +121,45 @@ export type GoLiveResult = { ok: true; slug: string } | { ok: false; error: stri
 export async function goLive(businessId: string): Promise<GoLiveResult> {
   const business = await prisma.business.findUnique({
     where: { id: businessId },
-    select: { slug: true, publishedAt: true, planId: true, locations: { select: { id: true } } },
+    select: {
+      slug: true,
+      publishedAt: true,
+      planId: true,
+      sellsKind: true,
+      deliveryModes: true,
+      locations: { select: { id: true } },
+      serviceCoverage: { select: { id: true } },
+    },
   });
   if (!business) return { ok: false, error: "That listing cannot be found." };
 
-  if (business.locations.length === 0) {
+  /*
+     Board `2d-s` B2, AC3. The gate is the same shape and a different fact.
+
+     `2d` requires a branch, because a goods listing with no address is a
+     listing nobody can collect from. Carried across unchanged that would mean
+     **no services business could ever publish**: a tax practice has one office
+     on a licence and no gate to pin, and the branch it does not have would hold
+     its listing off the directory for ever. The equivalent claim for a firm
+     that sells work is one way the work reaches the client and one area it
+     reaches them in.
+
+     A `both` business answers both, because both halves of its listing render:
+     the branch list a buyer collects from, and the coverage a buyer filters on.
+  */
+  const needsBranch = business.sellsKind !== "services";
+  const needsCoverage = business.sellsKind === "services" || business.sellsKind === "both";
+
+  if (needsBranch && business.locations.length === 0) {
     return { ok: false, error: "Add the address buyers should come to before going live." };
+  }
+
+  if (needsCoverage && business.deliveryModes.length === 0) {
+    return { ok: false, error: "Say how the work reaches the client before going live." };
+  }
+
+  if (needsCoverage && business.serviceCoverage.length === 0) {
+    return { ok: false, error: "Name at least one area you will work in before going live." };
   }
 
   if (!business.publishedAt) {
@@ -139,8 +172,13 @@ export async function goLive(businessId: string): Promise<GoLiveResult> {
         ...(business.planId ? {} : { planId: "free" }),
       },
     });
-    // At least one location has to be visible, or "live" is a listing with no
-    // address a buyer can see.
+    /*
+       At least one location has to be visible, or "live" is a goods listing
+       with no address a buyer can see. A services business with no branch at
+       all updates nothing here, which is correct — what a buyer filters on for
+       that listing is its coverage, and the branch it does not have is not a
+       gap in the listing.
+    */
     await prisma.location.updateMany({
       where: { businessId, published: false },
       data: { published: true },

@@ -156,6 +156,25 @@ if grep -qE '^[[:space:]]*model[[:space:]]+ListingFactorDay[[:space:]]*\{' <<<"$
   fi
 fi
 
+# Board `2d-s`. One coverage row per scope, and Prisma can express neither half.
+#
+# `(business, emirate, NULL)` duplicates freely under a plain unique index,
+# because NULL is distinct from NULL in SQL — which is the row a seller creates
+# by clicking Dubai twice on a slow connection, and it renders as the emirate
+# claimed twice on their own listing. `business_coverage` carries the same pair
+# for the same reason; this asserts the newer one, where a regeneration is the
+# thing most likely to drop it.
+if grep -qE '^[[:space:]]*model[[:space:]]+ServiceCoverage[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE '"service_coverage_business_id_area_id_key"' prisma/migrations \
+     && grep -rqE '"service_coverage_business_id_emirate_key"' prisma/migrations; then
+    echo "   pass — one service coverage row per scope, by two partial unique indexes"
+  else
+    echo "   FAIL — service_coverage has lost a partial unique index."
+    echo "     Without both, one business claims the same emirate any number of times."
+    fail=1
+  fi
+fi
+
 # Board 12c Q7. A boost names a listing or a category, never both and never
 # neither. Prisma expresses neither half: the relation is two optional foreign
 # keys, which permits a row with both set — a boost that lifts one supplier and

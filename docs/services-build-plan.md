@@ -366,7 +366,7 @@ drawn apart, the list shows a column the editor cannot fill or omits one it can.
 |---|---|---|
 | **`2b-s`** Claim result | **shipped 11 Sep** | `/onboarding/kind`, between verify and profile. See §4d |
 | **`2c-s`** Profile basics | **shipped 11 Sep** | One screen, conditional field set. See §4e |
-| **`2d-s`** Coverage, not branches | | `BusinessCoverage` exists and onboarding never writes it. Free zone is **already** a second axis — `Area.isFreeZone`, whose own comment says so. What is missing is a delivery mode, and `scripts/check-schema-invariants.sh` forbids it being its own table |
+| **`2d-s`** Coverage, not branches | **shipped 11 Sep** | `/onboarding/locations`, one route and two bodies. See §4f — five corrections, and the taxonomy went from four free zones to forty-two |
 | **`8a-s`** Setup hub | | **Three tasks, not four** — the epic is wrong and the code's own stale prose is where it got it |
 | **`8b-s`** Credentials task | | Unblocked by D10's split: optional evidence, no register, no chasing |
 | **`8c-s`** Scope sheet + first 3 services | | Lands **after** the editor, not four phases before it |
@@ -506,6 +506,106 @@ and both sectors; `description` survived untouched. Typing 95 characters turned 
 
 ---
 
+
+## 4f · Handoff `2d-s` — coverage, and the taxonomy that was four rows deep
+
+Shipped 11 Sep at `/onboarding/locations`. **One route, two bodies**, chosen by `sellsKind` — the
+same shape as `2c-s`, and for the same reason.
+
+### Five corrections to the handoff
+
+**1 · There is no `/onboarding/coverage`.** The board's header names one and its own B1 says
+"conditional screen body keyed on `Business.sellsKind`, **not a second route**". B1 wins. A second
+URL is a second place for `goLive` to be called from and a bookmark that lands a seller on the wrong
+body after they change their mind.
+
+**2 · `CoverageArea` already exists, under the name `Area`.** The board proposes a new seeded table
+of "7 emirates + Al Ain" with an `isEmirate` flag. `Area` is already a seeded table of places, each
+carrying its `Emirate`, already joined by locations, coverage, area pages, curated lists and demand.
+Building a parallel one would have given the directory two taxonomies of the same places. So Al Ain
+is an `Area` row with `emirate = abu_dhabi`, and a coverage row is `(emirate, areaId?)` — the exact
+shape `BusinessCoverage` already uses, which is why the union in `lib/locations/service-coverage.ts`
+needs no translation for anything downstream. **AC4 holds exactly as written**: Al Ain is selectable,
+stored under Abu Dhabi, and `Emirate` still has seven values.
+
+What `Area` did not have is a way to say *this one sits beside the emirates on a coverage picker*.
+That is `Area.searchedAsEmirate`, one column, set on one row. Board Q2's "Khor Fakkan and Ruwais come
+up" is then a row somebody adds, not a deploy — which is what Q2 asks for.
+
+**3 · The free-zone list had four rows, not "over 40".** B4 says free zones come from "the existing
+free-zone list … reused here, not duplicated", and Dependencies calls it "already seeded". It was
+JAFZA, SAIF Zone, KIZAD and Ajman Free Zone — enough for a cross-cutting toggle that filters a
+warehouse's address, and nowhere near enough for a picker a firm uses to name the zones it is
+approved to work in. **Thirty-eight more ship with this board**, taking it to 42, and the screen
+**counts the rows** rather than printing "over 40": a number in a placeholder is a number that
+survives the list changing. `nameAr`, `lat` and `lng` are null on every new row, deliberately — an
+Arabic name or a coordinate typed from memory is a fact this directory has not got.
+
+**4 · `ServiceCoverage` ships without `serviceId`.** The board's model has `serviceId String?`, null
+for the default this screen writes. **There is no `Service` model yet** — it lands in stage 3 with
+`3g-s`. A nullable column pointing at nothing, always null, with no writer, is the defect this
+project has already paid for twice: `Area.publishedAt` and the dropped `spec_field_proposal`. The
+column arrives with the table it references. What B5 and AC6 actually protect — *the default is never
+copied down onto a service* — is enforced by `effectiveCoverage`, which resolves inheritance **at
+read time**, and pinned by tests that run today.
+
+**5 · `check:schema-invariants` does not forbid a delivery-mode table.** §4's own note said it did.
+It bans models named `Order`, `OrderLine`, `Payment`, `Fulfilment` or `Fulfillment`, and the strings
+`payout`, `commissionRate`, `transactionFee`, `escrow`. `DeliveryMode` is an enum on `Business`
+because three values multi-selected is what the question is, not because a check refused a table.
+
+### Two tables, not one, and the reason
+
+`BusinessCoverage` is a **delivery promise**: this emirate, in this many hours. `ServiceCoverage` is
+**where the work happens**, and carries no promise because nothing is being moved. The tempting
+saving is one table with a nullable `leadTimeHours`; it is wrong for a `both` business, which
+genuinely delivers valves to all seven emirates and commissions them only in Dubai. Two claims, two
+tables, one shape, one union helper.
+
+### The gate, which is the whole board
+
+`2d` blocks publish until a branch has coordinates. **Carried across unchanged, no services business
+could ever publish** — a tax practice has no gate to pin, and nobody would be able to say why the
+listing never went up. `goLive` now asks by kind: a branch for goods, a mode and an area for
+services, both for `both`.
+
+### One thing added that the board did not ask for
+
+Coverage rows narrower than the eight chips are **listed read-only** rather than dropped. `3c-s` will
+write finer default rows from the dashboard, and a screen that renders eight chips and replaces the
+set on save would delete a claim it never showed anybody. The chip writer touches one row at a time.
+
+### Found on the way, and fixed
+
+The fan-out's locality term read `BusinessCoverage` only, so a practice that had just claimed all
+eight areas reached it with an empty set and scored `UNMEASURED` — the same as a listing that had
+said nothing. It now reads both tables. The `coverage * 0.34` term still means *does this business
+have any products*; replacing that with geographic match is `1h-s` and is not this.
+
+### Still owed
+
+- **The dashboard mirror is `3c-s`**, and it is not built. A published services seller changes their
+  coverage by returning to the step, which the copy now says instead of promising a dashboard screen
+  that does not exist. Same precedent as `2c-s`, whose mirror is `3b-s`.
+- **`/admin/areas` [12h] does not exist**, so an unmatched free-zone search offers no *request a
+  free zone* route. The no-match line says the list is closed and stops, rather than linking nowhere.
+- **Q3, verifying a registration** against the zones' published approved-provider lists: no
+  `verifiedAt` column ships, because a column with no writer renders an unverified claim as a checked
+  one. It belongs to the credentials chain, `8b-s` → `4c-s`.
+- **Q4 stays open and is now measurable.** `deliveryModes` and `ServiceCoverage` together answer
+  whether remote-only sellers claim all eight at a higher rate than everyone else.
+
+### Verified by clicking it
+
+All three bodies, on a seeded database. A services seller: the chips inert until a mode was picked,
+the framing line changing with the answer, Al Ain written as `(abu_dhabi, al-ain)`, `Select all`
+writing eight and the second press a no-op, `Search 41 free zones` counting the published rows, and
+`Continue` refused with "Pick at least one way the work reaches the client" when the mode was
+cleared. A `both` seller: the branch list under *Where your stock sits*, the coverage set under
+*Where you work*, neither behind a toggle. A goods seller: step 4 exactly as it was, rail included.
+Axe at 1280 and at 375 found nothing but the project's pinned contrast gap.
+
+---
 
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`
@@ -704,7 +804,7 @@ edit**.
 |---|---|---|---|---|
 | **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **One handoff, three screens.** `3g-s` fixes the field set the whole lane renders; `3f-s`'s columns are a summary of those fields; `1g-s` is the same set from the buyer's side. Drawn apart, the editor collects what the page never shows and the list carries a column nothing fills |
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | The hub, the onboarding task and credentials. Needs Q3 answered first, or it creates uncapped rows |
-| **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | Needs Q2 answered. `3c-s` is mostly built; `2d-s` needs a delivery mode that cannot be its own table |
+| **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | `2b-s`, `2c-s` and `2d-s` shipped 11 Sep. `3c-s` is mostly built and now owes the services mirror as well as the per-service rows |
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | `5c-s` has a placeholder waiting. `1d-s` needs the Free-plan certifications gate decided |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | The expensive one, and the two that must be consecutive |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
@@ -714,8 +814,10 @@ edit**.
 **What needs no handoff at all:**
 
 - `4d-s`/S9 — shipped. A staff table plus a column and a bulk control, and nobody outside sees it.
-- `1f-s` — D11 is closed, so what remains is board `1f`'s shipped page reading `BusinessCoverage`
-  instead of two seller-claimed fields. That is stage 1's locality fix surfacing, not a design.
+- `1f-s` — D11 is closed, so what remains is board `1f`'s shipped page reading coverage instead of
+  two seller-claimed fields. Since `2d-s` that means **both** tables through `businessCoverage()` in
+  `lib/locations/service-coverage.ts`, which is the one helper B6 asks for. Stage 1's locality fix
+  surfacing, not a design.
 - Every migration in stages 3 and 6, and the `profileStrength` re-weighting in stage 4.
 - `2e-s` — the plan's service cap. It is a column and a number, not a screen, which is why it is in
   stage 3 and not in the table above. It still has to be **answered** before handoff 2 ships.

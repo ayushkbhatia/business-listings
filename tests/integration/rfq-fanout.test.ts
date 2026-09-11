@@ -88,6 +88,11 @@ async function addSupplier(fields: {
   branchIn?: "dubai" | "sharjah";
   /** Emirates claimed on `BusinessCoverage`, which is a promise, not a place. */
   covers?: readonly ("dubai" | "sharjah" | "abu_dhabi")[];
+  /**
+   * Emirates claimed on `ServiceCoverage` — board `2d-s`, and the only coverage
+   * table a firm that sells work ever writes.
+   */
+  works?: readonly ("dubai" | "sharjah" | "abu_dhabi")[];
 }): Promise<string> {
   const id = stamp();
   const tier = fields.tier ?? 2;
@@ -125,6 +130,11 @@ async function addSupplier(fields: {
             coverage: {
               create: fields.covers.map((emirate) => ({ emirate, leadTimeHours: 24 })),
             },
+          }
+        : {}),
+      ...(fields.works?.length
+        ? {
+            serviceCoverage: { create: fields.works.map((emirate) => ({ emirate })) },
           }
         : {}),
       ...(fields.catalogue === false
@@ -522,6 +532,38 @@ describe("where a supplier works, as they stated it", () => {
     const order = await preview(catWhere);
     expect(order[0]!.businessId, "the Sharjah depot that covers Dubai").toBe(coversDubai);
     expect(order.findIndex((r) => r.businessId === sharjahOnly)).toBeGreaterThan(0);
+  });
+
+  it("reads where a firm that sells work says it works — board `2d-s` B6", async () => {
+    /*
+       The same defect one table over, and the one this board would otherwise
+       have created. A consultancy writes `ServiceCoverage` and never
+       `BusinessCoverage`, because it delivers nothing — so a practice that had
+       just named all seven emirates on the coverage step reached the locality
+       term with an empty set and scored `UNMEASURED`: the same as a listing
+       that had said nothing at all, which is precisely what the screen had
+       asked it not to be.
+
+       The `coverage * 0.34` term is a separate number and still reads "does
+       this business have any products". Replacing that with geographic match is
+       `1h-s`, not this.
+    */
+    const worksInDubai = await addSupplier({
+      categoryId: catWhere,
+      branchIn: "sharjah",
+      works: ["dubai"],
+    });
+
+    const candidates = await findFanoutCandidates({
+      categoryId: catWhere,
+      categoryIds: await descendantsOf(catWhere),
+      emirate: "dubai",
+      lineCount: 2,
+      want: MAX_RECIPIENTS,
+    });
+
+    const found = candidates.find((row) => row.businessId === worksInDubai);
+    expect([...(found?.emirates ?? [])].sort()).toEqual(["dubai", "sharjah"]);
   });
 
   it("scores a listing with no stated location as unknown, not as far away", async () => {

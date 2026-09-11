@@ -67,6 +67,7 @@ export default async function PlanStepPage() {
     <>
       <OnboardingHeader
         step="plan"
+        sellsKind={state.sellsKind}
         signedIn
         trailing={<span className="text-body-sm text-body">{t("plan_step.live_header")}</span>}
       />

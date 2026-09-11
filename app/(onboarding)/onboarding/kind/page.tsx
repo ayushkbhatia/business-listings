@@ -57,6 +57,10 @@ export default async function KindPage() {
   return (
     <OnboardingPage
       step="verify"
+      /* The rail says what the row says, including here: a seller who has
+         already answered once and come back sees step 4 by the name their own
+         answer gives it. */
+      sellsKind={recommendation.current}
       title={t("kind.title", { name: business.displayName })}
       intro={t("kind.intro")}
     >

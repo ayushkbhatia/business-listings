@@ -2,6 +2,7 @@ import "server-only";
 import { redirect } from "next/navigation";
 import { getActor } from "@/lib/auth/session";
 import type { Step } from "@/lib/onboarding/service";
+import type { SellsKind } from "@/lib/db/generated/enums";
 import { OnboardingColumn, OnboardingHeader } from "./_chrome";
 
 /**
@@ -29,6 +30,7 @@ export async function requireClaimant(step: Step) {
 export function OnboardingPage({
   step,
   signedIn = true,
+  sellsKind = "unset",
   title,
   intro,
   children,
@@ -36,6 +38,8 @@ export function OnboardingPage({
   step: Step;
   /** Drives the sign-in offer in the header. `2b`–`2e` are always signed in. */
   signedIn?: boolean;
+  /** Board `2d-s`: renames step 4 on the rail, and nothing else. */
+  sellsKind?: SellsKind;
   title: string;
   intro?: string;
   children: React.ReactNode;
@@ -51,7 +55,7 @@ export function OnboardingPage({
    */
   return (
     <>
-      <OnboardingHeader step={step} signedIn={signedIn} />
+      <OnboardingHeader step={step} signedIn={signedIn} sellsKind={sellsKind} />
       <OnboardingColumn>
         <div className="flex flex-col gap-4">
           <div>

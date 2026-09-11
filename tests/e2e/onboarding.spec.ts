@@ -377,6 +377,31 @@ test.describe("board 2d — locations and hours", () => {
     await expect(page.getByText(/an unpinned listing loses most local searches/)).toBeVisible();
   });
 
+  test("leaves a goods seller's step exactly as it was — board `2d-s` AC1", async ({ page }) => {
+    /*
+       `2d-s` is a conditional body on this route rather than a second one, so
+       the test that matters most is the one proving nothing moved for the
+       sellers already here. All 123 live businesses are `goods` or `unset`; if
+       the coverage set leaked onto them they would arrive at step 4 to find the
+       branch list, the map and the pin gate replaced by eight chips.
+    */
+    await expect(page.getByRole("heading", { level: 1, name: "Where can buyers find you?" })).toBeVisible();
+
+    /*
+       The rail still calls step 4 by its own name. Scoped to the `<li>` and
+       matched exactly, because a role name matches as a substring here and
+       "Locations" would otherwise find half the page.
+    */
+    const rail = page.getByRole("banner").getByRole("listitem");
+    await expect(rail.filter({ hasText: /^4Locations$/ })).toHaveCount(1);
+    await expect(rail.filter({ hasText: /Coverage/ })).toHaveCount(0);
+
+    // And none of the services set.
+    await expect(page.getByText("How the work reaches the client")).toHaveCount(0);
+    await expect(page.getByText("Emirates you serve")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Select all" })).toHaveCount(0);
+  });
+
   test("counts locations used against the plan, in the grammar 2c set", async ({ page }) => {
     // Criterion 1. `N of M locations used on <plan>` — used over allowed, plan
     // named. The render's own correction: "Branch 2 of 3 available on your plan"

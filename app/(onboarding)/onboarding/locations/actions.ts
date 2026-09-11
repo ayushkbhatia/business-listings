@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { getActor } from "@/lib/auth/session";
 import { describeProblemText } from "@/lib/trade/hours-copy";
 import type { RamadanHours, WeekHours } from "@/lib/trade/hours";
+import { prisma } from "@/lib/db/client";
 import { goLive } from "@/lib/onboarding/service";
+import { coverageCheck } from "@/lib/onboarding/coverage";
+import type { CoverageGap } from "@/lib/locations/service-coverage";
 import {
   addBranch,
   branchesWithHours,
@@ -152,7 +155,7 @@ export async function countBranchesWithHours(formData: FormData): Promise<number
 
 export type ContinueResult =
   | { ok: true }
-  | { ok: false; blocking: { branchId: string; gaps: BranchGap[] }[] };
+  | { ok: false; blocking: { branchId: string; gaps: BranchGap[] }[]; coverage: CoverageGap[] };
 
 /**
  * Criterion 4, and the funnel's criterion 3 in the same call.
@@ -169,10 +172,31 @@ export type ContinueResult =
  */
 export async function continueToPlan(): Promise<ContinueResult> {
   const actor = await getActor();
-  if (!actor?.businessId) return { ok: false, blocking: [] };
+  if (!actor?.businessId) return { ok: false, blocking: [], coverage: [] };
 
-  const check = await continueCheck(actor.businessId);
-  if (!check.ready) return { ok: false, blocking: check.blocking };
+  /*
+     Board `2d-s`: which check applies is decided by what the seller said on
+     `2b-s`, and a `both` business faces both. Read here rather than passed from
+     the page for the same reason the branch check is re-read — the page's copy
+     is as old as its last render, and a seller who changed their kind in
+     another tab would otherwise be let through the wrong gate.
+  */
+  const business = await prisma.business.findUnique({
+    where: { id: actor.businessId },
+    select: { sellsKind: true },
+  });
+  const kind = business?.sellsKind ?? "unset";
+
+  const branches =
+    kind === "services" ? { ready: true, blocking: [] } : await continueCheck(actor.businessId);
+  const coverage =
+    kind === "services" || kind === "both"
+      ? await coverageCheck(actor.businessId)
+      : { ready: true, missing: [] as CoverageGap[] };
+
+  if (!branches.ready || !coverage.ready) {
+    return { ok: false, blocking: branches.blocking, coverage: coverage.missing };
+  }
 
   await goLive(actor.businessId);
   revalidatePath("/onboarding/plan");

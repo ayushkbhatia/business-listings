@@ -33,8 +33,12 @@ import {
   DirectorySearchBar,
   RfqPanel,
   TrustPanel,
+  CoverageFields,
+  type CoverageChipView,
+  type FreeZoneView,
 } from "@/components/domain";
 import { Button } from "@/components/primitives";
+import type { DeliveryMode } from "@/lib/db/generated/enums";
 import type { RamadanHours, WeekHours } from "@/lib/trade/hours";
 import { formatAED, formatDate, formatDuration, formatSize } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -1272,6 +1276,33 @@ export function ModerationSpecimens() {
       </Section>
 
       <Section
+        id="coverage-fields"
+        title="CoverageFields"
+        note="board 2d-s · the mode group gates the areas; Al Ain is an area, never an eighth emirate"
+      >
+        <States label="nothing answered — the chips render and are inert" stack>
+          <Frame>
+            <CoverageFieldsSpecimen mode="fresh" />
+          </Frame>
+        </States>
+        <States label="remote and at-our-office — no distance affordance" stack>
+          <Frame>
+            <CoverageFieldsSpecimen mode="remote" />
+          </Frame>
+        </States>
+        <States label="on the client's site — the areas become a travel commitment" stack>
+          <Frame>
+            <CoverageFieldsSpecimen mode="travel" />
+          </Frame>
+        </States>
+        <States label="all eight claimed, with a free-zone registration" stack>
+          <Frame>
+            <CoverageFieldsSpecimen mode="all" />
+          </Frame>
+        </States>
+      </Section>
+
+      <Section
         id="plan-card"
         title="PlanCard"
         note="tier 4 · the recommended card takes the tinted shadow, never a badge colour"
@@ -1497,6 +1528,72 @@ function HoursEditorSpecimen() {
           : "Check these times."
       }
       onCopyToAll={() => undefined}
+    />
+  );
+}
+
+/**
+ * Board `2d-s`, in its four documented states.
+ *
+ * The cold one first, because it is the one a seller actually meets: nothing
+ * answered, the chips rendered and visibly inert, and a line saying which
+ * question decides what they mean. The chips are not hidden — a seller has to
+ * be able to see what they are about to be asked.
+ */
+function CoverageFieldsSpecimen({ mode }: { mode: "fresh" | "remote" | "travel" | "all" }) {
+  const zones = [
+    { id: "dmcc", name: "DMCC", emirate: "dubai" as const },
+    { id: "difc", name: "DIFC", emirate: "dubai" as const },
+    { id: "adgm", name: "ADGM", emirate: "abu_dhabi" as const },
+    { id: "jafza", name: "Jebel Ali Free Zone", emirate: "dubai" as const },
+  ];
+
+  const [modes, setModes] = useState<DeliveryMode[]>(
+    mode === "fresh"
+      ? []
+      : mode === "travel"
+        ? ["at_our_office", "at_client_site"]
+        : ["remote", "at_our_office"],
+  );
+  const [chips, setChips] = useState<CoverageChipView[]>(() =>
+    [
+      { emirate: "abu_dhabi" as const, areaId: null, label: "Abu Dhabi" },
+      { emirate: "abu_dhabi" as const, areaId: "al-ain", label: "Al Ain" },
+      { emirate: "dubai" as const, areaId: null, label: "Dubai" },
+      { emirate: "sharjah" as const, areaId: null, label: "Sharjah" },
+      { emirate: "ajman" as const, areaId: null, label: "Ajman" },
+      { emirate: "umm_al_quwain" as const, areaId: null, label: "Umm Al Quwain" },
+      { emirate: "ras_al_khaimah" as const, areaId: null, label: "Ras Al Khaimah" },
+      { emirate: "fujairah" as const, areaId: null, label: "Fujairah" },
+    ].map((row) => ({
+      key: row.areaId ?? row.emirate,
+      label: row.label,
+      scope: { emirate: row.emirate, areaId: row.areaId },
+      on: mode === "all" || (mode === "remote" && row.emirate === "dubai"),
+    })),
+  );
+  const [registrations, setRegistrations] = useState<FreeZoneView[]>(
+    mode === "all" ? [zones[0]!] : [],
+  );
+
+  return (
+    <CoverageFields
+      modes={modes}
+      onModes={setModes}
+      chips={chips}
+      onChip={(key, on) =>
+        setChips((current) => current.map((row) => (row.key === key ? { ...row, on } : row)))
+      }
+      onSelectAll={() => setChips((current) => current.map((row) => ({ ...row, on: true })))}
+      freeZones={zones}
+      registrations={registrations}
+      onFreeZone={(areaId, on) =>
+        setRegistrations((current) =>
+          on
+            ? [...current, zones.find((zone) => zone.id === areaId)!]
+            : current.filter((zone) => zone.id !== areaId),
+        )
+      }
     />
   );
 }
