@@ -35,6 +35,14 @@ import { useSaved } from "../_saved";
 const IDLE_MS = 800;
 
 export interface ProfileFormProps {
+  /**
+   * Board `2c-s`. False for a services seller, whose prose field is the
+   * ninety-character one-liner rather than this six-hundred-character one.
+   * The column is untouched either way — hidden, never dropped.
+   */
+  showDescription?: boolean;
+  /** Board `2c-s`. Labels `establishedYear` as "practising since" instead. */
+  practisingLabel?: boolean;
   tradeName: string;
   displayName: string;
   description: string;
@@ -214,6 +222,17 @@ export function ProfileForm(props: ProfileFormProps) {
         onChanged={() => router.refresh()}
       />
 
+      {/*
+         Board 2c-s. The six-hundred-character description is the goods version
+         of this question; the services version asks for a ninety-character
+         one-liner instead, and rendering both would ask a seller to describe
+         themselves twice in two lengths on one screen.
+
+         Hidden, never dropped: `description` keeps whatever it holds, so a
+         seller who switches kind finds their prose where they left it. Same
+         no-conversion rule as 4d-s B5 and 2b-s B5.
+      */}
+      {props.showDescription !== false && (
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={descriptionId}>{t("profile_step.description")}</Label>
         {/*
@@ -242,10 +261,18 @@ export function ProfileForm(props: ProfileFormProps) {
           </p>
         )}
       </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={establishedId}>{t("profile_step.established")}</Label>
+          <Label htmlFor={establishedId}>
+            {/*
+               One column, two labels. A practice's "practising since" and a
+               trader's "established" are the same fact — `establishedYear` —
+               and a second column would be two writable paths to one truth.
+            */}
+            {props.practisingLabel ? t("profile_svc.practising") : t("profile_step.established")}
+          </Label>
           <Input
             id={establishedId}
             type="number"

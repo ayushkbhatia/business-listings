@@ -24,6 +24,7 @@ import { sweepSetupNudges } from "@/lib/setup/nudge-job";
 import { sweepExpiringQuotes } from "@/lib/quotes/expiry-job";
 import { sweepRamadanShift } from "@/lib/trade/ramadan-shift-job";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
+import { rebuildSectorIndex } from "@/lib/onboarding/sector-index";
 
 /**
  * The daily run — the jobs whose natural grain is a day.
@@ -352,6 +353,19 @@ export async function GET(request: NextRequest) {
        failure mode.
     */
     ramadanShift: () => sweepRamadanShift(),
+    /*
+       Board 2c-s B2: the sector chips, recomputed from what sellers picked.
+
+       Last, and it can be: nothing else in this route reads the index, and a
+       day-old chip list is a slightly worse suggestion rather than a wrong
+       fact. It is a full rebuild inside one transaction, so a reader never sees
+       a half-built index and a retry is free.
+
+       On a directory where nobody has filled the field in it writes nothing,
+       which is the honest cold state — the profile step renders no chip row and
+       says why, rather than padding with a list we invented.
+    */
+    sectorIndex: () => rebuildSectorIndex(),
   });
 
   console.info("[jobs] daily", outcome.steps);
