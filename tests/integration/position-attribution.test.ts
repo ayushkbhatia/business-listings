@@ -49,7 +49,26 @@ const madeBusinesses: string[] = [];
 let categoryId = "";
 
 beforeAll(async () => {
-  const category = await prisma.category.findFirstOrThrow({ select: { id: true } });
+  /*
+     A category that actually has listings to rank, chosen deterministically.
+
+     This was `findFirstOrThrow({ select: { id: true } })` — no `where` and no
+     `orderBy` — so it took an arbitrary heap row out of 440 categories and then
+     asserted the nightly job had ranked listings in it. Only 29 of those 440
+     have a published listing, so the test was passing on roughly a 7% chance
+     that the heap handed back a useful one, and any `UPDATE` to any category
+     row could move it. Board 4d-s setting `trade_kind` on six rows is what
+     finally moved it: the pick came back as a category with nothing in it and
+     the snapshot correctly wrote no ranks.
+
+     The same shape as the `storefront-catalogue` flake and for the same reason.
+     An unordered `findFirst` is not a fixture, it is a coin toss with 440 sides.
+  */
+  const category = await prisma.category.findFirstOrThrow({
+    where: { primaryFor: { some: { publishedAt: { not: null }, suspendedAt: null } } },
+    orderBy: { id: "asc" },
+    select: { id: true },
+  });
   categoryId = category.id;
 
   /*

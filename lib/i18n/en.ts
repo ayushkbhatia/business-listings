@@ -7992,6 +7992,23 @@ export const en = {
   "taxonomy.removed": "Removed, and its address redirects.",
   "taxonomy.remove_hint": "Only where nothing is left pointing at it — no subcategories, no listings, no published area page. Its address redirects to the parent.",
 
+  // Board 4d-s — how a trade is sold. Decision D5.
+  "taxonomy.kind_title": "How a trade is sold",
+  "taxonomy.kind_body": "By the item or by the job. Set a sector once and every trade under it follows, then change only the ones that disagree — Logistics holds customs clearance beside material handling equipment, so almost every sector has both.",
+  "taxonomy.kind_hint": "Leave a trade blank to follow its sector. Nothing set anywhere is read as sold by the item, which is what every screen assumed before this existed.",
+  "taxonomy.kind": "Sold",
+  "taxonomy.kind_goods": "By the item",
+  "taxonomy.kind_services": "By the job",
+  "taxonomy.kind_inherit": "Follow the sector",
+  "taxonomy.kind_set": "Set how it is sold",
+  "taxonomy.kind_saved": "Saved. {count} trades change.",
+  "taxonomy.kind_moves": { one: "{count} trade changes", other: "{count} trades change" },
+  "taxonomy.kind_keeps": { one: "{count} keeps its own answer", other: "{count} keep their own answer" },
+  "taxonomy.kind_unset": "Not set",
+  "taxonomy.kind_from": "From {name}",
+  "taxonomy.kind_own": "Set here",
+  "taxonomy.kind_tally": "{services} of {total} trades are sold by the job. {set} have been decided; the rest follow a sector or the default.",
+
   // ── Guides, boards 10b and 6d ─────────────────────────────────────────────
   //
   // The public half. Read by strangers deciding whether to trust us, so §08

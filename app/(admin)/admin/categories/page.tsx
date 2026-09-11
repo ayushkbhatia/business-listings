@@ -6,9 +6,10 @@ import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { CategoryTable } from "./CategoryTable";
-import { previewRename, remove, rename } from "./actions";
+import { previewRename, previewTradeKind, remove, rename, setKind } from "./actions";
 import { RenamePanel, type TradeOption } from "./RenamePanel";
 import { DefaultTemplatePanel, type SubcategoryOption } from "./DefaultTemplatePanel";
+import { TradeKindPanel } from "./TradeKindPanel";
 import { prisma } from "@/lib/db/client";
 
 /**
@@ -70,6 +71,14 @@ export default async function TaxonomyPage() {
   }));
 
   const blocked = rows.filter((row) => !row.decision.publishable).length;
+  /*
+     Counted off the rows already loaded, not a constant and not a second query.
+     `set` counts rows that answer for themselves, which is the number that says
+     how far through the taxonomy ops actually is — it is the one this screen
+     exists to move.
+  */
+  const soldByJob = rows.filter((row) => row.trade.kind === "services").length;
+  const decided = rows.filter((row) => row.trade.from === "own").length;
 
 
   const trades: TradeOption[] = rows.map((row) => ({
@@ -105,11 +114,22 @@ export default async function TaxonomyPage() {
       </div>
 
       <div className="mt-[var(--gutter)]">
+        <TradeKindPanel trades={trades} setKind={setKind} preview={previewTradeKind} />
+      </div>
+
+      <div className="mt-[var(--gutter)]">
         <DefaultTemplatePanel subcategories={subcategories} />
       </div>
 
       <div className="mt-[var(--gutter)] flex flex-col gap-1">
         <p className="max-w-prose text-caption text-muted">{t("admin.taxonomy.note")}</p>
+        <p className="max-w-prose text-caption text-muted">
+          {t("taxonomy.kind_tally", {
+            services: formatCount(soldByJob),
+            total: formatCount(rows.length),
+            set: formatCount(decided),
+          })}
+        </p>
         <p className="max-w-prose text-caption text-faint">{t("admin.taxonomy.intro_note")}</p>
       </div>
     </AdminPage>

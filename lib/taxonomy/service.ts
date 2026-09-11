@@ -11,6 +11,17 @@ import {
   type PublishThresholds,
 } from "@/lib/publish-threshold";
 import { VERIFIED_TIER } from "@/lib/verification";
+import type { Prisma, PrismaClient } from "@/lib/db/generated/client";
+import type { TradeKind } from "@/lib/db/generated/enums";
+import {
+  resolveTradeKind,
+  tradeKindOrigin,
+  type TradeKindOrigin,
+  type TradeKindRow,
+} from "./trade-kind";
+
+/** Prisma or a transaction, for callers inside a `staffMutation`. */
+type Db = PrismaClient | Prisma.TransactionClient;
 
 /**
  * Board 4d — the taxonomy, and the thresholds that gate landing pages.
@@ -45,6 +56,15 @@ export interface CategoryHealth extends CategoryRules {
   verified: number;
   /** Against this category's own thresholds, not the defaults. */
   decision: PublishDecision;
+  /**
+   * How this trade is sold, and where that answer came from — board `4d-s`.
+   *
+   * Resolved rather than the raw column, because the raw column is null on
+   * most rows and null is not an answer, it is a pointer at the parent. The
+   * origin travels with it so the screen can show SET, INHERITED and NOT SET
+   * as three different things, which is the only way 440 rows can be triaged.
+   */
+  trade: TradeKindOrigin;
 }
 
 /**
@@ -76,6 +96,7 @@ export async function categoryHealth(): Promise<CategoryHealth[]> {
         synonyms: true,
         ...CATEGORY_RULES_SELECT,
         intro: true,
+        tradeKind: true,
       },
     }),
     prisma.business.groupBy({
@@ -96,6 +117,9 @@ export async function categoryHealth(): Promise<CategoryHealth[]> {
 
   const listings = new Map(counts.map((row) => [row.primaryCategoryId, row._count]));
   const verified = new Map(verifiedCounts.map((row) => [row.primaryCategoryId, row._count]));
+  // The same rows this function already loaded, keyed for the inheritance walk.
+  // No second query: `tradeKind` rides along in the select above.
+  const kinds = new Map(categories.map((row) => [row.id, row]));
 
   return categories.map((category) => {
     const total = listings.get(category.id) ?? 0;
@@ -110,6 +134,7 @@ export async function categoryHealth(): Promise<CategoryHealth[]> {
         { listings: total, verified: verifiedTotal, introWords },
         thresholdsFor(category),
       ),
+      trade: tradeKindOrigin(kinds, category.id),
     };
   });
 }
@@ -263,3 +288,131 @@ export function describeFailure(
 }
 
 export { countWords };
+
+/**
+ * The whole taxonomy's trade kinds, keyed by id. One query, whatever is asked.
+ *
+ * The query half of `./trade-kind.ts`. Everything is loaded rather than the
+ * chain above one id, because the chain costs a round trip per level and the
+ * whole table is 440 rows of three small columns — so resolving one id and
+ * resolving all of them cost the same.
+ */
+export async function loadTradeKinds(db: Db = prisma): Promise<Map<string, TradeKindRow>> {
+  const rows = await db.category.findMany({
+    select: { id: true, parentId: true, tradeKind: true },
+  });
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+/**
+ * The kind of one category, for a caller holding an id and no taxonomy.
+ *
+ * A caller resolving more than one id should call `loadTradeKinds` once and
+ * `resolveTradeKind` per id rather than calling this in a loop.
+ */
+export async function tradeKindFor(categoryId: string, db: Db = prisma): Promise<TradeKind> {
+  return resolveTradeKind(await loadTradeKinds(db), categoryId);
+}
+
+/**
+ * How many subcategories one write would actually move — board `4d-s`.
+ *
+ * The same promise `previewRename` makes about addresses, for the same reason:
+ * setting a sector is the bulk action, and somebody about to change the kind of
+ * thirty-eight trades in one click should be told that before rather than
+ * after. Counted as *changes*, not as descendants — a subcategory that already
+ * resolves to the value being set, by its own row or by an override further
+ * down, is not moved by this and is not counted.
+ */
+export async function tradeKindImpact(
+  categoryId: string,
+  next: TradeKind | null,
+): Promise<{ moved: number; overridden: number }> {
+  const rows = await loadTradeKinds();
+  const subject = rows.get(categoryId);
+  if (!subject) return { moved: 0, overridden: 0 };
+
+  const after = new Map(rows);
+  after.set(categoryId, { ...subject, tradeKind: next });
+
+  let moved = 0;
+  let overridden = 0;
+  for (const row of rows.values()) {
+    if (resolveTradeKind(rows, row.id) !== resolveTradeKind(after, row.id)) moved += 1;
+    /*
+       A descendant that answers for itself, and so will not follow. Surfaced
+       separately rather than folded into `moved`: "38 move, 4 keep their own
+       answer" is the sentence that stops somebody assuming a sector write is
+       total and then discovering four exceptions a month later.
+    */
+    else if (row.id !== categoryId && row.tradeKind !== null && isUnder(rows, row.id, categoryId)) {
+      overridden += 1;
+    }
+  }
+  return { moved, overridden };
+}
+
+/** Whether `id` sits anywhere below `ancestorId`. Bounded, like the resolver. */
+function isUnder(rows: ReadonlyMap<string, TradeKindRow>, id: string, ancestorId: string): boolean {
+  let current = rows.get(id)?.parentId ?? null;
+  for (let depth = 0; depth < 8 && current; depth += 1) {
+    if (current === ancestorId) return true;
+    current = rows.get(current)?.parentId ?? null;
+  }
+  return false;
+}
+
+/**
+ * Set, override or clear how a trade is sold — board `4d-s`, decision D5.
+ *
+ * `null` is a real choice and not an absence: it clears an override so the row
+ * inherits again. That is why the screen offers three options and why this
+ * takes `TradeKind | null` rather than an optional argument — an optional one
+ * could not tell "leave it alone" from "make it inherit".
+ *
+ * Audited like every other taxonomy change. It decides which version of roughly
+ * forty screens a seller and a buyer see, which is a larger blast radius than
+ * the rename beside it.
+ */
+export async function setTradeKind(input: {
+  actor: Actor;
+  categoryId: string;
+  tradeKind: TradeKind | null;
+  reason: string;
+}): Promise<TaxonomyResult> {
+  const category = await prisma.category.findUnique({
+    where: { id: input.categoryId },
+    select: { id: true, name: true, tradeKind: true },
+  });
+  if (!category) {
+    return { ok: false, error: "not_found", message: "That category is not in the taxonomy." };
+  }
+  if (category.tradeKind === input.tradeKind) {
+    return { ok: false, error: "out_of_range", message: "That is already how this trade is sold." };
+  }
+
+  await prisma.$transaction(async (tx) =>
+    staffMutation(
+      {
+        actor: input.actor,
+        capability: "taxonomy.write",
+        subject: `Category:${category.id}`,
+        reason: input.reason,
+        tx,
+      },
+      async () => {
+        await tx.category.update({
+          where: { id: category.id },
+          data: { tradeKind: input.tradeKind },
+        });
+        return {
+          result: null,
+          before: { tradeKind: category.tradeKind },
+          after: { tradeKind: input.tradeKind },
+        };
+      },
+    ),
+  );
+
+  return { ok: true };
+}
