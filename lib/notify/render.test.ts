@@ -110,6 +110,42 @@ describe("what must still render", () => {
     }
   });
 
+  it("lets an identifier through, whatever digits it happens to contain", () => {
+    /*
+       The defect this replaced, and it refused a real notification.
+
+       A cuid is twenty-five characters of base-36, so one in roughly two
+       million contains a run that reads as an international dialling prefix
+       followed by a number — `…y0085254929h3`. The guard threw
+       `NotificationLeakError: {enquiryId} looks like a phone` and the message
+       was never sent. It surfaced as a red `verify` on a docs-only branch,
+       which is the only reason it was found at all.
+
+       An id is opaque by construction. Anything the product mints must pass.
+    */
+    for (const value of [
+      "c3bzgrfeeq1hy0085254929h3",
+      "cmtx0xzs700ji1ksphxmq0hgp",
+      "cmtx0xzsl00k01ksp9uko0fu3",
+      "cjld2cjxh0000qzrmn831i7rn",
+    ]) {
+      expect(contactShape(value), value).toBeNull();
+    }
+  });
+
+  it("still refuses a dialling prefix that stands on its own", () => {
+    // The boundary that fixes the identifier must not blunt the check: a
+    // number after a space, a colon or the start of the value still throws.
+    for (const value of [
+      "00971506412288",
+      "Tel: 00971506412288",
+      "call 00971 50 641 2288",
+      "+971 50 641 2288",
+    ]) {
+      expect(contactShape(value), value).toBe("phone");
+    }
+  });
+
   it("lets a deep link through", () => {
     expect(contactShape("/dashboard/leads/cmt73abc/thread")).toBeNull();
   });

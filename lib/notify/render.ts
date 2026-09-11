@@ -70,8 +70,27 @@ export class MissingParamError extends Error {
 const LOOKS_LIKE: readonly { kind: "phone" | "email" | "iban"; pattern: RegExp }[] = [
   { kind: "email", pattern: /[\w.+-]+@[\w-]+\.[\w.]{2,}/ },
   { kind: "iban", pattern: /\b[A-Z]{2}\d{2}[A-Z0-9]{10,30}\b/ },
-  // +971 50 641 2288 · 00971506412288 · 0506412288
-  { kind: "phone", pattern: /(?:\+|00)\d{1,3}[\s-]?\d[\d\s-]{6,}/ },
+  /*
+     +971 50 641 2288 · 00971506412288 · 0506412288
+
+     The lookbehind is load-bearing. Without it the `00` international prefix
+     was recognised anywhere in a value, including in the middle of an opaque
+     identifier — and a cuid is twenty-five characters of base-36, so a run like
+     `…y0085254929h3` reads as a dialling prefix followed by a number.
+
+     It refused a real notification. `reachable-delivery.test.ts` went red on a
+     docs-only branch with "{enquiryId} looks like a phone", and the same throw
+     in production would kill the message rather than skip it. Two million
+     cuid-shaped strings were sampled to find the shape: one tripped, and every
+     one that trips does so through this pattern and this missing boundary.
+
+     A dialling prefix glued to the end of a word is not a dialling prefix, so
+     this gives up exactly one shape: a phone number with no separator before it
+     and a letter immediately preceding, "rashid00971506412288". A leaked number
+     comes out of a `phone` column rendered alone or after a space, and both of
+     those still throw.
+  */
+  { kind: "phone", pattern: /(?<![A-Za-z0-9])(?:\+|00)\d{1,3}[\s-]?\d[\d\s-]{6,}/ },
   { kind: "phone", pattern: /\b0\d[\s-]?\d{3}[\s-]?\d{4}\b/ },
   { kind: "phone", pattern: /\b\d{9,15}\b/ },
 ];
