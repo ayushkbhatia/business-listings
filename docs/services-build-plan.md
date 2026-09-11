@@ -362,22 +362,90 @@ drawn apart, the list shows a column the editor cannot fill or omits one it can.
 
 `2b-s` → `2c-s` → `2d-s` → `8a-s` → `8b-s` → `8c-s`, then the two maintenance screens.
 
-| Board | Note |
-|---|---|
-| **`2b-s`** Claim result — goods, services or both | **Open question below:** asked, or derived? |
-| **`2c-s`** Profile basics | Sectors by search and chips. The chips already ship; the search does not, and the picker offers every leaf category unfiltered — so a service seller is offered goods subcategories today |
-| **`2d-s`** Coverage, not branches | `BusinessCoverage` exists and onboarding never writes it. Free zone is **already** a second axis — `Area.isFreeZone`, whose own comment says so. What is genuinely missing is a delivery mode, and `scripts/check-schema-invariants.sh` forbids it being its own table |
-| **`8a-s`** Setup hub | **Three tasks, not four** — the epic is wrong and the code's own stale prose is where it got it. Needs a target a service seller can reach, and the product target lives in two files that must not disagree |
-| **`8b-s`** Credentials task | Unblocked by D10's split: optional evidence, no register, no chasing. The licence keeps all three |
-| **`8c-s`** Scope sheet + first 3 services | Now lands **after** the editor, not four phases before it |
-| **`3b-s`** Listing profile | A schema diff, not copy: `ModeratedField` is a Prisma enum, so a new field **stops for a person** |
-| **`3c-s`** Coverage manager | The most-built board in the lane — panel, writer, capability guard and listing revision all ship |
+| Board | State | Note |
+|---|---|---|
+| **`2b-s`** Claim result | **shipped 11 Sep** | `/onboarding/kind`, between verify and profile. See §4d |
+| **`2c-s`** Profile basics | | Sectors by search and chips. The chips already ship; the search does not, and the picker offers every leaf category unfiltered — so a service seller is offered goods subcategories today |
+| **`2d-s`** Coverage, not branches | | `BusinessCoverage` exists and onboarding never writes it. Free zone is **already** a second axis — `Area.isFreeZone`, whose own comment says so. What is missing is a delivery mode, and `scripts/check-schema-invariants.sh` forbids it being its own table |
+| **`8a-s`** Setup hub | | **Three tasks, not four** — the epic is wrong and the code's own stale prose is where it got it |
+| **`8b-s`** Credentials task | | Unblocked by D10's split: optional evidence, no register, no chasing |
+| **`8c-s`** Scope sheet + first 3 services | | Lands **after** the editor, not four phases before it |
+| **`3b-s`** Listing profile | | A schema diff, not copy: `ModeratedField` is a Prisma enum, so it **stops for a person** |
+| **`3c-s`** Coverage manager | mostly built | Panel, writer, capability guard and listing revision all ship |
 
 **`profileStrength` is fixed here, not in stage 1.** `catalogue: 20` + `filterableSpecs: 15` of 100
 are unreachable without products, against a published `STRONG_ENOUGH` of 80 — so a service supplier
 can never be strong enough. It needs services counting toward `catalogue`, which needs stage 3.
 
 ---
+
+## 4d · Handoff `2b-s` — the declaration, and what it settled
+
+Shipped 11 Sep at `/onboarding/kind`. It sits at the end of verify, after ownership is proven and
+before profile, and **adds no numbered step** — `step="verify"` keeps the indicator on 2 of 5,
+because this is not a task the seller performs but the question that decides what the tasks are.
+
+### It answered §4b's Q2, and better than the recommendation there
+
+§4b asked whether a business's kind is **derived or declared**, and recommended derived-only. The
+handoff's answer is **both, with different jobs**, and it is the better one:
+
+- `Category.tradeKind` decides how **one listing** renders. A fact about a trade.
+- `Business.sellsKind` decides which **onboarding, nav and setup tasks** the seller gets. Their own
+  declaration.
+
+Derived-only could not have captured intent, and intent is what sizes the setup — "roughly twice the
+setup, so pick it only if you mean it" is a sentence the taxonomy cannot say. Where the two disagree,
+`2c-s` asks again rather than overriding either, which `BusinessCategory.unverifiedActivityAt`
+already has the column for.
+
+`both` lives on `SellsKind` and deliberately not on `TradeKind`: on the category a third value would
+let a subcategory be neither, and ~40 consumers would branch for a state the taxonomy cannot act on.
+
+### The rule that shaped the build
+
+**A recommendation may only come from a decision somebody made.**
+
+`resolveTradeKind` never returns null — an unset category falls back to `goods` so the product
+behaves as it did before the column existed. That fallback is right for rendering and useless as
+evidence. Production has **0 of 440 categories set**, so if the fallback counted, every seller on the
+platform would be shown *"we sell products · MATCHES YOUR LICENCE"* over a licence nobody had read.
+
+The recommendation is therefore built from `tradeKindOrigin`, which distinguishes a decision from a
+fallback, and an undecided taxonomy produces no recommendation at all — the handoff's AC2. Three
+silences are told apart, because they send a seller to different places: no trades yet, trades but
+nothing decided, and a licence that states no activity.
+
+### What was built beyond the render
+
+- **B5's Settings path.** The screen promises "you can switch in Settings at any time", and B5 says
+  not to ship that copy without the behaviour. `/dashboard/settings` now carries the control,
+  confirmed, outside the tab split — a fact about the business is neither a notifications setting nor
+  a channels one, and one that appears under a single tab is one most sellers never find.
+- **AC1 enforced on the way in.** Profile redirects an `unset` seller back, rather than trusting the
+  link that got them there.
+- **The fork only where it is unanswered.** Verify hands off to profile as before for a seller who
+  has already answered, so a published one is never routed into a screen that would bounce them.
+
+### Verified by clicking it
+
+The recommendation rendered `services` from a decided trade with the licence's own words beside it;
+selecting **products** against it added **zero characters** of copy and no warning — AC4 — while the
+badge stayed on services so the seller could see what they were disagreeing with; the override
+persisted; a direct URL to profile bounced back; and changing the kind in Settings on a published
+listing left all **8 products intact, 3 still in stock**.
+
+One copy defect was found that way and not by any test: the saved message read *"Saved. You now sell
+We sell services."* — an option title is a whole sentence and cannot be read back inside another one.
+Short forms added.
+
+### Still open from this handoff
+
+**Q2, the ambiguous case.** The handoff recommends shipping the neutral three-option version and
+measuring, rather than asking a second question. Shipped neutral.
+
+**Q3, existing sellers.** Shown the screen once rather than migrated by inference — which is what
+`sellsKind` defaulting to `unset` does, and why there is no backfill in the migration.
 
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`

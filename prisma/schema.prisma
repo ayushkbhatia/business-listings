@@ -218,6 +218,34 @@ enum Emirate {
   @@map("emirate")
 }
 
+/// What a seller says they sell, in their own words — board `2b-s`, decision D8.
+///
+/// **Not the same question as `TradeKind`, and not a duplicate of it.** A
+/// trade kind is a fact about a *category*: customs clearance is sold by the
+/// job whoever is selling it. This is a *business's own declaration*, and the
+/// two have different jobs — `sellsKind` drives which onboarding a seller gets,
+/// which dashboard nav they see and which setup tasks appear; `Category.tradeKind`
+/// decides how each individual listing renders.
+///
+/// `both` exists here and deliberately not on `TradeKind`. A firm that supplies
+/// equipment and services it is ordinary, and on the category a third value
+/// would let a subcategory be neither — but on the business it is the plain
+/// truth, and it is what sizes the setup honestly. It introduces no third model:
+/// the business simply holds subcategories of both kinds and each listing still
+/// renders per its own.
+///
+/// `unset` is the state before the seller has been asked. Onboarding routes back
+/// to the question rather than guessing, because inferring this onto a live
+/// business is the mistake `offering_type` made.
+enum SellsKind {
+  unset
+  goods
+  services
+  both
+
+  @@map("sells_kind")
+}
+
 /// Whether a trade is sold by the item or by the job.
 ///
 /// Two values and deliberately no third. "Both" is a property of a *business*,
@@ -658,6 +686,12 @@ model Business {
   establishedYear  Int?          @map("established_year")
   teamSize         TeamSizeBand? @map("team_size")
   languages        String[]      @default([])
+  /// What this seller says they sell — board `2b-s`. Their declaration, not the
+  /// resolved kind of any one listing, which comes from `Category.tradeKind`.
+  ///
+  /// Defaults to `unset`: a business that has not passed the question is routed
+  /// back to it rather than assumed to be anything.
+  sellsKind        SellsKind     @default(unset) @map("sells_kind")
   /// The trading activity as the licence register words it, carried over from
   /// `StagedListing.activity` at import.
   ///
