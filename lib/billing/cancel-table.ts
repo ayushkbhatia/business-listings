@@ -352,12 +352,17 @@ function domainRow(facts: CancelFacts): ConsequenceRow {
 }
 
 /**
- * The placement, which outlasts the subscription under its own term.
+ * The placement, which ends when the subscription does.
  *
- * Q1, four boards deep and still open: the booking has its own dates, its own
- * invoice and its own end, and this row states the booking's date rather than
- * the subscription's. It does not say what happens if the two disagree, because
- * that is exactly the question. `11e` owns the booking and is blocked on `12c`.
+ * **D2, settled: the slot belongs to the subscription.** This docblock used to
+ * say the opposite — "outlasts the subscription under its own term", "four
+ * boards deep and still open" — four lines above the code that had already
+ * closed it. A comment arguing the losing side of a settled decision is worse
+ * than no comment: the next reader believes the prose over the code.
+ *
+ * One end date, moved by one event, so the two can never disagree. The unused
+ * part comes back as a credit note priced over the period it was billed for —
+ * `lib/placement/term.ts`.
  */
 function placementRow(facts: CancelFacts): ConsequenceRow {
   if (!facts.placement) {
