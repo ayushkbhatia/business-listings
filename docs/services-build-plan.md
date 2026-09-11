@@ -251,21 +251,28 @@ happens to be.
 **What it does not do.** The 0.34 coverage term is untouched, so a supplier with no catalogue still
 loses it. That is Stage 2, and it is the larger half.
 
-### Stage 2 · The fork
+### Stage 2 · The fork — **built, awaiting the migration**
 *One migration, one resolver, one ops screen. Stops for a person.*
 
-| Board | Note |
-|---|---|
-| **`4d-s` / S9** Trade kind per subcategory | `TradeKind` enum + `Category.tradeKind`, additive, applies **before** merge |
-| — the resolver | **Write it.** Both documents cite `lib/taxonomy/sector.ts:44-55` as a precedent for null-inheritance. It is not one — it walks `parentId` to the root and returns an id, never looking for the nearest non-null value of a field, and it does one `findUnique` per level |
-| — the ops screen | **440 rows, not "~420"**: 13 sectors + 427 subcategories. `/admin/categories` renders all of them at once with no `pagination` prop, though `DataTable` supports one |
+- [x] **2.1 `TradeKind` and `Category.tradeKind`** — `20260930090000_category_trade_kind`.
+  Additive and nullable, so it applies **before** the merge. Two values and no third: "both" is a
+  property of a business, which `BusinessCategory` already expresses, not of a trade.
+- [x] **2.2 The null-inherit resolver.** Written, not copied. `lib/taxonomy/sector.ts:44-55` is the
+  precedent for the *shape* only — it looks for the top of the tree and returns an id, where this
+  looks for the nearest ancestor holding a value, and it issues one `findUnique` per level. The rule
+  is pure and unit-tested in `lib/taxonomy/trade-kind.ts`; the query half is in `./service.ts`.
+- [x] **2.3 No database default, deliberately.** A default would write `goods` into all 440 rows and
+  make "decided" and "never opened" the same fact. The fallback is `goods` in code — what every
+  surface assumed before the column existed, so the day it ships nothing changes.
+- [x] **2.4 `4d-s`/S9, the ops screen.** A SOLD column with three states and a panel whose bulk
+  primitive is inheritance: thirteen writes cover the taxonomy, then the exceptions are typed.
+  Impact shown before the button, separating what moves from what will not follow. Audited.
+- [x] **2.5 The first consumer.** `findFanoutCandidates` resolves the enquiry's category once and
+  stops counting products on a trade sold by the job — the 0.34 term, carried over from stage 1.
 
-Two sectors are unambiguously all-services and take one write each under null-inherit.
-`pumps-and-motors` has **zero children**, so a per-subcategory-only screen cannot set it.
-`construction-and-building-materials` is roughly **half** services — 17 of 38 — not "mostly
-products, but three exceptions" as `services-spec.md:59-60` says.
-
----
+**The count is 440, not "~420".** 13 sectors and 427 subcategories. `pumps-and-motors` has **zero
+children**, so a per-subcategory-only screen could never set it — which is one reason the panel takes
+sectors as well. Two sectors are unambiguously all-services and take one write each.
 
 ### Stage 3 · The seller can describe what they sell
 `8a-s` → `8b-s` → `8c-s` → `3g-s`/S3 → `3f-s`/S4 → `3h-s`
@@ -396,7 +403,7 @@ Items 1–3 are one coherent billing batch. Item 4 is a ranking-honesty fix and 
 
 ## 7 · The handoff order
 
-**Stages 1 and 2 need no handoff.** Stage 1 — now shipped — was scoring and metrics — the fan-out score is never
+**Stages 1 and 2 are done and need no handoff.** Stage 1 was scoring and metrics — the fan-out score is never
 persisted (there is no score column on `EnquiryRecipient`) and never rendered; `selectRecipients` is
 called from a server action (`app/(public)/rfq/actions.ts:108`) and returns a recipient list, not a
 number on a page. Stage 2's one screen, `4d-s`/S9, is a variant of `/admin/categories` — an existing

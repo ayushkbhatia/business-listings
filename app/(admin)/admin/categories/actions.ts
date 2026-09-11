@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import { requireStaff } from "@/lib/auth/staff";
 import { addressesFor, deleteCategory, renameCategory } from "@/lib/taxonomy/rename";
+import { setTradeKind, tradeKindImpact } from "@/lib/taxonomy/service";
 import { setCategoryDefaultTemplate } from "@/lib/spec/versions";
 import { t } from "@/lib/i18n";
 
@@ -95,4 +96,54 @@ export async function setDefaultTemplate(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/categories");
   revalidatePath("/admin/spec-library");
+}
+
+/**
+ * How many trades one trade-kind write would actually move — board `4d-s`.
+ *
+ * The parallel of `previewRename`, and shown in the same place for the same
+ * reason. Setting a sector is the bulk action here, so the number can be large.
+ */
+export async function previewTradeKind(
+  categoryId: string,
+  kind: string,
+): Promise<{ moved: number; overridden: number }> {
+  await requireStaff();
+  if (!categoryId || !kind) return { moved: 0, overridden: 0 };
+  return tradeKindImpact(categoryId, kind === "inherit" ? null : kind === "services" ? "services" : "goods");
+}
+
+/**
+ * Set, override or clear how a trade is sold.
+ *
+ * Returns an `ActionResult` rather than throwing, unlike `setDefaultTemplate`
+ * beside it: a refusal here is an ordinary outcome — a missing reason, a value
+ * already set — and the panel has somewhere to render it.
+ */
+export async function setKind(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const raw = String(formData.get("kind") ?? "");
+    if (raw !== "goods" && raw !== "services" && raw !== "inherit") {
+      return { ok: false, error: t("taxonomy.kind_hint") };
+    }
+
+    const categoryId = String(formData.get("categoryId") ?? "");
+    const kind = raw === "inherit" ? null : raw;
+    // Counted before the write, because afterwards the answer is zero.
+    const { moved } = await tradeKindImpact(categoryId, kind);
+
+    const result = await setTradeKind({
+      actor: seat.actor,
+      categoryId,
+      tradeKind: kind,
+      reason: String(formData.get("reason") ?? ""),
+    });
+    if (!result.ok) return { ok: false, error: result.message };
+
+    revalidatePath("/admin/categories");
+    return { ok: true, message: t("taxonomy.kind_saved", { count: moved }) };
+  } catch (error) {
+    return refused(error);
+  }
 }

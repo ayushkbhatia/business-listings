@@ -101,6 +101,32 @@ export function seatEmail(kind: SeatKind, slug: string | null): string {
     : `dev-${kind.key}@${DOMAIN}`;
 }
 
+/**
+ * The auth user for a seat email, wherever it sits in the list.
+ *
+ * Bounded rather than unbounded: a local `auth.users` grows without limit
+ * because OTP mints a row per verification attempt and nothing collects them,
+ * so a runaway loop here would be the second bug rather than the fix. Ten pages
+ * of 200 is 2,000 users, which is far past any real local database and cheap
+ * to give up on — the caller creates the user, and if that refuses, the message
+ * is the same one it always was.
+ */
+async function findSeatUser(
+  admin: ReturnType<typeof createAdminClient>,
+  email: string,
+): Promise<{ id: string } | null> {
+  const PER_PAGE = 200;
+  for (let page = 1; page <= 10; page += 1) {
+    const { data } = await admin.auth.admin.listUsers({ page, perPage: PER_PAGE });
+    const users = data?.users ?? [];
+    const hit = users.find((user) => user.email === email);
+    if (hit) return hit;
+    // A short page is the last page.
+    if (users.length < PER_PAGE) return null;
+  }
+  return null;
+}
+
 export type SeatResult =
   | { ok: true; destination: string; email: string }
   | { ok: false; error: string };
@@ -141,8 +167,20 @@ export async function takeSeat(kindKey: string, slug: string | null): Promise<Se
      that can lose its actor is not an audit log. `scripts/dev-seat.mts` learned
      this the same way.
   */
-  const { data: existing } = await admin.auth.admin.listUsers({ perPage: 200 });
-  const found = (existing?.users ?? []).find((user) => user.email === email);
+  /*
+     Paged, because `listUsers` is paginated and this read used to take the
+     first page only.
+
+     `perPage: 200` against a local Supabase holding 562 auth users meant the
+     seat was found only if it happened to sit on page one — and OTP mints a
+     user per verification attempt, so that table grows on its own and every
+     seat eventually falls off the end. The failure looked like a bug in
+     whatever screen you were trying to reach: the lookup missed, the create
+     ran, GoTrue refused with "A user with this email address has already been
+     registered", and the seat page redirected back to itself with that error.
+     Nothing in the message pointed at pagination.
+  */
+  const found = await findSeatUser(admin, email);
 
   let userId: string;
   if (found) {

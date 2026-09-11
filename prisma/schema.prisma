@@ -218,6 +218,24 @@ enum Emirate {
   @@map("emirate")
 }
 
+/// Whether a trade is sold by the item or by the job.
+///
+/// Two values and deliberately no third. "Both" is a property of a *business*,
+/// not of a trade: a firm that sells pumps and services them holds one category
+/// of each, which the many-to-many `BusinessCategory` already expresses. Adding
+/// `both` here would let one subcategory be neither, and every reader would
+/// need a branch for a state the taxonomy cannot act on.
+///
+/// Not a booking model. There is no calendar, no slot and no availability
+/// window behind `services` — the conversion event stays the enquiry. See
+/// `docs/services-spec.md` §2.
+enum TradeKind {
+  goods
+  services
+
+  @@map("trade_kind")
+}
+
 /// Areas and free zones are translatable records, not code strings. Arabic names
 /// live here from day one so the taxonomy is a data change, never a deploy.
 model Area {
@@ -249,19 +267,33 @@ model Area {
 
 /// Self-referencing tree, two levels in use.
 model Category {
-  id                  String   @id @default(cuid())
-  parentId            String?  @map("parent_id")
+  id                  String     @id @default(cuid())
+  parentId            String?    @map("parent_id")
   name                String
-  nameAr              String?  @map("name_ar")
-  slug                String   @unique
+  nameAr              String?    @map("name_ar")
+  slug                String     @unique
   /// Two-letter mono mark, e.g. "IN".
   code                String
   /// Query routing. Includes Arabic terms — صمامات must find valve suppliers.
-  synonyms            String[] @default([])
-  defaultTemplateId   String?  @map("default_template_id")
-  showOnHome          Boolean  @default(false) @map("show_on_home")
-  acceptsRfq          Boolean  @default(true) @map("accepts_rfq")
-  requiresExtraCheck  Boolean  @default(false) @map("requires_extra_check")
+  synonyms            String[]   @default([])
+  defaultTemplateId   String?    @map("default_template_id")
+  /// How this trade is sold — decision D5, `docs/services-spec.md`.
+  ///
+  /// Null inherits from the parent, so a sector can be set once and a
+  /// subcategory overridden where it differs. `resolveTradeKind` walks up to
+  /// the nearest ancestor that has one, and a tree with none anywhere resolves
+  /// to `goods`, because that is what every surface assumed before this column
+  /// existed and an unset taxonomy must not change what the site does.
+  ///
+  /// The unit is the subcategory, not the sector, and that is the finding this
+  /// column exists to record: not one of the thirteen sectors is purely one or
+  /// the other. Logistics holds *Customs clearance* beside *Material handling
+  /// equipment*; IT holds *Cybersecurity* beside *Servers & storage*. A
+  /// sector-level flag would be wrong on roughly half the tree.
+  tradeKind           TradeKind? @map("trade_kind")
+  showOnHome          Boolean    @default(false) @map("show_on_home")
+  acceptsRfq          Boolean    @default(true) @map("accepts_rfq")
+  requiresExtraCheck  Boolean    @default(false) @map("requires_extra_check")
   /// The landing page's own copy.
   ///
   /// Board 6f: a category page with a heading and a grid of results is a page
@@ -273,8 +305,8 @@ model Category {
   /// which pages have nothing to say yet.
   intro               String?
   /// Listings needed before landing pages publish.
-  publishThreshold    Int      @default(60) @map("publish_threshold")
-  verifiedShareMin    Float    @default(0.30) @map("verified_share_min")
+  publishThreshold    Int        @default(60) @map("publish_threshold")
+  verifiedShareMin    Float      @default(0.30) @map("verified_share_min")
   /// Listings required per 1,000 monthly searches — board 6f.
   ///
   /// The second half of the listings rule. A page needs the absolute floor
@@ -282,7 +314,7 @@ model Category {
   /// so a trade nobody searches for publishes at 60 and one with four thousand
   /// searches a month has to be worth arriving at. It bites only on scopes
   /// somebody has recorded a `ScopeDemand` row for.
-  demandPerThousand   Int      @default(25) @map("demand_per_thousand")
+  demandPerThousand   Int        @default(25) @map("demand_per_thousand")
   /// The fraction of that need a page which is ALREADY live keeps holding at.
   ///
   /// Board 6f asks for hysteresis: publish at 60, unpublish at 48. Without a
@@ -290,28 +322,28 @@ model Category {
   /// and leaving the sitemap. A share rather than a second integer because the
   /// need is no longer one number — at 0.8 it reproduces the board's 60 and 48
   /// exactly and scales with a demand-raised floor.
-  holdShare           Float    @default(0.80) @map("hold_share")
+  holdShare           Float      @default(0.80) @map("hold_share")
   /// Words of the page's own copy — board 6f's fourth control.
   ///
   /// A column rather than the module default it used to read, because §5 puts
   /// the word floor on the rules panel beside the other five and every one of
   /// them republishes the site. `thresholdsFor` pinned this to 250 with a
   /// comment saying "board 6f owns it"; it does now.
-  minIntroWords       Int      @default(250) @map("min_intro_words")
+  minIntroWords       Int        @default(250) @map("min_intro_words")
   /// Whether generated drafts must be read by a person before they publish.
   ///
   /// Board 6f §2: "Generate 38 drafts", not "Generate queued pages". A single
   /// button that publishes 38 pages into a live index is a materially different
   /// and worse button. On by default, and `generateDrafts` refuses to publish
   /// anything while it is on.
-  humanReviewRequired Boolean  @default(true) @map("human_review_required")
+  humanReviewRequired Boolean    @default(true) @map("human_review_required")
   /// Days a newly published page is protected from the sweep — board 6f.
   ///
   /// The sweep skips a page inside this window rather than the page staying
   /// live while thin: see `AreaPage.firstPublishedAt`.
-  minLiveDays         Int      @default(30) @map("min_live_days")
-  sortOrder           Int      @default(0) @map("sort_order")
-  createdAt           DateTime @default(now()) @map("created_at")
+  minLiveDays         Int        @default(30) @map("min_live_days")
+  sortOrder           Int        @default(0) @map("sort_order")
+  createdAt           DateTime   @default(now()) @map("created_at")
 
   parent            Category?              @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   children          Category[]             @relation("CategoryTree")
@@ -458,7 +490,7 @@ model SpecField {
   variesByVariant Boolean   @default(false) @map("varies_by_variant")
   sortOrder       Int       @default(0) @map("sort_order")
 
-  template  SpecTemplate        @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  template SpecTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   @@unique([templateId, key])
   @@index([templateId, isFilterable])
@@ -3564,14 +3596,14 @@ model ListingBoost {
   /// `businessId` and `categoryId` is set, enforced by the
   /// `listing_boost_one_target` check constraint in the migration: Prisma has
   /// no syntax for it, so it is asserted by `pnpm check:schema` instead.
-  businessId  String? @map("business_id")
+  businessId String?  @map("business_id")
   /// The category this boost lifts, where it lifts a category.
-  categoryId  String? @map("category_id")
+  categoryId String?  @map("category_id")
   /// Narrows a category boost to one emirate. Null means the whole country.
   ///
   /// Meaningless on a business-targeted boost and rejected there: a boost on a
   /// named listing already knows where that listing trades.
-  emirate     Emirate?
+  emirate    Emirate?
 
   /// Added to the computed score. Bounded in the service, because a boost that
   /// can outrank everything is a boost that replaces the ranking.
@@ -4349,20 +4381,20 @@ model CategoryRankDay {
 /// milliseconds, a filled ratio — because *"rose from 4h to 31h"* is a sentence
 /// about the measurement and not about its normalised 0..1 form.
 model ListingFactorDay {
-  businessId String   @map("business_id")
-  day        DateTime @map("day") @db.Date
+  businessId  String   @map("business_id")
+  day         DateTime @map("day") @db.Date
   /// `{ relevance, verificationTier, responseTime, specCompleteness, distance,
   /// planTier }`, each 0..1 as `scoreRow` normalises them. Typed as
   /// `FactorVector` in `lib/analytics/factors.ts`.
-  scores     Json
+  scores      Json
   /// The same keys, holding what the seller would recognise: milliseconds, a
   /// tier, a ratio. Typed as `RawFactors`.
-  raw        Json
+  raw         Json
   /// The six weights in force that night, as `12c` had them set.
-  weights    Json
+  weights     Json
   /// Points from a live `ListingBoost`. Added after the weighted sum, so it is
   /// its own number here too — state 10 reads it to say a position was bought.
-  boostPoints Int     @default(0) @map("boost_points")
+  boostPoints Int      @default(0) @map("boost_points")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 

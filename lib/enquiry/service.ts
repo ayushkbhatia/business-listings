@@ -1,6 +1,7 @@
 import "server-only";
 import type { Emirate } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
+import { tradeKindFor } from "@/lib/taxonomy/service";
 import { createProvisionalIdentity } from "@/lib/auth/flow";
 import { normaliseIdentifier } from "@/lib/auth/identity";
 import { routeLead } from "@/lib/leads/router";
@@ -204,6 +205,17 @@ export async function findFanoutCandidates(
     else coveredBy.set(row.businessId, [row.emirate]);
   }
 
+  /*
+     Whether this enquiry is about a thing or about a job.
+
+     Resolved from the enquiry's own category, once, rather than per candidate.
+     The question `matchedLineCount` answers is "how many of these lines does
+     this seller have something for", and on a service enquiry there is no line
+     that a product could answer — so the product proxy is meaningless for
+     everyone on it, not only for the suppliers who happen to stock nothing.
+  */
+  const kind = await tradeKindFor(request.categoryId);
+
   return businesses.map((business) => ({
     businessId: business.id,
     slug: business.slug,
@@ -221,16 +233,20 @@ export async function findFanoutCandidates(
     verificationTier: business.verificationTier,
     responseTimeMedianMs: business.responseTimeMedianMs,
     /*
-       Still a proxy, and still the coarsest one: all of the lines or none of
-       them, on whether any product is live.
+       Still a proxy on a goods enquiry, and still the coarsest one: all of the
+       lines or none of them, on whether any product is live. A supplier with
+       one irrelevant listing scores the same as one with five hundred relevant
+       ones, which is a separate defect and needs real line matching to fix.
 
-       It stays until `Category.tradeKind` exists. For a supplier who sells by
-       the item, "no live products" really is zero lines matched and scoring it
-       zero is correct. For one who sells by the job it is a question about the
-       wrong noun, and there is no way to tell the two apart here yet — which
-       is stage 2 of `docs/services-build-plan.md`, not this change.
+       Null on a service enquiry, because there the proxy is not coarse but
+       wrong. `coverage` is 0.34 — the largest term in the vector — and a
+       freight forwarder, an auditor and a facilities contractor have no
+       products by the nature of what they sell, so every one of them scored a
+       hard zero on it for as long as the fan-out has existed. That is not a
+       measurement of whether they can do the job; it is a measurement of a
+       noun that does not apply. `scoreCandidate` scores null at the midpoint.
     */
-    matchedLineCount: business._count.products > 0 ? request.lineCount : 0,
+    matchedLineCount: kind === "services" ? null : business._count.products > 0 ? request.lineCount : 0,
     /*
        Null, because nobody has ever counted it.
 

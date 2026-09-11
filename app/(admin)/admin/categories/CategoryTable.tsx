@@ -16,6 +16,13 @@ import { t } from "@/lib/i18n";
  */
 
 export function CategoryTable({ rows }: { rows: readonly CategoryHealth[] }) {
+  /*
+     Ancestor names, so an inherited row can say which sector it came from.
+     "From Logistics & freight forwarding" is a reason to leave a row alone; a
+     bare "by the job" is not, and there are 440 rows to triage.
+  */
+  const nameOf = new Map(rows.map((row) => [row.id, row.name]));
+
   const columns: Column<CategoryHealth>[] = [
     {
       key: "category",
@@ -54,6 +61,37 @@ export function CategoryTable({ rows }: { rows: readonly CategoryHealth[] }) {
           listings: formatCount(row.publishThreshold),
           share: String(Math.round(row.verifiedShareMin * 100)),
         }),
+    },
+    {
+      key: "trade",
+      header: t("taxonomy.kind"),
+      width: "12rem",
+      render: (row) => (
+        <span className="flex flex-col">
+          {/*
+             The three states kept apart. `default` is not rendered as "by the
+             item" with a quiet note — it is rendered as NOT SET, because a
+             trade nobody has looked at and one somebody decided is sold by the
+             item are different facts, and the whole job of this screen is to
+             find the first kind.
+          */}
+          {row.trade.from === "default" ? (
+            <StatusBadge tone="neutral">{t("taxonomy.kind_unset")}</StatusBadge>
+          ) : (
+            <StatusBadge tone={row.trade.kind === "services" ? "info" : "neutral"}>
+              {row.trade.kind === "services" ? t("taxonomy.kind_services") : t("taxonomy.kind_goods")}
+            </StatusBadge>
+          )}
+          {row.trade.from === "inherited" && (
+            <span className="mt-0.5 text-caption text-faint">
+              {t("taxonomy.kind_from", { name: nameOf.get(row.trade.ancestorId) ?? "—" })}
+            </span>
+          )}
+          {row.trade.from === "own" && (
+            <span className="mt-0.5 text-caption text-faint">{t("taxonomy.kind_own")}</span>
+          )}
+        </span>
+      ),
     },
     {
       key: "state",

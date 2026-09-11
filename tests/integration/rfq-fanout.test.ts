@@ -2,7 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { previewRecipients } from "@/app/(public)/rfq/actions";
 import { prisma } from "@/lib/db/client";
 import { descendantsOf, findFanoutCandidates } from "@/lib/enquiry/service";
-import { MAX_RECIPIENTS, MIN_RECIPIENTS, selectRecipients } from "@/lib/enquiry/fanout";
+import {
+  MAX_RECIPIENTS,
+  MIN_RECIPIENTS,
+  scoreCandidate,
+  selectRecipients,
+} from "@/lib/enquiry/fanout";
 
 /**
  * Board 1h, acceptance criteria 6 and 7: who an RFQ actually reaches.
@@ -54,13 +59,20 @@ let catCoverage: string;
 let catCap: string;
 let catEmpty: string;
 let catWhere: string;
+/** Sold by the job, so no line a product could answer — board 4d-s. */
+let catService: string;
 
 /** The subject of the cap tests. Its plan and its month are set per test. */
 let subjectId: string;
 
-async function addCategory(name: string): Promise<string> {
+async function addCategory(name: string, tradeKind?: "goods" | "services"): Promise<string> {
   const row = await prisma.category.create({
-    data: { slug: `${PREFIX}${name}`, code: "RF", name: `RFQ fan-out test — ${name}` },
+    data: {
+      slug: `${PREFIX}${name}`,
+      code: "RF",
+      name: `RFQ fan-out test — ${name}`,
+      ...(tradeKind ? { tradeKind } : {}),
+    },
   });
   return row.id;
 }
@@ -259,14 +271,15 @@ beforeAll(async () => {
   cappedPlanLimit = capped!.enquiriesPerMonth!;
   uncappedPlanId = uncapped!.id;
 
-  [catMany, catOrder, catCoverage, catCap, catEmpty, catWhere] = await Promise.all([
+  [catMany, catOrder, catCoverage, catCap, catEmpty, catWhere, catService] = await Promise.all([
     addCategory("many"),
     addCategory("order"),
     addCategory("coverage"),
     addCategory("cap"),
     addCategory("empty"),
     addCategory("where"),
-  ]) as [string, string, string, string, string, string];
+    addCategory("service", "services"),
+  ]) as [string, string, string, string, string, string, string];
 
   // Twelve identical suppliers: more than the ceiling, so the ceiling is what
   // decides the count and not the size of the pool.
@@ -379,6 +392,73 @@ describe("criterion 7 — the order the buyer sees them in", () => {
     const live = new Map(counts.map((row) => [row.businessId, row._count._all]));
     expect(live.get(order[0]!.businessId) ?? 0).toBeGreaterThan(0);
     expect(live.get(order[1]!.businessId) ?? 0).toBe(0);
+  });
+});
+
+describe("an enquiry about a job, not a thing", () => {
+  /*
+     Board 4d-s. `coverage` is 0.34 — the largest term in the vector — and it
+     was fed by `business._count.products > 0`. A freight forwarder, an auditor
+     and a facilities contractor have no products by the nature of what they
+     sell, so every one of them took a hard zero on the largest term of every
+     enquiry in their own category, for as long as the fan-out has existed.
+
+     The fix is not to score them as though they had a catalogue. It is to stop
+     asking: on an enquiry filed under a trade sold by the job there is no line
+     a product could answer, for anybody on it, so the measurement is not taken
+     and `scoreCandidate` scores what was not measured at the midpoint.
+
+     Resolved from the ENQUIRY's category rather than each candidate's, once
+     per enquiry. The question is about the lines, and the lines belong to the
+     enquiry.
+  */
+  let withCatalogue: string;
+  let withNone: string;
+
+  beforeAll(async () => {
+    withCatalogue = await addSupplier({ categoryId: catService });
+    withNone = await addSupplier({ categoryId: catService, catalogue: false });
+  });
+
+  async function candidatesFor(categoryId: string) {
+    return findFanoutCandidates({
+      categoryId,
+      categoryIds: await descendantsOf(categoryId),
+      emirate: "dubai",
+      lineCount: 2,
+      want: MAX_RECIPIENTS,
+    });
+  }
+
+  it("does not count products on a trade that is sold by the job", async () => {
+    const candidates = await candidatesFor(catService);
+    expect(candidates.length).toBeGreaterThanOrEqual(2);
+    // Not measured, for every candidate — including the one that does have a
+    // catalogue. The proxy is wrong here rather than merely coarse.
+    expect(candidates.map((c) => c.matchedLineCount)).toEqual(candidates.map(() => null));
+  });
+
+  it("still counts them on a trade that is sold by the item", async () => {
+    // The fallback, and the state of all 440 rows the day the column shipped.
+    const candidates = await candidatesFor(catCoverage);
+    expect(candidates.some((c) => typeof c.matchedLineCount === "number")).toBe(true);
+  });
+
+  it("stops an empty catalogue costing a service supplier the largest term", async () => {
+    const candidates = await candidatesFor(catService);
+    const score = (id: string) => {
+      const found = candidates.find((c) => c.businessId === id)!;
+      return scoreCandidate(found, {
+        categoryId: catService,
+        categoryIds: [catService],
+        emirate: "dubai",
+        lineCount: 2,
+        want: MAX_RECIPIENTS,
+      });
+    };
+    // Alike on every other ranked column, so if coverage still read the
+    // catalogue these two would differ by 0.34.
+    expect(score(withNone)).toBe(score(withCatalogue));
   });
 });
 

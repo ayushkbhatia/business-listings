@@ -162,6 +162,45 @@ test.describe("boards 4b, 4d and 4e", () => {
     await expect(page.getByText(/of 60/).first()).toBeVisible();
   });
 
+  test("the taxonomy says how each trade is sold, and where that answer came from", async ({
+    page,
+  }) => {
+    /*
+       Board 4d-s. Three states, not two: a trade somebody decided about, one
+       following its sector, and one nobody has opened. The third is the reason
+       the column has no database default — a default would write "by the item"
+       into all 440 rows and make "decided" and "never looked at" the same fact.
+    */
+    await page.goto("/admin/categories");
+
+    /*
+       Matched on the row's OWN name cell, not on the row's accessible name.
+
+       A role name matches as a substring and a row's name is every cell in it,
+       so `getByRole("row", { name: /Legal, audit & business setup/ })` also
+       matched all 35 children — each of whose SOLD cell reads "From Legal,
+       audit & business setup". Thirty-six rows, and the first draft of this
+       test asserted against all of them.
+    */
+    const rowFor = (name: string) =>
+      page.locator("tbody tr").filter({ has: page.locator("td:first-child", { hasText: name }) });
+
+    // Set on its own row. The seed decides six; Legal is the clean sector.
+    const legal = rowFor("Legal, audit & business setup");
+    await expect(legal).toHaveCount(1);
+    await expect(legal.getByText("By the job")).toBeVisible();
+    await expect(legal.getByText("Set here")).toBeVisible();
+
+    // Inherited, and it names the sector it came from — which is what makes a
+    // row safe to skip when there are 440 of them to triage.
+    const inherited = rowFor("PRO services");
+    await expect(inherited).toHaveCount(1);
+    await expect(inherited.getByText(/From Legal, audit & business setup/)).toBeVisible();
+
+    // And the tally underneath is a query over the rows, never a constant.
+    await expect(page.getByText(/\d+ of \d+ trades are sold by the job/)).toBeVisible();
+  });
+
   test("the taxonomy does not claim to measure intro words", async ({ page }) => {
     // The copy belongs to the landing page, which is handoff 5. Counting it
     // here would fail every category on a threshold this screen cannot see.

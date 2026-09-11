@@ -484,6 +484,47 @@ async function main() {
       `${SUBCATEGORIES.length + MORE_SUBCATEGORIES.length} subcategories`,
   );
 
+  /*
+     How a handful of trades are sold — board 4d-s, decision D5.
+
+     A sample, not the answer. Production's 440 rows are set by ops through
+     /admin/categories, where each write is audited with a reason; putting them
+     in a seed would make a taxonomy decision cost a deploy, and the seed is
+     refused against any non-loopback host anyway.
+
+     What it has to give a developer and CI is both kinds and both directions of
+     inheritance, because a fixture set where everything resolves to `goods`
+     would let every service branch pass vacuously:
+
+       - a whole sector set once, so the inherit path has real data;
+       - services overridden inside a goods sector — Logistics holds customs
+         clearance, which is the finding the column exists to record;
+       - goods overridden inside a sector set to services, so the override is
+         shown working in both directions rather than only downward.
+  */
+  const TRADE_KINDS = [
+    { slug: "legal-audit-and-business-setup", kind: "services" as const },
+    { slug: "customs-clearance", kind: "services" as const },
+    { slug: "freight-forwarding", kind: "services" as const },
+    { slug: "cybersecurity", kind: "services" as const },
+    { slug: "event-management", kind: "services" as const },
+    { slug: "servers-and-storage", kind: "goods" as const },
+  ];
+  let kindsSet = 0;
+  for (const row of TRADE_KINDS) {
+    const { count } = await prisma.category.updateMany({
+      where: { slug: row.slug },
+      data: { tradeKind: row.kind },
+    });
+    if (count === 0) {
+      // A renamed slug would otherwise leave the fixture silently one-sided,
+      // and the service tests would go green against a taxonomy of one kind.
+      throw new Error(`seed: no category with slug "${row.slug}" to set a trade kind on`);
+    }
+    kindsSet += count;
+  }
+  console.log(`   ${kindsSet} trade kinds set (the rest inherit or default to goods)`);
+
   console.log("→ spec template");
   const template = await prisma.specTemplate.create({
     data: {
