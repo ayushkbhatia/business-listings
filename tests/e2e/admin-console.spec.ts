@@ -173,14 +173,28 @@ test.describe("boards 4b, 4d and 4e", () => {
     */
     await page.goto("/admin/categories");
 
+    /*
+       Matched on the row's OWN name cell, not on the row's accessible name.
+
+       A role name matches as a substring and a row's name is every cell in it,
+       so `getByRole("row", { name: /Legal, audit & business setup/ })` also
+       matched all 35 children — each of whose SOLD cell reads "From Legal,
+       audit & business setup". Thirty-six rows, and the first draft of this
+       test asserted against all of them.
+    */
+    const rowFor = (name: string) =>
+      page.locator("tbody tr").filter({ has: page.locator("td:first-child", { hasText: name }) });
+
     // Set on its own row. The seed decides six; Legal is the clean sector.
-    const legal = page.getByRole("row", { name: /Legal, audit & business setup/ });
+    const legal = rowFor("Legal, audit & business setup");
+    await expect(legal).toHaveCount(1);
     await expect(legal.getByText("By the job")).toBeVisible();
     await expect(legal.getByText("Set here")).toBeVisible();
 
     // Inherited, and it names the sector it came from — which is what makes a
     // row safe to skip when there are 440 of them to triage.
-    const inherited = page.getByRole("row", { name: /PRO services/ });
+    const inherited = rowFor("PRO services");
+    await expect(inherited).toHaveCount(1);
     await expect(inherited.getByText(/From Legal, audit & business setup/)).toBeVisible();
 
     // And the tally underneath is a query over the rows, never a constant.

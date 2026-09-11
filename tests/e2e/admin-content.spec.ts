@@ -583,7 +583,14 @@ test.describe("criterion 7 — renaming a trade on the taxonomy screen", () => {
     await page.goto("/admin/categories");
     await expect(page.getByRole("heading", { name: "Move a trade's address" })).toBeVisible();
 
-    await page.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
+    /*
+       Scoped to the rename panel. Board 4d-s put a second "How a trade is sold"
+       panel on this screen whose own picker is also labelled "Trade", so an
+       unscoped combobox now matches two — the same reason the Reason field
+       below was already scoped.
+    */
+    const rename = page.getByRole("region", { name: "Move a trade's address" });
+    await rename.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
     await page.getByLabel("New address", { exact: true }).fill("hvac-and-cooling");
 
     await expect(page.getByText(/\d+ addresses? move/)).toBeVisible();
@@ -591,7 +598,14 @@ test.describe("criterion 7 — renaming a trade on the taxonomy screen", () => {
 
   test("will not rename or remove without a reason", async ({ page }) => {
     await page.goto("/admin/categories");
-    await page.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
+    /*
+       Scoped to the rename panel. Board 4d-s put a second "How a trade is sold"
+       panel on this screen whose own picker is also labelled "Trade", so an
+       unscoped combobox now matches two — the same reason the Reason field
+       below was already scoped.
+    */
+    const rename = page.getByRole("region", { name: "Move a trade's address" });
+    await rename.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
     await page.getByLabel("New address", { exact: true }).fill("hvac-and-cooling");
 
     await expect(page.getByRole("button", { name: "Rename and write the redirects" })).toBeDisabled();
@@ -605,7 +619,16 @@ test.describe("criterion 7 — renaming a trade on the taxonomy screen", () => {
        built rather than templated.
     */
     await page.goto("/admin/categories");
-    await page.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
+    /*
+       Scoped to the rename panel. Board 4d-s put a second "How a trade is sold"
+       panel on this screen whose own picker is also labelled "Trade", so an
+       unscoped combobox now matches two — the same reason the Reason field
+       below was already scoped.
+    */
+    await page
+      .getByRole("region", { name: "Move a trade's address" })
+      .getByRole("combobox", { name: "Trade" })
+      .selectOption({ label: "HVAC & ventilation" });
     /*
        Scoped to the region that owns the button this test then clicks. Every
        staff action on this screen writes its own audit reason, so "Reason"
