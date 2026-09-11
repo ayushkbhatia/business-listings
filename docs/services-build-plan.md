@@ -252,27 +252,78 @@ happens to be.
 loses it. That is Stage 2, and it is the larger half.
 
 ### Stage 2 · The fork — **shipped**
-*One migration, one resolver, one ops screen. Stops for a person.*
+*One migration, one resolver, one ops screen. Stopped for a person.*
 
-- [x] **2.1 `TradeKind` and `Category.tradeKind`** — `20260930090000_category_trade_kind`.
-  Additive and nullable, so it applies **before** the merge. Two values and no third: "both" is a
-  property of a business, which `BusinessCategory` already expresses, not of a trade.
-- [x] **2.2 The null-inherit resolver.** Written, not copied. `lib/taxonomy/sector.ts:44-55` is the
-  precedent for the *shape* only — it looks for the top of the tree and returns an id, where this
-  looks for the nearest ancestor holding a value, and it issues one `findUnique` per level. The rule
-  is pure and unit-tested in `lib/taxonomy/trade-kind.ts`; the query half is in `./service.ts`.
-- [x] **2.3 No database default, deliberately.** A default would write `goods` into all 440 rows and
-  make "decided" and "never opened" the same fact. The fallback is `goods` in code — what every
-  surface assumed before the column existed, so the day it ships nothing changes.
-- [x] **2.4 `4d-s`/S9, the ops screen.** A SOLD column with three states and a panel whose bulk
-  primitive is inheritance: thirteen writes cover the taxonomy, then the exceptions are typed.
-  Impact shown before the button, separating what moves from what will not follow. Audited.
+- [x] **2.1 `TradeKind` and `Category.tradeKind`** — `20260930090000_category_trade_kind`, applied to
+  production before the merge. Two values and no third: "both" is a property of a business, which
+  `BusinessCategory` already expresses, not of a trade.
+- [x] **2.2 The null-inherit resolver.** Written, not copied — `lib/taxonomy/sector.ts:44-55` is the
+  precedent for the *shape* only. Pure and unit-tested in `lib/taxonomy/trade-kind.ts`.
+- [x] **2.3 No database default.** The fallback is `goods` in code, so an unset taxonomy behaves
+  exactly as the product did before the column existed, and "decided" stays distinguishable from
+  "never opened".
+- [x] **2.4 `4d-s`/S9, the board** — **handoff received and built out, 11 Sep.** Its own tab at
+  `/admin/categories?tab=kind`: unset-first ordering, 25-row pages over 440, multi-select with a
+  bulk bar, an atomic write, a confirmation naming the listings it moves, a set-by column read from
+  the audit log, and the two explanatory cards. See §4c for what the handoff asked that the tree
+  already had, and the three places this build diverges from the render.
 - [x] **2.5 The first consumer.** `findFanoutCandidates` resolves the enquiry's category once and
-  stops counting products on a trade sold by the job — the 0.34 term, carried over from stage 1.
+  stops counting products on a trade sold by the job.
 
-**The count is 440, not "~420".** 13 sectors and 427 subcategories. `pumps-and-motors` has **zero
-children**, so a per-subcategory-only screen could never set it — which is one reason the panel takes
-sectors as well. Two sectors are unambiguously all-services and take one write each.
+**The count is 440, not the handoff's "420".** 13 sectors and 427 subcategories. `pumps-and-motors`
+has **zero children**, so a per-subcategory-only screen could never set it — which is why the board
+lists sectors as selectable rows rather than filtering them out.
+
+---
+
+## 4c · Handoff `4d-s` — what was already built, and where this diverges
+
+The handoff's §5 asked for exactly this note: *"check the tree before building. If `tradeKind` or
+something like it already exists, tell us, and this becomes an export-against-tree rather than a new
+build."*
+
+**It did.** `Category.tradeKind`, the enum, the bounded resolver and an audited write shipped in
+#157 on 11 Sep, before the handoff arrived. Four of its eight acceptance criteria were already met.
+
+| | Criterion | Before the handoff | Now |
+|---|---|---|---|
+| 1 | Resolves for every category, no unbounded recursion | ✓ | ✓ |
+| 2 | Null inherits; root fallback is `goods` and is visible | ✓ resolves · not surfaced | ✓ counted and stated on the screen |
+| 3 | Every write records author, timestamp and reason | ✓ | ✓ |
+| 4 | Bulk set is atomic | — | ✓ one transaction, one audit row per category |
+| 5 | Confirmation naming the listing count | — | ✓ and it counts what *moves*, not what was selected |
+| 6 | Flipping a kind never converts existing rows | ✓ by omission | ✓ and the dialog says so |
+| 7 | Progress figure and unset-first sort from one query | — | ✓ `loadTradeKindBoard` returns both |
+| 8 | Resolved map cached, invalidated on write | — | ✓ read-through, dropped from the action |
+
+### Three divergences, each deliberate
+
+**Two tabs, not four.** The render draws Sectors / Subcategories / Trade kind / Scope sheets.
+Sectors and subcategories are one table here and always have been, and splitting them is a change
+with no stated purpose. *Scope sheets* is `4e-s` — a board that may never exist, because it turns on
+Q1 in §4b. A tab for a board that might be cancelled is a dead end somebody has to click to find.
+
+**The cache is read-through, not strict.** `unstable_cache` throws outside a Next request, and
+`revalidateTag` throws in the service layer for the same reason. So the reader falls back to the
+query when there is no request context — a job, a script, a test — and the invalidation happens at
+the action boundary. A cache that made the taxonomy unreadable from a scheduled job would be a worse
+defect than the round trip it saves.
+
+**Non-ops-lead staff still get a 404, not a read-only view.** The handoff's states table asks for the
+column to stay visible to other staff, *"how they answer why does this seller see that screen"*. The
+whole route is gated on `taxonomy.write` today and `tests/e2e/admin-console.spec.ts` asserts a
+moderator gets 404 there. **Widening who can see a screen is not a side effect of building one**, so
+the gate is unchanged and the request is recorded here instead. It needs a decision, and it is
+really a question about `4d` rather than about this board.
+
+### The handoff's open questions, answered
+
+- **Q1, a third kind for equipment-rental-with-an-operator:** **no**, and the schema comment says so
+  — a third value would let a subcategory be neither, and every one of ~40 consumers would need a
+  branch for a state the taxonomy cannot act on.
+- **Q2, who can set it:** ops lead only. Already true — `taxonomy.write` is `OPS_LEAD_ONLY`.
+- **Q3, who sets the 13 sectors:** by hand on this screen, so each is audited. The seed sets six as
+  fixtures only, and production has **0 of 440 set** — the work is real and it is ops's.
 
 ### Stage 3 · A service exists, and one screen owns its fields
 *The editor first. Nothing above it in this lane can be drawn until its field set is fixed.*

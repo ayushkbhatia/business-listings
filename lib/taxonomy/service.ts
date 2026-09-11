@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { unstable_cache } from "next/cache";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
@@ -289,69 +290,6 @@ export function describeFailure(
 
 export { countWords };
 
-/**
- * The whole taxonomy's trade kinds, keyed by id. One query, whatever is asked.
- *
- * The query half of `./trade-kind.ts`. Everything is loaded rather than the
- * chain above one id, because the chain costs a round trip per level and the
- * whole table is 440 rows of three small columns — so resolving one id and
- * resolving all of them cost the same.
- */
-export async function loadTradeKinds(db: Db = prisma): Promise<Map<string, TradeKindRow>> {
-  const rows = await db.category.findMany({
-    select: { id: true, parentId: true, tradeKind: true },
-  });
-  return new Map(rows.map((row) => [row.id, row]));
-}
-
-/**
- * The kind of one category, for a caller holding an id and no taxonomy.
- *
- * A caller resolving more than one id should call `loadTradeKinds` once and
- * `resolveTradeKind` per id rather than calling this in a loop.
- */
-export async function tradeKindFor(categoryId: string, db: Db = prisma): Promise<TradeKind> {
-  return resolveTradeKind(await loadTradeKinds(db), categoryId);
-}
-
-/**
- * How many subcategories one write would actually move — board `4d-s`.
- *
- * The same promise `previewRename` makes about addresses, for the same reason:
- * setting a sector is the bulk action, and somebody about to change the kind of
- * thirty-eight trades in one click should be told that before rather than
- * after. Counted as *changes*, not as descendants — a subcategory that already
- * resolves to the value being set, by its own row or by an override further
- * down, is not moved by this and is not counted.
- */
-export async function tradeKindImpact(
-  categoryId: string,
-  next: TradeKind | null,
-): Promise<{ moved: number; overridden: number }> {
-  const rows = await loadTradeKinds();
-  const subject = rows.get(categoryId);
-  if (!subject) return { moved: 0, overridden: 0 };
-
-  const after = new Map(rows);
-  after.set(categoryId, { ...subject, tradeKind: next });
-
-  let moved = 0;
-  let overridden = 0;
-  for (const row of rows.values()) {
-    if (resolveTradeKind(rows, row.id) !== resolveTradeKind(after, row.id)) moved += 1;
-    /*
-       A descendant that answers for itself, and so will not follow. Surfaced
-       separately rather than folded into `moved`: "38 move, 4 keep their own
-       answer" is the sentence that stops somebody assuming a sector write is
-       total and then discovering four exceptions a month later.
-    */
-    else if (row.id !== categoryId && row.tradeKind !== null && isUnder(rows, row.id, categoryId)) {
-      overridden += 1;
-    }
-  }
-  return { moved, overridden };
-}
-
 /** Whether `id` sits anywhere below `ancestorId`. Bounded, like the resolver. */
 function isUnder(rows: ReadonlyMap<string, TradeKindRow>, id: string, ancestorId: string): boolean {
   let current = rows.get(id)?.parentId ?? null;
@@ -363,56 +301,371 @@ function isUnder(rows: ReadonlyMap<string, TradeKindRow>, id: string, ancestorId
 }
 
 /**
- * Set, override or clear how a trade is sold — board `4d-s`, decision D5.
+ * Set, override or clear a set of categories in one transaction — board `4d-s`.
  *
- * `null` is a real choice and not an absence: it clears an override so the row
- * inherits again. That is why the screen offers three options and why this
- * takes `TradeKind | null` rather than an optional argument — an optional one
- * could not tell "leave it alone" from "make it inherit".
+ * **B4: "Bulk set is one transaction, and a partial failure rolls back
+ * entirely. Seven rows half-set is worse than none."** So every row and every
+ * audit event share one transaction: if the fourth refuses, the first three
+ * never happened and neither did their log entries.
  *
- * Audited like every other taxonomy change. It decides which version of roughly
- * forty screens a seller and a buyer see, which is a larger blast radius than
- * the rename beside it.
+ * One audit row per category rather than one for the batch, because the log is
+ * read per subject — "why does this subcategory render a scope list" is a
+ * question about one row, and an answer that only exists as "part of a bulk of
+ * seven" cannot be found from the row. The written reason is shared, which is
+ * honest: it was one decision.
+ *
+ * Rows already holding the value are skipped rather than refused. A bulk action
+ * over a mixed selection is normal — the design's own state table has "selection
+ * includes both set and unset rows" — and failing the batch because one row was
+ * already right would make the bulk bar unusable.
  */
-export async function setTradeKind(input: {
+export async function setTradeKindBulk(input: {
   actor: Actor;
-  categoryId: string;
+  categoryIds: readonly string[];
   tradeKind: TradeKind | null;
   reason: string;
-}): Promise<TaxonomyResult> {
-  const category = await prisma.category.findUnique({
-    where: { id: input.categoryId },
-    select: { id: true, name: true, tradeKind: true },
-  });
-  if (!category) {
-    return { ok: false, error: "not_found", message: "That category is not in the taxonomy." };
-  }
-  if (category.tradeKind === input.tradeKind) {
-    return { ok: false, error: "out_of_range", message: "That is already how this trade is sold." };
+}): Promise<TaxonomyResult & { changed?: number }> {
+  const ids = [...new Set(input.categoryIds)];
+  if (ids.length === 0) {
+    return { ok: false, error: "not_found", message: "Nothing was selected." };
   }
 
-  await prisma.$transaction(async (tx) =>
-    staffMutation(
-      {
-        actor: input.actor,
-        capability: "taxonomy.write",
-        subject: `Category:${category.id}`,
-        reason: input.reason,
-        tx,
-      },
-      async () => {
-        await tx.category.update({
-          where: { id: category.id },
-          data: { tradeKind: input.tradeKind },
+  const categories = await prisma.category.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, tradeKind: true },
+  });
+  if (categories.length !== ids.length) {
+    return {
+      ok: false,
+      error: "not_found",
+      message: "One of those trades is no longer in the taxonomy. Reload and try again.",
+    };
+  }
+
+  const moving = categories.filter((category) => category.tradeKind !== input.tradeKind);
+  if (moving.length === 0) {
+    return { ok: false, error: "out_of_range", message: "That is already how those trades are sold." };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const category of moving) {
+      await staffMutation(
+        {
+          actor: input.actor,
+          capability: "taxonomy.write",
+          subject: `Category:${category.id}`,
+          reason: input.reason,
+          tx,
+        },
+        async () => {
+          await tx.category.update({
+            where: { id: category.id },
+            data: { tradeKind: input.tradeKind },
+          });
+          return {
+            result: null,
+            before: { tradeKind: category.tradeKind },
+            after: { tradeKind: input.tradeKind },
+          };
+        },
+      );
+    }
+  });
+
+  return { ok: true, changed: moving.length };
+}
+
+/**
+ * What a bulk write would move, and what it would touch — board `4d-s` B5/AC5.
+ *
+ * **"Changing a set subcategory's kind is a consequential write. Confirm with
+ * the listing count and name what changes."** Three numbers, because they answer
+ * three different questions:
+ *
+ *   · `rows` — how many categories the click writes to.
+ *   · `alsoInheriting` — how many more follow because a sector was selected.
+ *     The design's state table asks for this by name: "sector-level change:
+ *     confirm with the total affected count, not just the sector name."
+ *   · `listings` — how many published businesses render differently afterwards.
+ *     A subcategory with 488 listings is a different act from one with 12, and
+ *     the number belongs at the moment of the click.
+ *
+ * A selection touching no listings needs no confirmation at all, which the
+ * design also asks for: "a subcategory with zero listings: set freely."
+ */
+export async function tradeKindBulkImpact(
+  categoryIds: readonly string[],
+  next: TradeKind | null,
+): Promise<{ rows: number; alsoInheriting: number; listings: number }> {
+  const ids = [...new Set(categoryIds)];
+  if (ids.length === 0) return { rows: 0, alsoInheriting: 0, listings: 0 };
+
+  const rows = await loadTradeKinds();
+  const selected = ids.filter((id) => rows.has(id));
+
+  const after = new Map(rows);
+  for (const id of selected) {
+    const row = after.get(id);
+    if (row) after.set(id, { ...row, tradeKind: next });
+  }
+
+  const moved: string[] = [];
+  for (const row of rows.values()) {
+    if (resolveTradeKind(rows, row.id) !== resolveTradeKind(after, row.id)) moved.push(row.id);
+  }
+  const chosen = new Set(selected);
+
+  /*
+     Listings are counted over everything that MOVES, not over what was
+     selected. Selecting one sector with no listings of its own can change what
+     forty subcategories holding four thousand businesses render, and a
+     confirmation quoting zero would be the most misleading number on the screen.
+  */
+  const counts =
+    moved.length === 0
+      ? []
+      : await prisma.business.groupBy({
+          by: ["primaryCategoryId"],
+          where: {
+            primaryCategoryId: { in: moved },
+            publishedAt: { not: null },
+            suspendedAt: null,
+          },
+          _count: true,
         });
-        return {
-          result: null,
-          before: { tradeKind: category.tradeKind },
-          after: { tradeKind: input.tradeKind },
-        };
+
+  return {
+    rows: selected.filter((id) => moved.includes(id)).length,
+    alsoInheriting: moved.filter((id) => !chosen.has(id)).length,
+    listings: counts.reduce((total, row) => total + row._count, 0),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Board 4d-s — the trade-kind board
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * The resolved map, cached.
+ *
+ * B2: "Forty screens read this on nearly every request. Resolve once per
+ * category at write time or cache the resolved map; do not walk the tree per
+ * render." The taxonomy changes a few times a month and is read on nearly every
+ * request, which is the shape `unstable_cache` exists for.
+ *
+ * A `Map` cannot cross the cache boundary — it serialises to `{}` — so the
+ * cached value is an array of rows and the map is rebuilt on the near side.
+ * Rebuilding 440 entries is microseconds; the query it replaces is a round trip.
+ *
+ * Invalidated by `TAXONOMY_CACHE_TAG`, from the **action** rather than from
+ * here. `revalidateTag` needs a Next request context and throws "Invariant:
+ * static generation store missing" without one, so calling it in the service
+ * would make this function uncallable from a scheduled job, a script or a test
+ * — the same constraint `lib/db/queries/home.ts` documents for the reader side.
+ * The service is the domain; the action is the request boundary.
+ *
+ * A day is the backstop, not the mechanism: if an invalidation is ever missed,
+ * the failure is a stale kind for a few hours rather than for ever.
+ */
+export const TAXONOMY_CACHE_TAG = "taxonomy-trade-kind";
+
+const readTradeKindRows = async (): Promise<TradeKindRow[]> =>
+  prisma.category.findMany({ select: { id: true, parentId: true, tradeKind: true } });
+
+const cachedTradeKindRows = unstable_cache(readTradeKindRows, ["taxonomy-trade-kinds"], {
+  revalidate: 86_400,
+  tags: [TAXONOMY_CACHE_TAG],
+});
+
+/**
+ * The whole taxonomy's trade kinds, keyed by id. **Uncached.**
+ *
+ * The reader, and the one every service, job and test calls. `unstable_cache`
+ * needs a Next request context and throws "Invariant: incrementalCache missing"
+ * without one — the constraint `lib/db/queries/home.ts` documents for its own
+ * readers — so the cache cannot be the only way in. Pass a transaction client
+ * where a write needs to read its own effect before committing.
+ */
+export async function loadTradeKinds(db: Db = prisma): Promise<Map<string, TradeKindRow>> {
+  const rows = await db.category.findMany({
+    select: { id: true, parentId: true, tradeKind: true },
+  });
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+/**
+ * The same map, cached. Board `4d-s` B2.
+ *
+ * "Forty screens read this on nearly every request. Resolve once per category
+ * at write time or cache the resolved map; do not walk the tree per render."
+ * This is that cache. Today its live reader is the fan-out, which resolves a
+ * kind for every enquiry; the rest arrive with the service-track screens.
+ *
+ * A `Map` cannot cross the cache boundary — it serialises to `{}` — so the
+ * cached value is the row array and the map is rebuilt on the near side.
+ * Rebuilding 440 entries is microseconds; the query it replaces is a round trip.
+ *
+ * **Read-through, and deliberately.** `unstable_cache` throws "Invariant:
+ * incrementalCache missing" outside a Next request — in a scheduled job, a
+ * script, or an integration test — and the correct behaviour there is to read
+ * the table, not to fail. So a miss falls back to the query. The cost of the
+ * fallback is one round trip, which is exactly what the cache was saving; the
+ * cost of not having it would be that no caller outside a request could resolve
+ * a trade kind at all.
+ *
+ * Invalidated from the action, by `TAXONOMY_CACHE_TAG` — `revalidateTag` needs
+ * the same request context, so the service cannot do it either.
+ */
+export async function getTradeKinds(): Promise<Map<string, TradeKindRow>> {
+  try {
+    const rows = await cachedTradeKindRows();
+    return new Map(rows.map((row) => [row.id, row]));
+  } catch {
+    return loadTradeKinds();
+  }
+}
+
+/**
+ * The kind of one category, for a caller holding an id and no taxonomy.
+ *
+ * Off the cached map unless a transaction client is passed, because the callers
+ * that matter — the fan-out among them — run once per request on a path where a
+ * round trip is worth avoiding. A caller resolving more than one id should load
+ * the map once and `resolveTradeKind` per id rather than calling this in a loop.
+ */
+export async function tradeKindFor(categoryId: string, db?: Db): Promise<TradeKind> {
+  const rows = db ? await loadTradeKinds(db) : await getTradeKinds();
+  return resolveTradeKind(rows, categoryId);
+}
+
+/** One row of the board's table. */
+export interface TradeKindBoardRow {
+  id: string;
+  name: string;
+  /** Null on a sector, which has no parent to name. */
+  sectorName: string | null;
+  isSector: boolean;
+  trade: TradeKindOrigin;
+  /** Published, unsuspended listings filed under this category. */
+  listings: number;
+  /** Who set it, where somebody did. Null on an inherited or unset row. */
+  setBy: string | null;
+  setAt: Date | null;
+}
+
+export interface TradeKindBoard {
+  rows: TradeKindBoardRow[];
+  /** Rows answering for themselves. The numerator of the progress figure. */
+  decided: number;
+  /** Every category. The denominator. */
+  total: number;
+  /** Resolving through an ancestor that was set. */
+  inherited: number;
+  /** Reaching the root with nothing set anywhere — AC2's data defect. */
+  unset: number;
+}
+
+/**
+ * Everything the board renders, from one pass over one set of rows.
+ *
+ * **AC7: "the progress figure and the unset-first sort derive from the same
+ * query — they cannot disagree."** So they are computed here together rather
+ * than by the page counting one thing and the table sorting another. This
+ * project has shipped a header reading `18 OF 22` over a table of 16 rows; the
+ * only defence is that both numbers come from one array.
+ *
+ * **B6: unset first.** An unset row is not neutral — it inherits whatever the
+ * sector says, and the sector is wrong about half the time, so an unset row is
+ * a place a supplier may be shown the wrong screens. Sorting them to the top is
+ * the screen's whole argument. Then inherited, then decided; alphabetical
+ * inside each band, so the order is stable between loads.
+ */
+export async function loadTradeKindBoard(): Promise<TradeKindBoard> {
+  const [categories, counts, authors] = await Promise.all([
+    prisma.category.findMany({
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        parentId: true,
+        tradeKind: true,
+        parent: { select: { name: true } },
       },
-    ),
+    }),
+    prisma.business.groupBy({
+      by: ["primaryCategoryId"],
+      where: { publishedAt: { not: null }, suspendedAt: null },
+      _count: true,
+    }),
+    /*
+       The set-by column, read from the audit log rather than from a column on
+       the category.
+
+       There is no `tradeKindSetBy` and there should not be: the log already
+       records who changed what and why, and a second copy on the row is a
+       second thing to keep in step. One query for every category's latest
+       taxonomy change, deduped in memory — a per-row lookup would be 440.
+    */
+    prisma.auditEvent.findMany({
+      where: { action: "taxonomy_changed", subject: { startsWith: "Category:" } },
+      orderBy: { createdAt: "desc" },
+      select: {
+        subject: true,
+        createdAt: true,
+        after: true,
+        actor: { select: { fullName: true, email: true } },
+      },
+      take: 2_000,
+    }),
+  ]);
+
+  const listings = new Map(counts.map((row) => [row.primaryCategoryId, row._count]));
+  const kinds = new Map(categories.map((row) => [row.id, row]));
+
+  /*
+     Latest trade-kind change per category. The log holds renames and removals
+     under the same action, so a row is only an author for this column when its
+     `after` actually carries a `tradeKind` — otherwise a rename would claim
+     credit for a kind somebody else set.
+  */
+  const lastSet = new Map<string, { name: string; at: Date }>();
+  for (const event of authors) {
+    const id = event.subject.slice("Category:".length);
+    if (lastSet.has(id)) continue;
+    const after = event.after as { tradeKind?: unknown } | null;
+    if (!after || !("tradeKind" in after)) continue;
+    lastSet.set(id, {
+      name: event.actor.fullName ?? event.actor.email ?? "—",
+      at: event.createdAt,
+    });
+  }
+
+  const rows: TradeKindBoardRow[] = categories.map((category) => {
+    const trade = tradeKindOrigin(kinds, category.id);
+    const author = trade.from === "own" ? (lastSet.get(category.id) ?? null) : null;
+    return {
+      id: category.id,
+      name: category.name,
+      sectorName: category.parent?.name ?? null,
+      isSector: category.parentId === null,
+      trade,
+      listings: listings.get(category.id) ?? 0,
+      setBy: author?.name ?? null,
+      setAt: author?.at ?? null,
+    };
+  });
+
+  // Unset, then inherited, then decided. Name breaks ties so two loads agree.
+  const BAND = { default: 0, inherited: 1, own: 2 } as const;
+  rows.sort(
+    (a, b) => BAND[a.trade.from] - BAND[b.trade.from] || a.name.localeCompare(b.name),
   );
 
-  return { ok: true };
+  return {
+    rows,
+    decided: rows.filter((row) => row.trade.from === "own").length,
+    inherited: rows.filter((row) => row.trade.from === "inherited").length,
+    unset: rows.filter((row) => row.trade.from === "default").length,
+    total: rows.length,
+  };
 }

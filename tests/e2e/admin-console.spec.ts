@@ -201,6 +201,56 @@ test.describe("boards 4b, 4d and 4e", () => {
     await expect(page.getByText(/\d+ of \d+ trades are sold by the job/)).toBeVisible();
   });
 
+  test("the trade kind tab lists unset trades first and says how many", async ({ page }) => {
+    /*
+       Board 4d-s. An unset row is not neutral — it inherits whatever the sector
+       says, and no sector is purely one kind — so every unset row is a place a
+       supplier may be shown the wrong screens. Sorting them to the top is the
+       screen's argument, not a default, and the progress figure beside it comes
+       from the same array so the two cannot disagree.
+    */
+    await page.goto("/admin/categories?tab=kind");
+
+    const table = page.getByRole("table", { name: /how it is sold/i });
+    await expect(table).toBeVisible();
+
+    // The first row on the first page is one nobody has decided about.
+    await expect(table.locator("tbody tr").first().getByText("Not set")).toBeVisible();
+
+    // Both figures rendered, and both derived rather than written down.
+    await expect(page.getByText(/\d+ of \d+ decided/)).toBeVisible();
+    await expect(page.getByText(/\d+ still resolve to sold by the item/)).toBeVisible();
+
+    // The two cards that carry the rules somebody acting here needs.
+    await expect(page.getByRole("heading", { name: "How inheritance works" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Why it sits on the trade" })).toBeVisible();
+  });
+
+  test("changing a trade's kind asks first, and names what it touches", async ({ page }) => {
+    /*
+       B5/AC5. Flipping a trade changes which onboarding its suppliers get and
+       which storefront renders, so the confirmation names how many published
+       listings that is — and says plainly that nothing is converted, because a
+       silent conversion would destroy data and this is the only screen that
+       could trigger one.
+    */
+    await page.goto("/admin/categories?tab=kind");
+
+    await page.locator("tbody input[type=checkbox]").first().check();
+    await expect(page.getByText(/1 selected/)).toBeVisible();
+
+    await page.getByRole("button", { name: "Set to sold by the job" }).click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByText(/1 trade changes/)).toBeVisible();
+    await expect(dialog.getByText(/renders differently|No published listing/)).toBeVisible();
+    await expect(dialog.getByText(/Nothing they have already entered is converted or deleted/))
+      .toBeVisible();
+
+    // No reason, no write — the same gate every other staff change answers to.
+    await expect(dialog.getByRole("button", { name: "Change them" })).toBeDisabled();
+  });
+
   test("the taxonomy does not claim to measure intro words", async ({ page }) => {
     // The copy belongs to the landing page, which is handoff 5. Counting it
     // here would fail every category on a threshold this screen cannot see.
@@ -220,6 +270,8 @@ test.describe("boards 4b, 4d and 4e", () => {
     for (const path of [
       "/admin/queue",
       "/admin/categories",
+      // Board 4d-s: its own table, selection column and bulk bar.
+      "/admin/categories?tab=kind",
       "/admin/spec-library",
       "/admin/ingest",
       "/admin/reports",
