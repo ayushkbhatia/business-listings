@@ -251,90 +251,252 @@ happens to be.
 **What it does not do.** The 0.34 coverage term is untouched, so a supplier with no catalogue still
 loses it. That is Stage 2, and it is the larger half.
 
-### Stage 2 · The fork — **built, awaiting the migration**
-*One migration, one resolver, one ops screen. Stops for a person.*
+### Stage 2 · The fork — **shipped**
+*One migration, one resolver, one ops screen. Stopped for a person.*
 
-- [x] **2.1 `TradeKind` and `Category.tradeKind`** — `20260930090000_category_trade_kind`.
-  Additive and nullable, so it applies **before** the merge. Two values and no third: "both" is a
-  property of a business, which `BusinessCategory` already expresses, not of a trade.
-- [x] **2.2 The null-inherit resolver.** Written, not copied. `lib/taxonomy/sector.ts:44-55` is the
-  precedent for the *shape* only — it looks for the top of the tree and returns an id, where this
-  looks for the nearest ancestor holding a value, and it issues one `findUnique` per level. The rule
-  is pure and unit-tested in `lib/taxonomy/trade-kind.ts`; the query half is in `./service.ts`.
-- [x] **2.3 No database default, deliberately.** A default would write `goods` into all 440 rows and
-  make "decided" and "never opened" the same fact. The fallback is `goods` in code — what every
-  surface assumed before the column existed, so the day it ships nothing changes.
-- [x] **2.4 `4d-s`/S9, the ops screen.** A SOLD column with three states and a panel whose bulk
-  primitive is inheritance: thirteen writes cover the taxonomy, then the exceptions are typed.
-  Impact shown before the button, separating what moves from what will not follow. Audited.
+- [x] **2.1 `TradeKind` and `Category.tradeKind`** — `20260930090000_category_trade_kind`, applied to
+  production before the merge. Two values and no third: "both" is a property of a business, which
+  `BusinessCategory` already expresses, not of a trade.
+- [x] **2.2 The null-inherit resolver.** Written, not copied — `lib/taxonomy/sector.ts:44-55` is the
+  precedent for the *shape* only. Pure and unit-tested in `lib/taxonomy/trade-kind.ts`.
+- [x] **2.3 No database default.** The fallback is `goods` in code, so an unset taxonomy behaves
+  exactly as the product did before the column existed, and "decided" stays distinguishable from
+  "never opened".
+- [x] **2.4 `4d-s`/S9, the board** — **handoff received and built out, 11 Sep.** Its own tab at
+  `/admin/categories?tab=kind`: unset-first ordering, 25-row pages over 440, multi-select with a
+  bulk bar, an atomic write, a confirmation naming the listings it moves, a set-by column read from
+  the audit log, and the two explanatory cards. See §4c for what the handoff asked that the tree
+  already had, and the three places this build diverges from the render.
 - [x] **2.5 The first consumer.** `findFanoutCandidates` resolves the enquiry's category once and
-  stops counting products on a trade sold by the job — the 0.34 term, carried over from stage 1.
+  stops counting products on a trade sold by the job.
 
-**The count is 440, not "~420".** 13 sectors and 427 subcategories. `pumps-and-motors` has **zero
-children**, so a per-subcategory-only screen could never set it — which is one reason the panel takes
-sectors as well. Two sectors are unambiguously all-services and take one write each.
-
-### Stage 3 · The seller can describe what they sell
-`8a-s` → `8b-s` → `8c-s` → `3g-s`/S3 → `3f-s`/S4 → `3h-s`
-
-`8b-s` is unblocked by D10's split and narrows to optional evidence. `3h-s` follows the model
-answer: services get their own scope template rather than reusing `SpecTemplate`. `3b-s` is a schema diff,
-not a copy change: `ModeratedField` is a Prisma enum (`prisma/schema.prisma:1981-1988`) and
-`lib/listing/service.ts:51-52` says the list is explicit *"so a new field is a deliberate choice on
-one side or the other."* It stops for a person too.
+**The count is 440, not the handoff's "420".** 13 sectors and 427 subcategories. `pumps-and-motors`
+has **zero children**, so a per-subcategory-only screen could never set it — which is why the board
+lists sectors as selectable rows rather than filtering them out.
 
 ---
 
-### Stage 4 · The buyer can read it
-`1g-s`/S1 → `1d-s` → `1e-s` → `5c-s` → `1f-s`
+## 4c · Handoff `4d-s` — what was already built, and where this diverges
 
-**A gate nobody has connected to this track:** the `certifications` section — the only public
-credential surface, and the exact slot `1d-s` wants — is stripped on the Free plan
+The handoff's §5 asked for exactly this note: *"check the tree before building. If `tradeKind` or
+something like it already exists, tell us, and this becomes an export-against-tree rather than a new
+build."*
+
+**It did.** `Category.tradeKind`, the enum, the bounded resolver and an audited write shipped in
+#157 on 11 Sep, before the handoff arrived. Four of its eight acceptance criteria were already met.
+
+| | Criterion | Before the handoff | Now |
+|---|---|---|---|
+| 1 | Resolves for every category, no unbounded recursion | ✓ | ✓ |
+| 2 | Null inherits; root fallback is `goods` and is visible | ✓ resolves · not surfaced | ✓ counted and stated on the screen |
+| 3 | Every write records author, timestamp and reason | ✓ | ✓ |
+| 4 | Bulk set is atomic | — | ✓ one transaction, one audit row per category |
+| 5 | Confirmation naming the listing count | — | ✓ and it counts what *moves*, not what was selected |
+| 6 | Flipping a kind never converts existing rows | ✓ by omission | ✓ and the dialog says so |
+| 7 | Progress figure and unset-first sort from one query | — | ✓ `loadTradeKindBoard` returns both |
+| 8 | Resolved map cached, invalidated on write | — | ✓ read-through, dropped from the action |
+
+### Three divergences, each deliberate
+
+**Two tabs, not four.** The render draws Sectors / Subcategories / Trade kind / Scope sheets.
+Sectors and subcategories are one table here and always have been, and splitting them is a change
+with no stated purpose. *Scope sheets* is `4e-s` — a board that may never exist, because it turns on
+Q1 in §4b. A tab for a board that might be cancelled is a dead end somebody has to click to find.
+
+**The cache is read-through, not strict.** `unstable_cache` throws outside a Next request, and
+`revalidateTag` throws in the service layer for the same reason. So the reader falls back to the
+query when there is no request context — a job, a script, a test — and the invalidation happens at
+the action boundary. A cache that made the taxonomy unreadable from a scheduled job would be a worse
+defect than the round trip it saves.
+
+**Non-ops-lead staff still get a 404, not a read-only view.** The handoff's states table asks for the
+column to stay visible to other staff, *"how they answer why does this seller see that screen"*. The
+whole route is gated on `taxonomy.write` today and `tests/e2e/admin-console.spec.ts` asserts a
+moderator gets 404 there. **Widening who can see a screen is not a side effect of building one**, so
+the gate is unchanged and the request is recorded here instead. It needs a decision, and it is
+really a question about `4d` rather than about this board.
+
+### The handoff's open questions, answered
+
+- **Q1, a third kind for equipment-rental-with-an-operator:** **no**, and the schema comment says so
+  — a third value would let a subcategory be neither, and every one of ~40 consumers would need a
+  branch for a state the taxonomy cannot act on.
+- **Q2, who can set it:** ops lead only. Already true — `taxonomy.write` is `OPS_LEAD_ONLY`.
+- **Q3, who sets the 13 sectors:** by hand on this screen, so each is audited. The seed sets six as
+  fixtures only, and production has **0 of 440 set** — the work is real and it is ops's.
+
+### Stage 3 · A service exists, and one screen owns its fields
+*The editor first. Nothing above it in this lane can be drawn until its field set is fixed.*
+
+**Re-sequenced 11 Sep 2026 on the owner's instruction:** the editor moves ahead of every screen
+that creates a service. The epic had it the other way — `8c-s` and `3f-s` in its Phase 2, `3g-s` in
+its Phase 6 — so a seller would have created services through onboarding four phases before a screen
+existed to change one.
+
+The generalised rule, which is what the instruction is a case of:
+
+> **Nothing creates a row no screen can edit. Nothing renders a field no screen can fill. Nothing is
+> capped by a number that does not exist.**
+
+| Step | What | Note |
+|---|---|---|
+| **3.1** | The `Service` model | A migration, so it **stops for a person**. Additive, applies before the merge |
+| **3.2** | `2e-s` — `Plan.serviceLimit` | **Same migration, and it is not optional.** See below |
+| **3.3** | **`3g-s` / S3** — the service editor | The first screen of the lane. Its field set is the contract every later board renders |
+| **3.4** | **`3f-s` / S4** — the services list | The editor's entry point. An editor reachable from nowhere is a route, not a screen |
+
+**Why `2e-s` stops being an orphan here.** It appears exactly once in the epic
+(`docs/epic-2026-09-11.md:90`, D1's *Blocks* column) and in no phase — a 29th `-s` id in a document
+that says 28. It is load-bearing all the same: `Plan` carries `productLimit` and **no service
+limit**, so the moment services are their own model a Free seller can create them without end. D1
+ratified seven numbers and none of them is this one. **The eighth number is owed before `8c-s`, not
+after it**, or the first board that creates services creates uncapped ones.
+
+**`3g-s` and `3f-s` are one handoff.** The list's columns are a summary of the editor's fields;
+drawn apart, the list shows a column the editor cannot fill or omits one it can.
+
+---
+
+### Stage 4 · Services get created
+*Everything that writes a `Service` row, now that a screen exists to change one.*
+
+`2b-s` → `2c-s` → `2d-s` → `8a-s` → `8b-s` → `8c-s`, then the two maintenance screens.
+
+| Board | Note |
+|---|---|
+| **`2b-s`** Claim result — goods, services or both | **Open question below:** asked, or derived? |
+| **`2c-s`** Profile basics | Sectors by search and chips. The chips already ship; the search does not, and the picker offers every leaf category unfiltered — so a service seller is offered goods subcategories today |
+| **`2d-s`** Coverage, not branches | `BusinessCoverage` exists and onboarding never writes it. Free zone is **already** a second axis — `Area.isFreeZone`, whose own comment says so. What is genuinely missing is a delivery mode, and `scripts/check-schema-invariants.sh` forbids it being its own table |
+| **`8a-s`** Setup hub | **Three tasks, not four** — the epic is wrong and the code's own stale prose is where it got it. Needs a target a service seller can reach, and the product target lives in two files that must not disagree |
+| **`8b-s`** Credentials task | Unblocked by D10's split: optional evidence, no register, no chasing. The licence keeps all three |
+| **`8c-s`** Scope sheet + first 3 services | Now lands **after** the editor, not four phases before it |
+| **`3b-s`** Listing profile | A schema diff, not copy: `ModeratedField` is a Prisma enum, so a new field **stops for a person** |
+| **`3c-s`** Coverage manager | The most-built board in the lane — panel, writer, capability guard and listing revision all ship |
+
+**`profileStrength` is fixed here, not in stage 1.** `catalogue: 20` + `filterableSpecs: 15` of 100
+are unreachable without products, against a published `STRONG_ENOUGH` of 80 — so a service supplier
+can never be strong enough. It needs services counting toward `catalogue`, which needs stage 3.
+
+---
+
+### Stage 5 · The buyer can read it
+`1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`
+
+**`1g-s` / S1 is drawn with `3g-s`, built here.** Same field set from the buyer's side. Designing
+them apart is how the editor ends up collecting a field the page never shows, and the
+"unfilled stays visible" rule makes that mismatch visible to both people at once.
+
+**A gate nobody has connected to this lane:** `certifications` — the only public credential surface,
+and the exact slot `1d-s` wants where stock would be — is stripped on the Free plan
 (`app/(public)/b/[slug]/page.tsx:600-604`). A free service supplier's storefront would show neither
-a catalogue nor credentials.
+a catalogue nor credentials. That is a pricing decision hiding inside a layout one.
+
+`5c-s` has a labelled placeholder already: `components/storefront/Services.tsx`, registered and held
+off live storefronts by `comingSoon: true`.
 
 ---
 
-### Stage 5 · The buyer can ask for it
-`1h-s`/S2 → `3j-s` → `1n-s`, plus two schema changes the spec half-names.
+### Stage 6 · The buyer can ask, and the seller can answer
+*Two migrations, and the second is the one that gates the terminal state.*
 
-- `EnquiryLine.qty` is `Int` **NOT NULL** (`prisma/schema.prisma:1790`).
-- **`QuoteLine.qty` is the harder blocker and neither document names it.** Also NOT NULL
-  (`prisma/schema.prisma:2757`), and `lib/quote/send-quote.ts:114-116` refuses `qty < 1` with
-  `quote.error.bad_qty`. The quote side gates the terminal state of the entire product — an accepted
-  quote — so a service enquiry that cannot be quoted cannot convert.
-- `Enquiry.deliverToArea` is **free text** (`prisma/schema.prisma:1701`), not an `areaId`. So the
-  area-level coverage match proposed as `coverage`'s replacement is not computable from the enquiry
-  side at all today. Only `Enquiry.emirate` is structured. That is a second migration plus a
-  composer control, and it belongs to this phase rather than S1.
+| Step | What | Note |
+|---|---|---|
+| **6.1** | `EnquiryLine.qty` nullable | `Int` NOT NULL today. **Stops for a person.** Three render sites print `×{qty}` |
+| **6.2** | **`1h-s` / S2** — the brief | The expensive screen. Where, what, how often, when, how big — and no quantity |
+| **6.3** | `QuoteLine.qty` | **The harder blocker, and neither planning document names it.** Also NOT NULL, and `lib/quote/send-quote.ts:114-116` refuses `qty < 1`. It gates the **accepted quote** — the terminal state of the whole product. A service enquiry that cannot be quoted cannot convert |
+| **6.4** | `3j-s` Reply with a proposal | |
+| **6.5** | `1n-s` Compare proposals | Consecutive with `3j-s`. Four fee bases do not compare the way four unit prices do |
 
----
-
-### Stage 6 · Discovery
-`1c-s` → `10c-s` → `6a-s`/S7
-
-**The epic's premise for `1c-s` is false on the tree.** It warns that "a default of Products makes a
-services-only firm invisible"; `lib/search/query.ts:182` defaults `tab` to `businesses`. The
-products tab is opt-in. The board is still worth building for the kind badges; the urgency claimed
-for it is not real.
-
-`6a-s` is the expensive one and the epic is right that it roughly doubles the `6f` page matrix.
+**`Enquiry.deliverToArea` is free text**, not an `areaId`, so an area-level coverage match is not
+computable from the enquiry side. That is a third migration plus a composer control, and it belongs
+to `1h-s` rather than to stage 1's locality fix, which used the emirate.
 
 ---
 
-### Stage 7 · Ranking and ops
-`12c-s` → `4e-s` → `4c-s` → `12g-s` + `6g-s`
+### Stage 7 · Discovery
+`1c-s` → `10c-s` → `6a-s`
 
-`12c-s` cannot be built until §2's three ranking defects are fixed — the 96/106 totals, the
-singleton CHECK, and the `unread` counter that can only print 1.
+**The epic's urgency for `1c-s` is not real.** It warns a Products default makes a services-only
+firm invisible; `lib/search/query.ts:182` defaults the tab to `businesses`. Worth building for the
+kind badges, not for the stated reason.
 
-**`4e-s`'s named trap is not the one the epic names.** It flags "fee basis is an enum per family" as
-"the field most likely to be built wrong" without saying why: **a Prisma enum is one fixed value set
-for a column.** Per-family allowed bases is a second table keyed by family. It cannot be an enum.
+`6a-s` roughly doubles the `6f` page matrix, which is the real cost in this stage.
 
-**`12g-s` + `6g-s` have no instrument to charge D9's accepted drift.**
-`scripts/check-vocabulary.sh` has no pair concept, and `lib/i18n/coverage.ts` counts keys. Nothing
-in the tree records a copy *swap* at all.
+---
+
+### Stage 8 · Ranking and ops
+`12c` defects → `12c-s` → `4c-s` → `12g-s` + `6g-s`
+
+**`12c-s` cannot be built until §2's three ranking defects are fixed**: the vector totals 96 and 106
+on two of three query shapes, `RankingWeights` is a Postgres singleton so a kind key is a
+drop-and-re-key, and the affected-seller counter can only ever print `1`.
+
+`4c-s` narrows under D10 to the two kinds a register can answer. `12g-s` and `6g-s` are one piece of
+work and there is currently no instrument in the tree that can charge D9's accepted drift.
+
+---
+
+### Deferred, and conditional on a decision
+**`4e-s` scope-sheet families · `3h-s` scope template.**
+
+These exist only if scope sheets are templated. See the open questions below — the two planning
+documents disagree, and the answer decides whether these are two boards or none.
+
+---
+
+## 4b · What the re-sequence opens up
+
+Three questions the new order forces, in the order they bite.
+
+### Q1 · Scope sheets: five families, or one fixed field set?
+
+`docs/epic-2026-09-11.md:220` draws **`4e-s`**, five families covering the subcategories with a
+**fee basis enum per family**, and **`3h-s`**, a clone-and-rename template mirroring `3h`.
+`docs/services-spec.md:207-211` says the opposite — hold services out of the template system
+entirely, *"the cheaper and more coherent answer"*.
+
+**Recommendation: a fixed field set, with `pricingUnit` as one small global enum.**
+
+- D3 was answered **no**, so service fields are never filterable and never comparable. A template
+  system exists to make fields comparable; if nothing compares them it buys nothing.
+- The goods template system it would mirror covers **2 of 427** subcategories today.
+- `4e-s`'s central instruction cannot be built as written: a Prisma enum is one fixed value set for
+  a column, so "an enum per family" is a second table keyed by family. The epic calls this
+  *"the field most likely to be built wrong"* without naming why.
+- D7 already took exactly this trade on the neighbouring field — sizing ships as free text with a
+  per-subcategory placeholder, structure added where traffic argues for it. Fee basis is the same
+  shape of question and deserves the same answer, one notch more structured because the values are
+  few and known: per visit, per month, per square metre, per job, per person, per vehicle.
+
+**If yes:** `4e-s` and `3h-s` leave the plan, and the count drops from 28 to 26.
+**If no:** both are upstream of `3g-s` and stage 3 grows by two boards and a dictionary for ops.
+
+### Q2 · Is a business's kind derived, or declared?
+
+`4d-s` shipped `Category.tradeKind`, and a business holds categories — so what it sells is already
+derivable. `2b-s` proposes asking the seller directly at claim, which makes a second source of truth
+for the same fact.
+
+**Recommendation: derived, and `2b-s` confirms rather than asks.** *"Your licence puts you in
+customs clearance and freight forwarding — both sold by the job. Right?"* is a better question than
+a blank choice, it cannot disagree with the taxonomy, and it satisfies D8 (a firm holding one
+category of each sells both) without a column. `CLAUDE.md` already forbids a writable path for
+anything derived.
+
+**If declared instead:** `Business` gains a kind column, and every reader needs a rule for what
+happens when it contradicts the categories.
+
+### Q3 · What is Free's service cap?
+
+D1 ratified seven numbers. None is this one, and `Plan` has no column for it. Free is
+**1 category, 1 branch, 10 products, 30 photos, 3 enquiries a month, 1 seat, 50 MB**.
+
+**Recommendation: 3 services on Free.** It matches `8c-s`'s own "first three services" framing, it
+is the same shape of number as the 10-product cap relative to what a small seller actually lists,
+and it makes the onboarding task completable exactly at the cap rather than leaving a seller one
+short of a hub that will not close.
+
+**It is owed before `8c-s` ships**, not after.
 
 ---
 
@@ -403,31 +565,37 @@ Items 1–3 are one coherent billing batch. Item 4 is a ranking-honesty fix and 
 
 ## 7 · The handoff order
 
-**Stages 1 and 2 are done and need no handoff.** Stage 1 was scoring and metrics — the fan-out score is never
-persisted (there is no score column on `EnquiryRecipient`) and never rendered; `selectRecipients` is
-called from a server action (`app/(public)/rfq/actions.ts:108`) and returns a recipient list, not a
-number on a page. Stage 2's one screen, `4d-s`/S9, is a variant of `/admin/categories` — an existing
-staff table plus a column and a bulk control, internal, no buyer or seller sees it. I will build it
-against that table's own conventions unless the design side would rather draw it.
+**Re-sequenced 11 Sep 2026: the editor leads.** The epic drew `8c-s` and `3f-s` into its Phase 2 and
+`3g-s` into its Phase 6, so services would have been created four phases before a screen existed to
+edit one. The owner reversed it, and the ordering rule is now **nothing creates a row no screen can
+edit**.
 
-**Send them in build order, not hardest-first.** `docs/services-spec.md:239-241` suggested S1, S2,
-S3 first on the grounds that they are the long poles. That is the right order to *design* in and the
-wrong order to *deliver* in: a handoff that arrives early costs nothing to hold, and one that arrives
-late blocks a stage. The stages below are the order I can actually build.
+**Stages 1 and 2 are shipped and needed no handoff.** Everything below does.
 
-| # | Send | Screens | Builds in | Note |
+| # | Send together | `-s` ids | Builds in | Why these, in this order |
 |---|---|---|---|---|
-| 1 | **S3 + S1 together** | service editor, service detail | Stage 3, Stage 4 | **A pair, not two handoffs.** Same field set from the seller's side and the buyer's. Designed apart, the editor collects fields the page never shows, and the "unfilled stays visible" rule makes that visible to both |
-| 2 | S4 / `3f-s` | services list | Stage 3 | Close to `3f`. Shorter table, and only the bulk actions that mean something |
-| 3 | S8 / `8a-s` + `8c-s` | setup hub, scope sheet + 3 services | Stage 3 | The hub card's destination is `/dashboard/services`, so it cannot land before S4 |
-| 4 | `8b-s` | credentials task | Stage 3 | Narrowed by D10's split: optional evidence only, no register, no chasing. The licence keeps all three |
-| 5 | S5 / `1d-s` · `1e-s` · `5c-s` | storefront services section | Stage 4 | `components/storefront/Services.tsx` already exists as a labelled placeholder — the renderer has a home |
-| 6 | S2 / `1h-s` | service enquiry composer | Stage 5 | The expensive one, and the one carrying `EnquiryLine.qty` and `QuoteLine.qty` |
-| 7 | `3j-s` + `1n-s` | reply with a proposal, compare proposals | Stage 5 | Consecutive. Four fee bases do not compare the way four unit prices do |
-| 8 | S6 / `1c-s` · `10c-s` | search, kind-scoped facets | Stage 6 | |
-| 9 | S7 / `6a-s` | area landing, service variant | Stage 6 | Roughly doubles the `6f` page matrix |
-| 10 | `4e-s` · `4c-s` · `12c-s` | scope families, credential review, ranking | Stage 7 | `12c-s` waits on §2's three ranking defects |
+| **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **One handoff, three screens.** `3g-s` fixes the field set the whole lane renders; `3f-s`'s columns are a summary of those fields; `1g-s` is the same set from the buyer's side. Drawn apart, the editor collects what the page never shows and the list carries a column nothing fills |
+| **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | The hub, the onboarding task and credentials. Needs Q3 answered first, or it creates uncapped rows |
+| **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | Needs Q2 answered. `3c-s` is mostly built; `2d-s` needs a delivery mode that cannot be its own table |
+| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | `5c-s` has a placeholder waiting. `1d-s` needs the Free-plan certifications gate decided |
+| **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | The expensive one, and the two that must be consecutive |
+| **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
+| **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | `12c-s` waits on §2's three ranking defects |
+| — | **Only if Q1 says families** | `4e-s` · `3h-s` | before Stage 3 | Otherwise these two leave the plan |
 
-**`1f-s` needs no handoff either.** D11 is closed, so what is left of that board is board `1f`'s
-shipped page reading `BusinessCoverage` instead of two seller-claimed fields — which is Stage 1's
-locality fix surfacing, not a new design.
+**What needs no handoff at all:**
+
+- `4d-s`/S9 — shipped. A staff table plus a column and a bulk control, and nobody outside sees it.
+- `1f-s` — D11 is closed, so what remains is board `1f`'s shipped page reading `BusinessCoverage`
+  instead of two seller-claimed fields. That is stage 1's locality fix surfacing, not a design.
+- Every migration in stages 3 and 6, and the `profileStrength` re-weighting in stage 4.
+- `2e-s` — the plan's service cap. It is a column and a number, not a screen, which is why it is in
+  stage 3 and not in the table above. It still has to be **answered** before handoff 2 ships.
+
+All 29 `-s` ids in `docs/epic-2026-09-11.md` are placed above exactly once — the 28 it counts, plus
+`2e-s`, which it names once and puts in no phase.
+
+**Why not hardest-first.** `docs/services-spec.md:239-241` suggested S1, S2, S3 on the grounds that
+they are the long poles. That is the right order to *design* in and the wrong order to *deliver* in:
+a handoff that arrives early costs nothing to hold, and one that arrives late blocks a stage. Design
+may draw them in any order it likes — this table is the order they can be built.

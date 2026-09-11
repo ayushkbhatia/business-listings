@@ -56,6 +56,8 @@ export const DEFAULT_TRADE_KIND: TradeKind = "goods";
 /** How far up the tree to walk before concluding the parents form a cycle. */
 const MAX_DEPTH = 8;
 
+
+
 /**
  * Resolve one category against an already-loaded taxonomy.
  *
@@ -109,3 +111,18 @@ export function tradeKindOrigin(
   }
   return { kind: DEFAULT_TRADE_KIND, from: "default" };
 }
+
+/**
+ * A resolution that reached the root without finding a value.
+ *
+ * Board `4d-s` AC2: the root fallback "is a data defect, not a valid state, and
+ * it should be visible". Returned rather than logged from in here, because this
+ * module is pure and a resolver that writes to a log is a resolver that cannot
+ * be called from a test or a render without a side effect. `tradeKindOrigin`
+ * reports `from: "default"` and the screen counts them; `loadTradeKindBoard`
+ * turns that count into the figure ops acts on.
+ *
+ * It is expected and harmless on the day the column ships, when every row is
+ * null. It stops being either once the 13 sectors are set.
+ */
+export const ROOT_FALLBACK: TradeKindOrigin["from"] = "default";

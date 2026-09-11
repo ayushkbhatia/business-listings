@@ -1,15 +1,16 @@
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
-import { categoryHealth } from "@/lib/taxonomy/service";
+import { categoryHealth, loadTradeKindBoard } from "@/lib/taxonomy/service";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
+import { Panel, Tabs } from "@/components/structure";
 import { CategoryTable } from "./CategoryTable";
-import { previewRename, previewTradeKind, remove, rename, setKind } from "./actions";
+import { previewRename, previewTradeKindBulk, remove, rename, setKindBulk } from "./actions";
 import { RenamePanel, type TradeOption } from "./RenamePanel";
 import { DefaultTemplatePanel, type SubcategoryOption } from "./DefaultTemplatePanel";
-import { TradeKindPanel } from "./TradeKindPanel";
+import { TradeKindBoard } from "./TradeKindBoard";
 import { prisma } from "@/lib/db/client";
 
 /**
@@ -31,11 +32,24 @@ import { prisma } from "@/lib/db/client";
 
 export const dynamic = "force-dynamic";
 
-export default async function TaxonomyPage() {
+type Tab = "taxonomy" | "kind";
+
+/** The tab, from the address. Anything else is the default rather than a 404. */
+function tabOf(value: string | undefined): Tab {
+  return value === "kind" ? "kind" : "taxonomy";
+}
+
+export default async function TaxonomyPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const seat = await requireStaff();
   if (!can(seat.actor, "taxonomy.write")) notFound();
 
-  const [rows, badges, templateLinks] = await Promise.all([
+  const tab = tabOf((await searchParams).tab);
+
+  const [rows, badges, templateLinks, board] = await Promise.all([
     /*
      * Intro words passed as satisfied. The copy lives with the landing page,
      * which handoff 5 owns, so counting it here would fail every category on a
@@ -61,6 +75,13 @@ export default async function TaxonomyPage() {
         templates: { select: { template: { select: { id: true, name: true } } } },
       },
     }),
+    /*
+       Board 4d-s. Loaded for both tabs rather than only its own, because the
+       taxonomy tab's tally is read off the same array — AC7 asks that the
+       progress figure and the sort cannot disagree, and the cheapest way to
+       guarantee that is for there to be one source of both.
+    */
+    loadTradeKindBoard(),
   ]);
 
   const subcategories: SubcategoryOption[] = templateLinks.map((row) => ({
@@ -77,8 +98,7 @@ export default async function TaxonomyPage() {
      how far through the taxonomy ops actually is — it is the one this screen
      exists to move.
   */
-  const soldByJob = rows.filter((row) => row.trade.kind === "services").length;
-  const decided = rows.filter((row) => row.trade.from === "own").length;
+  const soldByJob = board.rows.filter((row) => row.trade.kind === "services").length;
 
 
   const trades: TradeOption[] = rows.map((row) => ({
@@ -97,37 +117,83 @@ export default async function TaxonomyPage() {
         <span className="text-caption text-muted">
           {t("admin.taxonomy.meta", {
             blocked: formatCount(blocked),
-            total: formatCount(rows.length),
+            total: formatCount(board.total),
           })}
         </span>
       }
     >
-      <CategoryTable rows={rows} />
+      {/*
+         Two tabs, not the four the handoff draws.
 
-      <div className="mt-[var(--gutter)]">
-        <RenamePanel
-          trades={trades}
-          rename={rename}
-          remove={remove}
-          preview={previewRename}
-        />
-      </div>
+         The render shows Sectors / Subcategories / Trade kind / Scope sheets.
+         Sectors and subcategories are one table here and always have been —
+         splitting them would be a change with no stated purpose — and scope
+         sheets is `4e-s`, a board that may never exist: it turns on a question
+         about whether services are templated at all. A tab for a board that
+         might be cancelled is a dead end somebody has to click to discover.
+      */}
+      <Tabs
+        items={[
+          { key: "taxonomy", label: t("taxonomy.tab.taxonomy"), href: "/admin/categories" },
+          { key: "kind", label: t("taxonomy.tab.kind"), href: "/admin/categories?tab=kind" },
+        ]}
+        active={tab}
+        label={t("admin.taxonomy.title")}
+        as="a"
+      />
 
-      <div className="mt-[var(--gutter)]">
-        <TradeKindPanel trades={trades} setKind={setKind} preview={previewTradeKind} />
-      </div>
+      {tab === "kind" ? (
+        <div className="mt-[var(--gutter)] flex flex-col gap-[var(--gutter)]">
+          <TradeKindBoard
+            board={board}
+            canWrite={can(seat.actor, "taxonomy.write")}
+            setKindBulk={setKindBulk}
+            preview={previewTradeKindBulk}
+          />
 
-      <div className="mt-[var(--gutter)]">
-        <DefaultTemplatePanel subcategories={subcategories} />
-      </div>
+          {/*
+             The two cards the handoff asks for. They are not decoration: this
+             board is the only place either rule is written down where the
+             person acting on it will read it, and the second one answers a
+             question that was open for a week — why the flag is not on the
+             business.
+          */}
+          <Panel title={t("taxonomy.kind_inherit_card")}>
+            <p className="max-w-prose text-body-sm text-prose">{t("taxonomy.kind_inherit_body")}</p>
+          </Panel>
+
+          <Panel title={t("taxonomy.kind_provenance_card")}>
+            <p className="max-w-prose text-body-sm text-prose">
+              {t("taxonomy.kind_provenance_body")}
+            </p>
+          </Panel>
+        </div>
+      ) : (
+        <div className="mt-[var(--gutter)]">
+          <CategoryTable rows={rows} />
+
+          <div className="mt-[var(--gutter)]">
+            <RenamePanel
+              trades={trades}
+              rename={rename}
+              remove={remove}
+              preview={previewRename}
+            />
+          </div>
+
+          <div className="mt-[var(--gutter)]">
+            <DefaultTemplatePanel subcategories={subcategories} />
+          </div>
+        </div>
+      )}
 
       <div className="mt-[var(--gutter)] flex flex-col gap-1">
         <p className="max-w-prose text-caption text-muted">{t("admin.taxonomy.note")}</p>
         <p className="max-w-prose text-caption text-muted">
           {t("taxonomy.kind_tally", {
             services: formatCount(soldByJob),
-            total: formatCount(rows.length),
-            set: formatCount(decided),
+            total: formatCount(board.total),
+            set: formatCount(board.decided),
           })}
         </p>
         <p className="max-w-prose text-caption text-faint">{t("admin.taxonomy.intro_note")}</p>
