@@ -67,6 +67,7 @@ and it is the one that argues back.
 /onboarding/kind                        Claim result — how it sells         [2b-s] built h2bs
 /onboarding/profile                     Profile basics                        [2c]  built h6s3
 /onboarding/locations                   Locations & hours                     [2d]  built h6s4
+/onboarding/locations (services)        Coverage areas                      [2d-s] built h2ds
 /onboarding/plan                        Pick a plan                           [2e]  built h6s5
 /dashboard                              Overview                              [3a]
 /dashboard (free variant)               Free-plan overview                   [11a]
@@ -294,6 +295,21 @@ allowance is the cap minus the primary, the strength meter counts the total. An
 extra whose category is not covered by the licence's stated activity is taken,
 flagged, and left out of the enquiry fan-out **for that category only** until a
 reviewer clears it.
+
+`/onboarding/locations` is **one route with two bodies**, chosen by
+`Business.sellsKind` — board `2d-s` B1. A seller who sells goods gets board 2d
+unchanged: a branch list, a map, a pin, hours, and a publish gate on
+coordinates. A seller who sells work gets a delivery mode, a set of coverage
+areas and a free-zone registration list, with no map and a publish gate on one
+mode and one area. A seller who sells both gets both, grouped and labelled, on
+one step. The step rail renames itself accordingly, on all five steps, so the
+name does not change under the seller between step 2 and step 4.
+
+There is no `/onboarding/coverage`. The board's header names one; B1 in the same
+document says "conditional screen body keyed on `Business.sellsKind`, not a
+second route", and the second is the one that is right — a second URL is a second
+place for `goLive` to be called from and a bookmark that sends a seller to the
+wrong body after they change their mind.
 
 `/onboarding/verify` takes `?business=` as either an id or a slug. Board 2a hands
 over an id, which is what a link built by a screen carries; a link built by a

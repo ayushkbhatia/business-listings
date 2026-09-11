@@ -37,6 +37,69 @@ export const AREAS = [
   // Ajman
   { emirate: "ajman", name: "New Industrial Area", slug: "ajman-new-industrial-area", nameAr: "المنطقة الصناعية الجديدة", isFreeZone: false, lat: 25.3891, lng: 55.4903 },
   { emirate: "ajman", name: "Ajman Free Zone", slug: "ajman-free-zone", nameAr: "المنطقة الحرة بعجمان", isFreeZone: true, lat: 25.4052, lng: 55.4438 },
+  // ── Board `2d-s`: Al Ain, and the free zones a firm registers in ──────────
+  //
+  // Al Ain is not a free zone and not an emirate. It is the second city of Abu
+  // Dhabi, 160 km from the capital, and buyers there search it as though it were
+  // an emirate — which is exactly why coverage is a table of areas rather than
+  // the seven-value `Emirate` enum. Khor Fakkan and Ruwais arrive the same way,
+  // as rows.
+  { emirate: "abu_dhabi", name: "Al Ain", slug: "al-ain", nameAr: null, isFreeZone: false, lat: null, lng: null, searchedAsEmirate: true },
+  //
+  // Then the free zones. The list held four, which is enough for a toggle that
+  // filters a warehouse's address and nowhere near enough for a picker a firm
+  // uses to say which zones it is approved to work in — `2d-s` needs the real
+  // list, and the screen counts it rather than claiming a number.
+  //
+  // `nameAr`, `lat` and `lng` are null on every one of these, deliberately: an
+  // Arabic name or a coordinate typed from memory is a fact this directory has
+  // not got. The centre only seeds a new branch pin and the seller drags it, so
+  // a missing one costs a drag and a wrong one costs a wrong address.
+  // Dubai
+  { emirate: "dubai", name: "DMCC", slug: "dmcc", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "DIFC", slug: "difc", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Airport Free Zone", slug: "dubai-airport-free-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Silicon Oasis", slug: "dubai-silicon-oasis", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Internet City", slug: "dubai-internet-city", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Media City", slug: "dubai-media-city", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Studio City", slug: "dubai-studio-city", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Production City", slug: "dubai-production-city", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Knowledge Park", slug: "dubai-knowledge-park", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Science Park", slug: "dubai-science-park", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Design District", slug: "dubai-design-district", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Healthcare City", slug: "dubai-healthcare-city", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Outsource City", slug: "dubai-outsource-city", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai World Trade Centre Free Zone", slug: "dwtc-free-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai South Free Zone", slug: "dubai-south-free-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Maritime City", slug: "dubai-maritime-city", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Gold and Diamond Park", slug: "dubai-gold-and-diamond-park", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai CommerCity", slug: "dubai-commercity", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "International Humanitarian City", slug: "international-humanitarian-city", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Meydan Free Zone", slug: "meydan-free-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "IFZA", slug: "ifza", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "Dubai Auto Zone", slug: "dubai-auto-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "dubai", name: "National Industries Park", slug: "national-industries-park", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  // Abu Dhabi
+  { emirate: "abu_dhabi", name: "ADGM", slug: "adgm", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "abu_dhabi", name: "Masdar City Free Zone", slug: "masdar-city-free-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "abu_dhabi", name: "Abu Dhabi Airport Free Zone", slug: "abu-dhabi-airport-free-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "abu_dhabi", name: "twofour54", slug: "twofour54", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  // Sharjah
+  { emirate: "sharjah", name: "Hamriyah Free Zone", slug: "hamriyah-free-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "sharjah", name: "Sharjah Media City", slug: "sharjah-media-city", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "sharjah", name: "Sharjah Publishing City", slug: "sharjah-publishing-city", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "sharjah", name: "Sharjah Research Technology and Innovation Park", slug: "srtip", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  // Ajman
+  { emirate: "ajman", name: "Ajman Media City Free Zone", slug: "ajman-media-city-free-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  // Ras Al Khaimah
+  { emirate: "ras_al_khaimah", name: "RAKEZ", slug: "rakez", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "ras_al_khaimah", name: "RAK Maritime City Free Zone", slug: "rak-maritime-city-free-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "ras_al_khaimah", name: "RAK Digital Assets Oasis", slug: "rak-digital-assets-oasis", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  // Fujairah
+  { emirate: "fujairah", name: "Fujairah Free Zone", slug: "fujairah-free-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  { emirate: "fujairah", name: "Creative City Fujairah", slug: "creative-city-fujairah", nameAr: null, isFreeZone: true, lat: null, lng: null },
+  // Umm Al Quwain
+  { emirate: "umm_al_quwain", name: "Umm Al Quwain Free Trade Zone", slug: "uaq-free-trade-zone", nameAr: null, isFreeZone: true, lat: null, lng: null },
 ] as const;
 
 export const CATEGORIES = [

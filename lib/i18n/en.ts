@@ -5521,6 +5521,8 @@ export const en = {
   "onboarding.step.verify": "Verified",
   "onboarding.step.profile": "Profile",
   "onboarding.step.locations": "Locations",
+  // Board `2d-s`: step 4 by its other name, for a seller who sells work.
+  "onboarding.step.coverage": "Coverage",
   "onboarding.step.plan": "Plan",
   "onboarding.next": "Continue",
   "onboarding.back": "Back",
@@ -5725,7 +5727,77 @@ export const en = {
   "profile_svc.group_services": "How you sell work",
   "profile_svc.group_goods": "How you sell products",
   "profile_svc.both_note": "You told us you do both, so both sets are here. Fill in the ones that describe you.",
-  "profile_svc.remove": "Remove {value}",  // The extras allowance — the plan cap minus the primary. Not the total.
+  "profile_svc.remove": "Remove {value}",
+  // ── Board `2d-s`: coverage areas, the services variant of step 4 ─────────
+  //
+  // "Where will you work?", not "where are you". A tax practice has one office
+  // and it is on the licence we already hold; what a buyer needs is which
+  // emirates the practice will work in, and whether the work happens remotely.
+  "coverage_step.title": "Where will you work?",
+  "coverage_step.intro":
+    "Not where your office is — we have that from your licence. Where you will actually travel to, or whether the work happens remotely. This is the single strongest filter buyers use, and claiming everywhere when you mean Dubai costs you more enquiries than it wins.",
+
+  // The mode group sits above the areas, and the ordering is the argument: ask
+  // for emirates first and a remote-only practice reasonably ticks all eight,
+  // which is true and useless.
+  "coverage_step.modes": "How the work reaches the client",
+  "coverage_step.modes_hint": "Pick every one that applies. At least one is needed to publish.",
+  "coverage_step.mode.remote": "Remotely",
+  "coverage_step.mode.remote_note": "Filing, advisory, review. Geography barely matters.",
+  "coverage_step.mode.at_our_office": "At our office",
+  "coverage_step.mode.at_our_office_note": "The client comes to you. Your address becomes the relevant one.",
+  "coverage_step.mode.at_client_site": "On the client’s site",
+  "coverage_step.mode.at_client_site_note": "You travel. The areas below are then a hard constraint.",
+
+  "coverage_step.framing.where_clients_are":
+    "You did not pick travelling to clients, so the areas below are where your clients are, not where you drive. We will not show you a distance filter.",
+  "coverage_step.framing.where_you_travel":
+    "You travel to clients, so the areas below are a travel commitment. Pick the ones you would actually take a job in.",
+
+  "coverage_step.areas": "Emirates you serve",
+  "coverage_step.areas_hint": "Al Ain sits beside the seven because buyers there search it as though it were an emirate.",
+  "coverage_step.areas_locked": "Answer how the work reaches the client first — it decides what these areas mean.",
+  "coverage_step.select_all": "Select all",
+  "coverage_step.select_all_done": "All {count} selected",
+  "coverage_step.areas_count": { one: "{count} area claimed", other: "{count} areas claimed" },
+  "coverage_step.areas_none": "No areas yet. One is needed to publish.",
+  // Q1: no confirmation on Select all. The cost is stated here instead, once.
+  "coverage_step.areas_cost": "Claiming everywhere is allowed and it is usually a mistake: buyers read seven ticks as a firm that has not thought about it.",
+  "coverage_step.other_scopes": "Set from your dashboard",
+  "coverage_step.other_scopes_note": "Narrower than the areas above, so they are not shown as chips here. They still count.",
+
+  "coverage_step.zones": "Free zones you are registered to work in",
+  "coverage_step.zones_hint": "Optional, and a genuine filter for company-formation and audit work — a DMCC company often needs an auditor approved by DMCC.",
+  "coverage_step.zones_search": { one: "Search {count} free zone", other: "Search {count} free zones" },
+  "coverage_step.zones_clear": "Clear the search",
+  "coverage_step.zones_none": "No free zones listed. Most sellers leave this empty.",
+  // No free entry here, unlike the sectors one step earlier. A free zone is a
+  // closed, checkable list and a typed one is a claim nobody can verify.
+  "coverage_step.zones_no_match": "Nothing matching “{query}”. This list is the zones we hold and there is no free entry — a zone that is missing is one for us to add, not for you to type.",
+  "coverage_step.zones_add": "Add {name}",
+  "coverage_step.zones_remove": "Remove {name}",
+
+  "coverage_step.office": "Your registered office",
+  "coverage_step.office_note": "From your trade licence. It appears on your profile, but it is not what buyers filter on — coverage is.",
+  "coverage_step.office_none": "No address on the listing yet. Nothing on this step needs one.",
+  "coverage_step.not_a_branch_list": "This is not a branch list",
+  "coverage_step.not_a_branch_list_note": "A parts supplier has branches, and each one is a place stock sits. You have an office and a travel range, or neither. Same step on the goods side, entirely different shape — a set of areas rather than a list of points.",
+  "coverage_step.default_note": "This is the default for everything you offer. Come back to this step whenever it changes — nothing here is a one-time answer.",
+
+  "coverage_step.continue": "Continue",
+  "coverage_step.continue_note": "Next: choose your plan",
+  "coverage_step.back": "Back",
+  "coverage_step.blocked.delivery_mode": "Pick at least one way the work reaches the client.",
+  "coverage_step.blocked.coverage_area": "Pick at least one area you will work in.",
+  "coverage_step.blocked_join": " and ",
+  "coverage_step.error.save_failed": "That did not save. Try it again — nothing was lost.",
+  "coverage_step.error.unknown_area": "That area is not one we hold. Reload the step and pick it again.",
+  "coverage_step.live_note": "Your listing goes live on Free at the end of this step. The plan screen after it is a choice, not a gate.",
+
+  "coverage_step.group_coverage": "Where you work",
+  "coverage_step.group_branches": "Where your stock sits",
+  "coverage_step.both_note": "You told us you sell products and work, so both are here. Branches are places; coverage is a set of areas, and they are different questions.",
+  // The extras allowance — the plan cap minus the primary. Not the total.
   "profile_step.extras_used": "· {used} of {allowed} extra used on {plan}",
   "profile_step.extras_unlimited": "· unlimited on {plan}",
   "profile_step.extras_add": "Add category",

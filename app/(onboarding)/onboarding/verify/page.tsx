@@ -102,10 +102,23 @@ export default async function VerifyPage({
 
   // The one figure with a cache, composed here rather than inside the service —
   // `unstable_cache` only runs inside a request.
-  const [reviewCount, draft] = await Promise.all([
+  const [reviewCount, draft, kindRow] = await Promise.all([
     countPublishedReviews(state.businessId),
     loadVerifyDraft(state.businessId),
+    /*
+       Board `2d-s`: the rail calls step 4 "Coverage" for a seller who sells
+       work, and a shared component renders identically on every screen that
+       carries it — so the name has to be the same here as it is two steps
+       later. A seller arriving at verify for the first time has not answered
+       yet and reads "Locations"; one who answered and came back reads their own
+       answer, rather than the rail changing under them between steps.
+    */
+    prisma.business.findUnique({
+      where: { id: state.businessId },
+      select: { sellsKind: true },
+    }),
   ]);
+  const sellsKind = kindRow?.sellsKind ?? "unset";
 
   /*
      Once submitted the page is a status card, and there is no form left for
@@ -115,7 +128,7 @@ export default async function VerifyPage({
   if (state.submittedAt) {
     return (
       <>
-        <OnboardingHeader step="verify" signedIn />
+        <OnboardingHeader step="verify" sellsKind={sellsKind} signedIn />
         <OnboardingSplit aside={<VerifySidebar reviewCount={reviewCount} contested={state.contested} />}>
           <Heading state={state} />
           <div className="mt-6">
@@ -138,7 +151,7 @@ export default async function VerifyPage({
         No mono step eyebrow, and no second header band: the rail already states
         both the position and the name of every step.
       */}
-      <OnboardingHeader step="verify" signedIn trailing={<SaveExitButton />} />
+      <OnboardingHeader step="verify" sellsKind={sellsKind} signedIn trailing={<SaveExitButton />} />
 
       <OnboardingSplit aside={<VerifySidebar reviewCount={reviewCount} contested={state.contested} />}>
         <Heading state={state} />

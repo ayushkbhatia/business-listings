@@ -194,12 +194,33 @@ export async function findFanoutCandidates(
      two dashboard readers, and the consumer named in the schema was not one of
      them.
   */
-  const coverage = await prisma.businessCoverage.groupBy({
-    by: ["businessId", "emirate"],
-    where: { businessId: { in: businesses.map((business) => business.id) } },
-  });
+  const candidateIds = businesses.map((business) => business.id);
+  const [delivery, work] = await Promise.all([
+    prisma.businessCoverage.groupBy({
+      by: ["businessId", "emirate"],
+      where: { businessId: { in: candidateIds } },
+    }),
+    /*
+       Board `2d-s` B6, the half of it that exists today.
+
+       `ServiceCoverage` is the other coverage table, and it is the only one a
+       firm that sells work ever writes. Without this a consultancy that named
+       all seven emirates on the coverage step reaches the locality term with an
+       empty set and scores `UNMEASURED` — the same as a listing that has said
+       nothing at all, which is the one thing the screen was asking them not to
+       be.
+
+       The `coverage * 0.34` term above it still reads *does this business have
+       any products*, and replacing that with geographic match is `1h-s`, not
+       this. This is the locality term, and it is a different number.
+    */
+    prisma.serviceCoverage.groupBy({
+      by: ["businessId", "emirate"],
+      where: { businessId: { in: candidateIds } },
+    }),
+  ]);
   const coveredBy = new Map<string, string[]>();
-  for (const row of coverage) {
+  for (const row of [...delivery, ...work]) {
     const held = coveredBy.get(row.businessId);
     if (held) held.push(row.emirate);
     else coveredBy.set(row.businessId, [row.emirate]);

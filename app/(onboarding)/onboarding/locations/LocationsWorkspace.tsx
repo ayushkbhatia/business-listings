@@ -14,6 +14,7 @@ import {
   type BranchGap,
 } from "@/lib/onboarding/branch-fields";
 import type { AreaOption, BranchState, LocationsState } from "@/lib/onboarding/locations";
+import type { CoverageGap } from "@/lib/locations/service-coverage";
 import { t } from "@/lib/i18n";
 import { OnboardingMapSplit } from "../_map-split";
 import { useSaved } from "../_saved";
@@ -58,7 +59,24 @@ export interface LocationsWorkspaceProps {
   };
   /** `Ramadan, about 17 February to 19 March`, already formatted by the server. */
   ramadanWindow: { from: string; to: string; active: boolean } | null;
+  /**
+   * Board `2d-s` B7 — the coverage set, for a seller who sells both.
+   *
+   * A slot rather than a second screen. A trading company with an in-house
+   * service arm has real branches *and* a real travel range, and both belong on
+   * step 4: the branch list is where stock sits and the coverage set is where
+   * the work happens. Neither is behind a toggle, which is AC8.
+   */
+  coverage?: React.ReactNode;
 }
+
+/** Board `2d-s`. Resolved here, because a client component may not take a
+    label function across the boundary — `tests/unit/client-labels` fails the
+    build on one, and it is this repo's most repeated defect. */
+const COVERAGE_GAP: Record<CoverageGap, string> = {
+  delivery_mode: t("coverage_step.blocked.delivery_mode"),
+  coverage_area: t("coverage_step.blocked.coverage_area"),
+};
 
 const GAP_LABEL: Record<BranchGap, string> = {
   area: t("locations_step.gap.area"),
@@ -67,7 +85,12 @@ const GAP_LABEL: Record<BranchGap, string> = {
   pin: t("locations_step.gap.pin"),
 };
 
-export function LocationsWorkspace({ state, actions, ramadanWindow }: LocationsWorkspaceProps) {
+export function LocationsWorkspace({
+  state,
+  actions,
+  ramadanWindow,
+  coverage,
+}: LocationsWorkspaceProps) {
   const router = useRouter();
   const { setSaved } = useSaved();
 
@@ -129,7 +152,18 @@ export function LocationsWorkspace({ state, actions, ramadanWindow }: LocationsW
       }
       const first = result.blocking[0];
       if (!first) {
-        setBlocked(t("locations_step.blocked_none"));
+        /*
+           Board `2d-s` B7: a `both` seller can be complete on branches and
+           short on coverage, and the branch list has nothing to point at. The
+           refusal has to name what is actually missing — "add a branch" over a
+           full branch list is a message that sends the seller to fix the one
+           thing that is already right.
+        */
+        setBlocked(
+          result.coverage.length > 0
+            ? result.coverage.map((gap) => COVERAGE_GAP[gap]).join(t("coverage_step.blocked_join"))
+            : t("locations_step.blocked_none"),
+        );
         return;
       }
       const index = branches.findIndex((branch) => branch.id === first.branchId);
@@ -298,6 +332,25 @@ export function LocationsWorkspace({ state, actions, ramadanWindow }: LocationsW
           </Alert>
         )}
 
+        {/*
+          Board `2d-s` B7. A seller who sells both gets both sets on one step,
+          and the labels are what keeps them apart: branches are places stock
+          sits, coverage is a set of areas the work happens in, and a seller who
+          reads them as two spellings of one thing fills in one and wonders why
+          the other is empty. The coverage half carries its own heading, from
+          the shared field set, so this one names only what is under it.
+        */}
+        {coverage && (
+          <div>
+            <h2 className="font-mono text-eyebrow uppercase tracking-wide text-muted">
+              {t("coverage_step.group_branches")}
+            </h2>
+            <p className="mt-1 max-w-prose text-caption text-muted">
+              {t("coverage_step.both_note")}
+            </p>
+          </div>
+        )}
+
         <ul className="flex list-none flex-col gap-4 p-0">
           {branches.map((branch, index) => (
             <li key={branch.id}>
@@ -360,6 +413,14 @@ export function LocationsWorkspace({ state, actions, ramadanWindow }: LocationsW
             )
           )}
         </div>
+
+        {/*
+          Board `2d-s` B7. Both sets, grouped and labelled, and the labels are
+          what keeps them apart: a seller who reads "branches" and "coverage" as
+          two spellings of one thing will fill in one and wonder why the other
+          is empty.
+        */}
+        {coverage && <div className="border-t border-line pt-6">{coverage}</div>}
 
         {/*
           Continue and Back. Back exists here and did not on 2c, because this

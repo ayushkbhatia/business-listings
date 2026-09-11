@@ -306,6 +306,20 @@ model Area {
   slug        String    @unique
   /// A free zone is a cross-cutting toggle, not a place in the area hierarchy.
   isFreeZone  Boolean   @default(false) @map("is_free_zone")
+  /// Al Ain, and the ones like it — board `2d-s` B3.
+  ///
+  /// A fact about how a place is *searched*, not about where it is. Al Ain is
+  /// the second city of Abu Dhabi, 160 km from the capital, and a buyer there
+  /// picks it as though it were an emirate: a firm covering Abu Dhabi city and
+  /// not Al Ain is a different firm for that buyer. So the coverage picker
+  /// offers it beside the seven, and `Emirate` still has seven values — every
+  /// join on the enum keeps working, and every facet on coverage sees it.
+  ///
+  /// A column rather than a list of slugs in code, because board `2d-s` Q2 is
+  /// right that more of these are coming — Khor Fakkan, Ruwais — and each
+  /// should be a row somebody adds, not a deploy. `12h` owns that screen; until
+  /// it exists the writer is the seed and the migration beside it.
+  searchedAsEmirate Boolean @default(false) @map("searched_as_emirate")
   lat         Float?
   lng         Float?
   /// Unused. Handoff 0 intended an area-wide publish switch; board 6a put the
@@ -317,6 +331,8 @@ model Area {
 
   locations Location[]
   coverage  BusinessCoverage[]
+  serviceCoverage ServiceCoverage[]
+  freeZoneRegistrations FreeZoneRegistration[]
   pages     AreaPage[]
   lists     CuratedList[]
   demand    ScopeDemand[]
@@ -757,6 +773,15 @@ model Business {
   /// Defaults to `unset`: a business that has not passed the question is routed
   /// back to it rather than assumed to be anything.
   sellsKind        SellsKind     @default(unset) @map("sells_kind")
+  /// How the work reaches the client — board `2d-s`, and the question that
+  /// decides what the coverage set beneath it means.
+  ///
+  /// Empty on every business that predates the board, and empty is a real
+  /// state: it is what a seller who has not reached the coverage step has, and
+  /// it is half of the services publish gate. No backfill, for the same reason
+  /// `sellsKind` has none — inferring an answer onto a live listing is a claim
+  /// we would be making on the seller's behalf.
+  deliveryModes    DeliveryMode[] @default([]) @map("delivery_modes")
   /// The trading activity as the licence register words it, carried over from
   /// `StagedListing.activity` at import.
   ///
@@ -926,6 +951,8 @@ model Business {
   team                   User[]                   @relation("BusinessTeam")
   locations              Location[]
   coverage               BusinessCoverage[]
+  serviceCoverage        ServiceCoverage[]
+  freeZoneRegistrations  FreeZoneRegistration[]
   products               Product[]
   productQuestions       ProductQuestion[]
   media                  Media[]
@@ -1333,6 +1360,119 @@ model BusinessCoverage {
   @@index([emirate])
   @@index([areaId])
   @@map("business_coverage")
+}
+
+/// How the work reaches the client — board `2d-s`, the first question on the
+/// coverage step and the one that gives every answer under it a meaning.
+///
+/// Three values, multi-select, at least one required to publish. Only
+/// `at_client_site` makes the coverage set a statement about travel; the other
+/// two make it a statement about where the clients are, and the screen says so
+/// rather than rendering a greyed distance control nobody can use.
+///
+/// Not a `Location` field. A branch is a place; this is a property of the
+/// business, and a firm with no branch at all still has an answer.
+enum DeliveryMode {
+  /// Filing, advisory, review. The work reaches the client down a wire.
+  remote
+  /// The client comes to them. The licensed address is the relevant one.
+  at_our_office
+  /// They travel. The coverage set below is then a hard constraint.
+  at_client_site
+
+  @@map("delivery_mode")
+}
+
+/// Where a services business works — board `2d-s`.
+///
+/// A deliberate second table beside `BusinessCoverage` rather than a nullable
+/// column on it, because the two are different claims about different things.
+/// `BusinessCoverage` is a **delivery promise**: this emirate, in this many
+/// hours. This is **where the work happens**, and it carries no promise because
+/// there is nothing being moved. A trading company with a service arm holds
+/// both and they genuinely differ — valves delivered to all seven emirates,
+/// commissioning done only in Dubai — which one table with a nullable lead time
+/// could not say.
+///
+/// The shape is copied from `BusinessCoverage` on purpose: `emirate` always set,
+/// `areaId` null for the whole emirate. Everything that already reads coverage
+/// speaks that pair, so the union in `lib/coverage/rules.ts` is one shape rather
+/// than a translation.
+///
+/// **Al Ain is an `Area` row, not an eighth `Emirate`** — board `2d-s` B3. It is
+/// the second city of Abu Dhabi and buyers search it as though it were an
+/// emirate, so it is `{ emirate: abu_dhabi, areaId: <al-ain> }`. Everything
+/// joining on `Emirate` keeps working; everything faceting on coverage sees it.
+/// Khor Fakkan and Ruwais will arrive the same way, as rows.
+///
+/// ### No `serviceId` yet, and that is not an oversight
+///
+/// The board specifies `serviceId String?` — null for the business default this
+/// screen writes, set for the per-service rows `3c-s` writes. There is no
+/// `Service` model in this schema yet; it lands in stage 3 with `3g-s`. A
+/// nullable column pointing at nothing, always null, with no writer, is the
+/// defect this project has already paid for twice — `Area.publishedAt` and the
+/// dropped `spec_field_proposal`. The column arrives with the table it
+/// references. What the board is protecting — *the default is never copied down
+/// onto a service* — is enforced today by `effectiveCoverage` in
+/// `lib/coverage/rules.ts`, which resolves inheritance at read time, and it is
+/// tested there.
+model ServiceCoverage {
+  id         String @id @default(cuid())
+  businessId String @map("business_id")
+
+  /// The scope at its coarsest, always set — the same rule `BusinessCoverage`
+  /// and `Location` follow, so a reader that only knows about emirates does not
+  /// have to join to find one.
+  emirate Emirate
+
+  /// The named place, or null for the whole emirate.
+  areaId String? @map("area_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  area     Area?    @relation(fields: [areaId], references: [id], onDelete: Restrict)
+
+  @@index([businessId])
+  @@index([emirate])
+  @@index([areaId])
+  @@map("service_coverage")
+}
+
+/// A free zone a firm is registered — or approved — to work in. Board `2d-s` B4.
+///
+/// Orthogonal to coverage, which is the whole point. On the goods side a free
+/// zone is a place a warehouse sits, and `Area.isFreeZone` already says which
+/// areas are ones. Here it is a **registration**: a DMCC company often needs an
+/// auditor on DMCC's approved list, and that is a real filter for
+/// company-formation, audit and compliance work. A firm can be DMCC-approved and
+/// cover only Dubai; a firm can cover all seven emirates and be approved
+/// nowhere. So it is neither a subdivision of the emirate list nor a row in it.
+///
+/// A table rather than a `String[]` on `Business` because these ids name rows in
+/// a closed taxonomy and a foreign key is what keeps that true — the same reason
+/// board 2d refuses free-text areas. `sectorsServed` on `2c-s` is an array
+/// because a sector is whatever the seller says it is; a free zone is not.
+///
+/// **No `verifiedAt` column.** Board `2d-s` Q3 says registration should
+/// eventually be checked against the zones' published approved-provider lists,
+/// and that belongs to the credentials chain (`8b-s` → `4c-s`). A column with no
+/// writer would render as an unverified claim that looks like a checked one.
+model FreeZoneRegistration {
+  id         String @id @default(cuid())
+  businessId String @map("business_id")
+  areaId     String @map("area_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  area     Area     @relation(fields: [areaId], references: [id], onDelete: Restrict)
+
+  @@unique([businessId, areaId])
+  @@index([areaId])
+  @@map("free_zone_registration")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

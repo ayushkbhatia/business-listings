@@ -2,6 +2,7 @@ import Link from "next/link";
 import { StepHeader } from "@/components/structure";
 import { cn } from "@/lib/cn";
 import { STEPS, type Step } from "@/lib/onboarding/service";
+import type { SellsKind } from "@/lib/db/generated/enums";
 import { t } from "@/lib/i18n";
 
 /**
@@ -42,16 +43,45 @@ const LABELS: Record<Step, string> = {
   plan: t("onboarding.step.plan"),
 };
 
+/**
+ * Step 4 is called two things, and which one depends on what the seller sells.
+ *
+ * Board `2d-s`: a firm that sells work sets a coverage set where a trader sets
+ * a branch list, on the same route and at the same number. The rail has to say
+ * which, because a seller who is sent to "Locations" and finds no address field
+ * concludes the screen is broken.
+ *
+ * Resolved here rather than per page so all five steps agree for one seller —
+ * the rule that a shared component renders identically on every screen that
+ * carries it. `unset` keeps the name the step had before the fork, which is what
+ * every business that predates it still has.
+ */
+function labelsFor(sellsKind: SellsKind): Record<Step, string> {
+  if (sellsKind === "unset" || sellsKind === "goods") return LABELS;
+  return { ...LABELS, locations: t("onboarding.step.coverage") };
+}
+
 export function OnboardingHeader({
   step,
   signedIn,
   trailing,
+  sellsKind = "unset",
 }: {
   step: Step;
   signedIn: boolean;
   /** The right-hand slot. "Save & exit" on the steps that have state to save. */
   trailing?: React.ReactNode;
+  /**
+   * What the seller said on `2b-s`. It renames step 4 and nothing else.
+   *
+   * Defaulted rather than required, and the default is what the rail said
+   * before the fork existed: a step that has not read the row is not entitled
+   * to guess, and `claim` runs before there is a row to read.
+   */
+  sellsKind?: SellsKind;
 }) {
+  const labels = labelsFor(sellsKind);
+
   return (
     <header className="flex min-h-[3.75rem] flex-wrap items-center gap-x-5 gap-y-2 border-b border-line bg-card px-[var(--section-pad)] py-2.5">
       <Link
@@ -63,7 +93,7 @@ export function OnboardingHeader({
 
       <StepHeader
         variant="inline"
-        steps={STEPS.map((key) => ({ key, label: LABELS[key] }))}
+        steps={STEPS.map((key) => ({ key, label: labels[key] }))}
         current={STEPS.indexOf(step)}
         label={t("onboarding.sequence")}
         progressLabel={(current, total) =>

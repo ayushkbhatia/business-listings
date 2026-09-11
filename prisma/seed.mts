@@ -611,12 +611,26 @@ async function main() {
     data: { id: uuid(11), phone: "+971552048817", fullName: "Fatima Al Zaabi", roles: ["buyer"] },
   });
 
+  /** An area this seed can drop a fictional pin inside: one that has a centre. */
+  type PlaceableArea = { emirate: string; name: string; slug: string; lat: number; lng: number };
+
   console.log("→ businesses");
   const emirates = ["dubai", "sharjah", "abu_dhabi", "ajman"] as const;
-  const areasByEmirate = new Map<string, typeof AREAS[number][]>();
+  /*
+     Only the areas with a centre.
+
+     Branch pins are jittered around the area's own coordinates, and board
+     `2d-s` added thirty-nine rows — Al Ain and the free zones — with `lat` and
+     `lng` deliberately null, because a coordinate typed from memory is a fact
+     this directory has not got. They are real places a seller can pick; they
+     are not places this seed can scatter a fictional warehouse around, and the
+     arithmetic below would produce `NaN` if it tried.
+  */
+  const areasByEmirate = new Map<string, PlaceableArea[]>();
   for (const a of AREAS) {
+    if (a.lat === null || a.lng === null) continue;
     const list = areasByEmirate.get(a.emirate) ?? [];
-    list.push(a);
+    list.push({ ...a, lat: a.lat, lng: a.lng });
     areasByEmirate.set(a.emirate, list);
   }
 
