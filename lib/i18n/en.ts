@@ -4723,7 +4723,6 @@ export const en = {
   "cancel.dates_eyebrow": "Dates",
   "cancel.dates.period": "{plan} is paid to {paidTo} and runs to {paidTo}. That period is not shortened and the unused part is not paid back. Free starts {freeFrom}.",
   "cancel.dates.invoice": "Your next invoice would have been {amount} on {when}. It will not be raised.",
-  "cancel.dates.placement": "The sponsored placement runs to {when} under its own term.",
   "cancel.confirm": "Cancel from {when}",
   "cancel.confirm_closing": "Continue to close account",
   "cancel.resume_note": "You can resume {plan} any time before {when}.",

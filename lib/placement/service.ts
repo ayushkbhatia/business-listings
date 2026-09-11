@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { SLOT_TERM_DAYS } from "./term";
 import { assertCanBuyPlacement } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
@@ -223,7 +224,15 @@ export async function takeSlot(
       categoryId,
       monthlyPriceAed: SLOT_MONTHLY_AED,
       startsOn: now,
-      endsOn: new Date(now.getTime() + 30 * 86_400_000),
+      /*
+         The constant, not the same arithmetic written again.
+
+         `SLOT_TERM_DAYS`'s own docblock says "`takeSlot` writes `endsOn` from
+         this" and named a caller it did not have — the term existed in two
+         places and only one of them could be changed. The first renewal after
+         this moves `endsOn` to the subscription's own date, per D2.
+      */
+      endsOn: new Date(now.getTime() + SLOT_TERM_DAYS * 86_400_000),
     },
   });
 

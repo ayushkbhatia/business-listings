@@ -2,6 +2,8 @@ import "server-only";
 import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { daysRemaining, lineFils } from "@/lib/billing/proration";
+import { periodPriceAed } from "@/lib/billing/period";
+import type { BillingTerm } from "@/lib/db/generated/enums";
 import { issueInvoice } from "@/lib/billing/invoice";
 import { t } from "@/lib/i18n";
 
@@ -42,7 +44,20 @@ import { t } from "@/lib/i18n";
  *   3. The next business in the queue is told the same day.
  */
 
-/** A slot is sold in thirty-day terms. `takeSlot` writes `endsOn` from this. */
+/**
+ * The term a slot is sold in before any renewal has touched it.
+ *
+ * `takeSlot` writes `endsOn` from this — and for months it wrote the same
+ * arithmetic as a literal instead, so the constant documented a caller it did
+ * not have.
+ *
+ * **It is not the period a placement is billed over.** Since D2 the slot belongs
+ * to the subscription: the first renewal after a purchase moves `endsOn` to the
+ * subscription's own renewal date and charges the placement for that whole
+ * period. On an annual account that period is a year. Anything dividing a
+ * placement's value by this constant after that point is dividing a year by
+ * thirty days — see `unusedPlacementFils`.
+ */
 export const SLOT_TERM_DAYS = 30;
 
 export type PlacementEndReason = "cancelled" | "downgraded" | "lapsed";
@@ -57,10 +72,72 @@ export interface EndedPlacement {
   /** What those days were worth, at what this slot actually cost. */
   unusedFils: number;
   monthlyPriceAed: number;
+  /**
+   * Start of the period this placement was charged for, where one exists.
+   *
+   * Carried so the credit can look for the invoice that charged for **this**
+   * period rather than the most recent one holding a placement line of any age.
+   */
+  billedFrom: Date | null;
   /** Who is now first in the queue for this scope, or null where nobody is. */
   nextInQueue: string | null;
   /** Why it ended, carried so a caller can report it rather than infer it. */
   reason: PlacementEndReason;
+}
+
+/**
+ * The period a placement was actually charged for, and how long it ran.
+ *
+ * Both halves come from the subscription, because since D2 that is what a slot
+ * is billed against: `runRenewals` prices a placement through `periodPriceAed`
+ * — the same helper the plan uses, so an annual account gets the annual
+ * treatment — and then moves `endsOn` to the subscription's next renewal date.
+ */
+export interface BilledPeriod {
+  /** What this placement cost for the whole period, in AED. */
+  periodAed: number;
+  /** How many days that charge bought. */
+  periodDays: number;
+}
+
+/**
+ * What a placement was billed for, derived from the subscription behind it.
+ *
+ * Falls back to a thirty-day term at the monthly price when there is no
+ * subscription period to read — a slot bought mid-period that no renewal has
+ * reached yet. Nothing has been charged for such a slot, so `creditUnusedPlacement`
+ * will find no source invoice and credit nothing; the fallback exists so the
+ * arithmetic is defined rather than because that number is ever paid out.
+ */
+export function billedPeriodFor(
+  monthlyPriceAed: number,
+  subscription: {
+    term: BillingTerm;
+    periodStartedAt: Date;
+    renewsAt: Date;
+    plan: { annualMonthsCharged: number | null };
+  } | null,
+): BilledPeriod {
+  if (!subscription) return { periodAed: monthlyPriceAed, periodDays: SLOT_TERM_DAYS };
+
+  const periodDays = daysRemaining(subscription.periodStartedAt, subscription.renewsAt);
+  // An annual term on a plan sold only monthly has no annual price; rather than
+  // letting `periodPriceAed` throw inside a cancellation, fall back.
+  if (periodDays <= 0) return { periodAed: monthlyPriceAed, periodDays: SLOT_TERM_DAYS };
+  if (subscription.term === "annual" && subscription.plan.annualMonthsCharged === null) {
+    return { periodAed: monthlyPriceAed, periodDays: SLOT_TERM_DAYS };
+  }
+
+  return {
+    periodAed: periodPriceAed(
+      {
+        monthlyPriceAed,
+        annualMonthsCharged: subscription.plan.annualMonthsCharged,
+      },
+      subscription.term,
+    ),
+    periodDays,
+  };
 }
 
 /**
@@ -70,15 +147,42 @@ export interface EndedPlacement {
  * testing and the part a seller will argue with. `lineFils` is the same helper
  * a plan proration uses and rounds half-up for the same reason: agreeing with
  * the document the seller keeps beats being right about half a fil.
+ *
+ * ## Why this takes a period rather than a monthly price
+ *
+ * It used to be `lineFils(monthlyPriceAed, SLOT_TERM_DAYS, days)` — the monthly
+ * price over a fixed thirty days — and `endsOn` stopped meaning "thirty days
+ * from purchase" the moment D2 landed. `runRenewals` sets `endsOn` to the
+ * subscription's next renewal and charges the placement for that whole period.
+ *
+ * On an annual account that is a year. A seller on a ten-month year paid
+ * 450 x 10 = 4,500 AED for 365 days of placement, cancelled the next day, and
+ * was credited 450 x 365/30 = 5,475 AED — **975 AED more than they were ever
+ * charged**, issued as a real credit note correcting a real tax invoice. And on
+ * a monthly term the denominator was wrong in every month that is not exactly
+ * thirty days: 31 days of a 450 AED month credited 465.
+ *
+ * The rule now is the one the charge already follows — what it cost for the
+ * period, times the share of that period they will not get.
  */
 export function unusedPlacementFils(
-  monthlyPriceAed: number,
+  period: BilledPeriod,
   endsOn: Date | null,
   now: Date,
 ): { days: number; fils: number } {
   if (!endsOn) return { days: 0, fils: 0 };
   const days = daysRemaining(now, endsOn);
-  return { days, fils: lineFils(monthlyPriceAed, SLOT_TERM_DAYS, days) };
+  /*
+     Never more than the whole period.
+
+     `endsOn` and the period are written by the same renewal, so `days` cannot
+     normally exceed `periodDays` — but they are two columns and a support fix
+     to one of them would otherwise be able to credit more than was ever taken.
+     A credit note larger than its invoice is the one outcome this function must
+     not be able to produce.
+  */
+  const billable = Math.min(days, period.periodDays);
+  return { days, fils: lineFils(period.periodAed, period.periodDays, billable) };
 }
 
 /**
@@ -106,6 +210,24 @@ export async function endPlacementsFor(
   });
   if (live.length === 0) return [];
 
+  /*
+     The subscription the slots are billed against — read once, not per slot.
+
+     This is what makes the credit agree with the charge. `runRenewals` prices a
+     placement over the subscription's period and moves `endsOn` to match, so the
+     period it was sold in is a property of the subscription and not of the slot
+     row, and nothing on `placement_slot` records it.
+  */
+  const subscription = await tx.subscription.findUnique({
+    where: { businessId },
+    select: {
+      term: true,
+      periodStartedAt: true,
+      renewsAt: true,
+      plan: { select: { annualMonthsCharged: true } },
+    },
+  });
+
   const ended: EndedPlacement[] = [];
 
   for (const slot of live) {
@@ -114,7 +236,8 @@ export async function endPlacementsFor(
       data: { endsOn: now },
     });
 
-    const unused = unusedPlacementFils(Number(slot.monthlyPriceAed), slot.endsOn, now);
+    const period = billedPeriodFor(Number(slot.monthlyPriceAed), subscription);
+    const unused = unusedPlacementFils(period, slot.endsOn, now);
 
     /*
        The next in line, told the day it frees.
@@ -152,6 +275,7 @@ export async function endPlacementsFor(
       unusedDays: unused.days,
       unusedFils: unused.fils,
       monthlyPriceAed: Number(slot.monthlyPriceAed),
+      billedFrom: subscription?.periodStartedAt ?? null,
       nextInQueue: next?.businessId ?? null,
       reason,
     });
@@ -201,6 +325,17 @@ export async function creditUnusedPlacement(
         docType: "tax_invoice",
         status: { notIn: ["draft", "void"] },
         lines: { some: { kind: "placement" } },
+        /*
+           Issued in the period that has not finished — which is what the
+           paragraph above has always claimed and what the query did not check.
+
+           Without it the most recent placement invoice qualified however old it
+           was, so a seller whose placement was billed a year ago, ran its full
+           term and was bought again mid-period could have a fresh credit note
+           raised against a document from a closed period. On an annual account
+           that invoice is a year old.
+        */
+        ...(slot.billedFrom ? { issuedAt: { gte: slot.billedFrom } } : {}),
       },
       orderBy: { issuedAt: "desc" },
       select: { id: true, vatRate: true },
