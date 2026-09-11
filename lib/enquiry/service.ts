@@ -67,7 +67,17 @@ const FANOUT_SELECT = (since: Date) =>
     responseTimeMedianMs: true,
     categories: { select: { categoryId: true } },
     plan: { select: { enquiriesPerMonth: true, rankingMultiplier: true } },
-    locations: { where: { published: true }, select: { emirate: true }, take: 1 },
+    /*
+       Every published branch, not the first row Postgres returns.
+
+       This was `take: 1` with no `orderBy`, so a supplier with a Dubai
+       showroom and a Sharjah warehouse had one of them chosen at random and
+       the other ignored — and the choice could differ between two runs of the
+       same enquiry. The same shape of defect the seeds hit in board 3f.
+
+       Branch count is capped by the plan, so there is no window to size here.
+    */
+    locations: { where: { published: true }, select: { emirate: true } },
     _count: {
       select: {
         // The month's load, which is what the cap counts.
@@ -170,19 +180,66 @@ export async function findFanoutCandidates(
     );
   }
 
+  /*
+     Where each candidate has said it works.
+
+     A second query rather than a nested select, because coverage is one row
+     per area and a supplier who serves forty Dubai areas would otherwise drag
+     forty rows into a pool of sixty candidates to answer a question with seven
+     possible values. `groupBy` asks the database for the distinct answer.
+
+     `BusinessCoverage`'s own doc comment says it is "what `1h` routes on
+     today". Until this, nothing in the fan-out read it at all — one writer,
+     two dashboard readers, and the consumer named in the schema was not one of
+     them.
+  */
+  const coverage = await prisma.businessCoverage.groupBy({
+    by: ["businessId", "emirate"],
+    where: { businessId: { in: businesses.map((business) => business.id) } },
+  });
+  const coveredBy = new Map<string, string[]>();
+  for (const row of coverage) {
+    const held = coveredBy.get(row.businessId);
+    if (held) held.push(row.emirate);
+    else coveredBy.set(row.businessId, [row.emirate]);
+  }
+
   return businesses.map((business) => ({
     businessId: business.id,
     slug: business.slug,
     displayName: business.displayName,
     categoryIds: business.categories.map((c) => c.categoryId),
     primaryCategoryId: business.primaryCategoryId,
-    emirate: business.locations[0]?.emirate ?? "",
+    // Branches and coverage together, deduped. Empty stays empty: a listing
+    // with neither is unmeasured, and `scoreCandidate` scores it as such.
+    emirates: [
+      ...new Set([
+        ...business.locations.map((location) => location.emirate as string),
+        ...(coveredBy.get(business.id) ?? []),
+      ]),
+    ],
     verificationTier: business.verificationTier,
     responseTimeMedianMs: business.responseTimeMedianMs,
-    // Filled in by the caller when it has matched the lines. Without line
-    // matching, coverage is "they list in this category and have a catalogue".
+    /*
+       Still a proxy, and still the coarsest one: all of the lines or none of
+       them, on whether any product is live.
+
+       It stays until `Category.tradeKind` exists. For a supplier who sells by
+       the item, "no live products" really is zero lines matched and scoring it
+       zero is correct. For one who sells by the job it is a question about the
+       wrong noun, and there is no way to tell the two apart here yet — which
+       is stage 2 of `docs/services-build-plan.md`, not this change.
+    */
     matchedLineCount: business._count.products > 0 ? request.lineCount : 0,
-    inStockLineCount: 0,
+    /*
+       Null, because nobody has ever counted it.
+
+       It was `0` — a claim that every supplier in the country has nothing on
+       the shelf, multiplied by 0.2 of the score on every enquiry ever sent.
+       The field's own doc has always said a caller fills it in and no caller
+       ever has, so the honest value is "not measured".
+    */
+    inStockLineCount: null,
     enquiriesPerMonth: business.plan?.enquiriesPerMonth ?? null,
     enquiriesThisMonth: business._count.recipients,
     rankingMultiplier: business.plan?.rankingMultiplier ?? 1,
