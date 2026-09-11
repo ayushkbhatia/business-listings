@@ -36,6 +36,13 @@ export function ProfileWorkspace({
   threshold: number;
   lift: { multiple: number; threshold: number } | null;
   form: {
+    /**
+     * Board `2c-s`. False for a services seller, whose prose field is the
+     * one-liner rather than the six-hundred-character description.
+     */
+    showDescription?: boolean;
+    /** Board `2c-s`. Labels `establishedYear` as "practising since". */
+    practisingLabel?: boolean;
     tradeName: string;
     displayName: string;
     description: string;

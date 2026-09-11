@@ -14,6 +14,10 @@ import { OnboardingHeader, OnboardingColumn } from "../_chrome";
 import { requireClaimant } from "../_shell";
 import { addCategory, continueToLocations, removeCategory, saveProfileField } from "./actions";
 import { ProfileWorkspace } from "./ProfileWorkspace";
+import { ServiceProfileSection } from "./ServiceProfileSection";
+import { findSectors, saveServiceFields } from "./service-actions";
+import { fieldSetFor } from "@/lib/onboarding/service-profile";
+import { sectorChipsFor } from "@/lib/onboarding/sector-index";
 import { SavedIndicator, SavedProvider } from "../_saved";
 
 /**
@@ -72,7 +76,7 @@ export default async function ProfileStepPage() {
   const state = await profileStateFor(actor.businessId);
   if (!state) redirect("/onboarding/claim");
 
-  const [addable, plans, lift] = await Promise.all([
+  const [addable, plans, lift, profile] = await Promise.all([
     /*
        Leaves only. A parent category is a heading on the taxonomy rather than a
        thing a supplier trades in, and letting one be chosen would put a listing
@@ -88,7 +92,31 @@ export default async function ProfileStepPage() {
     }),
     prisma.plan.findMany({ orderBy: { sortOrder: "asc" }, select: { id: true, name: true, categoryLimit: true, sortOrder: true } }),
     getEnquiryLift(),
+    /*
+       Board 2c-s. The field set is chosen by what the seller said on 2b-s, and
+       the chips come from the sectors picked by sellers in this seller's own
+       trades — not a global list, which is the whole point of the index.
+    */
+    prisma.business.findUniqueOrThrow({
+      where: { id: actor.businessId },
+      select: {
+        sellsKind: true,
+        headline: true,
+        sectorsServed: true,
+        servicesOffered: true,
+        languages: true,
+        primaryCategoryId: true,
+        categories: { select: { categoryId: true } },
+      },
+    }),
   ]);
+
+  const fields = fieldSetFor(profile.sellsKind);
+  const chips = fields.services
+    ? await sectorChipsFor([
+        ...new Set([profile.primaryCategoryId, ...profile.categories.map((c) => c.categoryId)]),
+      ])
+    : [];
 
   const allowance = allowanceFor(state.categoryLimit, state.planName, state.extras.length);
 
@@ -140,6 +168,14 @@ export default async function ProfileStepPage() {
             lift={lift ? { multiple: lift.multiple, threshold: lift.threshold } : null}
             form={{
               /*
+                 Board 2c-s. A services seller's prose field is the one-liner
+                 below, and their year reads "practising since". Same screen,
+                 same columns — only the field set and two labels change, which
+                 is what makes this a variant rather than a fork.
+              */
+              showDescription: fields.goods,
+              practisingLabel: fields.services && !fields.goods,
+              /*
                  Board 2c is where the split between the two names is created,
                  and this is the field that shows a seller why it exists: the
                  legal name sits locked and grey beside the one they choose,
@@ -176,6 +212,48 @@ export default async function ProfileStepPage() {
             }}
           />
         </div>
+
+        {fields.services && (
+          <div className="mt-7 flex flex-col gap-4">
+            {/*
+               Board 2c-s. One screen with a conditional field set, keyed on
+               `sellsKind` — B1. Not a second route and not a forked component:
+               the goods fields above are untouched and a `both` seller gets
+               both groups, labelled, with nothing hidden behind a toggle.
+            */}
+            {fields.goods && (
+              <p className="max-w-prose text-body-sm text-prose">{t("profile_svc.both_note")}</p>
+            )}
+
+            <ServiceProfileSection
+              initial={{
+                headline: profile.headline ?? "",
+                servicesOffered: profile.servicesOffered,
+                sectorsServed: profile.sectorsServed,
+                languages: profile.languages,
+              }}
+              chips={chips}
+              save={saveServiceFields}
+              search={findSectors}
+              grouped={fields.goods}
+            />
+
+            {/*
+               Said rather than left as an absence. A tax practice asked for a
+               minimum order value invents a number or abandons the form, and a
+               seller who notices four fields missing deserves to know they were
+               removed on purpose.
+            */}
+            <div>
+              <p className="font-mono text-eyebrow uppercase tracking-wide text-faint">
+                {t("profile_svc.not_asked_eyebrow")}
+              </p>
+              <p className="mt-1 max-w-prose text-caption text-muted">
+                {t("profile_svc.not_asked")}
+              </p>
+            </div>
+          </div>
+        )}
       </OnboardingColumn>
     </SavedProvider>
   );

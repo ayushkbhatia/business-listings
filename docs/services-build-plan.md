@@ -365,7 +365,7 @@ drawn apart, the list shows a column the editor cannot fill or omits one it can.
 | Board | State | Note |
 |---|---|---|
 | **`2b-s`** Claim result | **shipped 11 Sep** | `/onboarding/kind`, between verify and profile. See §4d |
-| **`2c-s`** Profile basics | | Sectors by search and chips. The chips already ship; the search does not, and the picker offers every leaf category unfiltered — so a service seller is offered goods subcategories today |
+| **`2c-s`** Profile basics | **shipped 11 Sep** | One screen, conditional field set. See §4e |
 | **`2d-s`** Coverage, not branches | | `BusinessCoverage` exists and onboarding never writes it. Free zone is **already** a second axis — `Area.isFreeZone`, whose own comment says so. What is missing is a delivery mode, and `scripts/check-schema-invariants.sh` forbids it being its own table |
 | **`8a-s`** Setup hub | | **Three tasks, not four** — the epic is wrong and the code's own stale prose is where it got it |
 | **`8b-s`** Credentials task | | Unblocked by D10's split: optional evidence, no register, no chasing |
@@ -446,6 +446,66 @@ measuring, rather than asking a second question. Shipped neutral.
 
 **Q3, existing sellers.** Shown the screen once rather than migrated by inference — which is what
 `sellsKind` defaulting to `unset` does, and why there is no backfill in the migration.
+
+## 4e · Handoff `2c-s` — the field swap, and what was not there to swap
+
+Shipped 11 Sep at `/onboarding/profile`. **Same route, same step, same shell** — a conditional field
+set keyed on `sellsKind`, which is B1 and the reason this is a variant rather than a fork.
+
+### Two corrections to the handoff
+
+**There was nothing to remove.** The board lists four goods-only fields to take away — brands
+carried, minimum order value, typical lead time, delivery radius. **Not one of them is on this
+screen.** `minOrderQty` and `leadTimeDays` are on `Product`, `serviceRadiusKm` is on `Location`, and
+brands do not exist anywhere. Four fields out on paper, zero in the tree. The copy explaining the
+absence still ships, because a seller benefits from being told the goods questions do not apply.
+
+**Two of the four additions were already there.** *People on the team* is `teamSize`, *practising
+since* is `establishedYear`, both collected from every seller since board 2c. They are **relabelled,
+not duplicated** — a second year column is two writable paths to one truth. The real additions are
+three: `headline`, `sectorsServed`, `servicesOffered`.
+
+`TeamSizeBand` is **not** re-banded to the board's proposal. Ours are `b1_10 … b500_plus` and 123
+live rows hold them; changing them is a migration over live data for no stated gain.
+
+### The one-liner is a new field, not a shorter description
+
+`description` is six hundred characters and 123 listings hold one; the one-liner is ninety and shows
+in every search result. Capping the existing column would truncate live data, so `headline` is its
+own column and the long description is **hidden for a services seller, never dropped**.
+
+### The sector index, and its cold start
+
+B2's index is a materialised table rebuilt by the nightly job: the most-picked sectors **within the
+seller's own categories**, so a tax practice is offered free-zone entities and a valve trader
+contracting. A sector a seller types joins the index and may become a chip for the next one.
+
+Where nobody has filled the field in it is **empty**, and the screen says so rather than rendering a
+plausible twelve — which would be the curated list the board rejects, wearing the clothes of data.
+
+### Caps, and why two of them
+
+The service cap is the board's, at five. The **sector cap is not in the board and was added**: free
+entry on an unbounded array that every search result reads is a Friday afternoon away from a card
+carrying two hundred sectors. Twenty, each under forty characters.
+
+Nothing truncates. Over a cap is a refusal naming the cap — B4 — and the row is left alone, so a
+seller who is over does not lose the five they had while being told about the sixth.
+
+### AC7 is satisfied by construction
+
+`components/domain/ServiceProfileFields` is one component, and the dashboard mirror `3b-s` mounts
+the same one. A shared field set that exists twice is two field sets that agree today.
+
+### Verified by clicking it
+
+The counter read 76 of 90; a sixth service was refused with the cap named and the input disabled; a
+chip and a never-seen sector — *P&I clubs* — both landed; the autosave wrote exactly five services
+and both sectors; `description` survived untouched. Typing 95 characters turned the counter amber
+**and the row did not change**, so the colour is a gate rather than decoration.
+
+---
+
 
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`

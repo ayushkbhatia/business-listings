@@ -4,6 +4,11 @@ import { profileStrength, strengthItems, type StrengthItem } from "@/lib/metrics
 import { VERIFIED_TIER } from "@/lib/verification";
 import { checkDisplayName, couldBeMistakenFor, type DisplayNameProblem } from "./display-name";
 import { DESCRIPTION_MAX, ESTABLISHED_MIN, TEAM_SIZES, type TeamSize } from "./profile-fields";
+import {
+  checkServiceProfile,
+  type ProfileRefusal,
+  type ServiceProfileInput,
+} from "./service-profile";
 
 /**
  * Board 2c — the first screen where a seller writes rather than proves.
@@ -378,4 +383,37 @@ async function saved(
     select: { updatedAt: true },
   });
   return { ok: true, savedAt: row.updatedAt };
+}
+
+/**
+ * Board `2c-s` — save the services field set.
+ *
+ * A whole-set save rather than the per-field patch above, for two reasons. The
+ * fields are arrays and `patchProfileField` takes a string; and the dashboard
+ * mirror at `3b-s` saves a whole form, so one shape here keeps AC7's "a change
+ * to one is a change to both" true of the write path as well as the render.
+ *
+ * **Nothing is truncated.** Over the cap is a refusal naming the cap — B4 — and
+ * that holds for the sectors too. Silently dropping a sixth service teaches a
+ * seller that the form is lying to them, and they find out at `8c-s` when the
+ * scope sheet is missing.
+ */
+export async function saveServiceProfile(
+  businessId: string,
+  input: ServiceProfileInput,
+): Promise<{ ok: true; savedAt: Date } | { ok: false; refusals: ProfileRefusal[] }> {
+  const checked = checkServiceProfile(input);
+  if (!checked.ok) return { ok: false, refusals: checked.refusals };
+
+  const saved = await prisma.business.update({
+    where: { id: businessId },
+    data: {
+      headline: checked.value.headline,
+      sectorsServed: checked.value.sectorsServed,
+      servicesOffered: checked.value.servicesOffered,
+    },
+    select: { updatedAt: true },
+  });
+
+  return { ok: true, savedAt: saved.updatedAt };
 }

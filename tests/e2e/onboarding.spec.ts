@@ -72,6 +72,27 @@ test.describe("board 2b — prove ownership", () => {
     await expect(page).toHaveURL(/\/onboarding\/profile/);
   });
 
+  test("leaves a goods seller's profile step exactly as it was", async ({ page }) => {
+    /*
+       Board 2c-s is a conditional field set on the existing screen — B1 — so
+       the test that matters most is the one proving it changed nothing for the
+       sellers who were already here. All 123 live businesses are `goods` or
+       `unset`; if the services set leaked onto them, every one of them would
+       find their six-hundred-character description replaced by a field they
+       have never seen.
+    */
+    await page.goto("/onboarding/profile");
+
+    // The goods prose field, still there and still itself.
+    await expect(page.getByLabel("What you do")).toBeVisible();
+    await expect(page.getByText("Established", { exact: true })).toBeVisible();
+
+    // And none of the services set.
+    await expect(page.getByLabel("One line on what you do")).toHaveCount(0);
+    await expect(page.getByLabel("Services you offer")).toHaveCount(0);
+    await expect(page.getByLabel("Sectors you have worked in")).toHaveCount(0);
+  });
+
   test("names the licensed entity, with its legal suffix", async ({ page }) => {
     /*
      * The documented exception to the display-name rule, and the only element on

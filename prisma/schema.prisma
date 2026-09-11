@@ -218,6 +218,38 @@ enum Emirate {
   @@map("emirate")
 }
 
+/// The sectors sellers in a category actually picked — board `2c-s` B2.
+///
+/// A materialised view, recomputed nightly, and never a source of truth. The
+/// chips on the profile step are the most-picked sectors *within the seller's
+/// own categories*, so a tax practice is offered free-zone entities and family
+/// offices while a valve trader is offered contracting and marine — which no
+/// global top-twelve could do.
+///
+/// A sector a seller types joins this index and may become a chip for the next
+/// one. That is the whole mechanism: the list writes itself from what sellers
+/// say, rather than from what we guessed they would say.
+///
+/// Empty is a real and expected state on a cold directory, and the screen says
+/// so rather than rendering an empty chip row.
+model SectorSuggestion {
+  categoryId String @map("category_id")
+  /// Case-folded, for matching and for the unique key.
+  slug       String
+  /// As most sellers typed it — the form the chip renders.
+  label      String
+  /// How many sellers in this category picked it.
+  pickedBy   Int    @map("picked_by")
+
+  computedAt DateTime @default(now()) @map("computed_at")
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([categoryId, slug])
+  @@index([categoryId, pickedBy(sort: Desc)])
+  @@map("sector_suggestion")
+}
+
 /// What a seller says they sell, in their own words — board `2b-s`, decision D8.
 ///
 /// **Not the same question as `TradeKind`, and not a duplicate of it.** A
@@ -397,6 +429,7 @@ model Category {
   productAlerts     ProductAlert[]
   curatedLists      CuratedList[]
   sectorTemplates   StorefrontTemplate[]   @relation("SectorTemplates")
+  sectorSuggestions SectorSuggestion[]
 
   @@index([parentId])
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
@@ -686,6 +719,38 @@ model Business {
   establishedYear  Int?          @map("established_year")
   teamSize         TeamSizeBand? @map("team_size")
   languages        String[]      @default([])
+  /// One line on what this business does — board `2c-s`.
+  ///
+  /// Ninety characters, and it shows in every search result. Distinct from
+  /// `description`, which is six hundred and is the storefront's longer prose:
+  /// capping that one at ninety would truncate what 123 live listings already
+  /// hold, and no-conversion is the rule on both halves of this fork.
+  ///
+  /// `ListingCard` prefers this where it exists and falls back to `description`,
+  /// so a seller who writes one improves their own card and nobody else's
+  /// changes.
+  headline         String?
+  /// Industries this business has worked in — board `2c-s`, seller-declared.
+  ///
+  /// **Free text with a suggestion index, deliberately not a controlled
+  /// vocabulary.** Decision D3 settled that comparison stays at business level,
+  /// and a dictionary here would recreate the *Other* bucket it exists to
+  /// avoid: a marine surveyor works with P&I clubs, a tax practice with family
+  /// offices, and no list we write covers the tail. `SectorSuggestion` is a
+  /// materialised view of what sellers actually picked, not a source of truth.
+  ///
+  /// Normalised on write — trimmed, whitespace collapsed — and matched
+  /// case-insensitively, so *Free Zone* and *free zone* are one sector. Stored
+  /// as typed, because it is the seller's own words for their industry.
+  sectorsServed    String[]      @default([]) @map("sectors_served")
+  /// Up to five services this business offers — board `2c-s`.
+  ///
+  /// Names only. They decide which scope sheet the seller is offered at `8c-s`,
+  /// and they become the seed for real service rows when those exist. The cap
+  /// is enforced in the service layer and named in the refusal rather than
+  /// silently truncating: a practice claiming twelve services has not thought
+  /// about any of them.
+  servicesOffered  String[]      @default([]) @map("services_offered")
   /// What this seller says they sell — board `2b-s`. Their declaration, not the
   /// resolved kind of any one listing, which comes from `Category.tradeKind`.
   ///
