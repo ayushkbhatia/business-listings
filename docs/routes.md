@@ -24,6 +24,8 @@ and it is the one that argues back.
 /b/:slug/branches                       Branches & hours                      [1f]
 /b/:slug/reviews                        Reviews & ratings                     [1m]  built h4s6
 /b/:slug/p/:product                     Product + spec table                  [1g]
+/b/:slug/services                       Services index — the link surface   [1g-s] built h3gs
+/b/:slug/s/:service                     Service detail — the scope table    [1g-s] built h3gs
 /b/:slug (unclaimed variant)            Unclaimed listing                    [10g]
 /rfq/new                                RFQ fan-out                           [1h]  built h2s3
 /enquiry/:id                            Enquiry sent + tracking               [1i]  built h2s3
@@ -84,6 +86,8 @@ and it is the one that argues back.
 /dashboard/products/:id                 Product editor                        [3g]  built h3 wave 2
 /dashboard/products/import              CSV import mapper                    [11d]  built h3 wave 2
 /dashboard/products/export              Catalogue as a spreadsheet           [11d]  built h3 wave 2
+/dashboard/services                     Services list                       [3f-s] built h3gs
+/dashboard/services/:id                 Service editor — the scope sheet    [3g-s] built h3gs
 /dashboard/templates                    Spec templates                        [3h]  built h3 wave 2
 /dashboard/templates/:slug              One template, fields and settings      [3h]  built h3 wave 2
 /dashboard/templates/:slug/history      Revision history and rollback         [3h]  built h3 wave 2
@@ -295,6 +299,18 @@ allowance is the cap minus the primary, the strength meter counts the total. An
 extra whose category is not covered by the licence's stated activity is taken,
 flagged, and left out of the enquiry fan-out **for that category only** until a
 reviewer clears it.
+
+`/b/:slug/s/:service` is the scope table where the spec table is. Its row order
+comes from `ScopeSheetFamily`, so every firm in a family renders the same rows in
+the same order — that is the comparison, and sorting per service would destroy
+it. `/b/:slug/services` is the **link surface**, not board `1e-s`: `1e-s` is the
+full public catalogue and it replaces the index behind that tab, which stays.
+
+`indicativeFee` reaches neither. It is excluded from `publicServiceFor`'s
+`select`, so it cannot appear in the page, the payload, the meta description or
+the structured data — board `3g-s` B5 asks for the assertion to live in the
+response type rather than the template, and a field that is never fetched is the
+strongest version of that.
 
 `/onboarding/locations` is **one route with two bodies**, chosen by
 `Business.sellsKind` — board `2d-s` B1. A seller who sells goods gets board 2d

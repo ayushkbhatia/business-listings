@@ -107,6 +107,7 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
     labelKey: "nav.group.catalogue",
     items: [
       { key: "products", labelKey: "nav.products", href: "/dashboard/products", capability: "product.edit" },
+      { key: "services", labelKey: "nav.services", href: "/dashboard/services", capability: "product.edit" },
       { key: "media", labelKey: "nav.media", href: "/dashboard/media", capability: "listing.edit" },
     ],
   },
@@ -336,3 +337,35 @@ export const ADMIN_NAV: readonly NavGroup[] = [
   },
 ];
 
+/**
+ * The seller rail, for one seller — board `3f-s` B1.
+ *
+ * A firm that sells work has no products, and a rail carrying *Products* over a
+ * screen with nothing in it is a rail telling them they have forgotten
+ * something. A firm that sells goods has no services and the mirror applies.
+ * A firm that sells both has both, because it does.
+ *
+ * `unset` keeps what every seller saw before the fork: 123 published businesses
+ * hold it, and none of them has answered the question yet.
+ *
+ * The entry point is what moves, not the route. `3f-s` B1 says the same thing
+ * about the spreadsheet importer — "suppress the entry point, do not
+ * special-case the importer" — and the reason is the same: a route that refuses
+ * by kind is a second rule to keep in step with this one, and a seller who
+ * changes kind would find a bookmark 404ing rather than simply un-listed.
+ */
+export function dashboardNavFor(sellsKind: "unset" | "goods" | "services" | "both"): readonly NavGroup[] {
+  if (sellsKind === "unset" || sellsKind === "both") {
+    return sellsKind === "both"
+      ? DASHBOARD_NAV
+      : withoutItems(DASHBOARD_NAV, ["services"]);
+  }
+  return withoutItems(DASHBOARD_NAV, sellsKind === "services" ? ["products"] : ["services"]);
+}
+
+function withoutItems(groups: readonly NavGroup[], drop: readonly string[]): readonly NavGroup[] {
+  return groups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !drop.includes(item.key)),
+  }));
+}

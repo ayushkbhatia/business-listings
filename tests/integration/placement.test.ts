@@ -47,6 +47,7 @@ async function makePlan(sponsoredEligible: boolean): Promise<string> {
       monthlyPriceAed: 299,
       enquiriesPerMonth: null,
       productLimit: null,
+      serviceLimit: null,
       locationLimit: null,
       photoLimit: null,
       teamSeats: 5,

@@ -27,6 +27,7 @@ export interface PlanRowView {
   monthlyPriceAed: number;
   enquiriesPerMonth: number | null;
   productLimit: number | null;
+  serviceLimit: number | null;
   locationLimit: number | null;
   photoLimit: number | null;
   storageMb: number | null;
@@ -44,6 +45,16 @@ export interface PlanRowView {
 const CAPS = [
   { field: "enquiriesPerMonth", labelKey: "admin.plans.col.enquiries" },
   { field: "productLimit", labelKey: "admin.plans.col.products" },
+  /*
+     The sixth, added with board `2e-s`.
+
+     `serviceLimit` is what `productLimit` is for a firm that sells work, and
+     the numbers it shipped with — three, fifteen, unlimited — are proposed
+     rather than ratified: D1 settled seven plan numbers and services were not
+     their own model yet. It needs an editor from the first day it exists, or
+     the eighth number is the one only the database can change.
+  */
+  { field: "serviceLimit", labelKey: "admin.plans.col.services" },
   { field: "locationLimit", labelKey: "admin.plans.col.locations" },
   { field: "photoLimit", labelKey: "admin.plans.col.photos" },
   { field: "storageMb", labelKey: "admin.plans.col.storage" },
@@ -107,6 +118,7 @@ export function PlanEditor({
     setValues({
       enquiriesPerMonth: plan.enquiriesPerMonth === null ? "" : String(plan.enquiriesPerMonth),
       productLimit: plan.productLimit === null ? "" : String(plan.productLimit),
+      serviceLimit: plan.serviceLimit === null ? "" : String(plan.serviceLimit),
       locationLimit: plan.locationLimit === null ? "" : String(plan.locationLimit),
       photoLimit: plan.photoLimit === null ? "" : String(plan.photoLimit),
       /*

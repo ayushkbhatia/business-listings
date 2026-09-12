@@ -37,6 +37,22 @@ export function featuresOf(plan: PlanCaps): PlanFeature[] {
       included: true,
     },
     {
+      /*
+         Board `2e-s`. The counterpart to products, and it is on every card for
+         the same reason products is on a services seller's: this page compares
+         what a plan contains, not what one visitor will use. A cap a seller
+         can hit without ever having been told about it is the defect
+         `categoryLimit` and `storageMb` both had.
+      */
+      label:
+        plan.serviceLimit === null
+          ? t("plan.services_unlimited")
+          : plan.serviceLimit === 1
+            ? t("plan.service_one")
+            : t("plan.services", { n: formatCount(plan.serviceLimit) }),
+      included: true,
+    },
+    {
       label:
         plan.locationLimit === 1
           ? t("plan.location_one")

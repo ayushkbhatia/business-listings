@@ -951,6 +951,12 @@ async function main() {
      Boards 7d and 7e. PRNG-free and after everything that creates a seat, so it
      can add channels to the ones already there.
   */
+  /*
+     The service track's first fixture. PRNG-free, and it creates its own
+     business rather than repurposing a seeded one — changing a seller's kind
+     would move it out from under every board already asserting on its products.
+  */
+  await seedServicesFirm(prisma);
   await seedSeatsAndChannels(prisma);
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
@@ -3918,6 +3924,7 @@ async function seedCommercials(db: Db, businesses: Biz[]) {
             name: plan.name,
             monthlyPriceAed: Number(plan.monthlyPriceAed),
             enquiriesPerMonth: plan.enquiriesPerMonth,
+            serviceLimit: plan.serviceLimit,
             categoryLimit: plan.categoryLimit,
             productLimit: plan.productLimit,
             locationLimit: plan.locationLimit,
@@ -7241,6 +7248,186 @@ async function seedBranchNetwork(db: Db) {
  * marker would have gone on claiming a clash that the real dates do not
  * produce.
  */
+/**
+ * Boards `3g-s`, `3f-s`, `1g-s` — a firm that sells work, with a scope sheet.
+ *
+ * The service track has had no fixture since it started: every seeded business
+ * is `sells_kind = unset`, which means goods, so every services screen has only
+ * ever rendered its empty state in CI and in the gallery. This is that fixture,
+ * and it is a **new business** rather than a repurposed one — changing a seeded
+ * seller's kind would move it out from under every board already asserting on
+ * its products.
+ *
+ * Three services, and their completeness is the point:
+ *
+ *  - **Statutory audit**, 6 of 6 and live. The comparison instrument working.
+ *  - **VAT and corporate tax filing**, 4 of 6 and **live** — the board's own
+ *    example, and the rule it exists to prove: an incomplete sheet publishes.
+ *  - **Transfer pricing documentation**, a draft at 2 of 6.
+ *
+ * PRNG-free, and last among the fixture builders for the reason the ones above
+ * it give: it consumes no `rnd()` draw, so it renames nothing and no test that
+ * pins a slug moves because of it.
+ */
+async function seedServicesFirm(db: Db) {
+  console.log("→ a firm that sells work, for boards 3g-s / 3f-s / 1g-s");
+
+  const category = await db.category.findFirst({
+    where: { slug: "valves-and-fittings" },
+    select: { id: true },
+  });
+  if (!category) return;
+
+  const audit = await db.scopeSheetFamily.findUnique({
+    where: { id: "audit-and-assurance" },
+    select: { id: true },
+  });
+
+  const slug = "meridian-chartered-accountants";
+  const existing = await db.business.findUnique({ where: { slug }, select: { id: true } });
+  if (existing) await db.business.delete({ where: { id: existing.id } });
+
+  const firm = await db.business.create({
+    data: {
+      tradeName: "Meridian Chartered Accountants LLC",
+      displayName: "Meridian Chartered Accountants",
+      slug,
+      licenceNumber: "DED-884112",
+      licenceAuthority: "DED",
+      licenceExpiry: days(300),
+      primaryCategoryId: category.id,
+      claimStatus: "claimed",
+      publishedAt: days(-90),
+      verificationTier: 2,
+      verifiedAt: days(-88),
+      planId: "basic",
+      /*
+         The whole point of the fixture. `2b-s` is where a seller says this, and
+         until now nothing in the seed ever had.
+      */
+      sellsKind: "services",
+      deliveryModes: ["remote", "at_our_office"],
+      headline: "Statutory audit, VAT and corporate tax for contractors and trading companies",
+      sectorsServed: ["Contracting", "Trading", "Free zone entities"],
+      servicesOffered: ["Statutory audit", "VAT filing", "Corporate tax", "Transfer pricing"],
+      licenceActivity: "Auditing of accounts · Tax consultancy",
+      languages: ["English", "Arabic"],
+      establishedYear: 2009,
+      teamSize: "b11_50",
+      responseTimeMedianMs: 3 * 60 * 60 * 1000,
+    },
+    select: { id: true },
+  });
+
+  /*
+     Board `2d-s`'s coverage, so the service page's "Where they work" panel has
+     something true to render. A practice that files nationwide and audits from
+     Dubai — which is also the case `3c-s` will narrow per service.
+  */
+  await db.serviceCoverage.createMany({
+    data: [
+      { businessId: firm.id, emirate: "dubai", areaId: null },
+      { businessId: firm.id, emirate: "sharjah", areaId: null },
+      { businessId: firm.id, emirate: "abu_dhabi", areaId: null },
+    ],
+    skipDuplicates: true,
+  });
+
+  /*
+     A family on the trade, so the fixture exercises the half of B2 that a
+     default family cannot: per-family fee bases and per-family row labels. It
+     is the only category in the seed with one, which is honest — production has
+     none, and `12h` is the screen that assigns them.
+  */
+  if (audit) {
+    await db.category.update({
+      where: { id: category.id },
+      data: { scopeFamilyId: audit.id },
+    });
+  }
+
+  const services = [
+    {
+      name: "Statutory audit",
+      slug: "statutory-audit",
+      position: 0,
+      status: "live" as const,
+      publishedAt: days(-85),
+      engagementType: "ongoing_contract" as const,
+      feeBasis: "fixed_fee",
+      turnaround: "3–4 weeks from complete records",
+      deliveredWhere: "remote" as const,
+      deliverable: "Signed audit report, opinion, management letter",
+      scope:
+        "Planning meeting and risk assessment, substantive testing and analytical review, one round of adjusting entries, the signed report and audit opinion, a management letter setting out control weaknesses, and filing copies for the authority.",
+      excluded:
+        "Bookkeeping or ledger clean-up before the audit, VAT or corporate tax filing, valuations and actuarial work, and group consolidation of foreign subsidiaries.",
+      indicativeFee: "From AED 14,000, on turnover",
+      values: [
+        { fieldKey: "regulator", value: "IFRS, or IFRS for SMEs where eligible" },
+        {
+          fieldKey: "requires_from_client",
+          value: "Trial balance, bank confirmations, fixed asset register, contract schedule",
+        },
+        { fieldKey: "sectors", value: "Contracting, trading, free zone entities" },
+        { fieldKey: "languages", value: "English, Arabic" },
+      ],
+    },
+    {
+      /*
+         Live at 4 of 6, and deliberately. Board `3f-s` makes this its worked
+         example: six required fields make a sheet complete, not publishable,
+         and the screen's job is to make the cost legible rather than to
+         withhold the button. A fixture where every sheet is finished would
+         never render the line that says so.
+      */
+      name: "VAT and corporate tax filing",
+      slug: "vat-and-corporate-tax-filing",
+      position: 1,
+      status: "live" as const,
+      publishedAt: days(-60),
+      engagementType: "ongoing_contract" as const,
+      feeBasis: "retainer",
+      turnaround: "Filed within 10 working days of records",
+      deliveredWhere: null,
+      deliverable: null,
+      scope:
+        "Quarterly VAT returns and the annual corporate tax return, prepared from your ledger and filed with the FTA. Includes one round of queries and the correspondence that follows a filing.",
+      excluded: null,
+      indicativeFee: null,
+      values: [{ fieldKey: "languages", value: "English, Arabic" }],
+    },
+    {
+      name: "Transfer pricing documentation",
+      slug: "transfer-pricing-documentation",
+      position: 2,
+      status: "draft" as const,
+      publishedAt: null,
+      engagementType: "one_off_job" as const,
+      feeBasis: null,
+      turnaround: null,
+      deliveredWhere: null,
+      deliverable: null,
+      scope: null,
+      excluded: null,
+      indicativeFee: null,
+      values: [],
+    },
+  ];
+
+  for (const service of services) {
+    const { values, ...row } = service;
+    await db.service.create({
+      data: {
+        businessId: firm.id,
+        categoryId: category.id,
+        ...row,
+        ...(values.length > 0 ? { values: { create: values } } : {}),
+      },
+    });
+  }
+}
+
 async function seedPublicHolidays(db: Db) {
   console.log("→ the official UAE calendar, for board 3d");
 

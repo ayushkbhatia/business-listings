@@ -1,6 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
-import { DASHBOARD_NAV } from "@/components/structure/nav-config";
+import { dashboardNavFor } from "@/components/structure/nav-config";
 import { t } from "@/lib/i18n";
 
 /**
@@ -237,8 +237,19 @@ test.describe("the seller shell", () => {
      * items left, and this asserting nothing on that side is itself the honest
      * answer.
      */
-    const items = DASHBOARD_NAV.flatMap((group) => group.items);
+    /*
+     * `dashboardNavFor`, not `DASHBOARD_NAV` — board `3f-s` B1.
+     *
+     * The rail is filtered by what the seller sells: a firm that sells work has
+     * no products, and one that sells goods has no services. This seat is a
+     * goods seller, so reading the static config would assert a *Services* row
+     * that is correctly absent. The filtering is the thing under test on the
+     * services seat's own spec; here the point is still that every row the rail
+     * offers is either a link or named-and-deferred.
+     */
+    const items = dashboardNavFor("unset").flatMap((group) => group.items);
     expect(items.length).toBeGreaterThan(5);
+    expect(items.some((item) => item.key === "services")).toBe(false);
 
     // Scoped to the list items. A group heading carries the same word as one of
     // its items — "Overview" is both — and matching on text alone finds two.

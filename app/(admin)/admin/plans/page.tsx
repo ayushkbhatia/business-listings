@@ -31,6 +31,7 @@ export default async function PlansPage() {
     monthlyPriceAed: plan.monthlyPriceAed,
     enquiriesPerMonth: plan.enquiriesPerMonth,
     productLimit: plan.productLimit,
+    serviceLimit: plan.serviceLimit,
     locationLimit: plan.locationLimit,
     photoLimit: plan.photoLimit,
     storageMb: plan.storageMb,

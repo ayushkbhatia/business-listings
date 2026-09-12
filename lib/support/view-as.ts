@@ -134,7 +134,7 @@ export async function currentSession(staffId: string, now = new Date()) {
       ticketRef: true,
       startedAt: true,
       expiresAt: true,
-      business: { select: { displayName: true, slug: true } },
+      business: { select: { displayName: true, slug: true, sellsKind: true } },
     },
   });
   if (!session) return null;

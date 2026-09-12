@@ -11,7 +11,7 @@ import {
 
 /** The three real plans, matching prisma/seed-data.mts. */
 const FREE: PlanCaps = {
-  id: "free", name: "Free", monthlyPriceAed: 0, enquiriesPerMonth: 3, productLimit: 10,
+  id: "free", name: "Free", monthlyPriceAed: 0, enquiriesPerMonth: 3, productLimit: 10, serviceLimit: 3,
   locationLimit: 1, photoLimit: 5,
   publicPhotoLimit: null,
   categoryLimit: null, storageMb: 1024, teamSeats: 1, rankingMultiplier: 1, customDomain: false,
@@ -19,7 +19,7 @@ const FREE: PlanCaps = {
   sortOrder: 0,
 };
 const BASIC: PlanCaps = {
-  id: "basic", name: "Basic", monthlyPriceAed: 349, enquiriesPerMonth: 40, productLimit: 150,
+  id: "basic", name: "Basic", monthlyPriceAed: 349, enquiriesPerMonth: 40, productLimit: 150, serviceLimit: 15,
   locationLimit: 3, photoLimit: 40,
   publicPhotoLimit: null,
   categoryLimit: null, storageMb: 1024, teamSeats: 3, rankingMultiplier: 1.15, customDomain: false,
@@ -27,7 +27,7 @@ const BASIC: PlanCaps = {
   sortOrder: 1,
 };
 const PRO: PlanCaps = {
-  id: "pro", name: "Pro", monthlyPriceAed: 899, enquiriesPerMonth: null, productLimit: null,
+  id: "pro", name: "Pro", monthlyPriceAed: 899, enquiriesPerMonth: null, productLimit: null, serviceLimit: null,
   locationLimit: 10, photoLimit: 200,
   publicPhotoLimit: null,
   categoryLimit: null, storageMb: 1024, teamSeats: 10, rankingMultiplier: 1.35, customDomain: true,

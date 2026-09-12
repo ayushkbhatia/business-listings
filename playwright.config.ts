@@ -41,6 +41,17 @@ const SELLER_STATE = "tests/e2e/.auth/seller.json";
 /** Board 11a only exists for a plan with a cap, so it needs its own session. */
 const FREE_SELLER_STATE = "tests/e2e/.auth/seller-free.json";
 /*
+ * The service track's seat.
+ *
+ * Every other seller fixture sells goods — `sells_kind` is `unset` on all of
+ * them, which means goods — so until this existed the services screens could
+ * only ever be exercised in their empty state. It is a seat of its own rather
+ * than a kind flipped on an existing one, for the reason `seedServicesFirm`
+ * gives: changing a seeded seller's kind moves it out from under every board
+ * already asserting on its products.
+ */
+const SERVICES_SELLER_STATE = "tests/e2e/.auth/seller-services.json";
+/*
  * Two staff sessions. The moderator one exists to prove a negative — criterion
  * 9's claim that the console does not offer them the tier, credit or suspend
  * controls — and a negative asserted from an ops lead's session proves nothing.
@@ -69,12 +80,12 @@ export default defineConfig({
       // The dashboard needs a signed-in seller; the seller projects own it.
       // `pricing-seller` is a public page read with a session, which is the
       // same requirement for a different reason — board 1l criterion 10.
-      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller)[\w-]*\.spec\.ts/,
+      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller|services)[\w-]*\.spec\.ts/,
     },
     {
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller)[\w-]*\.spec\.ts/,
+      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller|services)[\w-]*\.spec\.ts/,
     },
     ...(canSignIn
       ? [
@@ -92,6 +103,12 @@ export default defineConfig({
             testMatch: /(overview-free|onboarding-free)\.spec\.ts/,
             dependencies: ["setup"],
             use: { ...devices["Desktop Chrome"], storageState: FREE_SELLER_STATE },
+          },
+          {
+            name: "seller-services",
+            testMatch: /services[\w-]*\.spec\.ts/,
+            dependencies: ["setup"],
+            use: { ...devices["Desktop Chrome"], storageState: SERVICES_SELLER_STATE },
           },
           {
             name: "staff",

@@ -340,10 +340,10 @@ The generalised rule, which is what the instruction is a case of:
 
 | Step | What | Note |
 |---|---|---|
-| **3.1** | The `Service` model | A migration, so it **stops for a person**. Additive, applies before the merge |
-| **3.2** | `2e-s` — `Plan.serviceLimit` | **Same migration, and it is not optional.** See below |
-| **3.3** | **`3g-s` / S3** — the service editor | The first screen of the lane. Its field set is the contract every later board renders |
-| **3.4** | **`3f-s` / S4** — the services list | The editor's entry point. An editor reachable from nowhere is a route, not a screen |
+| **3.1** | The `Service` model | **shipped 12 Sep**, with `ScopeSheetFamily`, `ScopeFieldValue` and `ServiceRevision` |
+| **3.2** | `2e-s` — `Plan.serviceLimit` | **shipped 12 Sep** in the same migration, at 3 / 15 / unlimited — proposed, not ratified. See §4g |
+| **3.3** | **`3g-s` / S3** — the service editor | **shipped 12 Sep.** Its field set is the contract every later board renders |
+| **3.4** | **`3f-s` / S4** — the services list | **shipped 12 Sep**, with `1g-s` alongside it. See §4g |
 
 **Why `2e-s` stops being an orphan here.** It appears exactly once in the epic
 (`docs/epic-2026-09-11.md:90`, D1's *Blocks* column) and in no phase — a 29th `-s` id in a document
@@ -375,7 +375,8 @@ drawn apart, the list shows a column the editor cannot fill or omits one it can.
 
 **`profileStrength` is fixed here, not in stage 1.** `catalogue: 20` + `filterableSpecs: 15` of 100
 are unreachable without products, against a published `STRONG_ENOUGH` of 80 — so a service supplier
-can never be strong enough. It needs services counting toward `catalogue`, which needs stage 3.
+can never be strong enough. It needs services counting toward `catalogue`, which needed stage 3 —
+and stage 3 landed on 12 Sep, so this is now owed to `8a-s`, the hub that renders the meter.
 
 ---
 
@@ -607,6 +608,125 @@ Axe at 1280 and at 375 found nothing but the project's pinned contrast gap.
 
 ---
 
+## 4g · Handoff `3g-s` + `3f-s` + `1g-s` — the scope sheet, end to end
+
+Shipped 12 Sep 2026. Three screens, one record: `/dashboard/services/:id` writes the scope sheet,
+`/dashboard/services` counts it, `/b/:slug/s/:service` renders it as a comparison table. Taken out
+of wave order on the re-sequence, and the handoff agreed — these three define the record the rest of
+the track reads.
+
+### D11 was already closed, which unblocked §3
+
+The README asks that `3g-s`'s `Capacity` field and `1g-s`'s *Accepting new clients* chip wait for
+D11. **D11 closed as no on 11 Sep** (§3 above) and names `1g-s` among the five boards it cuts it
+from. So neither shipped, and that is the board's own stated position rather than a divergence: a
+listed business is taking work, and a stale flag is worse than no flag because a buyer who acts on
+one and gets no reply blames the directory rather than the firm.
+
+Twelve fields therefore become **eleven**, and the optional set five rather than six.
+
+### One place this build diverges from a build note, and why
+
+**`1g-s` B2 and AC2 ask for unfilled rows to be omitted from the DOM. They are rendered, grey,
+reading "Not provided".**
+
+`CLAUDE.md` § Interface honesty says the opposite in as many words, about the table this one
+replaces: *"Unfilled spec rows render grey reading 'Not provided', never hidden. The buyer sees what
+is unanswered and the request becomes high-intent; the seller sees the same grey rows in their
+editor."* It is a checked-in project rule with a product reason, and the board's argument against it
+is aesthetic — a page of empty rows "makes a competent small firm look like an abandoned form".
+
+The board's own render settles it on the board's own terms. It prints *"9 of 12 rows on the audit
+sheet are filled"* **under a table with the empty ones removed** — so the buyer is already told
+three rows are unanswered and simply cannot see which. That is the abandoned-form signal, with less
+information attached and no way to ask about it.
+
+The line under the table now reads *"6 of 9 rows filled. The rest are unanswered rather than hidden
+— ask about them in your enquiry"*, which is the `CLAUDE.md` rationale made into the call to action.
+Reversing it is one branch in `scopeRows`, and the rule is pinned by a test either way.
+
+### Six other corrections
+
+**1 · Five filterable rows, not six.** The spec's prose says five; the render marks six. B5's own
+rule settles it — *"a row only becomes filterable when its values are enumerable across the family"*
+— and a turnaround is never that: "24/7 callout, 4-hour attendance" and "3–4 weeks from complete
+records" are both right and neither is a facet value.
+
+**2 · The `FILTERABLE` marker does not render to buyers.** `1c-s` and `6a-s` do not exist, so a chip
+claiming a filter would claim one the product has not got. The flag lives on the family, as B5 asks,
+and its reader today is the **editor**, which tells the seller which answers buyers will filter on —
+a true reader, and a more useful one.
+
+**3 · `ScopeFieldValue` carries four keys, not five.** `indicativeFee` is a column rather than a row,
+which the board's own model sketch already has: the safest place for a field that must not leak is
+outside the structure everything maps over.
+
+**4 · The public page has no prose paragraph above the chips.** The render carries a description
+distinct from the scope; the model this same handoff specifies has one prose field for an
+engagement. Rendering it twice on one screen is not a description, it is a duplicate.
+
+**5 · A draft service redirects to the storefront rather than 404ing.** AC's "404 at this route"
+against the product page one route over, which redirects for a stated reason: the buyer came for
+this supplier and the supplier still exists. Two behaviours for one situation is worse than either.
+
+**6 · The comparison strip is not built.** B9 scopes it to *family and area*, and no category has a
+family yet — every one resolves to the seeded default — so the query would return the whole
+directory. Widening to the whole country is the one thing B9 refuses. What ships in its place is the
+firm's other services; `1c-s` brings the strip.
+
+### What had to be built underneath
+
+**`Plan.serviceLimit` — the eighth number, and §4's Stage 3.2 said it was not optional.** The moment
+services became their own model, a Free seller could create them without end. It ships at **3 / 15 /
+unlimited**, and those are **proposed rather than ratified**: D1 settled seven numbers and services
+were not a model yet. They are rows, so changing them is an UPDATE; and `/admin/plans` grew a sixth
+cap editor in the same change, because the eighth number must not be the only one a person cannot
+change without writing the row by hand.
+
+**`ScopeSheetFamily`, and it is not `CoverageArea` all over again.** The family is genuinely new: a
+per-family fee-basis list, per-family row labels and a row order, reached from
+`Category.scopeFamilyId` by the same ancestor walk `tradeKind` uses and falling back to a seeded
+`general` family. That fallback is **not** the global enum B2 refuses — it is what an unclassified
+trade resolves to, exactly as an unset `tradeKind` resolves to `goods`, and today that is all 440 of
+them.
+
+**A services fixture, at last.** Every seeded business was `sells_kind = unset`, so every screen on
+this track had only ever rendered its empty state in CI. `seedServicesFirm` adds Meridian Chartered
+Accountants — a new business, not a repurposed one — with three services, one of them deliberately
+**live at 4 of 6** because that is the rule `3f-s` exists to demonstrate. It gets its own e2e seat
+and its own Playwright project, which every remaining `-s` board now inherits.
+
+**`/b/:slug/services`, which is not `1e-s`.** A detail page linked from nowhere is a route rather
+than a screen. The storefront tab and the index behind it are the link surface; `1e-s` replaces the
+index and keeps the tab.
+
+### Still owed
+
+- **`serviceId` on `ServiceCoverage`.** `1g-s` B8 is satisfied by `effectiveCoverage`, which resolves
+  inheritance at read time and is tested — but no service can narrow its coverage until `3c-s`
+  writes the rows, and the column arrives with its writer.
+- **The credentials block on `1g-s`.** *Who signs it* needs the credentials chain (`8b-s` → `4c-s`).
+  Omitted entirely rather than shown empty, which is the board's own §States rule.
+- **`12c`'s ranking term.** This is the data it will read: scope-sheet completeness replacing a
+  spec-completeness factor a services business can never earn. The amendment belongs to `12c`.
+- **`3h-s` scope templates.** B6 is already true by omission — nothing clones a scope sheet yet, and
+  when something does it must leave `scope` and `excluded` empty.
+
+### Verified by clicking it
+
+All three screens, against the seeded firm. The list: the rail offering *Services* and no
+*Products*, "2 live · 1 draft", a live row at 4 of 6 with the line naming it, `Not set` in a draft's
+enum columns, and bulk publish/unpublish with no bulk delete. The editor: the family's own fee bases
+in the select, a foreign key refused, the sidebar moving as fields were typed, and a change log
+reading *"Turnaround, from '24/7 callout, 4-hour attendance' · now · Dev owner"*. The public page:
+included and excluded side by side at equal weight, enums worded, unfilled rows grey, no fee
+anywhere in the DOM, and a draft redirecting to the storefront.
+
+Axe at 1280 found one real defect — an unnamed actions column on the table, now named — and
+otherwise nothing but the project's pinned contrast gap.
+
+---
+
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`
 
@@ -802,7 +922,7 @@ edit**.
 
 | # | Send together | `-s` ids | Builds in | Why these, in this order |
 |---|---|---|---|---|
-| **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **One handoff, three screens.** `3g-s` fixes the field set the whole lane renders; `3f-s`'s columns are a summary of those fields; `1g-s` is the same set from the buyer's side. Drawn apart, the editor collects what the page never shows and the list carries a column nothing fills |
+| **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **shipped 12 Sep.** One handoff, three screens, and it was right: the editor fixed the field set, the list reported on it, the page rendered it. See §4g |
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | The hub, the onboarding task and credentials. Needs Q3 answered first, or it creates uncapped rows |
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | `2b-s`, `2c-s` and `2d-s` shipped 11 Sep. `3c-s` is mostly built and now owes the services mirror as well as the per-service rows |
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | `5c-s` has a placeholder waiting. `1d-s` needs the Free-plan certifications gate decided |

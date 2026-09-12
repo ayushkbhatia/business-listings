@@ -75,6 +75,7 @@ const PLAN_SELECT = {
   monthlyPriceAed: true,
   enquiriesPerMonth: true,
   productLimit: true,
+  serviceLimit: true,
   locationLimit: true,
   photoLimit: true, publicPhotoLimit: true,
   categoryLimit: true, storageMb: true,
@@ -240,6 +241,13 @@ export function usageOf(overview: Overview, what: Metered) {
        join itself. Same reasoning as storage below: a zero here would be a
        number that is not a query, and nothing reads this today.
     */
+    /*
+       Services, and the overview does not carry them either. `3f-s` is the
+       only screen that meters them and it counts the rows itself. A zero here
+       would be a number that is not a query, which is the one thing a
+       directory's counts must never be.
+    */
+    services: 0,
     categories: 0,
     /*
        Megabytes, and the overview does not carry them. The media library is

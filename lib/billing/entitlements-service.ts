@@ -26,7 +26,7 @@ import { effectiveCaps, snapshotOf, type PlanCaps } from "@/lib/plan/entitlement
  */
 
 const PLAN_SELECT = {
-  id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
+  id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true, serviceLimit: true,
   locationLimit: true, photoLimit: true, publicPhotoLimit: true,
   categoryLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
   customDomain: true, analytics: true, csvImport: true, sponsoredEligible: true,
@@ -53,6 +53,7 @@ function toCaps(row: {
   csvImport: boolean;
   sponsoredEligible: boolean;
   categoryLimit: number | null;
+  serviceLimit: number | null;
   sortOrder: number;
 }): PlanCaps {
   return {
@@ -128,6 +129,15 @@ export interface EditPlanInput {
   changes: Partial<{
     enquiriesPerMonth: number | null;
     productLimit: number | null;
+    /**
+     * Services a seller may hold. The sixth numeric cap, from board `2e-s`.
+     *
+     * It ships with proposed numbers rather than ratified ones — D1 settled
+     * seven and services were not their own model yet — so it needs an editor
+     * from the day it exists, or the eighth number is the only one on the table
+     * that a person cannot change without writing the row by hand.
+     */
+    serviceLimit: number | null;
     locationLimit: number | null;
     photoLimit: number | null;
     publicPhotoLimit: number | null;

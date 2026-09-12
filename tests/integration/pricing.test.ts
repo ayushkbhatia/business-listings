@@ -77,6 +77,12 @@ describe("criterion 1 — every figure the page prints exists on the row", () =>
           "publicPhotoLimit",
           "productLimit",
           "rankingMultiplier",
+          /*
+             Board `2e-s`, and the eighth number. It joined for the reason
+             every cap above it did: absent, it reads as `undefined` through
+             `capFor` and the plan renders as selling unlimited services.
+          */
+          "serviceLimit",
           "sortOrder",
           // Board 3i's storage allowance. 11f now owns the plan matrix and
           // prints it; `PlanCaps` requires it either way, and a plan object

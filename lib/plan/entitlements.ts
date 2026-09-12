@@ -23,6 +23,15 @@ export interface PlanCaps {
   monthlyPriceAed: number;
   enquiriesPerMonth: number | null;
   productLimit: number | null;
+  /// How many services a seller may hold — board `2e-s`, the eighth number.
+  ///
+  /// `productLimit`'s counterpart, and it had to exist the moment services
+  /// became their own model: a cap that is absent is not a generous cap, it is
+  /// `productLimit` quietly not applying to half the directory. The ladder is
+  /// much shorter than products because the volume assumption inverts — an FM
+  /// contractor has six services, an audit practice four, nobody has six
+  /// hundred.
+  serviceLimit: number | null;
   locationLimit: number | null;
   photoLimit: number | null;
   /// How many gallery photographs a public storefront shows. Null is all.
@@ -76,6 +85,13 @@ export interface EntitlementSnapshot {
   capturedAt: string;
   enquiriesPerMonth: number | null;
   productLimit: number | null;
+  /**
+   * Optional, like `storageMb` and for the same reason: every snapshot written
+   * before board `2e-s` has no such key, and reading one must not make a
+   * seller's service allowance `undefined` — which `capFor` would read as
+   * unlimited. `effectiveCaps` falls back to the live plan where it is absent.
+   */
+  serviceLimit?: number | null;
   locationLimit: number | null;
   photoLimit: number | null;
   /**
@@ -110,6 +126,7 @@ export function snapshotOf(plan: PlanCaps, capturedAt: Date): EntitlementSnapsho
     capturedAt: capturedAt.toISOString(),
     enquiriesPerMonth: plan.enquiriesPerMonth,
     productLimit: plan.productLimit,
+    serviceLimit: plan.serviceLimit,
     locationLimit: plan.locationLimit,
     photoLimit: plan.photoLimit,
     categoryLimit: plan.categoryLimit,
@@ -153,6 +170,10 @@ export function effectiveCaps(plan: PlanCaps, snapshot: unknown): PlanCaps {
     ...plan,
     enquiriesPerMonth: frozen.enquiriesPerMonth,
     productLimit: frozen.productLimit,
+    // Absent on every snapshot frozen before board `2e-s`, which is all of
+    // them. The live plan is the honest reading: nothing was frozen, so nothing
+    // is owed — and reading `undefined` as a cap is reading it as unlimited.
+    serviceLimit: frozen.serviceLimit === undefined ? plan.serviceLimit : frozen.serviceLimit,
     locationLimit: frozen.locationLimit,
     photoLimit: frozen.photoLimit,
     // A pre-3i snapshot has no storage key at all. Falling back to the live
@@ -216,6 +237,7 @@ export function cheapestPlanGranting(
 export const METERED = [
   "enquiries",
   "products",
+  "services",
   "locations",
   "photos",
   "categories",
@@ -227,6 +249,7 @@ export type Metered = (typeof METERED)[number];
 const CAP_OF: Record<Metered, (p: PlanCaps) => number | null> = {
   enquiries: (p) => p.enquiriesPerMonth,
   products: (p) => p.productLimit,
+  services: (p) => p.serviceLimit,
   locations: (p) => p.locationLimit,
   photos: (p) => p.photoLimit,
   /*

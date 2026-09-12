@@ -31,7 +31,7 @@ import type { Usage } from "./plan-grid";
  */
 
 const PLAN_SELECT = {
-  id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
+  id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true, serviceLimit: true,
   locationLimit: true, photoLimit: true, publicPhotoLimit: true, categoryLimit: true, storageMb: true, teamSeats: true,
   rankingMultiplier: true, customDomain: true, analytics: true, csvImport: true,
   sponsoredEligible: true, sortOrder: true, annualMonthsCharged: true,
@@ -376,6 +376,7 @@ function toCaps(row: {
   analytics: boolean;
   csvImport: boolean;
   sponsoredEligible: boolean;
+  serviceLimit: number | null;
   sortOrder: number;
   annualMonthsCharged: number | null;
 }): PlanCaps {
@@ -398,6 +399,7 @@ function freeOr(plan: Parameters<typeof toCaps>[0] | null): PlanCaps {
   if (plan) return toCaps(plan);
   return {
     id: "free", name: "Free", monthlyPriceAed: 0, enquiriesPerMonth: 0, productLimit: 0,
+    serviceLimit: 0,
     locationLimit: 0, photoLimit: 0, publicPhotoLimit: 0, categoryLimit: 0, storageMb: 0,
     teamSeats: 1,
     rankingMultiplier: 1, customDomain: false, analytics: false, csvImport: false,
