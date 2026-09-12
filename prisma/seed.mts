@@ -3600,7 +3600,7 @@ async function deriveProfileStrength(db: Db) {
       */
       credentials: 0,
       licenceVerified: false,
-      servicesLive: 0,
+      servicesCounting: 0,
       sectors: 0,
       deliveryModes: 0,
       coverageAreas: 0,
@@ -7320,6 +7320,14 @@ async function seedServicesFirm(db: Db) {
          until now nothing in the seed ever had.
       */
       sellsKind: "services",
+      /*
+         Board `8c-s` step 1, already taken. The fixture's job is step 2 — the
+         table, the counting rule and the thin-service callout — and a seller
+         who had not chosen a sheet would render an inert half of the screen
+         and nothing else. The *unchosen* state is reachable in one click from
+         the acceptance shard, which is the cheaper direction to test from.
+      */
+      scopeSheetFamilyId: audit?.id ?? null,
       deliveryModes: ["remote", "at_our_office"],
       headline: "Statutory audit, VAT and corporate tax for contractors and trading companies",
       sectorsServed: ["Contracting", "Trading", "Free zone entities"],

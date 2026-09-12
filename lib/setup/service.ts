@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { COUNTABLE_SELECT, countCounting } from "@/lib/services/setup-sheet";
 import { getEnquiryLift, type EnquiryLift } from "@/lib/metrics/enquiry-lift";
 import {
   profileStrength,
@@ -127,7 +128,7 @@ export async function setupHubState(
       _count: {
         select: {
           team: true,
-          services: { where: { status: "live" } },
+
           serviceCoverage: true,
           /*
              Board `8b-s`. Credentials, and no longer `Document(kind:
@@ -150,8 +151,16 @@ export async function setupHubState(
 
   const since = business.publishedAt === null ? null : dubaiDayStart(business.publishedAt);
 
-  const [media, products, invitesSent, shortlists, openEnquiries, views, nudge, plan, lift] =
+  const [services, media, products, invitesSent, shortlists, openEnquiries, views, nudge, plan, lift] =
     await Promise.all([
+      /*
+         Board `8c-s` B4. The six required fields rather than a `_count` of
+         live rows: a service counts toward the lever at 4 of 6, and a thin one
+         is published, findable and excluded. The select is shared with the
+         three other readers of this rule so a bar applied in one of them
+         cannot be a seller reading two different numbers on two screens.
+      */
+      prisma.service.findMany({ where: { businessId }, select: COUNTABLE_SELECT }),
       /*
          Kinds rather than counts: the meter needs the logo and the cover named
          separately, and three counts would be three round trips for one fact.
@@ -228,7 +237,7 @@ export async function setupHubState(
 
     credentials: business._count.credentials,
     licenceVerified: business.verifiedAt !== null,
-    servicesLive: business._count.services,
+    servicesCounting: countCounting(services),
     sectors: business.sectorsServed.length,
     deliveryModes: business.deliveryModes.length,
     coverageAreas: business._count.serviceCoverage,
@@ -254,7 +263,7 @@ export async function setupHubState(
     products: facts.products,
     seats: facts.teamSeats,
     credentials: facts.credentials,
-    servicesLive: facts.servicesLive,
+    servicesCounting: facts.servicesCounting,
     invitesSent,
     items: strengthItems(facts, business.sellsKind),
   });
@@ -356,7 +365,7 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
       _count: {
         select: {
           team: true,
-          services: { where: { status: "live" } },
+
           serviceCoverage: true,
           /*
              Board `8b-s`. Credentials, and no longer `Document(kind:
@@ -377,7 +386,9 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
   });
   if (!business) return null;
 
-  const [media, products, invitesSent] = await Promise.all([
+  const [services, media, products, invitesSent] = await Promise.all([
+    // Board `8c-s` B4 — see `setupHubState` above.
+    prisma.service.findMany({ where: { businessId }, select: COUNTABLE_SELECT }),
     prisma.media.findMany({
       where: { businessId, reviewId: null },
       select: { kind: true },
@@ -408,7 +419,7 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
 
     credentials: business._count.credentials,
     licenceVerified: business.verifiedAt !== null,
-    servicesLive: business._count.services,
+    servicesCounting: countCounting(services),
     sectors: business.sectorsServed.length,
     deliveryModes: business.deliveryModes.length,
     coverageAreas: business._count.serviceCoverage,
@@ -420,7 +431,7 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
     products: facts.products,
     seats: facts.teamSeats,
     credentials: facts.credentials,
-    servicesLive: facts.servicesLive,
+    servicesCounting: facts.servicesCounting,
     invitesSent,
     items: strengthItems(facts, business.sellsKind),
   });

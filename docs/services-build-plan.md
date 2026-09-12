@@ -369,7 +369,7 @@ drawn apart, the list shows a column the editor cannot fill or omits one it can.
 | **`2d-s`** Coverage, not branches | **shipped 11 Sep** | `/onboarding/locations`, one route and two bodies. See §4f — five corrections, and the taxonomy went from four free zones to forty-two |
 | **`8a-s`** Setup hub | **shipped 12 Sep** | **Four tasks**, and the epic was right after all — the *code's* stale prose said three. Credentials lead at 32, photographs fall to 4. See §4h |
 | **`8b-s`** Credentials task | **shipped 12 Sep** | `/dashboard/setup/credentials`. Two tiers rather than three, the trade licence is not a credential row, and the FTA register is a seam nothing is plugged into. See §4i |
-| **`8c-s`** Scope sheet + first 3 services | | Lands **after** the editor, not four phases before it |
+| **`8c-s`** Scope sheet + first 3 services | **shipped 12 Sep** | `/dashboard/setup/services`. D11 was already closed, three authored sheets rather than seven, and the hub's task 2 now counts completeness rather than live rows. See §4j |
 | **`3b-s`** Listing profile | | A schema diff, not copy: `ModeratedField` is a Prisma enum, so it **stops for a person** |
 | **`3c-s`** Coverage manager | mostly built | Panel, writer, capability guard and listing revision all ship |
 
@@ -705,8 +705,9 @@ index and keeps the tab.
 - **`serviceId` on `ServiceCoverage`.** `1g-s` B8 is satisfied by `effectiveCoverage`, which resolves
   inheritance at read time and is tested — but no service can narrow its coverage until `3c-s`
   writes the rows, and the column arrives with its writer.
-- **The credentials block on `1g-s`.** *Who signs it* needs the credentials chain (`8b-s` → `4c-s`).
-  Omitted entirely rather than shown empty, which is the board's own §States rule.
+- ~~**The credentials block on `1g-s`.**~~ Shipped with `8b-s` as *Who signs it* — and it renders
+  its empty state rather than being omitted, because § Interface honesty says a section that
+  disappears when thin tells a buyer nothing about whether it was ever asked. See §4i.
 - **`12c`'s ranking term.** This is the data it will read: scope-sheet completeness replacing a
   spec-completeness factor a services business can never earn. The amendment belongs to `12c`.
 - **`3h-s` scope templates.** B6 is already true by omission — nothing clones a scope sheet yet, and
@@ -941,6 +942,120 @@ Axe found nothing but the project's pinned contrast gap.
 
 ---
 
+## 4j · Handoff `8c-s` — the screen that started the track
+
+Shipped 12 Sep. `/dashboard/setup/services`, two steps, a counting rule that is not the
+publishing rule, and a live preview that mounts the public page's own component.
+
+### The board is not blocked, and D11 closed before it was written
+
+The README calls this board *partially blocked on D11* and lists three availability
+affordances to leave out: the `TAKING WORK` column, the *Waitlist is a real answer* card
+and the preview's `Accepting new clients` chip. **D11 closed as no on 11 Sep** (§3), the
+`3g-s` `Capacity` field went with it when that board shipped, and none of the three exists
+in this tree to leave out. B9 and criterion 10 are satisfied by construction, and an e2e
+test keeps them that way.
+
+That is three handoffs running where the blocking claim was stale — `8b-s` said a register
+lookup existed, `8a-s` carried a two-month-old weight table, and this one names a decision
+already taken. **Check the tree first** has now paid for itself four times on this track.
+
+### Q1 answered by counting: three sheets, and one is the blank one
+
+The board says *seven trades are authored so far*; `4e-s`'s tracker note says *five
+families cover 420 subcategories*. **Both are wrong.** `ScopeSheetFamily` holds
+`general` (the blank default), `audit-and-assurance` and `facilities-management`.
+
+So the sentence counts the cards rather than claiming a figure, and the card's shape line
+is counted off the family's own rows: the board draws `12 fields · 6 required · 5
+filterable · used by 214 firms` and **three of those four numbers are wrong here** while
+the fourth is a constant where B3 itself asks for a query. The screen reads `9 rows · 6
+required · 5 filterable`, and `used by N firms` is counted live — rendering `no firms on
+it yet` where it is zero, because a directory at its cold start owes a seller the truth
+about how thin it is.
+
+`used by N firms` counts **sellers of work only**. Counting every listing put 176 valve
+traders on the blank sheet, since an unclassified category resolves to the default — a
+number that is arithmetically true and answers a question nobody asked.
+
+### The counting rule, and it changes a shipped board
+
+B4 asks for the task to close on three services at **four of six** required fields, where
+`8a-s` shipped a count of live rows. Adopted, because the alternative is a hub whose
+largest remaining task closes on three services carrying nothing but a name — and the
+task is the one asking for a *complete* list rather than a long one.
+
+`mayPublish()` is untouched and still returns `true` unconditionally: gate publication on
+a score and sellers type "TBC" into six fields, which destroys the comparison the fields
+exist to create. So a thin service is **published, findable and excluded**, and the
+screen says so in the seller's terms with the missing fields named — *"Turnaround,
+where it is delivered and deliverable are the ones missing"* rather than *"incomplete"*.
+
+The fact was renamed `servicesCounting` rather than left as `servicesLive`, because a
+field that no longer counts live services is the trap `normalised is two things` is a note
+about. Four modules read it — the hub, the setup chrome, the onboarding meter and the
+nightly job — and all four now share `COUNTABLE_SELECT` and `countCounting`.
+
+**B5 needed no change at all.** `strengthItems` already pays 7, 13 and 20 at one, two and
+three of the target, which is exactly the board's `+7%` / `+13%` / `+20%`. Verified by
+running it rather than by reading it.
+
+### Two corrections underneath
+
+- **`Business.scopeSheetFamilyId` had to exist for step 1 to mean anything.** A service's
+  family resolved from its category, and all 440 category rows are null — so every seller
+  resolved to `general` and a screen offering a choice would have changed nothing when
+  they used it. It is an **override** in the existing chain rather than a replacement:
+  business choice → `Category.scopeFamilyId` up the tree → the seeded default. The firm's
+  own statement is the more specific one.
+- **A third reader of the credentials lever was still counting files.**
+  `lib/onboarding/profile.ts` kept `Document(kind: certificate)` after `8b-s` moved the
+  other two to `Credential` rows, so a firm with two credentials and no certificates read
+  zero on the onboarding meter and two on the hub, on the same afternoon. Fixed here.
+
+### What the preview is, and why it is not a mock
+
+B11 asks for *a real render of `1g-s`*. The scope table moved to
+`components/domain/ScopeTable.tsx` and both surfaces mount it, and the preview is fed by
+`publicServiceFor` — so it is not merely the same markup but the same **data path**,
+including the fact that `indicativeFee` is absent from that select and therefore cannot
+reach the pane any more than it can reach the page.
+
+### Found on the way
+
+- **A caption repeating its own heading.** The table's `sr-only` caption restated the h2
+  directly above it, which is a screen reader hearing the sentence twice — the correction
+  `1g-s` already carries, arriving again one screen over.
+- **Six field labels in two places.** `3f-s` held the only copy of the required-field
+  names and the join that lists them; `8c-s`'s callout needs the same six. Both now read
+  `lib/services/gaps.ts`.
+- **A fee basis cannot be cleared from any screen.** The `Select` placeholder is disabled
+  on purpose — `3g-s`'s own correction against a select that invented data on save — so
+  there is no path that unsets one. Intended, and now written down.
+
+### Still owed
+
+- **`3h-s` scope templates** closes wave 2. Its one firm rule is already true by omission:
+  nothing clones a scope sheet, and the seed list here sets names only for the same reason.
+- **`4e-s`'s authored families.** Two trades and a blank sheet is the cold start, and the
+  screen is honest about it. Seven was never true.
+- **`12c`'s ranking term**, unchanged from `8a-s`: scope-sheet completeness now exists as
+  data, as a lever and as a counting bar.
+
+### Verified by clicking it
+
+Step 1 with no sheet: three cards, `MATCHES YOUR SERVICES` on the one the firm's own
+services named, `used by 1 firm` and `no firms on it yet` beside the other two, and step 2
+inert saying why. Chose the audit sheet: step 2 activated, *Start from our Audit &
+assurance list* appeared, and pressing it added four drafts at 1 of 6 carrying nothing but
+a name. Emptied a turnaround inline: 4 of 6 became 3, the tally moved to *2 live · 2 more
+to finish this task*, and the callout named the three missing fields. The preview rendered
+the real scope table with `FEE ON ENQUIRY` and no amount anywhere in the DOM.
+
+Axe at 1280 found nothing but the project's pinned contrast gap.
+
+---
+
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`
 
@@ -1137,7 +1252,7 @@ edit**.
 | # | Send together | `-s` ids | Builds in | Why these, in this order |
 |---|---|---|---|---|
 | **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **shipped 12 Sep.** One handoff, three screens, and it was right: the editor fixed the field set, the list reported on it, the page rendered it. See §4g |
-| **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | `8a-s` **shipped 12 Sep**; `2e-s`'s cap shipped with the scope sheet, so Q3 no longer blocks. `8b-s` is a refinement of `3e`, not a new screen — see §4h |
+| **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | `2b-s`, `2c-s` and `2d-s` shipped 11 Sep. `3c-s` is mostly built and now owes the services mirror as well as the per-service rows |
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | `5c-s` has a placeholder waiting. `1d-s` needs the Free-plan certifications gate decided |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | The expensive one, and the two that must be consecutive |

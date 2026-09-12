@@ -62,13 +62,33 @@ export interface ScopeFamily {
 }
 
 /**
- * The family a category resolves to, with its fee bases and its row order.
+ * The family a service resolves to, with its fee bases and its row order.
  *
  * Two queries and no more, however many categories are asked about: the
  * taxonomy is 440 rows of three columns and the families are three rows with
  * their children. `resolveTradeKind` made the same trade for the same reason.
+ *
+ * ## Precedence: the firm's own choice, then the trade, then the default
+ *
+ * `chosen` is `Business.scopeSheetFamilyId` — what the seller picked in step 1
+ * of `8c-s` — and it wins, because it is the more specific statement. The
+ * category assignment is about a whole trade; the choice is about this firm,
+ * and a practice whose subcategory somebody filed under facilities management
+ * should not be handed per-sq-ft-per-year because of it.
+ *
+ * It has to win for step 1 to mean anything at all: every one of the 440
+ * category rows is null today, so without it every seller resolves to `general`
+ * and the choice screen would change nothing when they used it.
+ *
+ * A `chosen` id naming a family that no longer exists falls through to the walk
+ * rather than throwing — the foreign key is `SET NULL`, so this is only
+ * reachable mid-delete, and a fee-basis control with no options is a worse
+ * answer than the trade's own sheet.
  */
-export async function familyFor(categoryId: string): Promise<ScopeFamily> {
+export async function familyFor(
+  categoryId: string,
+  chosen?: string | null,
+): Promise<ScopeFamily> {
   const [categories, families] = await Promise.all([
     prisma.category.findMany({ select: { id: true, parentId: true, scopeFamilyId: true } }),
     prisma.scopeSheetFamily.findMany({
@@ -86,7 +106,9 @@ export async function familyFor(categoryId: string): Promise<ScopeFamily> {
   ]);
 
   const rows = new Map<string, ScopeFamilyRow>(categories.map((row) => [row.id, row]));
-  const wanted = resolveScopeFamily(rows, categoryId);
+  const wanted =
+    (chosen && families.some((row) => row.id === chosen) ? chosen : null) ??
+    resolveScopeFamily(rows, categoryId);
 
   /*
      The seeded default, and a hard failure if it is missing.
@@ -142,8 +164,26 @@ export interface ServicesBoard {
   worst: { name: string; completeness: Completeness } | null;
 }
 
+/**
+ * The sheet this firm picked, or null.
+ *
+ * One column, read on its own so that every caller of `familyFor` reaches it
+ * the same way. Five call sites resolve a family and every one of them has to
+ * honour the choice — a path that skipped it would render one seller two
+ * different fee-basis lists on two screens, which is the shared-component
+ * defect wearing a query's clothes.
+ */
+export async function chosenSheetFor(businessId: string): Promise<string | null> {
+  const business = await prisma.business.findUnique({
+    where: { id: businessId },
+    select: { scopeSheetFamilyId: true },
+  });
+  return business?.scopeSheetFamilyId ?? null;
+}
+
 /** Everything board `3f-s` renders, in one read. */
 export async function servicesBoardFor(businessId: string): Promise<ServicesBoard> {
+  const chosen = await chosenSheetFor(businessId);
   const [services, caps, plans] = await Promise.all([
     prisma.service.findMany({
       where: { businessId },
@@ -175,7 +215,7 @@ export async function servicesBoardFor(businessId: string): Promise<ServicesBoar
   */
   const families = new Map<string, ScopeFamily>();
   for (const categoryId of new Set(services.map((row) => row.categoryId))) {
-    families.set(categoryId, await familyFor(categoryId));
+    families.set(categoryId, await familyFor(categoryId, chosen));
   }
 
   const rows: ServiceRow[] = services.map((service) => {
@@ -294,7 +334,7 @@ export async function serviceForEditor(
   if (!service) return null;
 
   const [family, revisions] = await Promise.all([
-    familyFor(service.categoryId),
+    familyFor(service.categoryId, await chosenSheetFor(businessId)),
     prisma.serviceRevision.findMany({
       where: { serviceId },
       orderBy: { createdAt: "desc" },
@@ -471,7 +511,7 @@ export async function patchServiceField(
        public page and a facet that matches nothing.
     */
     if (value !== "") {
-      const family = await familyFor(service.categoryId);
+      const family = await familyFor(service.categoryId, await chosenSheetFor(businessId));
       if (!family.feeBases.some((basis) => basis.key === value)) {
         return { ok: false, reason: "foreign_fee_basis" };
       }
@@ -789,7 +829,7 @@ export async function publicServiceFor(
   });
   if (!service) return null;
 
-  const family = await familyFor(service.categoryId);
+  const family = await familyFor(service.categoryId, await chosenSheetFor(service.businessId));
   return {
     ...toPublic(service, family),
     businessId: service.businessId,
@@ -798,6 +838,7 @@ export async function publicServiceFor(
 
 /** The live services of one business, in the seller's own order. */
 export async function publicServicesFor(businessId: string): Promise<PublicService[]> {
+  const chosen = await chosenSheetFor(businessId);
   const services = await prisma.service.findMany({
     where: { businessId, status: "live" },
     orderBy: [{ position: "asc" }, { createdAt: "asc" }],
@@ -821,7 +862,7 @@ export async function publicServicesFor(businessId: string): Promise<PublicServi
 
   const families = new Map<string, ScopeFamily>();
   for (const categoryId of new Set(services.map((row) => row.categoryId))) {
-    families.set(categoryId, await familyFor(categoryId));
+    families.set(categoryId, await familyFor(categoryId, chosen));
   }
 
   return services.map((service) => toPublic(service, families.get(service.categoryId)!));

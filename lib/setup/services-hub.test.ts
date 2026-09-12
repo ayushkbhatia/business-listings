@@ -40,7 +40,7 @@ const EMPTY: ProfileFacts = {
   teamSeats: 1,
   credentials: 0,
   licenceVerified: false,
-  servicesLive: 0,
+  servicesCounting: 0,
   sectors: 0,
   deliveryModes: 0,
   coverageAreas: 0,
@@ -49,7 +49,7 @@ const EMPTY: ProfileFacts = {
 /** Everything a practice can do for itself. The licence is not on this list. */
 const SELLER_CAN_DO: Partial<ProfileFacts> = {
   credentials: CREDENTIAL_TARGET,
-  servicesLive: SERVICES_TARGET,
+  servicesCounting: SERVICES_TARGET,
   hasDescription: true,
   sectors: 3,
   teamSeats: 2,
@@ -116,7 +116,7 @@ describe("what a seller of goods is measured against", () => {
     // Credentials, services, sectors and coverage do not.
     expect(
       profileStrength(
-        { ...EMPTY, credentials: 5, servicesLive: 9, sectors: 4, coverageAreas: 7 },
+        { ...EMPTY, credentials: 5, servicesCounting: 9, sectors: 4, coverageAreas: 7 },
         "goods",
       ),
     ).toBe(before);
@@ -201,7 +201,7 @@ describe("the cards", () => {
       products: merged.products,
       seats: merged.teamSeats,
       credentials: merged.credentials,
-      servicesLive: merged.servicesLive,
+      servicesCounting: merged.servicesCounting,
       invitesSent: 0,
       items: strengthItems(merged, "services"),
     });
@@ -218,7 +218,7 @@ describe("the cards", () => {
        Two of three live banks 13 of the 20, rounded down. The card is not done,
        and the badge says what is left rather than what the component is worth.
     */
-    const two = board({ servicesLive: 2 });
+    const two = board({ servicesCounting: 2 });
     const services = two.tasks.find((task) => task.id === "services");
     expect(services?.done).toBe(false);
     expect(services?.progress).toEqual({ got: 2, target: 3 });
@@ -230,7 +230,7 @@ describe("the cards", () => {
   });
 
   it("finishes task 2 at three", () => {
-    const three = board({ servicesLive: 3 });
+    const three = board({ servicesCounting: 3 });
     const services = three.tasks.find((task) => task.id === "services");
     expect(services?.done).toBe(true);
     expect(services?.points).toBe(0);
@@ -262,7 +262,7 @@ describe("the cards", () => {
   });
 
   it("says nothing is left once all four are done", () => {
-    const done = board({ credentials: 2, servicesLive: 3, teamSeats: 2, photos: 3 });
+    const done = board({ credentials: 2, servicesCounting: 3, teamSeats: 2, photos: 3 });
     expect(done.openCount).toBe(0);
     expect(done.doneCount).toBe(4);
   });

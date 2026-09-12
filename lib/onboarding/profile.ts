@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { COUNTABLE_SELECT, countCounting } from "@/lib/services/setup-sheet";
 import { profileStrength, strengthItems, type StrengthItem } from "@/lib/metrics/profile-strength";
 import { VERIFIED_TIER } from "@/lib/verification";
 import { checkDisplayName, couldBeMistakenFor, type DisplayNameProblem } from "./display-name";
@@ -178,7 +179,7 @@ async function profileFacts(
     verifiedAt?: Date | null;
   },
 ) {
-  const [productRows, photos, seats, locations, withHours, servicesLive, coverageAreas, credentials] =
+  const [productRows, photos, seats, locations, withHours, services, coverageAreas, credentials] =
     await Promise.all([
     /*
        Spec values are a JSON column, so "has any spec value" is a read rather
@@ -194,9 +195,22 @@ async function profileFacts(
     prisma.user.count({ where: { businessId } }),
     prisma.location.count({ where: { businessId } }),
     prisma.location.count({ where: { businessId, hours: { not: {} } } }),
-    prisma.service.count({ where: { businessId, status: "live" } }),
+    /*
+       Board `8c-s` B4. Live is not enough — a service counts at 4 of 6
+       required fields — so the fields are read rather than counted, through
+       the select every reader of this rule shares.
+    */
+    prisma.service.findMany({ where: { businessId }, select: COUNTABLE_SELECT }),
     prisma.serviceCoverage.count({ where: { businessId } }),
-    prisma.document.count({ where: { businessId, kind: "certificate" } }),
+    /*
+       Board `8b-s`. `Credential` rows, not `Document(kind: certificate)`.
+
+       This reader was missed when the other three moved and it is the defect
+       that note exists about: one lever, four readers, and this one was still
+       counting files — so a firm with two credentials and no certificates read
+       zero here and two on the hub, on the same afternoon.
+    */
+    prisma.credential.count({ where: { businessId } }),
   ]);
 
   const filterable = productRows.filter((product) => {
@@ -221,7 +235,7 @@ async function profileFacts(
 
     credentials,
     licenceVerified: business.verifiedAt != null,
-    servicesLive,
+    servicesCounting: countCounting(services),
     sectors: business.sectorsServed?.length ?? 0,
     deliveryModes: business.deliveryModes?.length ?? 0,
     coverageAreas,

@@ -300,13 +300,13 @@ enum TradeKind {
 /// Areas and free zones are translatable records, not code strings. Arabic names
 /// live here from day one so the taxonomy is a data change, never a deploy.
 model Area {
-  id          String    @id @default(cuid())
-  emirate     Emirate
-  name        String
-  nameAr      String?   @map("name_ar")
-  slug        String    @unique
+  id                String    @id @default(cuid())
+  emirate           Emirate
+  name              String
+  nameAr            String?   @map("name_ar")
+  slug              String    @unique
   /// A free zone is a cross-cutting toggle, not a place in the area hierarchy.
-  isFreeZone  Boolean   @default(false) @map("is_free_zone")
+  isFreeZone        Boolean   @default(false) @map("is_free_zone")
   /// Al Ain, and the ones like it — board `2d-s` B3.
   ///
   /// A fact about how a place is *searched*, not about where it is. Al Ain is
@@ -320,23 +320,23 @@ model Area {
   /// right that more of these are coming — Khor Fakkan, Ruwais — and each
   /// should be a row somebody adds, not a deploy. `12h` owns that screen; until
   /// it exists the writer is the seed and the migration beside it.
-  searchedAsEmirate Boolean @default(false) @map("searched_as_emirate")
-  lat         Float?
-  lng         Float?
+  searchedAsEmirate Boolean   @default(false) @map("searched_as_emirate")
+  lat               Float?
+  lng               Float?
   /// Unused. Handoff 0 intended an area-wide publish switch; board 6a put the
   /// gate on `AreaPage` per (area, category) instead, and this column has had
   /// no reader and no writer in application code since. It is always null.
   /// Named here rather than dropped so nobody reaches for "the area's
   /// published date" and gets a column that is never written.
-  publishedAt DateTime? @map("published_at")
+  publishedAt       DateTime? @map("published_at")
 
-  locations Location[]
-  coverage  BusinessCoverage[]
-  serviceCoverage ServiceCoverage[]
+  locations             Location[]
+  coverage              BusinessCoverage[]
+  serviceCoverage       ServiceCoverage[]
   freeZoneRegistrations FreeZoneRegistration[]
-  pages     AreaPage[]
-  lists     CuratedList[]
-  demand    ScopeDemand[]
+  pages                 AreaPage[]
+  lists                 CuratedList[]
+  demand                ScopeDemand[]
 
   @@index([emirate])
   @@map("area")
@@ -789,6 +789,19 @@ model Business {
   /// Defaults to `unset`: a business that has not passed the question is routed
   /// back to it rather than assumed to be anything.
   sellsKind        SellsKind     @default(unset) @map("sells_kind")
+
+  /// The scope sheet this firm picked on `8c-s` step 1, and the default for
+  /// every service it adds.
+  ///
+  /// An **override**, not a replacement for the category walk. Precedence is
+  /// business choice, then `Category.scopeFamilyId` up the tree, then the
+  /// seeded default — the same shape `Category.scopeFamilyId` uses against its
+  /// own parent, and for the same reason: only the disagreements are typed.
+  ///
+  /// It has to exist for step 1 to mean anything. All 440 category rows are
+  /// null today, so without this column every seller resolves to `general` and
+  /// a screen offering a choice would change nothing when they made one.
+  scopeSheetFamilyId String?        @map("scope_sheet_family_id")
   /// How the work reaches the client — board `2d-s`, and the question that
   /// decides what the coverage set beneath it means.
   ///
@@ -797,7 +810,7 @@ model Business {
   /// it is half of the services publish gate. No backfill, for the same reason
   /// `sellsKind` has none — inferring an answer onto a live listing is a claim
   /// we would be making on the seller's behalf.
-  deliveryModes    DeliveryMode[] @default([]) @map("delivery_modes")
+  deliveryModes      DeliveryMode[] @default([]) @map("delivery_modes")
   /// The trading activity as the licence register words it, carried over from
   /// `StagedListing.activity` at import.
   ///
@@ -808,22 +821,22 @@ model Business {
   /// covers — a paint trader receiving electrical RFQs is the failure this
   /// prevents. Null where the import carried none, which is not the same as
   /// covering nothing: an absent activity flags nothing.
-  licenceActivity  String?       @map("licence_activity")
-  description      String?
+  licenceActivity    String?        @map("licence_activity")
+  description        String?
   /// "30 days on approved account", "50% advance, balance on delivery".
   ///
   /// The seller's own words, not a picklist. Terms in this trade are a
   /// negotiation and the useful thing to publish is what they usually agree to,
   /// which no enumeration would hold. Never a price, and nothing here is a
   /// commitment the platform is party to.
-  paymentTerms     String?       @map("payment_terms")
+  paymentTerms       String?        @map("payment_terms")
   /// "Same-day within Dubai, next day to the Northern Emirates."
   ///
   /// Board 1d's details panel asks for delivery as a fact a buyer can plan
   /// around. Free text for the same reason as payment terms: a supplier who
   /// delivers to site on their own truck and one who uses a courier are both
   /// answering the question, and a dropdown would make one of them lie.
-  deliveryNote     String?       @map("delivery_note")
+  deliveryNote       String?        @map("delivery_note")
   /// Denormalised match surface: this supplier's own words, their categories
   /// and synonyms, and every product name, SKU and spec value in their
   /// catalogue — sizes and trade abbreviations expanded to every spelling.
@@ -838,7 +851,7 @@ model Business {
   /// Goes stale by construction, so a product write refreshes its business's
   /// row too — `lib/search/reindex.ts` owns both. Null means never indexed and
   /// is matched as empty, never as "matches everything".
-  searchText       String?       @map("search_text")
+  searchText         String?        @map("search_text")
 
   /// 0..2, held by the `business_verification_tier_range` CHECK. STAFF WRITE
   /// ONLY, ops_lead role. There is no API path and no seller-editable field.
@@ -970,6 +983,7 @@ model Business {
   serviceCoverage        ServiceCoverage[]
   freeZoneRegistrations  FreeZoneRegistration[]
   services               Service[]
+  scopeSheetFamily       ScopeSheetFamily?        @relation("BusinessScopeSheet", fields: [scopeSheetFamilyId], references: [id], onDelete: SetNull)
   credentials            Credential[]
   products               Product[]
   productQuestions       ProductQuestion[]
@@ -1544,9 +1558,31 @@ model ScopeSheetFamily {
 
   feeBases   ScopeSheetFeeBasis[]
   rows       ScopeSheetRow[]
+  common     ScopeSheetCommonService[]
   categories Category[]
+  businesses Business[]                @relation("BusinessScopeSheet")
 
   @@map("scope_sheet_family")
+}
+
+/// What a firm in this trade usually sells — board `8c-s` B8.
+///
+/// *Start from our audit-firm list* seeds these as **drafts**, so the seller
+/// edits a row rather than facing an empty table. Names only: `3g-s` B6 and
+/// `3h-s` both refuse to template `scope` and `excluded`, because a pre-filled
+/// exclusions line is the one that ends up in a dispute — and a seeded
+/// engagement type or turnaround would be the same mistake one field over,
+/// since both are claims about how *this* firm works.
+model ScopeSheetCommonService {
+  familyId String @map("family_id")
+  name     String
+  position Int
+
+  family ScopeSheetFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@id([familyId, name])
+  @@index([familyId, position])
+  @@map("scope_sheet_common_service")
 }
 
 /// One fee basis a family offers, and the label it wears there.
@@ -1888,7 +1924,7 @@ model Credential {
 
   verifiedOn DateTime? @map("verified_on")
   /// The register that answered, named. Null on a claim.
-  verifiedBy String? @map("verified_by")
+  verifiedBy String?   @map("verified_by")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

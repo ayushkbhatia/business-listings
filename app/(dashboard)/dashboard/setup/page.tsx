@@ -85,7 +85,17 @@ const HREF: Record<SetupTaskId, string> = {
      get privacy wrong.
   */
   credentials: "/dashboard/setup/credentials",
-  services: "/dashboard/services",
+  /*
+     Board `8c-s` shipped, so the 20-point card points at its own task screen.
+
+     It pointed at `/dashboard/services` — board `3f-s` — while `8c-s` was
+     unbuilt, which was the nearest thing and also the wrong shape: that screen
+     manages a catalogue a firm already has, and this task is the one asking a
+     firm that has none to pick a scope sheet and type its first three. `3f-s`
+     is where the seller goes afterwards, and the task screen links each row to
+     the `3g-s` editor rather than duplicating it.
+  */
+  services: "/dashboard/setup/services",
 };
 
 /**

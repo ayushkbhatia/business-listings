@@ -87,6 +87,11 @@ export {
   type SectorOption,
 } from "./ServiceProfileFields";
 
+// Boards `1g-s` and `8c-s`. The scope table, on the public service page and in
+// the setup screen's live preview — one component, because `8c-s` B11 says the
+// preview is a real render of `1g-s` and a mock would lie the moment they drift.
+export { ScopeTable, scopeWords, type ScopeTableProps } from "./ScopeTable";
+
 // Board `2d-s`. Coverage: how the work reaches the client, where it happens,
 // and which free zones the firm is registered in. Mounted by the onboarding
 // coverage step and by the dashboard's locations screen.
