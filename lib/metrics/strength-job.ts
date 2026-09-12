@@ -62,7 +62,9 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
           products: true,
           services: { where: { status: "live" } },
           serviceCoverage: true,
-          documents: { where: { kind: "certificate" } },
+          // Board `8b-s`: the credential is the thing, the file is optional
+          // evidence for it. Lapsed rows count — an expiry changes nothing.
+          credentials: true,
         },
       },
     },
@@ -170,7 +172,7 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
       photos: photoCounts.get(business.id) ?? 0,
       teamSeats: business._count.team,
 
-      credentials: business._count.documents,
+      credentials: business._count.credentials,
       // `verifiedAt` rather than the tier: the tier is a ladder and this is the
       // one rung that means "checked against the issuing authority".
       licenceVerified: business.verifiedAt !== null,

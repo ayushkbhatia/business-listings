@@ -75,6 +75,7 @@ and it is the one that argues back.
 /dashboard (free variant)               Free-plan overview                   [11a]
 /dashboard/setup                        Setup hub                             [8a]  built h8s1
 /dashboard/setup (services)             Setup hub — four tasks              [8a-s] built h8as
+/dashboard/setup/credentials            Task 1 (services) — credentials     [8b-s] built h8bs
 /dashboard/setup/photos                 Task 1 — photos                       [8b]  built h8s2
 /dashboard/setup/products               Task 2 — template, first products     [8c]  built h8s3
 /dashboard/setup/team                   Task 3 — invite the team              [8d]  built h8s4
@@ -308,9 +309,28 @@ photographs last at 4; a seller who is both gets five and one renormalised score
 `profile_score` stays one integer on one column, recomputed idempotently, and
 what changes is the table it is measured against.
 
-The credentials card points at `/dashboard/verification` — board 3e — rather than
-at a route of its own. That screen is already the credentials surface, which is
-what makes `8b-s` a refinement rather than a new build.
+The credentials card points at `/dashboard/setup/credentials`, board `8b-s`, and
+pointed at `/dashboard/verification` until that shipped. **The two surfaces stay
+distinct and the split is worth stating:** board 3e is *documents* — a file, a
+public-visibility switch and a storefront list — while `8b-s` is *typed
+credentials*, a kind with a tier the system assigns from it. A certificate added
+on the task screen writes a private `Document` row that 3e lists, because it is
+the same file and a second store for it would be a second place to get privacy
+wrong.
+
+The trade licence is on neither as a credential row. It lives on `Business` —
+number, authority, expiry, `verifiedAt` — and `8b-s` renders it read-only from
+there. A `Credential` row beside it would be a second source of truth for the
+only fact on a listing anybody has checked.
+
+**Nothing on `/dashboard/setup/credentials` is required**, and that is enforced
+by there being no refusal in the code rather than by a form that permits empty
+fields: `lib/credentials/service.ts` has exactly two failures, a kind that is not
+a kind and a business that does not exist. `trust` is assigned from the kind and
+is not an input. `CHECKABLE_KINDS` is one entry long — the FTA tax agent number —
+and `lib/credentials/fta.ts` is the seam rather than the integration: no register
+is configured anywhere on this platform, so every number saves as a claim with
+`register_unavailable` surfaced inline.
 
 `/b/:slug/s/:service` is the scope table where the spec table is. Its row order
 comes from `ScopeSheetFamily`, so every firm in a family renders the same rows in

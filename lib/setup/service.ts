@@ -129,7 +129,19 @@ export async function setupHubState(
           team: true,
           services: { where: { status: "live" } },
           serviceCoverage: true,
-          documents: { where: { kind: "certificate" } },
+          /*
+             Board `8b-s`. Credentials, and no longer `Document(kind:
+             certificate)` — which counted files rather than credentials and so
+             counted an uploaded PDF that names nothing and missed an FTA agent
+             number typed with no certificate to hand. A credential is the thing
+             the hub is asking for; the file is optional evidence for it.
+
+             Lapsed rows count. `8b-s`: *a credential expires and nothing
+             happens* — no reminder, no delisting, no badge change — so a task
+             that un-ticked itself on an expiry date would be the renewal
+             chasing that board refuses, arriving as a silent regression.
+          */
+          credentials: true,
         },
       },
     },
@@ -214,7 +226,7 @@ export async function setupHubState(
     photos: media.length,
     teamSeats: business._count.team,
 
-    credentials: business._count.documents,
+    credentials: business._count.credentials,
     licenceVerified: business.verifiedAt !== null,
     servicesLive: business._count.services,
     sectors: business.sectorsServed.length,
@@ -346,7 +358,19 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
           team: true,
           services: { where: { status: "live" } },
           serviceCoverage: true,
-          documents: { where: { kind: "certificate" } },
+          /*
+             Board `8b-s`. Credentials, and no longer `Document(kind:
+             certificate)` — which counted files rather than credentials and so
+             counted an uploaded PDF that names nothing and missed an FTA agent
+             number typed with no certificate to hand. A credential is the thing
+             the hub is asking for; the file is optional evidence for it.
+
+             Lapsed rows count. `8b-s`: *a credential expires and nothing
+             happens* — no reminder, no delisting, no badge change — so a task
+             that un-ticked itself on an expiry date would be the renewal
+             chasing that board refuses, arriving as a silent regression.
+          */
+          credentials: true,
         },
       },
     },
@@ -382,7 +406,7 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
     photos: media.length,
     teamSeats: business._count.team,
 
-    credentials: business._count.documents,
+    credentials: business._count.credentials,
     licenceVerified: business.verifiedAt !== null,
     servicesLive: business._count.services,
     sectors: business.sectorsServed.length,

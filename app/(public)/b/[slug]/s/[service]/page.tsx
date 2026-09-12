@@ -7,8 +7,9 @@ import { VerificationBadge, tierSpec } from "@/components/domain";
 import { getBusinessBySlug } from "@/lib/db/queries";
 import { prisma } from "@/lib/db/client";
 import { publicServiceFor, publicServicesFor } from "@/lib/services/service";
+import { publicCredentialsFor, type PublicCredential } from "@/lib/credentials/service";
 import { businessCoverage } from "@/lib/locations/service-coverage";
-import { formatCount } from "@/lib/format";
+import { formatCount, formatMonth } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
 import { EMIRATES } from "@/lib/uae";
@@ -101,12 +102,19 @@ export default async function ServiceDetailPage({ params }: Params) {
   const business = await getBusinessBySlug(slug);
   if (!business) notFound();
 
-  const [siblings, coverage] = await Promise.all([
+  const [siblings, coverage, credentials] = await Promise.all([
     publicServicesFor(service.businessId),
     prisma.serviceCoverage.findMany({
       where: { businessId: service.businessId },
       select: { emirate: true, areaId: true, area: { select: { name: true } } },
     }),
+    /*
+       Board `8b-s`'s Feeds note. The file never travels: `publicCredentialsFor`
+       does not select `documentId` at all, which is the same defence
+       `indicativeFee` gets — a field that is never fetched cannot leak into
+       this page, its payload or its structured data.
+    */
+    publicCredentialsFor(service.businessId),
   ]);
 
   /*
@@ -284,6 +292,14 @@ export default async function ServiceDetailPage({ params }: Params) {
           </p>
         </Panel>
 
+        {/* ── Who signs it ─────────────────────────────────────────────── */}
+        <Panel
+          title={t("service_public.credentials_title")}
+          description={t("service_public.credentials_hint")}
+        >
+          <Credentials rows={credentials} name={business.displayName} />
+        </Panel>
+
         {/* ── Where they work ──────────────────────────────────────────── */}
         <Panel title={t("service_public.coverage_title")}>
           {places.length > 0 ? (
@@ -374,4 +390,70 @@ function chipWords(chip: { key: string; value: string }): string {
 
 function emirateLabel(emirate: string): string {
   return EMIRATES.find((row) => row.value === emirate)?.label ?? emirate;
+}
+
+/* ── Who signs it ────────────────────────────────────────────────────────── */
+
+/**
+ * The trust block, where a product page shows stock availability.
+ *
+ * Board `8b-s` sets the tier labelling and this is one of the two screens it
+ * binds: **an unverified claim must never render like a verified one.** The
+ * separation here is structural rather than a colour — a checked credential
+ * says which register checked it and when, and a claim says whose claim it is,
+ * by name. A buyer reading "Stated by Meridian Chartered Accountants" knows
+ * exactly how much the line is worth, which is the whole point of printing it.
+ *
+ * Empty is a real state and says so. A practice that has added nothing renders
+ * the sentence rather than the panel vanishing: § Interface honesty — an
+ * unclaimed listing says plainly that nothing is verified, and a section that
+ * disappears when thin tells a buyer nothing about whether it was ever asked.
+ */
+function Credentials({ rows, name }: { rows: readonly PublicCredential[]; name: string }) {
+  if (rows.length === 0) {
+    return <p className="text-body-sm text-muted">{t("service_public.credentials_none")}</p>;
+  }
+
+  return (
+    <ul className="flex list-none flex-col gap-3 p-0">
+      {rows.map((row) => (
+        <li key={row.id} className="flex flex-col gap-0.5">
+          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <span className="text-body-sm text-ink">
+              {t(`credentials.kind.${row.kind}` as never)}
+            </span>
+            {row.verified ? (
+              <span className="font-mono text-eyebrow uppercase text-moss">
+                {t("credentials.tier.register_verified")}
+              </span>
+            ) : (
+              <span className="text-caption text-muted">
+                {t("service_public.credential_claim", { name })}
+              </span>
+            )}
+          </div>
+          {/*
+             Identifier, issuer and expiry, and only where the seller gave them
+             — this is a buyer's surface, and "Not provided" belongs in the
+             editor and in the scope table the board asks a buyer to compare
+             across firms, not under a trust line that has nothing to compare to.
+          */}
+          <p className="text-caption text-muted">
+            {[
+              row.issuer,
+              row.identifier,
+              row.expiresOn === null
+                ? null
+                : t("service_public.credential_until", { when: formatMonth(row.expiresOn) }),
+              row.verified && row.verifiedBy
+                ? t("service_public.credential_by", { register: row.verifiedBy })
+                : null,
+            ]
+              .filter((part): part is string => Boolean(part))
+              .join(" · ")}
+          </p>
+        </li>
+      ))}
+    </ul>
+  );
 }
