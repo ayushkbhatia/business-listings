@@ -45,6 +45,7 @@ export const EVENT_NAMES = [
   "setup_done_redirected",
   "listing_viewed",
   "product_viewed",
+  "service_viewed",
   "inbox_viewed",
   "lead_opened",
   "quote_sent",
@@ -258,6 +259,17 @@ export const EVENT_SPECS = {
     emitter: "browser",
     session: "never",
     props: { productId: "string" },
+  },
+
+  /*
+     Board `1g-s`, and the same shape for the same reasons: a service page is
+     public, most views happen before anybody signs in, and the owning business
+     is read off the service server-side rather than trusted from a payload.
+  */
+  service_viewed: {
+    emitter: "browser",
+    session: "never",
+    props: { serviceId: "string" },
   },
 
   /* ── Boards 3j and 11b ──

@@ -53,6 +53,9 @@ const PUBLIC_BUSINESS = {
  */
 export const STOREFRONT_TAB_COUNTS = {
   products: { where: { status: { not: "draft" as const } } },
+  // Board `1g-s`. Live only — a draft scope sheet is the seller's working copy
+  // and a tab counting it would offer a buyer a page that 404s.
+  services: { where: { status: "live" as const } },
   locations: { where: { published: true } },
   reviews: { where: { removedAt: null, heldAt: null } },
 } as const;

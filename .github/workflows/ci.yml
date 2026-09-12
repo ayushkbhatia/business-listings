@@ -176,7 +176,7 @@ jobs:
             projects: --project=mobile
           - shard: signed-in
             projects: >-
-              --project=seller --project=seller-free
+              --project=seller --project=seller-free --project=seller-services
               --project=staff --project=staff-moderator --project=staff-finance
 
     steps:

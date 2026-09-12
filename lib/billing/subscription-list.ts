@@ -68,7 +68,8 @@ export async function subscriptionList(limit = 500): Promise<SubscriptionRow[]> 
       plan: {
         select: {
           id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true,
-          productLimit: true, locationLimit: true, photoLimit: true, publicPhotoLimit: true,
+          productLimit: true,
+          serviceLimit: true, locationLimit: true, photoLimit: true, publicPhotoLimit: true,
   categoryLimit: true, storageMb: true, teamSeats: true,
           rankingMultiplier: true, customDomain: true, sortOrder: true,
           analytics: true, csvImport: true, sponsoredEligible: true,

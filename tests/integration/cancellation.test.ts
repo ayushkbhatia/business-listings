@@ -400,6 +400,7 @@ describe("what the daily job does with the row", () => {
           capturedAt: new Date().toISOString(),
           enquiriesPerMonth: null,
           productLimit: null,
+          serviceLimit: null,
           locationLimit: null,
           photoLimit: null,
           teamSeats: 10,

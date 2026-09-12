@@ -253,6 +253,7 @@ function storageOf(files: readonly LibraryFile[], plan: PlanCaps | null): Librar
       monthlyPriceAed: 0,
       enquiriesPerMonth: null,
       productLimit: null,
+      serviceLimit: null,
       locationLimit: null,
       photoLimit: null,
       publicPhotoLimit: null,

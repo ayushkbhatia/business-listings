@@ -2,7 +2,7 @@ import "server-only";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppSidebar, DashboardShell, PageHeader, resolveNav } from "@/components/structure";
-import { DASHBOARD_NAV } from "@/components/structure/nav-config";
+import { dashboardNavFor } from "@/components/structure/nav-config";
 import { prisma } from "@/lib/db/client";
 import { actorFromDevSeller, devSellerRequest } from "@/lib/auth/dev-seller";
 import { getActor } from "@/lib/auth/session";
@@ -24,6 +24,11 @@ export interface SellerSeat {
   businessId: string;
   businessName: string;
   /**
+   * The public path segment, so a write can revalidate the storefront it
+   * changed without a second query for the slug it already had.
+   */
+  businessSlug: string;
+  /**
    * What the identity block under the wordmark says about the account.
    *
    * Two facts and no more: the plan, because it decides what half the screens
@@ -33,6 +38,13 @@ export interface SellerSeat {
    */
   planName: string;
   place: string | null;
+  /**
+   * What the seller said on `2b-s`. It decides which catalogue the rail offers
+   * — board `3f-s` B1 — and nothing else about the frame.
+   *
+   * Read with the identity, so no screen loads it a second time.
+   */
+  sellsKind: "unset" | "goods" | "services" | "both";
   /** True while the seat came from DEV_SELLER_SLUG rather than a session. */
   isDevSeat: boolean;
   /**
@@ -59,6 +71,8 @@ export interface SellerSeat {
  */
 const IDENTITY_SELECT = {
   displayName: true,
+  slug: true,
+  sellsKind: true,
   plan: { select: { name: true } },
   locations: {
     where: { published: true },
@@ -69,12 +83,21 @@ const IDENTITY_SELECT = {
 } as const;
 
 interface IdentityRow {
+  slug: string;
+  sellsKind: "unset" | "goods" | "services" | "both";
   plan: { name: string } | null;
   locations: { area: { name: string } | null }[];
 }
 
-function identityOf(business: IdentityRow): { planName: string; place: string | null } {
+function identityOf(business: IdentityRow): {
+  planName: string;
+  place: string | null;
+  sellsKind: SellerSeat["sellsKind"];
+  businessSlug: string;
+} {
   return {
+    sellsKind: business.sellsKind,
+    businessSlug: business.slug,
     // Null means Free — `Business.planId` is nullable because an imported
     // licence record never chose one.
     planName: business.plan?.name ?? "Free",
@@ -103,11 +126,16 @@ export async function getSellerSeat(): Promise<SellerSeat | null> {
       actor,
       businessId: session.businessId,
       businessName: session.business.displayName,
+      businessSlug: session.business.slug,
       // A staff member looking through a seller's eyes gets the seller's
       // screens; the identity block is deliberately not one of them, because
       // the loud banner above it is what says whose account this is.
       planName: "",
       place: null,
+      // The rail still has to offer the right catalogue: a staff member looking
+      // at a services firm must see the screens that firm sees, or the session
+      // is showing them somebody else's product.
+      sellsKind: session.business.sellsKind,
       isDevSeat: false,
       viewingAs: {
         sessionId: session.id,
@@ -301,7 +329,7 @@ export function SellerPage({
       sidebar={
         <AppSidebar
           label={t("nav.label.dashboard")}
-          groups={resolveNav(DASHBOARD_NAV, (key) => t(key as never), badges)}
+          groups={resolveNav(dashboardNavFor(seat.sellsKind), (key) => t(key as never), badges)}
           /*
              The seller rail is light and carries the supplier's own name. The
              staff console keeps the dark one — see AppSidebar for why the

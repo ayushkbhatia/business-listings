@@ -79,6 +79,7 @@ model User {
   disputesRaised          ReviewDispute[]          @relation("DisputeRaisedBy")
   disputesDecided         ReviewDispute[]          @relation("DisputeDecidedBy")
   auditEvents             AuditEvent[]
+  serviceRevisions        ServiceRevision[]
   invoiceEvents           InvoiceEvent[]
   cancellations           SubscriptionChange[]     @relation("ChangeRequestedBy")
   reportsFiled            SupplierReport[]         @relation("ReportReporter")
@@ -367,6 +368,19 @@ model Category {
   /// equipment*; IT holds *Cybersecurity* beside *Servers & storage*. A
   /// sector-level flag would be wrong on roughly half the tree.
   tradeKind           TradeKind? @map("trade_kind")
+  /// Which scope sheet a service in this trade fills in — board `3g-s` B2.
+  ///
+  /// A family decides three things a global list cannot: which fee bases the
+  /// editor offers, what the public table's rows are called, and the order they
+  /// appear in. "Per sq ft / yr" is right for facilities management and absurd
+  /// for an audit; one enum was the first design and it was wrong for every
+  /// family at once.
+  ///
+  /// Null inherits from the parent, resolved by the same ancestor walk
+  /// `tradeKind` uses, and a tree with none anywhere falls back to the seeded
+  /// `general` family. That fallback is what lets a service be created in a
+  /// trade nobody has classified yet — which today is all 440 of them.
+  scopeFamilyId       String?    @map("scope_family_id")
   showOnHome          Boolean    @default(false) @map("show_on_home")
   acceptsRfq          Boolean    @default(true) @map("accepts_rfq")
   requiresExtraCheck  Boolean    @default(false) @map("requires_extra_check")
@@ -424,6 +438,8 @@ model Category {
   parent            Category?              @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
   children          Category[]             @relation("CategoryTree")
   defaultTemplate   SpecTemplate?          @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
+  scopeFamily       ScopeSheetFamily?      @relation(fields: [scopeFamilyId], references: [id], onDelete: SetNull)
+  services          Service[]
   templates         SpecTemplateCategory[]
   primaryFor        Business[]             @relation("BusinessPrimaryCategory")
   sectorFor         Business[]             @relation("BusinessSector")
@@ -953,6 +969,7 @@ model Business {
   coverage               BusinessCoverage[]
   serviceCoverage        ServiceCoverage[]
   freeZoneRegistrations  FreeZoneRegistration[]
+  services               Service[]
   products               Product[]
   productQuestions       ProductQuestion[]
   media                  Media[]
@@ -1439,6 +1456,302 @@ model ServiceCoverage {
   @@index([emirate])
   @@index([areaId])
   @@map("service_coverage")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Services — the scope sheet. Boards `3g-s`, `3f-s`, `1g-s`
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// How the work is engaged — board `3g-s`, one of the six required fields.
+///
+/// Three values, and the distinction is what a buyer compares on. An ongoing
+/// contract is a relationship with a monthly figure behind it; a one-off job is
+/// a scope with an end; a call-off is a rate agreed in advance and used when
+/// something happens. A buyer choosing between two firms needs to know which
+/// shape they are buying before anything else on the sheet means much.
+enum EngagementType {
+  ongoing_contract
+  one_off_job
+  call_off
+
+  @@map("engagement_type")
+}
+
+/// Where the work happens, matching `2d-s`'s delivery modes value for value.
+///
+/// Deliberately the same three words as `DeliveryMode`, because they answer the
+/// same question at two scales: the business says how it works in general on
+/// the coverage step, and each service says how *it* is delivered. A separate
+/// vocabulary would make the two uncomparable on a page that shows both.
+///
+/// Not the same enum, though. `DeliveryMode` is a multi-select on a business;
+/// this is one answer about one engagement, and merging them would let a
+/// service claim two ways of being delivered with no way to say which applies.
+enum DeliveredWhere {
+  remote
+  at_our_office
+  on_site
+
+  @@map("delivered_where")
+}
+
+/// Draft or live. Deliberately two values and no third.
+///
+/// There is no `pending_review`: a scope sheet is the seller's own description
+/// of their own work and nothing here waits for a moderator. There is no
+/// `archived` either — `3f-s` Q2 refuses bulk delete because enquiry history
+/// hangs off these rows, and the answer to a service a firm has stopped
+/// offering is `draft`, which is already the state that means "not on the
+/// directory".
+enum ServiceStatus {
+  draft
+  live
+
+  @@map("service_status")
+}
+
+/// A scope-sheet family — board `3g-s` B2.
+///
+/// The single most important line in the board: **fee basis is an enum per
+/// family, never global.** The facilities-management family offers per month,
+/// per visit, per sq ft / yr, fixed fee and on assessment. An audit family
+/// offers a different set and calls two of the table's rows different things —
+/// *Standard applied* rather than *Regulator*, *Sectors most audited* rather
+/// than *Sectors served*. One global list was the first design and it was wrong
+/// for every family at once.
+///
+/// A family also fixes the **row order** on the public table, and that is the
+/// whole comparison instrument: a buyer reading three audit firms reads the
+/// same nine rows in the same order three times. Sorting per service would
+/// destroy it, which is why the order lives here and not on the record.
+///
+/// Reached from `Category.scopeFamilyId`, resolved up the ancestor chain the
+/// same way `tradeKind` is, and falling back to the seeded `general` family —
+/// which is where every service lands today, because no category has been given
+/// one yet. `12h` owns the screen that assigns them.
+model ScopeSheetFamily {
+  id   String @id
+  name String
+
+  /// The fallback, and there is exactly one — enforced by a partial unique
+  /// index, because Prisma cannot express "at most one row where this is true"
+  /// and two defaults is a coin flip over which fee bases a seller is offered.
+  isDefault Boolean @default(false) @map("is_default")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  feeBases   ScopeSheetFeeBasis[]
+  rows       ScopeSheetRow[]
+  categories Category[]
+
+  @@map("scope_sheet_family")
+}
+
+/// One fee basis a family offers, and the label it wears there.
+///
+/// A row rather than a string in an array so the label and the order travel
+/// with the key: `per_sqft_yr` reads "Per sq ft / yr" in facilities management
+/// and would read something else anywhere it was borrowed. The key is what a
+/// `Service` stores; the label is what two screens render.
+model ScopeSheetFeeBasis {
+  familyId String @map("family_id")
+  key      String
+  label    String
+  position Int
+
+  family ScopeSheetFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@id([familyId, key])
+  @@index([familyId, position])
+  @@map("scope_sheet_fee_basis")
+}
+
+/// One row of the public scope table, per family.
+///
+/// The keys are fixed in code — they are the six required columns on `Service`
+/// minus the name, plus the optional `ScopeFieldValue` keys — and what a family
+/// chooses is the **label**, the **position** and whether the row is
+/// **filterable**.
+///
+/// `filterable` means *enumerable across this family*: a row only earns it when
+/// every firm's answer comes from a set a facet could offer. Turnaround never
+/// does — "24/7 callout, 4-hour attendance" and "3–4 weeks from complete
+/// records" are both right and neither is a facet value — which is the one row
+/// the design render marks and this does not. Board `1g-s` B5 makes this the
+/// single source for `1c-s`'s facets, so that the page and the filter rail
+/// cannot drift; until those exist, its reader is the editor, which tells a
+/// seller which answers buyers will filter on.
+model ScopeSheetRow {
+  familyId   String  @map("family_id")
+  key        String
+  label      String
+  position   Int
+  filterable Boolean @default(false)
+
+  family ScopeSheetFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@id([familyId, key])
+  @@index([familyId, position])
+  @@map("scope_sheet_row")
+}
+
+/// One engagement a firm offers — the unit of the entire service track.
+///
+/// Its own model rather than a `kind` discriminator on `Product`, settled
+/// 11 Sep in `docs/services-build-plan.md` §3. `Product` carries `availability`,
+/// `stockQty`, `minOrderQty`, `sku` and `specValues`, every one of them NOT NULL
+/// or defaulted and every one of them a lie about a service — and it has readers
+/// in search, fan-out, the storefront, the importer, the media library, quotes
+/// and four scheduled jobs, each of which would have grown a branch.
+///
+/// **Six of these fields are required and none of them gates publishing.**
+/// Board `3g-s` B4: six required fields make a sheet *complete*, not
+/// *publishable*. A completeness gate turns the score into a hurdle and the
+/// predictable result is sellers typing "TBC" into six fields to clear it,
+/// which destroys the comparison the fields exist to create. So every one of
+/// the six is nullable, a 4-of-6 service goes live, and `3f-s` says what that
+/// costs in the seller's own terms rather than withholding the button.
+model Service {
+  id         String @id @default(cuid())
+  businessId String @map("business_id")
+
+  /// Which trade this engagement sits in, and therefore which family's fee
+  /// bases and row labels apply.
+  categoryId String @map("category_id")
+
+  /// The row on `3f-s`, the H1 on `1g-s`, and the only required field with no
+  /// empty state to design: a service with no name is a row nobody can pick out
+  /// of a list of six.
+  name String
+
+  /// The public path segment — `/b/:slug/s/:service`.
+  ///
+  /// Unique per business rather than globally, because two firms both offering
+  /// *Statutory audit* is the normal case and the comparison the directory
+  /// exists for. Derived from the name on create and then **stable**: a seller
+  /// renaming a service must not silently break every link a buyer has.
+  slug String
+
+  engagementType EngagementType? @map("engagement_type")
+
+  /// Validated against the family's own list, never a global enum — `3g-s` B2.
+  /// A value from another family is refused rather than silently saved.
+  feeBasis String? @map("fee_basis")
+
+  /// Free text, and deliberately. "4-hour attendance" and "3–4 weeks from
+  /// complete records" are both right and no enum holds them both.
+  turnaround String?
+
+  deliveredWhere DeliveredWhere? @map("delivered_where")
+
+  /// What lands on the client's desk at the end.
+  deliverable String?
+
+  /// What the engagement includes, in the seller's own words.
+  scope String?
+
+  /// The line that prevents the argument in month four.
+  ///
+  /// Never templated. `3h-s` clones a scope sheet for reuse and deliberately
+  /// excludes this field and `scope` from the clone — a pre-filled exclusions
+  /// line is the one that ends up in a dispute.
+  excluded String?
+
+  /// **Private. Routing only. Never published** — `3g-s` B5, `1g-s` B3.
+  ///
+  /// It is the one field on this model where a leak is a commercial problem
+  /// rather than a bug, so it is excluded from the public loader's `select`
+  /// rather than filtered out of a template: a field that is never fetched
+  /// cannot reach a page, a payload, a meta description or a JSON-LD block.
+  indicativeFee String? @map("indicative_fee")
+
+  status ServiceStatus @default(draft)
+
+  /// Manual order, and it is the seller's — `3f-s` B5. Sellers lead with their
+  /// best work, and `1e-s` renders the public catalogue in this order.
+  position Int @default(0)
+
+  /// Set the first time it goes live and never cleared, the same rule
+  /// `Location.publishedAt` follows: a service that has been live once has made
+  /// a claim to buyers, and unpublishing does not un-make it.
+  publishedAt DateTime? @map("published_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  business  Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category  Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  values    ScopeFieldValue[]
+  revisions ServiceRevision[]
+
+  @@unique([businessId, slug])
+  @@index([businessId, status])
+  @@index([businessId, position])
+  @@map("service")
+}
+
+/// The optional half of the scope sheet — board `3g-s`.
+///
+/// A narrow table rather than five more columns, because the optional set
+/// differs per family and will grow: an audit family wants *Standard applied*,
+/// a lift-maintenance family wants an approval number, and a column per family
+/// is a migration per family. The six required fields stay as columns on
+/// `Service` because every list, facet and match reads them.
+model ScopeFieldValue {
+  id        String @id @default(cuid())
+  serviceId String @map("service_id")
+
+  /// `regulator` · `sectors` · `requires_from_client` · `languages`.
+  ///
+  /// Not `capacity`. D11 closed as no on 11 Sep: a listed business is taking
+  /// work, and a stale *accepting clients* flag is worse than no flag because a
+  /// buyer who acts on it and gets no reply blames the directory. The field,
+  /// the chip on `1g-s` and the matcher column went together.
+  fieldKey String @map("field_key")
+
+  value String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([serviceId, fieldKey])
+  @@map("scope_field_value")
+}
+
+/// Every change to a scope sheet — board `3g-s` B9, criterion 7.
+///
+/// Field, before, after, who and when. It renders in the editor's sidebar, and
+/// the reason it is a table rather than a rendering of `updatedAt` is the
+/// question support actually gets: *when did their turnaround change*. A row
+/// that only knows it changed cannot answer it.
+///
+/// Not an `AuditEvent`. That log records **staff** decisions and its
+/// `reason` is NOT NULL because a decision without one is unreviewable; this
+/// records a seller editing their own record, which needs no justification and
+/// would fill the staff log with noise.
+model ServiceRevision {
+  id        String @id @default(cuid())
+  serviceId String @map("service_id")
+  actorId   String @map("actor_id") @db.Uuid
+
+  /// The field key, as the editor names it.
+  field String
+
+  /// What it said, and what it says now. Both nullable: a first fill has no
+  /// before, and a cleared field has no after.
+  before String?
+  after  String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  actor   User    @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([serviceId, createdAt])
+  @@map("service_revision")
 }
 
 /// A free zone a firm is registered — or approved — to work in. Board `2d-s` B4.
@@ -3537,6 +3850,20 @@ model Plan {
   /// Null means unlimited.
   enquiriesPerMonth   Int?      @map("enquiries_per_month")
   productLimit        Int?      @map("product_limit")
+  /// How many services a seller may hold — board `2e-s`, and the eighth number.
+  ///
+  /// D1 ratified seven plan numbers on 11 Sep and this was not among them,
+  /// because services were not their own model yet. They are now, and a cap
+  /// that does not exist is not a generous cap — it is `productLimit` quietly
+  /// not applying to half the directory. The values seeded with this board are
+  /// **proposed, not ratified**: three, fifteen, unlimited. They are rows, so
+  /// changing them is an `UPDATE` rather than a deploy.
+  ///
+  /// Sized from what a services business actually holds. An FM contractor has
+  /// six; an audit practice four. Nobody has six hundred, which is why this is
+  /// a much smaller ladder than `productLimit` and why `3f-s` has no search and
+  /// no pagination.
+  serviceLimit        Int?      @map("service_limit")
   locationLimit       Int?      @map("location_limit")
   photoLimit          Int?      @map("photo_limit")
   /// How many gallery photographs a *public* storefront shows on this plan.

@@ -130,6 +130,7 @@ describe("who may take an address", () => {
           teamSeats: 1,
           enquiriesPerMonth: null,
           productLimit: null,
+          serviceLimit: null,
           locationLimit: null,
           photoLimit: null,
           customDomain: true,

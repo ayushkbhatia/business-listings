@@ -31,6 +31,7 @@ const PLAN_SELECT = {
   monthlyPriceAed: true,
   enquiriesPerMonth: true,
   productLimit: true,
+  serviceLimit: true,
   locationLimit: true,
   photoLimit: true, publicPhotoLimit: true,
   categoryLimit: true, storageMb: true,

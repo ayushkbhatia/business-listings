@@ -52,7 +52,7 @@ export interface ActionError {
 export type LocationResult = { ok: true; id: string } | ActionError;
 
 const PLAN_SELECT = {
-  id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
+  id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true, serviceLimit: true,
   locationLimit: true, photoLimit: true, publicPhotoLimit: true,
   categoryLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
   customDomain: true, analytics: true, csvImport: true, sponsoredEligible: true,

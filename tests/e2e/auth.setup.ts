@@ -49,7 +49,7 @@ interface Seat {
   heading: string;
 }
 
-const SEATS: Record<"pro" | "free" | "opsLead" | "moderator" | "finance", Seat> = {
+const SEATS: Record<"pro" | "free" | "services" | "opsLead" | "moderator" | "finance", Seat> = {
   pro: {
     email: "bl.e2e.seller@gmail.com",
     slug: "al-marwan-industrial-supplies-llc",
@@ -67,6 +67,22 @@ const SEATS: Record<"pro" | "free" | "opsLead" | "moderator" | "finance", Seat> 
     name: "E2E Free Seller",
     roles: ["seller_owner"],
     state: "tests/e2e/.auth/seller-free.json",
+    landing: "**/dashboard/leads",
+    heading: "Leads",
+  },
+  /*
+   * The service track's seat — boards `3g-s`, `3f-s`, `1g-s`.
+   *
+   * Every other seller fixture sells goods, so until this existed the services
+   * screens could only ever be exercised in their empty state. `seedServicesFirm`
+   * creates the business it signs into.
+   */
+  services: {
+    email: "bl.e2e.services.seller@gmail.com",
+    slug: "meridian-chartered-accountants",
+    name: "E2E Services Seller",
+    roles: ["seller_owner"],
+    state: "tests/e2e/.auth/seller-services.json",
     landing: "**/dashboard/leads",
     heading: "Leads",
   },
@@ -257,6 +273,10 @@ async function provision(page: Page, seat: Seat) {
 
 setup("sign in as a seller on Pro", async ({ page }) => {
   await provision(page, SEATS.pro);
+});
+
+setup("sign in as a seller who sells work", async ({ page }) => {
+  await provision(page, SEATS.services);
 });
 
 setup("sign in as a seller on Free", async ({ page }) => {

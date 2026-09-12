@@ -231,7 +231,7 @@ describe("criterion 10 — entitlements move with an upgrade, on payment", () =>
 
     const after = await prisma.business.findUniqueOrThrow({
       where: { id: businessId },
-      select: { planId: true, plan: { select: { productLimit: true, teamSeats: true } } },
+      select: { planId: true, plan: { select: { productLimit: true, serviceLimit: true, teamSeats: true } } },
     });
     // "Within a minute" is generous. This is the same request.
     expect(after.planId).toBe("basic");

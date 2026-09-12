@@ -326,6 +326,23 @@ function tabsFor(
     });
   }
 
+  /*
+     Board `1g-s`'s link surface.
+
+     `1e-s` is the full public catalogue — grouped, filtered, ordered — and it
+     is a later board. This is the tab that makes a service page reachable at
+     all, because a detail page linked from nowhere is a route rather than a
+     screen. `1e-s` replaces the index behind it; the tab stays.
+  */
+  if (business._count.services > 0) {
+    items.push({
+      key: "services",
+      label: t("storefront.services"),
+      href: `/b/${business.slug}/services`,
+      badge: business._count.services,
+    });
+  }
+
   if (business.locations.length > 0) {
     items.push({
       key: "branches",

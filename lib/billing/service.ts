@@ -62,7 +62,7 @@ import { recordMovement } from "./mrr";
  */
 
 const PLAN_SELECT = {
-  id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
+  id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true, serviceLimit: true,
   locationLimit: true, photoLimit: true, publicPhotoLimit: true,
   categoryLimit: true, storageMb: true, teamSeats: true, rankingMultiplier: true,
   customDomain: true, analytics: true, csvImport: true, sponsoredEligible: true,
@@ -878,7 +878,7 @@ export async function applyEndedCancellations(now = new Date()) {
   const freePlan = await prisma.plan.findUnique({
     where: { id: "free" },
     select: {
-      id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true,
+      id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true, productLimit: true, serviceLimit: true,
       locationLimit: true, photoLimit: true, publicPhotoLimit: true, categoryLimit: true, storageMb: true, teamSeats: true,
       rankingMultiplier: true, customDomain: true, analytics: true, csvImport: true,
       sponsoredEligible: true, sortOrder: true,

@@ -4404,6 +4404,12 @@ export const en = {
   "plan.enquiries": "{n} enquiries a month to answer",
   "plan.enquiries_unlimited": "Unlimited enquiries",
   "plan.products": "{n} products",
+  // Board `2e-s`, the eighth plan number. Singular at one, because "1 services"
+  // on a card somebody is deciding against is the kind of small wrongness that
+  // makes a price list feel unmaintained.
+  "plan.services": "{n} services",
+  "plan.service_one": "1 service",
+  "plan.services_unlimited": "Unlimited services",
   "plan.products_unlimited": "Unlimited products",
   "plan.locations": "{n} locations",
   "plan.locations_unlimited": "Unlimited locations",
@@ -5797,6 +5803,160 @@ export const en = {
   "coverage_step.group_coverage": "Where you work",
   "coverage_step.group_branches": "Where your stock sits",
   "coverage_step.both_note": "You told us you sell products and work, so both are here. Branches are places; coverage is a set of areas, and they are different questions.",
+
+  // ── Boards `3g-s` · `3f-s` · `1g-s`: the scope sheet ─────────────────────
+  //
+  // Twelve fields, six required, and the six are what make two firms
+  // comparable. Completeness is measured and never declared, and it does not
+  // gate publishing — a 4-of-6 service goes live and the list says what that
+  // costs rather than withholding the button.
+  "nav.services": "Services",
+
+  "engagement.ongoing_contract": "Ongoing contract",
+  "engagement.one_off_job": "One-off job",
+  "engagement.call_off": "Call-off",
+  "delivered.remote": "Remotely",
+  "delivered.at_our_office": "At our office",
+  "delivered.on_site": "On the client’s site",
+
+  // ── `3f-s` the list ──────────────────────────────────────────────────────
+  "services.title": "Services",
+  "services.eyebrow": "Catalogue",
+  "services.meta": { one: "{count} service", other: "{count} services" },
+  "services.counts": "{live} live · {draft} draft",
+  "services.counts_live": { one: "{count} live", other: "{count} live" },
+  "services.add": "Add a service",
+  "services.add_placeholder": "What is it called?",
+  "services.reorder": "Reorder",
+  "services.reorder_done": "Done",
+  "services.reorder_hint": "Drag a row to change the order buyers see on your storefront.",
+  "services.move_up": "Move {name} up",
+  "services.move_down": "Move {name} down",
+  "services.col.service": "Service",
+  "services.col.engagement": "Engagement",
+  "services.col.fee_basis": "Fee basis",
+  "services.col.turnaround": "Turnaround",
+  "services.col.sheet": "Scope sheet",
+  "services.col.status": "Status",
+  // Names the actions column for assistive technology. `DataTable` renders it
+  // sr-only; leaving it unset ships a `<th>` with no accessible name, which axe
+  // calls `empty-table-header` and a screen-reader user hears as nothing.
+  "services.col.actions": "Actions",
+  // Board `3f-s` B6: a draft's empty enum reads `Not set`, never an em dash or
+  // a blank cell. A blank looks like the table failed to load; this says the
+  // seller has not answered yet, which is what is true.
+  "services.not_set": "Not set",
+  "services.sheet": "{filled} of {total}",
+  "services.status.live": "Live",
+  "services.status.draft": "Draft",
+  "services.selected": { one: "{count} selected", other: "{count} selected" },
+  "services.publish": "Publish",
+  "services.unpublish": "Unpublish",
+  "services.clear_selection": "Clear",
+  "services.select_row": "Select {name}",
+  "services.select_all": "Select every service",
+  "services.open": "Open {name}",
+  "services.view_public": "View as a buyer",
+  // The cost of an incomplete sheet, in the seller's terms rather than ours.
+  // Naming the row is the whole point — "2 services incomplete" is a nag.
+  "services.gap_line": "{name} is live at {filled} of {total} — {missing}. Buyers enquire and then ask by message, which is slower for you than typing it once.",
+  "services.gap_none": "no {field}",
+  "services.gap_join": " and ",
+  "services.all_complete": "Every scope sheet is complete.",
+  "services.no_stock_note": "No stock, no price and no spreadsheet import — nobody imports six services.",
+  "services.empty_title": "No services yet",
+  "services.empty_body": "A service is one engagement you take on: what it covers, what it does not, how it is charged and how fast. Six typed by hand is the normal number.",
+  "services.counter": "{used} of {cap} services used on {plan}",
+  "services.counter_one": "{used} of {cap} service used on {plan}",
+  "services.counter_unlimited": "{used} services on {plan}",
+  "services.upgrade": "{plan} allows {cap} →",
+  "services.upgrade_unlimited": "{plan} allows unlimited →",
+  "services.at_cap": "That is {cap} services, which is all {plan} holds. Move up a plan, or remove one first.",
+  "services.delete": "Delete",
+  "services.delete_title": "Delete {name}?",
+  "services.delete_body": "Enquiries already sent about this service keep their history, and the public page stops resolving. There is no undo.",
+  "services.delete_confirm": "Delete this service",
+  "services.cancel": "Cancel",
+  "services.error.save_failed": "That did not save. Try it again — nothing was lost.",
+
+  // ── `3g-s` the editor ────────────────────────────────────────────────────
+  "service_editor.back": "Services",
+  "service_editor.required_group": "The six required fields",
+  "service_editor.name": "Service name",
+  "service_editor.name_hint": "What a buyer would call it. It is the heading on your public page.",
+  "service_editor.name_required": "A service needs a name — it is the row on your list and the heading buyers read.",
+  "service_editor.engagement": "Engagement type",
+  "service_editor.fee_basis": "Fee basis",
+  "service_editor.fee_basis_hint": "How the work is charged, not what it costs. These are the ones firms in {family} use.",
+  "service_editor.fee_basis_stale": "This service moved trade and its fee basis is not one {family} offers. Pick again — we have not guessed for you.",
+  "service_editor.turnaround": "Turnaround",
+  "service_editor.turnaround_hint": "In your own words. “24/7 callout, 4-hour attendance” and “3–4 weeks from complete records” are both right.",
+  "service_editor.delivered_where": "Delivered where",
+  "service_editor.deliverable": "Deliverable",
+  "service_editor.deliverable_hint": "What lands on the client’s desk at the end.",
+  "service_editor.choose": "Choose…",
+  "service_editor.scope": "Scope",
+  "service_editor.scope_hint": "What the engagement includes, in your words",
+  "service_editor.scope_long": "{count} characters. Around {max} reads well; longer is allowed and nothing is cut.",
+  "service_editor.excluded": "Excluded",
+  "service_editor.excluded_hint": "The line that prevents the argument later",
+  "service_editor.optional_group": "Optional · {filled} of {total}",
+  "service_editor.optional.regulator": "Regulator or standard",
+  "service_editor.optional.requires_from_client": "Requires from client",
+  "service_editor.optional.sectors": "Sectors served",
+  "service_editor.optional.languages": "Languages",
+  "service_editor.filterable": "Buyers filter on this",
+  "service_editor.sheet_title": "Scope sheet",
+  "service_editor.sheet_count": "{filled} of {total} required",
+  "service_editor.sheet_measured": "Measured from the record. There is no box to tick — the number is what the fields say.",
+  "service_editor.fee_title": "Indicative fee is optional, and private",
+  "service_editor.fee_label": "Indicative fee",
+  "service_editor.fee_body": "If you fill it in we use it to route enquiries, and we never publish it. There is no price on any public service page.",
+  "service_editor.log_title": "Every change is logged",
+  "service_editor.log_empty": "Nothing changed yet.",
+  "service_editor.log_line": "{what} · {when} · {actor}",
+  // The old value is half of what B9 asks for, and the half support actually
+  // needs: "when did their turnaround change" is only answerable beside what it
+  // changed from.
+  "service_editor.log_from": "{field}, from “{before}”",
+  "service_editor.log_set": "{field} set",
+  "service_editor.log_cleared": "{field} cleared",
+  "service_editor.log_created": "Created",
+  "service_editor.log_status_live": "Published",
+  "service_editor.log_status_draft": "Unpublished",
+  "service_editor.publish": "Publish",
+  "service_editor.unpublish": "Unpublish",
+  "service_editor.publish_at": "Publishing at {filled} of {total}. That is allowed — the missing fields cost you enquiries, not the listing.",
+  "service_editor.view_public": "View as a buyer",
+  "service_editor.not_found": "That service is not here",
+
+  // ── `1g-s` the public page ───────────────────────────────────────────────
+  "service_public.badge": "Service",
+  "service_public.scope_title": "Scope of work",
+  "service_public.included": "Included",
+  "service_public.excluded": "Not included",
+  "service_public.excluded_note": "Quoted separately if you need them. Say so in your enquiry.",
+  "service_public.scope_none": "This firm has not written out what the engagement covers. Ask in your enquiry and it comes back in the reply.",
+  "service_public.table_title": "Scope table",
+  "service_public.table_hint": "The same rows on every firm in {family}, so you can compare",
+  "service_public.not_provided": "Not provided",
+  "service_public.rows_filled": "{filled} of {total} rows filled. The rest are unanswered rather than hidden — ask about them in your enquiry.",
+  "service_public.coverage_title": "Where they work",
+  "service_public.coverage_none": "This firm has not said which areas it covers.",
+  "service_public.no_price_title": "Why there is no price",
+  "service_public.no_price_body": "A fee moves with the size of the job, and a number without the job attached is a number that changes. The fee basis above says what shape it takes; the number comes back with the quote.",
+  "service_public.compare_title": "Other firms offering this",
+  "service_public.compare_hint": "In {emirate}, in the same trade",
+  "service_public.enquire": "Enquire about this",
+  "service_public.other_services": "Other services from {name}",
+  "service_public.meta_description": "{name} from {business} — what the engagement covers, what it does not, how it is charged and how fast.",
+
+  // The storefront tab that makes the page reachable. Board `1e-s` replaces it
+  // with the full public catalogue; this is the link surface, not that board.
+  "storefront.services": "Services",
+  "services_index.title": "Services from {name}",
+  "services_index.intro": "What each engagement covers, what it does not, how it is charged and how fast.",
+  "services_index.empty": "Nothing listed yet.",
   // The extras allowance — the plan cap minus the primary. Not the total.
   "profile_step.extras_used": "· {used} of {allowed} extra used on {plan}",
   "profile_step.extras_unlimited": "· unlimited on {plan}",
@@ -6678,6 +6838,9 @@ export const en = {
   "admin.plans.col.price": "Monthly",
   "admin.plans.col.enquiries": "Enquiries",
   "admin.plans.col.products": "Products",
+  // Board `2e-s`. The sixth numeric cap, and the first one whose numbers are
+  // proposed rather than ratified.
+  "admin.plans.col.services": "Services",
   "admin.plans.col.locations": "Locations",
   "admin.plans.col.photos": "Photos",
   // Megabytes, and the unit is in the header because the field is a bare

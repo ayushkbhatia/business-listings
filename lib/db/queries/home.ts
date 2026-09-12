@@ -600,6 +600,7 @@ export async function readHomePlans() {
       monthlyPriceAed: true,
       locationLimit: true,
       productLimit: true,
+      serviceLimit: true,
       photoLimit: true, publicPhotoLimit: true,
   categoryLimit: true, storageMb: true,
       enquiriesPerMonth: true,
