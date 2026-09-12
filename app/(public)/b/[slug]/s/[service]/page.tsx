@@ -3,15 +3,14 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Breadcrumb, Card, Panel, PublicShell } from "@/components/structure";
 import { Tag } from "@/components/display";
-import { VerificationBadge, tierSpec } from "@/components/domain";
+import { ScopeTable, VerificationBadge, scopeWords, tierSpec } from "@/components/domain";
 import { getBusinessBySlug } from "@/lib/db/queries";
 import { prisma } from "@/lib/db/client";
 import { publicServiceFor, publicServicesFor } from "@/lib/services/service";
 import { publicCredentialsFor, type PublicCredential } from "@/lib/credentials/service";
 import { businessCoverage } from "@/lib/locations/service-coverage";
-import { formatCount, formatMonth } from "@/lib/format";
+import { formatMonth } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { cn } from "@/lib/cn";
 import { EMIRATES } from "@/lib/uae";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { PageEvent } from "@/components/telemetry";
@@ -253,43 +252,13 @@ export default async function ServiceDetailPage({ params }: Params) {
           title={t("service_public.table_title")}
           description={t("service_public.table_hint", { family: service.familyName })}
         >
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-body-sm">
-              {/* Named, not explained. The panel's description above says why
-                  the rows are the same on every firm; a caption repeating it is
-                  a screen reader hearing the sentence twice. */}
-              <caption className="sr-only">{t("service_public.table_title")}</caption>
-              <tbody>
-                {service.rows.map((row) => (
-                  <tr key={row.key} className="border-b border-line last:border-b-0">
-                    <th
-                      scope="row"
-                      className="w-[14rem] py-2.5 pe-4 text-start align-top font-normal text-muted"
-                    >
-                      {row.label}
-                    </th>
-                    <td
-                      className={cn(
-                        "py-2.5 align-top",
-                        row.value ? "text-ink" : "text-faint",
-                      )}
-                    >
-                      {row.value === null
-                        ? t("service_public.not_provided")
-                        : words(row.key, row.value)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <p className="mt-3 text-caption text-muted">
-            {t("service_public.rows_filled", {
-              filled: formatCount(service.filled),
-              total: formatCount(service.total),
-            })}
-          </p>
+          {/*
+             The same component the setup screen's live preview mounts —
+             `8c-s` B11. Two copies of this markup is two tables that agree
+             today, and the preview is the one place a disagreement would be
+             invisible until a seller published on the strength of it.
+          */}
+          <ScopeTable rows={service.rows} filled={service.filled} total={service.total} />
         </Panel>
 
         {/* ── Who signs it ─────────────────────────────────────────────── */}
@@ -374,18 +343,8 @@ export default async function ServiceDetailPage({ params }: Params) {
  * and a loader that returned words would be a loader no other surface could
  * translate.
  */
-function words(key: string, value: string): string {
-  if (key === "engagement_type") {
-    return t(`engagement.${value}` as "engagement.ongoing_contract") || value;
-  }
-  if (key === "delivered_where") {
-    return t(`delivered.${value}` as "delivered.remote") || value;
-  }
-  return value;
-}
-
 function chipWords(chip: { key: string; value: string }): string {
-  return words(chip.key, chip.value);
+  return scopeWords(chip.key, chip.value);
 }
 
 function emirateLabel(emirate: string): string {

@@ -1,5 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import {
+  COUNTABLE_SELECT,
+  countsTowardTask,
+  toCountable,
+} from "@/lib/services/setup-sheet";
 import { profileStrength, type ProfileFacts } from "./profile-strength";
 import {
   specCompleteness,
@@ -60,7 +65,7 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
         select: {
           team: true,
           products: true,
-          services: { where: { status: "live" } },
+
           serviceCoverage: true,
           // Board `8b-s`: the credential is the thing, the file is optional
           // evidence for it. Lapsed rows count — an expiry changes nothing.
@@ -70,9 +75,9 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
     },
   });
 
-  // Two whole-table reads rather than two queries per business. At 41,000
-  // listings this is the difference between a job and an outage.
-  const [productRows, mediaRows, fieldRows] = await Promise.all([
+  // Whole-table reads rather than a query per business. At 41,000 listings
+  // this is the difference between a job and an outage.
+  const [productRows, mediaRows, fieldRows, serviceRows] = await Promise.all([
     prisma.product.findMany({
       select: {
         businessId: true,
@@ -101,7 +106,24 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
         requiredFrom: true,
       },
     }),
+    /*
+     * Board `8c-s` B4. Live is not enough: a service counts toward the lever
+     * only at 4 of 6 required fields, so the six fields have to be read rather
+     * than counted. `COUNTABLE_SELECT` is shared with the three other readers
+     * of this rule, because a bar applied in one of them is a seller reading
+     * two different numbers on two screens.
+     */
+    prisma.service.findMany({ select: COUNTABLE_SELECT }),
   ]);
+
+  const countingByBusiness = new Map<string, number>();
+  for (const service of serviceRows) {
+    if (!countsTowardTask(toCountable(service))) continue;
+    countingByBusiness.set(
+      service.businessId,
+      (countingByBusiness.get(service.businessId) ?? 0) + 1,
+    );
+  }
 
   const rulesByTemplate = new Map<string, SpecFieldRule[]>();
   for (const field of fieldRows) {
@@ -176,7 +198,7 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
       // `verifiedAt` rather than the tier: the tier is a ladder and this is the
       // one rung that means "checked against the issuing authority".
       licenceVerified: business.verifiedAt !== null,
-      servicesLive: business._count.services,
+      servicesCounting: countingByBusiness.get(business.id) ?? 0,
       sectors: business.sectorsServed.length,
       deliveryModes: business.deliveryModes.length,
       coverageAreas: business._count.serviceCoverage,

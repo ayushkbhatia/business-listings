@@ -69,8 +69,21 @@ export interface ProfileFacts {
   credentials: number;
   /** The one component the seller cannot finish — see `SERVICES_WEIGHTS`. */
   licenceVerified: boolean;
-  /** Scope sheets with `status = live`. */
-  servicesLive: number;
+  /**
+   * Services that are live **and** at `8c-s`'s counting bar of 4 of 6.
+   *
+   * Not simply live, and the two rules are deliberately different — `8c-s` B4.
+   * Publishing is ungated on purpose (`mayPublish()` returns true so a gate has
+   * to be deleted to add one), because gating it makes sellers type "TBC" into
+   * six fields. But a lever that scored every live row would pay full marks for
+   * three services carrying nothing but a name, and the task this feeds is the
+   * one asking for a *complete* list rather than a long one.
+   *
+   * `lib/services/setup-sheet.ts` owns the rule and the select every reader
+   * shares, because four modules compute this and a bar added to one of them is
+   * a seller reading two different numbers on two screens.
+   */
+  servicesCounting: number;
   /** Sectors the firm says it has worked in — `2c-s`. */
   sectors: number;
   /** Delivery modes picked on `2d-s`. */
@@ -264,7 +277,7 @@ export const DESCRIPTION_TARGET = 120;
 function servicesFractions(facts: ProfileFacts): Record<string, number> {
   return {
     credentials: ratio(facts.credentials, CREDENTIAL_TARGET),
-    services: ratio(facts.servicesLive, SERVICES_TARGET),
+    services: ratio(facts.servicesCounting, SERVICES_TARGET),
     licence: facts.licenceVerified ? 1 : 0,
     identity:
       (ratio(descriptionLength(facts), DESCRIPTION_TARGET) * 12 + ratio(facts.sectors, 1) * 8) / 20,

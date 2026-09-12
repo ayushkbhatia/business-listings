@@ -9,7 +9,8 @@ import { DataTable, Modal, SelectionBar } from "@/components/structure";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { ServiceRow, ServicesBoard } from "@/lib/services/service";
-import type { Completeness, RequiredField } from "@/lib/services/scope-sheet";
+import type { Completeness } from "@/lib/services/scope-sheet";
+import { listGaps } from "@/lib/services/gaps";
 import type {
   addService,
   publishServices,
@@ -31,15 +32,6 @@ import type {
  * function prop crossing into a client component is this repo's most repeated
  * defect and `tests/unit/client-labels` fails the build on one.
  */
-
-const GAP_LABEL: Record<RequiredField, string> = {
-  name: t("service_editor.name"),
-  engagementType: t("service_editor.engagement"),
-  feeBasis: t("service_editor.fee_basis"),
-  turnaround: t("service_editor.turnaround"),
-  deliveredWhere: t("service_editor.delivered_where"),
-  deliverable: t("service_editor.deliverable"),
-};
 
 const ENGAGEMENT_LABEL: Record<string, string> = {
   ongoing_contract: t("engagement.ongoing_contract"),
@@ -455,10 +447,8 @@ function counterLabel(board: ServicesBoard): string {
  * delivered where" reads as one missing field and one present one — which is
  * the opposite of what it says.
  */
-function listGaps(gaps: readonly RequiredField[]): string {
-  const words = gaps.map((gap) =>
-    t("services.gap_none", { field: GAP_LABEL[gap].toLowerCase() }),
-  );
-  if (words.length <= 1) return words[0] ?? "";
-  return `${words.slice(0, -1).join(", ")}${t("services.gap_join")}${words.at(-1)}`;
-}
+/*
+   Moved to `lib/services/gaps.ts` with the label table, because `8c-s` names
+   the same six fields in its thin-service callout. Two copies of six labels is
+   two copies that agree until somebody renames a field on one screen.
+*/

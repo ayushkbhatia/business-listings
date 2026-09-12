@@ -351,7 +351,7 @@ describe("criterion 11 — profile strength has no seller-writable path", () => 
       teamSeats: business._count.team,
       credentials: 0,
       licenceVerified: false,
-      servicesLive: 0,
+      servicesCounting: 0,
       sectors: 0,
       deliveryModes: 0,
       coverageAreas: 0,

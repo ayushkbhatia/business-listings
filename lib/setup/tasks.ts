@@ -193,8 +193,14 @@ export interface SetupTaskFacts {
    * renewal chasing by another name.
    */
   credentials?: number;
-  /** Scope sheets with `status = live`. Zero for a seller of goods. */
-  servicesLive?: number;
+  /**
+   * Services live **and** at `8c-s`'s bar of 4 of 6. Zero for a seller of goods.
+   *
+   * A thin service is published, findable and excluded from the three — `3f-s`'s
+   * rule, and `8c-s` states it in the seller's terms with the missing fields
+   * named. See `lib/services/setup-sheet.ts`.
+   */
+  servicesCounting?: number;
   /** Media on the business or its products, review photographs excluded. */
   photos: number;
   products: number;
@@ -272,7 +278,7 @@ export function setupBoard(facts: SetupTaskFacts): SetupBoard {
     products: facts.products,
     team: facts.seats + facts.invitesSent,
     credentials: facts.credentials ?? 0,
-    services: facts.servicesLive ?? 0,
+    services: facts.servicesCounting ?? 0,
   };
 
   const targetOf = (id: SetupTaskId) =>

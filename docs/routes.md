@@ -76,6 +76,7 @@ and it is the one that argues back.
 /dashboard/setup                        Setup hub                             [8a]  built h8s1
 /dashboard/setup (services)             Setup hub — four tasks              [8a-s] built h8as
 /dashboard/setup/credentials            Task 1 (services) — credentials     [8b-s] built h8bs
+/dashboard/setup/services               Task 2 (services) — sheet + services [8c-s] built h8cs
 /dashboard/setup/photos                 Task 1 — photos                       [8b]  built h8s2
 /dashboard/setup/products               Task 2 — template, first products     [8c]  built h8s3
 /dashboard/setup/team                   Task 3 — invite the team              [8d]  built h8s4
@@ -331,6 +332,24 @@ is not an input. `CHECKABLE_KINDS` is one entry long — the FTA tax agent numbe
 and `lib/credentials/fta.ts` is the seam rather than the integration: no register
 is configured anywhere on this platform, so every number saves as a claim with
 `register_unavailable` surfaced inline.
+
+`/dashboard/setup/services` is **two steps and the order is load-bearing** — board
+`8c-s` B1. The sheet decides which rows a service has, so a service added before one
+is chosen has nowhere to put its values; step 2 is inert until
+`Business.scopeSheetFamilyId` is set, and `seedFromCommonServices` refuses on the
+server as well, because a disabled fieldset is a hint rather than a gate.
+
+**A family resolves business choice → `Category.scopeFamilyId` up the tree → the
+seeded default.** The business column is an override rather than a second source of
+truth, and it has to win for step 1 to mean anything: all 440 category rows are null,
+so without it every seller resolves to `general` and the choice would change nothing.
+
+**Publishing and counting are two rules.** `mayPublish()` still returns `true`
+unconditionally — gate publication on a score and sellers type "TBC" into six fields —
+but the hub's task 2 counts only services that are live **and** at `COUNTING_BAR`,
+four of the six required fields. A thin service is published, findable and excluded,
+and the screen names the missing fields rather than saying "incomplete". Four modules
+read that rule and all four share `COUNTABLE_SELECT` in `lib/services/setup-sheet.ts`.
 
 `/b/:slug/s/:service` is the scope table where the spec table is. Its row order
 comes from `ScopeSheetFamily`, so every firm in a family renders the same rows in

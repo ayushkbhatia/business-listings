@@ -2,14 +2,15 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 /**
- * Boards `3g-s`, `3f-s`, `1g-s`, `8a-s`, `8b-s` — the seat that sells work.
+ * Boards `3g-s`, `3f-s`, `1g-s`, `8a-s`, `8b-s`, `8c-s` — the seat that sells work.
  *
  * This spec has its own project and its own seat because every other seller
  * fixture on this platform sells goods: `sells_kind` is `unset` on all 123 live
  * businesses, which means goods, so the services screens could only ever be
  * exercised in their empty state. `seedServicesFirm` builds the firm this signs
- * in as — three services, one of them deliberately live at 4 of 6, and one
- * credential of the two its largest task asks for.
+ * in as — three services, one of them deliberately live at 4 of 6, one
+ * credential of the two its largest task asks for, and the audit scope sheet
+ * already chosen so `8c-s` step 2 is reachable.
  *
  * ## One file, and serial, because it is one business
  *
@@ -293,7 +294,7 @@ test.describe("board 8a-s — the setup hub", () => {
     expect(all.some((title) => /spec template/i.test(title))).toBe(false);
   });
 
-  test("sends the credentials card to its own task screen", async ({ page }) => {
+  test("sends both new cards to their own task screens", async ({ page }) => {
     /*
        `/dashboard/setup/credentials`, board `8b-s`, since that shipped.
 
@@ -311,10 +312,20 @@ test.describe("board 8a-s — the setup hub", () => {
       "/dashboard/setup/credentials",
     );
 
+    /*
+       And services points at `/dashboard/setup/services`, board `8c-s`, since
+       that shipped. It pointed at `/dashboard/services` — `3f-s` — while `8c-s`
+       was unbuilt, which was the nearest thing and the wrong shape: that screen
+       manages a catalogue a firm already has, and this task asks a firm with
+       none to pick a scope sheet and type its first three.
+    */
     const services = page
       .getByRole("listitem")
       .filter({ has: page.getByRole("heading", { name: /Publish your first three services/ }) });
-    await expect(services.getByRole("link")).toHaveAttribute("href", "/dashboard/services");
+    await expect(services.getByRole("link")).toHaveAttribute(
+      "href",
+      "/dashboard/setup/services",
+    );
   });
 
   test("shows what a partly done task still pays, and its progress beside it", async ({
@@ -535,6 +546,180 @@ test.describe("board 8b-s — credentials", () => {
 
     // The card is still open on the hub. Skip is not dismissal — B9.
     await expect(page.getByText("Add your credentials")).toBeVisible();
+  });
+
+  test("has no axe violations", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+
+const SETUP_SERVICES = "/dashboard/setup/services";
+
+/**
+ * Board `8c-s` — setup task 2, and the screen that started the service track.
+ *
+ * The fixture arrives with its sheet chosen and three services: 6 of 6 live,
+ * 4 of 6 live, 2 of 6 draft. So two count, one more would finish the task, and
+ * the thin-service state is one publish away — which is what the counting test
+ * does and undoes.
+ */
+test.describe("board 8c-s — the scope sheet and the first services", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(SETUP_SERVICES);
+  });
+
+  test("counts the sheets rather than claiming a number", async ({ page }) => {
+    /*
+       The board writes "Seven trades are authored so far" and `4e-s`'s tracker
+       note says five families. This tree holds three, one of which is the blank
+       sheet — so the sentence counts the cards. `CLAUDE.md`: every number is a
+       query, and if a sentence states a count, count the elements.
+    */
+    const cards = page.getByRole("listitem").filter({ hasText: /required · \d+ filterable|generic row set/ });
+    const drawn = await cards.count();
+    await expect(page.getByText(`${drawn} trades are authored so far`)).toBeVisible();
+  });
+
+  test("states each sheet's shape from its own rows — criterion 2", async ({ page }) => {
+    const audit = page.getByRole("listitem").filter({ hasText: "Audit & assurance" });
+    await expect(audit).toContainText("9 rows · 6 required · 5 filterable");
+    // A live count, and zero is rendered as zero rather than hidden.
+    await expect(audit).toContainText(/used by \d+ firm/);
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Facilities management" }),
+    ).toContainText("no firms on it yet");
+  });
+
+  test("badges the sheet the seller's own services match — criterion 2", async ({ page }) => {
+    const audit = page.getByRole("listitem").filter({ hasText: "Audit & assurance" });
+    await expect(audit).toContainText("MATCHES YOUR SERVICES");
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Facilities management" }),
+    ).not.toContainText("MATCHES");
+  });
+
+  test("collects no fee amount anywhere on the screen — criterion 7", async ({ page }) => {
+    // Fee *basis* is a column; the amount lives on `3g-s` and is private.
+    await expect(page.getByRole("columnheader", { name: "Fee basis" })).toBeVisible();
+    for (const banned of [/AED/, /indicative fee/i, /price/i]) {
+      await expect(page.getByText(banned)).toHaveCount(0);
+    }
+    await expect(page.getByText("Fee on enquiry")).toBeVisible();
+  });
+
+  test("carries no availability column, waitlist card or chip — criterion 10", async ({
+    page,
+  }) => {
+    /*
+       D11 closed as **no** on 11 Sep, before this board was handed over. The
+       `TAKING WORK` column, the *Waitlist is a real answer* card, the `1g-s`
+       chip and `3g-s`'s `Capacity` field went at once, so there is nothing here
+       to leave out — the criterion is satisfied by construction and this is the
+       test that keeps it that way.
+    */
+    await expect(page.getByRole("columnheader", { name: /taking work/i })).toHaveCount(0);
+    for (const gone of [/waitlist/i, /accepting new clients/i, /at capacity/i]) {
+      await expect(page.getByText(gone)).toHaveCount(0);
+    }
+  });
+
+  test("previews through the real service page, not a mock — criterion 9", async ({ page }) => {
+    const preview = page.getByText("This is the real page, not a mock-up.");
+    await expect(preview).toBeVisible();
+
+    /*
+       The same rows, in the same order, as the public page renders — one
+       component and one loader. If the two drift the preview lies at the worst
+       possible moment, which is B11's whole reason for existing.
+    */
+    const rows = await page
+      .getByRole("row")
+      .filter({ has: page.getByRole("rowheader") })
+      .allInnerTexts();
+    expect(rows.join(" ")).toContain("Engagement type");
+    expect(rows.join(" ")).toContain("Fee basis");
+    expect(rows.join(" ")).not.toContain("AED");
+  });
+
+  test("a thin service publishes and does not count — criteria 3, 4 and 5", async ({ page }) => {
+    await expect(page.getByText("2 live · 1 more to finish this task")).toBeVisible();
+    await expect(page.getByText("+13% so far")).toBeVisible();
+
+    /*
+       Make one thin from this screen rather than through another, which is both
+       the shorter path and the one that exercises the inline editing: the VAT
+       row is live at 4 of 6, and emptying its turnaround takes it to 3 —
+       below the bar — without unpublishing it. Publishing and counting are two
+       rules, and this is the state that separates them.
+
+       Turnaround rather than the fee basis, because the placeholder option on a
+       `Select` is disabled on purpose: a seller cannot choose "not set" back,
+       which is board `3g-s`'s own correction against a select that invented
+       data on save. There is no path through this screen that clears a fee
+       basis, and that is the intended behaviour rather than a gap in the test.
+    */
+    const vat = page.getByRole("row", { name: /VAT and corporate tax filing/ });
+    const turnaround = vat.getByRole("textbox", { name: "Turnaround" });
+    const wasTurnaround = (await turnaround.inputValue()).trim();
+    expect(wasTurnaround.length).toBeGreaterThan(0);
+
+    await turnaround.fill("");
+    await turnaround.blur();
+    await expect(vat.getByText("3 of 6")).toBeVisible();
+
+    /*
+       Still live and still findable — nothing about publication changed. What
+       changed is what it pays.
+
+       The tally is the assertion rather than a specific percentage: the shares
+       are distributed by largest remainder so that the levers sum to exactly a
+       hundred, which means the spare point moves between components as the rest
+       of the profile changes. `tests/integration/setup-services-8cs.test.ts`
+       pins 7, 13 and 20 against a controlled fixture, where the number is a
+       property of the rule rather than of this seller's whole record.
+    */
+    await expect(page.getByText("2 live · 2 more to finish this task")).toBeVisible();
+    await expect(page.getByText("+13% so far")).toHaveCount(0);
+    await expect(page.getByText(/^\+\d+% so far$/)).toBeVisible();
+
+    /*
+       And the callout names the fields. "Turnaround, where it is delivered and
+       deliverable are the ones missing" is an instruction; "this service is
+       incomplete" is a nag.
+    */
+    await expect(page.getByText("VAT and corporate tax filing is thin")).toBeVisible();
+    const body = page.getByText(/3 of 6 required rows means/);
+    await expect(body).toContainText("Turnaround");
+    await expect(body).toContainText("deliverable");
+
+    // Put the fixture back the way it was found.
+    await turnaround.fill(wasTurnaround);
+    await turnaround.blur();
+    await expect(vat.getByText("4 of 6")).toBeVisible();
+    await expect(page.getByText("2 live · 1 more to finish this task")).toBeVisible();
+    await expect(page.getByText("+13% so far")).toBeVisible();
+  });
+
+  test("step 2 is inert until a sheet is chosen — criterion 1", async ({ page }) => {
+    // Switch sheets, which is the reachable half: the fixture has one chosen,
+    // and the locked state is what a seller sees before they ever pick.
+    const fm = page.getByRole("listitem").filter({ hasText: "Facilities management" });
+    await fm.getByRole("button", { name: "Choose this sheet" }).click();
+    await expect(fm).toContainText("Chosen");
+
+    /*
+       Services keep everything typed — the board's §States. A seller correcting
+       a wrong first choice must not lose the afternoon they spent on it.
+    */
+    await expect(page.getByRole("row").filter({ hasText: "Statutory audit" })).toBeVisible();
+    await expect(page.getByText("Your services keep everything you have typed")).toBeVisible();
+
+    // Back to the sheet the fixture came with.
+    const audit = page.getByRole("listitem").filter({ hasText: "Audit & assurance" });
+    await audit.getByRole("button", { name: "Choose this sheet" }).click();
+    await expect(audit).toContainText("Chosen");
   });
 
   test("has no axe violations", async ({ page }) => {

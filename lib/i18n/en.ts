@@ -8651,6 +8651,135 @@ export const en = {
   "service_public.credential_until": "valid to {when}",
   "service_public.credential_by": "checked against {register}",
 
+  // ── Board `8c-s` — setup task 2, the scope sheet and the first services ──
+  //
+  // The screen that proved the service track had to exist. The goods task 2
+  // asks for a spec template and ten products; a tax practice has four services
+  // and will never have ten, so the largest lever on the hub could not be
+  // reached at all. Two steps, and the order is load-bearing: the sheet decides
+  // which rows exist, so a service added before one is picked has nowhere to
+  // put its values.
+  "setup_services.meta_title": "Your services",
+  "setup_services.eyebrow": "Your services",
+
+  // Step 1. The count is the number of sheets actually authored — the board
+  // says "seven trades" and this tree holds two plus a blank one, so the
+  // sentence counts the cards rather than claiming a figure.
+  "setup_services.step1_title": "Step 1 — which scope sheet fits the work you take on?",
+  "setup_services.step1_body": {
+    one: "We maintain these per trade so a buyer can compare you against other firms on the same rows — turnaround, fee basis, what they have to hand over. {formatted} trade is authored so far.",
+    other: "We maintain these per trade so a buyer can compare you against other firms on the same rows — turnaround, fee basis, what they have to hand over. {formatted} trades are authored so far.",
+  },
+  // Counted off the family's own rows, never typed. Three of the four figures
+  // on the board's card are wrong against this tree, which is why none of them
+  // is a constant here.
+  "setup_services.sheet_shape": "{rows} rows · {required} required · {filterable} filterable",
+  "setup_services.sheet_used": {
+    one: "used by {formatted} firm",
+    other: "used by {formatted} firms",
+  },
+  // Zero firms is a real answer and the card says it plainly. Hiding it would
+  // be the padding § Interface honesty forbids, and a directory at its cold
+  // start is exactly where a seller is owed the truth about how thin it is.
+  "setup_services.sheet_used_none": "no firms on it yet",
+  "setup_services.sheet_blank": "Start from a blank sheet",
+  "setup_services.sheet_blank_body": "The generic row set. Pick this if none of the trades above is close.",
+  "setup_services.match_first": "MATCHES YOUR SERVICES",
+  "setup_services.match_second": "ALSO MATCHES",
+  "setup_services.match_note": {
+    one: "One sheet matches what you told us you offer. A service can sit on a different sheet later.",
+    other: "{formatted} sheets match what you told us you offer. Pick the one that covers most of your work — a service can sit on a different sheet later.",
+  },
+  "setup_services.match_none": "Nothing you listed on your profile matched a sheet, so none is badged. Pick the closest — a service can sit on a different sheet later.",
+  "setup_services.choose": "Choose this sheet",
+  "setup_services.chosen": "Chosen",
+  "setup_services.change_sheet": "Change sheet",
+  "setup_services.sheet_kept": "Your services keep everything you have typed. A fee basis this sheet does not offer stops showing a label until you pick one it does.",
+
+  // Step 2, and it is inert until step 1 is done — B1, AC1.
+  "setup_services.step2_title": "Step 2 — add your first {formatted}",
+  "setup_services.step2_body": "Name, engagement type and turnaround is enough to go live. {formatted} is the bar because most practices have four or five, not thirty.",
+  "setup_services.step2_locked": "Pick a scope sheet above first. It decides which rows your services have, so it cannot come second.",
+  "setup_services.seed_list": "Start from our {trade} list",
+  "setup_services.seeded": {
+    one: "{formatted} draft added. Nothing is live until you say so.",
+    other: "{formatted} drafts added. Nothing is live until you say so.",
+  },
+  "setup_services.seed_all_present": "You already have all of them.",
+
+  "setup_services.table_caption": "Your services, with how much of each scope sheet is filled in",
+  "setup_services.col_service": "Service",
+  "setup_services.col_engagement": "Engagement",
+  "setup_services.col_turnaround": "Turnaround",
+  "setup_services.col_fee_basis": "Fee basis",
+  "setup_services.col_required": "Req. scope",
+  "setup_services.col_actions": "Open",
+  "setup_services.open_editor": "Open {name}",
+  "setup_services.new_row": "Start typing a service name…",
+  "setup_services.add_row": "Add another service",
+  "setup_services.adding": "Adding",
+  "setup_services.draft": "Draft",
+  "setup_services.empty": "No services yet. Add one below, or start from our list.",
+  // Unfilled cells stay visible and grey — § Interface honesty. The seller sees
+  // the thinness a buyer will see, which is the whole reason the column exists.
+  "setup_services.unset": "Not set",
+  "setup_services.no_fee_basis": "Fee basis not set",
+
+  // The line under the table. Live and counting are two numbers and the screen
+  // says both, because a seller with three live rows and two counting needs to
+  // know why the task has not closed.
+  "setup_services.tally": {
+    one: "{formatted} live · {toGo} more to finish this task",
+    other: "{formatted} live · {toGo} more to finish this task",
+  },
+  "setup_services.tally_done": {
+    one: "{formatted} live, and this task is done. Adding a sixth does not score more.",
+    other: "{formatted} live, and this task is done. Adding a sixth does not score more.",
+  },
+  "setup_services.points_so_far": "+{points}% so far",
+
+  // The thin-service callout, and it names the fields — B6, AC5. A score with
+  // no instruction is a nag: the seller knows the row is thin, and what they do
+  // not know is which two of six would fix it.
+  "setup_services.thin_title": "{name} is thin",
+  "setup_services.thin_body": "It is live and findable, but {filled} of {total} required rows means it does not count toward your {target}. {missing} {verb} missing.",
+  "setup_services.thin_verb_one": "is the one",
+  "setup_services.thin_verb_many": "are the ones",
+
+  // The card that answers the question the lower bar provokes, before it is
+  // asked. A seller who has seen the goods hub will notice their bar is lower.
+  "setup_services.why_three_title": "Why {formatted}, not ten",
+  "setup_services.why_three_body": "The goods version of this task asks for ten products because a supplier has hundreds. You have four or five, so the bar is a complete list rather than a long one. Adding another does not score more.",
+  "setup_services.fee_title": "Fee basis, not a fee",
+  "setup_services.fee_body": "Buyers need to know whether it is a fixed fee, an hourly rate or per return before they enquire — that is what makes firms comparable. The number itself stays private and you quote it in your reply.",
+  "setup_services.credentials_title": "Credentials do the rest",
+  "setup_services.credentials_body": "A scope with no FTA number behind it converts badly. This task and the credentials task are worth {points} of your 100 together, and buyers read them as one thing.",
+  "setup_services.credentials_cta": "Add credentials next",
+
+  // The live preview — B11, AC9. It mounts the same component the public page
+  // does, so a drift between them is impossible rather than merely unlikely.
+  "setup_services.preview_eyebrow": "LIVE PREVIEW",
+  "setup_services.preview_none": "Add a service and its page appears here, exactly as a buyer will see it.",
+  "setup_services.preview_note": "This is the real page, not a mock-up. {name} is what a buyer opens.",
+  "setup_services.preview_fee": "Fee on enquiry",
+
+  "setup_services.error.sheet": "That scope sheet is not one we hold.",
+  "setup_services.error.sheet_fix": "Pick one of the sheets above.",
+  "setup_services.error.seed": "The list did not load.",
+  "setup_services.error.seed_fix": "Pick a scope sheet first, then try again.",
+  "setup_services.error.add": "That service was not added.",
+  "setup_services.error.add_fix": "Give it a name and try again.",
+  "setup_services.error.at_cap": "{plan} covers {formatted} services and you have them all.",
+  "setup_services.error.at_cap_fix": "Remove one on the services screen, or move to a plan with more room.",
+  "setup_services.error.field": "That is not a field this screen edits.",
+  "setup_services.error.field_fix": "Open the service to change anything else.",
+  "setup_services.error.name": "A service needs a name.",
+  "setup_services.error.name_fix": "Type what a buyer would call it, for example “Statutory audit”.",
+  "setup_services.error.fee_basis": "That fee basis is not on this sheet.",
+  "setup_services.error.fee_basis_fix": "Pick one the sheet offers, or change the sheet in step 1.",
+  "setup_services.error.save": "That change was not saved.",
+  "setup_services.error.save_fix": "Check your connection and try again.",
+
   // ── Board `8b-s` — setup task 1, credentials ─────────────────────────────
   //
   // The screen that replaces "upload five photographs of your premises". Every
