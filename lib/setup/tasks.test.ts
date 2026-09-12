@@ -33,6 +33,12 @@ const EMPTY: ProfileFacts = {
   productsWithFilterableSpecs: 0,
   photos: 0,
   teamSeats: 1,
+  credentials: 0,
+  licenceVerified: false,
+  servicesLive: 0,
+  sectors: 0,
+  deliveryModes: 0,
+  coverageAreas: 0,
 };
 
 function board(profile: Partial<ProfileFacts> = {}, invitesSent = 0) {
@@ -133,6 +139,12 @@ describe("the levers close the gap", () => {
         products: 10,
         productsWithFilterableSpecs: 10,
         teamSeats: 3,
+        credentials: 0,
+        licenceVerified: false,
+        servicesLive: 0,
+        sectors: 0,
+        deliveryModes: 0,
+        coverageAreas: 0,
       },
     ];
 
@@ -148,9 +160,17 @@ describe("the levers close the gap", () => {
   });
 
   it("names the two nobody has a card for", () => {
+    /*
+       Scoped to the goods table. `LEVERS_WITHOUT_TASK` grew two services
+       entries with board `8a-s` — `licence`, which only staff can finish, and
+       `coverage` — and a goods board has neither lever at all. The property
+       being asserted is the one that matters either way: a lever this board
+       carries without a card is one the page names.
+    */
     const state = board();
     const uncarded = state.levers.filter((lever) => !lever.hasTask).map((lever) => lever.key);
-    expect(uncarded).toEqual([...LEVERS_WITHOUT_TASK]);
+    expect(uncarded).toEqual(["identity", "filterableSpecs"]);
+    for (const key of uncarded) expect(LEVERS_WITHOUT_TASK).toContain(key);
   });
 
   it("gives every lever a total that is its whole weight", () => {

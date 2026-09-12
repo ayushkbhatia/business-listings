@@ -171,9 +171,15 @@ async function profileFacts(
     languages: string[];
     categories: unknown[];
     media: { kind: string }[];
+    /* Board `8a-s`. Zero on every goods listing, and read from the row rather
+       than queried again — the caller already selected them. */
+    sectorsServed?: string[];
+    deliveryModes?: unknown[];
+    verifiedAt?: Date | null;
   },
 ) {
-  const [productRows, photos, seats, locations, withHours] = await Promise.all([
+  const [productRows, photos, seats, locations, withHours, servicesLive, coverageAreas, credentials] =
+    await Promise.all([
     /*
        Spec values are a JSON column, so "has any spec value" is a read rather
        than a `count`. The same rule the nightly job applies in
@@ -188,6 +194,9 @@ async function profileFacts(
     prisma.user.count({ where: { businessId } }),
     prisma.location.count({ where: { businessId } }),
     prisma.location.count({ where: { businessId, hours: { not: {} } } }),
+    prisma.service.count({ where: { businessId, status: "live" } }),
+    prisma.serviceCoverage.count({ where: { businessId } }),
+    prisma.document.count({ where: { businessId, kind: "certificate" } }),
   ]);
 
   const filterable = productRows.filter((product) => {
@@ -209,6 +218,13 @@ async function profileFacts(
     productsWithFilterableSpecs: filterable,
     photos,
     teamSeats: seats,
+
+    credentials,
+    licenceVerified: business.verifiedAt != null,
+    servicesLive,
+    sectors: business.sectorsServed?.length ?? 0,
+    deliveryModes: business.deliveryModes?.length ?? 0,
+    coverageAreas,
   };
 }
 

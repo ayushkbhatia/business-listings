@@ -44,9 +44,27 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
       languages: true,
       profileStrength: true,
       specCompleteness: true,
+      /*
+         Board `8a-s`. Which weight table this listing is measured against, and
+         the facts the services half of it reads. All zero for the 123 live
+         businesses, every one of which is `unset` and therefore measured
+         exactly as it was before the fork.
+      */
+      sellsKind: true,
+      verifiedAt: true,
+      sectorsServed: true,
+      deliveryModes: true,
       categories: { select: { categoryId: true } },
       locations: { select: { hours: true } },
-      _count: { select: { team: true, products: true } },
+      _count: {
+        select: {
+          team: true,
+          products: true,
+          services: { where: { status: "live" } },
+          serviceCoverage: true,
+          documents: { where: { kind: "certificate" } },
+        },
+      },
     },
   });
 
@@ -151,9 +169,18 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
       productsWithFilterableSpecs: withSpecs.get(business.id) ?? 0,
       photos: photoCounts.get(business.id) ?? 0,
       teamSeats: business._count.team,
+
+      credentials: business._count.documents,
+      // `verifiedAt` rather than the tier: the tier is a ladder and this is the
+      // one rung that means "checked against the issuing authority".
+      licenceVerified: business.verifiedAt !== null,
+      servicesLive: business._count.services,
+      sectors: business.sectorsServed.length,
+      deliveryModes: business.deliveryModes.length,
+      coverageAreas: business._count.serviceCoverage,
     };
 
-    const score = profileStrength(facts);
+    const score = profileStrength(facts, business.sellsKind);
     const completeness = specCompleteness(
       specsByBusiness.get(business.id) ?? [],
       rulesByTemplate,
