@@ -252,12 +252,25 @@ test.describe("board 8a-s — the setup hub", () => {
        four live in two places and the count has to read both.
     */
     const open = await page.getByRole("listitem").getByRole("heading", { level: 3 }).allInnerTexts();
-    const doneRow = await page.getByText(/^Done: /).innerText().catch(() => "");
+
+    /*
+       `allInnerTexts`, never `innerText`.
+
+       The done row exists only once a task is finished, and `innerText()` on a
+       locator that matches nothing waits for it to appear — with no action
+       timeout set, that is until the test's own 30 seconds run out, and the
+       `.catch()` after it never gets a turn. It passed locally against a
+       fixture that happened to have a finished task and timed out three times
+       in CI against one that did not. `allInnerTexts` returns `[]` at once.
+    */
+    const done = (await page.getByText(/^Done: /).allInnerTexts()).flatMap((row) =>
+      row.replace(/^Done: /, "").split(", "),
+    );
 
     expect(open[0]).toContain("credentials");
     expect(open.at(-1)).toMatch(/photographs/i);
 
-    const all = [...open, ...doneRow.replace(/^Done: /, "").split(", ").filter(Boolean)];
+    const all = [...open, ...done.filter(Boolean)];
     expect(all).toHaveLength(4);
     // And no product card anywhere: a practice has no catalogue.
     expect(all.some((title) => /spec template/i.test(title))).toBe(false);
