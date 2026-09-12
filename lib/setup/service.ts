@@ -50,6 +50,14 @@ export interface SetupRailCounts {
 
 export interface SetupHubState {
   businessId: string;
+  /**
+   * Which weight table this seller is measured against — board `8a-s` B1.
+   *
+   * One screen, one route, a conditional task set. The page reads it to decide
+   * which four cards to draw and which sentence the weights footnote closes
+   * with; everything else about the hub is the same screen it was.
+   */
+  sellsKind: "unset" | "goods" | "services" | "both";
   /** On the directory. False before `goLive`, and the hub says less. */
   live: boolean;
   /** Off the directory while staff look at it. The hub stands down entirely. */
@@ -106,7 +114,24 @@ export async function setupHubState(
       suspendedAt: true,
       categories: { select: { categoryId: true } },
       locations: { select: { hours: true } },
-      _count: { select: { team: true } },
+      /*
+         Board `8a-s`. Which table this seller is measured against, and the four
+         facts on the row that the services half of it reads. Every one of them
+         is empty on a goods listing, which is what keeps the goods hub the
+         screen it already was.
+      */
+      sellsKind: true,
+      verifiedAt: true,
+      sectorsServed: true,
+      deliveryModes: true,
+      _count: {
+        select: {
+          team: true,
+          services: { where: { status: "live" } },
+          serviceCoverage: true,
+          documents: { where: { kind: "certificate" } },
+        },
+      },
     },
   });
   if (!business) return null;
@@ -188,6 +213,13 @@ export async function setupHubState(
     productsWithFilterableSpecs: products.filter((product) => hasSpecs(product.specValues)).length,
     photos: media.length,
     teamSeats: business._count.team,
+
+    credentials: business._count.documents,
+    licenceVerified: business.verifiedAt !== null,
+    servicesLive: business._count.services,
+    sectors: business.sectorsServed.length,
+    deliveryModes: business.deliveryModes.length,
+    coverageAreas: business._count.serviceCoverage,
   };
 
   /*
@@ -202,18 +234,22 @@ export async function setupHubState(
      stored column stays the one search ranking and the cohort query read, and
      the job puts it right within the hour.
   */
-  const strength = profileStrength(facts);
+  const strength = profileStrength(facts, business.sellsKind);
 
   const board = setupBoard({
+    kind: business.sellsKind,
     photos: facts.photos,
     products: facts.products,
     seats: facts.teamSeats,
+    credentials: facts.credentials,
+    servicesLive: facts.servicesLive,
     invitesSent,
-    items: strengthItems(facts),
+    items: strengthItems(facts, business.sellsKind),
   });
 
   return {
     businessId: business.id,
+    sellsKind: business.sellsKind,
     live: business.publishedAt !== null,
     suspended: business.suspendedAt !== null,
     publishedAt: business.publishedAt,
@@ -298,7 +334,21 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
       languages: true,
       categories: { select: { categoryId: true } },
       locations: { select: { hours: true } },
-      _count: { select: { team: true } },
+      // Board `8a-s`, and the same four facts the hub reads: the chrome has to
+      // agree with the body exactly, which means measuring against the same
+      // table rather than a shorter version of it.
+      sellsKind: true,
+      verifiedAt: true,
+      sectorsServed: true,
+      deliveryModes: true,
+      _count: {
+        select: {
+          team: true,
+          services: { where: { status: "live" } },
+          serviceCoverage: true,
+          documents: { where: { kind: "certificate" } },
+        },
+      },
     },
   });
   if (!business) return null;
@@ -331,18 +381,28 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
     productsWithFilterableSpecs: products.filter((product) => hasSpecs(product.specValues)).length,
     photos: media.length,
     teamSeats: business._count.team,
+
+    credentials: business._count.documents,
+    licenceVerified: business.verifiedAt !== null,
+    servicesLive: business._count.services,
+    sectors: business.sectorsServed.length,
+    deliveryModes: business.deliveryModes.length,
+    coverageAreas: business._count.serviceCoverage,
   };
 
   const board = setupBoard({
+    kind: business.sellsKind,
     photos: facts.photos,
     products: facts.products,
     seats: facts.teamSeats,
+    credentials: facts.credentials,
+    servicesLive: facts.servicesLive,
     invitesSent,
-    items: strengthItems(facts),
+    items: strengthItems(facts, business.sellsKind),
   });
 
   return {
-    strength: profileStrength(facts),
+    strength: profileStrength(facts, business.sellsKind),
     openCount: board.openCount,
     openPoints: board.tasks
       .filter((task) => !task.done)

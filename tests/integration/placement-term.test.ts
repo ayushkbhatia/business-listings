@@ -28,6 +28,8 @@ const PREFIX = "placement-term-test-";
 let categoryId: string;
 let planId: string;
 const madeBusinesses: string[] = [];
+/** Plans made inside a test body. `beforeAll`'s own is tracked separately. */
+const madePlans: string[] = [];
 let seq = 0;
 const stamp = () => `${Date.now().toString(36)}${(seq += 1)}`;
 
@@ -114,7 +116,24 @@ afterAll(async () => {
     await prisma.placementWaitlist.deleteMany({ where: { categoryId: id } });
     await prisma.category.deleteMany({ where: { id } });
   }
-  await prisma.plan.deleteMany({ where: { id: planId } });
+  /*
+     Every plan this file made, not only the one `beforeAll` made.
+
+     The annual fixture below is created inside a test body and was never
+     recorded here, so each run left one `placement-term-test-annual-*` row on
+     the database for ever. They are invisible until something counts plans:
+     board 11f's change grid renders a column per plan, so six leftovers turned
+     a three-column comparison into a nine-column one and failed an e2e
+     assertion about denominators — three runs apart, on a test that had nothing
+     to do with placements.
+
+     Subscriptions first: a plan with one still pointing at it cannot be
+     deleted, and the throw would abort the rest of this cleanup as well.
+  */
+  const plans = [planId, ...madePlans.splice(0)];
+  await prisma.subscription.deleteMany({ where: { planId: { in: plans } } });
+  await prisma.business.updateMany({ where: { planId: { in: plans } }, data: { planId: null } });
+  await prisma.plan.deleteMany({ where: { id: { in: plans } } });
   await prisma.$disconnect();
 });
 
@@ -281,6 +300,7 @@ describe("the credit an annual seller actually receives", () => {
       },
       select: { id: true, annualMonthsCharged: true },
     });
+    madePlans.push(annualPlan.id);
 
     const seller = await makeSeller();
     await prisma.business.update({ where: { id: seller }, data: { planId: annualPlan.id } });

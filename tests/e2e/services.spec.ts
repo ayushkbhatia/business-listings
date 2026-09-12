@@ -233,3 +233,103 @@ test.describe("board 1g-s — the public scope table", () => {
     await expect(links.first()).toContainText("Statutory audit");
   });
 });
+
+test.describe("board 8a-s — the setup hub", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/dashboard/setup");
+  });
+
+  test("offers four tasks, credentials first and photographs last", async ({ page }) => {
+    /*
+       Four where goods has three, in weight order. The inversion is the board:
+       a warehouse photograph is evidence for a parts supplier and decoration
+       for an audit practice, so credentials lead at 32 and photographs fall
+       to 4.
+    */
+    /*
+       Open cards plus the collapsed done row. A finished task is never removed
+       — sellers look for evidence that the work they did was recorded — so the
+       four live in two places and the count has to read both.
+    */
+    const open = await page.getByRole("listitem").getByRole("heading", { level: 3 }).allInnerTexts();
+    const doneRow = await page.getByText(/^Done: /).innerText().catch(() => "");
+
+    expect(open[0]).toContain("credentials");
+    expect(open.at(-1)).toMatch(/photographs/i);
+
+    const all = [...open, ...doneRow.replace(/^Done: /, "").split(", ").filter(Boolean)];
+    expect(all).toHaveLength(4);
+    // And no product card anywhere: a practice has no catalogue.
+    expect(all.some((title) => /spec template/i.test(title))).toBe(false);
+  });
+
+  test("sends the credentials card to the screen that already holds them", async ({ page }) => {
+    /*
+       `/dashboard/verification`, board 3e — not a new `8b-s` route. That screen
+       is already the credentials surface: it splits what the platform checked
+       from what the seller uploaded, captures an expiry, and refuses to call an
+       uploaded certificate verified. Pointing a 32-point card at a route that
+       does not exist would have been the largest dead card on the product.
+    */
+    const credentials = page
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("heading", { name: /Add your credentials/ }) });
+    await expect(credentials.getByRole("link")).toHaveAttribute(
+      "href",
+      "/dashboard/verification",
+    );
+
+    const services = page
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("heading", { name: /Publish your first three services/ }) });
+    await expect(services.getByRole("link")).toHaveAttribute("href", "/dashboard/services");
+  });
+
+  test("shows what a partly done task still pays, and its progress beside it", async ({
+    page,
+  }) => {
+    /*
+       The seeded practice has two of three services live. The badge is what
+       this seller would still gain — 7 of the 20 — and the progress line is
+       where "2 of 3" lives. Board `8a-s` B3 asks for the full weight on the
+       badge; the shipped behaviour is kept and the reason is written twice in
+       the repository already: showing the weight tells a seller who has done
+       half of something that they can earn it all again.
+    */
+    const card = page
+      .getByRole("listitem")
+      .filter({ has: page.getByRole("heading", { name: /Publish your first three services/ }) });
+    await expect(card.getByText("+7%")).toBeVisible();
+    await expect(card.getByText(/2 OF 3/i)).toBeVisible();
+  });
+
+  test("publishes the weighting rather than making sellers ask for it", async ({ page }) => {
+    await expect(page.getByText("Weighted for a practice")).toBeVisible();
+    await expect(page.getByText(/Credentials on file/)).toBeVisible();
+    await expect(page.getByText(/0 of 32 points/)).toBeVisible();
+    // Every number in the closing line is this seller's own, not a constant.
+    await expect(page.getByText(/the inversion is the whole point/)).toBeVisible();
+  });
+
+  test("names the licence as a lever and never as a task — the one staff own", async ({
+    page,
+  }) => {
+    /*
+       `verificationTier` is writable only by an `ops_lead`, so the licence can
+       never be a card: a task the seller cannot finish is what made this hub
+       uncompletable before the site visit was withdrawn. Everything they *can*
+       do sums to exactly the threshold.
+    */
+    await expect(page.getByText(/Trade licence checked against the issuing authority/)).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /licence/i, level: 3 }),
+    ).toHaveCount(0);
+  });
+
+  test("offers no catalogue concierge — criterion 9", async ({ page }) => {
+    // `8a`'s offer is somebody keying a spreadsheet of products in for you, and
+    // there is no services equivalent: six scope sheets typed by hand is the
+    // fast path, which is why `3f-s` suppresses the importer on the same ground.
+    await expect(page.getByText("Send us your catalogue")).toHaveCount(0);
+  });
+});

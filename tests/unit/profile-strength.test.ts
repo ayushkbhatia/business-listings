@@ -23,6 +23,12 @@ const EMPTY: ProfileFacts = {
   productsWithFilterableSpecs: 0,
   photos: 0,
   teamSeats: 1,
+  credentials: 0,
+  licenceVerified: false,
+  servicesLive: 0,
+  sectors: 0,
+  deliveryModes: 0,
+  coverageAreas: 0,
 };
 
 const FULL: ProfileFacts = {
@@ -39,6 +45,12 @@ const FULL: ProfileFacts = {
   productsWithFilterableSpecs: 40,
   photos: 30,
   teamSeats: 4,
+  credentials: 0,
+  licenceVerified: false,
+  servicesLive: 0,
+  sectors: 0,
+  deliveryModes: 0,
+  coverageAreas: 0,
 };
 
 describe("the published weights", () => {
@@ -73,6 +85,12 @@ describe("profileStrength", () => {
         productsWithFilterableSpecs: 9_000,
         languages: 40,
         teamSeats: 60,
+        credentials: 0,
+        licenceVerified: false,
+        servicesLive: 0,
+        sectors: 0,
+        deliveryModes: 0,
+        coverageAreas: 0,
       }),
     ).toBe(100);
   });
@@ -149,7 +167,7 @@ describe("profileStrength", () => {
       { ...EMPTY, hasDescription: true, hasEstablishedYear: true, hasTeamSize: true, products: 10, productsWithFilterableSpecs: 10 },
       { ...EMPTY, hasDescription: true, hasEstablishedYear: true, hasTeamSize: true, products: 10, productsWithFilterableSpecs: 10, photos: 10 },
     ];
-    const scores = steps.map(profileStrength);
+    const scores = steps.map((facts) => profileStrength(facts));
     for (let i = 1; i < scores.length; i += 1) {
       expect(scores[i]!).toBeGreaterThan(scores[i - 1]!);
     }
@@ -173,6 +191,12 @@ describe("profileStrength", () => {
       productsWithFilterableSpecs: 10,
       photos: 8,
       teamSeats: 2,
+      credentials: 0,
+      licenceVerified: false,
+      servicesLive: 0,
+      sectors: 0,
+      deliveryModes: 0,
+      coverageAreas: 0,
     };
     expect(profileStrength(realistic)).toBeGreaterThanOrEqual(STRONG_ENOUGH);
   });

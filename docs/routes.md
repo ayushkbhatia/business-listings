@@ -74,6 +74,7 @@ and it is the one that argues back.
 /dashboard                              Overview                              [3a]
 /dashboard (free variant)               Free-plan overview                   [11a]
 /dashboard/setup                        Setup hub                             [8a]  built h8s1
+/dashboard/setup (services)             Setup hub — four tasks              [8a-s] built h8as
 /dashboard/setup/photos                 Task 1 — photos                       [8b]  built h8s2
 /dashboard/setup/products               Task 2 — template, first products     [8c]  built h8s3
 /dashboard/setup/team                   Task 3 — invite the team              [8d]  built h8s4
@@ -299,6 +300,17 @@ allowance is the cap minus the primary, the strength meter counts the total. An
 extra whose category is not covered by the licence's stated activity is taken,
 flagged, and left out of the enquiry fan-out **for that category only** until a
 reviewer clears it.
+
+`/dashboard/setup` is **one route with two task sets**, chosen by
+`Business.sellsKind` — board `8a-s` B1. A seller of goods gets three cards and
+the goods weights; a seller of work gets four, credentials first at 32 points and
+photographs last at 4; a seller who is both gets five and one renormalised score.
+`profile_score` stays one integer on one column, recomputed idempotently, and
+what changes is the table it is measured against.
+
+The credentials card points at `/dashboard/verification` — board 3e — rather than
+at a route of its own. That screen is already the credentials surface, which is
+what makes `8b-s` a refinement rather than a new build.
 
 `/b/:slug/s/:service` is the scope table where the spec table is. Its row order
 comes from `ScopeSheetFamily`, so every firm in a family renders the same rows in

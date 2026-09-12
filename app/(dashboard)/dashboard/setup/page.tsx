@@ -13,6 +13,7 @@ import {
 import { noteCompleted, noteFirstHubView, readBaseline } from "@/lib/setup/baseline";
 import { setupHubState, type SetupHubState } from "@/lib/setup/service";
 import type { SetupTaskId, SetupTaskRow } from "@/lib/setup/tasks";
+import { WEIGHTS } from "@/lib/metrics/profile-strength";
 import { cn } from "@/lib/cn";
 import { formatCount, formatDate } from "@/lib/format";
 import { t, type MessageKey } from "@/lib/i18n";
@@ -70,6 +71,19 @@ const HREF: Record<SetupTaskId, string> = {
   photos: "/dashboard/setup/photos",
   products: "/dashboard/products",
   team: "/dashboard/team",
+  /*
+     Board `8a-s` B8: both new cards link out rather than getting a sub-route of
+     their own, because the state lives on the task's own screen.
+
+     Credentials points at `/dashboard/verification` — board 3e — and not at a
+     new `8b-s` route. That screen is already the credentials surface: it splits
+     `Verified by us` from `Uploaded by you`, captures an expiry, and refuses to
+     call a seller-uploaded certificate verified. `8b-s` refines it for a
+     practice; it does not replace it, and pointing a 32-point card at a route
+     that does not exist would have been the largest dead card on the product.
+  */
+  credentials: "/dashboard/verification",
+  services: "/dashboard/services",
 };
 
 /**
@@ -80,13 +94,17 @@ const HREF: Record<SetupTaskId, string> = {
  * Identical primary buttons on every card would say they are interchangeable,
  * which is what the ordering exists to deny.
  */
-const LEADS: readonly SetupTaskId[] = ["photos", "products"];
+const LEADS: readonly SetupTaskId[] = ["photos", "products", "credentials", "services"];
 
 /** Which button verb each task takes. Board 8a words each one differently. */
 const CTA: Record<SetupTaskId, MessageKey> = {
   photos: "setup.cta.start",
   products: "setup.cta.start",
   team: "setup.cta.invite",
+  credentials: "setup.cta.start",
+  // "Continue", because a practice arrives here with services already typed on
+  // `8c-s` or `3f-s` and the card is asking them to finish rather than begin.
+  services: "setup.cta.continue",
 };
 
 /**
@@ -248,7 +266,14 @@ export default async function SetupPage({
         <aside className="flex w-full shrink-0 flex-col gap-4 lg:w-[326px]">
           <AlreadyHappening state={state} />
 
-          {concierge.offered && concierge.planName && (
+          {/*
+             Board `8a-s` B10, criterion 9: no catalogue concierge for a firm
+             that sells work. `8a`'s offer is somebody typing a spreadsheet of
+             products into the catalogue, and there is no services equivalent —
+             six scope sheets typed by hand is the fast path, which is why
+             `3f-s` B1 suppresses the spreadsheet importer on the same grounds.
+          */}
+          {state.sellsKind !== "services" && concierge.offered && concierge.planName && (
             <ConciergeCard
               planName={concierge.planName}
               free={concierge.feeAed === 0}
@@ -368,6 +393,13 @@ function DoneSummary({ tasks }: { tasks: SetupTaskRow[] }) {
   );
 }
 
+/**
+ * What photographs are worth on the other hub, for the line that names the
+ * inversion. Read from the goods table rather than typed, so the sentence moves
+ * with the number it is about.
+ */
+const GOODS_PHOTO_WEIGHT = WEIGHTS.photos;
+
 /* ── The half of the meter the four cards do not cover ───────────────────── */
 
 function Levers({ state }: { state: SetupHubState }) {
@@ -383,10 +415,32 @@ function Levers({ state }: { state: SetupHubState }) {
      the type a step down from the cards above it. It answers a question the
      four cards raise; it is not a fifth thing to do.
   */
+  /*
+     Board `8a-s` puts a weights card on the screen deliberately: sellers ask
+     why photographs barely count, and showing the weighting is cheaper than
+     answering it in support. It is the same footnote — every component, its
+     whole weight, what is earned — with the heading and the closing line that
+     name the inversion.
+  */
+  /*
+     Only a practice gets the services wording, and `both` deliberately does
+     not. "Weighted for a practice" over a seller who also stocks valves is
+     wrong about them, and the inversion sentence is worse: on the renormalised
+     `both` table photographs read 11 against the goods hub's 20, which is an
+     artifact of dividing by a larger denominator rather than a claim about what
+     matters. The table underneath says everything true for that seller; the
+     sentence is the one thing that does not survive the union.
+  */
+  const services = state.sellsKind === "services";
+  const photoWeight = state.levers.find((lever) => lever.key === "photos")?.total ?? 0;
+  const carded = state.levers
+    .filter((lever) => lever.hasTask)
+    .reduce((sum, lever) => sum + lever.total, 0);
+
   return (
     <section aria-labelledby="setup-levers" className="mt-1">
       <h3 id="setup-levers" className="font-mono text-eyebrow uppercase text-faint">
-        {t("setup.levers_title")}
+        {services ? t("setup.weights_title") : t("setup.levers_title")}
       </h3>
       <table className="mt-2.5 w-full border-collapse">
         <caption className="sr-only">{t("setup.levers_body")}</caption>
@@ -394,7 +448,11 @@ function Levers({ state }: { state: SetupHubState }) {
           {state.levers.map((lever) => (
             <tr key={lever.key}>
               <th scope="row" className="py-1 pe-3 text-start text-caption font-normal text-muted">
-                {t(`setup.lever.${lever.key}` as never)}
+                {t(
+                  (services && lever.key === "identity"
+                    ? "setup.lever.identity_services"
+                    : `setup.lever.${lever.key}`) as never,
+                )}
               </th>
               <td className="w-px whitespace-nowrap py-1 text-end font-mono text-eyebrow tabular-nums text-faint">
                 {t("setup.lever.earned", {
@@ -406,6 +464,22 @@ function Levers({ state }: { state: SetupHubState }) {
           ))}
         </tbody>
       </table>
+
+      {/*
+         The closing line, and every number in it is this seller's own. The
+         render writes "the other 36" and "4 here and 16 on the goods hub" as
+         constants; a constant is wrong the first time somebody moves a weight,
+         and the weights are a table two screens read.
+      */}
+      {services && (
+        <p className="mt-2 max-w-prose text-caption text-faint">
+          {t("setup.weights_note", {
+            rest: formatCount(100 - carded),
+            services: formatCount(photoWeight),
+            goods: formatCount(GOODS_PHOTO_WEIGHT),
+          })}
+        </p>
+      )}
     </section>
   );
 }

@@ -367,16 +367,16 @@ drawn apart, the list shows a column the editor cannot fill or omits one it can.
 | **`2b-s`** Claim result | **shipped 11 Sep** | `/onboarding/kind`, between verify and profile. See §4d |
 | **`2c-s`** Profile basics | **shipped 11 Sep** | One screen, conditional field set. See §4e |
 | **`2d-s`** Coverage, not branches | **shipped 11 Sep** | `/onboarding/locations`, one route and two bodies. See §4f — five corrections, and the taxonomy went from four free zones to forty-two |
-| **`8a-s`** Setup hub | | **Three tasks, not four** — the epic is wrong and the code's own stale prose is where it got it |
+| **`8a-s`** Setup hub | **shipped 12 Sep** | **Four tasks**, and the epic was right after all — the *code's* stale prose said three. Credentials lead at 32, photographs fall to 4. See §4h |
 | **`8b-s`** Credentials task | | Unblocked by D10's split: optional evidence, no register, no chasing |
 | **`8c-s`** Scope sheet + first 3 services | | Lands **after** the editor, not four phases before it |
 | **`3b-s`** Listing profile | | A schema diff, not copy: `ModeratedField` is a Prisma enum, so it **stops for a person** |
 | **`3c-s`** Coverage manager | mostly built | Panel, writer, capability guard and listing revision all ship |
 
-**`profileStrength` is fixed here, not in stage 1.** `catalogue: 20` + `filterableSpecs: 15` of 100
-are unreachable without products, against a published `STRONG_ENOUGH` of 80 — so a service supplier
-can never be strong enough. It needs services counting toward `catalogue`, which needed stage 3 —
-and stage 3 landed on 12 Sep, so this is now owed to `8a-s`, the hub that renders the meter.
+**`profileStrength` was fixed with `8a-s`, 12 Sep.** `catalogue: 20` + `filterableSpecs: 15` of 100
+were unreachable without products, against a published `STRONG_ENOUGH` of 80, so a service supplier
+could never be strong enough. The fix is not services counting toward `catalogue` — it is a second
+weight table, because the two kinds are not measured on the same things at all. See §4h.
 
 ---
 
@@ -727,6 +727,91 @@ otherwise nothing but the project's pinned contrast gap.
 
 ---
 
+## 4h · Handoff `8a-s` — the same hub, with the weights turned upside down
+
+Shipped 12 Sep 2026 at `/dashboard/setup`. Structurally board `8a` unchanged — one score, the
+largest remaining weights as cards, the traction rail, one reminder, a collapsed done row — and a
+conditional task set keyed on `sellsKind`, which is B1 and the same shape `2c-s` and `2d-s` use.
+
+### Q1 answered: the proposed table is right, and the arithmetic says why
+
+The board leaves the residual 36 points across licence, profile and coverage as a proposal needing a
+decision. **Adopted as written**, and there is a property that makes it more than a preference:
+
+> `32 + 20 + 12 + 8 + 4 + 4 = 80`, and `STRONG_ENOUGH` is 80.
+
+**Licence verification is the one component a seller cannot finish** — `verificationTier` is
+writable only by an `ops_lead`, which is `CLAUDE.md` non-negotiable 2. Everything else sums to
+exactly the threshold, so a practice that does every task on the hub lands on 80 with nothing it can
+act on left unnamed. That is the property the site-visit cut was made to restore, and this table
+holds it by arithmetic rather than by luck. A test asserts it.
+
+The numbers remain **adopted, not ratified** — they are a `const`, and moving one is a line.
+
+### `8b-s` is largely built, and is called `3e`
+
+The README says shipping this hub first "leaves two live cards pointing at nothing". It does not.
+`/dashboard/verification` — board 3e — is already the credentials surface: it splits *Verified by
+us* from *Uploaded by you*, captures an expiry at upload, holds the four states, and **refuses to
+call a seller-uploaded certificate verified**. The 32-point card points there. `8b-s` becomes a
+services-shaped refinement of a working screen rather than a new build, which is the "check the tree
+first" caution firing for the second time on this track.
+
+### Three corrections
+
+**1 · Credentials complete at two on file, not at "one verified".** The board's completion rule asks
+for a state this product does not have, and deliberately: board 3e's whole design is that a document
+nobody here has looked at says `On file` and never `Verified`. Requiring it would put the largest
+lever permanently out of the seller's hands — the defect the site-visit cut removed — and would
+break the 80-point property above.
+
+**2 · The `+N PTS` badge stays what this seller would still gain, against B3.** B3 asks for the
+component's full weight so the four badges sum to a hundred. The repository already argues the
+other way in two places, and the argument is better: *"showing the weight would tell a seller who
+has done half of something that they can earn it all again."* A seller reads one card and asks what
+they get for doing it; nobody sums badges. The full weights are on the screen — in the weights card,
+which is where a table belongs — and the partial state renders beside the badge as the render draws
+it, `2 OF 3` and `~4 MIN`. One line to flip if the owner disagrees.
+
+**3 · The closing line is computed, and `both` does not get it.** The render writes "the other 36"
+and "4 here and 16 on the goods hub" as constants; both are read from the tables, and the goods
+figure is **20** rather than 16 because the site-visit cut redistributed that table after the render
+was drawn. A `both` seller gets the goods heading and no inversion sentence at all: on the
+renormalised union photographs read 11 against 20, which is an artifact of a larger denominator
+rather than a claim about what matters.
+
+### What `both` actually does — B9
+
+One renormalised score from a union table, derived rather than written: where a component is in both
+tables the larger weight wins, and the result is divided by its own total. Five cards, which is the
+longest this screen gets. Summing the two tables — which B9 forbids in as many words — would give a
+denominator of 176 and a meter that never fills.
+
+### Nothing moved for a seller of goods
+
+`unset` and `goods` resolve to the table they always had, and the 123 live businesses are all
+`unset`. The six new facts are read for every listing and scored for none of them, the concierge
+still renders, and the levers footnote keeps its own heading. A test pins it.
+
+### Still owed
+
+- **`8b-s`** — the services shape of the credentials screen. Its card works today; what it does not
+  yet do is ask a practice for the four credentials the copy names by name.
+- **The Export Tracker entry for `8b-s`** still says *20 pts*. This board puts credentials at **32**.
+- **`12c`'s ranking term.** Scope-sheet completeness now exists as data and as a lever.
+
+### Verified by clicking it
+
+The practice: four cards with credentials first and photographs last, `+32%` over a card with
+nothing banked and `+7%` over the one at two of three, `~5 MIN · 0 OF 2` beside it, the weights
+footnote reading *Weighted for a practice* with every figure computed, no concierge. A `both`
+seller: five cards, nine renormalised levers, the concierge back, and the goods heading. A goods
+seller: the screen exactly as it was.
+
+Axe found nothing but the project's pinned contrast gap.
+
+---
+
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`
 
@@ -923,7 +1008,7 @@ edit**.
 | # | Send together | `-s` ids | Builds in | Why these, in this order |
 |---|---|---|---|---|
 | **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **shipped 12 Sep.** One handoff, three screens, and it was right: the editor fixed the field set, the list reported on it, the page rendered it. See §4g |
-| **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | The hub, the onboarding task and credentials. Needs Q3 answered first, or it creates uncapped rows |
+| **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | `8a-s` **shipped 12 Sep**; `2e-s`'s cap shipped with the scope sheet, so Q3 no longer blocks. `8b-s` is a refinement of `3e`, not a new screen — see §4h |
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | `2b-s`, `2c-s` and `2d-s` shipped 11 Sep. `3c-s` is mostly built and now owes the services mirror as well as the per-service rows |
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | `5c-s` has a placeholder waiting. `1d-s` needs the Free-plan certifications gate decided |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | The expensive one, and the two that must be consecutive |

@@ -6521,6 +6521,42 @@ export const en = {
   "setup.lever.team": "Somebody other than you who can reply",
   "setup.lever.earned": "{earned} of {total} points",
 
+  // ── Board `8a-s`: the same hub, with the weights turned upside down ──────
+  //
+  // The goods hub leads with photographs, because for a parts supplier a
+  // picture of the shelf is evidence. For an audit practice it is decoration:
+  // what makes the listing credible is the FTA agent number, the MoF approval,
+  // the professional body and the indemnity cover. So credentials lead at 32
+  // and photographs fall to 4 — and the weights card on the screen says so,
+  // because sellers ask why photographs barely count and showing the weighting
+  // is cheaper than answering it in support.
+  "setup.card.credentials": "Add your credentials",
+  "setup.card.credentials_body":
+    "FTA tax agent number, MoF audit approval, professional body, indemnity cover. For a firm like yours this is what a warehouse photograph is to a parts supplier.",
+  "setup.card.services": "Publish your first three services",
+  "setup.card.services_body":
+    "Each one becomes its own page. “Statutory audit in Business Bay” is a real search, and right now nobody owns it.",
+  "setup.cta.continue": "Continue",
+
+  "setup.lever.credentials": "Credentials on file — the ones a buyer checks",
+  "setup.lever.services": "Services published, each with its scope sheet",
+  // Named as a lever and never offered as a task, because it is the one
+  // component a seller cannot finish on their own: the tier is ours to set.
+  "setup.lever.licence": "Trade licence checked against the issuing authority",
+  "setup.lever.coverage": "Where you work — a delivery mode and an area",
+  // The same key, different evidence. A practice's identity is what it does and
+  // who for; a trader's is the year, the size and the languages. Rendering the
+  // goods sentence over the services arithmetic would name fields the meter is
+  // not reading.
+  "setup.lever.identity_services": "What you do and who for — your description and your sectors",
+
+  // The weights card. In the render deliberately: it is the answer to the
+  // question the inversion provokes, given before the seller has to ask it.
+  "setup.weights_title": "Weighted for a practice",
+  "setup.weights_note":
+    "Basics and licence carry the other {rest}. Photographs are {services} here and {goods} on the goods hub — the inversion is the whole point.",
+  "setup.weights_points": "{points}",
+
   // The right rail. Three counts, and each one says so plainly when it is zero
   // rather than being hidden — the panel's job is to make the tasks feel worth
   // doing, and a hidden zero makes the whole panel unbelievable.

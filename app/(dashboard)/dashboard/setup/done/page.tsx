@@ -5,7 +5,7 @@ import { recordEvent } from "@/lib/telemetry/record";
 import { markDoneSeen, readBaseline } from "@/lib/setup/baseline";
 import { setupCompletion, type RankingFactor } from "@/lib/setup/complete";
 import { setupHubState } from "@/lib/setup/service";
-import { SETUP_TASKS } from "@/lib/setup/tasks";
+import { tasksFor } from "@/lib/setup/tasks";
 import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
 import { t, type MessageKey } from "@/lib/i18n";
@@ -60,6 +60,13 @@ export default async function SetupDonePage() {
 
   const state = await setupHubState(seat.businessId);
   if (!state) redirect("/dashboard");
+
+  /*
+     Four ticks for a practice, three for a trader, five for a seller who is
+     both — board `8a-s` B9. A constant here would draw three ticks over a hub
+     the seller had just finished four of.
+  */
+  const tasks = tasksFor(state.sellsKind);
 
   /*
      Suspended, and this is the redirect §5 puts above every other one.
@@ -144,16 +151,16 @@ export default async function SetupDonePage() {
         <h1 className="text-h3 font-medium text-ink">{t("setup_done.eyebrow")}</h1>
 
         <span aria-hidden="true" className="ms-2 flex items-center gap-1.5">
-          {SETUP_TASKS.map((task) => (
+          {tasks.map((task) => (
             <span key={task} className="h-1.5 w-[22px] rounded-pill bg-moss" />
           ))}
         </span>
 
         <p className="text-caption text-muted">
           {t("setup_done.progress", {
-            count: SETUP_TASKS.length,
-            formatted: formatCount(SETUP_TASKS.length),
-            total: formatCount(SETUP_TASKS.length),
+            count: tasks.length,
+            formatted: formatCount(tasks.length),
+            total: formatCount(tasks.length),
           })}
         </p>
 

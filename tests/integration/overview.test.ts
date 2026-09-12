@@ -349,6 +349,12 @@ describe("criterion 11 — profile strength has no seller-writable path", () => 
       ).length,
       photos,
       teamSeats: business._count.team,
+      credentials: 0,
+      licenceVerified: false,
+      servicesLive: 0,
+      sectors: 0,
+      deliveryModes: 0,
+      coverageAreas: 0,
     });
 
     // Was `int(38, 98)` in the seed until handoff 3 step 1 — the same shape of

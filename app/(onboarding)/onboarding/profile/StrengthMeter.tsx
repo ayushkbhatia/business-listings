@@ -29,7 +29,14 @@ import type { StrengthItem, WeightKey } from "@/lib/metrics/profile-strength";
  * incomplete to a seller who had written one, which is the meter looking broken
  * for the one reason a meter must not.
  */
-const LABEL: Record<WeightKey, { todo: MessageKey; done: MessageKey }> = {
+/*
+   Board `8a-s` widened `StrengthItem.key` to a string, because a services
+   seller is measured against a different table. This screen only ever renders
+   the goods levers — it is the onboarding profile step, and `2c-s` chooses the
+   field set one level up — so an unknown key is dropped rather than rendered as
+   its own identifier.
+*/
+const LABEL: Record<string, { todo: MessageKey; done: MessageKey } | undefined> = {
   identity: { todo: "profile_step.item.identity", done: "profile_step.item.identity_done" },
   photos: { todo: "profile_step.item.photos", done: "profile_step.item.photos_done" },
   catalogue: { todo: "profile_step.item.catalogue", done: "profile_step.item.catalogue_done" },
@@ -60,9 +67,9 @@ export function StrengthMeter({
      know what is left and which of it is worth most; ordering by the config's
      own key order would put the answer wherever the weights happened to sit.
   */
-  const rows = [...items].sort((a, b) =>
-    a.done === b.done ? b.remaining - a.remaining : a.done ? -1 : 1,
-  );
+  const rows = [...items]
+    .filter((item) => LABEL[item.key] !== undefined)
+    .sort((a, b) => (a.done === b.done ? b.remaining - a.remaining : a.done ? -1 : 1));
 
   return (
     <section
@@ -92,7 +99,7 @@ export function StrengthMeter({
               {item.done && <Check size={11} />}
             </span>
             <span className={cn("min-w-0 flex-1", item.done ? "text-body" : "text-ink")}>
-              {t(item.done ? LABEL[item.key].done : LABEL[item.key].todo)}
+              {t(item.done ? LABEL[item.key]!.done : LABEL[item.key]!.todo)}
             </span>
             {/*
               The points still on the table, not the points the item is worth.

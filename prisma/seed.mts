@@ -3590,6 +3590,20 @@ async function deriveProfileStrength(db: Db) {
       productsWithFilterableSpecs: withSpecs.get(b.id) ?? 0,
       photos: photos.get(b.id) ?? 0,
       teamSeats: b._count.team,
+      /*
+         Board `8a-s`. Nothing here for any seeded listing, and the seed does
+         not pretend otherwise: every one of them is `sells_kind = unset` and is
+         therefore measured against the goods table, where none of these six is
+         read. The one services firm the seed creates is built later in
+         `seedServicesFirm`, and the nightly job puts its score right on the
+         first run.
+      */
+      credentials: 0,
+      licenceVerified: false,
+      servicesLive: 0,
+      sectors: 0,
+      deliveryModes: 0,
+      coverageAreas: 0,
     });
     const completeness = specCompleteness(
       specsByBusiness.get(b.id) ?? [],
