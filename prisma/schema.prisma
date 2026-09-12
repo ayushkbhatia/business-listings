@@ -1046,6 +1046,7 @@ model Business {
   teamMembers            TeamMember[]
   customDomain           CustomDomain?
   boosts                 ListingBoost[]
+  scopeTemplates         ScopeTemplate[]
 
   @@index([primaryCategoryId])
   @@index([sectorId], map: "business_sector_idx")
@@ -1561,8 +1562,85 @@ model ScopeSheetFamily {
   common     ScopeSheetCommonService[]
   categories Category[]
   businesses Business[]                @relation("BusinessScopeSheet")
+  templates  ScopeTemplate[]
 
   @@map("scope_sheet_family")
+}
+
+/// A seller's own scope template — board `3h-s`.
+///
+/// "You inspect four different things and describe each one the same way." The
+/// template holds the shape so the seller fills in the words.
+///
+/// **Per business, never shared** — B9. `ScopeSheetFamily` is the platform-level
+/// artefact that decides which rows exist; this is one firm's answer to four of
+/// them.
+///
+/// ## `values` carries five keys and can never carry four others
+///
+/// Engagement type, fee basis, delivered where, deliverable and the
+/// accreditation row travel. **Service name, scope, excluded and turnaround do
+/// not**, and that is enforced by a CHECK rather than by the form: `3h-s` B3
+/// says UI-only avoidance will not survive the first import script, and it is
+/// right. The reason is one line of the board's own: two inspections of the same
+/// class still differ in what they cover, and a pre-filled exclusions line is
+/// the one that ends up in a dispute.
+///
+/// Turnaround is the interesting exclusion — `3h-s` Q2. It is required, so
+/// templating it would make a clone arrive complete. It is also the field a
+/// buyer weighs most and the one that genuinely differs between a hull survey
+/// and a pre-purchase inspection, so templating it produces four services
+/// claiming the same turnaround. One blank field is the cheaper error.
+model ScopeTemplate {
+  id         String @id @default(cuid())
+  businessId String @map("business_id")
+  familyId   String @map("family_id")
+  name       String
+  /// `/dashboard/scope-templates/:slug`. Unique per business, not globally.
+  slug       String
+
+  /// Only the travelling five. The CHECK is the contract.
+  values Json @default("{}")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  business Business               @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  family   ScopeSheetFamily       @relation(fields: [familyId], references: [id], onDelete: Restrict)
+  services Service[]
+  declines ScopeTemplateDecline[]
+
+  @@unique([businessId, slug], map: "scope_template_business_slug_key")
+  @@index([businessId])
+  @@map("scope_template")
+}
+
+/// One template change a service has refused — board `3h-s` B4, AC4.
+///
+/// The offers themselves are **derived**: a template value that differs from the
+/// service's own is an offer, computed on read, because a stored offer queue is
+/// a second copy of the template that goes stale the moment either side moves.
+/// What cannot be derived is a decline — "I saw this and said no" is a fact
+/// about the past, and without it the same offer reappears for ever.
+///
+/// The declined **value** is stored rather than a flag, so a template edited
+/// again to something new offers again. Declining "Per certificate" says nothing
+/// about "Per day".
+model ScopeTemplateDecline {
+  serviceId  String @map("service_id")
+  templateId String @map("template_id")
+  fieldKey   String @map("field_key")
+  /// The exact value refused. A different one is a new offer.
+  value      String
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  service  Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  template ScopeTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, fieldKey])
+  @@index([templateId])
+  @@map("scope_template_decline")
 }
 
 /// What a firm in this trade usually sells — board `8c-s` B8.
@@ -1705,6 +1783,15 @@ model Service {
 
   status ServiceStatus @default(draft)
 
+  /// Which scope template this service was cloned from — board `3h-s` B5.
+  ///
+  /// **Provenance, never a binding.** A service owns its own values from the
+  /// moment it is created; this only answers "which template would offer me a
+  /// change" and "how many services use this template". `SET NULL` on delete,
+  /// because B7 says deleting a template leaves its services' values intact and
+  /// loses only the link.
+  scopeTemplateId String? @map("scope_template_id")
+
   /// Manual order, and it is the seller's — `3f-s` B5. Sellers lead with their
   /// best work, and `1e-s` renders the public catalogue in this order.
   position Int @default(0)
@@ -1721,6 +1808,9 @@ model Service {
   category  Category          @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   values    ScopeFieldValue[]
   revisions ServiceRevision[]
+
+  scopeTemplate  ScopeTemplate?         @relation(fields: [scopeTemplateId], references: [id], onDelete: SetNull)
+  declinedOffers ScopeTemplateDecline[]
 
   @@unique([businessId, slug])
   @@index([businessId, status])

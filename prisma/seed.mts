@@ -7450,6 +7450,66 @@ async function seedServicesFirm(db: Db) {
   }
 
   await seedCredentials(db, firm.id, category.id);
+  await seedScopeTemplate(db, firm.id);
+}
+
+/**
+ * Board `3h-s` — one template, used by two of the three services.
+ *
+ * One rather than two, and used by two rather than all three. The board's own
+ * empty state says *most practices need one or two*, and the useful fixture is
+ * the one where the numbers are not all the same: a template whose count, whose
+ * named services and whose offer list each say something different is the only
+ * way to see that the three come from three different places.
+ *
+ * **The offers are the point.** The template's fee basis deliberately disagrees
+ * with one of the two services it is attached to, so the screen arrives with a
+ * change waiting — which is `3h-s` B4, the rule that a template edit never
+ * writes through, in its only visible state.
+ */
+async function seedScopeTemplate(db: Db, firmId: string) {
+  const family = await db.scopeSheetFamily.findUnique({
+    where: { id: "audit-and-assurance" },
+    select: { id: true },
+  });
+  if (!family) return;
+
+  const template = await db.scopeTemplate.create({
+    data: {
+      businessId: firmId,
+      familyId: family.id,
+      name: "Our recurring compliance work",
+      slug: "our-recurring-compliance-work",
+      /*
+         Five keys at most, and never `scope`, `excluded`, `name` or
+         `turnaround` — the CHECK refuses those, which is where B3 asks for the
+         rule to live rather than in a form.
+      */
+      values: {
+        engagementType: "ongoing_contract",
+        feeBasis: "retainer",
+        deliveredWhere: "remote",
+        deliverable: "Filed return and the correspondence that follows it",
+        regulator: "Federal Tax Authority",
+      },
+    },
+    select: { id: true },
+  });
+
+  /*
+     Two of the three. The statutory audit is deliberately left off it: a firm's
+     template covers the work it repeats, and the one engagement that is not
+     recurring is the one that should not be attached to it.
+  */
+  await db.service.updateMany({
+    where: {
+      businessId: firmId,
+      slug: { in: ["vat-and-corporate-tax-filing", "transfer-pricing-documentation"] },
+    },
+    data: { scopeTemplateId: template.id },
+  });
+
+  console.log("   1 scope template, used by 2 services, with a change waiting on one");
 }
 
 /**

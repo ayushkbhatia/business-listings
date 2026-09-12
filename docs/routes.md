@@ -77,6 +77,8 @@ and it is the one that argues back.
 /dashboard/setup (services)             Setup hub — four tasks              [8a-s] built h8as
 /dashboard/setup/credentials            Task 1 (services) — credentials     [8b-s] built h8bs
 /dashboard/setup/services               Task 2 (services) — sheet + services [8c-s] built h8cs
+/dashboard/scope-templates              Scope templates                     [3h-s] built h3hs
+/dashboard/scope-templates/:slug        One template, its services, offers  [3h-s] built h3hs
 /dashboard/setup/photos                 Task 1 — photos                       [8b]  built h8s2
 /dashboard/setup/products               Task 2 — template, first products     [8c]  built h8s3
 /dashboard/setup/team                   Task 3 — invite the team              [8d]  built h8s4
@@ -350,6 +352,29 @@ but the hub's task 2 counts only services that are live **and** at `COUNTING_BAR
 four of the six required fields. A thin service is published, findable and excluded,
 and the screen names the missing fields rather than saying "incomplete". Four modules
 read that rule and all four share `COUNTABLE_SELECT` in `lib/services/setup-sheet.ts`.
+
+`/dashboard/scope-templates` is **not** `/dashboard/templates` with a different
+field list, whatever `3h-s`'s handoff says. Board `3h` is an *overlay* — one
+`SellerTemplate` per platform template per business, storing only overrides, with
+draft → apply → revision → rollback and a history route. `3h-s` is many templates
+per business, cloned into services, with a usage count and a per-service offer.
+The two share a word and nothing else; the one idea genuinely borrowed is that a
+change is proposed and reviewed before it lands.
+
+**Five fields travel and four never do.** Engagement type, fee basis, delivered
+where, deliverable and the accreditation row are pre-filled; service name, scope,
+excluded and turnaround are left per service. `scope` and `excluded` are `3g-s`
+B6; **name and turnaround are `3h-s`'s correction to it**, and turnaround is the
+interesting one — templating it would make a clone arrive complete and produce
+four services claiming the same turnaround. The rule is a CHECK on
+`scope_template.values`, not a form: B3 is right that UI-only avoidance does not
+survive an import script.
+
+**A template edit never writes through.** `saveTemplate` writes one row; the
+offers are the difference between the template and each service, computed on
+read. Only a decline is stored, and it carries the refused **value** so a
+template edited again to something else offers again. Accepting goes through
+`patchServiceField`, so `3g-s`'s fee-basis rule and the change log both apply.
 
 `/b/:slug/s/:service` is the scope table where the spec table is. Its row order
 comes from `ScopeSheetFamily`, so every firm in a family renders the same rows in

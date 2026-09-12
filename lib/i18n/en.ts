@@ -8651,6 +8651,119 @@ export const en = {
   "service_public.credential_until": "valid to {when}",
   "service_public.credential_by": "checked against {register}",
 
+  // ── Board `3h-s` — scope templates ───────────────────────────────────────
+  //
+  // "You inspect four different things and describe each one the same way." The
+  // template holds the shape so the seller fills in the words. Five fields
+  // travel; service name, scope, excluded and turnaround are left per service,
+  // and the last two are the ones that matter: two inspections of the same
+  // class still differ in what they cover, and a pre-filled exclusions line is
+  // the one that ends up in a dispute.
+  "services.scope_templates": "Scope templates",
+  "services.scope_templates_hint":
+    "— hold the shape of work you describe the same way, and add services from it.",
+  "scope_template.meta_title": "Scope templates",
+  "scope_template.eyebrow": "Scope templates",
+  "scope_template.title": "Scope templates",
+  "scope_template.intro":
+    "You describe several services the same way. A template holds the shape so you fill in the words — the same idea as a parts supplier cloning a spec sheet and renaming it.",
+  "scope_template.in_use": {
+    one: "{formatted} in use",
+    other: "{formatted} in use",
+  },
+  "scope_template.back": "Services",
+
+  // The empty state, and it exists to stop a seller feeling behind. A parts
+  // supplier with sixty-one spec templates is solving a catalogue problem; a
+  // practice with two is finished.
+  "scope_template.none_title": "Nothing here yet",
+  "scope_template.none_body":
+    "Most practices need one or two. Sixty-one is a parts catalogue problem.",
+  "scope_template.new": "New from a family",
+  "scope_template.new_name": "What do you call this group of work?",
+  "scope_template.new_name_hint": "For example “Our marine inspections”. Only you see it.",
+  "scope_template.new_family": "Which scope sheet is it based on",
+  "scope_template.create": "Create the template",
+  "scope_template.other": "Other templates",
+  "scope_template.used_by": {
+    one: "Used by {formatted} service",
+    other: "Used by {formatted} services",
+  },
+  "scope_template.used_by_none": "Not used by any service yet",
+  "scope_template.from_family": "From {family}",
+
+  "scope_template.prefilled": "PRE-FILLED FOR EVERY SERVICE THAT USES IT",
+  "scope_template.blank": "LEFT BLANK PER SERVICE",
+  "scope_template.never_templated":
+    "Scope and exclusions are never templated. Two inspections of the same class still differ in what they cover, and a pre-filled exclusions line is the one that ends up in a dispute.",
+  // Turnaround's exclusion is the board's only real design decision, so the
+  // screen gives the seller the reason rather than leaving a field mysteriously
+  // absent.
+  "scope_template.turnaround_why":
+    "Turnaround is left blank too. It is the field a buyer weighs most and the one that really differs between two jobs of the same kind — four services claiming the same turnaround reads worse than one blank field.",
+  "scope_template.field.engagementType": "Engagement type",
+  "scope_template.field.feeBasis": "Fee basis",
+  "scope_template.field.deliveredWhere": "Delivered where",
+  "scope_template.field.deliverable": "Deliverable",
+  "scope_template.field.regulator": "Accreditation",
+  "scope_template.field.name": "Service name",
+  "scope_template.field.scope": "Scope",
+  "scope_template.field.excluded": "Excluded",
+  "scope_template.field.turnaround": "Turnaround",
+  "scope_template.unset": "Not set",
+  "scope_template.dash": "—",
+
+  "scope_template.edit": "Edit the template",
+  "scope_template.save": "Save the template",
+  "scope_template.saving": "Saving",
+  "scope_template.saved": "Saved. Nothing on your live services changed — any differences are offered below.",
+  "scope_template.cancel": "Cancel",
+  "scope_template.name": "Template name",
+  "scope_template.delete": "Delete this template",
+  "scope_template.delete_confirm": "Delete {name}?",
+  "scope_template.delete_body": {
+    one: "{formatted} service keeps everything it holds and loses only the link back to this template.",
+    other: "{formatted} services keep everything they hold and lose only the link back to this template.",
+  },
+  "scope_template.delete_body_none": "Nothing uses it, so nothing changes.",
+  "scope_template.delete_go": "Delete",
+
+  // Editing never writes through — B4. The offers are the whole mechanism, so
+  // the copy says what will happen before the seller presses Save, not after.
+  "scope_template.no_writethrough_title": "Editing a template does not rewrite live services",
+  "scope_template.no_writethrough_body":
+    "It offers the change on each one. Services quoting different clients cannot change shape because you tidied a template.",
+  "scope_template.offers_title": "Changes waiting on your services",
+  "scope_template.offers_none": "Every service using this template already matches it.",
+  "scope_template.offer_row": "{field}: {before} → {after}",
+  "scope_template.offer_from_nothing": "{field}: not set → {after}",
+  "scope_template.accept": "Accept",
+  "scope_template.decline": "Decline",
+  "scope_template.declined": "Declined. It will be offered again if you change the template to something else.",
+  "scope_template.service_matches": "Matches the template",
+  "scope_template.service_draft": "Draft",
+
+  // A clone arrives at 4 of 6 — the `8c-s` counting bar — with turnaround the
+  // one field standing between it and a complete sheet.
+  "scope_template.clone_title": "Add a service from this template",
+  // Five rather than four, and the difference is worth being exact about: the
+  // template fills four and the name you type here is the fifth, so turnaround
+  // is genuinely the only field left. The board reads it as two steps because
+  // it draws them as two; this screen does both on one press.
+  "scope_template.clone_hint":
+    "The template fills {filled} of the {total} required rows. With the name you give it here that is {named}, and turnaround is the one left.",
+  "scope_template.clone": "Add the service",
+  "scope_template.cloned": "Added as a draft at {filled} of {total}. Turnaround is the one left.",
+
+  "scope_template.error.name": "A template needs a name.",
+  "scope_template.error.name_fix": "Type what you call this group of work, for example “Our marine inspections”.",
+  "scope_template.error.family": "That scope sheet is not one we hold.",
+  "scope_template.error.family_fix": "Pick one from the list.",
+  "scope_template.error.save": "That change was not saved.",
+  "scope_template.error.save_fix": "Check your connection and try again.",
+  "scope_template.error.at_cap": "{plan} covers {formatted} services and you have them all.",
+  "scope_template.error.at_cap_fix": "Remove one on the services screen, or move to a plan with more room.",
+
   // ── Board `8c-s` — setup task 2, the scope sheet and the first services ──
   //
   // The screen that proved the service track had to exist. The goods task 2
