@@ -7440,6 +7440,78 @@ async function seedServicesFirm(db: Db) {
       },
     });
   }
+
+  await seedCredentials(db, firm.id, category.id);
+}
+
+/**
+ * Board `8b-s` — one credential held, and a trade with a real rate behind it.
+ *
+ * **Meridian holds one, not two.** The render draws two and the task complete;
+ * one leaves it at 1 of 2, which is the more useful fixture: the held row
+ * renders, the seller-claim tier renders, the pro-rata half of the task renders,
+ * and there is still a credential left to add — which is what the acceptance
+ * shard adds, and how it watches the task tick.
+ *
+ * Professional indemnity, because it is the kind no register will ever answer
+ * for. The fixture that matters most on this screen is a claim labelled as a
+ * claim, and the seed should carry the awkward one rather than the flattering
+ * one.
+ *
+ * ## The suggestion rate needs a denominator, and it is the real one
+ *
+ * B6 suppresses a suggestion row below 25% — so on a directory where nobody
+ * holds anything, no row renders, which is correct and also means the feature
+ * is invisible in CI and in the gallery. So a share of this trade holds the
+ * Ministry of Finance approval: two in every three, by index, which is
+ * deterministic and lands near the 68% the board's own render prints.
+ *
+ * Existing businesses rather than new ones. `seedServicesFirm` is appended for
+ * the reason every builder near it is — the PRNG is a sequence — and adding
+ * suppliers here would move every count the category and area boards assert on.
+ * Adding rows to an empty table moves nothing.
+ */
+async function seedCredentials(db: Db, firmId: string, categoryId: string) {
+  await db.credential.create({
+    data: {
+      businessId: firmId,
+      kind: "indemnity_insurance",
+      issuer: "AXA Gulf",
+      identifier: "PI-DXB-40118",
+      expiresOn: days(220),
+      // A claim, and the seed says so by writing nothing else. The CHECK would
+      // refuse a verified row without a register behind it in any case.
+      trust: "seller_claim",
+    },
+  });
+
+  const peers = await db.business.findMany({
+    where: {
+      primaryCategoryId: categoryId,
+      publishedAt: { not: null },
+      suspendedAt: null,
+      verifiedAt: { not: null },
+      id: { not: firmId },
+    },
+    orderBy: { slug: "asc" },
+    select: { id: true },
+  });
+
+  const holders = peers.filter((_, index) => index % 3 !== 0);
+  if (holders.length === 0) return;
+
+  await db.credential.createMany({
+    data: holders.map((peer) => ({
+      businessId: peer.id,
+      kind: "mof_audit_approval" as const,
+      issuer: "Ministry of Finance",
+      trust: "seller_claim" as const,
+    })),
+  });
+
+  console.log(
+    `   ${holders.length} of ${peers.length} in the trade hold the MoF approval, for the suggestion rate`,
+  );
 }
 
 async function seedPublicHolidays(db: Db) {

@@ -8638,6 +8638,148 @@ export const en = {
   "guide_admin.block_items": "One per line",
   "guide_admin.note": "A guide publishes at {need} words. It is the same floor a landing page intro answers to, for the same reason: below it there is nothing for a search engine to rank and nothing for a reader to trust.",
 
+  // The trust block on `1g-s`, where a product page shows stock availability —
+  // `8b-s`'s Feeds note. The separation between a checked credential and a
+  // claim is structural rather than a colour: one names the register, the other
+  // names the firm. A buyer who reads "Stated by …" knows what the line is worth.
+  "service_public.credentials_title": "Who signs it",
+  "service_public.credentials_hint":
+    "What this firm holds. We check what a register will answer for and label the rest as the firm's own claim.",
+  "service_public.credentials_none":
+    "This firm has not listed any credentials. Nothing here has been checked, because nothing has been offered.",
+  "service_public.credential_claim": "Stated by {name}",
+  "service_public.credential_until": "valid to {when}",
+  "service_public.credential_by": "checked against {register}",
+
+  // ── Board `8b-s` — setup task 1, credentials ─────────────────────────────
+  //
+  // The screen that replaces "upload five photographs of your premises". Every
+  // register on this page is deliberate: the intro makes the *commercial* case
+  // and never the compliance one, because a seller who thinks they are being
+  // audited abandons the screen — and the abandonment is the whole thing the
+  // design is built to prevent.
+  //
+  // Nothing here is required, and the copy says so four times on purpose.
+  "credentials.meta_title": "Credentials",
+  "credentials.eyebrow": "Credentials & accreditations",
+  "credentials.title": "What are you licensed and approved to do?",
+  "credentials.intro":
+    "All of this is optional and you can publish without any of it. Buyers do filter on it — a trade licence says you exist, an FTA agent number says you can file on their behalf — so it is worth the five minutes. We check the ones we can check and label the rest as your own claim.",
+
+  // Already on file. The one thing this platform has actually checked, read off
+  // the business row rather than asked for again — B4, AC4.
+  "credentials.on_file_eyebrow": "ALREADY ON FILE",
+  "credentials.from_register": "FROM THE LICENCE REGISTER",
+  "credentials.licence_row": "Trade licence — {number}",
+  "credentials.licence_checked": "{authority} · expires {expiry} · verified against the issuing authority on {checked}",
+  // The honest half of the same row. A listing can be live with a licence
+  // nobody has checked yet, and saying "verified" over it would be the one lie
+  // this screen cannot afford — the tier is ours to set and we have not set it.
+  "credentials.licence_unchecked": "{authority} · expires {expiry} · not checked against the register yet",
+
+  "credentials.add_eyebrow": "ADD ANY YOU WANT SHOWN",
+  "credentials.add_note": "All optional — add none, add all, come back later",
+
+  // The tiers, and there are two of them that a saved row can be in. "We verify
+  // this" is a promise about a *field*, never a state a row is left in: it is
+  // what the form says before anything is typed, and it does not survive a save.
+  "credentials.tier.register_verified": "VERIFIED AGAINST THE ISSUING AUTHORITY",
+  "credentials.tier.we_verify_this": "WE VERIFY THIS",
+  "credentials.tier.seller_claim": "Your own claim",
+  "credentials.verified_on": "Checked against {register} on {when}",
+
+  "credentials.kind.fta_tax_agent": "FTA tax agent number",
+  "credentials.kind.mof_audit_approval": "Ministry of Finance audit approval",
+  "credentials.kind.professional_body": "Professional body membership",
+  "credentials.kind.indemnity_insurance": "Professional indemnity insurance",
+  "credentials.kind.other": "Something else",
+  "credentials.kind.professional_body_hint": "ACCA, ICAEW, CPA and others",
+
+  "credentials.field.kind": "What is it",
+  "credentials.field.identifier": "Number",
+  "credentials.field.identifier_hint": "Agent number, membership number, policy number. Leave it blank if you do not have it to hand.",
+  "credentials.field.issuer": "Who issued it",
+  "credentials.field.issuer_hint": "Optional. The body whose name is on the certificate.",
+  "credentials.field.expires": "Expires",
+  // B5, AC5. The hint is the commitment, not a nicety: it is the sentence that
+  // stops this field reading like the first row of a compliance record.
+  "credentials.field.expires_hint": "Only if the certificate carries a date. We do not remind you and nothing changes when it passes.",
+  "credentials.field.file": "Certificate",
+  "credentials.file_idle": "Add the certificate",
+  "credentials.file_hint": "PDF, JPEG or PNG. It stays private — buyers see that you hold it, never the file.",
+  "credentials.file_uploading": "Uploading",
+  "credentials.file_remove": "Remove",
+  "credentials.add": "Add",
+  "credentials.adding": "Adding",
+  "credentials.remove": "Remove {name}",
+  "credentials.removed": "Removed.",
+
+  // Suggestions, and the rate is the entire mechanism — B6, AC6. A generic
+  // "you might also add…" row is ignored; a number a seller can check their
+  // competitors against is not. Below the floor the row is not drawn at all.
+  "credentials.suggested": "Suggested for {category} — {rate}% of verified suppliers in your subcategory hold it",
+  "credentials.suggest_add": "Add",
+
+  // What a failed or impossible register check says, inline — Q2, AC10. None of
+  // the three blames the seller, none of them silently downgrades, and the row
+  // is saved either way: the sentence only says which of the three happened.
+  //
+  // Two of them are warnings because the seller can act on them, and each
+  // carries its own fix. The third is not a warning at all — nobody could have
+  // done anything differently and there is nothing to put right — so it is
+  // information, and giving it a fix line would be inventing one.
+  "credentials.register.not_found": "Saved as your own claim. The FTA register does not hold that number.",
+  "credentials.register.not_found_fix":
+    "Check it against your certificate. If it was mistyped, remove the row and add it again.",
+  "credentials.register.bad_format": "Saved as your own claim. That is not the shape of a tax agent number.",
+  "credentials.register.bad_format_fix":
+    "A tax agent number is digits only, as printed on the FTA certificate.",
+  "credentials.register.unavailable":
+    "Saved as your own claim. We could not reach the FTA register, so nobody has checked this yet.",
+  // Said once, above the form, where a register is not wired up at all. The
+  // alternative is a field wearing a WE VERIFY THIS badge that verifies nothing.
+  "credentials.register.off": "We are not connected to the FTA register yet, so a tax agent number saves as your own claim for now.",
+
+  // Every refusal on this screen is structural, and each one says what to do.
+  // "Something went wrong" is not a notice, it is an apology — `Alert` refuses
+  // a warning without a fix in development for exactly that reason.
+  "credentials.error.kind": "That is not a credential kind we hold.",
+  "credentials.error.kind_fix": "Pick what it is from the list, then add it.",
+  "credentials.error.upload": "That file did not upload.",
+  "credentials.error.upload_fix": "Check your connection, then choose the file again.",
+  "credentials.error.file_fix": "Choose a PDF, JPEG or PNG of {mb} MB or less.",
+  // Storage off is an environment fault, and the seller still has a screen to
+  // finish: the certificate is the optional part of an optional credential.
+  "credentials.error.storage_fix": "Add the credential without a certificate, and attach it later.",
+  "credentials.error.gone": "That credential is no longer on your listing.",
+  "credentials.error.gone_fix": "Reload the page to see what is on it now.",
+
+  // The closing line. Points earned rather than points available, because the
+  // number a seller wants at the bottom of a task is what they just banked.
+  "credentials.earned": {
+    one: "{formatted} added, {points} points earned. Skipping costs the points, not the listing.",
+    other: "{formatted} added, {points} points earned. Skipping costs the points, not the listing.",
+  },
+  "credentials.earned_none": "Nothing added yet. Skipping costs the points, not the listing.",
+
+  // The sidebar. The four rows and every number in them come from the `8a-s`
+  // table — B8, AC7 — so the day a weight moves, both screens move with it.
+  "credentials.tasks_title": "The four tasks",
+  "credentials.tasks_total": "{points} pts",
+  "credentials.task_line": "{points} pts · {minutes} min",
+  "credentials.task.credentials": "Credentials & accreditations",
+  "credentials.task.services": "Scope sheet + 3 services",
+  "credentials.task.team": "Invite your team",
+  "credentials.task.photos": "Office, team & certificates",
+  "credentials.task.products": "Your first products",
+  "credentials.photos_note":
+    "Photographs were task 1 and worth {goods}. For a practice, a photograph of the office proves nothing a buyer cares about, so it moves to task 4 at {services}.",
+
+  // The closing card, and the fourth statement that nothing here is required.
+  "credentials.nothing_eyebrow": "NOTHING HERE IS REQUIRED",
+  "credentials.nothing_body":
+    "A seller who uploads nothing still trades. We show what you give us, verify what we can check against a register, and mark the rest as your own claim. We do not hold a compliance record on you and we do not chase renewals.",
+
   // ── Not found ─────────────────────────────────────────────────────────────
   "notfound.title": "That page is not here",
   "notfound.body": "The address may be mistyped, the page may have moved, or you may not be signed in to the account it belongs to.",

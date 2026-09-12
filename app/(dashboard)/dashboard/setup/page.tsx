@@ -72,17 +72,19 @@ const HREF: Record<SetupTaskId, string> = {
   products: "/dashboard/products",
   team: "/dashboard/team",
   /*
-     Board `8a-s` B8: both new cards link out rather than getting a sub-route of
-     their own, because the state lives on the task's own screen.
+     Board `8b-s` shipped, so the 32-point card points at its own task screen.
 
-     Credentials points at `/dashboard/verification` — board 3e — and not at a
-     new `8b-s` route. That screen is already the credentials surface: it splits
-     `Verified by us` from `Uploaded by you`, captures an expiry, and refuses to
-     call a seller-uploaded certificate verified. `8b-s` refines it for a
-     practice; it does not replace it, and pointing a 32-point card at a route
-     that does not exist would have been the largest dead card on the product.
+     It pointed at `/dashboard/verification` while `8b-s` was unbuilt, because
+     that screen is the nearest thing — board 3e splits `Verified by us` from
+     `Uploaded by you` and refuses to call a seller-uploaded certificate
+     verified — and a dead card was the worse of the two. The two surfaces stay
+     distinct now: 3e is documents, with a public-visibility switch and a
+     storefront list; this is typed credentials with a tier assigned from the
+     kind. A certificate added here writes a private document row that 3e lists,
+     because it is the same file and two stores for it would be two places to
+     get privacy wrong.
   */
-  credentials: "/dashboard/verification",
+  credentials: "/dashboard/setup/credentials",
   services: "/dashboard/services",
 };
 

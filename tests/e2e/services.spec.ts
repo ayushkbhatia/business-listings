@@ -1,14 +1,31 @@
 import { expect, test } from "@playwright/test";
+import AxeBuilder from "@axe-core/playwright";
 
 /**
- * Boards `3g-s`, `3f-s`, `1g-s` — the scope sheet, from a seat that sells work.
+ * Boards `3g-s`, `3f-s`, `1g-s`, `8a-s`, `8b-s` — the seat that sells work.
  *
  * This spec has its own project and its own seat because every other seller
  * fixture on this platform sells goods: `sells_kind` is `unset` on all 123 live
  * businesses, which means goods, so the services screens could only ever be
  * exercised in their empty state. `seedServicesFirm` builds the firm this signs
- * in as — three services, one of them deliberately live at 4 of 6.
+ * in as — three services, one of them deliberately live at 4 of 6, and one
+ * credential of the two its largest task asks for.
+ *
+ * ## One file, and serial, because it is one business
+ *
+ * `8b-s`'s tests began in a file of their own and could not stay there. The
+ * suite is `fullyParallel`, so two files run at once outside CI — and while the
+ * credentials tests held two credentials, the hub two files away moved the
+ * credentials card into its done-summary and the card's own test failed looking
+ * for a link that was correctly no longer drawn. Nothing was wrong with either
+ * assertion; they were reading one listing through two windows.
+ *
+ * Playwright serialises within a file and not across them, so everything that
+ * drives this seat lives here. CI has run this shard on one worker since #62,
+ * which is why the race was invisible there — a green CI over a red local run
+ * being the worst of the two outcomes.
  */
+test.describe.configure({ mode: "serial" });
 
 test.describe("board 3f-s — the services list", () => {
   test.beforeEach(async ({ page }) => {
@@ -276,20 +293,22 @@ test.describe("board 8a-s — the setup hub", () => {
     expect(all.some((title) => /spec template/i.test(title))).toBe(false);
   });
 
-  test("sends the credentials card to the screen that already holds them", async ({ page }) => {
+  test("sends the credentials card to its own task screen", async ({ page }) => {
     /*
-       `/dashboard/verification`, board 3e — not a new `8b-s` route. That screen
-       is already the credentials surface: it splits what the platform checked
-       from what the seller uploaded, captures an expiry, and refuses to call an
-       uploaded certificate verified. Pointing a 32-point card at a route that
-       does not exist would have been the largest dead card on the product.
+       `/dashboard/setup/credentials`, board `8b-s`, since that shipped.
+
+       It pointed at `/dashboard/verification` — board 3e — while `8b-s` was
+       unbuilt, because a dead card was the worse of the two and 3e is the
+       nearest thing: it splits what the platform checked from what the seller
+       uploaded. The two stay distinct. 3e is documents and their public
+       visibility; this is typed credentials with a tier assigned from the kind.
     */
     const credentials = page
       .getByRole("listitem")
       .filter({ has: page.getByRole("heading", { name: /Add your credentials/ }) });
     await expect(credentials.getByRole("link")).toHaveAttribute(
       "href",
-      "/dashboard/verification",
+      "/dashboard/setup/credentials",
     );
 
     const services = page
@@ -318,8 +337,14 @@ test.describe("board 8a-s — the setup hub", () => {
 
   test("publishes the weighting rather than making sellers ask for it", async ({ page }) => {
     await expect(page.getByText("Weighted for a practice")).toBeVisible();
+    /*
+       Sixteen of thirty-two, because `8b-s` gives the fixture one credential of
+       the two the lever asks for. Every row is this seller's own arithmetic
+       rather than the component's weight — a constant would read zero over a
+       firm that had done half the task — and this is the row that says so.
+    */
     await expect(page.getByText(/Credentials on file/)).toBeVisible();
-    await expect(page.getByText(/0 of 32 points/)).toBeVisible();
+    await expect(page.getByText(/16 of 32 points/)).toBeVisible();
     // Every number in the closing line is this seller's own, not a constant.
     await expect(page.getByText(/the inversion is the whole point/)).toBeVisible();
   });
@@ -344,5 +369,176 @@ test.describe("board 8a-s — the setup hub", () => {
     // there is no services equivalent: six scope sheets typed by hand is the
     // fast path, which is why `3f-s` suppresses the importer on the same ground.
     await expect(page.getByText("Send us your catalogue")).toHaveCount(0);
+  });
+});
+
+const CREDENTIALS = "/dashboard/setup/credentials";
+
+/** The submit. "Add" is also the suggestion rows' verb, so scope it. */
+const submit = (page: import("@playwright/test").Page) =>
+  page.locator("form").getByRole("button", { name: "Add", exact: true });
+
+/**
+ * Board `8b-s` — setup task 1 for a firm that sells work.
+ *
+ * The fixture holds exactly one credential: professional indemnity, a claim.
+ * One rather than two is the useful state — it leaves the task at 1 of 2, so
+ * these tests can add the second and watch it tick, and it leaves a claim on
+ * screen so the tier labelling has something to be wrong about.
+ *
+ * Every test that writes removes what it wrote. The seed is shared with every
+ * other shard, and a spec that consumes a fixture row is a defect this
+ * repository has paid for more than once.
+ */
+test.describe("board 8b-s — credentials", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(CREDENTIALS);
+  });
+
+  test("the sidebar table is `8a-s`'s — 32 / 20 / 8 / 4, totalling 64 — criterion 7", async ({
+    page,
+  }) => {
+    const rail = page.getByRole("region", { name: "The four tasks" });
+    await expect(rail).toContainText("64 pts");
+
+    /*
+       Every one of these is looked up from the weight table rather than typed
+       into this screen, so the assertion is that the two screens agree — which
+       is the whole of B8. If a weight moves and only one screen moves with it,
+       this fails.
+    */
+    for (const [task, points] of [
+      ["Credentials & accreditations", "32 pts"],
+      ["Scope sheet + 3 services", "20 pts"],
+      ["Invite your team", "8 pts"],
+      ["Office, team & certificates", "4 pts"],
+    ]) {
+      const row = rail.getByRole("listitem").filter({ hasText: task! });
+      await expect(row).toContainText(points!);
+    }
+  });
+
+  test("the trade licence is read-only and is never asked for again — criterion 4", async ({
+    page,
+  }) => {
+    const onFile = page.getByRole("region", { name: "ALREADY ON FILE" });
+    await expect(onFile).toContainText("DED-884112");
+    await expect(onFile).toContainText("verified against the issuing authority");
+
+    // No control inside it at all: no edit, no re-upload, no remove.
+    await expect(onFile.getByRole("button")).toHaveCount(0);
+    await expect(onFile.getByRole("textbox")).toHaveCount(0);
+
+    // And it is not offered as something to add, because it is not a credential
+    // row — it lives on the business.
+    const kinds = page.getByRole("combobox", { name: "What is it" });
+    await expect(kinds.getByRole("option", { name: /trade licence/i })).toHaveCount(0);
+  });
+
+  test("the seller cannot choose a tier, and nothing offers one — criterion 3", async ({
+    page,
+  }) => {
+    for (const word of ["Verified", "Tier", "Trust level"]) {
+      await expect(page.getByRole("combobox", { name: word })).toHaveCount(0);
+    }
+
+    /*
+       And the seeded claim wears the claim's words. The register badge is
+       reserved for a row a register answered for, and no register has: the
+       only "verified" sentence on this page belongs to the trade licence,
+       which is not a credential row and is not the seller's to set either.
+    */
+    const claim = page.getByRole("listitem").filter({ hasText: "Professional indemnity" });
+    await expect(claim).toContainText("Your own claim");
+    await expect(claim.getByText("VERIFIED AGAINST THE ISSUING AUTHORITY")).toHaveCount(0);
+  });
+
+  test("there is no reminder, tracking or renewal surface — criterion 5", async ({ page }) => {
+    // The commitment, in both places the screen makes it.
+    await expect(
+      page.getByText("We do not remind you and nothing changes when it passes"),
+    ).toBeVisible();
+    await expect(page.getByText("We do not hold a compliance record on you")).toBeVisible();
+
+    /*
+       Controls rather than words: the page says "we do not chase renewals", so
+       an assertion on the *word* renewal would fail on the sentence that makes
+       the promise. What must not exist is something to press — `3e-s` was the
+       expiry tracker and it was cut, and this is the shape it would come back in.
+    */
+    for (const gone of [/renew/i, /remind me/i, /track/i]) {
+      await expect(page.getByRole("button", { name: gone })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: gone })).toHaveCount(0);
+      await expect(page.getByRole("switch", { name: gone })).toHaveCount(0);
+    }
+    // And the expiry field is optional, which is the rule underneath all of it.
+    const expires = page.getByRole("textbox", { name: "Expires" });
+    await expect(expires).not.toHaveAttribute("required", /.*/);
+  });
+
+  test("saves with every field but the kind left blank — criterion 1", async ({ page }) => {
+    // Enabled before anything is typed, and it stays that way.
+    await expect(submit(page)).toBeEnabled();
+
+    await page.getByRole("combobox", { name: "What is it" }).selectOption("other");
+    await expect(submit(page)).toBeEnabled();
+    await submit(page).click();
+
+    const row = page.getByRole("listitem").filter({ hasText: "Something else" });
+    await expect(row).toBeVisible();
+    // Nothing hidden because it is empty. The seller sees the thinness a buyer
+    // would — `CLAUDE.md` § Interface honesty.
+    await expect(row).toContainText("Not provided");
+
+    await row.getByRole("button", { name: /^Remove/ }).click();
+    await expect(page.getByRole("listitem").filter({ hasText: "Something else" })).toHaveCount(0);
+  });
+
+  test("an FTA number saves as a claim and says so inline — criteria 2 and 10", async ({
+    page,
+  }) => {
+    /*
+       The fixture holds one, and this test is written on that. A local database
+       that has drifted fails here with the reason in the message rather than
+       four assertions later with an arithmetic that looks wrong.
+    */
+    await expect(page.getByText("1 added, 16 points earned")).toBeVisible();
+
+    await page.getByRole("combobox", { name: "What is it" }).selectOption("fta_tax_agent");
+    await page.getByRole("textbox", { name: "Number" }).fill("20034512");
+    await submit(page).click();
+
+    /*
+       No register is configured, so the honest answer is that nobody has
+       checked it. The row is saved either way — Q2's position, and the reason
+       is stronger with no register than with one: a hard block on a call that
+       cannot be made is a screen nobody can finish.
+    */
+    await expect(page.getByText("Saved as your own claim")).toBeVisible();
+
+    const row = page.getByRole("listitem").filter({ hasText: "FTA tax agent number" });
+    await expect(row).toContainText("Your own claim");
+    await expect(row).toContainText("20034512");
+    await expect(row.getByText("VERIFIED AGAINST THE ISSUING AUTHORITY")).toHaveCount(0);
+
+    // Two held, so the task closes and the chrome says so rather than "Save".
+    await expect(page.getByRole("link", { name: "Done — back to setup" })).toBeVisible();
+    await expect(page.getByText("2 added, 32 points earned")).toBeVisible();
+
+    await row.getByRole("button", { name: /^Remove/ }).click();
+    await expect(page.getByText("1 added, 16 points earned")).toBeVisible();
+  });
+
+  test("skipping costs the points and not the listing — criterion 8", async ({ page }) => {
+    await page.getByRole("link", { name: "Skip for now" }).click();
+    await expect(page).toHaveURL(/\/dashboard\/setup$/);
+
+    // The card is still open on the hub. Skip is not dismissal — B9.
+    await expect(page.getByText("Add your credentials")).toBeVisible();
+  });
+
+  test("has no axe violations", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
   });
 });

@@ -970,6 +970,7 @@ model Business {
   serviceCoverage        ServiceCoverage[]
   freeZoneRegistrations  FreeZoneRegistration[]
   services               Service[]
+  credentials            Credential[]
   products               Product[]
   productQuestions       ProductQuestion[]
   media                  Media[]
@@ -1788,6 +1789,118 @@ model FreeZoneRegistration {
   @@map("free_zone_registration")
 }
 
+/// What a firm is licensed, approved or insured to do — board `8b-s`.
+///
+/// The goods setup hub opens with *upload five photographs of your premises*.
+/// For a parts supplier that is evidence: the stock exists and somebody stands
+/// behind it. For an audit practice a photograph of the office proves nothing a
+/// buyer cares about — the evidence is the FTA agent number, the Ministry of
+/// Finance approval, the professional body and the indemnity cover. So this
+/// becomes task 1 at 32 points and photographs fall to task 4 at 4.
+///
+/// **`trade_licence` is deliberately not one of these.** It is on `Business`
+/// already — number, authority, expiry and `verifiedAt` — and it is the one
+/// thing the platform has actually checked. A `Credential` row mirroring it
+/// would be a second source of truth for the only verified fact on the listing,
+/// and the two would disagree the first time either moved. The screen renders
+/// it read-only from the business row, which is also `8b-s` B4: do not ask for
+/// it twice.
+enum CredentialKind {
+  /// Checkable against the FTA's own register — the one kind that is.
+  fta_tax_agent
+  mof_audit_approval
+  professional_body
+  indemnity_insurance
+  /// Deliberately loose. Board `8b-s` Q4: watch what gets typed into it, and
+  /// the frequent ones become real kinds.
+  other
+
+  @@map("credential_kind")
+}
+
+/// Who asserts a credential — and there are two answers, not three.
+///
+/// Board `8b-s` draws three tiers: *register-verified* (the trade licence,
+/// against DET), *verifiable on submission* (the FTA agent number, against the
+/// FTA register) and *seller claim*. The first two are the same statement —
+/// the platform checked this against a register — differing only in **when**,
+/// which is not a durable fact about a row. Stored as two, rendered as three:
+/// `WE VERIFY THIS` is a promise about the field before it is submitted, not a
+/// state the record can be in.
+///
+/// The collapse is what keeps the enum honest. A third value nothing could
+/// write is a tier a screen would eventually render a badge for.
+enum TrustTier {
+  /// Checked against the issuing register. Only `fta_tax_agent` can reach one.
+  register_verified
+  /// Everything else. Rendered as the seller's own words, never as a check.
+  seller_claim
+
+  @@map("trust_tier")
+}
+
+/// One credential a firm shows — board `8b-s`.
+///
+/// **Nothing on that screen is required**, and this model is shaped by it: every
+/// column but the kind is nullable, a credential may be a number with no file or
+/// a file with no number, and a business with none of these is a business that
+/// still trades. A required column here is the change that turns the screen back
+/// into a compliance form, which is the one thing it is built not to be.
+///
+/// ## `expiresOn` is captured, never chased
+///
+/// Nullable and staying nullable. It is on the certificate, and a buyer reading
+/// a lapsed date is useful information — so it is stored where the document
+/// carries one. What does not exist is a reminder schedule, a renewal notice or
+/// an expiry-tracking surface: `3e-s` was that board and it was cut, and the
+/// Export Tracker's note that every credential requires an expiry is stale.
+/// Nothing happens when one lapses; the date renders and a buyer can read it.
+///
+/// ## The file is a `Document`
+///
+/// Not a second upload path. `Document` already holds the private bucket, the
+/// size and type checks and the storage path built from the seat's own business
+/// — and board 3e's screen already renders those files. One file, two readings:
+/// the document is the file, and the credential is the claim around it.
+model Credential {
+  id         String @id @default(cuid())
+  businessId String @map("business_id")
+
+  kind CredentialKind
+
+  /// Agent number, membership number, policy number. Whatever the certificate
+  /// calls the thing that identifies it.
+  identifier String?
+
+  /// Who issued it, in the seller's own words — ACCA, ICAEW, an insurer.
+  issuer String?
+
+  /// Where the document carries one. Never required — see above.
+  expiresOn DateTime? @map("expires_on")
+
+  documentId String? @map("document_id")
+
+  /// **System-assigned from the kind and from whether a check actually ran.**
+  /// Board `8b-s` B3: a seller cannot choose their own tier, and the form
+  /// offers no affordance that would let them. Defaults to a claim, because a
+  /// claim is what an unchecked assertion is.
+  trust TrustTier @default(seller_claim)
+
+  verifiedOn DateTime? @map("verified_on")
+  /// The register that answered, named. Null on a claim.
+  verifiedBy String? @map("verified_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, trust])
+  @@index([kind, trust])
+  @@map("credential")
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Products — no price, at any tier, on any surface
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2225,6 +2338,7 @@ model Document {
   /// Every product citing this document. Many-to-many since board 3i.
   products         ProductDocument[]
   claims           ClaimSubmission[]
+  credentials      Credential[]
   catalogueImports CatalogueImportRequest[]
   quoteAttachments QuoteAttachment[]
 

@@ -368,7 +368,7 @@ drawn apart, the list shows a column the editor cannot fill or omits one it can.
 | **`2c-s`** Profile basics | **shipped 11 Sep** | One screen, conditional field set. See §4e |
 | **`2d-s`** Coverage, not branches | **shipped 11 Sep** | `/onboarding/locations`, one route and two bodies. See §4f — five corrections, and the taxonomy went from four free zones to forty-two |
 | **`8a-s`** Setup hub | **shipped 12 Sep** | **Four tasks**, and the epic was right after all — the *code's* stale prose said three. Credentials lead at 32, photographs fall to 4. See §4h |
-| **`8b-s`** Credentials task | | Unblocked by D10's split: optional evidence, no register, no chasing |
+| **`8b-s`** Credentials task | **shipped 12 Sep** | `/dashboard/setup/credentials`. Two tiers rather than three, the trade licence is not a credential row, and the FTA register is a seam nothing is plugged into. See §4i |
 | **`8c-s`** Scope sheet + first 3 services | | Lands **after** the editor, not four phases before it |
 | **`3b-s`** Listing profile | | A schema diff, not copy: `ModeratedField` is a Prisma enum, so it **stops for a person** |
 | **`3c-s`** Coverage manager | mostly built | Panel, writer, capability guard and listing revision all ship |
@@ -795,8 +795,6 @@ still renders, and the levers footnote keeps its own heading. A test pins it.
 
 ### Still owed
 
-- **`8b-s`** — the services shape of the credentials screen. Its card works today; what it does not
-  yet do is ask a practice for the four credentials the copy names by name.
 - **The Export Tracker entry for `8b-s`** still says *20 pts*. This board puts credentials at **32**.
 - **`12c`'s ranking term.** Scope-sheet completeness now exists as data and as a lever.
 
@@ -807,6 +805,137 @@ nothing banked and `+7%` over the one at two of three, `~5 MIN · 0 OF 2` beside
 footnote reading *Weighted for a practice* with every figure computed, no concierge. A `both`
 seller: five cards, nine renormalised levers, the concierge back, and the goods heading. A goods
 seller: the screen exactly as it was.
+
+Axe found nothing but the project's pinned contrast gap.
+
+---
+
+## 4i · Handoff `8b-s` — credentials, and the register nobody is connected to
+
+Shipped 12 Sep. `/dashboard/setup/credentials`, a `Credential` table, a trust block on `1g-s`, and
+the 32-point card on the hub now points at its own screen instead of at board 3e.
+
+### The README's one factual error, and it is the load-bearing one
+
+> *"The trade-licence register lookup already exists from onboarding verification — the FTA agent
+> lookup is the new integration."*
+
+**It does not exist.** What `lib/verification/licence/` holds is number normalisation and text
+extraction from an uploaded PDF; the tier that follows is set by an `ops_lead` who looked the licence
+up themselves. `lib/verification/review.ts` says it outright: *"Nothing on this platform checks an
+ISO number against a registrar."* This is the "check the tree first" caution firing for the third
+time on this track, and this time in the other direction — twice it found things already built, and
+here it found the one thing the handoff took for granted missing.
+
+So `lib/credentials/fta.ts` is a **seam and not an integration**. It is pure of Prisma, gated on
+`FTA_REGISTER_URL`, and until that is configured it answers `register_unavailable`, which the screen
+prints inline. Every FTA number on the platform today saves as a claim. That is `8b-s` Q2's own
+position — *save it and show the mismatch, because a hard block on a live register call is a bad
+failure mode* — and the reason is stronger with no register than with one: a hard block on a call
+that cannot be made at all is a screen nobody can finish.
+
+### Three corrections
+
+**1 · `trade_licence` is not a `CredentialKind`.** The board's data model lists it first. It lives on
+`Business` — number, authority, expiry, `verifiedAt` — and the screen renders it read-only from
+there, which is B4's own instruction. A row beside it would be a second source of truth for the only
+fact on a listing anybody has actually checked, and the two would drift the first time an expiry
+sweep touched one of them.
+
+**2 · Two `TrustTier` values, not the spec's three.** *Register-verified* and *verifiable on
+submission* are the same statement differing only in **when**. A row cannot be in a "we will verify
+this" state: either a register answered for it or it is the seller's word. So `WE VERIFY THIS`
+renders as `promiseFor(kind)` — a label a *field* wears before anything is typed into it — and it is
+suppressed entirely when no register is configured, which is every deployment today. Shipping it as
+a stored tier would have produced a badge that means "nobody has looked at this" and reads as though
+somebody had.
+
+**3 · The hub's credentials counter moved off `Document(kind: certificate)`.** `8a-s` counted files,
+which counted an uploaded PDF naming nothing and missed an FTA agent number typed with no
+certificate to hand. It counts `Credential` rows now, in both readers — the hub and the nightly
+strength job — because two counters for one lever is the drift that makes a meter untrustworthy.
+**Lapsed rows still count**: `8b-s` is explicit that a credential expiring changes nothing, so a
+count that dropped one on its expiry date would be renewal chasing arriving as a silent regression.
+
+### Nothing here is required, and that is a property of the code
+
+The screen says it four times. The way to keep a sentence like that true is for the refusal not to
+exist: `lib/credentials/service.ts` has exactly two failures, a kind that is not a kind and a
+business that does not exist, and neither is reachable by leaving a field alone. A credential with no
+number, no issuer, no expiry and no file saves as what it is — the seller telling us they hold
+something. An integration test asserts precisely that (AC1), and the `Add` button is disabled only
+while a save is in flight.
+
+The database carries the other half. `credential_verified_has_a_register` refuses a `register_verified`
+row without both `verified_on` and `verified_by`, and refuses a `seller_claim` that carries either —
+so the forged shape cannot be written even by a direct query. `CredentialInput` has no `trust` field
+at all (B3, AC3).
+
+### The suggestion rate, and its denominator
+
+*68% of verified suppliers in your subcategory hold it* is the whole mechanism of the suggestion
+rows: a seller does not know what their competitors show, and a rate answers it in one line where a
+generic *you might also add…* gets ignored. It is computed over **verified, published suppliers in
+the seller's primary category and nobody else** — an unclaimed licence import holds no credentials
+and never will, so counting it would drag every rate toward zero and suppress every row, a number
+wrong in the direction of saying nothing. Below `SUGGESTION_FLOOR` (25%, Q3's starting point) the row
+is not drawn.
+
+Which means it needs a denominator to exist at all, and on a fresh database there is none. The seed
+gives two of every three verified suppliers in the fixture's trade the MoF approval — deterministic,
+by index, landing at 50% — on **existing** businesses rather than new ones, because
+`seedServicesFirm` is appended for the reason every builder near it is: the PRNG is a sequence, and
+adding suppliers would rename every business generated after them.
+
+### Documents are private, and the defence is that they are never fetched
+
+`publicCredentialsFor` does not select `documentId`. Not hidden in the template, not filtered in a
+mapper — absent from the query, which is the same defence `indicativeFee` gets one board over. A
+certificate uploaded here writes a `Document` row in the same private bucket `/dashboard/verification`
+writes to, with `isPublic` false, because it is the same kind of object and a second store for it
+would be a second place to get privacy wrong. A document id belonging to another business is dropped
+to null rather than refused — refusing is the thing this screen does not do.
+
+### What `1g-s` owed, and now has
+
+**Who signs it**, where a product page shows stock availability. A checked credential names the
+register and the date; a claim reads *Stated by Meridian Chartered Accountants*. The separation is
+structural rather than a colour, which is `8b-s`'s binding rule on its two downstream renderers: an
+unverified claim must never render like a verified one. `1d-s` is the other, and it is wave 4.
+
+### Found on the way, and fixed
+
+- **The `Alert` contract.** A `warn` or `bad` notice must carry the action that fixes it, and the
+  component says so in development. Two of the three register answers are the seller's to act on and
+  now carry their own fix line; the third — no register reachable — is **not a warning at all**,
+  because nobody could have done anything differently, so it renders as information. Inventing a fix
+  line for it would have been the apology the rule exists to prevent. Every refusal on the screen now
+  travels with its own way out, from the server, which is the only thing that knows which happened.
+- **A cross-file e2e race.** `8b-s`'s tests started in a file of their own. The suite is
+  `fullyParallel`, so outside CI two files run at once — and while the credentials tests held two
+  credentials, the hub two files away had correctly moved the credentials card into its done-summary
+  and that card's own test failed looking for a link no longer drawn. Neither assertion was wrong;
+  they were reading one listing through two windows. Playwright serialises within a file and not
+  across them, so everything driving this seat now lives in `services.spec.ts`, serial. CI runs this
+  shard on one worker, which is exactly why the race was invisible there.
+
+### Two numbers on the render that are not shipped
+
+- The sidebar draws **10 min** against the services task. `8a-s`'s hero says fifteen minutes across
+  the four and 5 + 10 + 2 + 4 is not fifteen; the shipped estimate is 4, read from `setupBoard`. B8
+  says one source, so the screen reads the table rather than the render.
+- The header draws **TASK 1 OF 4**. `TaskChrome` replaced that with a completion rail when `8b` (the
+  goods board) shipped, and the reason is in the component: the four tasks are independent and
+  free-order, and a rail that counts steps re-imposes the sequence the hub exists to remove.
+
+### Verified by clicking it
+
+Signed in as the practice: the trade licence read-only with its authority and check date, one held
+credential labelled *Your own claim* with its unfilled rows grey and visible, the MoF suggestion at a
+computed 50%, the sidebar reading 32 / 20 / 8 / 4 over 64. Selected the FTA kind, typed an agent
+number, pressed Add — saved as a claim, *We could not reach the FTA register* inline, the line below
+moved to *2 added, 32 points earned* and the chrome's primary to *Done — back to setup*. The service
+page's **Who signs it** block reads *Stated by Meridian Chartered Accountants* under both rows.
 
 Axe found nothing but the project's pinned contrast gap.
 

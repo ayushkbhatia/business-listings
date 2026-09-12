@@ -138,13 +138,14 @@ const TARGETS: Record<SetupTaskId, number> = {
   products: 10,
   team: 2,
   /*
-     Two credentials, and "on file" rather than "verified".
+     Two credentials, and "held" rather than "verified".
 
      Board `8a-s`'s completion rule asks for at least one *verified* credential,
-     and this product has no such state: board 3e splits its screen precisely so
-     that a document the seller uploaded reads `On file` and never `Verified`,
-     because nobody here has looked at it. A task that cannot be finished by the
-     seller's own work is the defect the site-visit cut was made to remove.
+     and board `8b-s` builds the only tier that can produce one: a register
+     answering for an FTA tax agent number. No register is configured, so that
+     half of the rule would make the largest task on the hub unfinishable by any
+     seller's own work — which is the defect the site-visit cut was made to
+     remove. Two held is the whole ask, and `8b-s` Q1 proposes the same shape.
   */
   credentials: 2,
   services: 3,
@@ -184,7 +185,13 @@ const SERVICES_MINUTES: Partial<Record<SetupTaskId, number>> = {
 export interface SetupTaskFacts {
   /** Which table this seller is measured against — board `8a-s` B1. */
   kind?: SetupKind;
-  /** Credentials on file and not lapsed. Zero for a seller of goods. */
+  /**
+   * Credentials held. Zero for a seller of goods.
+   *
+   * Lapsed ones included — board `8b-s` is explicit that a credential expiring
+   * changes nothing, so a count that dropped one on its expiry date would be
+   * renewal chasing by another name.
+   */
   credentials?: number;
   /** Scope sheets with `status = live`. Zero for a seller of goods. */
   servicesLive?: number;
@@ -210,6 +217,16 @@ export interface SetupTaskFacts {
 
 export interface SetupTaskRow {
   id: SetupTaskId;
+  /**
+   * The weight-table component this card pays into.
+   *
+   * Returned so a task screen can name its own card's whole weight without a
+   * second copy of the table — board `8b-s` B8: *one source; do not hardcode
+   * it twice*. The sidebar on `/dashboard/setup/credentials` draws 32 / 20 / 8
+   * / 4 by looking each of these up in `levers`, so the day a weight moves,
+   * both screens move with it.
+   */
+  lever: string;
   done: boolean;
   /** "3 of 10", for the card's own progress line. */
   progress: { got: number; target: number };
@@ -271,6 +288,7 @@ export function setupBoard(facts: SetupTaskFacts): SetupBoard {
 
     return {
       id,
+      lever: LEVER_OF[id],
       done,
       progress: { got: got[id], target },
       /*

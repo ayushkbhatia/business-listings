@@ -56,14 +56,15 @@ export interface ProfileFacts {
   /* ── Board `8a-s`. Only read for a seller of work. ──────────────────── */
 
   /**
-   * Credentials on file and not lapsed — board `8a-s`, task 1.
+   * Credentials held — board `8a-s` task 1, `Credential` rows since `8b-s`.
    *
-   * **Not "verified".** The spec's completion rule asks for at least one
-   * verified credential, and this product has no such state: board 3e splits
-   * the screen precisely so that a document the seller uploaded says `On file`
-   * and never `Verified`, because nobody here has looked at it. Requiring a
-   * state that cannot be reached would put the largest lever on the board
-   * permanently out of the seller's hands.
+   * **Not "verified", and lapsed ones count.** The spec's completion rule asks
+   * for at least one verified credential. `8b-s` builds the tier that could
+   * answer it — a register checking an FTA tax agent number — and no register
+   * is configured, so requiring it would put the largest lever on the board out
+   * of every seller's hands. And `8b-s` is equally plain that a credential
+   * expiring changes nothing: no reminder, no delisting, no badge change. A
+   * count that dropped a lapsed row would chase renewals through the meter.
    */
   credentials: number;
   /** The one component the seller cannot finish — see `SERVICES_WEIGHTS`. */
@@ -246,7 +247,7 @@ export function profileStrength(facts: ProfileFacts, kind: SellsKind = "goods"):
  */
 /** Three live scope sheets, pro-rata below — board `8a-s` B4. */
 export const SERVICES_TARGET = 3;
-/** Two credentials on file. Board `8a-s`'s completion rule, minus "verified". */
+/** Two credentials held. Board `8a-s`'s completion rule, minus "verified". */
 export const CREDENTIAL_TARGET = 2;
 /** A description this short says nothing; the board asks for 120 characters. */
 export const DESCRIPTION_TARGET = 120;
