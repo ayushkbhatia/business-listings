@@ -222,6 +222,7 @@ model Enquiry {
   recipients     EnquiryRecipient[]    // 1..8 businesses
   closesAt       DateTime
   contactReleasedToBusinessId String?  // set only on acceptance
+  buyerReference String?               // board 7c — the buyer's PO or job code, ≤ 40, set after acceptance
 }
 
 model EnquiryRecipient {
@@ -239,6 +240,8 @@ model Quote {
   revision     Int      @default(1)
   validityDays Int      @default(14)
   note         String?
+  paymentTerms PaymentTerms?  // board 7c — what the supplier quoted; null is "not stated", never the buyer's ask
+  delivery     DeliveryTerms? // board 7c — included | charged_separately | collection
   status       QuoteStatus  // draft | sent | read | accepted | lost | expired
   lostReason   String?
   lines        QuoteLine[]
@@ -257,6 +260,12 @@ model QuoteLine {
 
 Accepting a quote sets `Enquiry.contactReleasedToBusinessId`, marks the other recipients
 `declined`, and creates nothing else. There is no order, no fulfilment record, no payment.
+
+**Nothing is written to a quote after acceptance** (board `7c`). `lib/quote/fence.ts` is the one
+rule every writer of a quote reads — send, autosave, extend and the lead screen — and a send
+checks it again under a row lock on the enquiry, the same lock `acceptQuote`'s conditional claim
+takes, so a send and an accept racing cannot both land. The accepted record is a read of this
+one `Enquiry`; its totals are computed from `QuoteLine` at render and never stored.
 
 `Message` belongs to an Enquiry + Business pair and carries an optional `quoteRevisionId`, so
 a revised quote appears inline in the thread. Off-platform payment detection runs on message
@@ -307,7 +316,8 @@ model SupplierReport {
   subjectBusinessId String
   reporterId String?
   reviewId  String?     // board 11c B6 — the incentivised-review log had nothing to point at
-  kind      ReportKind   // closed | wrong_details | wrong_trade | claim_conflict | off_platform_payment | content | review_integrity
+  enquiryId String?  @unique  // board 7c B8 — one report per accepted enquiry; its thread is the evidence
+  kind      ReportKind   // closed | wrong_details | wrong_trade | claim_conflict | off_platform_payment | content | review_integrity | accepted_quote
   detail    String?
   outcome   ReportOutcome?  // seller_corrected | upheld | no_action
   outcomeReason String?

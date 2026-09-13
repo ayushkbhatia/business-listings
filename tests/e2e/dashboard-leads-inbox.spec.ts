@@ -139,6 +139,27 @@ test.describe("board 3j — one lead", () => {
     await expect(prices.first()).toHaveAttribute("placeholder", "");
   });
 
+  test("asks for payment terms and delivery, and answers neither for the seller — board 7c", async ({ page }) => {
+    /*
+       The accepted record shows these two as *payment agreed* and the delivery
+       half of the total. Both open on *Not stated* — a select with no empty
+       option posts its first value, and a quote would then state a term nobody
+       chose — and the buyer's own ask, where they gave one, is a hint beside the
+       control rather than its value.
+    */
+    await openFirstLead(page);
+    const terms = page.getByRole("combobox", { name: "Payment terms" });
+    const delivery = page.getByRole("combobox", { name: "Delivery" });
+    await expect(terms).toBeVisible();
+    await expect(delivery).toBeVisible();
+    await expect(terms.locator("option").first()).toHaveText("Not stated");
+    await expect(delivery.locator("option").first()).toHaveText("Not stated");
+    await expect(terms).toHaveValue("");
+    await expect(delivery).toHaveValue("");
+    // Nothing is chosen here: a change would autosave a draft onto a seeded
+    // lead that the other specs in this file read.
+  });
+
   test("bridges to the conversation, from the seller's side of the words", async ({ page }) => {
     /*
        §2 requires the exit in both directions. It says "the buyer" because the

@@ -22,6 +22,7 @@ import { t } from "@/lib/i18n";
 import { getInbox, type LeadRailRow, type LeadScope, type LeadTab } from "@/lib/leads/inbox";
 import { assignableSeats } from "@/lib/leads/assign";
 import { findDraft } from "@/lib/quote/draft";
+import { quoteFence } from "@/lib/quote/fence";
 import { getNavBadges, requireSellerSeat, SellerPage, type SellerSeat } from "../_shell";
 import { LeadRail, railHref } from "./_rail";
 import { Composer } from "./Composer";
@@ -309,15 +310,30 @@ async function LeadDetailPane({
   const outcome = recipient.outcome ?? (observedWin ? "won" : observedLoss ? "lost" : null);
   const observed = recipient.outcome === null && (observedWin || observedLoss);
 
-  const closed = lead.closesAt.getTime() <= now.getTime();
   /*
      §7: a marked outcome, a suspended listing or a closed enquiry all make the
-     composer read-only. The same three conditions the service refuses on, so a
-     seller never meets an enabled control that errors on submit — the mismatch
-     the shipped thread page had, where a quoted-and-lost seller saw a live
-     composer and got "closed" back.
+     composer read-only, so a seller never meets an enabled control that errors
+     on submit.
+
+     This comment used to say they were "the same three conditions the service
+     refuses on", and the service checked one of them. It reads `quoteFence` now,
+     the rule `sendQuoteForBusiness`, autosave and extend all read — so the claim
+     is true by construction rather than by two lists agreeing. Board `7c`.
   */
-  const readOnly = outcome !== null || suspended || closed;
+  const fence = quoteFence(
+    {
+      businessId: seat.businessId,
+      contactReleasedToBusinessId: recipient.enquiry.contactReleasedToBusinessId,
+      recipientState: lead.state,
+      outcome: recipient.outcome,
+      suspended,
+      closesAt: lead.closesAt,
+    },
+    now,
+  );
+  const readOnly = fence !== null;
+  const readOnlyReason =
+    fence === "suspended" ? "suspended" : fence === "closed" ? "closed" : "outcome";
 
   return (
     <div className="space-y-[var(--gutter)]">
@@ -369,7 +385,7 @@ async function LeadDetailPane({
           </p>
         </Panel>
       ) : readOnly ? (
-        <SentQuotes lead={lead} now={now} readOnlyReason={outcome !== null ? "outcome" : closed ? "closed" : "suspended"} />
+        <SentQuotes lead={lead} now={now} readOnlyReason={readOnlyReason} />
       ) : (
         <Panel
           title={t("lead.compose_title")}
@@ -385,6 +401,15 @@ async function LeadDetailPane({
             lines={toDrafts(lead, draft)}
             initialNote={draft?.note ?? lead.quotes[0]?.note ?? ""}
             initialValidityDays={draft?.validityDays ?? lead.quotes[0]?.validityDays ?? 14}
+            /*
+               The draft's terms, then the last quote's — never the buyer's ask.
+               `termsWanted` is shown beside the control as a hint instead: a
+               quote that states terms the seller did not choose is the platform
+               writing into an agreement. Board `7c`.
+            */
+            initialPaymentTerms={draft ? draft.paymentTerms : (lead.quotes[0]?.paymentTerms ?? null)}
+            initialDelivery={draft ? draft.delivery : (lead.quotes[0]?.delivery ?? null)}
+            termsWanted={lead.termsWanted}
             restored={draft !== null}
             {...(draft ? { restoredAt: draft.updatedAt.getTime() } : {})}
           />

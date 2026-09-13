@@ -3,11 +3,14 @@ import { prisma } from "@/lib/db/client";
 import { assertCan } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import { parseAedToFils } from "@/lib/quote/money";
-import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { onQuoteSent } from "@/lib/notify/events";
 import { recordEvent } from "@/lib/telemetry/record";
 import { findDraft, nextRevisionFor } from "./draft";
+import { quoteFence } from "./fence";
+import { lockQuoteFence, readQuoteFence } from "./fence-server";
+import { quoteFenceMessage } from "./fence-words";
+import { parseDeliveryTerms, parsePaymentTerms } from "./terms";
 
 /**
  * Sending a quote — the service.
@@ -36,6 +39,15 @@ export interface SendQuoteInput {
   enquiryId: string;
   note: string;
   validityDays: number;
+  /**
+   * The payment terms quoted, or null for *not stated*. Board `7c` renders it
+   * as *payment agreed* once the quote is accepted. Anything that is not a
+   * `PaymentTerms` value is stored as null rather than refused: the field is
+   * optional, and a stale form must not block a quote over it.
+   */
+  paymentTerms?: string | null;
+  /** How the goods reach the buyer, or null for *not stated*. Same rule. */
+  delivery?: string | null;
   lines: SendQuoteLineInput[];
 }
 
@@ -70,9 +82,20 @@ export async function sendQuoteForBusiness(
   if (!enquiry) return { ok: false, error: t("quote.error.not_your_enquiry") };
 
   const now = new Date();
-  if (enquiry.closesAt.getTime() < now.getTime()) {
-    return { ok: false, error: t("quote.error.closed", { when: formatDate(enquiry.closesAt) }) };
-  }
+
+  /*
+     Board `7c`'s fence, before anything else is judged.
+
+     This once fenced on `closesAt` alone, while the lead screen claimed to
+     enforce three conditions — so a supplier with a stale tab could send a
+     quote on an enquiry the buyer had already accepted. The same rule the
+     screen reads, `quoteFence`, answers here; it is asked again under a row
+     lock inside the write below, because this read proves nothing by then.
+  */
+  const early = await readQuoteFence(prisma, input.enquiryId, businessId);
+  if (!early) return { ok: false, error: t("quote.error.not_your_enquiry") };
+  const earlyRefusal = quoteFence(early, now);
+  if (earlyRefusal) return { ok: false, error: quoteFenceMessage(earlyRefusal, early.closesAt) };
 
   if (input.lines.length === 0) {
     return { ok: false, error: t("quote.error.nothing_included") };
@@ -129,6 +152,8 @@ export async function sendQuoteForBusiness(
   const validityDays = VALIDITY_CHOICES.includes(input.validityDays as (typeof VALIDITY_CHOICES)[number])
     ? input.validityDays
     : DEFAULT_VALIDITY_DAYS;
+  const paymentTerms = parsePaymentTerms(input.paymentTerms);
+  const delivery = parseDeliveryTerms(input.delivery);
 
   /*
      A revision is a new row, never an edit. Board 10h shows the buyer both.
@@ -156,6 +181,16 @@ export async function sendQuoteForBusiness(
   }));
 
   const sent = await prisma.$transaction(async (tx) => {
+    /*
+       The fence again, under the enquiry's row lock. A buyer accepting another
+       quote in the second between the read above and this write is exactly the
+       case the fence exists for; `lockQuoteFence` says why the lock settles it.
+    */
+    const locked = await lockQuoteFence(tx, input.enquiryId, businessId);
+    if (!locked) return { ok: false as const, error: t("quote.error.not_your_enquiry") };
+    const refusal = quoteFence(locked, now);
+    if (refusal) return { ok: false as const, error: quoteFenceMessage(refusal, locked.closesAt) };
+
     if (draft) {
       // Promote. The draft's lines are replaced wholesale rather than merged:
       // what the seller is sending is what is on screen now, and a line they
@@ -168,6 +203,8 @@ export async function sendQuoteForBusiness(
           againstRevision: enquiry.revision,
           validityDays,
           note: input.note || null,
+          paymentTerms,
+          delivery,
           status: "sent",
           sentAt: now,
           expiresAt,
@@ -211,6 +248,8 @@ export async function sendQuoteForBusiness(
         againstRevision: enquiry.revision,
         validityDays,
         note: input.note || null,
+        paymentTerms,
+        delivery,
         status: "sent",
         sentAt: now,
         expiresAt,
@@ -232,6 +271,9 @@ export async function sendQuoteForBusiness(
     return { ok: true as const, quoteId: created.id, quoteRef: created.ref, revision: created.revision };
   });
 
+  // Refused under the lock: nothing was written, so nothing is announced.
+  if (!sent.ok) return sent;
+
   // Outside the transaction: a carrier being slow must not hold one open.
   await onQuoteSent({ enquiryId: input.enquiryId, businessId, revision: sent.revision });
 
@@ -249,6 +291,8 @@ export async function sendQuoteForBusiness(
       revision: sent.revision,
       validityDays,
       handPriced: input.lines.filter((l) => l.productId === null).length,
+      termsStated: paymentTerms !== null,
+      deliveryStated: delivery !== null,
       ...(receivedAt
         ? { hoursSinceReceipt: Math.round((now.getTime() - receivedAt.getTime()) / 3_600_000) }
         : {}),

@@ -2608,6 +2608,24 @@ enum PaymentTerms {
   @@map("payment_terms")
 }
 
+/// How the goods on a quote reach the buyer — board `7c`, the payment card's
+/// neighbour on the accepted record.
+///
+/// Three values rather than a boolean. *Not included* is two different answers
+/// in this trade: a supplier who will deliver and bill the freight, and one who
+/// expects the buyer's own truck at the warehouse. The record's *collect or
+/// deliver from* column reads differently for each, and a boolean would make
+/// the page guess which one a `false` meant.
+///
+/// Nullable on `Quote`, and the null is shown: *Not stated on the quote*.
+enum DeliveryTerms {
+  included
+  charged_separately
+  collection
+
+  @@map("delivery_terms")
+}
+
 /// How often an ongoing contract recurs — board `1h-s`, question 03.
 ///
 /// Three values and only on an ongoing contract (B4), which a CHECK on
@@ -2790,6 +2808,14 @@ model Enquiry {
   /// Set only on acceptance. Releases contact to exactly one business.
   contactReleasedToBusinessId String?   @map("contact_released_to_business_id")
   contactReleasedAt           DateTime? @map("contact_released_at")
+  /// The buyer's own reference for the accepted quote — a PO number, a job
+  /// code, whatever their accounts team files it under. Board `7c`.
+  ///
+  /// Free text, 40 characters, written only by the buyer and only once the
+  /// enquiry is accepted (`lib/enquiry/accepted-record-server.ts`). It is a label
+  /// the buyer attaches, not a term of the agreement: the supplier never edits
+  /// it, and changing it moves nothing either party agreed.
+  buyerReference              String?   @map("buyer_reference")
   createdAt                   DateTime  @default(now()) @map("created_at")
 
   /// Criterion 9. Where this enquiry came from, if the buyer arrived through a
@@ -2816,6 +2842,9 @@ model Enquiry {
   messages       Message[]
   review         Review?
   reviewRequests ReviewRequest[]
+  /// Board `7c` `B8`: the one supplier report a buyer may file from the
+  /// accepted record, with this enquiry's thread as its evidence.
+  supplierReport SupplierReport?
   campaign       Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
   /// Board `1h-s`. Present on an enquiry for work, absent on one for things —
   /// and its presence is the whole of what makes an enquiry a brief.
@@ -3881,6 +3910,16 @@ model Quote {
   supersededAt    DateTime?   @map("superseded_at")
   /// The enquiry revision this quote was priced against.
   againstRevision Int         @default(1) @map("against_revision")
+  /// The payment terms the supplier quoted on — board `7c`'s *payment agreed*.
+  ///
+  /// The seller's answer to `Enquiry.termsWanted`, which is the buyer's ask:
+  /// two different claims, and the accepted record shows this one, because an
+  /// accepted quote is agreement to what was quoted rather than to what was
+  /// asked. Null is *Not stated on the quote*, never a default borrowed from
+  /// the enquiry. Settled directly between the two parties — we invoice nobody.
+  paymentTerms    PaymentTerms? @map("payment_terms")
+  /// How the goods reach the buyer, as quoted. See `DeliveryTerms`.
+  delivery        DeliveryTerms?
   createdAt       DateTime    @default(now()) @map("created_at")
   /// When the draft was last autosaved. A sent quote never moves it — a revision
   /// is a new row rather than an edit — so on everything but a draft it equals
@@ -4185,6 +4224,9 @@ enum ReportKind {
   off_platform_payment
   content
   review_integrity
+  /// Board `7c` `B8`: a buyer reporting the supplier whose quote they accepted.
+  /// Carries `enquiryId`, so the thread is the evidence rather than a summary.
+  accepted_quote
 
   @@map("report_kind")
 }
@@ -4220,6 +4262,17 @@ model SupplierReport {
   /// *outcome* of the finding, and a log that deletes itself when the thing it
   /// found is acted on is not a log.
   reviewId          String?        @map("review_id")
+  /// The accepted enquiry this report is about — board `7c` `B8`, *goes to the
+  /// trust team with the thread attached*.
+  ///
+  /// Unique, so a buyer files one report per accepted quote and the record then
+  /// shows that case rather than offering the control again. A plain unique on
+  /// a nullable column: Postgres treats nulls as distinct, so the listing
+  /// reports that carry no enquiry are unaffected.
+  ///
+  /// `SetNull` for the reason `reviewId` gives: the report is a finding about a
+  /// supplier, and it outlives the enquiry it was filed from.
+  enquiryId         String?        @unique @map("enquiry_id")
   detail            String?
   outcome           ReportOutcome?
   outcomeReason     String?        @map("outcome_reason")
@@ -4229,6 +4282,7 @@ model SupplierReport {
   subjectBusiness Business @relation("ReportSubject", fields: [subjectBusinessId], references: [id], onDelete: Cascade)
   reporter        User?    @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
   review          Review?  @relation(fields: [reviewId], references: [id], onDelete: SetNull)
+  enquiry         Enquiry? @relation(fields: [enquiryId], references: [id], onDelete: SetNull)
 
   @@index([subjectBusinessId, outcome])
   @@index([kind])

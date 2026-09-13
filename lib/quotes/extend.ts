@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { assertCan, can } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
+import { decidedReason } from "@/lib/quote/fence";
 import { recordEvent } from "@/lib/telemetry/record";
 
 /**
@@ -101,11 +102,18 @@ export async function extendQuote(
      §5: "Where it appears — any row whose window is live. Not on Won, Lost, or
      Expired rows." Both halves are checked here rather than only hidden in the
      UI, because a hidden button is not a fence.
+
+     Board `7c`'s `decidedReason`, rather than a third copy of the rule. The copy
+     that was here read acceptance only when it was *this* supplier's; an enquiry
+     accepted elsewhere was caught by the declined state that acceptance writes,
+     which held only for as long as nothing else ever released contact.
   */
-  const decided =
-    recipient.outcome !== null ||
-    recipient.state === "declined" ||
-    recipient.enquiry.contactReleasedToBusinessId === businessId;
+  const decided = decidedReason({
+    businessId,
+    contactReleasedToBusinessId: recipient.enquiry.contactReleasedToBusinessId,
+    recipientState: recipient.state,
+    outcome: recipient.outcome,
+  });
   if (decided) return { ok: false, error: "decided" };
 
   if (!quote.expiresAt || quote.expiresAt.getTime() <= now.getTime()) {

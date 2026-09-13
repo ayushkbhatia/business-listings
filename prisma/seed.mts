@@ -128,6 +128,18 @@ const PROVISIONAL_CLAIM_TOKEN = "seed-0000-4000-8000-provisional01";
 const PROVISIONAL_ENQUIRY_ID = "seedenquiryprovisional0001";
 /** Accepted, unreviewed — the subject of the review flow. */
 const PROVISIONAL_ACCEPTED_ENQUIRY_ID = "seedenquiryaccepted000001";
+/*
+ * Board `7c`'s accepted records, for a second account-less buyer.
+ *
+ * A buyer of their own rather than the provisional one above, so the tracking,
+ * compare and review specs that count that buyer's enquiries are not moved by
+ * two more. Fixed ids and a fixed token for the reason the first pair has them:
+ * a browser test reaches the record without signing anybody in.
+ */
+const RECORD_CLAIM_TOKEN = "seed-0000-4000-8000-provisional02";
+const RECORD_TYPICAL_ENQUIRY_ID = "seedenquiryrecord00000001";
+const RECORD_REPORTED_ENQUIRY_ID = "seedenquiryrecord00000002";
+const RECORD_REPORT_ID = "seedreport7cevidence00001";
 
 /** Deterministic v4-shaped uuids, so seeded users keep their ids between runs. */
 function uuid(n: number): string {
@@ -3082,7 +3094,281 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
     },
   });
 
+  await seedAcceptedRecords(db, claimed, [...recipients, ...anonRecipients, ...valveSellers]);
+
   return { e1, e2, e3, accepted: recipients[2]!, buyerTwoId };
+}
+
+/**
+ * Board `7c` — two accepted records, each in a state the board documents.
+ *
+ * `ENQ-8846` is the typical state as drawn: four suppliers, one accepted, three
+ * declined for the buyer; revision 2 of the quote inside its price window; a
+ * catalogue line and a line priced by hand; payment and delivery stated; the
+ * buyer's PO attached; and dated statements from the supplier in the thread
+ * for the commitments rail to select.
+ *
+ * `ENQ-8847` is the other end: one supplier, so no *declined for you* line; a
+ * price window that has ended; nothing stated about payment or delivery; and a
+ * supplier report already open, so the red panel shows the case rather than
+ * the control.
+ *
+ * The suppliers are claimed valve sellers **outside** every set the other
+ * enquiries use. A declined recipient row is a lead in that seller's inbox, and
+ * the seller dev seat's inbox counts are asserted by three specs.
+ */
+async function seedAcceptedRecords(db: Db, claimed: Biz[], taken: Biz[]) {
+  const used = new Set(taken.map((b) => b.id));
+  const pool = claimed.filter((b) => !used.has(b.id));
+  const valves = pool.filter((b) => b.categorySlug === "valves-and-fittings");
+  const candidates = [...valves, ...pool.filter((b) => b.categorySlug !== "valves-and-fittings")];
+
+  // A winner the buyer can actually call: a published branch with a phone first.
+  const withPhone = await db.location.findMany({
+    where: { businessId: { in: candidates.map((b) => b.id) }, published: true, phone: { not: null } },
+    select: { businessId: true },
+  });
+  const callable = new Set(withPhone.map((l) => l.businessId));
+  const ordered = [
+    ...candidates.filter((b) => callable.has(b.id)),
+    ...candidates.filter((b) => !callable.has(b.id)),
+  ];
+  if (ordered.length < 5) {
+    // Loud rather than silent: a spec asserting on ENQ-8846 fails with a reason.
+    throw new Error(`Board 7c fixtures need 5 unused claimed suppliers; the seed has ${ordered.length}.`);
+  }
+  const [winner, ...others] = ordered;
+  const losers = others.slice(0, 3);
+  const single = others[3]!;
+
+  const buyer = await db.user.create({
+    data: {
+      id: uuid(940),
+      phone: "+971544120091",
+      fullName: "Farah Haddad",
+      roles: [],
+      isProvisional: true,
+      claimToken: RECORD_CLAIM_TOKEN,
+    },
+  });
+
+  // A seat of the supplier's own, so thread messages are attributable to them.
+  // An existing one where the seller accounts step made it, so the business's
+  // seat count is not moved by a fixture.
+  const winnerSeat =
+    (await db.user.findFirst({
+      where: { businessId: winner!.id },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    })) ??
+    (await db.user.create({
+      data: {
+        id: uuid(941),
+        phone: "+971557041120",
+        fullName: "Rajesh Nair",
+        roles: ["seller_sales"],
+        businessId: winner!.id,
+      },
+      select: { id: true },
+    }));
+
+  /* ── ENQ-8846: the typical state ───────────────────────────────────────── */
+
+  /*
+     Dated before this calendar month, deliberately. `onlyOneSellerAtCap` trims
+     the oldest recipient rows *this month* from any capped seller at their
+     limit, and four recipient rows landing on free-plan suppliers put two of
+     them over it — the winner's row was the one removed, and the record lost
+     its thread. The price window is long enough to still be open today.
+  */
+  const monthStart = Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth(), 1);
+  const pre = (n: number) => new Date(monthStart - (n + 1) * 86_400_000);
+  const typical = await db.enquiry.create({
+    data: {
+      id: RECORD_TYPICAL_ENQUIRY_ID,
+      ref: "ENQ-8846",
+      buyerId: buyer.id,
+      requirement: "Grooved fittings for a sprinkler riser. Collection from Jebel Ali is fine.",
+      deliverToArea: "Jebel Ali Free Zone",
+      emirate: "dubai",
+      termsWanted: "net_30",
+      closesAt: pre(1),
+      createdAt: pre(8),
+      contactReleasedToBusinessId: winner!.id,
+      contactReleasedAt: pre(2),
+      buyerReference: "PO-2026-0418",
+      lines: {
+        create: [
+          { description: "Grooved butterfly valve DN100, ductile iron", qty: 40, unit: "pcs", size: "DN100", targetUnitPriceAed: "190.00", sortOrder: 0 },
+          { description: "Grooved rigid coupling, 4 inch, painted", qty: 120, unit: "pcs", size: "DN100", sortOrder: 1 },
+          { description: "Grooved gasket, EPDM, 4 inch", qty: 120, unit: "pcs", size: "DN100", sortOrder: 2 },
+        ],
+      },
+      recipients: {
+        create: [
+          { businessId: winner!.id, state: "quoted", openedAt: pre(8), firstReplyAt: pre(7), createdAt: pre(8) },
+          ...losers.map((b) => ({ businessId: b.id, state: "declined" as const, openedAt: pre(7), firstReplyAt: pre(6), createdAt: pre(8) })),
+        ],
+      },
+    },
+    select: { id: true, lines: { orderBy: { sortOrder: "asc" }, select: { id: true } } },
+  });
+  const [valveLine, couplingLine, gasketLine] = typical.lines;
+
+  await db.quote.create({
+    data: {
+      ref: "QT-8846-R1",
+      enquiryId: typical.id,
+      businessId: winner!.id,
+      revision: 1,
+      validityDays: 10,
+      status: "sent",
+      sentAt: pre(7),
+      readAt: pre(6),
+      expiresAt: new Date(pre(7).getTime() + 10 * 86_400_000),
+      createdAt: pre(7),
+      paymentTerms: "advance",
+      delivery: "collection",
+      lines: {
+        create: [
+          { enquiryLineId: valveLine!.id, description: "Grooved butterfly valve DN100, ductile iron", qty: 40, unitPrice: "198.00", leadTimeDays: 0, sortOrder: 0 },
+          { enquiryLineId: couplingLine!.id, description: "Grooved rigid coupling, 4 inch, painted", qty: 120, unitPrice: "48.00", leadTimeDays: 0, sortOrder: 1 },
+          { enquiryLineId: gasketLine!.id, description: "Grooved gasket, EPDM, 4 inch", qty: 120, unitPrice: "12.00", leadTimeDays: 5, sortOrder: 2 },
+        ],
+      },
+    },
+  });
+
+  // Revision 2, the one accepted. 40 × 191 + 120 × 46 + 120 × 12 = 14,600.00 —
+  // the corrected figure, and the one the board's own total got wrong.
+  await db.quote.create({
+    data: {
+      ref: "QT-8846-R2",
+      enquiryId: typical.id,
+      businessId: winner!.id,
+      revision: 2,
+      validityDays: 45,
+      status: "accepted",
+      note: "Revised after your call. Valves and couplings are ex-stock in JAFZA South; gaskets follow within 2 days of the drop.",
+      sentAt: pre(4),
+      readAt: pre(3),
+      acceptedAt: pre(2),
+      expiresAt: new Date(pre(4).getTime() + 45 * 86_400_000),
+      createdAt: pre(4),
+      paymentTerms: "net_30",
+      delivery: "included",
+      lines: {
+        create: [
+          { enquiryLineId: valveLine!.id, description: "Grooved butterfly valve DN100, ductile iron", qty: 40, unitPrice: "191.00", leadTimeDays: 0, sortOrder: 0 },
+          { enquiryLineId: couplingLine!.id, description: "Grooved rigid coupling, 4 inch, painted", qty: 120, unitPrice: "46.00", leadTimeDays: 0, sortOrder: 1 },
+          { enquiryLineId: gasketLine!.id, description: "Grooved gasket, EPDM, 4 inch", qty: 120, unitPrice: "12.00", leadTimeDays: 2, sortOrder: 2 },
+        ],
+      },
+    },
+  });
+
+  for (const [i, loser] of losers.entries()) {
+    await db.quote.create({
+      data: {
+        ref: `QT-8846-L${i + 1}R1`,
+        enquiryId: typical.id,
+        businessId: loser.id,
+        revision: 1,
+        validityDays: 14,
+        status: "lost",
+        lostReason: "buyer_accepted_another",
+        sentAt: pre(6),
+        readAt: pre(5),
+        expiresAt: new Date(pre(6).getTime() + 14 * 86_400_000),
+        createdAt: pre(6),
+        lines: {
+          create: [
+            { enquiryLineId: valveLine!.id, description: "Butterfly valve DN100, grooved", qty: 40, unitPrice: String(196 + i * 4) + ".00", leadTimeDays: 3, sortOrder: 0 },
+            { enquiryLineId: couplingLine!.id, description: "Rigid coupling 4 inch", qty: 120, unitPrice: String(47 + i) + ".50", leadTimeDays: 3, sortOrder: 1 },
+            { enquiryLineId: gasketLine!.id, description: "EPDM gasket 4 inch", qty: 120, unitPrice: "13.00", leadTimeDays: 7, sortOrder: 2 },
+          ],
+        },
+      },
+    });
+  }
+
+  await db.message.createMany({
+    data: [
+      { enquiryId: typical.id, businessId: winner!.id, senderId: buyer.id, body: "Can you get the valve price nearer 190 if we take all three lines from you?", createdAt: pre(5) },
+      { enquiryId: typical.id, businessId: winner!.id, senderId: winnerSeat.id, body: "Yes, 191.00 on the valves and 46.00 on the couplings. Revision 2 is on the enquiry.", createdAt: pre(4) },
+      { enquiryId: typical.id, businessId: winner!.id, senderId: buyer.id, body: "Accepted. When can we collect?", createdAt: pre(2) },
+      { enquiryId: typical.id, businessId: winner!.id, senderId: winnerSeat.id, body: "Thank you. One drop, 40 valves and 120 couplings, ready on " + formatSeedDay(new Date(pre(2).getTime() + 7 * 86_400_000)) + ". Gaskets to follow within 2 days of the drop.", createdAt: pre(2) },
+      { enquiryId: typical.id, businessId: winner!.id, senderId: winnerSeat.id, body: "Datasheets and the civil defence certificate are coming by email today.", createdAt: pre(1) },
+    ],
+  });
+
+  await linkQuoteLinesToCatalogue(db, [winner!.id]);
+
+  /* ── ENQ-8847: single supplier, window ended, reported ─────────────────── */
+  const reported = await db.enquiry.create({
+    data: {
+      id: RECORD_REPORTED_ENQUIRY_ID,
+      ref: "ENQ-8847",
+      buyerId: buyer.id,
+      requirement: "Brass gate valves for a villa plant room, delivered to Al Barsha.",
+      deliverToArea: "Al Barsha",
+      emirate: "dubai",
+      closesAt: days(-30),
+      createdAt: days(-40),
+      contactReleasedToBusinessId: single.id,
+      contactReleasedAt: days(-35),
+      lines: {
+        create: [{ description: "Brass gate valve, 1 inch, BSP", qty: 12, unit: "pcs", sortOrder: 0 }],
+      },
+      recipients: {
+        create: [{ businessId: single.id, state: "quoted", openedAt: days(-39), firstReplyAt: days(-38), createdAt: days(-40) }],
+      },
+    },
+    select: { id: true, lines: { select: { id: true } } },
+  });
+
+  await db.quote.create({
+    data: {
+      ref: "QT-8847-R1",
+      enquiryId: reported.id,
+      businessId: single.id,
+      revision: 1,
+      validityDays: 7,
+      status: "accepted",
+      sentAt: days(-38),
+      readAt: days(-37),
+      acceptedAt: days(-35),
+      expiresAt: days(-31),
+      createdAt: days(-38),
+      lines: {
+        create: [
+          { enquiryLineId: reported.lines[0]!.id, description: "Brass gate valve, 1 inch, BSP", qty: 12, unitPrice: "64.50", leadTimeDays: null, sortOrder: 0 },
+        ],
+      },
+    },
+  });
+
+  await db.supplierReport.create({
+    data: {
+      // Fixed, so the staff spec opens this report's evidence page directly
+      // rather than finding it in a queue other specs may have worked down.
+      id: RECORD_REPORT_ID,
+      subjectBusinessId: single.id,
+      reporterId: buyer.id,
+      kind: "accepted_quote",
+      enquiryId: reported.id,
+      subjectField: "accepted_quote",
+      detail: "Twelve valves were agreed for delivery to Al Barsha. Nothing has arrived and the supplier has stopped answering the thread.",
+      createdAt: days(-12),
+    },
+  });
+
+  console.log(`   2 accepted records for ${winner!.displayName} and ${single.displayName}`);
+}
+
+/** *12 Sep*, the way a supplier writes a date in a message. */
+function formatSeedDay(date: Date): string {
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Asia/Dubai" }).format(date);
 }
 
 /**

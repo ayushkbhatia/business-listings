@@ -85,6 +85,7 @@ export const EVENT_NAMES = [
   "product_save_blocked",
   "catalogue_exported",
   "catalogue_imported",
+  "supplier_report_filed",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -328,6 +329,14 @@ export const EVENT_SPECS = {
       validityDays: "number",
       hoursSinceReceipt: "number?",
       handPriced: "number?",
+      /*
+       * Board `7c`: whether the quote stated its payment terms and its delivery.
+       * Both are optional in the composer, and the accepted record shows *Not
+       * stated on the quote* where they are absent — so how often that grey row
+       * appears is a question worth being able to answer.
+       */
+      termsStated: "boolean?",
+      deliveryStated: "boolean?",
     },
   },
   /**
@@ -411,6 +420,18 @@ export const EVENT_SPECS = {
    * another screen: quotes routinely extended twice mean board 3j's default
    * validity is too short, and the fix belongs in the composer rather than here.
    */
+  /**
+   * Board `7c` `B8`: a buyer reported the supplier whose quote they accepted.
+   *
+   * The count the handoff's red panel exists to produce, and the denominator a
+   * trust team needs for *persistent problems cost them their verification* —
+   * a rate is only persistent against how many acceptances there were.
+   */
+  supplier_report_filed: {
+    emitter: "server",
+    session: "never",
+    props: { kind: "string", chars: "number" },
+  },
   quote_extended: {
     emitter: "server",
     session: "never",

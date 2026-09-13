@@ -656,7 +656,12 @@ describe("the autosaved draft", () => {
           },
         ],
       }),
-    ).toEqual({ ok: false, error: "decided" });
+    ).toMatchObject({ ok: false, error: "fenced", reason: "marked" });
+    /*
+       Board `7c`: autosave reads the same fence a send does, so the refusal now
+       names which of the fence's conditions it met rather than a bare "decided"
+       — the screen words a marked lead and an accepted enquiry differently.
+    */
   });
 });
 

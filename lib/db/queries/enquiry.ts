@@ -45,6 +45,9 @@ export interface BuyerQuote {
   revision: number;
   status: string;
   note: string | null;
+  /** Board `7c`: the terms quoted. The buyer reads them here before accepting. */
+  paymentTerms: string | null;
+  delivery: string | null;
   sentAt: Date | null;
   expiresAt: Date | null;
   acceptedAt: Date | null;
@@ -139,6 +142,8 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
           revision: true,
           status: true,
           note: true,
+          paymentTerms: true,
+          delivery: true,
           sentAt: true,
           expiresAt: true,
           acceptedAt: true,
@@ -194,6 +199,8 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
       revision: q.revision,
       status: q.status,
       note: q.note,
+      paymentTerms: q.paymentTerms,
+      delivery: q.delivery,
       sentAt: q.sentAt,
       expiresAt: q.expiresAt,
       acceptedAt: q.acceptedAt,
@@ -251,65 +258,8 @@ export async function getBuyerEnquiries(buyerId: string): Promise<BuyerEnquiryRo
   }));
 }
 
-/** The accepted supplier's own contact details, for the buyer who accepted. */
-export async function getAcceptedRecord(buyerId: string, enquiryId: string) {
-  const enquiry = await prisma.enquiry.findFirst({
-    where: { ...byRefOrId(buyerId, enquiryId), contactReleasedToBusinessId: { not: null } },
-    select: {
-      id: true,
-      ref: true,
-      contactReleasedAt: true,
-      contactReleasedToBusinessId: true,
-      quotes: {
-        where: { status: "accepted" },
-        take: 1,
-        select: {
-          id: true,
-          ref: true,
-          revision: true,
-          acceptedAt: true,
-          note: true,
-          lines: { orderBy: { sortOrder: "asc" } },
-          business: {
-            select: {
-              id: true,
-              slug: true,
-              displayName: true,
-              verificationTier: true,
-              locations: {
-                where: { published: true },
-                take: 1,
-                select: {
-                  phone: true,
-                  whatsapp: true,
-                  addressLine: true,
-                  area: { select: { name: true } },
-                },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-  const quote = enquiry?.quotes[0];
-  if (!enquiry || !quote) return null;
-
-  return {
-    enquiryId: enquiry.id,
-    ref: enquiry.ref,
-    acceptedAt: quote.acceptedAt ?? enquiry.contactReleasedAt,
-    quoteRef: quote.ref,
-    revision: quote.revision,
-    note: quote.note,
-    totalAed: quoteTotalAed(quote.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
-    lines: quote.lines.map((l) => ({
-      id: l.id,
-      description: l.description,
-      qty: l.qty,
-      unitPrice: l.unitPrice.toString(),
-      leadTimeDays: l.leadTimeDays,
-    })),
-    business: quote.business,
-  };
-}
+/**
+ * Board `7c`'s record. Moved to its own module when it grew from four fields to
+ * the whole page; re-exported so the enquiry reads stay importable from one place.
+ */
+export { getAcceptedRecord } from "./accepted-record";

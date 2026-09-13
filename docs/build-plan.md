@@ -296,10 +296,18 @@ is `7b`, and it is a tenancy question, not a screen.
   account. Their claim token opens one enquiry and never the list. No pagination, no test.
 - [ ] **3.3 `10h`** — `getThread` returns `automatic`; the buyer page drops it. The one party the
   tag exists for is the one party who cannot see it. No in-app navigation into the route at all.
-- [ ] **3.4 `1n` + `7c`** — `lib/quote/send-quote.ts` fences only on `closesAt`, never on
+- [x] **3.4 `1n` + `7c`** — `lib/quote/send-quote.ts` fences only on `closesAt`, never on
   acceptance, while the dashboard's read-only comment claims it enforces "the same three
   conditions the service refuses on" — false for two. The accepted record's contact panel has no
   empty state and picks a branch phone with no `orderBy`.
+  **Done with board `7c`'s handoff, 14 Sep 2026.** One rule, `lib/quote/fence.ts`, read by the
+  send, autosave, extend and the lead screen; the send re-checks under a row lock, and
+  `acceptQuote` claims the enquiry conditionally, so a send and an accept cannot both land and two
+  accepts cannot both release contact. The contact panel says what is missing and the branch is
+  chosen deterministically. The record itself was rebuilt against the board: quoted payment terms
+  and delivery (new `Quote` columns), the buyer's reference, commitments selected from the
+  supplier's own words, a quote PDF from the same value, and a supplier report with the thread
+  attached. Migration `20261016090000_accepted_record_7c`.
 - [ ] **3.5 `10f`** — the storefront computes eligibility for *this* business then links
   `/review/new?enq=` with no `&about=`. `?about=` has zero producers repo-wide.
 - [ ] **3.6 `13a`** — redraw against D4. The `card` layout, the only one that masks, has no
@@ -458,7 +466,7 @@ the only large piece and the only one selling something it does not deliver.
 | `10e` | Buyer enquiry inbox | partial | small | The product's default buyer has no account and so cannot open their own inbox. | 3.2 |
 | `10h` | Negotiation thread | partial | small | The AUTOMATIC badge exists for the buyer and renders only for the seller. | 3.3 |
 | `1n` | Compare quotes | partial | small | The tracking page's own Compare button builds a reference the route cannot resolve. | 1.2 / 3.4 |
-| `7c` | Accepted quote record | partial | small | The terminal state has no service-level fence against a post-acceptance quote send. | 3.4 |
+| `7c` | Accepted quote record | **built** | small | Fenced, and rebuilt against its board-level handoff, 14 Sep 2026. Services variant owed (`7c-s`, see `docs/services-build-plan.md` §6). | 3.4 |
 | `10f` | Write a review — gated | partial | small | The live review-request email links a URL the e2e suite asserts returns 404. | 3.5 |
 | `13a` | Contact reveal | partial | medium | The only layout that actually masks has no caller. | 3.6 |
 | `13b` | WhatsApp hand-off | not started | medium | Must be reconciled with a detector that reports sellers for off-platform steering. | 9.3 |

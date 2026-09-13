@@ -15,6 +15,10 @@ export function acceptErrorMessage(code: string | undefined): string | null {
       return t("compare.error_expired");
     case "not_found":
       return t("compare.error_not_found");
+    case "not_open":
+      return t("compare.error_not_open");
+    case "revised":
+      return t("compare.error_revised");
     default:
       return null;
   }

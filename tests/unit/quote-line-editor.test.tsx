@@ -78,6 +78,17 @@ const LABELS: QuoteLineEditorLabels = {
   validityLabel: t("quote.validity_label"),
   validityHelp: t("quote.validity_help"),
   validityDayOptions: [{ value: "14", label: "14 days" }],
+  paymentTermsLabel: t("quote.terms.label"),
+  paymentTermsOptions: [
+    { value: "", label: t("quote.terms.not_stated") },
+    { value: "net_30", label: t("terms.net_30") },
+  ],
+  deliveryLabel: t("quote.delivery.label"),
+  deliveryOptions: [
+    { value: "", label: t("quote.terms.not_stated") },
+    { value: "included", label: t("quote.delivery.included") },
+  ],
+  termsHelp: t("quote.terms.help"),
   submit: t("quote.send"),
   submitting: t("quote.sending"),
   unpricedError: (lines) => t("quote.error.unpriced", { count: lines.length, lines: lines.join("; ") }),
@@ -193,6 +204,38 @@ describe("sending", () => {
         { enquiryLineId: "l2", productId: null, qty: 4, unitPrice: "19750.00", leadTimeDays: 84 },
       ],
     });
+  });
+
+  it("sends no terms when nobody chose any — board 7c", async () => {
+    /*
+       A select with no empty option posts its first value, and a quote would
+       then state *Payment in advance* because nobody touched the box. The
+       record renders these two as terms of an accepted agreement, so untouched
+       must travel as null.
+    */
+    const user = userEvent.setup();
+    const { onSubmit } = renderEditor({ termsHint: t("quote.terms.buyer_asked", { terms: t("terms.net_30") }) });
+
+    await user.type(screen.getByLabelText("Unit price for Brass ball valve"), "62.00");
+    await user.type(screen.getByLabelText("Unit price for API 6D trunnion mounted ball valve"), "19750.00");
+    await user.click(screen.getByRole("button", { name: t("quote.send") }));
+
+    expect(onSubmit.mock.calls[0]![0]).toMatchObject({ paymentTerms: null, delivery: null });
+    // The buyer's ask is a hint beside the control, never its value.
+    expect(screen.getByLabelText(t("quote.terms.label"))).toHaveValue("");
+    expect(screen.getByText(t("quote.terms.buyer_asked", { terms: t("terms.net_30") }))).toBeInTheDocument();
+  });
+
+  it("sends the terms the seller chose, and opens on the ones a draft saved", async () => {
+    const user = userEvent.setup();
+    const { onSubmit } = renderEditor({ initialDelivery: "included" });
+
+    await user.selectOptions(screen.getByLabelText(t("quote.terms.label")), "net_30");
+    await user.type(screen.getByLabelText("Unit price for Brass ball valve"), "62.00");
+    await user.type(screen.getByLabelText("Unit price for API 6D trunnion mounted ball valve"), "19750.00");
+    await user.click(screen.getByRole("button", { name: t("quote.send") }));
+
+    expect(onSubmit.mock.calls[0]![0]).toMatchObject({ paymentTerms: "net_30", delivery: "included" });
   });
 
   it("drops a removed line from the quote rather than pricing it at zero", async () => {

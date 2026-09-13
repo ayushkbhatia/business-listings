@@ -49,6 +49,9 @@ export async function openReports(limit = 100) {
       subjectField: true,
       detail: true,
       createdAt: true,
+      // Board `7c`: set on a report filed from an accepted record, whose thread
+      // is the evidence `reportEvidence` reads.
+      enquiryId: true,
       reporter: { select: { id: true, fullName: true } },
       subjectBusiness: {
         select: {
@@ -186,6 +189,100 @@ export async function resolveReport(
   });
 
   return { ok: true };
+}
+
+/* ── Evidence: the thread behind an accepted-quote report ─────────────────── */
+
+/**
+ * Board `7c` `B8` — *"goes to the trust team with the thread attached"*.
+ *
+ * The thread is attached by reference: `SupplierReport.enquiryId`, read here,
+ * rather than a copy pasted into `detail` at filing time. A copy would be a
+ * second record of the conversation that stopped matching the first the moment
+ * a message was flagged.
+ *
+ * What a moderator needs to judge conduct and nothing more: the report, the
+ * accepted quote as it was accepted, and the messages between the buyer and
+ * that one supplier — not the other suppliers' threads, which are about other
+ * businesses. Null for a report that carries no enquiry, which the route turns
+ * into a 404: listing reports have no thread to attach.
+ */
+export async function reportEvidence(reportId: string) {
+  const report = await prisma.supplierReport.findUnique({
+    where: { id: reportId },
+    select: {
+      id: true,
+      kind: true,
+      detail: true,
+      outcome: true,
+      outcomeReason: true,
+      resolvedAt: true,
+      createdAt: true,
+      subjectBusinessId: true,
+      subjectBusiness: { select: { displayName: true, slug: true, suspendedAt: true } },
+      reporter: { select: { fullName: true } },
+      enquiry: {
+        select: {
+          id: true,
+          ref: true,
+          requirement: true,
+          contactReleasedToBusinessId: true,
+          contactReleasedAt: true,
+          buyerReference: true,
+        },
+      },
+    },
+  });
+  if (!report?.enquiry) return null;
+
+  const [quote, messages] = await Promise.all([
+    prisma.quote.findFirst({
+      where: {
+        enquiryId: report.enquiry.id,
+        businessId: report.subjectBusinessId,
+        status: "accepted",
+      },
+      orderBy: [{ acceptedAt: "desc" }, { revision: "desc" }, { id: "asc" }],
+      select: {
+        ref: true,
+        revision: true,
+        acceptedAt: true,
+        paymentTerms: true,
+        delivery: true,
+        note: true,
+        lines: {
+          orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+          select: { id: true, description: true, qty: true, unitPrice: true, leadTimeDays: true },
+        },
+      },
+    }),
+    prisma.message.findMany({
+      where: { enquiryId: report.enquiry.id, businessId: report.subjectBusinessId },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        body: true,
+        automatic: true,
+        flaggedAt: true,
+        createdAt: true,
+        sender: { select: { businessId: true } },
+      },
+    }),
+  ]);
+
+  return {
+    report,
+    enquiry: report.enquiry,
+    quote,
+    messages: messages.map((message) => ({
+      id: message.id,
+      body: message.body,
+      automatic: message.automatic,
+      flagged: message.flaggedAt !== null,
+      createdAt: message.createdAt,
+      fromSupplier: message.sender.businessId === report.subjectBusinessId,
+    })),
+  };
 }
 
 /* ── The audit log ───────────────────────────────────────────────────────── */
