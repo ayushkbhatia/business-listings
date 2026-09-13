@@ -1301,7 +1301,8 @@ test.describe("board 1f-s — coverage, where branches and hours were", () => {
     const offer = page.getByRole("complementary", { name: "Work they do not cover" });
     await expect(offer.getByText("Need work somewhere they do not cover?")).toBeVisible();
     const cta = offer.getByRole("link", { name: "Request a quote" });
-    await expect(cta).toHaveAttribute("href", /^\/rfq\/new\?category=.+&q=.+/);
+    // Seeds `1h-s`'s brief with the trade and the emirate, never a sentence in the buyer's name.
+    await expect(cta).toHaveAttribute("href", /^\/rfq\/new\?category=.+&kind=services(&emirate=[a-z_]+)?$/);
     await expect(cta).toHaveAttribute("rel", "nofollow");
   });
 

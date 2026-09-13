@@ -8,6 +8,7 @@ import { publicCredentialsFor, type PublicCredential } from "@/lib/credentials/s
 import { businessCoverage, effectiveCoverage } from "@/lib/locations/service-coverage";
 import type { CoverageScope } from "@/lib/locations/coverage";
 import { EMIRATES } from "@/lib/uae";
+import { VERIFIED_TIER } from "@/lib/verification";
 import { declaredSectors, type DeclaredSector } from "./services-overview";
 import { latencies, windowStart } from "@/lib/metrics/response-time";
 import { ENQUIRY_VOLUME_DAYS } from "./services-catalogue";
@@ -284,6 +285,15 @@ export async function replySampleFor(businessId: string, now: Date = new Date())
  * unsuspended firms count, because the offer is *we will send it to the firms
  * that do* and a firm the fan-out would not deliver to is not one of them. This
  * firm is excluded — it is the firm that does not cover the place.
+ *
+ * **And only firms holding a verified, current trade licence** — `1h-s` B5's
+ * first clause, which the brief this offer opens routes on. Without it the
+ * offer counted firms the brief would never send to: *34 firms cover Ajman*,
+ * one click, and a rail matching nine. Every firm counted here is one
+ * `findBriefCandidates` also matches (a live service in the trade reaching the
+ * emirate is inside the business union), so the offer can understate the
+ * brief's match and never overstate it. The monthly cap is not applied, for
+ * D4's reason: capacity is never a public number.
  */
 export async function coveringFirmsByEmirate(
   categoryId: string,
@@ -300,6 +310,9 @@ export async function coveringFirmsByEmirate(
          and b."published_at" is not null
          and b."suspended_at" is null
          and b."claim_status" = 'claimed'
+         and b."sells_kind" in ('services', 'both')
+         and b."verification_tier" >= ${VERIFIED_TIER}
+         and b."licence_expiry" >= now()
     ),
     reach as (
       select svc."business_id", sc."emirate"::text as emirate

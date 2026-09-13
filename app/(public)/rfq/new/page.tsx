@@ -4,9 +4,12 @@ import { prisma } from "@/lib/db/client";
 import { getActor } from "@/lib/auth/session";
 import { t } from "@/lib/i18n";
 import { DirectoryNav } from "@/app/(public)/_chrome";
+import { briefWanted, pinnedFirm } from "@/lib/enquiry/service-brief-server";
 import { previewRecipients } from "../actions";
 import { RfqComposer } from "../RfqComposer";
 import type { RfqLine } from "../rfq-state";
+import { ServiceBriefPage } from "./_brief";
+import { RevisePage } from "./_revise";
 
 /**
  * Board 1h — the RFQ fan-out. One route, three arrival states.
@@ -62,6 +65,14 @@ export default async function RfqNewPage({
   const actor = await getActor();
 
   /*
+     Board 1i's *Edit the requirement*, which linked here for as long as the
+     tracking page has existed and landed on a blank composer. A revision is its
+     own small page, not a mode of either composer.
+  */
+  const revise = one("revise");
+  if (revise) return <RevisePage refOrId={revise} token={one("t") ?? null} />;
+
+  /*
      `?to=slug` from a storefront, `?to=a,b,c` from the comparison tray.
 
      Resolved before the category, because it decides what the category is when
@@ -102,19 +113,58 @@ export default async function RfqNewPage({
   */
   const categorySlug = one("category");
   const category = categorySlug
-    ? await prisma.category.findFirst({ where: { slug: categorySlug }, select: { id: true, name: true } })
+    ? await prisma.category.findFirst({ where: { slug: categorySlug }, select: { id: true, name: true, slug: true } })
     : ((pinnedBusinesses[0]?.primaryCategoryId
         ? await prisma.category.findUnique({
             where: { id: pinnedBusinesses[0].primaryCategoryId },
-            select: { id: true, name: true },
+            select: { id: true, name: true, slug: true },
           })
         : null) ??
       (await prisma.category.findFirst({
         where: { showOnHome: true },
         orderBy: { sortOrder: "asc" },
-        select: { id: true, name: true },
+        select: { id: true, name: true, slug: true },
       })));
   if (!category) notFound();
+
+  /*
+     Board `1h-s`: a brief rather than a parts list, when the work is sold by
+     the job. Decided before any goods seeding runs, because none of it applies
+     — no product lines, no recipient picker, no quantity.
+
+     One named firm only. The comparison tray's `?to=a,b,c` is a goods mechanic
+     with a checkbox per supplier; a brief names one firm or lets us pick.
+  */
+  const firm =
+    pinnedSlugs.length === 1 || one("supplier")
+      ? await pinnedFirm(pinnedSlugs[0] ?? one("supplier")!)
+      : null;
+  const service =
+    firm && one("service")
+      ? await prisma.service.findFirst({
+          where: { businessId: firm.id, slug: one("service")!, status: "live" },
+          select: { slug: true, categoryId: true, engagementType: true, category: { select: { id: true, name: true, slug: true } } },
+        })
+      : null;
+  const trade = service?.category ?? category;
+  if (
+    await briefWanted({
+      categoryId: trade.id,
+      kindParam: one("kind") ?? null,
+      pinnedSellsKind: firm?.sellsKind ?? null,
+    })
+  ) {
+    return (
+      <ServiceBriefPage
+        category={trade}
+        firm={firm}
+        service={service ? { slug: service.slug, engagementType: service.engagementType } : null}
+        params={{ emirate: one("emirate") ?? null, area: one("area") ?? null }}
+        kind={one("kind") ?? null}
+        signedIn={Boolean(actor)}
+      />
+    );
+  }
 
   /*
      The seeded lines, and the shape of the arrival.

@@ -11,6 +11,7 @@ import { Position } from "./_sections/Position";
 import { Ranking } from "./_sections/Ranking";
 import { Reviews } from "./_sections/Reviews";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
+import { ServiceBriefGallery } from "./_sections/ServiceBrief";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
 import { Tokens } from "./_sections/Tokens";
@@ -163,6 +164,8 @@ const UNLISTED = [
   "declared-sectors",
   "coverage-summary",
   "service-enquiry-composer",
+  // Board `1h-s`: the brief on `/rfq/new` for work sold by the job.
+  "service-brief-composer",
 ] as const;
 
 export default function Gallery() {
@@ -245,6 +248,7 @@ export default function Gallery() {
 
       <Reviews />
       <ServicesStorefrontGallery />
+      <ServiceBriefGallery />
       <Overlays />
       <Shells />
       <Tokens />

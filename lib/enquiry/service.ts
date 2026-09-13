@@ -1,5 +1,5 @@
 import "server-only";
-import type { Emirate } from "@/lib/db/generated/client";
+import type { BriefStart, Emirate, EngagementType, ServiceCadence } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { tradeKindFor } from "@/lib/taxonomy/service";
 import { createProvisionalIdentity } from "@/lib/auth/flow";
@@ -393,14 +393,50 @@ export interface CreateEnquiryInput {
    * from a server action, and only one of those has a cookie jar.
    */
   attribution?: Attribution | null;
+
+  /**
+   * Board `1h-s`: who it goes to, already decided.
+   *
+   * A brief is matched on a different criterion from a parts list — a verified
+   * licence, the trade, and coverage of the site — by `lib/enquiry/service-brief`,
+   * and running the goods ranking over the top of that answer would re-pick on
+   * stock signals a firm that sells work does not have. When this is set the
+   * goods matcher does not run and `chosenBusinessIds` / `fanoutTo` are
+   * ignored; the recipients and the cap skips are written exactly as given.
+   */
+  selection?: {
+    recipients: readonly EnquiryRecipientSummary[];
+    skipped: FanoutResult["skipped"];
+  };
+  /**
+   * Board `1h-s`: the brief itself, written in the same transaction as the
+   * enquiry so an enquiry for work can never exist without one.
+   */
+  serviceBrief?: {
+    categoryId: string;
+    engagementType: EngagementType;
+    cadence: ServiceCadence | null;
+    startMode: BriefStart;
+    startsOn: Date | null;
+    building: string | null;
+  };
+  /**
+   * The area the buyer **picked**, written directly — `1h-s`'s site select.
+   * `resolveEnquiryArea` is for typed text; running it over a name the buyer
+   * chose from our own list could only lose information.
+   */
+  areaId?: string | null;
 }
+
+/** What a caller learns about each firm the enquiry reached. */
+export type EnquiryRecipientSummary = Pick<FanoutCandidate, "businessId" | "slug" | "displayName">;
 
 export type CreateEnquiryResult =
   | {
       ok: true;
       enquiryId: string;
       ref: string;
-      recipients: FanoutCandidate[];
+      recipients: EnquiryRecipientSummary[];
       skipped: FanoutResult["skipped"];
       /**
        * Set only for a buyer with no account: the bearer token their tracking
@@ -451,47 +487,9 @@ export async function createEnquiry(
     claimToken = provisional?.isProvisional ? provisional.claimToken : null;
   }
 
-  const request: FanoutRequest = {
-    categoryId: input.categoryId,
-    categoryIds: await descendantsOf(input.categoryId),
-    emirate: input.emirate ?? null,
-    lineCount: input.lines.length,
-    want: input.fanoutTo,
-    ...(input.pinnedBusinessIds ? { pinned: input.pinnedBusinessIds } : {}),
-  };
-
-  const candidates = await findFanoutCandidates(request, now);
-  const selection = selectRecipients(candidates, request);
-  const skipped = selection.skipped;
-
-  /*
-     The buyer's choice, intersected with what the matcher would allow.
-
-     Intersected rather than trusted: the ids arrive from a form and a seller
-     who has hit their cap since the page rendered must still be excluded, or
-     the cap is advisory. Nobody is added who was not ticked.
-
-     That is what the comment said and not what the code did. It filtered
-     `candidates` — the raw pool `findFanoutCandidates` returns, before any cap
-     is applied — so the cap was advisory on the only path that matters:
-     `RfqComposer` always sends `chosenBusinessIds`, so every enquiry from the
-     composer took this branch. A capped seller got an `EnquiryRecipient` row
-     and a `skipped` record for the same enquiry, and their monthly ceiling
-     meant nothing.
-
-     Excluded by `selection.skipped` rather than by `selection.recipients`.
-     `recipients` is `ranked.slice(0, want)` — the top N the matcher would have
-     picked on its own — and intersecting with that would silently drop a
-     supplier the buyer deliberately ticked because they placed eleventh.
-     `skipped` is the cap decision and nothing else, which is the only part of
-     the matcher's judgement that should override the buyer's.
-  */
-  const capped = new Set(selection.skipped.map((s) => s.businessId));
-  const recipients = input.chosenBusinessIds
-    ? candidates
-        .filter((c) => input.chosenBusinessIds!.includes(c.businessId) && !capped.has(c.businessId))
-        .slice(0, MAX_RECIPIENTS)
-    : selection.recipients;
+  const { recipients, skipped } = input.selection
+    ? { recipients: [...input.selection.recipients], skipped: input.selection.skipped }
+    : await matchGoods(input, now);
   if (recipients.length === 0) return { ok: false, error: "no_recipients" };
 
   /*
@@ -549,7 +547,9 @@ export async function createEnquiry(
      lets a seller covering only Al Quoz be matched — a bad resolve sends the
      job to somebody who does not work there.
   */
-  const areaId = input.deliverToArea
+  const areaId = input.areaId !== undefined
+    ? input.areaId
+    : input.deliverToArea
     ? resolveEnquiryArea(
         input.deliverToArea,
         input.emirate ?? null,
@@ -568,7 +568,12 @@ export async function createEnquiry(
         ref,
         buyerId,
         buyerCompanyId: input.buyerCompanyId ?? null,
-        requirement: input.requirement.trim(),
+        /*
+           A brief keeps the description byte for byte — `1h-s` B2, *suppliers
+           see this exactly as you write it*. The goods composer's trim stays
+           where it was: a parts-list note has never promised otherwise.
+        */
+        requirement: input.serviceBrief ? input.requirement : input.requirement.trim(),
         // What the buyer wrote, kept as they wrote it — and beside it the row
         // it resolves to, which is a different claim and often null.
         deliverToArea: input.deliverToArea ?? null,
@@ -614,6 +619,7 @@ export async function createEnquiry(
             sortOrder: i,
           })),
         },
+        ...(input.serviceBrief ? { serviceBrief: { create: input.serviceBrief } } : {}),
       },
       select: { id: true, ref: true },
     });
@@ -688,6 +694,57 @@ export async function createEnquiry(
   });
 
   return { ok: true, enquiryId: enquiry.id, ref: enquiry.ref, recipients, skipped, claimToken };
+}
+
+/**
+ * The goods matcher, and the buyer's picker over it — every enquiry that did not
+ * arrive with its recipients already chosen.
+ */
+async function matchGoods(
+  input: CreateEnquiryInput,
+  now: Date,
+): Promise<{ recipients: EnquiryRecipientSummary[]; skipped: FanoutResult["skipped"] }> {
+  const request: FanoutRequest = {
+    categoryId: input.categoryId,
+    categoryIds: await descendantsOf(input.categoryId),
+    emirate: input.emirate ?? null,
+    lineCount: input.lines.length,
+    want: input.fanoutTo,
+    ...(input.pinnedBusinessIds ? { pinned: input.pinnedBusinessIds } : {}),
+  };
+
+  const candidates = await findFanoutCandidates(request, now);
+  const selection = selectRecipients(candidates, request);
+
+  /*
+     The buyer's choice, intersected with what the matcher would allow.
+
+     Intersected rather than trusted: the ids arrive from a form and a seller
+     who has hit their cap since the page rendered must still be excluded, or
+     the cap is advisory. Nobody is added who was not ticked.
+
+     That is what the comment said and not what the code did. It filtered
+     `candidates` — the raw pool `findFanoutCandidates` returns, before any cap
+     is applied — so the cap was advisory on the only path that matters:
+     `RfqComposer` always sends `chosenBusinessIds`, so every enquiry from the
+     composer took this branch. A capped seller got an `EnquiryRecipient` row
+     and a `skipped` record for the same enquiry, and their monthly ceiling
+     meant nothing.
+
+     Excluded by `selection.skipped` rather than by `selection.recipients`.
+     `recipients` is `ranked.slice(0, want)` — the top N the matcher would have
+     picked on its own — and intersecting with that would silently drop a
+     supplier the buyer deliberately ticked because they placed eleventh.
+     `skipped` is the cap decision and nothing else, which is the only part of
+     the matcher's judgement that should override the buyer's.
+  */
+  const capped = new Set(selection.skipped.map((s) => s.businessId));
+  const recipients = input.chosenBusinessIds
+    ? candidates
+        .filter((c) => input.chosenBusinessIds!.includes(c.businessId) && !capped.has(c.businessId))
+        .slice(0, MAX_RECIPIENTS)
+    : selection.recipients;
+  return { recipients, skipped: selection.skipped };
 }
 
 /**

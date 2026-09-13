@@ -441,6 +441,8 @@ model Category {
   defaultTemplate   SpecTemplate?          @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
   scopeFamily       ScopeSheetFamily?      @relation(fields: [scopeFamilyId], references: [id], onDelete: SetNull)
   services          Service[]
+  /// Board `1h-s`. The briefs written for work in this trade.
+  serviceBriefs     ServiceBrief[]
   templates         SpecTemplateCategory[]
   primaryFor        Business[]             @relation("BusinessPrimaryCategory")
   sectorFor         Business[]             @relation("BusinessSector")
@@ -2584,6 +2586,91 @@ enum PaymentTerms {
   @@map("payment_terms")
 }
 
+/// How often an ongoing contract recurs — board `1h-s`, question 03.
+///
+/// Three values and only on an ongoing contract (B4), which a CHECK on
+/// `service_brief` enforces rather than a form: monthly on a one-off job is
+/// meaningless, and on a call-off it is misleading — a call-off is used when
+/// something happens, not on a calendar.
+enum ServiceCadence {
+  monthly
+  quarterly
+  annually
+
+  @@map("service_cadence")
+}
+
+/// When the work starts — board `1h-s`, question 04.
+///
+/// Two values rather than a nullable date, because *as soon as possible* is an
+/// answer and *not said* is not one the page offers. A null date alone could
+/// not tell the two apart.
+enum BriefStart {
+  from_date
+  asap
+
+  @@map("brief_start")
+}
+
+/// The brief a buyer writes for work — board `1h-s`, `/rfq/new`.
+///
+/// **One per enquiry, and never lines of its own.** The goods composer asks a
+/// parts list — product, quantity, target price — and none of those columns
+/// means anything for a facilities contract. This is what a brief carries that
+/// `Enquiry` does not already: the trade, the engagement shape, the cadence,
+/// the start, and the building on the site.
+///
+/// What it deliberately does **not** duplicate:
+///
+///  - the description is `Enquiry.requirement`, stored **verbatim** for a
+///    brief (B2) — the page promises *suppliers see this exactly as you write
+///    it*, and a second copy is a second thing that could be normalised;
+///  - the site is `Enquiry.emirate` and `Enquiry.areaId`, the same pair every
+///    coverage table is keyed on, written directly from the picker;
+///  - the scale is `Enquiry.scale`, decision D7's one free-text line, never
+///    parsed (B6) and null when the buyer left it empty (B7);
+///  - the files are `Document` rows on the enquiry, one set for every
+///    recipient (B8).
+///
+/// The enquiry still writes **one unquantified line**, naming the trade or the
+/// service. That is not a lines table: the page renders none and asks no
+/// quantity. It is the row `sendQuote` requires every quote line to answer, so
+/// a firm can reply to a brief with the quote composer that exists today.
+model ServiceBrief {
+  enquiryId String @id @map("enquiry_id")
+
+  /// The subcategory the brief is for — which scope-sheet family's fee bases
+  /// `3j-s` offers and `1n-s` compares, and the trade the matcher routed on.
+  /// `Enquiry` has no category of its own; a brief cannot do without one.
+  categoryId String @map("category_id")
+
+  /// The same enum the seller set on `3g-s` (B3). If the two drift, a buyer's
+  /// answer stops being comparable to a firm's scope sheet.
+  engagementType EngagementType @map("engagement_type")
+
+  /// Only on an ongoing contract, and optional there — a 24/7 reactive line is
+  /// an ongoing contract with no calendar.
+  cadence ServiceCadence?
+
+  startMode BriefStart @map("start_mode")
+  /// Set exactly when `startMode` is `from_date`. A calendar date in the UAE,
+  /// not an instant: the FM brief is dated to the day the incumbent contract
+  /// ends.
+  startsOn  DateTime?  @map("starts_on") @db.Date
+
+  /// *Building or plot*, optional, in the buyer's words. Not matched on.
+  building String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  /// `Restrict`: a trade a brief was routed on is history, not a row to lose.
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([categoryId, createdAt])
+  @@map("service_brief")
+}
+
 enum RecipientState {
   delivered
   opened
@@ -2708,6 +2795,9 @@ model Enquiry {
   review         Review?
   reviewRequests ReviewRequest[]
   campaign       Campaign?          @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  /// Board `1h-s`. Present on an enquiry for work, absent on one for things —
+  /// and its presence is the whole of what makes an enquiry a brief.
+  serviceBrief   ServiceBrief?
 
   @@index([buyerId])
   @@index([closesAt])

@@ -116,15 +116,17 @@ export default async function StorefrontCoveragePage({ params, searchParams }: P
     ? await coveringFirmsByEmirate(missing.service.categoryId, business.id)
     : new Map<string, number>();
   const offer = missing ? fanoutOffer(uncoveredEmirates(missing.places), counts) : null;
+  /*
+     Board `1h-s`'s seeded arrival: the trade and the emirate answer question 01
+     and the cursor starts in question 02. The description is left for the
+     buyer — `1h-s` B2 sends it as they write it, and a sentence we prefilled
+     would reach six firms in the buyer's name.
+  */
   const offerHref = missing
     ? `/rfq/new?${new URLSearchParams({
         category: missing.service.categorySlug,
-        q: offer
-          ? t("storefront_services.coverage_offer_seed", {
-              service: missing.service.name,
-              emirate: t(`emirate.${offer.emirate}` as never),
-            })
-          : missing.service.name,
+        kind: "services",
+        ...(offer ? { emirate: offer.emirate } : {}),
       })}`
     : null;
 

@@ -7,6 +7,7 @@ import type { MatchReason, QuoteLineDraft } from "@/components/domain/QuoteLineE
 import { can } from "@/lib/auth/can";
 import { prisma } from "@/lib/db/client";
 import { getLeadDetail, type LeadDetail } from "@/lib/db/queries/seller";
+import { briefFactWords } from "@/lib/enquiry/service-brief-words";
 import {
   formatAED,
   formatBytes,
@@ -436,24 +437,45 @@ function RequestHeader({
      asked is a gap nobody left.
   */
   const askedService = lead.lines.find((line) => line.service !== null)?.service ?? null;
+  /*
+     Board `1h-s` — a brief has no delivery address, no needed-by and no payment
+     terms; it has a site, an engagement and a start. Its scale is always a row:
+     B7 says a null scale is handled explicitly downstream, and `3j-s` prices a
+     per-unit basis against it, so *Not given* is information the seller needs
+     before they write a figure.
+  */
+  const briefFacts = lead.brief ? briefFactWords(lead.brief) : null;
+  const shape: { key: string; label: string; value: string }[] = briefFacts
+    ? [
+        ...(askedService
+          ? [{ key: "service", label: t("lead.service_asked"), value: askedService.name }]
+          : [{ key: "trade", label: t("lead.brief.trade"), value: lead.brief!.subcategoryName }]),
+        { key: "site", label: t("lead.brief.site"), value: briefFacts.site },
+        { key: "engagement", label: t("lead.brief.engagement"), value: briefFacts.engagement },
+        { key: "start", label: t("lead.brief.start"), value: briefFacts.start },
+        { key: "scale", label: t("lead.brief.scale"), value: lead.scale ?? t("lead.brief.scale_none") },
+      ]
+    : [
+        ...(askedService
+          ? [{ key: "service", label: t("lead.service_asked"), value: askedService.name }]
+          : []),
+        ...(lead.scale ? [{ key: "scale", label: t("lead.scale"), value: lead.scale }] : []),
+        { key: "deliver", label: t("lead.deliver_to"), value: lead.deliverToArea ?? t("table.not_provided") },
+        {
+          key: "needed",
+          label: t("lead.needed_by"),
+          value: lead.neededBy ? formatDate(lead.neededBy) : t("table.not_provided"),
+        },
+        {
+          key: "terms",
+          label: t("lead.terms_wanted"),
+          value: lead.termsWanted
+            ? t(`terms.${lead.termsWanted}` as "terms.net_30")
+            : t("table.not_provided"),
+        },
+      ];
   const facts: { key: string; label: string; value: string }[] = [
-    ...(askedService
-      ? [{ key: "service", label: t("lead.service_asked"), value: askedService.name }]
-      : []),
-    ...(lead.scale ? [{ key: "scale", label: t("lead.scale"), value: lead.scale }] : []),
-    { key: "deliver", label: t("lead.deliver_to"), value: lead.deliverToArea ?? t("table.not_provided") },
-    {
-      key: "needed",
-      label: t("lead.needed_by"),
-      value: lead.neededBy ? formatDate(lead.neededBy) : t("table.not_provided"),
-    },
-    {
-      key: "terms",
-      label: t("lead.terms_wanted"),
-      value: lead.termsWanted
-        ? t(`terms.${lead.termsWanted}` as "terms.net_30")
-        : t("table.not_provided"),
-    },
+    ...shape,
     {
       key: "closes",
       label: t("lead.closes_label"),

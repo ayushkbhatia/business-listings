@@ -9413,7 +9413,6 @@ export const en = {
     one: "{formatted} firm covers {emirate} for {service}.",
     other: "{formatted} firms cover {emirate} for {service}.",
   },
-  "storefront_services.coverage_offer_seed": "{service} in {emirate}",
   "storefront_services.coverage_hours_note":
     "There is no opening-hours table on this page. For work delivered remotely or at your site, when the office door is unlocked tells you little about when the work gets done — so we show how fast they reply instead.",
 
@@ -9428,6 +9427,173 @@ export const en = {
   "credentials_public.kind.professional_body": "Professional body membership",
   "credentials_public.kind.indemnity_insurance": "Professional indemnity cover",
   "credentials_public.kind.other": "Other credential",
+
+  // ── Board 1h-s · the brief, five questions and none a quantity ────────────
+  "brief.eyebrow": "{trade}",
+  "brief.eyebrow_place": "{trade} · {emirate}",
+  "brief.h1": "Describe the work once",
+  "brief.sub":
+    "Five questions. We send this to the suppliers who cover your site and hold a verified trade licence, and their proposals come back in one place.",
+  "brief.sub_pinned":
+    "Five questions, and it goes to {name} alone. Their proposal comes back in one place, beside this brief.",
+  "brief.form_label": "Brief for {trade}",
+
+  "brief.q_site": "Where is the site?",
+  "brief.q_site_why":
+    "A contract in Fujairah and one in Al Quoz are different engagements, so this decides who we ask.",
+  "brief.q_site_why_pinned": "It tells {name} where the work is.",
+  "brief.site_placeholder": "Choose the area, or anywhere in an emirate",
+  "brief.site_anywhere": "Anywhere in {emirate}",
+  "brief.site_free_zone": "{area} · free zone",
+  "brief.building": "Building or plot",
+  "brief.building_placeholder": "Building or plot · optional",
+
+  "brief.q_work": "What needs doing?",
+  "brief.work_verbatim": "Suppliers see this exactly as you write it.",
+  "brief.attach": "Attach a file",
+  "brief.attach_another": "Attach another",
+  "brief.attach_hint": "PDF, JPEG or PNG, up to {mb} MB each and {max} files. Export a spreadsheet as a PDF first.",
+  "brief.attach_full": "That is {max} files, the most one brief carries.",
+  "brief.attach_remove": "Remove {name}",
+  "brief.attach_list": "Files attached to this brief",
+  "brief.attach_warn_title": "Every supplier this goes to can open these files",
+  "brief.attach_warn_body":
+    "Up to {cap} firms will each hold a copy. Take out tenant names, personal details and anything you would not send to all of them.",
+  "brief.attach_warn_body_count": {
+    one: "{formatted} firm will hold a copy, and more if the match grows before you send. Take out tenant names, personal details and anything you would not send to every supplier.",
+    other: "{formatted} firms will each hold a copy, and more if the match grows before you send. Take out tenant names, personal details and anything you would not send to all of them.",
+  },
+  "brief.attach_warn_body_pinned":
+    "{name} will hold a copy. Take out anything you would not send them.",
+  "brief.attach_warn_continue": "Choose files",
+  "brief.attach_warn_cancel": "Not now",
+  "brief.attach_again": "Files are not kept when you leave the page. Attach again: {names}",
+
+  "brief.q_engagement": "Engagement type",
+  "brief.q_cadence": "How often",
+  "brief.cadence.monthly": "Monthly",
+  "brief.cadence.quarterly": "Quarterly",
+  "brief.cadence.annually": "Annually",
+  "brief.q_start": "When from?",
+  "brief.start.from_date": "Starting from",
+  "brief.start.asap": "As soon as possible",
+  "brief.start_date": "Start date",
+
+  "brief.q_scale": "Roughly what scale?",
+  "brief.scale_optional": "Optional, and it halves the questions you get back",
+  "brief.scale_why":
+    "One free-text line. Every trade sizes work differently — square metres, headcount, returns filed, vehicles — so we ask in your own words rather than keeping a sizing question for every subcategory.",
+
+  "brief.contact_title": "Where the proposals reach you",
+
+  "brief.rail_title": "Who will see this",
+  "brief.rail_no_site": "Choose where the site is and this shows who the brief would go to.",
+  "brief.rail_matched_area":
+    "Up to {cap} suppliers of {trade} who cover {place} and hold a verified trade licence. We pick them; you do not have to.",
+  "brief.rail_matched_emirate":
+    "Up to {cap} suppliers of {trade} who work in {place} and hold a verified trade licence. We pick them; you do not have to.",
+  "brief.rail_more_area": {
+    one: "and {formatted} more that covers this area",
+    other: "and {formatted} more that cover this area",
+  },
+  "brief.rail_more_emirate": {
+    one: "and {formatted} more that works in {place}",
+    other: "and {formatted} more that work in {place}",
+  },
+  "brief.rail_thin": {
+    one: "Only {formatted} supplier matches, so it goes to them alone rather than to a firm that does not cover the site.",
+    other: "Only {formatted} suppliers match, so it goes to those {formatted} rather than to firms that do not cover the site.",
+  },
+  "brief.rail_names": "Suppliers this brief would go to",
+  "brief.rail_widen": {
+    one: "No supplier with a verified licence has listed {area} yet. {formatted} works elsewhere in {emirate}.",
+    other: "No supplier with a verified licence has listed {area} yet. {formatted} work elsewhere in {emirate}.",
+  },
+  "brief.widen": "Send to suppliers across {emirate}",
+  "brief.widened": "Matched across {emirate}, because nobody has listed {area} yet.",
+  "brief.unwiden": "Match {area} only",
+  "brief.rail_none": "No supplier of {trade} with a verified trade licence works in {place} yet.",
+  "brief.route_for_me": "Send it to us and we will look for one",
+  "brief.routed": "Sent to us. We will look for a firm that does this work in {place} and come back to you.",
+  "brief.rail_pinned": "Only {name} sees this brief.",
+  "brief.rail_pinned_elsewhere": "Or leave the firm unnamed and send it to the suppliers who cover your site.",
+  "brief.rail_pinned_undelivered":
+    "This brief cannot be delivered to {name} through the directory right now. Leave the firm unnamed and we will send it to the suppliers who cover your site.",
+
+  "brief.next_eyebrow": "What happens next",
+  "brief.next_measured": "Half the briefs sent here in the last 90 days had a first reply within {duration}.",
+  "brief.next_body":
+    "You can ask each supplier questions without sharing your number, and nothing you see is a published price — every figure is written for this brief.",
+  "brief.privacy":
+    "Suppliers see this brief and your first name. Your number, email and company stay hidden until you accept a proposal.",
+
+  "brief.send": {
+    one: "Send to {formatted} supplier",
+    other: "Send to {formatted} suppliers",
+  },
+  "brief.send_pinned": "Send to {name}",
+  "brief.send_idle": "Send the brief",
+  "brief.send_after": "You can add detail after you send",
+  "brief.blocked_no_site": "Choose where the site is first.",
+  "brief.blocked_no_match": "Nobody matches this site yet. Widen the area, or send it to us.",
+  "brief.fix_fields": "Some answers need another look. Each one is marked.",
+  "brief.error_fix": "Change the marked answers and send again. Nothing was sent.",
+  "brief.undelivered":
+    "Nobody who matches this brief can take it right now, and nothing was sent. Widen the area, or send it to us and we will look for a firm.",
+  "brief.gone": "This trade is no longer taking briefs. Search the directory for firms that do this work.",
+
+  "brief.refusal.site_missing": "Choose the area, or anywhere in an emirate.",
+  "brief.refusal.building_too_long": "Keep the building to {max} characters, like Tower B, plot 344-112.",
+  "brief.refusal.description_too_short":
+    "Describe the work in at least {min} characters — what it is, where on the site, and anything already agreed.",
+  "brief.refusal.description_too_long": "Keep this to {max} characters and attach the rest as a file.",
+  "brief.refusal.engagement_missing": "Choose an ongoing contract, a one-off job or a call-off.",
+  "brief.refusal.cadence_not_ongoing": "How often only applies to an ongoing contract. Choose it again, or clear it.",
+  "brief.refusal.start_missing": "Choose a start date, or as soon as possible.",
+  "brief.refusal.start_invalid": "Pick a date from the calendar, like 1 Nov 2026.",
+  "brief.refusal.start_past": "Pick today or a later date.",
+  "brief.refusal.scale_too_long": "Keep the scale to one line of {max} characters. Put the detail in the description.",
+  "brief.refusal.attachments_type": "Attach PDF, JPEG or PNG files. Export a spreadsheet as a PDF first.",
+  "brief.refusal.attachments_size": "Attach files up to {mb} MB each. A scan saved at a lower resolution usually fits.",
+  "brief.refusal.attachments_too_many": "Attach up to {max} files. Combine drawings into one PDF if there are more.",
+
+  // Revising a sent brief or requirement — board 1i's link, finally answered.
+  "revise.meta_title": "Add detail",
+  "revise.h1": "Add detail to {ref}",
+  "revise.sub":
+    "Suppliers who have not replied see the new version. Anyone who already sent a proposal keeps it, marked as written against the earlier version.",
+  "revise.fixed":
+    "The site, the trade and who it went to stay as they are — changing those would be a different brief.",
+  "revise.requirement": "What needs doing",
+  "revise.scale": "Roughly what scale",
+  "revise.save": "Send the revised version",
+  "revise.cancel": "Back to the enquiry",
+  "revise.closed": "This enquiry has closed or a proposal was accepted, so it can no longer be revised.",
+  "revise.unchanged": "Nothing has changed yet. Add the detail, then send it.",
+  "revise.error_fix": "Nothing was sent. Change the text above and send it again.",
+
+  // The brief on the buyer's own tracking page.
+  "track.brief_title": "Your brief",
+  "track.brief.site": "Site",
+  "track.brief.engagement": "Engagement",
+  "track.brief.start": "Starts",
+  "track.brief.start_asap": "As soon as possible",
+  "track.brief.scale": "Scale, in your words",
+  "track.brief.scale_none": "Not given — suppliers may ask",
+  "track.brief.files": "Files",
+  "track.brief.next_1": "Suppliers reply with a proposal inside the platform",
+  "track.brief.next_2": "You compare what comes back and choose one",
+
+  // The brief as a supplier reads it.
+  "lead.brief.site": "Site",
+  "lead.brief.engagement": "Engagement",
+  "lead.brief.start": "Starts",
+  "lead.brief.scale": "Scale, in their words",
+  "lead.brief.scale_none": "Not given",
+  "lead.brief.trade": "Trade",
+  "brief.engagement_cadence": "{engagement} · {cadence}",
+  "brief.site_building": "{site} · {building}",
+  "brief.site_area": "{area}, {emirate}",
 
   // ── Not found ─────────────────────────────────────────────────────────────
   "notfound.title": "That page is not here",

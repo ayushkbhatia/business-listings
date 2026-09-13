@@ -534,8 +534,17 @@ export async function getTradeKinds(): Promise<Map<string, TradeKindRow>> {
  * the map once and `resolveTradeKind` per id rather than calling this in a loop.
  */
 export async function tradeKindFor(categoryId: string, db?: Db): Promise<TradeKind> {
-  const rows = db ? await loadTradeKinds(db) : await getTradeKinds();
-  return resolveTradeKind(rows, categoryId);
+  if (db) return resolveTradeKind(await loadTradeKinds(db), categoryId);
+  /*
+     A category the cached map has never seen reads the table. The map lives a
+     day and is dropped by the taxonomy action's tag — but a row written by a
+     migration, a seed or a script revalidates nothing, and resolving an id the
+     map does not hold falls through to `goods`. Found by `1h-s`: a freshly
+     seeded Hard FM brief opened the parts-list composer because every id in
+     the cache belonged to the previous database.
+  */
+  const cached = await getTradeKinds();
+  return resolveTradeKind(cached.has(categoryId) ? cached : await loadTradeKinds(), categoryId);
 }
 
 /** One row of the board's table. */

@@ -1436,7 +1436,8 @@ promised a column the board never drew; with D11 closed as no there is nothing t
    on one screen. So the card shows the header's figure and the sample it stands on — *measured by
    us across N replies in the last 90 days* — counted through the same `latencies` function. **Raising
    the floor to 10 is a platform decision** — it would move search ranking and every card's reply
-   line — and is left for the owner rather than taken on one page.
+   line. **The owner kept it at 3, 13 Sep 2026**: at 10, twelve of seventeen measured sellers in
+   production would go unmeasured, and fast repliers would lose ranking to thin samples.
 2. **Free zones say *registered in*, not *approved*.** A `FreeZoneRegistration` is where the firm is
    registered; *DMCC approved* is a claim about an auditor list nothing records. They print beside a
    row only where that service reaches the zone's emirate, and are never places or filter values (B4).
@@ -1444,7 +1445,9 @@ promised a column the board never drew; with D11 closed as no there is nothing t
    the card says *they see clients here* when the firm's delivery modes include its office, and
    *their registered office* otherwise.
 4. **The fan-out CTA is *Request a quote*, not *Ask for quotes*.** The vocabulary rule. It opens
-   `/rfq/new` with the service's subcategory and *{service} in {emirate}* seeded, and is `nofollow`.
+   `/rfq/new` with the service's subcategory and the emirate seeded, and is `nofollow`. (It seeded
+   *{service} in {emirate}* as the requirement until `1h-s`, whose B2 sends a description as the
+   buyer writes it — see §4p.)
 
 ### How the offer picks its emirate
 
@@ -1479,6 +1482,103 @@ Their own claim*; *2 firms cover Ajman for Statutory audit* on the offer, whose 
 
 ---
 
+## 4p · Handoff `1h-s` — the brief, and no field asks a quantity
+
+**Shipped 13 Sep 2026.** One migration, `20261014120000_service_brief_1hs`, additive: a
+`service_brief` table and two enums. `/rfq/new` mounts a second composer when the trade is sold by
+the job; the goods `1h` beside it is untouched.
+
+### What a brief is, in the schema
+
+**One `ServiceBrief` per enquiry**, holding only what an enquiry did not already have: the trade,
+the engagement (`3g-s`'s enum, imported rather than restated — B3), the cadence (a CHECK allows it
+only on an ongoing contract — B4), the start (`from_date` with a date, or `asap`, another CHECK), and
+the building. The description is `Enquiry.requirement`, **stored byte for byte** for a brief (B2) and
+trimmed for goods as it always was; the site is `Enquiry.emirate` + `Enquiry.areaId`, picked and
+written directly rather than resolved from text; the scale is D7's `Enquiry.scale`, null when left
+empty (B6, B7); the files are `Document` rows, one set for every recipient.
+
+### Six corrections to the render and the spec
+
+1. **The brief still writes one line.** The spec's model says *no lines*. `sendQuote` requires every
+   quote line to answer an enquiry line, so a brief with none could not be quoted until `3j-s`
+   rebuilds the composer — the accepted quote, the terminal state, would be unreachable. The line
+   names the trade (or the service a named firm's brief came from) and has **no quantity**. The page
+   renders no lines table and asks nothing per line (B1).
+2. **The privacy card said *your name and company go with the brief*.** Rule 1 at the query layer
+   (`seller-visibility.ts`) gives a supplier a first name and nothing else until acceptance, and the
+   `1d-s` lead screen already corrected the same render. The card says so.
+3. ***Most buyers get their first proposal back in under an hour* was a claim.** It is now a median of
+   brief-to-first-reply over the last 90 days at the owner's floor of 3, or the sentence is left out.
+   Production has no brief yet, so production shows it left out.
+4. ***A verified licence for Hard FM*** — a trade licence is not per subcategory. *Suppliers of Hard FM
+   & MEP maintenance who … hold a verified trade licence.*
+5. **The site is a select, not a text box.** One native `<select>`, an optgroup per emirate, *anywhere
+   in {emirate}* first, then its areas with free zones labelled. The value is `(emirate, areaId)`, the
+   exact shape every coverage table is keyed on; typed text would need the resolver, which refuses on
+   ambiguity and would leave the matcher with nothing.
+6. **The attachment warning states the match.** *Up to 8* before a site is chosen; *3 firms will each
+   hold a copy* once one is — B8's warning, with the number.
+
+### Matching — B5, in the database where it can be
+
+`findBriefCandidates`: published, claimed, `sellsKind` services or both, **verification tier ≥ 2 with
+a licence not yet expired**, listed under the trade (a flagged extra category excluded) **or** a live
+service filed in it, and some `ServiceCoverage` row in the site's emirate. Then, in TypeScript, the
+exact test: the business union of its live services' effective coverage (`businessCoverage`, `2d-s`
+B6) reaching the site — the area or its whole emirate, or anywhere in the emirate once the buyer
+widens. `selectBriefRecipients` drops a firm at its monthly cap into `MissedEnquiry` (D4) and ranks the
+rest: sells the chosen engagement, exact trade, measured reply time, id. **No plan multiplier**, the
+goods fan-out's rule. The preview and the send call the same function.
+
+**The engagement ranks and never filters.** A firm whose sheet says *ongoing contract* can still price
+a one-off job; filtering would narrow the match silently, which is what B3 warns about.
+
+### The open questions
+
+- **Q1, the cap** — **left at 8**, as criterion 5 and the render say, in one constant
+  (`BRIEF_MAX_RECIPIENTS`). The design side argues 5 for services. Owner's call; it is one line.
+- **Q2, a budget field** — no. There is none.
+- **Q3, attachments** — one set, every recipient, up to five files at 10 MB, warned once before the
+  first. No per-recipient files.
+- **D11** — closed; no availability clause (B12).
+
+### Found on the way, and fixed
+
+- **`/rfq/new?revise=` has been a dead link since board 1i.** The tracking page's *Edit the
+  requirement* opened a blank composer and `reviseRequirement` had no caller. It is a small page now,
+  for goods and briefs: the words, and for a brief the scale; a revision that changes nothing is
+  refused because it would still supersede every quote. The link carries the claim token.
+- **`tradeKindFor` resolved an id missing from its day-long cache to `goods`.** A category written by a
+  seed or a migration revalidates nothing, so a freshly seeded Hard FM brief opened the parts list. A
+  cache miss on the id now reads the table.
+- **`1f-s`'s offer counted firms the brief could never reach.** It now requires the verified, current
+  licence too, so *N firms cover Ajman* can understate the brief's match and never overstate it; and
+  its link seeds the emirate rather than a sentence the buyer did not write.
+- **A constant exported from a `"use client"` module arrives in a server component as a reference.**
+  `EMPTY_BRIEF` spread to nothing and the seeded brief lost every key but two — the function-boundary
+  defect, in constant form. It lives in the pure module.
+
+### Not done here
+
+- **`?from=` (*add two more suppliers*)** is still unanswered for goods. A brief hides it: it already
+  went to every firm that covers the site.
+- **The quote composer still says *nothing in your catalogue matches*** on a brief's line — `3j-s`.
+- **Fan-out scoring for goods** still does not read `areaId`; the brief's matcher filters on it.
+
+### Verified by clicking it
+
+Anonymous, on the local database with the new fixture: Hard FM · *anywhere in Dubai* named Emirates
+Facilities Group, Al Shirawi and Khansaheb (Al Quoz only) and not Sand and Steel (unverified); Deira
+dropped Khansaheb and said *only 2 suppliers match*; Ajman Free Zone offered *send to suppliers across
+Ajman* and, taken, *Send to 1 supplier*. A sent brief wrote one enquiry, three recipients, one
+`service_brief`, one line with a null quantity, and the tracking page read it back with *Scale, in
+your words*. Revised to R2 through the tracking page's link. Signed in as Meridian's owner, a named
+brief read *Site Sharjah · Engagement Ongoing contract · Starts As soon as possible · Scale Not given*
+under the first name only.
+
+---
+
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`
 
@@ -1504,7 +1604,7 @@ off live storefronts by `comingSoon: true`.
 | **6.1** | ~~`EnquiryLine.qty` nullable~~ | **Shipped #173**, `20261010090000_nullable_line_qty`. Null means **unquantified, not none**: `lineTotalFils` multiplies by 1 so a priced line still totals, and every render site omits the figure rather than printing `×1` |
 | **6.3** | ~~`QuoteLine.qty`~~ | **Shipped in the same migration.** It was the harder half and neither planning document named it: `sendQuote` refused `qty < 1`, so it gated the **accepted quote** — the terminal state of the whole product |
 | **6.1b** | `Enquiry.areaId` | **Shipped #178.** The third migration, below |
-| **6.2** | **`1h-s` / S2** — the brief | The expensive screen, and now the only thing in this stage that needs a handoff. **Read the note below before commissioning it** |
+| **6.2** | ~~**`1h-s` / S2** — the brief~~ | **Shipped 13 Sep**, `20261014120000_service_brief_1hs`. See §4p |
 | **6.4** | `3j-s` Reply with a proposal | |
 | **6.5** | `1n-s` Compare proposals | Consecutive with `3j-s`. Four fee bases do not compare the way four unit prices do |
 
@@ -1728,7 +1828,7 @@ edit**.
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | `2b-s`, `2c-s` and `2d-s` shipped 11 Sep; `3c-s`'s per-service rows shipped 13 Sep (#173). What is left in this wave is `3b-s` and `3c-s`'s dashboard mirror |
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **`1d-s`, `1e-s` and `1f-s` shipped 13 Sep** (§4m–§4o) — the public storefront set is complete. `5c-s` has a placeholder waiting |
-| **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | The expensive one, and the two that must be consecutive |
+| **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p). `3j-s` and `1n-s` must be consecutive, and both read the brief |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | **Unblocked.** Two of §2's three ranking defects are fixed (#173); the third is `12c-s`'s own first step, not a prerequisite — see §2.4 |
 | — | **Q1 said families** | `4e-s` · `3h-s` | — | Both **shipped 13 Sep** — `3h-s` closed wave 2 (§4k) and `4e-s` authored the five families (§4l) |

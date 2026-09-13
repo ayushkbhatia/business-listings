@@ -1015,6 +1015,9 @@ async function main() {
      would move it out from under every board already asserting on its products.
   */
   await seedServicesFirm(prisma);
+  // Board `1h-s`: the firms a brief is matched against. After the one above
+  // and PRNG-free for the same reasons.
+  await seedBriefMatchFirms(prisma);
   await seedSeatsAndChannels(prisma);
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
@@ -7524,6 +7527,170 @@ async function seedServicesFirm(db: Db) {
 
   await seedCredentials(db, firm.id, category.id);
   await seedScopeTemplate(db, firm.id);
+}
+
+/**
+ * Board `1h-s` — facilities firms for a brief to match, and the ones it must not.
+ *
+ * Until now the service track had one firm, filed under a goods trade, so every
+ * brief matched nobody and the rail only ever rendered its empty state. These
+ * sit under *Hard FM & MEP maintenance*, which the taxonomy resolves to
+ * `services`, and each one exists to prove one clause of B5:
+ *
+ *  - **Emirates Facilities Group** — verified, Dubai and Sharjah whole, a live
+ *    ongoing-contract service. The ordinary match.
+ *  - **Al Shirawi Facilities** — verified, Dubai whole, a call-off service, and
+ *    listed under the trade only through that service.
+ *  - **Khansaheb Facilities** — verified, **Al Quoz Industrial 1 only**. Matches
+ *    a brief anywhere in Dubai or in Al Quoz; never one in Deira.
+ *  - **Gulf Towers Maintenance** — verified, Abu Dhabi whole. A thin match of one.
+ *  - **Northern Cooling Services** — verified, Ajman's New Industrial Area only,
+ *    so a brief at Ajman Free Zone matches nobody and offers to widen.
+ *  - **Sand and Steel Services** — Dubai whole, **licence not verified**. Never
+ *    a recipient, whatever it covers.
+ *
+ * New businesses, not repurposed ones; verified long enough ago to stay out of
+ * *verified this week*.
+ */
+async function seedBriefMatchFirms(db: Db) {
+  console.log("→ facilities firms a brief matches, for board 1h-s");
+
+  const [trade, areas] = await Promise.all([
+    db.category.findFirst({ where: { slug: "hard-fm" }, select: { id: true } }),
+    db.area.findMany({
+      where: { slug: { in: ["al-quoz-industrial-1", "ajman-new-industrial-area"] } },
+      select: { id: true, slug: true },
+    }),
+  ]);
+  if (!trade) return;
+  const area = (slug: string) => areas.find((row) => row.slug === slug)?.id ?? null;
+
+  const firms: {
+    slug: string;
+    name: string;
+    licence: string;
+    tier: number;
+    replyHours: number | null;
+    coverage: { emirate: "dubai" | "sharjah" | "abu_dhabi" | "ajman"; areaId: string | null }[];
+    service: { name: string; slug: string; engagementType: "ongoing_contract" | "call_off" | "one_off_job" } | null;
+    primary: boolean;
+  }[] = [
+    {
+      slug: "emirates-facilities-group",
+      name: "Emirates Facilities Group",
+      licence: "DED-771204",
+      tier: 2,
+      replyHours: 2,
+      coverage: [
+        { emirate: "dubai", areaId: null },
+        { emirate: "sharjah", areaId: null },
+      ],
+      service: { name: "Planned and reactive MEP maintenance", slug: "planned-and-reactive-mep-maintenance", engagementType: "ongoing_contract" },
+      primary: true,
+    },
+    {
+      slug: "al-shirawi-facilities",
+      name: "Al Shirawi Facilities",
+      licence: "DED-771318",
+      tier: 2,
+      replyHours: 5,
+      coverage: [{ emirate: "dubai", areaId: null }],
+      service: { name: "Chiller call-out", slug: "chiller-call-out", engagementType: "call_off" },
+      primary: false,
+    },
+    {
+      slug: "khansaheb-facilities",
+      name: "Khansaheb Facilities",
+      licence: "DED-771455",
+      tier: 2,
+      replyHours: null,
+      coverage: [{ emirate: "dubai", areaId: area("al-quoz-industrial-1") }],
+      service: null,
+      primary: true,
+    },
+    {
+      slug: "gulf-towers-maintenance",
+      name: "Gulf Towers Maintenance",
+      licence: "ADDED-330921",
+      tier: 2,
+      replyHours: 8,
+      coverage: [{ emirate: "abu_dhabi", areaId: null }],
+      service: null,
+      primary: true,
+    },
+    {
+      slug: "northern-cooling-services",
+      name: "Northern Cooling Services",
+      licence: "AJM-118734",
+      tier: 2,
+      replyHours: null,
+      coverage: [{ emirate: "ajman", areaId: area("ajman-new-industrial-area") }],
+      service: null,
+      primary: true,
+    },
+    {
+      slug: "sand-and-steel-services",
+      name: "Sand and Steel Services",
+      licence: "DED-771902",
+      tier: 0,
+      replyHours: null,
+      coverage: [{ emirate: "dubai", areaId: null }],
+      service: null,
+      primary: true,
+    },
+  ];
+
+  const valves = await db.category.findFirst({ where: { slug: "valves-and-fittings" }, select: { id: true } });
+
+  for (const firm of firms) {
+    const existing = await db.business.findUnique({ where: { slug: firm.slug }, select: { id: true } });
+    if (existing) await db.business.delete({ where: { id: existing.id } });
+
+    const created = await db.business.create({
+      data: {
+        tradeName: `${firm.name} LLC`,
+        displayName: firm.name,
+        slug: firm.slug,
+        licenceNumber: firm.licence,
+        licenceAuthority: firm.licence.split("-")[0] as "DED" | "ADDED" | "AJM",
+        licenceExpiry: days(280),
+        // Al Shirawi is filed elsewhere and reaches the trade through its service.
+        primaryCategoryId: firm.primary || !valves ? trade.id : valves.id,
+        claimStatus: "claimed",
+        publishedAt: days(-150),
+        verificationTier: firm.tier,
+        ...(firm.tier >= 2 ? { verifiedAt: days(-140) } : {}),
+        planId: "basic",
+        sellsKind: "services",
+        deliveryModes: ["at_client_site"],
+        responseTimeMedianMs: firm.replyHours === null ? null : firm.replyHours * 3_600_000,
+      },
+      select: { id: true },
+    });
+
+    await db.serviceCoverage.createMany({
+      data: firm.coverage.map((row) => ({ businessId: created.id, emirate: row.emirate, areaId: row.areaId })),
+      skipDuplicates: true,
+    });
+
+    if (firm.service) {
+      await db.service.create({
+        data: {
+          businessId: created.id,
+          categoryId: trade.id,
+          name: firm.service.name,
+          slug: firm.service.slug,
+          engagementType: firm.service.engagementType,
+          deliveredWhere: "on_site",
+          status: "live",
+          publishedAt: days(-120),
+          position: 0,
+        },
+      });
+    }
+  }
+
+  console.log(`   ${firms.length} facilities firms, ${firms.filter((f) => f.tier >= 2).length} verified`);
 }
 
 /**

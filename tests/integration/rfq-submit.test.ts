@@ -207,8 +207,20 @@ describe("the edge states the fan-out framing has to survive", () => {
        wrong, not the code.
     */
     await removeFixtures();
+    /*
+       No supplier *filed* under it either. `businesses` is the extra-category
+       join, so a trade whose firms all hold it as their primary category read
+       as empty — and once `1h-s`'s seed filed facilities firms under Hard FM,
+       this picked that trade and correctly sent to them.
+    */
     const orphan = await prisma.category.findFirst({
-      where: { businesses: { none: {} }, products: { none: {} } },
+      where: {
+        businesses: { none: {} },
+        primaryFor: { none: {} },
+        products: { none: {} },
+        children: { none: {} },
+      },
+      orderBy: { id: "asc" },
       select: { id: true },
     });
     if (!orphan) return;

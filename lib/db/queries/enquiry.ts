@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { quoteTotalAed } from "@/lib/quote/money";
+import { ENQUIRY_BRIEF_SELECT, toEnquiryBrief, type EnquiryBrief } from "./enquiry-brief";
 
 /**
  * Server-side reads for the buyer's side of an enquiry.
@@ -64,6 +65,11 @@ export interface BuyerEnquiry {
   scale: string | null;
   /** The buyer's own file's name. Theirs to see; the path never leaves the server. */
   attachments: { id: string; filename: string }[];
+  /**
+   * Board `1h-s`: the brief, when this enquiry is one. Null on every enquiry
+   * for things — its absence is what makes the page render the goods card.
+   */
+  brief: EnquiryBrief | null;
   closesAt: Date;
   createdAt: Date;
   contactReleasedToBusinessId: string | null;
@@ -107,6 +113,9 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
         orderBy: { createdAt: "asc" },
         select: { id: true, filename: true },
       },
+      emirate: true,
+      area: { select: { name: true } },
+      serviceBrief: { select: ENQUIRY_BRIEF_SELECT },
       closesAt: true,
       createdAt: true,
       contactReleasedToBusinessId: true,
@@ -158,6 +167,7 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
     termsWanted: enquiry.termsWanted,
     scale: enquiry.scale,
     attachments: enquiry.attachments,
+    brief: toEnquiryBrief(enquiry.serviceBrief, enquiry),
     closesAt: enquiry.closesAt,
     createdAt: enquiry.createdAt,
     contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
