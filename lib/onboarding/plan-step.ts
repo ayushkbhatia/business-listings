@@ -2,7 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { effectiveCaps, type PlanCaps } from "@/lib/plan/entitlements";
 import { rankingShare } from "@/lib/billing/pricing";
-import { liveWeights } from "@/lib/search/settings";
+import { vectorForBusiness } from "@/lib/search/settings";
 import { trialStateFor, TRIAL_DAYS, TRIAL_PLAN_ID, type TrialState } from "@/lib/billing/trial";
 import { planCohortFor, type PlanCohort } from "@/lib/metrics/plan-cohort";
 import { setupStateFor, type SetupState } from "./service";
@@ -142,7 +142,10 @@ export async function planStepStateFor(
     trialStateFor(businessId, now),
     planCohortFor(business.primaryCategoryId, now),
     setupStateFor(businessId),
-    liveWeights(),
+    // The vector this listing ranks on. Plan tier is the same number on both
+    // (`12c-s` B5), so the share reads the same either way — but the total it
+    // is a share *of* is this listing's own.
+    vectorForBusiness(businessId).then((ranking) => ranking.weights),
   ]);
 
   const currentPlanId = business.planId ?? "free";

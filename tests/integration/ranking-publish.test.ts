@@ -6,6 +6,7 @@ import {
   discardDraft,
   draftState,
   liveBrowseRelevanceMode,
+  liveVectors,
   liveWeights,
   markPreviewRunning,
   publishDraft,
@@ -69,65 +70,73 @@ beforeEach(async () => {
     madeBoosts.length = 0;
   }
   await prisma.rankingWeights.upsert({
-    where: { id: "current" },
-    create: { id: "current", ...DEFAULT_WEIGHTS, browseRelevanceMode: "redistribute" },
+    where: { kind: "goods" },
+    create: { id: "current", kind: "goods", ...DEFAULT_WEIGHTS, browseRelevanceMode: "redistribute" },
     update: { ...DEFAULT_WEIGHTS, browseRelevanceMode: "redistribute" },
   });
+  // This file is about the goods vector. A services vector left live by
+  // `ranking-services.test.ts` would move the services scopes under every
+  // preview here, and the counts would describe two decisions at once.
+  await prisma.rankingWeights.deleteMany({ where: { kind: "services" } });
 });
 
 afterAll(async () => {
   await prisma.listingBoost.deleteMany({ where: { id: { in: madeBoosts } } });
   await prisma.rankingDraft.deleteMany({});
   await prisma.rankingPublish.deleteMany({ where: { id: { notIn: publishesBefore } } });
-  await prisma.rankingWeights.update({ where: { id: "current" }, data: DEFAULT_WEIGHTS });
+  await prisma.rankingWeights.update({ where: { kind: "goods" }, data: DEFAULT_WEIGHTS });
   await prisma.$disconnect();
 });
 
 /** Save a draft and run its preview, leaving it fresh and publishable. */
 async function draftWithPreview(next = redistribute(DEFAULT_WEIGHTS, "responseTime", 24)) {
-  const mode = await liveBrowseRelevanceMode();
-  const saved = await saveDraft(lead, next, mode, "Leaning on reply time for a fortnight.");
+  const mode = await liveBrowseRelevanceMode("goods");
+  const saved = await saveDraft(lead, "goods", next, mode, "Leaning on reply time for a fortnight.");
   expect(saved).toMatchObject({ ok: true });
 
-  const [live, liveMode] = await Promise.all([liveWeights(), liveBrowseRelevanceMode()]);
-  const preview = await runImpact({ draft: next, draftMode: mode, live, liveMode });
-  await storePreview(next, mode, preview);
+  const preview = await runImpact({
+    kind: "goods",
+    draft: next,
+    draftMode: mode,
+    live: await liveVectors(),
+  });
+  await storePreview("goods", next, mode, preview);
   return { next, preview };
 }
 
 describe("criterion 5 — a draft changes nothing a buyer sees", () => {
   it("saves without moving the live weights", async () => {
-    const before = await liveWeights();
+    const before = await liveWeights("goods");
     const next = redistribute(DEFAULT_WEIGHTS, "responseTime", 24);
 
-    expect(await saveDraft(lead, next, "redistribute", "Trying reply time higher.")).toMatchObject({
+    expect(await saveDraft(lead, "goods", next, "redistribute", "Trying reply time higher.")).toMatchObject({
       ok: true,
     });
 
     // The whole of criterion 5, structurally: the disclosure is derived from
     // the live vector moving, and this did not move it. There is no code path
     // that could tell a seller their ranking changed, because it has not.
-    expect(await liveWeights()).toEqual(before);
+    expect(await liveWeights("goods")).toEqual(before);
 
-    const draft = await draftState();
+    const draft = await draftState("goods");
     expect(draft?.weights.responseTime).toBe(24);
     expect(draft?.previewState).toBe("none");
   }, 60_000);
 
   it("discards without ever having touched the live row", async () => {
-    const before = await liveWeights();
-    await saveDraft(lead, redistribute(DEFAULT_WEIGHTS, "relevance", 20), "redistribute", "A draft.");
-    expect(await discardDraft(lead, "Thought better of it.")).toMatchObject({ ok: true });
+    const before = await liveWeights("goods");
+    await saveDraft(lead, "goods", redistribute(DEFAULT_WEIGHTS, "relevance", 20), "redistribute", "A draft.");
+    expect(await discardDraft(lead, "goods", "Thought better of it.")).toMatchObject({ ok: true });
 
-    expect(await draftState()).toBeNull();
-    expect(await liveWeights()).toEqual(before);
+    expect(await draftState("goods")).toBeNull();
+    expect(await liveWeights("goods")).toEqual(before);
   }, 60_000);
 });
 
 describe("criterion 7 — publish is impossible on a stale or running preview", () => {
   it("refuses with no preview at all", async () => {
-    await saveDraft(lead, redistribute(DEFAULT_WEIGHTS, "relevance", 30), "redistribute", "A draft.");
-    expect(await publishDraft(lead, "Publishing blind.")).toMatchObject({
+    await saveDraft(lead, "goods", redistribute(DEFAULT_WEIGHTS, "relevance", 30), "redistribute", "A draft.");
+    expect(await publishDraft(lead, "goods", "Publishing blind.")).toMatchObject({
       ok: false,
       error: "preview_missing",
     });
@@ -135,10 +144,10 @@ describe("criterion 7 — publish is impossible on a stale or running preview", 
 
   it("refuses while one is running", async () => {
     await draftWithPreview();
-    await markPreviewRunning();
+    await markPreviewRunning("goods");
 
-    expect((await draftState())?.previewState).toBe("running");
-    expect(await publishDraft(lead, "Publishing mid-run.")).toMatchObject({
+    expect((await draftState("goods"))?.previewState).toBe("running");
+    expect(await publishDraft(lead, "goods", "Publishing mid-run.")).toMatchObject({
       ok: false,
       error: "preview_running",
     });
@@ -146,7 +155,7 @@ describe("criterion 7 — publish is impossible on a stale or running preview", 
 
   it("goes stale the moment the draft moves past it, and refuses then too", async () => {
     await draftWithPreview();
-    expect((await draftState())?.previewState).toBe("fresh");
+    expect((await draftState("goods"))?.previewState).toBe("fresh");
 
     // The same draft with one weight moved. Staleness is a comparison, not a
     // timer: a count from a superseded draft is worse than no count, because it
@@ -154,17 +163,18 @@ describe("criterion 7 — publish is impossible on a stale or running preview", 
     // dashboards.
     await saveDraft(
       lead,
+      "goods",
       redistribute(DEFAULT_WEIGHTS, "responseTime", 26),
-      await liveBrowseRelevanceMode(),
+      await liveBrowseRelevanceMode("goods"),
       "Moving it again after the preview ran.",
     );
 
-    const draft = await draftState();
+    const draft = await draftState("goods");
     expect(draft?.previewState).toBe("stale");
     // A stale preview is not shown as a result either.
     expect(draft?.preview).toBeNull();
 
-    expect(await publishDraft(lead, "Publishing on a superseded count.")).toMatchObject({
+    expect(await publishDraft(lead, "goods", "Publishing on a superseded count.")).toMatchObject({
       ok: false,
       error: "preview_stale",
     });
@@ -173,12 +183,12 @@ describe("criterion 7 — publish is impossible on a stale or running preview", 
   it("goes stale when only the browse mode moves", async () => {
     const { next } = await draftWithPreview();
     const other =
-      (await liveBrowseRelevanceMode()) === "redistribute" ? "category_depth" : "redistribute";
+      (await liveBrowseRelevanceMode("goods")) === "redistribute" ? "category_depth" : "redistribute";
 
     // No weight moved, and several hundred landing pages would reorder. A
     // preview that stayed fresh here would be describing a different platform.
-    await saveDraft(lead, next, other, "Changing what relevance means without a query.");
-    expect((await draftState())?.previewState).toBe("stale");
+    await saveDraft(lead, "goods", next, other, "Changing what relevance means without a query.");
+    expect((await draftState("goods"))?.previewState).toBe("stale");
   }, 120_000);
 });
 
@@ -186,13 +196,13 @@ describe("criterion 4 and 6 — the publish, and what it records", () => {
   it("promotes the draft, writes a history row, and clears the draft", async () => {
     const { next, preview } = await draftWithPreview();
 
-    const published = await publishDraft(lead, "Reply time matters more than text match now.");
+    const published = await publishDraft(lead, "goods", "Reply time matters more than text match now.");
     expect(published).toMatchObject({ ok: true });
 
-    expect(await liveWeights()).toEqual(next);
-    expect(await draftState()).toBeNull();
+    expect(await liveWeights("goods")).toEqual(next);
+    expect(await draftState("goods")).toBeNull();
 
-    const [latest] = await publishHistory(1);
+    const [latest] = await publishHistory("goods", 1);
     expect(latest).toBeDefined();
     expect(latest?.weights).toEqual(next);
     expect(latest?.reason).toContain("Reply time matters more");
@@ -205,12 +215,12 @@ describe("criterion 4 and 6 — the publish, and what it records", () => {
     // decisions with two written reasons, and a row keyed by day keeps only the
     // second — which is the thing criterion 4 asks for, lost.
     await draftWithPreview(redistribute(DEFAULT_WEIGHTS, "responseTime", 24));
-    await publishDraft(lead, "First move of the day.");
+    await publishDraft(lead, "goods", "First move of the day.");
 
     await draftWithPreview(redistribute(DEFAULT_WEIGHTS, "responseTime", 26));
-    await publishDraft(lead, "Second move of the day.");
+    await publishDraft(lead, "goods", "Second move of the day.");
 
-    const history = await publishHistory(2);
+    const history = await publishHistory("goods", 2);
     expect(history).toHaveLength(2);
     expect(history[0]?.reason).toContain("Second move");
     expect(history[1]?.reason).toContain("First move");
@@ -219,32 +229,32 @@ describe("criterion 4 and 6 — the publish, and what it records", () => {
   }, 180_000);
 
   it("records the browse mode, so a mode-only publish is not a blank row", async () => {
-    const live = await liveWeights();
+    const live = await liveWeights("goods");
     const other =
-      (await liveBrowseRelevanceMode()) === "redistribute" ? "category_depth" : "redistribute";
+      (await liveBrowseRelevanceMode("goods")) === "redistribute" ? "category_depth" : "redistribute";
 
-    const saved = await saveDraft(lead, live, other, "Changing only what relevance means.");
+    const saved = await saveDraft(lead, "goods", live, other, "Changing only what relevance means.");
     expect(saved).toMatchObject({ ok: true });
 
     const preview = await runImpact({
+      kind: "goods",
       draft: live,
       draftMode: other,
-      live,
-      liveMode: await liveBrowseRelevanceMode(),
+      live: await liveVectors(),
     });
-    await storePreview(live, other, preview);
+    await storePreview("goods", live, other, preview);
 
-    expect(await publishDraft(lead, "Scoring category depth on the landing pages.")).toMatchObject({
+    expect(await publishDraft(lead, "goods", "Scoring category depth on the landing pages.")).toMatchObject({
       ok: true,
     });
-    expect(await liveBrowseRelevanceMode()).toBe(other);
+    expect(await liveBrowseRelevanceMode("goods")).toBe(other);
 
-    const [latest] = await publishHistory(1);
+    const [latest] = await publishHistory("goods", 1);
     expect(latest?.browseMode).toBe(other);
   }, 120_000);
 
   it("refuses a publish with nothing behind it", async () => {
-    expect(await publishDraft(lead, "Publishing an empty desk.")).toMatchObject({
+    expect(await publishDraft(lead, "goods", "Publishing an empty desk.")).toMatchObject({
       ok: false,
       error: "no_draft",
     });
@@ -289,12 +299,12 @@ describe("the impact preview", () => {
   it("finds nothing to report when the draft is the live vector in another shape", async () => {
     // A draft that reorders nothing produces no rows, and the board says so
     // rather than padding the table out to look like an impact.
-    const live = await liveWeights();
+    const live = await liveWeights("goods");
     const preview = await runImpact({
+      kind: "goods",
       draft: live,
-      draftMode: await liveBrowseRelevanceMode(),
-      live,
-      liveMode: await liveBrowseRelevanceMode(),
+      draftMode: await liveBrowseRelevanceMode("goods"),
+      live: await liveVectors(),
     });
     expect(preview.rows).toHaveLength(0);
     expect(preview.listingsMoved).toBe(0);

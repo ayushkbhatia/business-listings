@@ -4591,11 +4591,40 @@ enum MrrMovementKind {
 /// taken a `weights` option and no caller ever passed one, so the constant was
 /// the whole configuration.
 ///
-/// A single row, keyed by a constant. Not a settings table with a JSON blob:
+/// A row per vector, keyed by `kind`. Not a settings table with a JSON blob:
 /// six named columns are six things a migration can change and a reviewer can
 /// read in a diff.
+///
+/// ## Two vectors — board `12c-s`
+///
+/// It was one row, `CHECK ("id" = 'current')`, and half the directory could
+/// not earn two of its six factors: services are held out of the spec-template
+/// system, so `spec_completeness` was twelve points a service supplier could
+/// never score, and `distance` measured kilometres between two offices for work
+/// done at the client's site or by email. The services row re-points those two
+/// slots — scope completeness and coverage match — at the same weights, so the
+/// two vectors stay the same shape and still total 100.
+///
+/// **The slots keep their column names.** `spec_completeness` and `distance`
+/// are what each vector stores in its fourth and fifth slot; what a slot
+/// *measures* is `FACTOR_SOURCES` in `lib/search/ranking.ts`. Renaming the
+/// columns would make this migration a drop-and-add, which has no safe order
+/// against a deploy (`docs/deployments.md` § Ordering).
+///
+/// **`id` is legacy and pinned to the kind** — `current` for goods, `services`
+/// for services — by `ranking_weights_one_row_per_kind`. The code before this
+/// board reads `id = 'current'`, so keeping the goods row there is what lets
+/// the migration apply ahead of the deploy with nothing noticing. Readers key
+/// on `kind`.
+///
+/// **No services row is seeded.** A missing services row is the state the board
+/// draws as *not published*: services listings go on ranking by the goods
+/// vector until an ops lead publishes one, so shipping this changes no result.
 model RankingWeights {
-  id               String @id @default("current")
+  id               String    @id @default("current")
+  /// Which listings this vector ranks, resolved per listing from
+  /// `Category.tradeKind` at query time — never from a business-level flag.
+  kind             TradeKind @unique(map: "ranking_weights_kind_key") @default(goods)
   relevance        Int
   verificationTier Int    @map("verification_tier")
   responseTime     Int    @map("response_time")
@@ -4707,7 +4736,12 @@ model ListingBoost {
 /// what makes the preview stale; nothing else can, and the comparison is
 /// exact rather than a timestamp race.
 model RankingDraft {
-  id String @id @default("current")
+  /// `current` for goods, `services` for services — the same pinning, and for
+  /// the same deploy-window reason, as `RankingWeights.id`.
+  id   String    @id @default("current")
+  /// One draft per vector — board `12c-s` B1. The editor, the preview and the
+  /// publish strip are one screen; what they act on is keyed.
+  kind TradeKind @unique(map: "ranking_draft_kind_key") @default(goods)
 
   relevance        Int
   verificationTier Int @map("verification_tier")
@@ -4761,6 +4795,11 @@ model RankingDraft {
 model RankingPublish {
   id String @id @default(cuid())
 
+  /// Which vector went live. Board `12c-s` B8: publishing one leaves the
+  /// other's history untouched, so each row's *what moved* is diffed against
+  /// the previous publish **of the same kind**.
+  kind TradeKind @default(goods)
+
   /// Dubai-day start, for the prune and the grouping. Not unique.
   day         DateTime @map("day") @db.Date
   publishedAt DateTime @default(now()) @map("published_at")
@@ -4794,6 +4833,7 @@ model RankingPublish {
   publishedBy   User   @relation("RankingPublisher", fields: [publishedById], references: [id], onDelete: Restrict)
 
   @@index([publishedAt], map: "ranking_publish_at_idx")
+  @@index([kind, publishedAt], map: "ranking_publish_kind_at_idx")
   @@index([day], map: "ranking_publish_day_idx")
   @@map("ranking_publish")
 }
@@ -5449,6 +5489,15 @@ model ListingFactorDay {
   raw         Json
   /// The six weights in force that night, as `12c` had them set.
   weights     Json
+  /// Which of `12c-s`'s two vectors ranked this listing that night.
+  ///
+  /// Not the listing's kind: a services listing ranks on the goods vector until
+  /// a services vector is published, and the night one is, its fourth and
+  /// fifth slots start measuring scope and coverage instead of spec and
+  /// distance. Diffing those scores across that night would bill the seller for
+  /// a change the platform made, so attribution treats a vector change as
+  /// state 09 and never as the seller's movement.
+  vector      TradeKind @default(goods)
   /// Points from a live `ListingBoost`. Added after the weighted sum, so it is
   /// its own number here too — state 10 reads it to say a position was bought.
   boostPoints Int      @default(0) @map("boost_points")

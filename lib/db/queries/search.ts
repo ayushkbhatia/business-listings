@@ -14,14 +14,25 @@ import {
   type SortOrigin,
 } from "@/lib/search/origin";
 import { liveBoosts } from "@/lib/search/boosts";
-import { liveBrowseRelevanceMode, liveWeights } from "@/lib/search/settings";
+import { liveVectors, type LiveVectors } from "@/lib/search/settings";
 import {
   placeSponsored,
   rank,
+  rankBlended,
   weightsForBrowse,
   type BrowseRelevanceMode,
+  type RankingKind,
   type RankingWeights,
+  type VectorSet,
 } from "@/lib/search/ranking";
+import {
+  coverageMatch,
+  matchedServices,
+  scopeCompleteness,
+  type CoverageTarget,
+} from "@/lib/search/service-signals";
+import { getTradeKinds } from "@/lib/taxonomy/service";
+import { resolveTradeKind, type TradeKindRow } from "@/lib/taxonomy/trade-kind";
 import {
   appliedKeys,
   countable,
@@ -320,8 +331,22 @@ export async function searchBusinesses(
   query: SearchQuery,
   options: {
     categoryIds?: string[];
-    /** Omit to read the live ones. The default is only a fallback. */
+    /**
+     * The goods vector. Omit to read the live ones. The default is only a
+     * fallback.
+     */
     weights?: RankingWeights;
+    /**
+     * The services vector — board `12c-s`. Omit to read the live one; `null`
+     * ranks every listing on the goods vector, which is the platform's state
+     * until a services vector is published.
+     *
+     * A caller that passes `weights` and omits this gets `null`: it asked for a
+     * ranking under one vector it named, and quietly mixing in a second one read
+     * from the database would make that caller's result depend on a row it never
+     * mentioned.
+     */
+    servicesWeights?: RankingWeights | null;
     sponsoredId?: string | null;
     /** Live boost points by business id. Omit to read them. */
     boosts?: Map<string, number>;
@@ -376,16 +401,12 @@ export async function searchBusinesses(
    * here rather than at every call site, because a caller that forgot would
    * silently get the old ranking.
    */
-  const [storedWeights, boosts, origin, shape, browseMode] = await Promise.all([
-    options.weights ? Promise.resolve(options.weights) : liveWeights(),
+  const [stored, boosts, origin, shape, kinds] = await Promise.all([
+    readVectors(options),
     options.boosts ? Promise.resolve(options.boosts) : liveBoosts(),
     options.origin !== undefined ? Promise.resolve(options.origin) : resolveOrigin(query),
     options.shape ? Promise.resolve(options.shape) : shapeOf(query),
-    !browse
-      ? Promise.resolve(null)
-      : options.browseMode
-        ? Promise.resolve(options.browseMode)
-        : liveBrowseRelevanceMode(),
+    getTradeKinds(),
   ]);
 
   /*
@@ -404,9 +425,23 @@ export async function searchBusinesses(
      here — running the two in sequence would have a page with no query
      claiming to know that its absent search term was about a service.
   */
-  const weights = browse
-    ? weightsForBrowse(storedWeights, browseMode ?? undefined)
-    : weightsForShape(storedWeights, shape);
+  /*
+     `12c-s`: each vector through its own browse mode, and the shape only ever
+     moves the goods vector — `weightsForShape` says why. A browse mode passed by
+     the caller names the page's mode and applies to both, as the stored one
+     would.
+  */
+  const vectors: VectorSet = browse
+    ? {
+        goods: weightsForBrowse(stored.goods, options.browseMode ?? stored.modes.goods ?? undefined),
+        services: stored.services
+          ? weightsForBrowse(
+              stored.services,
+              options.browseMode ?? stored.modes.services ?? undefined,
+            )
+          : null,
+      }
+    : { goods: weightsForShape(stored.goods, shape), services: stored.services };
   const where = businessWhere(query, categoryIds);
 
   const [candidates, total] = await Promise.all([
@@ -421,7 +456,14 @@ export async function searchBusinesses(
     prisma.business.count({ where }),
   ]);
 
-  const ranked = rank(
+  const kindOf = listingKind(kinds, categoryIds);
+  const services = await serviceSignals(
+    vectors.services !== null ? candidates.filter((business) => kindOf(business) === "services") : [],
+    query,
+    categoryIds,
+  );
+
+  const ranked = rankBlended(
     candidates,
     (business) => ({
       /*
@@ -474,8 +516,12 @@ export async function searchBusinesses(
       // Ops moving a listing for a reason of ours, with an expiry on it. Never
       // labelled sponsored: nobody paid for this one.
       boostPoints: boosts.get(business.id) ?? 0,
+      // `12c-s` — read only where the listing ranks on the services vector.
+      scopeCompleteness: services.get(business.id)?.scopeCompleteness ?? null,
+      coverageMatch: services.get(business.id)?.coverageMatch ?? null,
     }),
-    weights,
+    kindOf,
+    vectors,
   );
 
   const ordered = orderFor(ranked, query.sort);
@@ -504,6 +550,139 @@ export async function searchBusinesses(
 }
 
 export type BusinessResult = Awaited<ReturnType<typeof searchBusinesses>>["rows"][number];
+
+/**
+ * The two vectors a search ranks with, from the caller or the database.
+ *
+ * One read for both. A caller naming the goods vector and not the services one
+ * gets no services vector — see `servicesWeights`.
+ */
+async function readVectors(options: {
+  weights?: RankingWeights;
+  servicesWeights?: RankingWeights | null;
+}): Promise<LiveVectors> {
+  if (options.weights) {
+    return {
+      goods: options.weights,
+      services: options.servicesWeights ?? null,
+      modes: { goods: null, services: null },
+    };
+  }
+  const live = await liveVectors();
+  return options.servicesWeights === undefined
+    ? live
+    : { ...live, services: options.servicesWeights };
+}
+
+/**
+ * Which vector's kind a listing is, on this search — board `12c-s` B11.
+ *
+ * Resolved per listing from `Category.tradeKind`, never from a business-level
+ * flag, and from the category **this result set matched it through**: a firm
+ * filed under both HVAC equipment and HVAC maintenance is goods on the first
+ * page and services on the second. With no category scope — a free-text search
+ * — the primary category decides, because it is the one trade a listing has
+ * outside a category.
+ *
+ * The card carries five of a listing's categories. A listing matched through a
+ * sixth is resolved by the scope itself where every category in the scope is
+ * one kind, which is every subcategory page and nearly every sector page; only a
+ * mixed scope with a sixth-category match falls back to the primary.
+ */
+function listingKind(
+  kinds: ReadonlyMap<string, TradeKindRow>,
+  categoryIds: readonly string[] | undefined,
+): (business: { primaryCategoryId: string; categories: { categoryId: string }[] }) => RankingKind {
+  if (!categoryIds?.length) {
+    return (business) => resolveTradeKind(kinds, business.primaryCategoryId);
+  }
+  const scope = new Set(categoryIds);
+  const scopeKinds = new Set(categoryIds.map((id) => resolveTradeKind(kinds, id)));
+  const uniform = scopeKinds.size === 1 ? [...scopeKinds][0]! : null;
+
+  return (business) => {
+    if (scope.has(business.primaryCategoryId)) {
+      return resolveTradeKind(kinds, business.primaryCategoryId);
+    }
+    const matched = business.categories.find((link) => scope.has(link.categoryId));
+    if (matched) return resolveTradeKind(kinds, matched.categoryId);
+    return uniform ?? resolveTradeKind(kinds, business.primaryCategoryId);
+  };
+}
+
+/**
+ * Scope completeness and coverage match for the listings that rank on the
+ * services vector, and nothing for the rest.
+ *
+ * Two queries for the whole candidate set, and none at all while no services
+ * vector is published — the day this ships, search makes exactly the round trips
+ * it made the day before.
+ */
+async function serviceSignals(
+  servicesListings: readonly { id: string }[],
+  query: SearchQuery,
+  categoryIds: readonly string[] | undefined,
+): Promise<Map<string, { scopeCompleteness: number | null; coverageMatch: boolean | null }>> {
+  const out = new Map<string, { scopeCompleteness: number | null; coverageMatch: boolean | null }>();
+  if (servicesListings.length === 0) return out;
+
+  const ids = servicesListings.map((listing) => listing.id);
+  const [services, defaults, target] = await Promise.all([
+    prisma.service.findMany({
+      where: { businessId: { in: ids }, status: "live" },
+      select: {
+        businessId: true,
+        name: true,
+        categoryId: true,
+        engagementType: true,
+        feeBasis: true,
+        turnaround: true,
+        deliveredWhere: true,
+        deliverable: true,
+        coverage: { select: { emirate: true, areaId: true } },
+      },
+    }),
+    prisma.serviceCoverage.findMany({
+      where: { businessId: { in: ids }, serviceId: null },
+      select: { businessId: true, emirate: true, areaId: true },
+    }),
+    coverageTargetOf(query),
+  ]);
+
+  const words = tokens(query.q);
+  for (const id of ids) {
+    const own = services.filter((service) => service.businessId === id);
+    out.set(id, {
+      scopeCompleteness: scopeCompleteness(own),
+      coverageMatch: coverageMatch({
+        target,
+        businessDefault: defaults.filter((row) => row.businessId === id),
+        matched: matchedServices(own, { categoryIds, words }),
+      }),
+    });
+  }
+  return out;
+}
+
+/**
+ * The place the buyer named, as coverage reads places — the same two filters
+ * `resolveOrigin` reads, area first.
+ *
+ * Its own lookup rather than `resolveOrigin`'s, because that one answers with a
+ * coordinate and a label and this needs the area's id; an area whose slug
+ * matches nothing falls through to the emirate, as the origin does.
+ */
+async function coverageTargetOf(query: SearchQuery): Promise<CoverageTarget | null> {
+  if (query.area) {
+    const area = await prisma.area.findUnique({
+      where: { slug: query.area },
+      select: { id: true, emirate: true },
+    });
+    if (area) return { emirate: area.emirate, areaId: area.id };
+  }
+  if (query.emirate) return { emirate: query.emirate as CoverageTarget["emirate"], areaId: null };
+  return null;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Product filters
@@ -600,7 +779,8 @@ export async function searchProducts(
 ) {
   const { categoryIds } = options;
   const [storedWeights, origin, shape] = await Promise.all([
-    options.weights ? Promise.resolve(options.weights) : liveWeights(),
+    // Products are goods by construction, so the goods vector, and only it.
+    options.weights ? Promise.resolve(options.weights) : liveVectors().then((live) => live.goods),
     options.origin !== undefined ? Promise.resolve(options.origin) : resolveOrigin(query),
     options.shape ? Promise.resolve(options.shape) : shapeOf(query),
   ]);

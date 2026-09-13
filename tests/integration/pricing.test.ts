@@ -100,7 +100,7 @@ describe("criterion 1 — every figure the page prints exists on the row", () =>
 
   it("puts a real number behind every line the seeded plans render", async () => {
     const plans = await readPricingPlans();
-    const weights = await liveWeights();
+    const weights = await liveWeights("goods");
 
     for (const plan of plans) {
       for (const feature of featuresOf(plan)) {
@@ -120,7 +120,7 @@ describe("criterion 1 — every figure the page prints exists on the row", () =>
     // Falls back to the constant when the settings row is absent, which is what
     // a fresh database has. Either way the page is reading the same object the
     // query does rather than a copy of it.
-    const weights = await liveWeights();
+    const weights = await liveWeights("goods");
     for (const key of Object.keys(DEFAULT_WEIGHTS) as (keyof typeof DEFAULT_WEIGHTS)[]) {
       expect(typeof weights[key], key).toBe("number");
     }

@@ -1,7 +1,7 @@
 import "server-only";
 import { unstable_cache } from "next/cache";
 import { prisma } from "@/lib/db/client";
-import { liveWeights } from "@/lib/search/settings";
+import { liveVectors } from "@/lib/search/settings";
 import type { PricingPlan } from "@/lib/billing/pricing";
 
 /**
@@ -75,7 +75,13 @@ export async function readPricingPlans(): Promise<PricingPlan[]> {
 
 /** The weights the search actually ranks by, not the constant behind them. */
 export async function readRankingWeights() {
-  return liveWeights();
+  /*
+     The goods vector. `/pricing` states what plan tier is worth to anybody
+     reading it, and board `12c-s` B5 holds plan tier at the same number on both
+     vectors — `planTierAgrees` refuses a publish that would split them — so the
+     share this page quotes is true of a services listing too.
+  */
+  return (await liveVectors()).goods;
 }
 
 /**

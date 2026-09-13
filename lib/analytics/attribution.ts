@@ -1,6 +1,7 @@
 import {
   WEIGHT_KEYS,
   type FactorScores,
+  type RankingKind,
   type RankingWeights,
   type WeightKey,
 } from "@/lib/search/ranking";
@@ -52,6 +53,13 @@ export interface RawFactors {
   specCompleteness: number | null;
   distanceKm: number | null;
   planMultiplier: number;
+  /**
+   * Board `12c-s` — what the services vector's fourth and fifth slots measured.
+   * Absent on rows written before it, all of which ranked on the goods vector.
+   */
+  scopeCompleteness?: number | null;
+  /** 1 covered, 0 not, null unknown. */
+  coverageMatch?: number | null;
 }
 
 /** One day of what the ranker saw. The shape `ListingFactorDay` stores. */
@@ -60,6 +68,11 @@ export interface FactorDay {
   raw: RawFactors;
   weights: RankingWeights;
   boostPoints: number;
+  /**
+   * Which vector ranked the listing that night — board `12c-s`. Absent reads as
+   * goods, which every night before the services vector existed was.
+   */
+  vector?: RankingKind;
 }
 
 /**
@@ -98,6 +111,8 @@ export type Attribution =
       direction: Direction;
       places: number;
       factor: WeightKey;
+      /** Which vector's slot `factor` names — spec or scope, distance or coverage. */
+      vector: RankingKind;
       trend: Direction;
       before: RawFactors;
       after: RawFactors;
@@ -107,13 +122,14 @@ export type Attribution =
   /** 10 · A paid boost ended, and the position returned to the earned one. */
   | { kind: "commercial"; endedOn: Date; earnedRank: number | null }
   /** 11 · Their factors held; somebody above them improved. */
-  | { kind: "competitor"; count: number; factor: WeightKey }
+  | { kind: "competitor"; count: number; factor: WeightKey; vector: RankingKind }
   /** 12 · Several moved. `factor` is null where none dominates. */
   | {
       kind: "multiple";
       count: number;
       direction: Direction;
       factor: WeightKey | null;
+      vector: RankingKind;
       trend: Direction;
       before: RawFactors;
       after: RawFactors;
@@ -181,8 +197,9 @@ function rawTrend(
   after: RawFactors,
   beforeScores: FactorScores,
   afterScores: FactorScores,
+  vector: RankingKind,
 ): Direction {
-  const pair = RAW_OF[factor];
+  const pair = (vector === "services" ? SERVICES_RAW_OF : RAW_OF)[factor];
   const was = pair ? pair(before) : null;
   const is = pair ? pair(after) : null;
   if (was !== null && is !== null && was !== is) return is > was ? "up" : "down";
@@ -198,6 +215,18 @@ const RAW_OF: Partial<Record<WeightKey, (raw: RawFactors) => number | null>> = {
   planTier: (raw) => raw.planMultiplier,
   relevance: (raw) => raw.relevance,
 };
+
+/** The same, where the services vector re-points the fourth and fifth slots. */
+const SERVICES_RAW_OF: Partial<Record<WeightKey, (raw: RawFactors) => number | null>> = {
+  ...RAW_OF,
+  specCompleteness: (raw) => raw.scopeCompleteness ?? null,
+  distance: (raw) => raw.coverageMatch ?? null,
+};
+
+/** The vector a stored row ranked on. Absent is goods — see `FactorDay.vector`. */
+export function vectorOf(day: FactorDay): RankingKind {
+  return day.vector ?? "goods";
+}
 
 /** Everything the sentence needs that is not in the two factor rows. */
 export interface AttributionInput {
@@ -261,6 +290,7 @@ export function attribute(input: AttributionInput): Attribution {
   const direction: Direction = places < 0 ? "up" : "down";
   const magnitude = Math.abs(places);
   const parts = decompose(before, after);
+  const vector = vectorOf(after);
 
   // State 10. A boost that ended is a return to the earned position, not a loss.
   if (input.boostEndedOn && parts.boost < 0) {
@@ -269,6 +299,21 @@ export function attribute(input: AttributionInput): Attribution {
       endedOn: input.boostEndedOn,
       earnedRank: input.earnedRank ?? null,
     };
+  }
+
+  /*
+     State 09, and never the seller's — board `12c-s`.
+
+     The night a listing changes vector, its fourth and fifth scores stop
+     measuring one thing and start measuring another: spec completeness becomes
+     scope completeness, kilometres become a yes or a no. `decompose` would read
+     that as the seller's measurement moving, and a services firm would be told
+     its "scope completeness rose" on the night the platform started counting it.
+     A vector changes because staff published one or ops reclassified a trade,
+     and both are ours.
+  */
+  if (vectorOf(before) !== vector) {
+    return { kind: "platform", on: input.on };
   }
 
   const sellerSize = Math.abs(parts.seller);
@@ -285,7 +330,12 @@ export function attribute(input: AttributionInput): Attribution {
   // board, and the one with no call to action by design.
   if (sellerSize < NAMEABLE_POINTS) {
     return input.overtakenBy && input.overtakenBy.count > 0
-      ? { kind: "competitor", count: input.overtakenBy.count, factor: input.overtakenBy.factor }
+      ? {
+          kind: "competitor",
+          count: input.overtakenBy.count,
+          factor: input.overtakenBy.factor,
+          vector,
+        }
       : NO_REASON;
   }
 
@@ -302,7 +352,7 @@ export function attribute(input: AttributionInput): Attribution {
   if (!leader) return NO_REASON;
 
   const share = Math.abs(parts.byFactor[leader]) / sellerSize;
-  const trend = rawTrend(leader, before.raw, after.raw, before.scores, after.scores);
+  const trend = rawTrend(leader, before.raw, after.raw, before.scores, after.scores, vector);
 
   // State 12. Several moved together, so the count carries the sentence and the
   // leader is named only where it actually accounts for most of the movement.
@@ -312,6 +362,7 @@ export function attribute(input: AttributionInput): Attribution {
       count: moved.length,
       direction,
       factor: share >= DOMINANT_SHARE ? leader : null,
+      vector,
       trend,
       before: before.raw,
       after: after.raw,
@@ -324,6 +375,7 @@ export function attribute(input: AttributionInput): Attribution {
     direction,
     places: magnitude,
     factor: leader,
+    vector,
     trend,
     before: before.raw,
     after: after.raw,

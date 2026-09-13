@@ -3,7 +3,7 @@ import { formatCount, formatDate, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { Attribution, RawFactors } from "@/lib/analytics/attribution";
 import type { Delta as DeltaValue } from "@/lib/analytics/model";
-import type { WeightKey } from "@/lib/search/ranking";
+import type { RankingKind, WeightKey } from "@/lib/search/ranking";
 
 /**
  * The `3a`/`3l` amendment's component — a rank, a movement, and why.
@@ -129,10 +129,10 @@ function sentence(
     case "seller":
       return t(reason.direction === "up" ? "attribution.seller.up" : "attribution.seller.down", {
         places: t("attribution.places", { count: reason.places }),
-        factor: t(`factors.${reason.factor}`),
+        factor: factorLabel(reason.factor, reason.vector),
         trend: t(reason.trend === "up" ? "attribution.trend.up" : "attribution.trend.down"),
-        before: factorValue(reason.factor, reason.before),
-        after: factorValue(reason.factor, reason.after),
+        before: factorValue(reason.factor, reason.before, reason.vector),
+        after: factorValue(reason.factor, reason.after, reason.vector),
       });
 
     case "platform":
@@ -163,7 +163,7 @@ function sentence(
       // time on a decline the seller did not cause.
       return t("attribution.competitor", {
         count: reason.count,
-        factor: t(`factors.${reason.factor}`),
+        factor: factorLabel(reason.factor, reason.vector),
       });
 
     case "multiple":
@@ -179,13 +179,13 @@ function sentence(
         reason.direction === "up" ? "attribution.multiple.up" : "attribution.multiple.down",
         {
           count: formatCount(reason.count),
-          factor: t(`factors.${reason.factor}`),
+          factor: factorLabel(reason.factor, reason.vector),
           // The adverb, not the verb: "…, up from 4 h to 1 d 7 h".
           trend: t(
             reason.trend === "up" ? "attribution.direction.up" : "attribution.direction.down",
           ),
-          before: factorValue(reason.factor, reason.before),
-          after: factorValue(reason.factor, reason.after),
+          before: factorValue(reason.factor, reason.before, reason.vector),
+          after: factorValue(reason.factor, reason.after, reason.vector),
         },
       );
 
@@ -201,13 +201,38 @@ function sentence(
 }
 
 /**
+ * A factor's name, as the vector that ranked the seller calls it.
+ *
+ * Board `12c-s`: on the services vector the fourth slot is scope completeness
+ * and the fifth is coverage match. A services firm told its *spec completeness*
+ * fell has been told about a measure it cannot earn and a screen it never sees.
+ */
+function factorLabel(factor: WeightKey, vector: RankingKind): string {
+  if (vector === "services" && (factor === "specCompleteness" || factor === "distance")) {
+    return t(`factors.services.${factor}`);
+  }
+  return t(`factors.${factor}`);
+}
+
+/**
  * One factor, in the units the seller measures it in.
  *
  * The normalised 0..1 score is what the ranker consumed and is meaningless in a
  * sentence: *"your measured reply time fell from 1 to 0.2"* describes an
  * internal scale nobody outside this file has seen. These are the raw values.
  */
-function factorValue(factor: WeightKey, raw: RawFactors): string {
+function factorValue(factor: WeightKey, raw: RawFactors, vector: RankingKind): string {
+  if (vector === "services" && factor === "specCompleteness") {
+    return raw.scopeCompleteness === null || raw.scopeCompleteness === undefined
+      ? t("factors.value.unmeasured")
+      : t("factors.value.ratio", { percent: formatCount(Math.round(raw.scopeCompleteness * 100)) });
+  }
+  if (vector === "services" && factor === "distance") {
+    return raw.coverageMatch === null || raw.coverageMatch === undefined
+      ? t("factors.value.unmeasured")
+      : t(raw.coverageMatch === 1 ? "factors.value.covered" : "factors.value.not_covered");
+  }
+
   switch (factor) {
     case "responseTime":
       return raw.responseTimeMedianMs === null

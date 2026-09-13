@@ -3,16 +3,25 @@ import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
 import { Tabs } from "@/components/structure";
 import { Panel } from "@/components/structure";
-import { StatusBadge } from "@/components/display";
+import { Alert, StatusBadge } from "@/components/display";
 import { boostList } from "@/lib/search/boosts";
+import { vectorReach } from "@/lib/search/impact";
 import { zeroResultCount } from "@/lib/search/zero-results";
 import {
   draftState,
-  liveBrowseRelevanceMode,
-  liveWeights,
+  liveVectors,
+  otherPlanTier,
   publishHistory,
 } from "@/lib/search/settings";
-import { MAX_BOOST_POINTS, WEIGHT_KEYS } from "@/lib/search/ranking";
+import {
+  defaultWeightsFor,
+  gainsLabelKey,
+  isRankingKind,
+  MAX_BOOST_POINTS,
+  WEIGHT_KEYS,
+  weightLabelKey,
+  type RankingKind,
+} from "@/lib/search/ranking";
 import type { RankingWeights } from "@/lib/search/ranking";
 import { EMIRATES } from "@/lib/uae";
 import { formatCount, formatDate, formatDateTime, formatTime } from "@/lib/format";
@@ -36,6 +45,15 @@ import { RankingEditor } from "./RankingEditor";
  * table asks for every other staff seat to see the numbers read-only — they are
  * how anyone here answers a seller asking why they moved. So the page requires
  * a staff seat and the capability gates the controls, not the door.
+ *
+ * ## Two vectors, one board — `12c-s` B1
+ *
+ * `?vector=services` selects the services vector. It is a query parameter on
+ * this route rather than a second route, because the board is one screen: the
+ * editor, the preview, the publish strip and the history are the same
+ * components, and a second URL would be the first step towards a second screen.
+ * Boosts are not keyed — a boost is points added after either vector — so the
+ * boosts tab carries no toggle.
  */
 
 export const dynamic = "force-dynamic";
@@ -46,25 +64,39 @@ function tabOf(value: string | undefined): Tab {
   return value === "boosts" || value === "history" ? value : "weights";
 }
 
+/** The board's own URL, carrying the vector and the tab. Goods is the bare route. */
+function hrefFor(vector: RankingKind, tab: Tab): string {
+  const params = new URLSearchParams();
+  if (tab !== "weights") params.set("tab", tab);
+  if (vector !== "goods") params.set("vector", vector);
+  const query = params.toString();
+  return query ? `/admin/search?${query}` : "/admin/search";
+}
+
 export default async function SearchPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; vector?: string }>;
 }) {
   const seat = await requireStaff();
   const mayWrite = can(seat.actor, "search.ranking.write");
-  const tab = tabOf((await searchParams).tab);
+  const params = await searchParams;
+  const tab = tabOf(params.tab);
+  const vector: RankingKind = params.vector && isRankingKind(params.vector) ? params.vector : "goods";
+  const services = vector === "services";
 
-  const [live, liveMode, draft, boosts, zeroResults, history, badges] = await Promise.all([
-    liveWeights(),
-    liveBrowseRelevanceMode(),
-    draftState(),
+  const [live, draft, boosts, zeroResults, history, badges, other, reach] = await Promise.all([
+    liveVectors(),
+    draftState(vector),
     boostList(),
     zeroResultCount(),
-    publishHistory(),
+    publishHistory(vector),
     getAdminNavBadges(seat),
+    otherPlanTier(vector),
+    vectorReach(),
   ]);
 
+  const published = services ? live.services : live.goods;
   const liveBoostCount = boosts.filter((boost) => !boost.expired).length;
 
   const boostRows: BoostRowView[] = boosts.map((boost) => ({
@@ -96,20 +128,22 @@ export default async function SearchPage({
     fallName: row.biggestFall?.name ?? null,
     fallPlaces: row.biggestFall?.places ?? null,
     gains: row.gains
-      ? t(`ranking.impact.gains.${row.gains}` as never)
+      ? t(gainsLabelKey(row.vector ?? "goods", row.gains) as never)
       : t("ranking.impact.gains.none"),
   }));
 
   const historyRows: HistoryRowView[] = history.map((row) => ({
     id: row.id,
     when: formatDateTime(row.publishedAt),
-    vector: t("ranking.history.vector", { ...row.weights }),
+    vector: t(services ? "ranking.history.vector.services" : "ranking.history.vector", {
+      ...row.weights,
+    }),
     moved: row.moved
       ? Object.entries(row.moved)
           .map(([key, change]) =>
             key === "browseRelevanceMode"
               ? `${t("ranking.history.mode")} ${change}`
-              : `${t(`ranking.weight.${key}` as never)} ${change}`,
+              : `${t(weightLabelKey(vector, key as (typeof WEIGHT_KEYS)[number]) as never)} ${change}`,
           )
           .join(" · ") || t("ranking.history.mode")
       : t("ranking.history.first"),
@@ -122,15 +156,61 @@ export default async function SearchPage({
     preview !== null ? t("ranking.count.sellers", { count: preview.sellersTold }) : null;
 
   const tabs = [
-    { key: "weights", label: t("ranking.tab.weights"), href: "/admin/search" },
+    { key: "weights", label: t("ranking.tab.weights"), href: hrefFor(vector, "weights") },
     {
       key: "boosts",
       label: t("ranking.tab.boosts"),
-      href: "/admin/search?tab=boosts",
+      href: hrefFor(vector, "boosts"),
       badge: liveBoostCount,
     },
-    { key: "history", label: t("ranking.tab.history"), href: "/admin/search?tab=history" },
+    { key: "history", label: t("ranking.tab.history"), href: hrefFor(vector, "history") },
   ];
+
+  /*
+     What the draft moves, against what listings of this kind rank on today.
+     For a services vector nobody has published that is the goods vector — the
+     honest baseline, because it is what a services listing is scored by until
+     this publishes — and the two replaced slots are named even where their
+     numbers match, since the measure behind them changes on the first publish.
+  */
+  const baseline = published ?? live.goods;
+  const draftSummary = draft
+    ? [
+        movedSummary(vector, baseline, draft.weights),
+        ...(services && !live.services ? [t("ranking.draft.replaces")] : []),
+      ]
+        .filter(Boolean)
+        .join("; ")
+    : null;
+
+  const latestPublish = history[0]?.publishedAt ?? null;
+  const status: { label: string; tone: "ok" | "warn" | "neutral" } = published
+    ? {
+        label: latestPublish
+          ? t("ranking.vector.status.live", { date: formatDate(latestPublish) })
+          : t("ranking.vector.status.live_undated"),
+        tone: "ok",
+      }
+    : draft
+      ? { label: t("ranking.vector.status.draft"), tone: "warn" }
+      : { label: t("ranking.vector.status.none"), tone: "neutral" };
+
+  const vectorToggle = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <Tabs
+        variant="enclosed"
+        as="a"
+        label={t("ranking.vector.label")}
+        active={vector}
+        items={(["goods", "services"] as const).map((kind) => ({
+          key: kind,
+          label: t(`ranking.vector.${kind}`),
+          href: hrefFor(kind, tab),
+        }))}
+      />
+      <StatusBadge tone={status.tone}>{status.label}</StatusBadge>
+    </div>
+  );
 
   return (
     <AdminPage
@@ -153,11 +233,44 @@ export default async function SearchPage({
       <div className="flex flex-col gap-[var(--gutter)]">
         <Tabs items={tabs} active={tab} label={t("ranking.title")} as="a" />
 
+        {tab !== "boosts" && vectorToggle}
+
+        {tab === "weights" && services && (
+          /*
+             `12c-s` §The defect — the reason this vector exists, stated while it
+             is still true and replaced by what is true once it is not. Every
+             number in it is a query: the listings are counted by primary
+             category, and the points are the goods vector's live weight.
+          */
+          published ? (
+            <Alert tone="ok" title={t("ranking.defect.fixed.title")}>
+              {reach.servicesMeasured === reach.services
+                ? t("ranking.defect.fixed.body", {
+                    listings: t("ranking.count.services_listings", { count: reach.services }),
+                  })
+                : t("ranking.defect.fixed.body_partial", {
+                    listings: t("ranking.count.services_listings", { count: reach.services }),
+                    measured: formatCount(reach.servicesMeasured),
+                    unmeasured: formatCount(reach.services - reach.servicesMeasured),
+                  })}
+            </Alert>
+          ) : (
+            <Alert tone="bad" title={t("ranking.defect.title")} fix={t("ranking.defect.fix")}>
+              {t("ranking.defect.body", {
+                points: live.goods.specCompleteness,
+                listings: t("ranking.count.services_listings", { count: reach.services }),
+              })}
+            </Alert>
+          )
+        )}
+
         {tab === "weights" && (
           <>
             <PublishStrip
+              key={`strip-${vector}`}
+              kind={vector}
               hasDraft={draft !== null}
-              draftSummary={draft ? movedSummary(live, draft.weights) : null}
+              draftSummary={draftSummary}
               draftAuthor={draft?.savedBy ?? null}
               draftWhen={draft ? formatTime(draft.savedAt) : null}
               previewState={draft?.previewState ?? "none"}
@@ -165,7 +278,7 @@ export default async function SearchPage({
               previewSummary={
                 preview
                   ? t("ranking.step.preview_body", {
-                      categories: t("ranking.count.categories", {
+                      categories: t("ranking.count.categories_move", {
                         count: preview.categoriesMoved,
                       }),
                       listings: t("ranking.count.listings", { count: preview.listingsMoved }),
@@ -181,10 +294,28 @@ export default async function SearchPage({
 
             <div className="grid gap-[var(--gutter)] xl:grid-cols-[minmax(0,1fr)_20rem]">
               <div className="flex min-w-0 flex-col gap-[var(--gutter)]">
+                {/*
+                   Keyed by the vector so switching remounts it. The editor holds
+                   the numbers in state, and a remount is what stops the goods
+                   draft's sliders being carried onto the services vector.
+
+                   And by the last publish, so the editor's own "Draft saved"
+                   notice does not outlive the draft: clicking publish left it
+                   standing over a board that had no draft any more. A save does
+                   not remount it, so that confirmation still reaches the person
+                   who pressed the button.
+                */}
                 <RankingEditor
-                  weights={draft?.weights ?? live}
-                  browseMode={draft?.browseMode ?? liveMode}
+                  key={`editor-${vector}-${latestPublish?.getTime() ?? "never"}`}
+                  kind={vector}
+                  weights={draft?.weights ?? published ?? defaultWeightsFor(vector)}
+                  browseMode={
+                    draft?.browseMode ?? live.modes[vector] ?? live.modes.goods ?? "redistribute"
+                  }
                   isDraft={draft !== null}
+                  isProposal={draft === null && published === null}
+                  compareWith={services ? live.goods : null}
+                  otherPlanTier={other}
                   mayWrite={mayWrite}
                   saveDraft={saveDraftWeights}
                 />
@@ -197,6 +328,42 @@ export default async function SearchPage({
               </div>
 
               <aside className="flex flex-col gap-[var(--gutter)]">
+                {/*
+                   `12c-s` B1 and B8, said where the controls are: everything on
+                   this tab acts on the vector selected above, and nothing else.
+                */}
+                <Panel eyebrow={t("ranking.two_vectors")}>
+                  <p className="max-w-prose text-caption text-body">
+                    {t("ranking.two_vectors_body")}
+                  </p>
+                </Panel>
+
+                {/*
+                   `12c-s` B7 — what a publish of this vector can reach, counted.
+                   Before a services vector is live, the goods vector ranks the
+                   services listings too, and the panel says so rather than
+                   claiming a scope the ranker does not have.
+                */}
+                <Panel title={t("ranking.reach")}>
+                  <p className="max-w-prose text-caption text-body">
+                    {services
+                      ? t("ranking.reach.services", {
+                          services: t("ranking.count.services_listings", { count: reach.services }),
+                          goods: t("ranking.count.goods_listings", { count: reach.goods }),
+                        })
+                      : live.services
+                        ? t("ranking.reach.goods_only", {
+                            goods: t("ranking.count.goods_listings", { count: reach.goods }),
+                          })
+                        : t("ranking.reach.goods_shared", {
+                            goods: t("ranking.count.goods_listings", { count: reach.goods }),
+                            services: t("ranking.count.services_listings", {
+                              count: reach.services,
+                            }),
+                          })}
+                  </p>
+                </Panel>
+
                 {/*
                    The console routes "Searches that found nothing" to this board
                    and this board rendered no such number, so the link landed on
@@ -294,7 +461,12 @@ export default async function SearchPage({
           />
         )}
 
-        {tab === "history" && <HistoryTable rows={historyRows} />}
+        {tab === "history" && (
+          <HistoryTable
+            rows={historyRows}
+            {...(services ? { empty: t("ranking.history.empty.services") } : {})}
+          />
+        )}
 
         {!mayWrite && (
           <p className="max-w-prose text-caption text-body">
@@ -314,14 +486,21 @@ export default async function SearchPage({
  * the browse mode when that is what changed: a publish that flips the mode and
  * moves no weight still reorders several hundred landing pages, and a summary
  * that read "nothing moved" would be describing the wrong thing.
+ *
+ * Named for the vector being drafted, so a services draft reads *scope
+ * completeness* where the goods one reads *spec completeness*.
  */
-function movedSummary(live: RankingWeights, draft: RankingWeights): string {
+function movedSummary(
+  vector: RankingKind,
+  live: RankingWeights,
+  draft: RankingWeights,
+): string {
   const moved = WEIGHT_KEYS.filter((key) => live[key] !== draft[key]).sort(
     (a, b) => Math.abs(draft[b] - live[b]) - Math.abs(draft[a] - live[a]),
   );
   if (moved.length === 0) return t("ranking.history.mode");
 
   return moved
-    .map((key) => `${t(`ranking.weight.${key}` as never)} ${live[key]} → ${draft[key]}`)
+    .map((key) => `${t(weightLabelKey(vector, key) as never)} ${live[key]} → ${draft[key]}`)
     .join(", ");
 }

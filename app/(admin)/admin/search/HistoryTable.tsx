@@ -30,7 +30,18 @@ export interface HistoryRowView {
   told: string;
 }
 
-export function HistoryTable({ rows }: { rows: readonly HistoryRowView[] }) {
+export function HistoryTable({
+  rows,
+  empty = t("ranking.history.empty"),
+}: {
+  rows: readonly HistoryRowView[];
+  /**
+   * What an empty history says. Board `12c-s`: the services vector's empty
+   * history is not "the weights the platform shipped with" — there were none —
+   * and saying so would misdescribe what services listings rank on today.
+   */
+  empty?: string;
+}) {
   const columns: Column<HistoryRowView>[] = [
     {
       key: "when",
@@ -75,7 +86,7 @@ export function HistoryTable({ rows }: { rows: readonly HistoryRowView[] }) {
         stickyHeader
         empty={
           <div className="text-center">
-            <p className="text-body-sm text-body">{t("ranking.history.empty")}</p>
+            <p className="text-body-sm text-body">{empty}</p>
           </div>
         }
       />

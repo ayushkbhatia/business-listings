@@ -6,6 +6,7 @@ import { Button, Label, Textarea } from "@/components/primitives";
 import { Check } from "@/components/primitives/icons";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
+import type { RankingKind } from "@/lib/search/ranking";
 import type { PreviewState } from "@/lib/search/settings";
 import type { ActionResult } from "./actions";
 
@@ -28,6 +29,11 @@ import type { ActionResult } from "./actions";
  */
 
 export interface PublishStripProps {
+  /**
+   * The vector every control here acts on — board `12c-s`. Posted with each
+   * action, so a strip drawn for one vector cannot publish the other.
+   */
+  kind: RankingKind;
   hasDraft: boolean;
   /** "Reply time 18 → 24, relevance 34 → 28", already localised. */
   draftSummary: string | null;
@@ -40,7 +46,7 @@ export interface PublishStripProps {
   /** "431 sellers", already localised. Null until fresh. */
   sellerCount: string | null;
   mayWrite: boolean;
-  runPreview: () => Promise<ActionResult>;
+  runPreview: (formData: FormData) => Promise<ActionResult>;
   publish: (formData: FormData) => Promise<ActionResult>;
   discard: (formData: FormData) => Promise<ActionResult>;
 }
@@ -87,6 +93,7 @@ function Step({
 }
 
 export function PublishStrip({
+  kind,
   hasDraft,
   draftSummary,
   draftAuthor,
@@ -117,8 +124,15 @@ export function PublishStrip({
 
   function withReason(action: (formData: FormData) => Promise<ActionResult>) {
     const form = new FormData();
+    form.set("kind", kind);
     form.set("reason", reason);
     run(() => action(form), true);
+  }
+
+  function preview() {
+    const form = new FormData();
+    form.set("kind", kind);
+    run(() => runPreview(form), false);
   }
 
   const previewBadge =
@@ -226,7 +240,7 @@ export function PublishStrip({
             <Button
               variant="secondary"
               disabled={pending || previewState === "running"}
-              onClick={() => run(runPreview, false)}
+              onClick={preview}
             >
               {previewState === "none" ? t("ranking.run_preview") : t("ranking.rerun_preview")}
             </Button>

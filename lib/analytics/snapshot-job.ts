@@ -2,16 +2,18 @@ import "server-only";
 import { Prisma, type Emirate } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { dubaiDayStart } from "@/lib/format";
-import { weightsForBrowse, type RankingWeights } from "@/lib/search/ranking";
+import { weightsForBrowse, type VectorSet } from "@/lib/search/ranking";
 import { liveBoosts } from "@/lib/search/boosts";
 import {
   candidatesFrom,
+  descendantsIndex,
   loadDirectory,
-  MAX_LISTINGS,
+  placeIn,
   scopesOf,
-  type Candidate,
+  type Placed,
 } from "@/lib/search/directory";
-import { liveBrowseRelevanceMode, liveWeights } from "@/lib/search/settings";
+import { liveVectors } from "@/lib/search/settings";
+import { loadTradeKinds } from "@/lib/taxonomy/service";
 
 /**
  * The amendment's `B1` and `B2` — the nightly snapshot.
@@ -92,28 +94,47 @@ export async function runPositionSnapshots(now: Date = new Date()): Promise<Snap
      would make state 09 fire on a *buyer's* query shape rather than on a staff
      decision, and miss a change to the browse mode, which is a staff decision.
   */
-  const [stored, mode, boosts] = await Promise.all([
-    liveWeights(),
-    liveBrowseRelevanceMode(),
-    liveBoosts(now),
-  ]);
-  const weights = weightsForBrowse(stored, mode);
+  const [live, boosts, kinds] = await Promise.all([liveVectors(), liveBoosts(now), loadTradeKinds()]);
+  /*
+     Both vectors, each in its own browse mode — board `12c-s`. A services
+     category listing has no query box either, so its vector goes through
+     `weightsForBrowse` exactly as the goods one does. While no services vector
+     is published this pair's `services` is null and every scope ranks on the
+     goods vector, which is what the platform does.
+  */
+  const vectors: VectorSet = {
+    goods: weightsForBrowse(live.goods, live.modes.goods ?? undefined),
+    services: live.services
+      ? weightsForBrowse(live.services, live.modes.services ?? undefined)
+      : null,
+  };
 
   /*
      The same sampler board 12c's impact preview runs — `lib/search/directory.ts`,
-     which loads the directory once and ranks it under a vector. Board 12c `B5`:
+     which loads the directory once and ranks it under the vectors. Board 12c `B5`:
      *one job, two readers, do not build a second sampler*. Two implementations
      of "where does this listing sit in this category" is how the preview comes
      to promise a reorder the night then does not perform.
   */
   const { rows, capped, unread } = await loadDirectory();
-  const candidates = candidatesFrom(rows, weights, boosts);
+  const candidates = candidatesFrom(rows, boosts);
+  const context = { vectors, kinds };
 
-  await writeFactorDays(candidates, weights, boosts, day);
+  /*
+     One factor row per listing, scored for its primary category country-wide —
+     the per-listing limitation the note at the top of this file states. The
+     vector is the primary category's, so a services firm's row carries scope and
+     coverage from the night its vector is published, and `vector` says so.
+  */
+  const descendants = descendantsIndex(kinds);
+  const primaries = candidates.map((candidate) =>
+    placeIn(candidate, candidate.primaryCategoryId, null, { ...context, descendants }),
+  );
+  await writeFactorDays(primaries, vectors, day);
 
   let scopes = 0;
   let ranks = 0;
-  for (const scope of scopesOf(candidates)) {
+  for (const scope of scopesOf(candidates, context)) {
     scopes += 1;
     ranks += await writeRanks(scope.categoryId, scope.emirate, scope.ordered, day);
   }
@@ -140,30 +161,34 @@ export async function runPositionSnapshots(now: Date = new Date()): Promise<Snap
  * to re-run after a failed night.
  */
 async function writeFactorDays(
-  candidates: readonly Candidate[],
-  weights: RankingWeights,
-  boosts: ReadonlyMap<string, number>,
+  placed: readonly Placed[],
+  vectors: VectorSet,
   day: Date,
 ): Promise<void> {
-  const weightsJson = JSON.stringify(weights);
+  const goodsJson = JSON.stringify(vectors.goods);
+  const servicesJson = vectors.services ? JSON.stringify(vectors.services) : goodsJson;
 
-  for (let index = 0; index < candidates.length; index += CHUNK) {
-    const chunk = candidates.slice(index, index + CHUNK);
-    const ids = chunk.map((candidate) => candidate.id);
-    const scores = chunk.map((candidate) => JSON.stringify(candidate.scores));
-    const raw = chunk.map((candidate) => JSON.stringify(candidate.raw));
-    const points = chunk.map((candidate) => boosts.get(candidate.id) ?? 0);
+  for (let index = 0; index < placed.length; index += CHUNK) {
+    const chunk = placed.slice(index, index + CHUNK);
+    const ids = chunk.map((row) => row.candidate.id);
+    const scores = chunk.map((row) => JSON.stringify(row.scores));
+    const raw = chunk.map((row) => JSON.stringify(row.raw));
+    const points = chunk.map((row) => row.candidate.boostPoints);
+    // The weights that actually ranked this listing, beside the vector's name.
+    const weights = chunk.map((row) => (row.vector === "services" ? servicesJson : goodsJson));
+    const vector = chunk.map((row) => row.vector);
 
     await prisma.$executeRaw`
-      INSERT INTO "listing_factor_day" ("business_id", "day", "scores", "raw", "weights", "boost_points")
-      SELECT id, ${day}::date, s::jsonb, r::jsonb, ${weightsJson}::jsonb, p
-        FROM unnest(${ids}::text[], ${scores}::text[], ${raw}::text[], ${points}::int[])
-             AS t(id, s, r, p)
+      INSERT INTO "listing_factor_day" ("business_id", "day", "scores", "raw", "weights", "boost_points", "vector")
+      SELECT id, ${day}::date, s::jsonb, r::jsonb, w::jsonb, p, v::"trade_kind"
+        FROM unnest(${ids}::text[], ${scores}::text[], ${raw}::text[], ${weights}::text[], ${points}::int[], ${vector}::text[])
+             AS t(id, s, r, w, p, v)
       ON CONFLICT ("business_id", "day") DO UPDATE
         SET "scores" = EXCLUDED."scores",
             "raw" = EXCLUDED."raw",
             "weights" = EXCLUDED."weights",
-            "boost_points" = EXCLUDED."boost_points"
+            "boost_points" = EXCLUDED."boost_points",
+            "vector" = EXCLUDED."vector"
     `;
   }
 }
@@ -180,15 +205,15 @@ async function writeFactorDays(
 async function writeRanks(
   categoryId: string,
   emirate: Emirate | null,
-  ordered: readonly Candidate[],
+  ordered: readonly Placed[],
   day: Date,
 ): Promise<number> {
   const total = ordered.length;
 
   for (let index = 0; index < ordered.length; index += CHUNK) {
     const chunk = ordered.slice(index, index + CHUNK);
-    const ids = chunk.map((candidate) => candidate.id);
-    const positions = chunk.map((_candidate, offset) => index + offset + 1);
+    const ids = chunk.map((placed) => placed.candidate.id);
+    const positions = chunk.map((_placed, offset) => index + offset + 1);
 
     const rows = Prisma.sql`
       SELECT ${Prisma.raw("gen_random_uuid()::text")}, id, ${categoryId}, ${emirate}::"emirate",

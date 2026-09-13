@@ -4,6 +4,7 @@ import { PageEvent } from "@/components/telemetry";
 import { recordEvent } from "@/lib/telemetry/record";
 import { markDoneSeen, readBaseline } from "@/lib/setup/baseline";
 import { setupCompletion, type RankingFactor } from "@/lib/setup/complete";
+import type { RankingKind } from "@/lib/search/ranking";
 import { setupHubState } from "@/lib/setup/service";
 import { tasksFor } from "@/lib/setup/tasks";
 import { cn } from "@/lib/cn";
@@ -279,7 +280,7 @@ export default async function SetupDonePage() {
               </ul>
             </div>
 
-            <RankingCard factors={completion.factors} />
+            <RankingCard factors={completion.factors} vector={completion.rankingVector} />
 
             <div className="rounded-card border border-warn-line bg-warn-wash px-5 py-4">
               <p className="font-mono text-eyebrow uppercase text-warn-ink">
@@ -303,7 +304,13 @@ export default async function SetupDonePage() {
  * config search ranks by — so a staff member retuning ranking in admin moves
  * this card with it rather than leaving it stating last quarter's numbers.
  */
-function RankingCard({ factors }: { factors: readonly RankingFactor[] }) {
+function RankingCard({
+  factors,
+  vector,
+}: {
+  factors: readonly RankingFactor[];
+  vector: RankingKind;
+}) {
   const total = factors.reduce((sum, factor) => sum + factor.weight, 0);
 
   return (
@@ -325,7 +332,16 @@ function RankingCard({ factors }: { factors: readonly RankingFactor[] }) {
                 factor.moved || factor.open ? "font-medium text-ink" : "text-body",
               )}
             >
-              {t(`setup_done.rank.${factor.key}` as MessageKey)}
+              {/*
+                 Board `12c-s`: on the services vector the fourth and fifth bars
+                 measure scope and coverage, and are named for what they measure.
+              */}
+              {t(
+                (vector === "services" &&
+                (factor.key === "specCompleteness" || factor.key === "distance")
+                  ? `setup_done.rank.services.${factor.key}`
+                  : `setup_done.rank.${factor.key}`) as MessageKey,
+              )}
             </span>
             {/*
               Decorative. The weight is printed beside it as a number, so a

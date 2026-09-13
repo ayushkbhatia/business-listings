@@ -433,6 +433,79 @@ test.describe("board 12c — ranking and boosts", () => {
   });
 });
 
+/**
+ * Board `12c-s` — the services vector, on the same board.
+ *
+ * Read-only on purpose. Publishing a vector reorders every services result the
+ * other specs look at, and a draft left behind changes what the goods strip says
+ * on the next run; the publish flow is proven against its own database in
+ * `tests/integration/ranking-services.test.ts`. What only a browser shows is that
+ * the toggle is one board rather than two, and what the services editor names.
+ */
+test.describe("board 12c-s — the services vector", () => {
+  test("is a toggle on the same board, not a second screen", async ({ page }) => {
+    await page.goto("/admin/search");
+    const toggle = page.getByRole("link", { name: "Services vector", exact: true });
+    await expect(toggle).toHaveAttribute("href", "/admin/search?vector=services");
+    await toggle.click();
+
+    await expect(page).toHaveURL(/vector=services/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Ranking & boosts");
+    await expect(page.getByRole("link", { name: "Goods vector", exact: true })).toHaveAttribute(
+      "href",
+      "/admin/search",
+    );
+    // The section tabs carry the vector with them.
+    await expect(page.getByRole("link", { name: "Weight history" })).toHaveAttribute(
+      "href",
+      "/admin/search?tab=history&vector=services",
+    );
+  });
+
+  test("names the two replaced factors for what they measure", async ({ page }) => {
+    await page.goto("/admin/search?vector=services");
+    await expect(
+      page.getByRole("slider", { name: "Scope completeness · replaces spec completeness" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("slider", { name: "Coverage match · replaces distance, pinned" }),
+    ).toBeVisible();
+    await expect(page.getByRole("slider", { name: "Plan tier · pinned, ceiling 10" })).toBeVisible();
+    // Neither goods measure is on the services editor.
+    await expect(page.getByRole("slider", { name: "Spec completeness", exact: true })).toHaveCount(0);
+    await expect(page.getByText(/Six factors · (proposed|draft|live) total 100/)).toBeVisible();
+  });
+
+  test("states the defect while it is true, with a count behind it", async ({ page }) => {
+    await page.goto("/admin/search?vector=services");
+    const state = page.getByText(/Services rank on a factor they cannot move|Services listings rank on this vector/);
+    await expect(state).toBeVisible();
+    await expect(page.getByText(/\d+ services listings?/).first()).toBeVisible();
+  });
+
+  test("says publishing one vector leaves the other alone", async ({ page }) => {
+    await page.goto("/admin/search?vector=services");
+    await expect(page.getByText(/Publishing one leaves the other's weights and history as they were/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Publishing this vector" })).toBeVisible();
+  });
+
+  test("keeps its own history", async ({ page }) => {
+    await page.goto("/admin/search?tab=history&vector=services");
+    await expect(page.getByRole("heading", { name: "Weight history" })).toBeVisible();
+    await expect(
+      page.getByText(/Nothing published on this vector yet|Scope \d+ · Coverage \d+/).first(),
+    ).toBeVisible();
+  });
+
+  test("is axe clean on the weights and history tabs", async ({ page }) => {
+    for (const path of ["/admin/search?vector=services", "/admin/search?tab=history&vector=services"]) {
+      await page.goto(path);
+      const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+      expect(results.violations, path).toEqual([]);
+    }
+  });
+});
+
 test.describe("the copy reaches the public page", () => {
   test("a written category shows its intro, an unwritten one shows none", async ({ browser }) => {
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } });
