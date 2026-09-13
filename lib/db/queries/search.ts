@@ -1124,7 +1124,7 @@ export async function readSpecFacets(
       status: "live",
       categories: { some: { categoryId: { in: templateCategoryIds } } },
     },
-    orderBy: { version: "desc" },
+    orderBy: [{ version: "desc" }, { id: "desc" }],
     include: { fields: { where: { isFilterable: true }, orderBy: { sortOrder: "asc" } } },
   });
   if (!template) return [];
@@ -1344,7 +1344,7 @@ export async function getSponsoredBusinessId(
        broken — two overlapping slots — and on that day the answer has to be the
        published one rather than the profitable one.
     */
-    orderBy: { startsOn: "asc" },
+    orderBy: [{ startsOn: "asc" }, { id: "asc" }],
     select: { businessId: true },
   });
   return slot?.businessId ?? null;
@@ -1423,7 +1423,7 @@ export async function getFeaturedBusinesses(take = 6) {
       locations: { where: { published: true }, include: { area: true }, take: 1 },
       _count: { select: { products: { where: { status: { not: "draft" } } } } },
     },
-    orderBy: [{ verificationTier: "desc" }, { reviewCount: "desc" }, { displayName: "asc" }],
+    orderBy: [{ verificationTier: "desc" }, { reviewCount: "desc" }, { displayName: "asc" }, { id: "asc" }],
     take,
   });
 }

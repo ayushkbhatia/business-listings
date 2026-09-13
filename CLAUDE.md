@@ -126,7 +126,7 @@ cadence as the other projects in this workspace.
 - The PR body is the commit body. Say what moved, what it cost, and anything
   found on the way that was fixed in passing.
 - Two gates, and they run at different moments. `pnpm verify:fast` is the inner
-  loop — typecheck, lint, the seven `check:*` scans and the unit project. No
+  loop — typecheck, lint, the eight `check:*` scans and the unit project. No
   database, no build, so run it as often as you like while the work is moving.
   It regenerates the Prisma client first, because `lib/db/generated` is not
   committed and typecheck reads it: without that step a fresh worktree fails on

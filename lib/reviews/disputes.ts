@@ -182,7 +182,7 @@ export interface QueuedDispute {
 export async function openDisputes(limit = 100, now = new Date()): Promise<QueuedDispute[]> {
   const rows = await prisma.reviewDispute.findMany({
     where: { resolvedAt: null },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: limit,
     select: {
       id: true,

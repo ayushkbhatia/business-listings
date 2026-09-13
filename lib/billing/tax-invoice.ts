@@ -219,7 +219,7 @@ export async function documentOf(
         },
       },
       events: {
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         take: 12,
         select: {
           id: true,

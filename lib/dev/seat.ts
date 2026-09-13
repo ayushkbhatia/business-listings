@@ -279,7 +279,7 @@ export async function seatBusinesses(limit = 40): Promise<SeatBusiness[]> {
        suppliers — the ones with a plan, branches and a filled profile, which
        are the only rows worth seating into — off the end of the forty.
     */
-    orderBy: [{ profileStrength: { sort: "desc", nulls: "last" } }, { displayName: "asc" }],
+    orderBy: [{ profileStrength: { sort: "desc", nulls: "last" } }, { displayName: "asc" }, { id: "asc" }],
     take: limit,
     select: {
       slug: true,

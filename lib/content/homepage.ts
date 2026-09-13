@@ -80,7 +80,7 @@ export async function popularQueryReport(take = 12): Promise<PopularQueryRow[]> 
     where: { createdAt: { gte: since } },
     _count: { normalised: true },
     _max: { resultCount: true },
-    orderBy: { _count: { normalised: "desc" } },
+    orderBy: [{ _count: { normalised: "desc" } }, { normalised: "asc" }],
     take,
   });
   if (grouped.length === 0) return [];

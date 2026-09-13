@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AppSidebar, DashboardShell, PageHeader, resolveNav } from "@/components/structure";
 import { dashboardNavFor } from "@/components/structure/nav-config";
+import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { actorFromDevSeller, devSellerRequest } from "@/lib/auth/dev-seller";
 import { getActor } from "@/lib/auth/session";
@@ -76,7 +77,8 @@ const IDENTITY_SELECT = {
   plan: { select: { name: true } },
   locations: {
     where: { published: true },
-    orderBy: { type: "asc" },
+    // Cast: this select is `as const`, which would make the array a readonly tuple Prisma rejects.
+    orderBy: [{ type: "asc" }, { id: "asc" }] as Prisma.LocationOrderByWithRelationInput[],
     take: 1,
     select: { area: { select: { name: true } } },
   },

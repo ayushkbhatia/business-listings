@@ -286,7 +286,7 @@ async function queryRows(
       // The most recent count of what the phrase returns, not the largest the
       // set has ever been. A category that shed listings did shed them.
       _max: { resultTotal: true, day: true },
-      orderBy: { _sum: { impressions: "desc" } },
+      orderBy: [{ _sum: { impressions: "desc" } }, { normalised: "asc" }],
       take: TOP_QUERIES,
     }),
     prisma.searchImpressionDay.groupBy({
@@ -357,7 +357,7 @@ async function demandGap(
     by: ["normalised"],
     where: { businessId, day: { gte: fromDay } },
     _sum: { impressions: true },
-    orderBy: { _sum: { impressions: "desc" } },
+    orderBy: [{ _sum: { impressions: "desc" } }, { normalised: "asc" }],
     take: TOP_QUERIES * 2,
   });
   if (top.length === 0) return null;
@@ -445,7 +445,7 @@ async function productRows(
       by: ["productId"],
       where: { businessId, day: { gte: fromDay } },
       _sum: { views: true },
-      orderBy: { _sum: { views: "desc" } },
+      orderBy: [{ _sum: { views: "desc" } }, { productId: "asc" }],
       take: TOP_PRODUCTS * 4,
     }),
     prisma.productViewDay.groupBy({

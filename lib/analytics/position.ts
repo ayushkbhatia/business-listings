@@ -356,7 +356,7 @@ async function reasonFor(input: ReasonInput): Promise<Attribution> {
         businessId: input.businessId,
         expiresAt: { gte: input.from, lte: input.to },
       },
-      orderBy: { expiresAt: "desc" },
+      orderBy: [{ expiresAt: "desc" }, { id: "desc" }],
       select: { expiresAt: true, createdAt: true },
     }),
   ]);
@@ -405,7 +405,7 @@ async function earnedRankBefore(input: ReasonInput, boostStarted: Date): Promise
       emirate: input.emirate,
       day: { lt: boostStarted },
     },
-    orderBy: { day: "desc" },
+    orderBy: [{ day: "desc" }, { id: "desc" }],
     select: { position: true },
   });
   return row?.position ?? null;

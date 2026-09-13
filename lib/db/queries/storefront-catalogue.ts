@@ -535,16 +535,22 @@ async function getPage(
   }
 
   const orderBy: Prisma.ProductOrderByWithRelationInput[] =
+    /*
+       `id` last on every branch. This list is paged with `skip`, and a range
+       sold in three sizes is three products with one name — so without a
+       unique key a buyer paging a storefront could meet one of them twice and
+       another never.
+    */
     query.sort === "recent"
-      ? [{ createdAt: "desc" }, { name: "asc" }]
+      ? [{ createdAt: "desc" }, { name: "asc" }, { id: "asc" }]
       : query.sort === "name"
-        ? [{ name: "asc" }]
+        ? [{ name: "asc" }, { id: "asc" }]
         : /*
              The enum is declared in exactly this order — in stock, made to
              order, indent, out of stock — so ascending is the board's order
              without a CASE expression to keep in step with it.
           */
-          [{ availability: "asc" }, { name: "asc" }];
+          [{ availability: "asc" }, { name: "asc" }, { id: "asc" }];
 
   const rows = await prisma.product.findMany({
     where,

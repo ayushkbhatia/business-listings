@@ -476,7 +476,7 @@ export interface DeliverQueuedResult {
 export async function deliverQueued(limit = 200): Promise<DeliverQueuedResult> {
   const due = await prisma.notificationDelivery.findMany({
     where: { status: "queued" },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: limit,
     select: {
       id: true,

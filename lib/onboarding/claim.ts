@@ -1,4 +1,5 @@
 import "server-only";
+import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import type { Actor } from "@/lib/auth/roles";
 import { sameLicenceNumber } from "@/lib/verification/licence/number";
@@ -98,7 +99,8 @@ const CANDIDATE_SELECT = {
   verificationTier: true,
   primaryCategory: { select: { name: true, code: true } },
   locations: {
-    orderBy: { createdAt: "asc" },
+    // Cast: this select is `as const`, which would make the array a readonly tuple Prisma rejects.
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }] as Prisma.LocationOrderByWithRelationInput[],
     take: 1,
     select: { emirate: true, area: { select: { name: true } } },
   },
@@ -197,7 +199,7 @@ export async function findClaimMatches(
           { licenceNumber: digits },
         ],
       },
-      orderBy: { tradeName: "asc" },
+      orderBy: [{ tradeName: "asc" }, { id: "asc" }],
       take: limit,
       select: CANDIDATE_SELECT,
     });

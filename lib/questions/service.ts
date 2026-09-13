@@ -163,7 +163,7 @@ export async function removeQuestion(input: {
 export async function questionsForSeller(businessId: string, take = 50) {
   return prisma.productQuestion.findMany({
     where: { businessId, removedAt: null },
-    orderBy: [{ answeredAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
+    orderBy: [{ answeredAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }, { id: "desc" }],
     take,
     select: {
       id: true,
@@ -185,7 +185,7 @@ export async function questionsForSeller(businessId: string, take = 50) {
  */
 export async function questionsForModeration(take = 100) {
   const rows = await prisma.productQuestion.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take,
     select: {
       id: true,

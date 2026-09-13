@@ -281,7 +281,7 @@ async function sectionData(
       // Published only: a held review is off every public surface while the
       // hold stands, exactly as a removed one is off it for good.
       where: { businessId, ...PUBLISHED },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 6,
       select: {
         id: true, overall: true, body: true, sellerReply: true, createdAt: true,

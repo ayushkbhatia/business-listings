@@ -130,7 +130,7 @@ export default async function RfqNewPage({
         : null) ??
       (await prisma.category.findFirst({
         where: { showOnHome: true },
-        orderBy: { sortOrder: "asc" },
+        orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
         select: { id: true, name: true, slug: true },
       })));
   if (!category) notFound();

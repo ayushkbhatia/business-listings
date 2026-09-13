@@ -20,7 +20,7 @@ export async function checkThrottle(
       createdAt: { gte: new Date(now.getTime() - THROTTLES[kind].windowMs) },
     },
     select: { createdAt: true, succeeded: true },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 50,
   });
   return decide(kind, attempts, now);

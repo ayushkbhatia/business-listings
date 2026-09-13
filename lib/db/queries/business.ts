@@ -161,7 +161,7 @@ export async function getBusinessProducts(
     },
     // In stock first: a buyer scanning a catalogue is looking for what they can
     // have now, and made-to-order below it is still a useful answer.
-    orderBy: [{ availability: "asc" }, { name: "asc" }],
+    orderBy: [{ availability: "asc" }, { name: "asc" }, { id: "asc" }],
     take,
     skip,
   });
@@ -273,6 +273,7 @@ const SIMILAR_INCLUDE = {
 const SIMILAR_ORDER = [
   { verificationTier: "desc" },
   { reviewCount: "desc" },
+  { id: "desc" },
 ] as const;
 
 export async function getSimilarClaimedBusinesses(

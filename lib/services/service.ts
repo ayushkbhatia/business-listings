@@ -337,7 +337,7 @@ export async function serviceForEditor(
     familyFor(service.categoryId, await chosenSheetFor(businessId)),
     prisma.serviceRevision.findMany({
       where: { serviceId },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 12,
       select: {
         field: true,

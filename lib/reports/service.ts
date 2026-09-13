@@ -41,7 +41,7 @@ export type ReportOutcome = $Enums.ReportOutcome;
 export async function openReports(limit = 100) {
   const rows = await prisma.supplierReport.findMany({
     where: { outcome: null, kind: { not: "off_platform_payment" } },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: limit,
     select: {
       id: true,
@@ -79,7 +79,7 @@ export async function openReports(limit = 100) {
 export async function offPlatformReports(limit = 50) {
   return prisma.supplierReport.findMany({
     where: { outcome: null, kind: "off_platform_payment" },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: limit,
     select: {
       id: true,
@@ -213,7 +213,7 @@ export async function auditLog(
       ...(options.action ? { action: options.action } : {}),
       ...(options.subject ? { subject: { contains: options.subject } } : {}),
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: options.limit ?? 100,
     select: {
       id: true,

@@ -101,7 +101,7 @@ export async function profileStateFor(businessId: string): Promise<ProfileState 
       },
       locations: {
         where: { published: true },
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         take: 1,
         select: { emirate: true, area: { select: { name: true } } },
       },

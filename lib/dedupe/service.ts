@@ -215,7 +215,7 @@ export async function findCandidates(limit = 500): Promise<RescanResult> {
 export async function recentMerges(now = new Date(), limit = 50) {
   return prisma.businessMerge.findMany({
     where: { reversedAt: null, reversibleUntil: { gte: now } },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit,
     select: {
       id: true,
@@ -256,7 +256,7 @@ export async function openCandidateCounts(): Promise<{ certain: number; probable
 export async function openCandidates(band?: "certain" | "probable", limit = 100) {
   return prisma.mergeCandidate.findMany({
     where: { dismissedAt: null, mergeId: null, ...(band ? { band } : {}) },
-    orderBy: [{ band: "asc" }, { score: "desc" }],
+    orderBy: [{ band: "asc" }, { score: "desc" }, { id: "desc" }],
     take: limit,
     select: {
       id: true,

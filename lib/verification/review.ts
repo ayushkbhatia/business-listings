@@ -55,7 +55,7 @@ export interface ReviewInput {
 export async function pendingDocumentReviews(limit = 50) {
   return prisma.document.findMany({
     where: { isPublic: true, reviewedAt: null, businessId: { not: null } },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: limit,
     select: {
       id: true,

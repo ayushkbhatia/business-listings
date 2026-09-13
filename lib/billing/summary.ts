@@ -203,7 +203,7 @@ export async function billingSummary(
               pastDueSince: true,
               plan: { select: { monthlyPriceAed: true, annualMonthsCharged: true, name: true } },
               attempts: {
-                orderBy: { attemptedAt: "desc" },
+                orderBy: [{ attemptedAt: "desc" }, { id: "desc" }],
                 take: 1,
                 select: { amountFils: true, succeeded: true, providerMessage: true, attemptedAt: true },
               },
@@ -217,7 +217,7 @@ export async function billingSummary(
       prisma.plan.findUnique({ where: { id: "free" }, select: PLAN_SELECT }),
       prisma.invoice.findMany({
         where: { businessId, status: { not: "draft" } },
-        orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
         take: 24,
         select: {
           id: true,

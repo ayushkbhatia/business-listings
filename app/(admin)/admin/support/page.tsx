@@ -27,7 +27,7 @@ export default async function SupportPage() {
   const [session, recent, badges] = await Promise.all([
     currentSession(seat.actor.id),
     prisma.viewAsSession.findMany({
-      orderBy: { startedAt: "desc" },
+      orderBy: [{ startedAt: "desc" }, { id: "desc" }],
       take: 20,
       select: {
         id: true,

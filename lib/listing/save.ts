@@ -308,7 +308,7 @@ export async function recordPhotoRevision(
 export async function recentRevisions(businessId: string, take = 3) {
   return prisma.listingRevision.findMany({
     where: { businessId },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take,
     select: {
       id: true,

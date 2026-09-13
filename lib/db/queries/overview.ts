@@ -146,7 +146,8 @@ export async function getOverview(businessId: string, now = new Date()): Promise
     prisma.review.count({ where: { businessId, removedAt: null, sellerReply: null } }),
     prisma.missedEnquiry.findMany({
       where: { businessId, createdAt: { gte: since } },
-      orderBy: { createdAt: "desc" },
+      // `enquiryId` last: with `businessId` fixed it is the other half of the key.
+      orderBy: [{ createdAt: "desc" }, { enquiryId: "desc" }],
       take: 20,
       select: {
         reason: true,

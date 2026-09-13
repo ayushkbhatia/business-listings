@@ -158,7 +158,7 @@ export async function endViewAs(staffId: string, now = new Date()): Promise<void
 export async function sessionsFor(businessId: string, limit = 20) {
   return prisma.viewAsSession.findMany({
     where: { businessId },
-    orderBy: { startedAt: "desc" },
+    orderBy: [{ startedAt: "desc" }, { id: "desc" }],
     take: limit,
     select: {
       id: true,

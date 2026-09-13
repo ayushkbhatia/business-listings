@@ -54,7 +54,7 @@ export interface RedirectRow {
 
 export async function redirectList(limit = 500): Promise<RedirectRow[]> {
   const rows = await prisma.redirect.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit,
     select: {
       id: true,

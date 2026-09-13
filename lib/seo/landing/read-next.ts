@@ -48,7 +48,7 @@ export async function readNext(scope: LandingScope): Promise<ReadNextItem[]> {
         */
         ...(scope.area ? { OR: [{ areaId: scope.area.id }, { areaId: null }] } : { areaId: null }),
       },
-      orderBy: [{ areaId: { sort: "desc", nulls: "last" } }, { publishedAt: "desc" }],
+      orderBy: [{ areaId: { sort: "desc", nulls: "last" } }, { publishedAt: "desc" }, { id: "desc" }],
       take: LIMIT,
       select: { slug: true, title: true },
     }),
@@ -59,7 +59,7 @@ export async function readNext(scope: LandingScope): Promise<ReadNextItem[]> {
         // about the platform rather than about this page's subject.
         ctaCategoryId: { in: [...scope.categoryIds, sectorId] },
       },
-      orderBy: { publishedAt: "desc" },
+      orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
       take: LIMIT,
       select: { slug: true, title: true, body: true },
     }),

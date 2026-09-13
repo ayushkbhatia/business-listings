@@ -56,7 +56,7 @@ export interface ConflictSummary {
 export async function openConflictIfContested(businessId: string): Promise<string | null> {
   const open = await prisma.claimSubmission.findMany({
     where: { businessId, decidedAt: null },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: { id: true },
     take: 2,
   });
@@ -167,7 +167,7 @@ const CLAIM_SELECT = {
 export async function openConflicts(limit = 50) {
   const rows = await prisma.claimConflict.findMany({
     where: { resolvedAt: null },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: limit,
     select: {
       id: true,
@@ -241,7 +241,7 @@ export async function resolveConflict(input: ResolveInput): Promise<ResolveResul
           primaryCategoryId: true,
           source: true,
           locations: {
-            orderBy: { createdAt: "asc" },
+            orderBy: [{ createdAt: "asc" }, { id: "asc" }],
             take: 1,
             select: { emirate: true, areaId: true, addressLine: true },
           },

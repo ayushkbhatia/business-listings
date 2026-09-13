@@ -480,7 +480,7 @@ export async function rejectCatalogueImport(
 export async function openCatalogueImports(limit = 100) {
   const rows = await prisma.catalogueImportRequest.findMany({
     where: { status: { in: [...OPEN_STATUSES] } },
-    orderBy: { createdAt: "asc" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: limit,
     select: {
       id: true,

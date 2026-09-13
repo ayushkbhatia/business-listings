@@ -120,7 +120,7 @@ export async function readPopularQueries(take = 5): Promise<string[]> {
       tab: { in: [...BUYER_TABS] },
     },
     _count: { normalised: true },
-    orderBy: { _count: { normalised: "desc" } },
+    orderBy: [{ _count: { normalised: "desc" } }, { normalised: "asc" }],
     take,
   });
   if (grouped.length === 0) return [];
@@ -243,7 +243,7 @@ export async function readOpenRfqTeasers(take = 4): Promise<RfqTeaser[]> {
       */
       createdAt: { lte: now },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     // Four times the need. Enough that a run of chatty requirements does not
     // empty the panel, small enough to stay one index scan.
     take: take * 4,
@@ -260,7 +260,8 @@ export async function readOpenRfqTeasers(take = 4): Promise<RfqTeaser[]> {
       */
       recipients: {
         take: 1,
-        orderBy: { createdAt: "asc" },
+        // `businessId` last: under one enquiry it is the other half of the key.
+        orderBy: [{ createdAt: "asc" }, { businessId: "asc" }],
         select: {
           business: {
             select: { primaryCategory: { select: { name: true, parent: { select: { name: true } } } } },

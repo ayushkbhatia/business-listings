@@ -83,7 +83,7 @@ export async function writeMissingInvoicePdfs(
     where,
     // Oldest first. A seller chasing a document is chasing the one their
     // accountant asked for, which is never the one raised last night.
-    orderBy: { issuedAt: "asc" },
+    orderBy: [{ issuedAt: "asc" }, { id: "asc" }],
     take: limit,
     select: { id: true },
   });
