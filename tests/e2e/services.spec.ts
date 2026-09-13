@@ -1436,7 +1436,12 @@ test.describe("board 3b-s — the listing profile for a firm that sells work", (
 
   test("explains the mechanism under the categories, counted", async ({ page }) => {
     await page.goto(path);
-    await expect(page.getByText(/set to (services|goods) in the directory’s taxonomy/)).toBeVisible();
+    /*
+       Meridian's one category is Valves & fittings, a goods trade — the seed
+       files the track's demo firm there — so the sentence is the mismatch
+       case, and it says so rather than claiming the category is services.
+    */
+    await expect(page.getByText(/in the directory’s taxonomy, but you told us you sell work/)).toBeVisible();
   });
 
   test("has no axe violations at the acceptance width", async ({ page }) => {

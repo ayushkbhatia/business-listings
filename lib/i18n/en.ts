@@ -3982,6 +3982,7 @@ export const en = {
   "listing.practising_since": "Practising since",
   "listing.practice_size": "Practice size",
   "listing.kinds_all_services": { one: "This category is set to services in the directory’s taxonomy, which is why you see this version of every screen. A category set to goods gives a product catalogue instead.", other: "All {formatted} categories are set to services in the directory’s taxonomy, which is why you see this version of every screen. A category set to goods gives a product catalogue instead." },
+  "listing.kinds_all_goods": { one: "This category is set to goods in the directory’s taxonomy, but you told us you sell work — so you see this version of every screen. Buyers searching for the work you do may not find you under it; ask for a category that describes it.", other: "All {formatted} categories are set to goods in the directory’s taxonomy, but you told us you sell work — so you see this version of every screen. Buyers searching for the work you do may not find you under them; ask for a category that describes it." },
   "listing.kinds_mixed": "{services} of your categories are set to services and {goods} to goods in the directory’s taxonomy. Each screen follows what you sell; the categories decide what buyers find you under.",
   "listing.services_offered_elsewhere": "The services you offer are managed on the Services screen, where each one has its own scope sheet and coverage.",
   "listing.services_rail_title": "For a firm that sells work",

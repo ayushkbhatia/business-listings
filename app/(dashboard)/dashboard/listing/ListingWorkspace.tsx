@@ -693,10 +693,21 @@ function Basics(props: BasicsProps) {
                   count: props.kinds.total,
                   formatted: formatCount(props.kinds.total),
                 })
-              : t("listing.kinds_mixed", {
-                  services: formatCount(props.kinds.services),
-                  goods: formatCount(props.kinds.goods),
-                })}
+              : props.kinds.services === 0
+                ? /*
+                     Every category resolves to goods while the seller said they
+                     sell work. The screen follows what they said, and the
+                     sentence says so — this is the listing filed under the wrong
+                     trade, and buyers searching for the work will not find it.
+                  */
+                  t("listing.kinds_all_goods", {
+                    count: props.kinds.total,
+                    formatted: formatCount(props.kinds.total),
+                  })
+                : t("listing.kinds_mixed", {
+                    services: formatCount(props.kinds.services),
+                    goods: formatCount(props.kinds.goods),
+                  })}
           </p>
         )}
 

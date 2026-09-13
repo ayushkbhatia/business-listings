@@ -1871,7 +1871,8 @@ seller screen and the buyer pages cannot disagree about what a buyer sees.
 ### Still owed
 
 - **Seed fixture: Meridian is filed under *Valves & fittings***, a goods trade, so the mechanism
-  sentence truthfully reads *0 services, 1 goods* for the track's demo firm. Moving it touches the
+  sentence shows its mismatch case — *set to goods, but you told us you sell work* — for the track's
+  demo firm. Moving it touches the
   fan-out counts other suites pin; worth doing once, deliberately.
 - The fixture-name split the handoff raises (*Nexus* on `8b-s` and `4e-s`'s preview) is design-side.
 - A `both` seller's languages use the goods screen's fixed list of eight, while a services-only
