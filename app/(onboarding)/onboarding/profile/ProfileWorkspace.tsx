@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { CategoryAllowance } from "@/lib/onboarding/categories";
 import type { ProfileCategory } from "@/lib/onboarding/profile";
 import type { StrengthItem } from "@/lib/metrics/profile-strength";
-import type { AddCategoryResult } from "@/lib/onboarding/categories";
+import type { AddCategoryResult, RemoveCategoryResult } from "@/lib/onboarding/categories";
 import type { ContinueResult, SaveFieldResult } from "./actions";
 import { ProfileForm } from "./ProfileForm";
 import { ProfilePreview, type PreviewRecord } from "./ProfilePreview";
@@ -56,7 +56,7 @@ export function ProfileWorkspace({
     teamSizes: readonly { value: string; label: string }[];
     saveAction: (formData: FormData) => Promise<SaveFieldResult>;
     addAction: (formData: FormData) => Promise<AddCategoryResult>;
-    removeAction: (formData: FormData) => Promise<{ ok: true }>;
+    removeAction: (formData: FormData) => Promise<RemoveCategoryResult>;
     continueAction: () => Promise<ContinueResult>;
   };
 }) {

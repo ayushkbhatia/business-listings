@@ -117,7 +117,18 @@ export async function priorsFor(businessId: string, subjectField: string | null)
 
 export type ResolveResult =
   | { ok: true }
-  | { ok: false; error: "not_found" | "already_resolved"; message: string };
+  /**
+   * The reason, as a key. Never a sentence.
+   *
+   * This carried a `message` of raw English that `admin/reports/actions.ts`
+   * returned to the screen verbatim — the one path in that file that skipped
+   * `t()`, and the `already_resolved` one interpolated a raw enum value into
+   * it as well ("resolved as seller_corrected"). Non-negotiable 5: every
+   * user-visible string goes through the catalogue, and a service layer is not
+   * where the catalogue lives.
+   */
+  | { ok: false; error: "not_found" }
+  | { ok: false; error: "already_resolved"; outcome: ReportOutcome };
 
 export interface ResolveReportInput {
   actor: Actor;
@@ -144,14 +155,10 @@ export async function resolveReport(
     select: { id: true, outcome: true, subjectBusinessId: true, kind: true },
   });
   if (!report) {
-    return { ok: false, error: "not_found", message: "That report is not in the queue." };
+    return { ok: false, error: "not_found" };
   }
   if (report.outcome) {
-    return {
-      ok: false,
-      error: "already_resolved",
-      message: `That report was already resolved as ${report.outcome}.`,
-    };
+    return { ok: false, error: "already_resolved", outcome: report.outcome };
   }
 
   await prisma.$transaction(async (tx) => {

@@ -26,13 +26,21 @@ import type { ModeratedField } from "@/lib/listing/service";
  * whoever remembers.
  */
 
+/**
+ * A refusal as a key and its facts, never a sentence.
+ *
+ * Every branch below carried a `message` of raw English and
+ * `admin/queue/actions.ts` returned it to the screen verbatim — seven strings
+ * that never passed through `lib/i18n/en.ts`, two of them interpolating a raw
+ * enum (`already approved`) and one a raw slug. Non-negotiable 5: every
+ * user-visible string goes through the catalogue, and a service layer is not
+ * where the catalogue lives. The facts travel; the wording is the screen's.
+ */
 export type DecisionResult =
   | { ok: true; applied: boolean }
-  | {
-      ok: false;
-      error: "not_found" | "already_decided" | "stale" | "slug_taken";
-      message: string;
-    };
+  | { ok: false; error: "not_found" | "stale" }
+  | { ok: false; error: "already_decided"; status: string }
+  | { ok: false; error: "slug_taken"; slug: string };
 
 export interface DecideInput {
   actor: Actor;
@@ -175,14 +183,10 @@ export async function approveChange(input: DecideInput): Promise<DecisionResult>
     },
   });
   if (!request) {
-    return { ok: false, error: "not_found", message: "That submission is not in the queue." };
+    return { ok: false, error: "not_found" };
   }
   if (request.status !== "pending") {
-    return {
-      ok: false,
-      error: "already_decided",
-      message: `That submission was already ${request.status}.`,
-    };
+    return { ok: false, error: "already_decided", status: request.status };
   }
 
   /*
@@ -202,12 +206,7 @@ export async function approveChange(input: DecideInput): Promise<DecisionResult>
           : null;
 
   if (request.beforeValue !== null && request.beforeValue !== current) {
-    return {
-      ok: false,
-      error: "stale",
-      message:
-        "The listing has changed since this was submitted. Reject it and ask for the change again against what it says now.",
-    };
+    return { ok: false, error: "stale" };
   }
 
   const field: ModeratedField = request.field;
@@ -219,11 +218,7 @@ export async function approveChange(input: DecideInput): Promise<DecisionResult>
       select: { id: true },
     });
     if (taken) {
-      return {
-        ok: false,
-        error: "slug_taken",
-        message: `Another listing already uses the address /b/${nextSlug}. Reject this and ask for a name that does not collide.`,
-      };
+      return { ok: false, error: "slug_taken", slug: nextSlug };
     }
   }
 
@@ -345,14 +340,10 @@ export async function rejectChange(input: DecideInput): Promise<DecisionResult> 
     select: { id: true, status: true, field: true, businessId: true },
   });
   if (!request) {
-    return { ok: false, error: "not_found", message: "That submission is not in the queue." };
+    return { ok: false, error: "not_found" };
   }
   if (request.status !== "pending") {
-    return {
-      ok: false,
-      error: "already_decided",
-      message: `That submission was already ${request.status}.`,
-    };
+    return { ok: false, error: "already_decided", status: request.status };
   }
 
   await prisma.$transaction(async (tx) => {

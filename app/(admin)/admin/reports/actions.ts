@@ -30,7 +30,17 @@ export async function resolve(formData: FormData): Promise<ActionResult> {
       outcome,
       reason: String(formData.get("reason") ?? ""),
     });
-    if (!result.ok) return { ok: false, error: result.message };
+    if (!result.ok) {
+      return {
+        ok: false,
+        error:
+          result.error === "already_resolved"
+            ? t("admin.reports.error.already_resolved", {
+                outcome: t(`admin.reports.outcome.${result.outcome}` as never),
+              })
+            : t("admin.reports.error.not_found"),
+      };
+    }
     revalidatePath("/admin/reports");
     revalidatePath("/admin");
     return { ok: true, message: t("admin.reports.resolved") };

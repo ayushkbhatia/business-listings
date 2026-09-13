@@ -68,6 +68,94 @@ export async function resolveTemplateId(
   return serving?.id ?? null;
 }
 
+/**
+ * The same rule, for many categories at once.
+ *
+ * `resolveTemplateId` is one category and three queries, which is right for a
+ * request and wrong for a sweep: `lib/metrics/strength-job.ts` scores every
+ * product on the platform in one pass, and a query per product is not a job it
+ * can finish. That is why it read `category.defaultTemplateId` directly and
+ * became the eighth divergent resolver — step 1 of a three-step rule, applied
+ * as if it were the whole rule.
+ *
+ * So the sweep gets a bulk reader rather than a shortcut. Three queries total,
+ * whatever the size of the input, and **the same answer as calling
+ * `resolveTemplateId` once per category** — including step 3's quirk, which is
+ * that it takes the newest live template serving *either* the category or its
+ * parent rather than preferring the category's own. That is what the `findFirst`
+ * above does today; reproducing it is the point, and changing it belongs in a
+ * change to both.
+ */
+export async function resolveTemplateIds(
+  client: Client,
+  categoryIds: readonly string[],
+): Promise<Map<string, string | null>> {
+  const wanted = [...new Set(categoryIds)];
+  const out = new Map<string, string | null>();
+  if (wanted.length === 0) return out;
+
+  const [categories, templates] = await Promise.all([
+    client.category.findMany({
+      where: { id: { in: wanted } },
+      select: {
+        id: true,
+        defaultTemplateId: true,
+        parentId: true,
+        parent: { select: { defaultTemplateId: true } },
+      },
+    }),
+    /*
+       Step 3's whole pool, in the order `findFirst` would have walked it. Live
+       templates are a staff-authored set in the dozens, so reading all of them
+       is cheaper than one query per category and the ordering is what makes
+       the two readers agree.
+    */
+    client.specTemplate.findMany({
+      where: { status: "live" },
+      orderBy: [{ version: "desc" }, { name: "asc" }],
+      select: { id: true, categories: { select: { categoryId: true } } },
+    }),
+  ]);
+
+  // Where each template sits in that order, so "whichever `findFirst` would
+  // have returned" is a comparison rather than another query.
+  const rank = new Map(templates.map((template, index) => [template.id, index]));
+  const servedBy = new Map<string, string>();
+  for (const template of templates) {
+    for (const link of template.categories) {
+      if (!servedBy.has(link.categoryId)) servedBy.set(link.categoryId, template.id);
+    }
+  }
+  const earlier = (a: string | undefined, b: string | undefined): string | null => {
+    if (!a) return b ?? null;
+    if (!b) return a;
+    return (rank.get(a) ?? Infinity) <= (rank.get(b) ?? Infinity) ? a : b;
+  };
+
+  for (const category of categories) {
+    if (category.defaultTemplateId) {
+      out.set(category.id, category.defaultTemplateId);
+      continue;
+    }
+    if (category.parent?.defaultTemplateId) {
+      out.set(category.id, category.parent.defaultTemplateId);
+      continue;
+    }
+    out.set(
+      category.id,
+      earlier(
+        servedBy.get(category.id),
+        category.parentId ? servedBy.get(category.parentId) : undefined,
+      ),
+    );
+  }
+
+  // A category id that names no row resolves to null, the same as
+  // `resolveTemplateId`'s `if (!category) return null`.
+  for (const id of wanted) if (!out.has(id)) out.set(id, null);
+  return out;
+}
+
 /** The template a category answers to, with its fields in template order. */
 export async function resolveTemplate(client: Client, categoryId: string) {
   const templateId = await resolveTemplateId(client, categoryId);

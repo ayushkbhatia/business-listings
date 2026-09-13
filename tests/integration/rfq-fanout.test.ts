@@ -619,6 +619,83 @@ describe("criterion 6 — a seller who cannot reply is not offered", () => {
     expect((await match(catCap)).skipped).toEqual([]);
   });
 
+  it("caps on the number the seller signed up on, not the one staff last typed", async () => {
+    /*
+       D1's grandfathering, and the reader that skipped it.
+
+       `findFanoutCandidates` took `enquiriesPerMonth` straight off the live
+       `Plan` row. `Subscription.entitlementSnapshot` has frozen that number
+       since handoff 3 and billing, the plan console and the dashboard have all
+       read it through `effectiveCaps` — this one, which decides whether a
+       seller is shown an enquiry at all, did not. So editing a plan moved
+       every account on it immediately, in the one place a seller would never
+       think to look.
+
+       Here the live plan is uncapped and the snapshot says one. The snapshot
+       has to win, or the seller is being given something they did not buy —
+       and the opposite arrangement is the one that costs a paying customer
+       their leads.
+    */
+    await setPlan(subjectId, uncappedPlanId);
+    await prisma.subscription.upsert({
+      where: { businessId: subjectId },
+      create: {
+        businessId: subjectId,
+        planId: uncappedPlanId,
+        renewsAt: new Date(Date.now() + 30 * DAY),
+        entitlementSnapshot: {
+          planId: uncappedPlanId,
+          capturedAt: new Date().toISOString(),
+          enquiriesPerMonth: 1,
+          productLimit: null,
+          locationLimit: null,
+          photoLimit: null,
+          teamSeats: 1,
+          customDomain: false,
+        },
+      },
+      update: {
+        planId: uncappedPlanId,
+        entitlementSnapshot: {
+          planId: uncappedPlanId,
+          capturedAt: new Date().toISOString(),
+          enquiriesPerMonth: 1,
+          productLimit: null,
+          locationLimit: null,
+          photoLimit: null,
+          teamSeats: 1,
+          customDomain: false,
+        },
+      },
+    });
+    await loadMonth(subjectId, withinThisMonth(1));
+
+    const { skipped } = await match(catCap);
+    expect(skipped).toContainEqual({ businessId: subjectId, reason: "at_monthly_cap" });
+    expect((await preview(catCap)).map((r) => r.businessId)).not.toContain(subjectId);
+
+    // And a snapshot for a different plan is not this plan's promise, so it is
+    // ignored and the live row stands.
+    await prisma.subscription.update({
+      where: { businessId: subjectId },
+      data: {
+        entitlementSnapshot: {
+          planId: cappedPlanId,
+          capturedAt: new Date().toISOString(),
+          enquiriesPerMonth: 1,
+          productLimit: null,
+          locationLimit: null,
+          photoLimit: null,
+          teamSeats: 1,
+          customDomain: false,
+        },
+      },
+    });
+    expect((await preview(catCap)).map((r) => r.businessId)).toContain(subjectId);
+
+    await prisma.subscription.deleteMany({ where: { businessId: subjectId } });
+  });
+
   it("offers the same seller on an uncapped plan whatever their month looks like", async () => {
     /*
        `enquiries_per_month` null means unlimited, and null compares false to

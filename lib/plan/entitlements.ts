@@ -68,6 +68,62 @@ export interface PlanCaps {
 }
 
 /**
+ * Every column `toCaps` needs, as a Prisma `select`.
+ *
+ * One list, because there were three: `lib/billing/summary.ts` and
+ * `lib/billing/entitlements-service.ts` each restated it, and the fan-out —
+ * which is the reader that matters most, since it decides whether a seller is
+ * shown an enquiry at all — selected two columns and skipped the snapshot
+ * entirely. A cap interpreted in four places is four places to forget one.
+ *
+ * Plain data and no Prisma import, so this module stays testable without a
+ * database. A caller may select more beside it; `toCaps` reads structurally
+ * and ignores the rest.
+ */
+export const PLAN_CAPS_SELECT = {
+  id: true,
+  name: true,
+  monthlyPriceAed: true,
+  enquiriesPerMonth: true,
+  productLimit: true,
+  serviceLimit: true,
+  locationLimit: true,
+  photoLimit: true,
+  publicPhotoLimit: true,
+  storageMb: true,
+  categoryLimit: true,
+  teamSeats: true,
+  rankingMultiplier: true,
+  customDomain: true,
+  analytics: true,
+  csvImport: true,
+  sponsoredEligible: true,
+  sortOrder: true,
+} as const;
+
+/**
+ * A `Plan` row as `PlanCaps`.
+ *
+ * The only work it does is the two `Decimal` columns: Prisma hands back a
+ * `Decimal` for `monthlyPriceAed` and `rankingMultiplier`, and arithmetic on
+ * one of those silently concatenates rather than adds. `unknown` on the input
+ * rather than `Decimal` so this file needs no Prisma types.
+ */
+export function toCaps(row: PlanCapsRow): PlanCaps {
+  return {
+    ...row,
+    monthlyPriceAed: Number(row.monthlyPriceAed),
+    rankingMultiplier: Number(row.rankingMultiplier),
+  };
+}
+
+/** What `PLAN_CAPS_SELECT` returns, before the two decimals are narrowed. */
+export type PlanCapsRow = Omit<PlanCaps, "monthlyPriceAed" | "rankingMultiplier"> & {
+  monthlyPriceAed: unknown;
+  rankingMultiplier: unknown;
+};
+
+/**
  * The caps a subscription was signed up on.
  *
  * `Subscription.entitlementSnapshot` has existed since handoff 3 with a doc

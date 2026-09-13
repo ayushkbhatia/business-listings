@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import { requireStaff } from "@/lib/auth/staff";
-import { approveChange, rejectChange } from "@/lib/moderation/service";
+import { approveChange, rejectChange, type DecisionResult } from "@/lib/moderation/service";
 import { resolveConflict } from "@/lib/onboarding/conflict";
 import { approveDocument, rejectDocument } from "@/lib/verification/review";
 import type { ClaimResolution } from "@/lib/db/generated/client";
@@ -29,6 +29,24 @@ function refused(error: unknown): ActionResult {
   throw error;
 }
 
+/**
+ * A moderation refusal, worded here rather than in the service.
+ *
+ * `lib/moderation/service.ts` returned seven sentences of raw English that this
+ * file handed straight to the screen — the only strings on it that never
+ * reached `lib/i18n/en.ts`, and two of them printed a raw enum or a raw slug.
+ * The service returns the fact now; this turns it into words.
+ */
+function changeRefusal(result: Extract<DecisionResult, { ok: false }>): string {
+  if (result.error === "already_decided") {
+    return t("admin.queue.change_error.already_decided", { status: result.status });
+  }
+  if (result.error === "slug_taken") {
+    return t("admin.queue.change_error.slug_taken", { slug: result.slug });
+  }
+  return t(`admin.queue.change_error.${result.error}`);
+}
+
 export async function approve(formData: FormData): Promise<ActionResult> {
   const seat = await requireStaff();
   try {
@@ -37,7 +55,7 @@ export async function approve(formData: FormData): Promise<ActionResult> {
       requestId: String(formData.get("requestId") ?? ""),
       reason: String(formData.get("reason") ?? ""),
     });
-    if (!result.ok) return { ok: false, error: result.message };
+    if (!result.ok) return { ok: false, error: changeRefusal(result) };
     revalidatePath("/admin/queue");
     revalidatePath("/admin");
     return { ok: true, message: t("admin.queue.approved") };
@@ -54,7 +72,7 @@ export async function reject(formData: FormData): Promise<ActionResult> {
       requestId: String(formData.get("requestId") ?? ""),
       reason: String(formData.get("reason") ?? ""),
     });
-    if (!result.ok) return { ok: false, error: result.message };
+    if (!result.ok) return { ok: false, error: changeRefusal(result) };
     revalidatePath("/admin/queue");
     revalidatePath("/admin");
     return { ok: true, message: t("admin.queue.rejected") };
@@ -91,7 +109,9 @@ export async function resolve(formData: FormData): Promise<ActionResult> {
       reason: String(formData.get("reason") ?? ""),
       ...(secondTradeName ? { secondTradeName } : {}),
     });
-    if (!result.ok) return { ok: false, error: result.message };
+    if (!result.ok) {
+      return { ok: false, error: t(`admin.queue.conflict_error.${result.error}`) };
+    }
     revalidatePath("/admin/queue");
     revalidatePath("/admin");
     return { ok: true, message: t("admin.queue.resolved") };
@@ -118,7 +138,7 @@ export async function approveCredential(formData: FormData): Promise<ActionResul
       documentId: String(formData.get("requestId") ?? ""),
       reason: String(formData.get("reason") ?? ""),
     });
-    if (!result.ok) return { ok: false, error: result.message };
+    if (!result.ok) return { ok: false, error: t(`admin.queue.credential_error.${result.error}`) };
     revalidatePath("/admin/queue");
     revalidatePath("/admin");
     return { ok: true, message: t("admin.queue.approved") };
@@ -135,7 +155,7 @@ export async function rejectCredential(formData: FormData): Promise<ActionResult
       documentId: String(formData.get("requestId") ?? ""),
       reason: String(formData.get("reason") ?? ""),
     });
-    if (!result.ok) return { ok: false, error: result.message };
+    if (!result.ok) return { ok: false, error: t(`admin.queue.credential_error.${result.error}`) };
     revalidatePath("/admin/queue");
     revalidatePath("/admin");
     return { ok: true, message: t("admin.queue.rejected") };

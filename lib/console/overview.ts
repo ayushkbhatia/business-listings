@@ -198,7 +198,13 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
     }),
   ]);
 
-  const callListSize = (await callList(500, now)).length;
+  /*
+     `total`, not the length of a page. This asked for 500 and read the array
+     back, so at 500 prospects the console tile would have read exactly 500
+     forever — and the page beside it asked for 200 over a different candidate
+     pool. One count, taken before either limit.
+  */
+  const callListSize = (await callList(0, now)).total;
 
   const metric = (
     key: string,

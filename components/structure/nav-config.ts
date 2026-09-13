@@ -99,7 +99,18 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
       { key: "listing", labelKey: "nav.listing", href: "/dashboard/listing", capability: "listing.edit" },
       { key: "locations", labelKey: "nav.locations", href: "/dashboard/locations", capability: "listing.edit" },
       { key: "hours", labelKey: "nav.hours", href: "/dashboard/hours", capability: "listing.edit" },
-      { key: "verification", labelKey: "nav.verification", href: "/dashboard/verification" },
+      /*
+         The last row in this file with no capability, and it was not a
+         decision. Every write on `/dashboard/verification` — upload, replace,
+         withdraw, resubmit — calls `assertCanEditListing`, so a sales or
+         finance seat reached the screen, chose a document and met the guard on
+         submit. Board 3g's scar, in the navigation.
+
+         `listing.edit`, the same as its three siblings above. Locked rather
+         than hidden: the seat can still see that verification exists and ask
+         an owner for it, which is what `capability` means here.
+      */
+      { key: "verification", labelKey: "nav.verification", href: "/dashboard/verification", capability: "listing.edit" },
     ],
   },
   {

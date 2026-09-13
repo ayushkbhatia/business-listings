@@ -16,14 +16,17 @@ import { CallListTable, type ProspectRow } from "./CallListTable";
 
 export const dynamic = "force-dynamic";
 
+/** How many rows the screen draws. The signals are read far deeper — see `SIGNAL_SCAN`. */
+const PAGE = 200;
+
 export default async function CrmPage() {
   const seat = await requireStaff();
   // Any staff seat may see the list. Nothing on it is a decision.
   if (!seat) notFound();
 
-  const [prospects, badges] = await Promise.all([callList(200), getAdminNavBadges(seat)]);
+  const [list, badges] = await Promise.all([callList(PAGE), getAdminNavBadges(seat)]);
 
-  const rows: ProspectRow[] = prospects.map((prospect) => ({
+  const rows: ProspectRow[] = list.prospects.map((prospect) => ({
     businessId: prospect.businessId,
     displayName: prospect.displayName,
     signal: prospect.signal,
@@ -41,7 +44,21 @@ export default async function CrmPage() {
       eyebrow={t("admin.crm.eyebrow")}
       meta={
         <span className="text-caption text-muted">
-          {t("admin.crm.meta", { count: formatCount(rows.length) })}
+          {/*
+             The count the signals produced, never the page cap. This read
+             `rows.length` from a `callList(200)` — so a hundred and one
+             prospects and a thousand both rendered "200 prospects, from demand
+             we measured", which is the one claim this screen exists to make.
+          */}
+          {list.total > rows.length
+            ? t("admin.crm.meta_more", {
+                shown: formatCount(rows.length),
+                count: formatCount(list.total),
+              })
+            : t("admin.crm.meta", { count: formatCount(list.total) })}
+          {list.truncated && (
+            <span className="ms-1 text-faint">{t("admin.crm.meta_floor")}</span>
+          )}
         </span>
       }
     >

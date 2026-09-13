@@ -12,7 +12,7 @@ import type { MessageKey } from "@/lib/i18n";
 import type { CategoryAllowance } from "@/lib/onboarding/categories";
 import type { ProfileCategory, PatchField, PatchProblem } from "@/lib/onboarding/profile";
 import { DESCRIPTION_MAX, ESTABLISHED_MIN } from "@/lib/onboarding/profile-fields";
-import type { AddCategoryResult } from "@/lib/onboarding/categories";
+import type { AddCategoryResult, RemoveCategoryResult } from "@/lib/onboarding/categories";
 import type { ContinueResult, SaveFieldResult } from "./actions";
 import { useSaved } from "../_saved";
 
@@ -59,9 +59,24 @@ export interface ProfileFormProps {
   onDraft: (draft: { displayName: string; description: string; establishedYear: number | null }) => void;
   saveAction: (formData: FormData) => Promise<SaveFieldResult>;
   addAction: (formData: FormData) => Promise<AddCategoryResult>;
-  removeAction: (formData: FormData) => Promise<{ ok: true }>;
+  removeAction: (formData: FormData) => Promise<RemoveCategoryResult>;
   continueAction: () => Promise<ContinueResult>;
 }
+
+/**
+ * Why a category change was refused, in the seller's words.
+ *
+ * Both actions returned their reason and the chip row threw it away — an `×`
+ * that did nothing and said nothing, which reads as the click having missed.
+ * `forbidden` is the one that is not about the listing at all: it is the seat.
+ */
+const CATEGORY_REFUSAL: Record<string, MessageKey> = {
+  at_cap: "profile_step.extras_error.at_cap",
+  already_there: "profile_step.extras_error.already_there",
+  is_primary: "profile_step.extras_error.is_primary",
+  not_found: "profile_step.extras_error.not_found",
+  forbidden: "profile_step.extras_error.forbidden",
+};
 
 const PROBLEM: Record<string, MessageKey> = {
   too_short: "profile_step.error.too_short",
@@ -350,10 +365,16 @@ function Extras({
   upgrade: { planName: string; more: number | null } | null;
   addable: readonly { value: string; label: string }[];
   addAction: (formData: FormData) => Promise<AddCategoryResult>;
-  removeAction: (formData: FormData) => Promise<{ ok: true }>;
+  removeAction: (formData: FormData) => Promise<RemoveCategoryResult>;
   onChanged: () => void;
 }) {
   const addId = useId();
+  const [refused, setRefused] = useState<string | null>(null);
+
+  const settle = (result: AddCategoryResult | RemoveCategoryResult) => {
+    setRefused(result.ok ? null : (CATEGORY_REFUSAL[result.reason] ?? null));
+    onChanged();
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -385,7 +406,7 @@ function Extras({
                 {extra.name}
                 <form
                   action={(formData) => {
-                    void removeAction(formData).then(onChanged);
+                    void removeAction(formData).then(settle);
                   }}
                 >
                   <input type="hidden" name="categoryId" value={extra.id} />
@@ -422,7 +443,7 @@ function Extras({
       {allowance.canAddMore && addable.length > 0 ? (
         <form
           action={(formData) => {
-            void addAction(formData).then(onChanged);
+            void addAction(formData).then(settle);
           }}
           className="flex flex-wrap items-center gap-2"
         >
@@ -456,6 +477,18 @@ function Extras({
                 })}
           </Link>
         )
+      )}
+
+      {/*
+         The refusal, where the control that was refused is. `assertive`,
+         because it answers a click the seller has already made — and it names
+         the seat rather than the listing when that is what stopped them, since
+         "ask an owner or manager" is the only thing they can act on.
+      */}
+      {refused && (
+        <Alert tone="bad" live="assertive" fix={t("profile_step.extras_error.fix")}>
+          {t(refused as MessageKey)}
+        </Alert>
       )}
     </div>
   );

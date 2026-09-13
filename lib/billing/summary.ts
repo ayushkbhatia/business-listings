@@ -3,7 +3,14 @@ import { prisma } from "@/lib/db/client";
 import { storageUsedBytes } from "@/lib/media/service";
 import { assertCanManageBilling } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
-import { allowance, capFor, effectiveCaps, type Allowance, type PlanCaps } from "@/lib/plan/entitlements";
+import {
+  allowance,
+  capFor,
+  effectiveCaps,
+  toCaps,
+  type Allowance,
+  type PlanCaps,
+} from "@/lib/plan/entitlements";
 import { keepsOf } from "./plan-grid";
 import { storedTotals } from "./invoice";
 import { monthlyValueFils, offersAnnual, periodPriceAed, type BillingTerm } from "./period";
@@ -357,34 +364,6 @@ async function pendingKeepsFor(change: PendingChange, usage: Usage): Promise<Pen
       chosen: row.chosen ? row.chosen.length : null,
     }))
     .filter((row) => row.keeps < row.used);
-}
-
-function toCaps(row: {
-  id: string;
-  name: string;
-  monthlyPriceAed: unknown;
-  rankingMultiplier: unknown;
-  enquiriesPerMonth: number | null;
-  productLimit: number | null;
-  locationLimit: number | null;
-  photoLimit: number | null;
-  publicPhotoLimit: number | null;
-  categoryLimit: number | null;
-  storageMb: number | null;
-  teamSeats: number;
-  customDomain: boolean;
-  analytics: boolean;
-  csvImport: boolean;
-  sponsoredEligible: boolean;
-  serviceLimit: number | null;
-  sortOrder: number;
-  annualMonthsCharged: number | null;
-}): PlanCaps {
-  return {
-    ...row,
-    monthlyPriceAed: Number(row.monthlyPriceAed),
-    rankingMultiplier: Number(row.rankingMultiplier),
-  };
 }
 
 /**

@@ -28,11 +28,19 @@ import type { $Enums } from "@/lib/db/generated/client";
  * `MissedEnquiry` since the fan-out. This is the reader.
  */
 
+/**
+ * Why a prospect is on the list. Three, and each has a producer below.
+ *
+ * `reply_rate_falling` was a fourth with a label in the catalogue, a place in
+ * this union and nothing anywhere that could ever set it — the same shape as
+ * `spec_field_proposal`, the table with a reader and no writer, dropped in
+ * `d5455a8`. A signal a caller can never be shown is a promise the list does
+ * not keep; it comes back with the query that produces it.
+ */
 export type SignalKey =
   | "missed_at_cap"
   | "zero_result_in_their_trade"
-  | "unclaimed_with_demand"
-  | "reply_rate_falling";
+  | "unclaimed_with_demand";
 
 export interface Prospect {
   businessId: string;
@@ -54,6 +62,30 @@ export interface Prospect {
 const RECENTLY_CALLED_DAYS = 7;
 
 /**
+ * How deep the signal queries read, and deliberately not the screen's limit.
+ *
+ * `take: limit` sat on every source query, so the number a *screen* wanted to
+ * show decided which signals were considered at all: the console metric asked
+ * for 500 and the page asked for 200, and the two were computed over different
+ * candidate pools. Worse, the page then printed `rows.length` — its own page
+ * cap — as "N prospects, from demand we measured", which is a constant wearing
+ * a measurement's clothes.
+ *
+ * Two thousand per signal is far above anything the platform produces at 41,000
+ * listings, and `truncated` says so honestly when it is not.
+ */
+const SIGNAL_SCAN = 2000;
+
+export interface CallList {
+  /** The page, at whatever size the caller asked for. */
+  prospects: Prospect[];
+  /** How many the signals actually produced, before that limit. */
+  total: number;
+  /** True when a signal query filled `SIGNAL_SCAN`, so `total` is a floor. */
+  truncated: boolean;
+}
+
+/**
  * Build the list.
  *
  * Ordered by the size of the missed demand rather than by account value: a Free
@@ -61,7 +93,7 @@ const RECENTLY_CALLED_DAYS = 7;
  * one, and sorting by what we would earn is how a CRM stops being about the
  * customer.
  */
-export async function callList(limit = 100, now = new Date()): Promise<Prospect[]> {
+export async function callList(limit = 100, now = new Date()): Promise<CallList> {
   const since = new Date(now.getTime() - 30 * 86_400_000);
   const calledSince = new Date(now.getTime() - RECENTLY_CALLED_DAYS * 86_400_000);
 
@@ -76,7 +108,7 @@ export async function callList(limit = 100, now = new Date()): Promise<Prospect[
       where: { createdAt: { gte: since }, reason: "at_monthly_cap" },
       _count: true,
       orderBy: { _count: { businessId: "desc" } },
-      take: limit,
+      take: SIGNAL_SCAN,
     }),
 
     // Searches that found nobody, by category. Demand with no supply behind it.
@@ -95,7 +127,7 @@ export async function callList(limit = 100, now = new Date()): Promise<Prospect[
       where: { createdAt: { gte: since }, business: { claimStatus: "unclaimed" } },
       _count: true,
       orderBy: { _count: { businessId: "desc" } },
-      take: limit,
+      take: SIGNAL_SCAN,
     }),
 
     prisma.callOutcome.findMany({
@@ -118,6 +150,7 @@ export async function callList(limit = 100, now = new Date()): Promise<Prospect[
   ]);
 
   // Businesses in a category buyers searched for and found nobody in.
+  let thinTruncated = false;
   const thinCategoryIds = zeroResults
     .map((row) => row.categoryId)
     .filter((id): id is string => id !== null);
@@ -131,12 +164,13 @@ export async function callList(limit = 100, now = new Date()): Promise<Prospect[
         mergedIntoId: null,
       },
       select: { id: true },
-      take: limit,
+      take: SIGNAL_SCAN,
     });
+    thinTruncated = inThinCategories.length === SIGNAL_SCAN;
     for (const business of inThinCategories) ids.add(business.id);
   }
 
-  if (ids.size === 0) return [];
+  if (ids.size === 0) return { prospects: [], total: 0, truncated: false };
 
   const businesses = await prisma.business.findMany({
     where: { id: { in: [...ids] }, suspendedAt: null, mergedIntoId: null },
@@ -215,10 +249,16 @@ export async function callList(limit = 100, now = new Date()): Promise<Prospect[
    * same person every morning is a list that gets somebody rung twice, and the
    * second call is worse than no call.
    */
-  return prospects
+  const ranked = prospects
     .filter((prospect) => prospect.lastCalledAt === null)
-    .sort((a, b) => b.value - a.value)
-    .slice(0, limit);
+    .sort((a, b) => b.value - a.value);
+
+  return {
+    prospects: ranked.slice(0, limit),
+    total: ranked.length,
+    truncated:
+      missed.length === SIGNAL_SCAN || unclaimed.length === SIGNAL_SCAN || thinTruncated,
+  };
 }
 
 export type LogResult = { ok: true } | { ok: false; error: string };

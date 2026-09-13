@@ -40,13 +40,10 @@ import type { Actor } from "@/lib/auth/roles";
  * evidence of a past state, and deleting it makes the tier history unauditable.
  */
 
+/** A key, not a sentence — the wording lives in `lib/i18n/en.ts`. */
 export type ReviewResult =
   | { ok: true; approved: boolean }
-  | {
-      ok: false;
-      error: "not_found" | "not_a_credential" | "already_decided";
-      message: string;
-    };
+  | { ok: false; error: "not_found" | "not_a_credential" | "already_decided" };
 
 export interface ReviewInput {
   actor: Actor;
@@ -92,7 +89,7 @@ async function decide(input: ReviewInput, approved: boolean): Promise<ReviewResu
     },
   });
   if (!document || !document.businessId) {
-    return { ok: false, error: "not_found", message: "That document is not in the queue." };
+    return { ok: false, error: "not_found" };
   }
 
   /*
@@ -103,21 +100,11 @@ async function decide(input: ReviewInput, approved: boolean): Promise<ReviewResu
      platform having approved publishing a licence scan.
   */
   if (!isPublishable(document.kind)) {
-    return {
-      ok: false,
-      error: "not_a_credential",
-      message:
-        "A trade licence or VAT certificate is never published, so there is nothing to decide. " +
-        "Set the verification tier instead.",
-    };
+    return { ok: false, error: "not_a_credential" };
   }
 
   if (document.reviewedAt) {
-    return {
-      ok: false,
-      error: "already_decided",
-      message: "Somebody has already looked at that document.",
-    };
+    return { ok: false, error: "already_decided" };
   }
 
   const before = { isPublic: document.isPublic, reviewedAt: document.reviewedAt };
