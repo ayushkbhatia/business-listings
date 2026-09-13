@@ -389,7 +389,7 @@ export async function closeRuleChange(
 export async function pendingRuleChange(categoryId: string) {
   return prisma.publishRuleChange.findFirst({
     where: { categoryId, state: "proposed" },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: {
       id: true,
       before: true,
@@ -408,7 +408,7 @@ export async function pendingRuleChange(categoryId: string) {
 export async function lastRuleChange(categoryId: string) {
   return prisma.publishRuleChange.findFirst({
     where: { categoryId, state: "approved" },
-    orderBy: { decidedAt: "desc" },
+    orderBy: [{ decidedAt: "desc" }, { id: "desc" }],
     select: {
       decidedAt: true,
       decidedReason: true,

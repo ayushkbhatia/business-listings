@@ -141,7 +141,7 @@ export async function getListing(businessId: string): Promise<ListingView | null
       },
       locations: {
         where: { published: true },
-        orderBy: { type: "asc" },
+        orderBy: [{ type: "asc" }, { id: "asc" }],
         take: 1,
         select: { area: { select: { name: true } } },
       },

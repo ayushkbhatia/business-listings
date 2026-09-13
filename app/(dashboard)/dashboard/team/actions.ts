@@ -87,7 +87,7 @@ export async function sendInvite(formData: FormData): Promise<InviteActionResult
       });
       const better = await prisma.plan.findFirst({
         where: { monthlyPriceAed: { gt: plan.monthlyPriceAed } },
-        orderBy: { monthlyPriceAed: "asc" },
+        orderBy: [{ monthlyPriceAed: "asc" }, { id: "asc" }],
         select: { name: true },
       });
       return {

@@ -1,4 +1,5 @@
 import "server-only";
+import { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { assertCanEditListing } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
@@ -44,6 +45,31 @@ export { NON_LOGO_TARGET, PHOTO_MINUTES, PHOTO_TARGET } from "./targets";
 
 /** The kinds this board writes. A photograph is one of exactly two things. */
 const BOARD_KINDS = ["gallery", "cover"] as const;
+
+/**
+ * Gallery order, in one place, because two queries depend on agreeing.
+ *
+ * `photoBoardFor` renders the seller's gallery in this order, and the delete
+ * path promotes the first surviving `gallery` photograph to `cover` using it.
+ * Those have to be the same order or the promotion picks a photograph that is
+ * not the one the seller sees at the front.
+ *
+ * `sortOrder` alone does not settle it: `Media.sortOrder` is `@default(0)`, so
+ * every photograph a seller has never dragged sits at 0 and the whole gallery
+ * is one tie. `createdAt` does not finish the job either — it is `TIMESTAMP(3)`
+ * and a multi-file upload lands inside one millisecond. So a seller who
+ * uploaded four photographs and reordered none had no defined first, and
+ * deleting the cover promoted an arbitrary one of them onto the storefront.
+ *
+ * `id` last makes it total. A cuid carries a millisecond prefix and a
+ * per-process counter, so ids sort in the order they were minted: within a tie
+ * this is upload order, which is the order the seller watched them arrive in.
+ */
+const GALLERY_ORDER: Prisma.MediaOrderByWithRelationInput[] = [
+  { sortOrder: "asc" },
+  { createdAt: "asc" },
+  { id: "asc" },
+];
 
 export interface PhotoItem {
   id: string;
@@ -107,7 +133,7 @@ export async function photoBoardFor(businessId: string): Promise<PhotoBoard> {
   const [rows, used, caps] = await Promise.all([
     prisma.media.findMany({
       where: { businessId, kind: { in: [...BOARD_KINDS, "logo"] }, reviewId: null },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      orderBy: GALLERY_ORDER,
       select: ITEM_SELECT,
     }),
     photoUsage(businessId),
@@ -350,7 +376,9 @@ export async function deletePhoto(
   if (target.kind === "cover") {
     const next = await prisma.media.findFirst({
       where: { businessId, kind: "gallery" },
-      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+      // The same order the board renders, so the photograph promoted here is
+      // the one the seller was looking at first.
+      orderBy: GALLERY_ORDER,
       select: { id: true },
     });
     if (next) await prisma.media.update({ where: { id: next.id }, data: { kind: "cover" } });

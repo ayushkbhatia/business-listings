@@ -86,7 +86,18 @@ export async function getCatalogueView(
   const [products, hiddenByPlan] = await Promise.all([
     prisma.product.findMany({
       where: { businessId },
-      orderBy: [{ updatedAt: "desc" }],
+      /*
+         `id` last, because `updatedAt` does not order these rows.
+
+         `updated_at` is `TIMESTAMP(3)`, and a bulk edit — an import, a category
+         reassign, a plan cap hiding forty products — stamps every row it
+         touches inside one transaction with one value. On the seeded database
+         172 of 226 products already share an `updated_at` with another, in
+         groups of up to eight. With the keys equal Postgres is free to return
+         them in any order, and the slice below then scans an arbitrary
+         `SCAN_CEILING` of them.
+      */
+      orderBy: [{ updatedAt: "desc" }, { id: "desc" }],
       take: SCAN_CEILING + 1,
       select: ROW_SELECT,
     }),
@@ -213,13 +224,29 @@ function matchesSpecValues(specValues: unknown, needle: string): boolean {
   return false;
 }
 
-function comparatorFor(sort: CatalogueSort): (a: CatalogueRow, b: CatalogueRow) => number {
+/** Exported so a test can check that every sort is total. See `recent`. */
+export function comparatorFor(
+  sort: CatalogueSort,
+): (a: CatalogueRow, b: CatalogueRow) => number {
+  /*
+     Every comparator ends here, so this is what makes each of them total.
+
+     `updatedAt` ties heavily — 172 of 226 seeded products share one with
+     another, because a bulk edit stamps every row it touches with one value —
+     and `filtered.slice` below pages whatever order comes out. It was
+     deterministic by accident: `Array.prototype.sort` is stable, so ties kept
+     the fetch order, which `getCatalogueView` pins with `{ id: "desc" }`. That
+     holds until somebody changes the fetch. `id` here, in the fetch's own
+     direction, makes paging independent of it.
+  */
   const recent = (a: CatalogueRow, b: CatalogueRow) =>
-    b.updatedAt.getTime() - a.updatedAt.getTime();
+    b.updatedAt.getTime() - a.updatedAt.getTime() || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0);
 
   switch (sort) {
     case "name":
-      return (a, b) => a.name.localeCompare(b.name);
+      // Two products with one name are common — a range in three sizes — so
+      // this falls through to `recent` like every other sort.
+      return (a, b) => a.name.localeCompare(b.name) || recent(a, b);
     case "sku":
       return (a, b) => (a.sku ?? "").localeCompare(b.sku ?? "") || recent(a, b);
     case "template":

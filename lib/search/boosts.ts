@@ -419,7 +419,7 @@ export interface BoostView {
 export async function boostList(now = new Date()): Promise<BoostView[]> {
   const [rows, reach] = await Promise.all([
     prisma.listingBoost.findMany({
-      orderBy: [{ expiresAt: "desc" }],
+      orderBy: [{ expiresAt: "desc" }, { id: "desc" }],
       take: 200,
       select: {
         id: true,

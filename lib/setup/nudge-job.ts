@@ -173,7 +173,7 @@ export async function sweepSetupNudges(
       suspendedAt: null,
     },
     select: { id: true },
-    orderBy: { publishedAt: "asc" },
+    orderBy: [{ publishedAt: "asc" }, { id: "asc" }],
     take: BATCH_LIMIT,
   });
 

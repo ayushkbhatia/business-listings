@@ -145,6 +145,53 @@ describe("the cover", () => {
     expect(after.items[0]?.isCover).toBe(true);
   });
 
+  /**
+   * Four photographs, none of them ever dragged.
+   *
+   * `Media.sortOrder` is `@default(0)`, so a seller who has never reordered
+   * their gallery has every row at 0 — the ordering key is a tie across the
+   * whole board. `createdAt` does not finish it either: it is `TIMESTAMP(3)`
+   * and a multi-file upload lands inside one millisecond. So "the next
+   * photograph" had nothing to decide on, and deleting the cover promoted an
+   * arbitrary one of the survivors onto the storefront.
+   *
+   * The ids are written and the rows inserted newest-first on purpose. The
+   * promotion reads through the `business_id, kind, sort_order` index and a
+   * bitmap heap scan hands rows back in physical order, so writing them
+   * backwards makes an untiebroken sort promote the *last* photograph every
+   * run. With `id` on the end of `GALLERY_ORDER` it promotes the first, which
+   * is also the one `photoBoardFor` puts at the front.
+   */
+  it("promotes the one at the front of the board when every photograph ties", async () => {
+    const ids = ["ph-tie-00", "ph-tie-01", "ph-tie-02", "ph-tie-03"];
+    const sameMs = new Date("2026-04-01T07:00:00.000Z");
+    for (const [index, id] of [...ids.entries()].reverse()) {
+      await prisma.media.create({
+        data: {
+          id,
+          businessId,
+          kind: index === 0 ? "cover" : "gallery",
+          storagePath: `${id}.webp`,
+          filename: `${id}.webp`,
+          bytes: 90_000,
+          width: 1600,
+          height: 1200,
+          createdAt: sameMs,
+        },
+      });
+    }
+
+    // The board agrees with the promotion, which is the whole point of the
+    // shared constant — it opens on the cover and then in id order.
+    const before = await photoBoardFor(businessId);
+    expect(before.items.map((item) => item.id)).toEqual(ids);
+
+    await deletePhoto(actor, businessId, ids[0]!);
+
+    const after = await photoBoardFor(businessId);
+    expect(after.items.find((item) => item.isCover)?.id).toBe(ids[1]);
+  });
+
   it("leaves nothing behind when the last one goes", async () => {
     await add("only.webp");
     const board = await photoBoardFor(businessId);

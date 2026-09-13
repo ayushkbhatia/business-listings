@@ -127,7 +127,7 @@ export async function saveLocation(formData: FormData): Promise<LocationResult> 
     if (left.atCap) {
       const better = await prisma.plan.findFirst({
         where: { monthlyPriceAed: { gt: plan.monthlyPriceAed } },
-        orderBy: { monthlyPriceAed: "asc" },
+        orderBy: [{ monthlyPriceAed: "asc" }, { id: "asc" }],
         select: { name: true },
       });
       const cap = String(left.cap ?? 0);

@@ -78,7 +78,9 @@ export async function photoPicks(businessId: string): Promise<PhotoPicks> {
 export async function unpickedPhotos(businessId: string) {
   const rows = await prisma.media.findMany({
     where: { businessId, kind: "library", reviewId: null },
-    orderBy: { createdAt: "desc" },
+    // `id` last: photographs arrive in batches and tie on `created_at`, and
+    // this is a slice at 60 — without it, which 60 the picker offers moves.
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 60,
     select: { id: true, storagePath: true, alt: true },
   });

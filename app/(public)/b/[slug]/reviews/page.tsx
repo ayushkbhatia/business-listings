@@ -418,7 +418,7 @@ async function eligibleEnquiry(buyerId: string | null, businessId: string): Prom
         { recipients: { some: { businessId, firstReplyAt: { not: null } } } },
       ],
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 5,
     select: { id: true },
   });

@@ -107,7 +107,7 @@ export async function callList(limit = 100, now = new Date()): Promise<CallList>
       by: ["businessId"],
       where: { createdAt: { gte: since }, reason: "at_monthly_cap" },
       _count: true,
-      orderBy: { _count: { businessId: "desc" } },
+      orderBy: [{ _count: { businessId: "desc" } }, { businessId: "asc" }],
       take: SIGNAL_SCAN,
     }),
 
@@ -116,7 +116,7 @@ export async function callList(limit = 100, now = new Date()): Promise<CallList>
       by: ["categoryId"],
       where: { createdAt: { gte: since }, categoryId: { not: null } },
       _count: true,
-      orderBy: { _count: { categoryId: "desc" } },
+      orderBy: [{ _count: { categoryId: "desc" } }, { categoryId: "asc" }],
       take: 20,
     }),
 
@@ -126,7 +126,7 @@ export async function callList(limit = 100, now = new Date()): Promise<CallList>
       by: ["businessId"],
       where: { createdAt: { gte: since }, business: { claimStatus: "unclaimed" } },
       _count: true,
-      orderBy: { _count: { businessId: "desc" } },
+      orderBy: [{ _count: { businessId: "desc" } }, { businessId: "asc" }],
       take: SIGNAL_SCAN,
     }),
 
@@ -315,7 +315,7 @@ export async function logCall(input: LogCallInput): Promise<LogResult> {
 export async function callHistory(businessId: string, limit = 20) {
   return prisma.callOutcome.findMany({
     where: { businessId },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit,
     select: {
       id: true,

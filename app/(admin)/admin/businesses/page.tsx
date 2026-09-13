@@ -43,7 +43,7 @@ export default async function BusinessesPage() {
   */
   const [businesses, badges, listingCount, claimedCount] = await Promise.all([
     prisma.business.findMany({
-      orderBy: [{ suspendedAt: { sort: "desc", nulls: "last" } }, { displayName: "asc" }],
+      orderBy: [{ suspendedAt: { sort: "desc", nulls: "last" } }, { displayName: "asc" }, { id: "asc" }],
       take: 300,
       select: {
         id: true,

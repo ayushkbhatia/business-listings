@@ -96,6 +96,12 @@ jobs:
       - name: Schema invariants
         run: pnpm check:schema
 
+      # An ordered read that takes, skips, pages or picks a first row has to end
+      # on a unique key, or Postgres chooses the rows. No database — it reads
+      # schema.prisma and the source. See scripts/check-ordering.mts.
+      - name: Ordering is total
+        run: pnpm check:ordering
+
       # A PR that adds a migration has to name it. `prisma migrate deploy`
       # applies every pending migration rather than the caller's, so whoever
       # deploys next inherits this one — and can only review it if the merge

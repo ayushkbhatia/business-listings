@@ -243,7 +243,7 @@ export async function cancellationView(
       }),
       prisma.placementSlot.findFirst({
         where: { businessId, OR: [{ endsOn: null }, { endsOn: { gte: now } }] },
-        orderBy: { startsOn: "asc" },
+        orderBy: [{ startsOn: "asc" }, { id: "asc" }],
         select: { endsOn: true, emirate: true, category: { select: { name: true } } },
       }),
       pendingChangeFor(businessId),

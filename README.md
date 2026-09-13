@@ -129,8 +129,9 @@ and every `/dev` route will refuse, which is the point.
 | `pnpm check:contrast` | Every token pairing against the §09.2 floor |
 | `pnpm report:contrast` | What axe finds on the running gallery, grouped by colour pair |
 | `pnpm check:formatters` | Every formatter has a test |
+| `pnpm check:ordering` | An ordered read that takes, skips, pages or picks a first row ends on a unique key |
 | `pnpm matrix` | The permission matrix, for diffing against §07 |
-| `pnpm verify` | Typecheck, lint, `check:tokens`, `check:vocabulary`, `check:markup`, `check:schema`, `check:migrations`, `check:audit`, `check:formatters`, unit tests, integration tests, build |
+| `pnpm verify` | Typecheck, lint, `check:tokens`, `check:vocabulary`, `check:markup`, `check:schema`, `check:migrations`, `check:audit`, `check:ordering`, `check:formatters`, unit tests, integration tests, build |
 | `pnpm test:integration` | Vitest against a real database |
 | `pnpm dev:seat <kind>` | Provision a seat and print a sign-in code |
 | `pnpm storage:setup` | Create the two storage buckets |

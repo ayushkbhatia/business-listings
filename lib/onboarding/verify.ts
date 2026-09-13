@@ -114,7 +114,7 @@ export async function verifyStateFor(
       verificationTier: true,
       locations: {
         where: { phone: { not: null } },
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         take: 1,
         select: { phone: true },
       },
@@ -124,7 +124,7 @@ export async function verifyStateFor(
 
   const mine = await prisma.claimSubmission.findFirst({
     where: { businessId: business.id, claimantId, decidedAt: null },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: { createdAt: true, route: true },
   });
 

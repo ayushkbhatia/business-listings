@@ -120,7 +120,7 @@ export async function readPopularQueries(take = 5): Promise<string[]> {
       tab: { in: [...BUYER_TABS] },
     },
     _count: { normalised: true },
-    orderBy: { _count: { normalised: "desc" } },
+    orderBy: [{ _count: { normalised: "desc" } }, { normalised: "asc" }],
     take,
   });
   if (grouped.length === 0) return [];
@@ -243,7 +243,7 @@ export async function readOpenRfqTeasers(take = 4): Promise<RfqTeaser[]> {
       */
       createdAt: { lte: now },
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     // Four times the need. Enough that a run of chatty requirements does not
     // empty the panel, small enough to stay one index scan.
     take: take * 4,
@@ -260,7 +260,8 @@ export async function readOpenRfqTeasers(take = 4): Promise<RfqTeaser[]> {
       */
       recipients: {
         take: 1,
-        orderBy: { createdAt: "asc" },
+        // `businessId` last: under one enquiry it is the other half of the key.
+        orderBy: [{ createdAt: "asc" }, { businessId: "asc" }],
         select: {
           business: {
             select: { primaryCategory: { select: { name: true, parent: { select: { name: true } } } } },
@@ -550,11 +551,20 @@ export async function readNewCatalogueProducts(take = 5) {
       createdAt: { gte: ago(7) },
       business: { ...PUBLIC_BUSINESS, verificationTier: { gte: VERIFIED_TIER } },
     },
-    orderBy: { createdAt: "desc" },
+    // `id` last: a seller who imported a catalogue this week has one
+    // `created_at` across the whole file, and this row is an editorial slot —
+    // it should show the same five products to two visitors a second apart.
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: take * 8,
     include: {
       category: { select: { id: true, name: true } },
-      media: { orderBy: { sortOrder: "asc" }, take: 1, include: { media: true } },
+      // `mediaId` last, for the same reason the row's own order needs `id`:
+      // `ProductMedia.sortOrder` is `@default(0)` and ties across the product.
+      media: {
+        orderBy: [{ sortOrder: "asc" }, { mediaId: "asc" }],
+        take: 1,
+        include: { media: true },
+      },
       business: { select: { slug: true, displayName: true, verificationTier: true } },
     },
   });

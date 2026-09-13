@@ -261,7 +261,7 @@ export async function runSummary(runId: string) {
 
 export async function recentRuns(limit = 20) {
   return prisma.licenceImportRun.findMany({
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: limit,
     select: {
       id: true,

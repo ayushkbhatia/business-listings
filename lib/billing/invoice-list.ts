@@ -44,7 +44,7 @@ export interface InvoiceList {
 
 export async function invoiceList(limit = 200): Promise<InvoiceList> {
   const invoices = await prisma.invoice.findMany({
-    orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }],
+    orderBy: [{ issuedAt: "desc" }, { createdAt: "desc" }, { id: "desc" }],
     take: limit,
     select: {
       id: true,

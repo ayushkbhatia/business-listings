@@ -617,7 +617,7 @@ export async function loadTradeKindBoard(): Promise<TradeKindBoard> {
     */
     prisma.auditEvent.findMany({
       where: { action: "taxonomy_changed", subject: { startsWith: "Category:" } },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: {
         subject: true,
         createdAt: true,

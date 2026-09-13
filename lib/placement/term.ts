@@ -258,7 +258,7 @@ export async function endPlacementsFor(
     */
     const next = await tx.placementWaitlist.findFirst({
       where: { categoryId: slot.categoryId, emirate: slot.emirate, notifiedAt: null },
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
       select: { id: true, businessId: true },
     });
     if (next) {
@@ -337,7 +337,7 @@ export async function creditUnusedPlacement(
         */
         ...(slot.billedFrom ? { issuedAt: { gte: slot.billedFrom } } : {}),
       },
-      orderBy: { issuedAt: "desc" },
+      orderBy: [{ issuedAt: "desc" }, { id: "desc" }],
       select: { id: true, vatRate: true },
     });
     if (!source) continue;

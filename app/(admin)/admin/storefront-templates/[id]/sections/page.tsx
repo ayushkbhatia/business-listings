@@ -86,7 +86,7 @@ export default async function SectionLibraryPage({ params, searchParams }: Param
         mergedIntoId: null,
         suspendedAt: null,
       },
-      orderBy: { displayName: "asc" },
+      orderBy: [{ displayName: "asc" }, { id: "asc" }],
       take: 60,
       select: { id: true, slug: true, displayName: true, sellsKind: true },
     }),

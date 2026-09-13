@@ -127,7 +127,7 @@ export async function coverageStateFor(businessId: string): Promise<CoverageStat
          somehow has four still only has one licensed one.
       */
       locations: {
-        orderBy: [{ createdAt: "asc" }],
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         take: 1,
         select: { addressLine: true, emirate: true, area: { select: { name: true } } },
       },

@@ -62,7 +62,7 @@ export async function resolveTemplateId(
     where: { status: "live", categories: { some: { categoryId: { in: ids } } } },
     // The category's own template before its parent's, then the newest — the
     // same preference order the two default lookups above express.
-    orderBy: [{ version: "desc" }, { name: "asc" }],
+    orderBy: [{ version: "desc" }, { name: "asc" }, { id: "asc" }],
     select: { id: true, categories: { select: { categoryId: true } } },
   });
   return serving?.id ?? null;

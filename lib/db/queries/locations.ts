@@ -103,8 +103,15 @@ export async function getLocationsBoard(
          Not by status: a seller scanning for the branch they came to fix looks
          for its name, and a table that reorders itself when they hide a row
          moves every other row out from under the pointer.
+
+         `id` last, for the same reason. Branches added in one save share a
+         `created_at`, and a tie is a table that reorders itself between two
+         loads just as surely as a status sort would. It is also the order the
+         public storefront lists them in — `lib/db/queries/business.ts` and
+         `lib/storefront/loader.ts` — so the seller's table and the buyer's list
+         agree.
       */
-      orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+      orderBy: [{ type: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       select: {
         id: true,
         type: true,

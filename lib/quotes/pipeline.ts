@@ -239,6 +239,23 @@ export function contractHolds(counts: PipelineCounts): boolean {
   return counts.awaiting + counts.won + counts.lost + counts.expired === counts.all;
 }
 
+/**
+ * The pipeline's order: newest sent first, then `quoteId`, so it is total.
+ *
+ * Exported so a test can hold it to the property that matters — the same rows
+ * in any input order come out in one order — which is what lets
+ * `exportPipeline` page through it without trusting two queries to agree.
+ */
+export function newestSentFirst(
+  a: Pick<Bucketed, "sentAt" | "quoteId">,
+  b: Pick<Bucketed, "sentAt" | "quoteId">,
+): number {
+  return (
+    (b.sentAt?.getTime() ?? 0) - (a.sentAt?.getTime() ?? 0) ||
+    (a.quoteId < b.quoteId ? 1 : a.quoteId > b.quoteId ? -1 : 0)
+  );
+}
+
 function inTab(row: Bucketed, tab: PipelineTab): boolean {
   if (tab === "all") return true;
   if (tab === "expiring") return row.expiring;
@@ -270,9 +287,19 @@ export async function getPipeline(input: {
      reorders itself under the seller while they work down it is worse than one
      that does not.
   */
-  const inThisTab = all
-    .filter((row) => inTab(row, input.tab))
-    .sort((a, b) => (b.sentAt?.getTime() ?? 0) - (a.sentAt?.getTime() ?? 0));
+  /*
+     `quoteId` last, in the sort's own direction, so every call agrees.
+
+     `bucket` reads recipients with no `orderBy`, so tied `sentAt` values keep
+     whatever order Postgres returned for that call. `exportPipeline` calls this
+     once per page and re-runs `bucket` each time, and its loop stops on
+     `rows.length >= total` — so if two calls ever disagreed about a tie at a
+     page boundary, the file would hold one quote twice and another not at all
+     while still being the right length. No seeded quotes tie on `sentAt`, and
+     a disagreement was not observed; the file's completeness should not rest
+     on two identical queries happening to return ties in the same order.
+  */
+  const inThisTab = all.filter((row) => inTab(row, input.tab)).sort(newestSentFirst);
 
   const page = Math.max(1, input.page ?? 1);
   const slice = inThisTab.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);

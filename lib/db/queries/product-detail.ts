@@ -280,7 +280,7 @@ export async function getQuestions(
   const [rows, answered] = await Promise.all([
     prisma.productQuestion.findMany({
       where,
-      orderBy: { answeredAt: "desc" },
+      orderBy: [{ answeredAt: "desc" }, { id: "desc" }],
       take,
       select: { id: true, body: true, answer: true, answeredAt: true },
     }),

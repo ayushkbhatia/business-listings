@@ -547,7 +547,7 @@ export interface ModerationReview {
 
 export async function reviewsForModeration(limit = 200): Promise<ModerationReview[]> {
   const rows = await prisma.review.findMany({
-    orderBy: [{ removedAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }],
+    orderBy: [{ removedAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }, { id: "desc" }],
     take: limit,
     select: {
       id: true,

@@ -755,7 +755,7 @@ export interface PublishRecord {
 export async function publishHistory(kind: RankingKind, take = 50): Promise<PublishRecord[]> {
   const rows = await prisma.rankingPublish.findMany({
     where: { kind },
-    orderBy: { publishedAt: "desc" },
+    orderBy: [{ publishedAt: "desc" }, { id: "desc" }],
     take: take + 1,
     include: { publishedBy: { select: { fullName: true, email: true } } },
   });

@@ -131,7 +131,9 @@ function toPending(row: {
 export async function pendingChangeFor(businessId: string): Promise<PendingChange | null> {
   const row = await prisma.subscriptionChange.findFirst({
     where: { businessId, appliedAt: null, withdrawnAt: null },
-    orderBy: { createdAt: "desc" },
+    // `id` last. Two pending changes should not coexist, but this reads a whole
+    // row and the caller acts on it, so a tie must not decide which.
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     select: CHANGE_SELECT,
   });
   return row ? toPending(row) : null;

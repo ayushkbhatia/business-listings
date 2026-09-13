@@ -51,7 +51,7 @@ const CAP_FIELDS = [
 
 export async function subscriptionList(limit = 500): Promise<SubscriptionRow[]> {
   const subscriptions = await prisma.subscription.findMany({
-    orderBy: [{ startedAt: "desc" }],
+    orderBy: [{ startedAt: "desc" }, { id: "desc" }],
     take: limit,
     select: {
       id: true,

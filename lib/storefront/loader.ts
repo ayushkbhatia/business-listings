@@ -249,7 +249,10 @@ async function sectionData(
         verifiedAt: true, responseTimeMedianMs: true, establishedYear: true,
         locations: {
           where: { published: true },
-          orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+          // Same order the storefront's own loader uses — see
+          // lib/db/queries/business.ts. `id` last so the branch list does not
+          // reorder between two loads of one page.
+          orderBy: [{ type: "asc" }, { createdAt: "asc" }, { id: "asc" }],
           select: {
             id: true, type: true, emirate: true, addressLine: true, phone: true,
             area: { select: { name: true, lat: true, lng: true } },
@@ -259,7 +262,14 @@ async function sectionData(
     }),
     prisma.product.findMany({
       where: { businessId, status: "live" },
-      orderBy: [{ availability: "asc" }, { createdAt: "desc" }],
+      /*
+         `id` last. An imported catalogue shares one `created_at` across every
+         row of the file — `CURRENT_TIMESTAMP` is the transaction's start time —
+         so without it *which twelve products a buyer sees* is whatever order
+         the scan happened to produce, and it can differ between two loads of
+         the same storefront.
+      */
+      orderBy: [{ availability: "asc" }, { createdAt: "desc" }, { id: "desc" }],
       take: 12,
       select: {
         id: true, slug: true, name: true, sku: true, availability: true,
@@ -271,7 +281,7 @@ async function sectionData(
       // Published only: a held review is off every public surface while the
       // hold stands, exactly as a removed one is off it for good.
       where: { businessId, ...PUBLISHED },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 6,
       select: {
         id: true, overall: true, body: true, sellerReply: true, createdAt: true,

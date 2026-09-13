@@ -214,7 +214,9 @@ export async function setupHubState(
       */
       prisma.notificationDelivery.findFirst({
         where: { businessId, event: "setup_nudge" },
-        orderBy: { createdAt: "desc" },
+        // `id` last. It orders on `createdAt` and reads `sentAt`, so unlike the
+        // other "most recent" reads in this sweep a tie does change the answer.
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         select: { sentAt: true },
       }),
       // Through the snapshot, so a grandfathered seller keeps the caps they
