@@ -1,20 +1,21 @@
 import type { Metadata } from "next";
-import type { Emirate } from "@/lib/db/generated/enums";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Breadcrumb, Card, Panel, PublicShell } from "@/components/structure";
 import { Tag } from "@/components/display";
 import { ScopeTable, VerificationBadge, scopeWords, tierSpec } from "@/components/domain";
+import { CredentialTable } from "@/components/domain/CredentialTable";
+import { buttonClassName } from "@/components/primitives";
 import { getBusinessBySlug } from "@/lib/db/queries";
-import { prisma } from "@/lib/db/client";
 import { publicServiceFor, publicServicesFor } from "@/lib/services/service";
-import { publicCredentialsFor, type PublicCredential } from "@/lib/credentials/service";
-import { effectiveCoverage } from "@/lib/locations/service-coverage";
-import { formatMonth } from "@/lib/format";
+import { publicServiceCoverage, storefrontCredentials } from "@/lib/storefront/services";
+import { formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { EMIRATES } from "@/lib/uae";
+import { getActor } from "@/lib/auth/session";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { PageEvent } from "@/components/telemetry";
+import { composerOptions } from "../../_services";
+import { ServiceEnquireDrawer } from "../../ServiceEnquireDrawer";
 
 /**
  * Board `1g-s` — service detail, and the scope table where the spec table was.
@@ -83,11 +84,6 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
-/** One row, as the shape `effectiveCoverage` reads. */
-function toScope(row: { emirate: Emirate; areaId: string | null }) {
-  return { emirate: row.emirate, areaId: row.areaId };
-}
-
 export default async function ServiceDetailPage({ params }: Params) {
   const { slug, service: serviceSlug } = await params;
   const service = await publicServiceFor(slug, serviceSlug);
@@ -107,33 +103,20 @@ export default async function ServiceDetailPage({ params }: Params) {
   const business = await getBusinessBySlug(slug);
   if (!business) notFound();
 
-  const [siblings, coverage, credentials] = await Promise.all([
+  const [siblings, credentials, actor, coverage] = await Promise.all([
     publicServicesFor(service.businessId),
-    /*
-       The business default *and* this service's own rows, in one query. Board
-       `3c-s` gave the table a `serviceId`; before it, every row here was the
-       default and this page could only ever show the firm's coverage on a
-       page about one engagement.
-    */
-    prisma.serviceCoverage.findMany({
-      where: {
-        businessId: service.businessId,
-        OR: [{ serviceId: null }, { serviceId: service.id }],
-      },
-      select: {
-        emirate: true,
-        areaId: true,
-        serviceId: true,
-        area: { select: { name: true } },
-      },
-    }),
     /*
        Board `8b-s`'s Feeds note. The file never travels: `publicCredentialsFor`
        does not select `documentId` at all, which is the same defence
        `indicativeFee` gets — a field that is never fetched cannot leak into
        this page, its payload or its structured data.
+
+       The same cached read the storefront header makes, so the two pages ask
+       one question the same way.
     */
-    publicCredentialsFor(service.businessId),
+    storefrontCredentials(service.businessId),
+    getActor(),
+    publicServiceCoverage(service.businessId, service.id),
   ]);
 
   /*
@@ -146,19 +129,11 @@ export default async function ServiceDetailPage({ params }: Params) {
      service's narrowing back into the default it was narrowing away from — so
      restricting one service to Dubai would have published it as covering
      everywhere, which is the seller punished for being precise.
+
+     `publicServiceCoverage` is the storefront loader's sibling (`1d-s` B7 uses
+     the union), so one firm's places are worded one way on both pages.
   */
-  const areaNames = new Map(
-    coverage.filter((row) => row.areaId).map((row) => [row.areaId!, row.area?.name ?? ""]),
-  );
-  const scopes = effectiveCoverage(
-    coverage.filter((row) => row.serviceId === null).map(toScope),
-    coverage.filter((row) => row.serviceId !== null).map(toScope),
-  );
-  const places = scopes.map((scope) =>
-    scope.areaId
-      ? (areaNames.get(scope.areaId) ?? emirateLabel(scope.emirate))
-      : emirateLabel(scope.emirate),
-  );
+  const places = coverage.map((place) => place.label);
 
   const others = siblings.filter((row) => row.id !== service.id);
 
@@ -290,7 +265,19 @@ export default async function ServiceDetailPage({ params }: Params) {
           title={t("service_public.credentials_title")}
           description={t("service_public.credentials_hint")}
         >
-          <Credentials rows={credentials} name={business.displayName} />
+          {credentials.length === 0 ? (
+            <p className="text-body-sm text-muted">{t("service_public.credentials_none")}</p>
+          ) : (
+            /*
+               `1d-s`'s cross-board invariant: this page and the storefront render
+               credentials identically, because it is one component on both.
+            */
+            <CredentialTable
+              rows={credentials}
+              name={business.displayName}
+              caption={t("storefront_services.credentials_caption", { name: business.displayName })}
+            />
+          )}
         </Panel>
 
         {/* ── Where they work ──────────────────────────────────────────── */}
@@ -317,12 +304,41 @@ export default async function ServiceDetailPage({ params }: Params) {
               {t("service_public.no_price_body")}
             </p>
             <div className="mt-4">
-              <Link
-                href={`/rfq/new?business=${business.slug}&service=${service.slug}`}
-                className="inline-flex items-center rounded-ctl bg-moss px-4 py-2 text-body-sm text-on-ink hover:bg-moss-deep focus-visible:shadow-focus focus-visible:outline-none"
-              >
-                {t("service_public.enquire")}
-              </Link>
+              {/*
+                 Board `1d-s` B11 — the enquiry opens on this service.
+
+                 It used to link to `/rfq/new?business=…&service=…`, and the
+                 composer there reads neither parameter: a buyer arrived at a
+                 goods form asking for lines and quantities, with the service
+                 they had been reading gone. A firm that sells only work now
+                 takes the buyer to its storefront's composer with this service
+                 chosen; one that sells both opens the service composer here,
+                 because that storefront's rail is the goods one.
+              */}
+              {business.sellsKind === "both" ? (
+                <ServiceEnquireDrawer
+                  businessId={business.id}
+                  businessName={business.displayName}
+                  services={composerOptions(siblings)}
+                  service={service.slug}
+                  serviceName={service.name}
+                  askForContact={!actor}
+                  responseLine={
+                    business.responseTimeMedianMs === null
+                      ? t("storefront_services.composer.reply_unmeasured")
+                      : t("storefront_services.composer.reply_measured", {
+                          duration: formatDuration(business.responseTimeMedianMs),
+                        })
+                  }
+                />
+              ) : (
+                <Link
+                  href={`/b/${business.slug}?service=${encodeURIComponent(service.slug)}#enquire`}
+                  className={buttonClassName()}
+                >
+                  {t("service_public.enquire")}
+                </Link>
+              )}
             </div>
           </Card>
 
@@ -369,74 +385,4 @@ export default async function ServiceDetailPage({ params }: Params) {
  */
 function chipWords(chip: { key: string; value: string }): string {
   return scopeWords(chip.key, chip.value);
-}
-
-function emirateLabel(emirate: string): string {
-  return EMIRATES.find((row) => row.value === emirate)?.label ?? emirate;
-}
-
-/* ── Who signs it ────────────────────────────────────────────────────────── */
-
-/**
- * The trust block, where a product page shows stock availability.
- *
- * Board `8b-s` sets the tier labelling and this is one of the two screens it
- * binds: **an unverified claim must never render like a verified one.** The
- * separation here is structural rather than a colour — a checked credential
- * says which register checked it and when, and a claim says whose claim it is,
- * by name. A buyer reading "Stated by Meridian Chartered Accountants" knows
- * exactly how much the line is worth, which is the whole point of printing it.
- *
- * Empty is a real state and says so. A practice that has added nothing renders
- * the sentence rather than the panel vanishing: § Interface honesty — an
- * unclaimed listing says plainly that nothing is verified, and a section that
- * disappears when thin tells a buyer nothing about whether it was ever asked.
- */
-function Credentials({ rows, name }: { rows: readonly PublicCredential[]; name: string }) {
-  if (rows.length === 0) {
-    return <p className="text-body-sm text-muted">{t("service_public.credentials_none")}</p>;
-  }
-
-  return (
-    <ul className="flex list-none flex-col gap-3 p-0">
-      {rows.map((row) => (
-        <li key={row.id} className="flex flex-col gap-0.5">
-          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
-            <span className="text-body-sm text-ink">
-              {t(`credentials.kind.${row.kind}` as never)}
-            </span>
-            {row.verified ? (
-              <span className="font-mono text-eyebrow uppercase text-moss">
-                {t("credentials.tier.register_verified")}
-              </span>
-            ) : (
-              <span className="text-caption text-muted">
-                {t("service_public.credential_claim", { name })}
-              </span>
-            )}
-          </div>
-          {/*
-             Identifier, issuer and expiry, and only where the seller gave them
-             — this is a buyer's surface, and "Not provided" belongs in the
-             editor and in the scope table the board asks a buyer to compare
-             across firms, not under a trust line that has nothing to compare to.
-          */}
-          <p className="text-caption text-muted">
-            {[
-              row.issuer,
-              row.identifier,
-              row.expiresOn === null
-                ? null
-                : t("service_public.credential_until", { when: formatMonth(row.expiresOn) }),
-              row.verified && row.verifiedBy
-                ? t("service_public.credential_by", { register: row.verifiedBy })
-                : null,
-            ]
-              .filter((part): part is string => Boolean(part))
-              .join(" · ")}
-          </p>
-        </li>
-      ))}
-    </ul>
-  );
 }

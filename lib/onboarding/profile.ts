@@ -7,6 +7,7 @@ import { checkDisplayName, couldBeMistakenFor, type DisplayNameProblem } from ".
 import { DESCRIPTION_MAX, ESTABLISHED_MIN, TEAM_SIZES, type TeamSize } from "./profile-fields";
 import {
   checkServiceProfile,
+  sectorSlug,
   type ProfileRefusal,
   type ServiceProfileInput,
 } from "./service-profile";
@@ -437,15 +438,40 @@ export async function saveServiceProfile(
   const checked = checkServiceProfile(input);
   if (!checked.ok) return { ok: false, refusals: checked.refusals };
 
-  const saved = await prisma.business.update({
-    where: { id: businessId },
-    data: {
-      headline: checked.value.headline,
-      sectorsServed: checked.value.sectorsServed,
-      servicesOffered: checked.value.servicesOffered,
-    },
-    select: { updatedAt: true },
-  });
+  const { sectorEngagements } = checked.value;
+  const listed = checked.value.sectorsServed.map(sectorSlug);
+
+  /*
+     One transaction, so the sectors and their counts cannot disagree for the
+     length of a request. A removed sector's count is deleted in the same write
+     that removes the sector — board `1d-s` B8 reads a count only beside its
+     chip, and a row outliving its chip is a number waiting for the day the
+     seller types that sector back in and finds it already filled.
+
+     Counts are replaced wholesale when the form sent them and left alone when
+     it did not — an older client saving only the one-liner must not wipe them.
+  */
+  const [saved] = await prisma.$transaction([
+    prisma.business.update({
+      where: { id: businessId },
+      data: {
+        headline: checked.value.headline,
+        sectorsServed: checked.value.sectorsServed,
+        servicesOffered: checked.value.servicesOffered,
+      },
+      select: { updatedAt: true },
+    }),
+    sectorEngagements === null
+      ? prisma.sectorEngagement.deleteMany({ where: { businessId, sectorSlug: { notIn: listed } } })
+      : prisma.sectorEngagement.deleteMany({ where: { businessId } }),
+    ...(sectorEngagements && sectorEngagements.length > 0
+      ? [
+          prisma.sectorEngagement.createMany({
+            data: sectorEngagements.map((row) => ({ businessId, ...row })),
+          }),
+        ]
+      : []),
+  ]);
 
   return { ok: true, savedAt: saved.updatedAt };
 }

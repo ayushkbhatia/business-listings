@@ -17,6 +17,7 @@ import { t } from "@/lib/i18n";
 import { primarySize } from "@/lib/spec";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
+import { sellsGoods } from "@/lib/storefront/tabs";
 import { ProductTray } from "./ProductTray";
 import { CatalogueRail, CatalogueToolbar } from "./_rail";
 import { NotifyButton } from "./NotifyButton";
@@ -107,6 +108,15 @@ export default async function CataloguePage({ params, searchParams }: Params) {
   // An unclaimed listing has no subpages. It is a licence record, not a
   // storefront, and there is nothing here for it to show.
   if (business.claimStatus === "unclaimed") notFound();
+
+  /*
+     Board `1d-s` B1: a firm that sells work has no catalogue tab, and so no
+     catalogue URL — even where product rows survive from before it declared
+     what it sells. The header and the sitemap read the same rule from
+     `lib/storefront/tabs.ts`; a tab that does not exist must not have a route
+     that renders.
+  */
+  if (!sellsGoods(business.sellsKind)) notFound();
 
   const query = parseCatalogueQuery(await searchParams);
 

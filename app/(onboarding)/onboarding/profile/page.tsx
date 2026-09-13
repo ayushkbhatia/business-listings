@@ -105,6 +105,7 @@ export default async function ProfileStepPage() {
         sectorsServed: true,
         servicesOffered: true,
         languages: true,
+        sectorEngagements: { select: { sectorSlug: true, engagements: true } },
         primaryCategoryId: true,
         categories: { select: { categoryId: true } },
       },
@@ -230,6 +231,9 @@ export default async function ProfileStepPage() {
                 headline: profile.headline ?? "",
                 servicesOffered: profile.servicesOffered,
                 sectorsServed: profile.sectorsServed,
+                sectorEngagements: Object.fromEntries(
+                  profile.sectorEngagements.map((row) => [row.sectorSlug, row.engagements]),
+                ),
                 languages: profile.languages,
               }}
               chips={chips}

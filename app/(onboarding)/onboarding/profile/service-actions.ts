@@ -35,6 +35,9 @@ function say(refusal: ProfileRefusal, counts: { services: number; sectors: numbe
       over: formatCount(Math.max(0, counts.services - refusal.max)),
     });
   }
+  if (refusal.field === "sectorEngagements") {
+    return t("profile_svc.engagements_range", { max: formatCount(refusal.max) });
+  }
   if (refusal.reason === "entry_too_long") {
     return t("profile_svc.sectors_too_long", { max: formatCount(refusal.max) });
   }
@@ -62,6 +65,7 @@ export async function saveServiceFields(formData: FormData): Promise<SaveService
     headline: String(formData.get("headline") ?? ""),
     servicesOffered,
     sectorsServed,
+    ...engagementsFrom(formData.get("sectorEngagements")),
   });
 
   if (!result.ok) {
@@ -80,6 +84,29 @@ export async function saveServiceFields(formData: FormData): Promise<SaveService
 
   revalidatePath("/onboarding/profile");
   return { ok: true, savedAt: result.savedAt.toISOString() };
+}
+
+/**
+ * Board `1d-s` B8 — the declared counts, posted as one JSON object keyed by the
+ * sector's matching form. Absent means an older form that never sent them, and
+ * the stored counts are left alone; anything that does not parse is treated the
+ * same way rather than as *clear every count*.
+ */
+function engagementsFrom(raw: FormDataEntryValue | null): {
+  sectorEngagements?: Record<string, number | null>;
+} {
+  if (typeof raw !== "string" || raw === "") return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    const out: Record<string, number | null> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      out[key] = typeof value === "number" ? value : null;
+    }
+    return { sectorEngagements: out };
+  } catch {
+    return {};
+  }
 }
 
 /** The sector search, for the field's type-ahead. */

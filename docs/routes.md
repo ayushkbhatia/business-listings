@@ -20,6 +20,8 @@ and it is the one that argues back.
 /search?tab=products                    Results, products tab                [10c]
 /compare?p=…                            Comparison tray                      [10d]
 /b/:slug                                Storefront overview                   [1d]
+/b/:slug (sells work)                   Storefront, catalogue taken out     [1d-s] built h1ds
+/b/:slug/credentials                    Credentials tab, with a count       [1d-s] built h1ds
 /b/:slug/products                       Catalogue                             [1e]
 /b/:slug/branches                       Branches & hours                      [1f]
 /b/:slug/reviews                        Reviews & ratings                     [1m]  built h4s6
@@ -100,6 +102,7 @@ and it is the one that argues back.
 /dashboard/leads                        Leads & RFQ inbox                     [3j]  built h3 wave 1
 /dashboard/leads/:id                    One lead, and the quote composer      [3j]  built h3 wave 1
 /dashboard/leads/:id/thread             Seller message thread                [11b]  built h3 wave 1
+/dashboard/leads/:id/attachments/:doc   The buyer's file, signed for 2 min  [1d-s] built h1ds
 /dashboard/quotes                       Quotes sent pipeline                  [3k]  built h3 wave 1
 /dashboard/quotes/:ref                  One quote, highlighted                [3k]  built h3 wave 1
 /dashboard/quotes/:ref/extend           …with the extend dialog open          [3k]  built h3 wave 1
@@ -400,6 +403,17 @@ comes from `ScopeSheetFamily`, so every firm in a family renders the same rows i
 the same order — that is the comparison, and sorting per service would destroy
 it. `/b/:slug/services` is the **link surface**, not board `1e-s`: `1e-s` is the
 full public catalogue and it replaces the index behind that tab, which stays.
+
+`/b/:slug` for a firm whose `sellsKind` is `services` is **its own composition**,
+not the goods overview with sections hidden — board `1d-s`. It has no catalogue
+tab and `/b/:slug/products` 404s for it (B1); `/b/:slug/credentials` exists for
+any firm that sells work and holds a credential. Which tabs a storefront has is
+`lib/storefront/tabs.ts`, read by the header, every tab route and the sitemap, so
+the three cannot disagree. A firm that sells `both` keeps the goods overview and
+gains the services and credentials sections, with a service row opening its
+composer in a drawer. The overview takes `?service=<slug>`, which the composer
+opens on (B11) — `1g-s`'s *Enquire about this* and the services tab link there.
+`services`, `s` and `credentials` are reserved template-page slugs.
 
 `indicativeFee` reaches neither. It is excluded from `publicServiceFor`'s
 `select`, so it cannot appear in the page, the payload, the meta description or

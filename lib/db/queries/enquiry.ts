@@ -60,11 +60,25 @@ export interface BuyerEnquiry {
   deliverToArea: string | null;
   neededBy: Date | null;
   termsWanted: string | null;
+  /** How big the job is, in the buyer's words — decision D7. Null on goods. */
+  scale: string | null;
+  /** The buyer's own file's name. Theirs to see; the path never leaves the server. */
+  attachments: { id: string; filename: string }[];
   closesAt: Date;
   createdAt: Date;
   contactReleasedToBusinessId: string | null;
   contactReleasedAt: Date | null;
-  lines: { id: string; description: string; qty: number | null; unit: string | null; size: string | null; targetUnitPriceAed: string | null }[];
+  lines: {
+    id: string;
+    description: string;
+    /** Null is unquantified — work sold as a job — not zero. */
+    qty: number | null;
+    unit: string | null;
+    size: string | null;
+    targetUnitPriceAed: string | null;
+    /** Board `1d-s`: set when the line asked about a service rather than a thing. */
+    serviceId: string | null;
+  }[];
   recipients: { businessId: string; slug: string; displayName: string; state: string; openedAt: Date | null }[];
   /** Current revision per supplier, newest first. Superseded ones are not shown. */
   quotes: BuyerQuote[];
@@ -87,6 +101,12 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
       deliverToArea: true,
       neededBy: true,
       termsWanted: true,
+      scale: true,
+      attachments: {
+        where: { kind: "enquiry_attachment" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, filename: true },
+      },
       closesAt: true,
       createdAt: true,
       contactReleasedToBusinessId: true,
@@ -136,6 +156,8 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
     deliverToArea: enquiry.deliverToArea,
     neededBy: enquiry.neededBy,
     termsWanted: enquiry.termsWanted,
+    scale: enquiry.scale,
+    attachments: enquiry.attachments,
     closesAt: enquiry.closesAt,
     createdAt: enquiry.createdAt,
     contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
@@ -147,6 +169,7 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
       unit: l.unit,
       size: l.size,
       targetUnitPriceAed: l.targetUnitPriceAed?.toString() ?? null,
+      serviceId: l.serviceId,
     })),
     recipients: enquiry.recipients.map((r) => ({
       businessId: r.businessId,

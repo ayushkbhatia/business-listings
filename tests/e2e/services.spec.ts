@@ -2,8 +2,8 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 /**
- * Boards `3g-s`, `3f-s`, `1g-s`, `8a-s`, `8b-s`, `8c-s`, `3h-s` — the seat that
- * sells work.
+ * Boards `3g-s`, `3f-s`, `1g-s`, `8a-s`, `8b-s`, `8c-s`, `3h-s`, `1d-s` — the seat
+ * that sells work, and the storefront a buyer reads it through.
  *
  * This spec has its own project and its own seat because every other seller
  * fixture on this platform sells goods: `sells_kind` is `unset` on all 123 live
@@ -333,7 +333,8 @@ test.describe("board 1g-s — the public scope table", () => {
 
   test("words the enum rows rather than printing the stored value", async ({ page }) => {
     await page.goto(path);
-    const table = page.getByRole("table");
+    // By name: since `1d-s` the credentials are a table on this page too.
+    const table = page.getByRole("table", { name: "Scope table" });
     await expect(table.getByText("Ongoing contract")).toBeVisible();
     await expect(table.getByText("ongoing_contract")).toHaveCount(0);
   });
@@ -971,6 +972,165 @@ test.describe("board 3h-s — scope templates", () => {
   });
 
   test("has no axe violations", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+test.describe("board 1d-s — the storefront with the catalogue taken out of it", () => {
+  const storefront = "/b/meridian-chartered-accountants";
+
+  test("has no catalogue tab and no catalogue URL, and a credentials tab with a count — AC1, AC2", async ({
+    page,
+  }) => {
+    await page.goto(storefront);
+    // The tab row, not the directory nav above it — that one has a Products link of its own.
+    const tabs = page.getByLabel("Storefront sections");
+    await expect(tabs.getByRole("link", { name: /^Products/ })).toHaveCount(0);
+    await expect(tabs.getByRole("link", { name: /^Services\s*\d/ })).toBeVisible();
+    const credentialsTab = tabs.getByRole("link", { name: /^Credentials\s*\d+/ });
+    await expect(credentialsTab).toBeVisible();
+
+    // The count on the tab is the rows on the tab, not a number beside them.
+    const badge = Number((await credentialsTab.innerText()).replace(/\D+/g, ""));
+    await credentialsTab.click();
+    await page.waitForURL(/\/credentials$/);
+    const table = page.getByRole("table", { name: /Credentials held by Meridian Chartered Accountants/ });
+    await expect(table.locator("tbody tr")).toHaveCount(badge);
+
+    const catalogue = await page.request.get(`${storefront}/products`);
+    expect(catalogue.status()).toBe(404);
+  });
+
+  test("labels an unchecked credential as the firm's own claim, never as checked — AC3", async ({ page }) => {
+    await page.goto(`${storefront}/credentials`);
+    const table = page.getByRole("table", { name: /Credentials held by/ });
+    await expect(table.getByText("Stated by Meridian Chartered Accountants").first()).toBeVisible();
+    // No register is connected, so nothing on this listing may read as checked.
+    await expect(table.getByText(/checked against|verified against/i)).toHaveCount(0);
+    await expect(page.getByText(/we do not track expiry/i)).toBeVisible();
+  });
+
+  test("carries no fee in the page, the meta or the structured data — AC4", async ({ page }) => {
+    await page.goto(storefront);
+    const html = await page.content();
+    expect(html).not.toContain("14,000");
+    expect(html.toLowerCase()).not.toContain("indicative");
+
+    const ld = await page.locator('script[type="application/ld+json"]').allTextContents();
+    const business = ld.map((text) => JSON.parse(text)).find((data) => data["@type"] === "LocalBusiness");
+    expect(business?.hasOfferCatalog?.itemListElement?.length).toBeGreaterThan(0);
+    expect(JSON.stringify(business)).not.toMatch(/"price|priceRange|priceSpecification/);
+  });
+
+  test("renders an unfilled service field as absent rather than blank — AC5", async ({ page }) => {
+    await page.goto(storefront);
+    const services = page.getByRole("region", { name: "Services" });
+    const vat = services.getByRole("article").filter({ hasText: "VAT and corporate tax filing" });
+    await expect(vat).toBeVisible();
+    await expect(vat.getByText("Not provided")).toHaveCount(0);
+    // The audit row's deliverable is filled; the VAT row's is not, and no line stands in for it.
+    await expect(
+      services.getByRole("article").filter({ hasText: "Statutory audit" }).getByText("Signed audit report"),
+    ).toBeVisible();
+  });
+
+  test("words coverage as the union and sector counts as declared — AC6, AC7", async ({ page }) => {
+    await page.goto(storefront);
+    await expect(page.getByText("Works across Abu Dhabi, Dubai, and Sharjah.")).toBeVisible();
+
+    const sectors = page.getByRole("region", { name: "Sectors they work in" });
+    await expect(sectors.getByRole("listitem").filter({ hasText: "Contracting" })).toContainText("41");
+    await expect(sectors.getByRole("listitem").filter({ hasText: "Free zone entities" })).not.toContainText(/\d/);
+    await expect(
+      page.getByText("Counts are engagements the firm has declared, not audited by us."),
+    ).toBeVisible();
+  });
+
+  test("ships no availability chip and no site-visit badge — AC8, AC9", async ({ page }) => {
+    await page.goto(storefront);
+    const text = (await page.locator("main").innerText()).toLowerCase();
+    expect(text).not.toContain("accepting new clients");
+    expect(text).not.toContain("waitlist");
+    expect(text).not.toContain("office visited");
+    expect(text).not.toContain("premises visited");
+  });
+
+  test("opens the composer on the service the buyer arrived from — AC10", async ({ page }) => {
+    await page.goto(`${storefront}/s/vat-and-corporate-tax-filing`);
+    await page.getByRole("link", { name: "Enquire about this" }).click();
+    await page.waitForURL(/\?service=vat-and-corporate-tax-filing#enquire$/);
+    await expect(page.getByRole("combobox", { name: "Which service" })).toHaveValue(
+      "vat-and-corporate-tax-filing",
+    );
+
+    // And from a service row on the storefront itself, without losing what was typed.
+    await page.goto(storefront);
+    const need = page.getByRole("textbox", { name: "What you need, in your words" });
+    await need.fill("Year-end audit for a trading company.");
+    await page
+      .getByRole("region", { name: "Services" })
+      .getByRole("link", { name: "Enquire about VAT and corporate tax filing" })
+      .click();
+    await expect(page.getByRole("combobox", { name: "Which service" })).toHaveValue(
+      "vat-and-corporate-tax-filing",
+    );
+    await expect(need).toHaveValue("Year-end audit for a trading company.");
+    await expect(need).toBeFocused();
+  });
+
+  test("asks no quantity, and refuses a thin description beside the field", async ({ page }) => {
+    await page.goto(storefront);
+    const form = page.locator("#enquire");
+    await expect(form.getByRole("spinbutton")).toHaveCount(0);
+    await expect(form.getByText(/quantity|qty/i)).toHaveCount(0);
+
+    await form.getByRole("textbox", { name: "What you need, in your words" }).fill("audit");
+    await form.getByRole("button", { name: "Send enquiry" }).click();
+    await expect(form.getByText(/at least 10 characters/)).toBeVisible();
+  });
+
+  test("delivers a buyer's enquiry as the service it asked about, and the seller reads it so", async ({
+    page,
+    browser,
+  }) => {
+    /*
+       A buyer with no account, in a context of their own — the seat this
+       project signs in as is the firm, and a firm enquiring of itself is not
+       the path a buyer takes.
+    */
+    const buyer = await browser.newContext({ storageState: { cookies: [], origins: [] } });
+    const tab = await buyer.newPage();
+    const mark = Date.now().toString().slice(-7);
+
+    await tab.goto(`${storefront}?service=statutory-audit`);
+    const form = tab.locator("#enquire");
+    await form
+      .getByRole("textbox", { name: "What you need, in your words" })
+      .fill(`FY2025 audit for a contracting company, three projects. Ref ${mark}.`);
+    await form.getByRole("textbox", { name: "Size of your business" }).fill("AED 20–50m turnover, 40 staff");
+    await form.getByRole("textbox", { name: "Your name" }).fill("Test Buyer").catch(() => undefined);
+    await form.getByRole("textbox", { name: /mobile/i }).fill(`05${mark.slice(-1)}${mark}`);
+    await form.getByRole("button", { name: "Send enquiry" }).click();
+
+    await tab.waitForURL(/\/enquiry\/[^/?]+\?sent=1/);
+    const enquiryId = new URL(tab.url()).pathname.split("/").pop()!;
+    await expect(tab.getByText("Statutory audit", { exact: true })).toBeVisible();
+    // A service line prints no quantity.
+    await expect(tab.getByText("×1")).toHaveCount(0);
+    await expect(tab.getByText(/Size of the job: AED 20–50m turnover, 40 staff/)).toBeVisible();
+    await buyer.close();
+
+    // The firm's own inbox names the service and the size.
+    await page.goto(`/dashboard/leads/${enquiryId}`);
+    await expect(page.getByText("Service", { exact: true })).toBeVisible();
+    await expect(page.getByText("Size of the job", { exact: true })).toBeVisible();
+    await expect(page.getByText("AED 20–50m turnover, 40 staff")).toBeVisible();
+  });
+
+  test("has no axe violations at the acceptance width", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto(storefront);
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
   });

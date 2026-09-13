@@ -1237,6 +1237,118 @@ Axe at 1280 found nothing but the project's pinned contrast gap.
 
 ---
 
+## 4m · Handoff `1d-s` — the storefront with the catalogue taken out of it
+
+**Shipped 13 Sep 2026.** The first buyer-facing board of the track. Migration
+`20261012090000_storefront_services_1ds` — additive: `sector_engagement`,
+`enquiry_line.service_id`, `enquiry.scale`.
+
+### Its own composition, not the goods page with sections hidden
+
+`app/(public)/b/[slug]/_services.tsx`, chosen in the page by `sellsKind = services`. The goods
+overview is template sections around a catalogue; this answers a different question, so it is
+a different composition: what we take on, services as rows, credentials, sectors, the licence
+record; a composer, location, hours, coverage and what we checked in the rail. A `both` firm
+keeps the goods overview and gains the services and credentials sections (B2).
+
+**Which tabs exist is one pure module** — `lib/storefront/tabs.ts` — read by the shared
+header, every tab route and the sitemap. B1 is true three ways at once: no tab, a 404 on
+`/products`, and no sitemap entry.
+
+### Six corrections to the handoff
+
+1. **The composer asks four things every job has, not the render's audit form.** Financial
+   year end and turnover band are an audit firm's questions; the owner's standing rule is that
+   the track serves every firm that sells work. The fields are *which service*, *what you need*,
+   D7's free-text **scale** and *needed by*. The trade speaks through placeholders looked up by
+   scope-sheet family — *Size of your business · AED 20–50m turnover, 40 staff* for professional
+   services, *Size of the site · 4,000 sq m* for on-site maintenance — with a general fallback,
+   so a family created on `4e-s` tomorrow renders correctly today.
+2. **The attachment prompt is the firm's own data.** *Attach what they work from:* followed by the
+   service's `requires_from_client` row, when it filled one in. PDF, JPEG or PNG — the private
+   bucket's allow-list, which refuses spreadsheets; widening it is a `storage:setup`, not a
+   constant.
+3. **The hero credential chip only renders for a register-verified credential.** No register is
+   connected (`8b-s`), so on every live listing it is absent, and correctly: a claim beside the
+   licence badge reads as a second platform check. The claims are still listed, as claims.
+4. **"Goes to the partner who handles new work"** became *goes to whoever handles new work at
+   {name}* — "partner" is a practice's word, and lead routing sends to a seat.
+5. **Ministry of Finance, not Economy.** `8b-s` shipped the kind as `mof_audit_approval`; the
+   render's label is not re-decided here.
+6. **The render draws a credentials list; the build draws a table**, with visible column heads —
+   non-negotiable 4, and a visually hidden `<thead>` leaves the heads off their columns, which
+   `gallery.spec.ts` measures.
+
+### Two decisions taken rather than asked
+
+- **Credentials render on every plan.** Board 1d strips *certificates* — the documents section,
+  a paid feature — from a Free storefront. A credential is a trust line whose file never travels,
+  and non-negotiable 2 says trust signals render identically everywhere. Gating them would make
+  *who checked it* something a firm buys. One condition in `CredentialsSection` reverses it.
+- **B6 on the overview, the scope table's rule on `1g-s`.** A summary row omits an unfilled chip;
+  the scope table one click away shows every unanswered row grey, which is where §4g put the
+  honesty rule and where it stays.
+
+### What was not there to build on
+
+- **An enquiry could not name a service.** `1g-s`'s *Enquire about this* linked
+  `/rfq/new?business=…&service=…`, and that composer reads neither parameter: the buyer landed
+  on a goods form asking quantities, with the service gone. `EnquiryLine.serviceId` is the
+  service-side twin of `productId`; `createEnquiry` keeps it only for a live service of a
+  recipient. The line is written **unquantified** — `qty` null, which pull request 173 made
+  possible — so neither the buyer's page nor the seller's quote invents a *×1*.
+- **Coverage is the union of live services' effective coverage**, read through
+  `publicCoverageFor` now that pull request 173 gave `ServiceCoverage` a `serviceId`: a service
+  narrowed to Dubai never shrinks the listing, and one that travels further widens it.
+  `1g-s`'s page reads the one service's effective coverage through `publicServiceCoverage`.
+- **A buyer's file had no path at all.** `DocumentKind.enquiry_attachment` existed with no
+  writer, no reader and no route. The upload is signed **after** the enquiry exists, under its
+  own folder — signing on pick would hand a private-bucket write to anyone who opens a public
+  page. The confirm checks the buyer (session or claim token), the path, what storage actually
+  holds, and one file. The seller reads it through `/dashboard/leads/:id/attachments/:doc`,
+  which re-checks the recipient row and redirects to a two-minute signed link.
+- **Declared sector counts had no column.** `sectorsServed` is a string array; a second
+  index-aligned array is one bug from printing one sector's count under another, so
+  `sector_engagement` is keyed by the sector's matching form, CHECKed 1–99,999, written by
+  `2c-s`'s field set in the same transaction as the sectors.
+
+### Found on the way, and fixed
+
+- **The services tab never carried template pages.** It passed the business id to `navPages`,
+  which takes a sector — the shared header rendered differently on that one tab.
+- **`services`, `s` and `credentials` were not reserved page slugs.** A staff page at
+  `/b/x/services` would have been unreachable behind `1g-s`'s route.
+- **The sitemap never submitted `1g-s`'s services tab or service pages**, and would have
+  submitted a services firm's catalogue. It reads `tabRoutes` now.
+- **The buyer's tracking page printed `net_30`** for payment terms, and `×1` beside a service.
+- **A services firm's business details showed *Payment terms* and *Delivery* as *Not
+  provided*** — goods fields `2c-s` never asks it.
+- **`publicCredentialsFor` ordered by trust then date**; the board orders by trust then kind.
+
+### Still owed
+
+- **`1f-s`.** The tab still reads *Branches* for a services firm and the rail still carries the
+  location card; `1f-s` replaces both with coverage.
+- **`3j-s`.** The seller's quote composer tells a services firm *nothing in your catalogue
+  matches this line* for a service line. It prices correctly at quantity one; the copy is the
+  proposal board's.
+- **The tracking page's *what happens next*** still says *compare line by line* — `1h-s`.
+- **Q4, per-service reviews** — noted for the reviews board, not built.
+
+### Verified by clicking it
+
+Signed out at 1440 and 1280: no Products in the tab row, *Services 2 · Credentials 1*, the
+indemnity row reading *Stated by Meridian Chartered Accountants* with a dash rather than a
+check, *Contracting 41 · Trading 28 · Free zone entities* with the disclaimer beneath, *Works
+across Abu Dhabi, Dubai, and Sharjah*. Typed a requirement, pressed *Enquire* on the VAT row:
+the select moved, the text stayed, focus landed in it. Sent it with a PDF: the tracking page
+read *VAT and corporate tax filing* with no quantity, *Size of the job* and *Attached*; the row
+landed private with storage's own byte count. Signed in as the owner: the lead showed
+*Service*, *Size of the job* and the file, which downloaded through a signed link; a guessed
+document id and another enquiry's path both 404.
+
+---
+
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`
 
@@ -1435,7 +1547,7 @@ edit**.
 | **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **shipped 12 Sep.** One handoff, three screens, and it was right: the editor fixed the field set, the list reported on it, the page rendered it. See §4g |
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | `2b-s`, `2c-s` and `2d-s` shipped 11 Sep. `3c-s` is mostly built and now owes the services mirror as well as the per-service rows |
-| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | `5c-s` has a placeholder waiting. `1d-s` needs the Free-plan certifications gate decided |
+| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **`1d-s` shipped 13 Sep** (§4m) — credentials render on every plan. `5c-s` has a placeholder waiting |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | The expensive one, and the two that must be consecutive |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | `12c-s` waits on §2's three ranking defects |

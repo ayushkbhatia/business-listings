@@ -7,3 +7,4 @@ export * from "./phone";
 export * from "./trn";
 export * from "./size";
 export * from "./distance";
+export * from "./list";

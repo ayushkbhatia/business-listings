@@ -56,6 +56,9 @@ export const STOREFRONT_TAB_COUNTS = {
   // Board `1g-s`. Live only — a draft scope sheet is the seller's working copy
   // and a tab counting it would offer a buyer a page that 404s.
   services: { where: { status: "live" as const } },
+  // Board `1d-s`. Every row, lapsed or not — an expiry changes nothing on this
+  // tab (B4), and the tab counts what the table below it lists.
+  credentials: true,
   locations: { where: { published: true } },
   reviews: { where: { removedAt: null, heldAt: null } },
 } as const;

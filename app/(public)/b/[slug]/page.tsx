@@ -33,6 +33,9 @@ import { navPages } from "@/lib/storefront/pages";
 import { PageEvent } from "@/components/telemetry";
 import { ShortlistButton, shortlistLabels, toggleShortlistAction } from "@/app/(public)/_shortlist";
 import { isShortlisted } from "@/lib/shortlist/service";
+import { storefrontPhotos } from "@/lib/storefront/photos";
+import { servicesStorefrontFor } from "@/lib/storefront/services";
+import { CredentialsSection, ServicesSection, ServicesStorefrontPage } from "./_services";
 
 export const revalidate = 300;
 
@@ -55,6 +58,11 @@ const SCHEMA_AVAILABILITY: Record<string, string> = {
 
 interface Params {
   params: Promise<{ slug: string }>;
+  /**
+   * `service` — board `1d-s` B11. The service a buyer arrived asking about,
+   * from `1g-s` or the services tab, which the composer opens on.
+   */
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }
 
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
@@ -109,8 +117,10 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
-export default async function StorefrontPage({ params }: Params) {
+export default async function StorefrontPage({ params, searchParams }: Params) {
   const { slug } = await params;
+  const query = (await searchParams) ?? {};
+  const requestedService = typeof query.service === "string" ? query.service : null;
   const business = await getBusinessBySlug(slug);
   if (!business) {
     /*
@@ -152,7 +162,7 @@ export default async function StorefrontPage({ params }: Params) {
       {business.claimStatus === "unclaimed" ? (
         <UnclaimedStorefront business={business} />
       ) : (
-        <ClaimedStorefront business={business} />
+        <ClaimedStorefront business={business} requestedService={requestedService} />
       )}
     </>
   );
@@ -164,7 +174,13 @@ type Business = NonNullable<Awaited<ReturnType<typeof getBusinessBySlug>>>;
 // Board 1d — the claimed composition
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function ClaimedStorefront({ business }: { business: Business }) {
+async function ClaimedStorefront({
+  business,
+  requestedService,
+}: {
+  business: Business;
+  requestedService: string | null;
+}) {
   // Decides whether the composer asks for a phone number, and now also who the
   // save control is answering for. A buyer with no account can still send an
   // enquiry — that is the point of the provisional identity — they just have to
@@ -178,6 +194,28 @@ async function ClaimedStorefront({ business }: { business: Business }) {
      ever answer false.
   */
   const saved = actor ? await isShortlisted(actor.id, business.id) : false;
+
+  /*
+     Board `1d-s`. A firm that sells only work gets the storefront with the
+     catalogue taken out of it — its own composition, not this one with
+     sections hidden, because the page is answering a different question. See
+     `./_services.tsx`.
+
+     A firm that sells both keeps this composition and gains the services and
+     credentials sections below, with the catalogue and the services as
+     separate tabs (B2).
+  */
+  if (business.sellsKind === "services") {
+    return (
+      <ServicesStorefrontPage
+        business={business}
+        actor={actor}
+        saved={saved}
+        requestedService={requestedService}
+      />
+    );
+  }
+  const work = business.sellsKind === "both" ? await servicesStorefrontFor(business.id) : null;
 
   const plan = await storefrontPlan({
     id: business.id,
@@ -347,22 +385,8 @@ async function ClaimedStorefront({ business }: { business: Business }) {
   */
   const freePlan = (business.plan?.id ?? "free") === "free";
 
-  /*
-     From the plan row, not from a constant here. D1, 9 Sep 2026.
-
-     This was `const FREE_PHOTO_LIMIT = 3`, gated on `plan.id === "free"` — a
-     plan number that lived in a page file, on a plan identified by string
-     comparison. Two defects in three lines: nobody could change the cut without
-     a deploy, and a second free-shaped plan would have rendered as Pro.
-
-     `publicPhotoLimit` is null on the paid plans, which means all of them, so
-     the null check is the whole of the paid path. A listing with no plan row is
-     treated as Free — most are unclaimed imports, and defaulting the other way
-     would hand the best storefront to every listing nobody has claimed.
-  */
-  const publicPhotoLimit = business.plan?.publicPhotoLimit ?? (freePlan ? 3 : null);
-  const allPhotos = business.media.filter((item) => item.kind === "gallery");
-  const photos = publicPhotoLimit === null ? allPhotos : allPhotos.slice(0, publicPhotoLimit);
+  // The photo cut is the plan row's, in one function both compositions share.
+  const photos = storefrontPhotos(business.plan, business.media);
 
   return (
     <PublicShell
@@ -545,7 +569,7 @@ async function ClaimedStorefront({ business }: { business: Business }) {
                Removed entirely at zero, like every other section on this page.
             */}
             {photos.length > 0 && (
-              <section id="photos" className="scroll-mt-6">
+              <section id="photos" className="scroll-mt-20">
                 <h2 className="text-h2 text-brand-ink">{t("storefront.photos_heading")}</h2>
                 <ul className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                   {photos.map((photo) => (
@@ -574,6 +598,20 @@ async function ClaimedStorefront({ business }: { business: Business }) {
                dropped on the way.
             */}
             <CapabilityChips business={business} />
+
+            {/*
+               Board `1d-s` B2 — a firm that sells both. The catalogue stays
+               this page's lead and its tab; the services and the credentials
+               follow as their own sections, and a service row opens the
+               service composer in a drawer, because this rail's composer asks
+               for quantities.
+            */}
+            {work && (
+              <>
+                <ServicesSection business={business} data={work} mode="drawer" signedIn={Boolean(actor)} />
+                <CredentialsSection business={business} data={work} />
+              </>
+            )}
 
             <BusinessDetails business={business} lastUpdated={formatDate(business.updatedAt)} />
 

@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import {
+  ENGAGEMENTS_MAX,
   HEADLINE_MAX,
   SERVICES_MAX,
   sectorSlug,
@@ -44,6 +45,11 @@ export interface ServiceProfileValue {
   headline: string;
   servicesOffered: string[];
   sectorsServed: string[];
+  /**
+   * Board `1d-s` B8 — engagements declared per sector, keyed by `sectorSlug`.
+   * A sector with no key has no declared count, which is not zero.
+   */
+  sectorEngagements: Record<string, number>;
   languages: string[];
 }
 
@@ -138,8 +144,26 @@ export function ServiceProfileFields({
         chips={chips}
         search={search}
         disabled={disabled}
-        onChange={(next) => set({ sectorsServed: next })}
+        onChange={(next) => {
+          // A removed sector takes its count with it.
+          const kept = new Set(next.map(sectorSlug));
+          set({
+            sectorsServed: next,
+            sectorEngagements: Object.fromEntries(
+              Object.entries(value.sectorEngagements).filter(([slug]) => kept.has(slug)),
+            ),
+          });
+        }}
       />
+
+      {value.sectorsServed.length > 0 && (
+        <EngagementCounts
+          sectors={value.sectorsServed}
+          counts={value.sectorEngagements}
+          disabled={disabled}
+          onChange={(next) => set({ sectorEngagements: next })}
+        />
+      )}
 
       {/* ── Languages ─────────────────────────────────────────────────── */}
       <ChipField
@@ -271,6 +295,71 @@ function ChipField({
 
       <p className="mt-1 text-caption text-muted">{full ? fullNote : hint}</p>
     </div>
+  );
+}
+
+/**
+ * How many engagements in each sector — board `1d-s` B8, and optional.
+ *
+ * The storefront prints these beside the sector chips with *counts are
+ * engagements the firm has declared, not audited by us* directly beneath, and
+ * this says the same thing to the seller before they type a number: it is a
+ * declaration in public, under their name. A blank is *not declared* and prints
+ * a chip without a number — never a zero.
+ *
+ * Real inputs with real labels, one per sector, rather than a number squeezed
+ * into each pill: a field whose only name is the chip beside it is a field a
+ * screen reader announces as "edit text".
+ */
+function EngagementCounts({
+  sectors,
+  counts,
+  disabled,
+  onChange,
+}: {
+  sectors: readonly string[];
+  counts: Record<string, number>;
+  disabled?: boolean;
+  onChange: (next: Record<string, number>) => void;
+}) {
+  return (
+    <fieldset className="min-w-0">
+      <legend className="text-caption font-medium text-body">{t("profile_svc.engagements")}</legend>
+      <p className="mt-0.5 max-w-prose text-caption text-muted">{t("profile_svc.engagements_hint")}</p>
+      <ul className="mt-2 grid list-none gap-2 p-0 sm:grid-cols-2">
+        {sectors.map((sector) => {
+          const slug = sectorSlug(sector);
+          const id = `svc-engagements-${slug.replace(/[^a-z0-9]+/g, "-")}`;
+          return (
+            <li key={slug} className="flex items-center justify-between gap-3">
+              <label htmlFor={id} className="min-w-0 truncate text-body-sm text-body">
+                {sector}
+              </label>
+              <div className="w-28 shrink-0">
+                <Input
+                  id={id}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={ENGAGEMENTS_MAX}
+                  step={1}
+                  disabled={disabled}
+                  value={counts[slug] ?? ""}
+                  placeholder={t("profile_svc.engagements_placeholder")}
+                  onChange={(event) => {
+                    const raw = event.target.value.trim();
+                    const next = { ...counts };
+                    if (raw === "") delete next[slug];
+                    else next[slug] = Number(raw);
+                    onChange(next);
+                  }}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </fieldset>
   );
 }
 

@@ -35,7 +35,7 @@ export type PageResult<T = unknown> =
 const MESSAGE: Record<PageRefusal, string> = {
   not_found: "That page is not here.",
   slug_taken: "This template already has a page at that address.",
-  slug_is_reserved: "That address is one the storefront already uses for its catalogue, branches or reviews.",
+  slug_is_reserved: "That address is one the storefront already uses for its catalogue, services, credentials, branches or reviews.",
   not_a_slug: "Lowercase letters, numbers and hyphens.",
   already_published: "This page is live, so its address is fixed. Publish a new page and this one will redirect to it.",
 };
@@ -52,7 +52,19 @@ function refuse<T>(error: PageRefusal): PageResult<T> {
  * silently never render. Refusing it is better than shipping a page nobody can
  * reach.
  */
-const RESERVED = ["products", "branches", "reviews", "p", "d"];
+const RESERVED = [
+  "products",
+  "branches",
+  "reviews",
+  "p",
+  "d",
+  // Board `1g-s`'s services tab and service pages, which shipped without
+  // joining this list — a staff page at `/b/x/services` would have been
+  // unreachable behind them. And board `1d-s`'s credentials tab.
+  "services",
+  "s",
+  "credentials",
+];
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 

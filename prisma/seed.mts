@@ -7414,6 +7414,21 @@ async function seedServicesFirm(db: Db) {
   });
 
   /*
+     Board `1d-s` B8 — two of the three sectors carry a declared count and one
+     does not, which is the fixture that renders both halves of the rule: a
+     number beside a chip with the disclaimer beneath, and a chip with no number
+     that is *not declared* rather than zero. Rows in a new table, so no count a
+     sibling board asserts on moves.
+  */
+  await db.sectorEngagement.createMany({
+    data: [
+      { businessId: firm.id, sectorSlug: "contracting", engagements: 41 },
+      { businessId: firm.id, sectorSlug: "trading", engagements: 28 },
+    ],
+    skipDuplicates: true,
+  });
+
+  /*
      A family on the trade, so the fixture exercises the half of B2 that a
      default family cannot: per-family fee bases and per-family row labels. It
      is the only category in the seed with one, which is honest — production has

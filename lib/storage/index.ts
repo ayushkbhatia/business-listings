@@ -109,6 +109,38 @@ export async function readInvoicePdf(path: string): Promise<Buffer | null> {
   return Buffer.from(await data.arrayBuffer());
 }
 
+/**
+ * What storage actually holds at a private path — its size and type — or null.
+ *
+ * For a write the browser made directly with a signed URL. The form told the
+ * server a size and a type before the signature was issued, and the bytes that
+ * arrived are not bound by what the form said: storage enforces the bucket's
+ * own ceiling and allow-list, and this reads back what was stored so the row
+ * that points at the file records the truth rather than the claim.
+ */
+export async function statDocument(
+  path: string,
+): Promise<{ bytes: number; mimeType: string | null } | null> {
+  const slash = path.lastIndexOf("/");
+  if (slash <= 0) return null;
+  const folder = path.slice(0, slash);
+  const name = path.slice(slash + 1);
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage
+    .from(DOCUMENT_BUCKET)
+    .list(folder, { limit: 100, search: name });
+  if (error || !data) return null;
+
+  const file = data.find((entry) => entry.name === name);
+  if (!file) return null;
+  const metadata = (file.metadata ?? {}) as { size?: number; mimetype?: string };
+  return {
+    bytes: typeof metadata.size === "number" ? metadata.size : 0,
+    mimeType: typeof metadata.mimetype === "string" ? metadata.mimetype : null,
+  };
+}
+
 export async function removeObject(bucket: string, path: string): Promise<void> {
   const admin = createAdminClient();
   await admin.storage.from(bucket).remove([path]);

@@ -783,6 +783,11 @@ export interface PublicService {
   excluded: string | null;
   status: ServiceStatus;
   familyName: string;
+  /**
+   * The family's id, for copy that speaks the trade — board `1d-s`'s composer
+   * words its placeholders per family rather than per component.
+   */
+  familyId: string;
   categoryId: string;
   categoryName: string;
   categorySlug: string;
@@ -919,6 +924,7 @@ function toPublic(service: PublicRow, family: ScopeFamily): PublicService {
     excluded: service.excluded,
     status: service.status,
     familyName: family.name,
+    familyId: family.id,
     categoryId: service.categoryId,
     categoryName: service.category.name,
     categorySlug: service.category.slug,
