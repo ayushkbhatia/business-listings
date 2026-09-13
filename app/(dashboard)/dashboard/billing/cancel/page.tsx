@@ -212,23 +212,25 @@ export default async function CancelPage() {
           </div>
 
           {/*
-             The fork, stated and not linked.
+             The fork, stated and now linked.
 
-             `11i` is not drawn and is blocked, and a live link to a route that
-             does not exist is the defect corrected on `11d` and `11g`. The
-             seller still needs the difference — cancelling leaves the listing in
-             the directory, closing removes it — so it is said here and asked
-             again on step 2, which is where the fork actually happens. Build
-             note `B5`.
+             Until board 11i existed this was said and not linked — a live link
+             to a route that did not exist is the defect corrected on `11d` and
+             `11g`. It exists, so the seller who is closing rather than cancelling
+             can go straight there. The difference is still said first:
+             cancelling leaves the listing in the directory, closing removes it.
           */}
           <Card surface="paper" padded>
             <p className="text-caption font-medium text-ink">{t("cancel.closing_eyebrow")}</p>
             <p className="mt-2 text-caption leading-relaxed text-body-ink">
               {t("cancel.closing_body")}
             </p>
-            <p className="mt-2 text-caption leading-relaxed text-muted">
-              {t("cancel.closing_blocked")}
-            </p>
+            <Link
+              href="/dashboard/account/close"
+              className="mt-2 inline-block rounded-tag text-caption font-medium text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+            >
+              {t("cancel.closing_link")}
+            </Link>
           </Card>
 
           <Card surface="card" padded>

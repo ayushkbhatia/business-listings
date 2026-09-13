@@ -387,6 +387,57 @@ model AuditEvent {
 Write it in the service layer. A mutation that can reach the database without an audit row is
 a bug, and the test suite should prove it cannot.
 
+## Closing a business — board 11i
+
+Closure is a **status transition, not a delete**. Nothing about the business is removed at
+the moment it closes, which is what lets it be reversed exactly.
+
+```prisma
+model Business {
+  closureRequestedAt DateTime?   // set when the listing comes down; null again on reversal
+  closedAt           DateTime?   // set when the cooling-off window ends; cleared only by a staff reopen
+}
+
+model BusinessClosure {
+  initiator     ClosureInitiator  // owner | platform (B8, lapsed licence)
+  requestedById String            // owner, or the ops lead who gave notice
+  ownerId       String?           // who the email goes to and who may reverse
+  effectiveAt   DateTime          // = requestedAt for an owner; +14 days notice for platform
+  appliedAt     DateTime?         // when it actually came down
+  finalAt       DateTime          // last moment to reverse, fixed at request
+  reversedAt / reversedById / reversedVia   // email | dashboard | licence_renewed | staff
+  finalisedAt   DateTime?
+  tokenHash     String @unique    // SHA-256 of the emailed token; the token is never stored
+  snapshot      Json              // publishedAt, seats and roles, subdomain — what a reversal restores
+  emailDeliveredAt  DateTime?
+  documentsPurgedAt DateTime?     // trade licence and VAT certificate, 12 months after finalisedAt
+}
+```
+
+- **Coming down nulls `publishedAt`.** Every public read already honours it, so closure needed
+  no new filter on 118 queries. The original value lives in the snapshot, and a reversal puts
+  that value back rather than `now()`, so the listing's age and its sitemap `lastmod` survive.
+- **Seats are revoked the way `removeSeat` revokes them** — business and branch nulled, seller
+  roles stripped, claims repaired — and every revoked user's `auth.sessions` rows are deleted.
+  The owner signs in again to a user with no seat, which is what routes them to the reversal
+  screen. A reversal restores only seats whose user has not joined another business since.
+- **One open closure per business**, held by a partial unique index on
+  `reversed_at IS NULL AND finalised_at IS NULL`. Four checks pin the rest: a closure ends one
+  way, a reversal says how, the window runs forward, and an owner closure applies immediately.
+  On `business`, a closed business must have been requested, and a requested one is
+  unpublished.
+- **Retained, not deleted:** enquiry threads and quotes (the buyer's record as much as the
+  seller's), reviews (reachable by direct link from the noindex notice), tax invoices for five
+  years, and the licence documents for twelve months — Privacy §07's periods, not new ones.
+- **The slug is reserved forever.** A final closure does not free `/b/:slug`; the same trade
+  licence reclaims it through `reopenClosedBusiness`, which staff run under `business.close`
+  and which leaves `publishedAt` null so the owner goes live through the usual gate.
+- The nightly job applies platform notices whose 14 days have passed, withdraws any whose
+  licence was renewed (`licence_renewed`), holds any with a paid subscription still running,
+  finalises windows that have ended — deleting the revoked seats' notification channels then,
+  not at request, so a reversal does not make every seat re-verify — and purges retained
+  documents that are due.
+
 ## Derived, never stored as editable
 
 `responseTimeMedian` — from enquiry-to-first-reply timestamps. `profileStrength` — weighted

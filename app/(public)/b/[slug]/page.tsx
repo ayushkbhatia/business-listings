@@ -14,6 +14,8 @@ import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { crawlRel } from "@/lib/seo/crawl-policy";
 import { StorefrontHeader, storefrontCrumbs } from "./_storefront";
+import { ClosedStorefront } from "./_closed";
+import { closedListing } from "@/lib/closure/public";
 import { renderSection } from "@/components/storefront";
 import { storefrontPlan } from "@/lib/storefront/loader";
 import { openingHoursSchema } from "@/lib/trade/open-now";
@@ -68,7 +70,16 @@ interface Params {
 export async function generateMetadata({ params }: Params): Promise<Metadata> {
   const { slug } = await params;
   const business = await getBusinessBySlug(slug);
-  if (!business) return {};
+  if (!business) {
+    // Board 11i Q5. The notice is readable by direct link and indexed nowhere.
+    const closed = await closedListing(slug);
+    return closed
+      ? {
+          title: t("closed.meta_title", { name: closed.displayName }),
+          robots: { index: false, follow: false },
+        }
+      : {};
+  }
 
   const head = business.locations[0];
   const area = head?.area.name ?? "";
@@ -129,6 +140,12 @@ export default async function StorefrontPage({ params, searchParams }: Params) {
      * read since handoff 0.
      */
     await redirectIfMoved(`/b/${slug}`);
+    /*
+     * And the one way it legitimately leaves: board 11i. A closed business is
+     * not a 404 — it existed, buyers reviewed it — and not a storefront.
+     */
+    const closed = await closedListing(slug);
+    if (closed) return <ClosedStorefront listing={closed} searchParams={query} />;
     notFound();
   }
 

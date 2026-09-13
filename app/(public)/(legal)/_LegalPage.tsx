@@ -3,9 +3,9 @@ import Link from "next/link";
 import { Eyebrow } from "@/components/display";
 import { cn } from "@/lib/cn";
 import { PublicShell } from "@/components/structure";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatDateRange } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import type { LegalBlock, LegalDocument } from "@/lib/legal/documents";
+import type { LegalBlock, LegalChange, LegalDocument } from "@/lib/legal/documents";
 import { siblingsOf } from "@/lib/legal/pages";
 import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
@@ -323,25 +323,96 @@ export function LegalPage({ document: doc }: LegalPageProps) {
 
           <RailCard title={t("legal.versions")}>
             <ul className="flex flex-col gap-2.5">
+              {/*
+                 Terms §14: a change is announced here before it takes effect,
+                 and the earlier wording stays here after. Board 11i's amendment
+                 is the first change either document has had, so these rows are
+                 real rather than the specimens the canvas drew.
+              */}
+              {doc.pendingChange && (
+                <li className="flex items-baseline gap-2">
+                  <span className="font-mono text-caption uppercase text-muted tabular-nums">
+                    {formatDate(doc.pendingChange.effectiveFrom)}
+                  </span>
+                  <span className="ms-auto text-caption text-warn-ink">{t("legal.version_pending")}</span>
+                </li>
+              )}
               <li className="flex items-baseline gap-2">
                 <span className="font-mono text-caption uppercase text-muted tabular-nums">
                   {effective}
                 </span>
                 <span className="ms-auto text-caption text-body">{t("legal.version_current")}</span>
               </li>
+              {doc.previousChange && (
+                <li className="flex items-baseline gap-2">
+                  <span className="font-mono text-caption uppercase text-muted tabular-nums">
+                    {formatDateRange(PREVIOUS_FROM, doc.previousChange.until)}
+                  </span>
+                  <span className="ms-auto text-caption text-body">{t("legal.version_previous")}</span>
+                </li>
+              )}
             </ul>
+
+            {doc.pendingChange && (
+              <ChangeDetails
+                summary={t("legal.changes_pending_summary", { date: formatDate(doc.pendingChange.effectiveFrom) })}
+                change={doc.pendingChange}
+              />
+            )}
+            {doc.previousChange && (
+              <ChangeDetails summary={t("legal.changes_previous_summary")} change={doc.previousChange} />
+            )}
+
             {/*
                13f §3: the archive starts at first publish. Two dated rows are
                drawn on the canvas and they are specimens — rendering them would
                be two links to versions that never existed, which is the padding
                CLAUDE.md's interface-honesty section is about.
             */}
-            <p className="mt-3 text-caption leading-relaxed text-muted">
-              {t("legal.versions_first")}
-            </p>
+            {!doc.pendingChange && !doc.previousChange && (
+              <p className="mt-3 text-caption leading-relaxed text-muted">
+                {t("legal.versions_first")}
+              </p>
+            )}
           </RailCard>
         </aside>
       </div>
     </PublicShell>
+  );
+}
+
+/** The date the first published wording took effect, which a previous version starts from. */
+const PREVIOUS_FROM = new Date(Date.UTC(2026, 8, 4));
+
+/**
+ * The changed clauses, before and after, in a disclosure.
+ *
+ * Collapsed by default because most readers of a policy are not comparing
+ * versions. The dated rows above it are what a printed copy carries.
+ */
+function ChangeDetails({ summary, change }: { summary: string; change: LegalChange }) {
+  return (
+    <details className="mt-3 border-t border-fill pt-3">
+      <summary className="cursor-pointer rounded-tag text-caption font-medium text-moss focus-visible:shadow-focus focus-visible:outline-none">
+        {summary}
+      </summary>
+      <ul className="mt-2.5 flex flex-col gap-3">
+        {change.items.map((item) => (
+          <li key={item.section} className="flex flex-col gap-1.5">
+            <span className="font-mono text-caption uppercase text-muted">
+              {t("legal.change_section", { section: item.section })}
+            </span>
+            <p className="text-[0.75rem] leading-[1.55] text-muted">
+              <span className="font-medium text-body">{t("legal.change_until", { date: formatDate(change.until) })}</span>{" "}
+              {item.before}
+            </p>
+            <p className="text-[0.75rem] leading-[1.55] text-body">
+              <span className="font-medium text-ink">{t("legal.change_from", { date: formatDate(change.effectiveFrom) })}</span>{" "}
+              {item.after}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </details>
   );
 }

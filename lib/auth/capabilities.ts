@@ -58,6 +58,12 @@ export const CAPABILITIES = {
     source: "stated",
     why: "§07 cross-surface and staff tables agree: superadmin only. Taking a paying supplier off the directory is the most severe reversible act on the platform.",
   },
+  "business.close": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "inferred",
+    why: "Board 11i build note B8 — the platform-initiated closure of a listing whose trade licence lapsed and was not renewed, and the two acts that undo one: withdrawing a notice or a closure inside its window, and reopening a closed business for the same licence holder (Q2). Held at ops lead with suspension, which it outranks: suspension is a pause with a reason, closure removes the business and revokes its team. Not a row in §07 — flag it if §07 gains one.",
+  },
   "business.merge": {
     roles: OPS_LEAD_ONLY,
     audited: true,
@@ -244,6 +250,12 @@ export const CAPABILITIES = {
     audited: false,
     source: "stated",
     why: "Board 7d, \"Change plan or cancel\": owner only. Was inferred as owner + finance by analogy with billing.manage, and the matrix separates them — a finance seat reads the invoices and does not decide what the business buys.",
+  },
+  "account.close": {
+    roles: ["seller_owner"],
+    audited: false,
+    source: "stated",
+    why: "Board 11i Q4, answered by the owner on 14 Sep 2026: owner only. Consistent with board 7d, where cancelling a plan is already owner-only, and closure is strictly more consequential — it takes the business out of the directory, revokes every seat and ends every session. Not an AuditEvent: a seller closing their own account is not a staff state change, so the record is the `business_closure` row, which names who asked and who reversed, the same call board 11h made for a cancellation.",
   },
   "team.manage": {
     roles: ["seller_owner", "seller_manager"],

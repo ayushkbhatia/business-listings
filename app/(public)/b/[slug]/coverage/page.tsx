@@ -7,7 +7,7 @@ import { ChipLink } from "@/components/display";
 import { CoverageTable, type CoverageTableRow } from "@/components/domain/ServicesStorefront";
 import { coverageRowView } from "@/components/domain/service-views";
 import { getBusinessBySlug } from "@/lib/db/queries";
-import { absorbedInto, redirectIfMoved } from "@/lib/listing/redirect";
+import { absorbedInto, redirectIfClosed, redirectIfMoved } from "@/lib/listing/redirect";
 import { navPages } from "@/lib/storefront/pages";
 import {
   coveragePageFor,
@@ -86,6 +86,8 @@ export default async function StorefrontCoveragePage({ params, searchParams }: P
   const business = await getBusinessBySlug(slug);
   if (!business) {
     await redirectIfMoved(`/b/${slug}/coverage`);
+    // Board 11i: a closed business's subpages go to its notice.
+    await redirectIfClosed(slug);
     notFound();
   }
   const movedTo = await absorbedInto(slug);

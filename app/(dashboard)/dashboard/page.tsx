@@ -9,6 +9,7 @@ import { PositionValue, PositionReason } from "@/components/domain";
 import { cheapestPlanGranting, cheapestPlanUnlocking, type PlanCaps } from "@/lib/plan/entitlements";
 import { formatCount, formatDate, formatDuration, formatRelative } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { openClosureFor } from "@/lib/closure/service";
 import type { SetupChrome } from "@/lib/setup/service";
 import { getNavBadges, getSetupProgress, requireSellerSeat, SellerPage } from "./_shell";
 
@@ -38,12 +39,17 @@ export default async function OverviewPage({
   searchParams: Promise<{ notice?: string; strength?: string }>;
 }) {
   const seat = await requireSellerSeat();
-  const [{ notice, strength }, overview, badges, setup] = await Promise.all([
+  const [{ notice, strength }, overview, badges, setup, openClosure] = await Promise.all([
     searchParams,
     getOverview(seat.businessId),
     getNavBadges(seat.businessId),
     getSetupProgress(seat.businessId),
+    openClosureFor(seat.businessId),
   ]);
+  // A platform notice that has not taken effect yet. An owner closure revokes
+  // this seat, so any other open closure cannot be seen from here.
+  const noticeOfClosure =
+    openClosure && openClosure.initiator === "platform" && !openClosure.appliedAt ? openClosure : null;
   if (!overview) return null;
 
   const enquiries = usageOf(overview, "enquiries");
@@ -85,6 +91,38 @@ export default async function OverviewPage({
           been working on and "complete" on its own is a word about the product
           rather than about them.
         */}
+        {/*
+          Board 11i. The owner reversed a closure from the reversal screen and
+          lands here. The listing is back up exactly as it was, and saying so is
+          the difference between a reversal and a page that looks unchanged.
+        */}
+        {notice === "reopened" && (
+          <Alert tone="ok" live="polite">
+            {t("closure.reopened_flash")}
+          </Alert>
+        )}
+
+        {/*
+          Board 11i build note B8: the seller hears before it happens. A platform
+          notice is on the overview, not only on the close screen, because a
+          seller with a lapsed licence has no reason to go looking there.
+        */}
+        {noticeOfClosure && (
+          <Alert
+            tone="warn"
+            action={
+              <Link href="/dashboard/verification" className={buttonClassName({ variant: "secondary", size: "sm" })}>
+                {t("closure.notice.cta")}
+              </Link>
+            }
+          >
+            {t("closure.notice.title", {
+              business: seat.businessName,
+              date: formatDate(noticeOfClosure.effectiveAt),
+            })}
+          </Alert>
+        )}
+
         {notice === "setup_complete" && (
           <Alert tone="ok" live="polite">
             {t("setup.complete_flash", {

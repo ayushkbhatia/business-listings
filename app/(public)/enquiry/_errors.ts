@@ -19,6 +19,8 @@ export function acceptErrorMessage(code: string | undefined): string | null {
       return t("compare.error_not_open");
     case "revised":
       return t("compare.error_revised");
+    case "supplier_closed":
+      return t("compare.error_supplier_closed");
     default:
       return null;
   }

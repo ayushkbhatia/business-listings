@@ -65,6 +65,14 @@ const MINUTE = 60_000;
  */
 export const RATE_POLICIES = {
   claim_search: { limit: 120, windowMs: MINUTE, cooldownMs: 0 },
+  /*
+     Board 11i. The reversal link in a closure email is reachable without a
+     session and takes a secret. The secret is 32 random bytes, so the limit is
+     not what keeps it safe; it is what keeps a script hammering the endpoint
+     from costing nothing. Ten a minute is far more than an owner pressing one
+     button, and still refuses a loop.
+  */
+  closure_reopen: { limit: 10, windowMs: MINUTE, cooldownMs: 0 },
 } as const satisfies Record<string, RatePolicy>;
 
 export type RateBucket = keyof typeof RATE_POLICIES;

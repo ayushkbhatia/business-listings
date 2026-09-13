@@ -3,7 +3,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { PageBlocks } from "@/components/storefront";
 import { getBusinessBySlug } from "@/lib/db/queries";
-import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
+import { redirectIfClosed, redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
 import { livePage } from "@/lib/storefront/pages";
 import { storefrontPlan } from "@/lib/storefront/loader";
 import { t } from "@/lib/i18n";
@@ -64,6 +64,8 @@ export default async function TemplatePageRoute({ params }: Params) {
    * internally rather than returning, so there is nothing to test here.
    */
   await redirectIfMoved(`/b/${slug}/${pageSlug}`);
+  // Board 11i: a closed business's subpages go to its notice.
+  await redirectIfClosed(slug);
 
   const found = await load(slug, pageSlug);
   if (!found) {

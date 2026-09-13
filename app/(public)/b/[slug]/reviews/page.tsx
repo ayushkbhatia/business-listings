@@ -1,10 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
-import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
+import { redirectIfClosed, redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { buttonClassName } from "@/components/primitives";
-import { ReviewCard, ReviewHeldRow } from "@/components/domain";
+import { ReviewHeldRow } from "@/components/domain";
 import {
   getBusinessBySlug,
   getReviewBoard,
@@ -12,22 +12,21 @@ import {
   parseReviewQuery,
   toReviewParams,
   REVIEWS_PAGE_SIZE,
-  type ReviewRow,
 } from "@/lib/db/queries";
-import { formatCount, formatDate, formatDecimal, formatRating } from "@/lib/format";
+import { formatCount, formatRating } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { navPages } from "@/lib/storefront/pages";
-import { canReview, provenanceOf, type Provenance } from "@/lib/reviews/eligibility";
+import { canReview } from "@/lib/reviews/eligibility";
 import { enquiryForReview } from "@/lib/reviews/service";
 import { getActor } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/client";
-import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
 import { ProvenanceCard, RatedOnCard, RatingCard } from "./_summary";
 import { ReviewToolbar } from "./_toolbar";
+import { ReviewRowItem } from "./_row";
 
 /**
  * Board 1m — reviews and ratings.
@@ -49,11 +48,6 @@ interface Params {
 }
 
 /** The provenance ladder, as a badge tone. Never "Verified purchase". */
-const PROVENANCE_TONE = {
-  accepted_quote: "ok",
-  verified_enquiry: "neutral",
-} as const satisfies Record<Provenance, "ok" | "neutral">;
-
 export async function generateMetadata({ params, searchParams }: Params): Promise<Metadata> {
   const { slug } = await params;
   const business = await getBusinessBySlug(slug);
@@ -113,6 +107,8 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
      * handoff 4 step 2.
      */
     await redirectIfMoved(`/b/${slug}`);
+    // Board 11i: a closed business's subpages go to its notice.
+    await redirectIfClosed(slug);
     notFound();
   }
 
@@ -327,72 +323,6 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
         )}
       </div>
     </PublicShell>
-  );
-}
-
-/** One row: avatar-less identity line, marks, body, photos, the seller's reply. */
-function ReviewRowItem({
-  review,
-  sellerName,
-}: {
-  review: ReviewRow;
-  sellerName: string;
-}) {
-  const provenance = provenanceOf(review);
-
-  return (
-    <ReviewCard
-      as="li"
-      variant="row"
-      /*
-         The buyer's own registered company name, suffix and all.
-
-         Board 1m leaves this alone deliberately: the display-name rule governs
-         *seller* identity, where a legal name and a trading name genuinely
-         differ and a buyer who reads one lands on the other. Buyers have no
-         display-name field, so stripping a suffix off theirs would be inventing
-         data about a company that did not ask us to.
-
-         With no company on file it falls to the anonymous label rather than to
-         the person's name. "Show my company name" is consent to publish a
-         company; a sole trader who ticked it did not thereby agree to have
-         their own name on a public page, and the seller's dashboard shows a
-         first name at most for the same reason.
-      */
-      author={
-        review.showCompanyName && review.buyer.buyerCompany
-          ? review.buyer.buyerCompany.name
-          : t("storefront.review_anonymous")
-      }
-      /*
-         `formatDecimal`, not `formatRating`: one review's score is an integer
-         one to five, and "Rated 5.0 out of 5" reads as a measurement of
-         something that was never measured. The aggregate above the list is the
-         decimal, and it uses the other one.
-      */
-      rating={formatDecimal(review.overall)}
-      ratingValue={review.overall}
-      ratingLabel={t("reviewpage.rating_label", { rating: formatDecimal(review.overall) })}
-      date={formatDate(review.createdAt)}
-      provenance={{
-        label: t(`reviewpage.provenance.${provenance}` as "reviewpage.provenance.accepted_quote"),
-        tone: PROVENANCE_TONE[provenance],
-      }}
-      /*
-         Rendered verbatim. Never normalised to platform vocabulary and never
-         redacted: a buyer writing "ordered 40 DN100 valves" or naming a price
-         they were quoted is describing their own experience in their own words.
-         The only permitted intervention is removal, on the four grounds.
-      */
-      body={review.body}
-      photos={review.media.map((item) => ({
-        id: item.id,
-        url: publicUrl(MEDIA_BUCKET, item.storagePath),
-        alt: item.alt ?? t("reviewpage.photo_alt", { name: sellerName }),
-      }))}
-      sellerReply={review.sellerReply}
-      replyLabel={t("reviewpage.seller_reply", { name: sellerName })}
-    />
   );
 }
 

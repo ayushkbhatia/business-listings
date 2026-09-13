@@ -29,7 +29,7 @@ export interface BusinessRow {
   tier: number;
   replyMs: number | null;
   strength: number | null;
-  state: "suspended" | "merged" | "unclaimed" | "live";
+  state: "suspended" | "merged" | "closed" | "closing" | "unclaimed" | "live";
   /**
    * Worked out on the server, per row and per seat. A field verifier holds
    * `business.verification_tier.write` but may only tier a business they
@@ -37,11 +37,19 @@ export interface BusinessRow {
    */
   mayTier: boolean;
   maySuspend: boolean;
+  /** Board 11i. Ops lead only — `business.close`. */
+  mayClose: boolean;
+  /** The open closure, dated: when a notice takes effect, or the last day to reverse. */
+  closure: { kind: "notice" | "closing"; date: string } | null;
+  /** B8 applies only to a licence that has actually lapsed. */
+  licenceLapsed: boolean;
 }
 
 const TONE = {
   suspended: "bad",
   merged: "neutral",
+  closed: "neutral",
+  closing: "warn",
   unclaimed: "warn",
   live: "ok",
 } as const;
@@ -70,11 +78,23 @@ export interface BusinessTableProps {
   setTier: (formData: FormData) => Promise<ActionResult>;
   suspend: (formData: FormData) => Promise<ActionResult>;
   lift: (formData: FormData) => Promise<ActionResult>;
+  giveNotice: (formData: FormData) => Promise<ActionResult>;
+  withdraw: (formData: FormData) => Promise<ActionResult>;
+  reopen: (formData: FormData) => Promise<ActionResult>;
 }
 
-export function BusinessTable({ rows, setTier, suspend, lift }: BusinessTableProps) {
+export function BusinessTable({
+  rows,
+  setTier,
+  suspend,
+  lift,
+  giveNotice,
+  withdraw,
+  reopen,
+}: BusinessTableProps) {
   const [open, setOpen] = useState<string | null>(null);
   const [reason, setReason] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
   const [tier, setTierValue] = useState<string>("");
   const [result, setResult] = useState<ActionResult | null>(null);
   const [pending, startTransition] = useTransition();
@@ -87,6 +107,7 @@ export function BusinessTable({ rows, setTier, suspend, lift }: BusinessTablePro
     const form = new FormData();
     form.set("businessId", row.id);
     form.set("reason", reason);
+    form.set("ownerEmail", ownerEmail);
     if (withTier) form.set("tier", tier);
     startTransition(async () => {
       const outcome = await action(form);
@@ -94,6 +115,7 @@ export function BusinessTable({ rows, setTier, suspend, lift }: BusinessTablePro
       if (outcome.ok) {
         setOpen(null);
         setReason("");
+        setOwnerEmail("");
         setTierValue("");
       }
     });
@@ -142,9 +164,18 @@ export function BusinessTable({ rows, setTier, suspend, lift }: BusinessTablePro
       header: t("admin.businesses.col.state"),
       width: "9rem",
       render: (row) => (
-        <StatusBadge tone={TONE[row.state]}>
-          {t(`admin.businesses.state.${row.state}` as never)}
-        </StatusBadge>
+        <span className="flex flex-col items-start gap-0.5">
+          <StatusBadge tone={TONE[row.state]}>
+            {t(`admin.businesses.state.${row.state}` as never)}
+          </StatusBadge>
+          {row.closure && (
+            <span className="text-caption text-muted">
+              {t(`admin.businesses.closure.until_${row.closure.kind}` as "admin.businesses.closure.until_notice", {
+                date: row.closure.date,
+              })}
+            </span>
+          )}
+        </span>
       ),
     },
   ];
@@ -166,7 +197,7 @@ export function BusinessTable({ rows, setTier, suspend, lift }: BusinessTablePro
            there were none, and it has to go on passing now there are.
         */
         rowAction={(row) =>
-          row.mayTier || row.maySuspend
+          row.mayTier || row.maySuspend || row.mayClose
             ? {
                 label: t("admin.businesses.col.decide"),
                 onSelect: () => {
@@ -240,10 +271,50 @@ export function BusinessTable({ rows, setTier, suspend, lift }: BusinessTablePro
                 </Button>
               ))}
 
+            {/*
+               Board 11i. One closure control at a time, chosen by where the
+               business is: notice for a lapsed licence with nothing open,
+               withdraw for anything open, reopen for a closure already final.
+               Offering "give notice" over a current licence would be offering
+               a control the service refuses, which this screen stopped doing.
+            */}
+            {row.mayClose && row.closure && (
+              <Button variant="secondary" disabled={!ready} onClick={() => act(withdraw)}>
+                {t("admin.businesses.closure.action.withdraw")}
+              </Button>
+            )}
+            {row.mayClose && !row.closure && row.state === "live" && row.licenceLapsed && (
+              <Button variant="secondary" disabled={!ready} onClick={() => act(giveNotice)}>
+                {t("admin.businesses.closure.action.notice")}
+              </Button>
+            )}
+
             <Button variant="ghost" onClick={() => setOpen(null)}>
               {t("action.cancel")}
             </Button>
           </div>
+
+          {row.mayClose && row.state === "closed" && (
+            <div className="flex flex-wrap items-end gap-2 border-t border-line pt-3">
+              <label className="flex min-w-64 flex-1 flex-col gap-1">
+                <span className="text-body-sm text-ink">{t("admin.businesses.closure.owner_email")}</span>
+                <Input
+                  type="email"
+                  autoComplete="off"
+                  value={ownerEmail}
+                  onChange={(event) => setOwnerEmail(event.target.value)}
+                />
+              </label>
+              <Button
+                variant="secondary"
+                disabled={!ready || !ownerEmail.includes("@")}
+                onClick={() => act(reopen)}
+              >
+                {t("admin.businesses.closure.action.reopen")}
+              </Button>
+              <p className="w-full text-caption text-muted">{t("admin.businesses.closure.reopen_note")}</p>
+            </div>
+          )}
 
           {row.maySuspend && row.state !== "suspended" && (
             <p className="text-caption text-muted">{t("admin.businesses.suspend_note")}</p>

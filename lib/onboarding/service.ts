@@ -1,4 +1,5 @@
 import "server-only";
+import { t } from "@/lib/i18n";
 import { prisma } from "@/lib/db/client";
 import { profileStrength, STRONG_ENOUGH, WEIGHTS } from "@/lib/metrics/profile-strength";
 import { measureProfileStrength } from "@/lib/metrics/strength-job";
@@ -124,6 +125,8 @@ export async function goLive(businessId: string): Promise<GoLiveResult> {
     select: {
       slug: true,
       publishedAt: true,
+      closureRequestedAt: true,
+      closedAt: true,
       planId: true,
       sellsKind: true,
       deliveryModes: true,
@@ -134,6 +137,17 @@ export async function goLive(businessId: string): Promise<GoLiveResult> {
     },
   });
   if (!business) return { ok: false, error: "That listing cannot be found." };
+
+  /*
+     Board 11i. Going live sets `publishedAt` whenever it is null — and closure
+     is what nulls it. Without this, anything that reached go-live during a
+     closure would put a closing listing back in search without reversing the
+     closure, leaving a published business with its team revoked and a check
+     constraint to trip over. Reversal is the only way back up.
+  */
+  if (business.closureRequestedAt || business.closedAt) {
+    return { ok: false, error: t("closure.golive_refused") };
+  }
 
   /*
      Board `2d-s` B2, AC3. The gate is the same shape and a different fact.

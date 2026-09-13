@@ -100,6 +100,9 @@ model User {
   changesDecided          ListingChangeRequest[]   @relation("ChangeRequestDecider")
   demandRecorded          ScopeDemand[]            @relation("ScopeDemandRecorder")
   ruleChangesProposed     PublishRuleChange[]      @relation("RuleChangeProposer")
+  closuresRequested       BusinessClosure[]        @relation("ClosureRequestedBy")
+  closuresOwned           BusinessClosure[]        @relation("ClosureOwner")
+  closuresReversed        BusinessClosure[]        @relation("ClosureReversedBy")
   ruleChangesDecided      PublishRuleChange[]      @relation("RuleChangeDecider")
   areaPagesHeld           AreaPage[]               @relation("AreaPageHolder")
   emiratePagesHeld        EmiratePage[]            @relation("EmiratePageHolder")
@@ -937,6 +940,27 @@ model Business {
   mergedIntoId       String?       @map("merged_into_id")
   mergedAt           DateTime?     @map("merged_at")
   publishedAt        DateTime?     @map("published_at")
+  /// Board `11i`. The listing came down because its owner asked, or because we
+  /// closed it after a lapsed licence — and it is still reversible.
+  ///
+  /// A **status transition, never a delete**. The business row is the anchor
+  /// every retained enquiry, quote and review hangs from, so closing it must not
+  /// move any of them. `publishedAt` is nulled in the same transaction, which is
+  /// what takes the listing out of every public read — 118 call sites check it,
+  /// and a new column in one predicate would have missed most of them. The value
+  /// it had is kept on the `BusinessClosure` snapshot, so a reversal restores it
+  /// exactly rather than stamping a new go-live date.
+  ///
+  /// Cleared on reversal. Left set when the closure becomes final, so a closed
+  /// business reads as both.
+  closureRequestedAt DateTime?     @map("closure_requested_at")
+  /// Board `11i`. The cooling-off window passed and the closure is final.
+  ///
+  /// The slug stays on this row for good, which is what reserves it: `slug` is
+  /// unique and the row is never deleted, so no other business can take the URL
+  /// a buyer bookmarked. Cleared only when staff reopen the business for the
+  /// same licence holder (`Q2`).
+  closedAt           DateTime?     @map("closed_at")
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
@@ -1069,6 +1093,7 @@ model Business {
   storefrontContent      StorefrontContent[]
   teamMembers            TeamMember[]
   customDomain           CustomDomain?
+  closures               BusinessClosure[]
   boosts                 ListingBoost[]
   scopeTemplates         ScopeTemplate[]
   sectorEngagements      SectorEngagement[]
@@ -7108,6 +7133,114 @@ model TemplateVersion {
 
   @@unique([templateId, version])
   @@map("template_version")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Closing an account — board 11i
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Who started a closure.
+///
+/// `owner` is the seller on `/dashboard/account/close`. `platform` is an ops
+/// lead closing a listing whose trade licence lapsed and was not renewed —
+/// build note `B8`, where the seller is told first and the closure only takes
+/// effect after a notice period.
+enum ClosureInitiator {
+  owner
+  platform
+
+  @@map("closure_initiator")
+}
+
+/// How a closure was undone, which is a different fact in each case.
+enum ClosureReversal {
+  /// The one link in the closure email — build note `B3`.
+  email
+  /// The owner signed in again and pressed the button on the reversal screen.
+  dashboard
+  /// A platform notice withdrawn by the nightly job because the licence was
+  /// renewed before the notice ran out.
+  licence_renewed
+  /// An ops lead withdrew a platform notice by hand, with a reason.
+  staff
+
+  @@map("closure_reversal")
+}
+
+/// One closure of one business: requested, and then either reversed or final.
+///
+/// ## Why a row of its own
+///
+/// Two columns on `Business` say where the listing is now. This says how it got
+/// there, and it has to survive being undone: a business closed in anger on a
+/// Tuesday and reopened on the Thursday has a history a reviewer will want, and
+/// a reversal that erased the request would erase it.
+///
+/// It is also the log build note `B9` asks for. A seller closing their own
+/// account is not a staff state change, so it is not an `AuditEvent` — the same
+/// call board `11h` made for a cancellation, which is a `subscription_change`
+/// row carrying `requestedById`. Every write here names the person: who asked,
+/// who reversed, and by which door. A platform closure additionally writes an
+/// `AuditEvent` with a reason, because an ops lead acted.
+///
+/// ## The snapshot
+///
+/// What a reversal puts back. `publishedAt` as it was, every seat that was
+/// revoked with its roles and branch, and the storefront address that was
+/// released. Restoring from the business's *current* state instead would put
+/// the listing back with a new go-live date and a team of nobody.
+///
+/// ## The token
+///
+/// Only its SHA-256 is stored. The link in the email carries the token itself,
+/// and a database read must not be enough to reopen somebody's listing.
+model BusinessClosure {
+  id            String           @id @default(cuid())
+  businessId    String           @map("business_id")
+  initiator     ClosureInitiator
+  /// The acting user. The owner, or the ops lead who gave notice.
+  requestedById String           @map("requested_by_id") @db.Uuid
+  /// The owner at the time — who the email goes to and who may reverse from the
+  /// dashboard. Null only where a platform closure found no owner seat at all.
+  ownerId       String?          @map("owner_id") @db.Uuid
+  requestedAt   DateTime         @default(now()) @map("requested_at")
+  /// When the listing comes down. Equal to `requestedAt` for an owner closure;
+  /// the end of the notice period for a platform one.
+  effectiveAt   DateTime         @map("effective_at")
+  /// When it actually came down. Null while a platform notice is still running.
+  appliedAt     DateTime?        @map("applied_at")
+  /// The last moment it can be reversed. `effectiveAt` plus the cooling-off
+  /// window, fixed at request so the date the email promised cannot move.
+  finalAt       DateTime         @map("final_at")
+  reversedAt    DateTime?        @map("reversed_at")
+  reversedById  String?          @map("reversed_by_id") @db.Uuid
+  reversedVia   ClosureReversal? @map("reversed_via")
+  finalisedAt   DateTime?        @map("finalised_at")
+  /// SHA-256 of the reversal token, hex.
+  tokenHash     String           @unique @map("token_hash")
+  /// What a reversal restores. Typed as `ClosureSnapshot` in lib/closure.
+  snapshot      Json             @default("{}")
+  /// Set when the email carrying the reversal link was accepted by a carrier.
+  /// Null is not "not sent yet" — it is what the confirmation screen reads to
+  /// say plainly that it could not be sent and how else to reverse.
+  emailDeliveredAt DateTime?     @map("email_delivered_at")
+  /// When the licence and verification documents were hard-deleted, twelve
+  /// months after `finalisedAt` — Privacy §07, "12 months after expiry or
+  /// removal". Build note `B5`.
+  documentsPurgedAt DateTime?    @map("documents_purged_at")
+
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
+  requestedBy User     @relation("ClosureRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)
+  owner       User?    @relation("ClosureOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  reversedBy  User?    @relation("ClosureReversedBy", fields: [reversedById], references: [id], onDelete: SetNull)
+
+  @@index([businessId, requestedAt])
+  /// The owner's own open closure, read when they sign in with no seat.
+  @@index([ownerId])
+  /// The nightly job's two sweeps.
+  @@index([effectiveAt])
+  @@index([finalAt])
+  @@map("business_closure")
 }
 
 /// A named person on a storefront, with the consent to be there.

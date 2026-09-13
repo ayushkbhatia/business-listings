@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, useTransition } from "react";
-import { Button, Radio, Textarea } from "@/components/primitives";
+import { Radio, Textarea } from "@/components/primitives";
 import { Alert } from "@/components/display";
 import { Card } from "@/components/structure";
 import { cn } from "@/lib/cn";
@@ -30,10 +30,9 @@ import { confirmCancellation } from "../../actions";
  * ## Choosing "the business is closing" cancels nothing
  *
  * Criterion 7, and it is enforced in three places rather than one: the button
- * changes to `Continue to close account`, this component never posts, and
- * `scheduleCancellation` refuses that reason outright. `11i` is not drawn and
- * is blocked, so the control is inert and says why — never a 404 out of a
- * cancellation flow.
+ * becomes a `Continue to close account` link, this component never posts, and
+ * `scheduleCancellation` refuses that reason outright. The button is a link to
+ * board 11i's close-account screen and never a submit.
  */
 
 export interface ReasonOption {
@@ -57,7 +56,7 @@ export interface ReasonFormLabels {
   keepPlan: string;
   confirm: string;
   confirmClosing: string;
-  closingBlocked: string;
+  closingNote: string;
   resumeNote: string;
   errorNoReason: string;
   errorNoteRequired: string;
@@ -247,17 +246,20 @@ export function ReasonForm({
 
           {closing ? (
             /*
-               The fork. Nothing is cancelled from this screen, and the control
-               is inert because `11i` does not exist — build note `B5`. It stays
-               visible rather than disappearing: the seller chose this because it
-               is true of their business, and a control that vanishes reads as
-               having done something.
+               The fork. Nothing is cancelled from this screen — the control is a
+               link to board 11i, never a submit, and `scheduleCancellation`
+               still refuses this reason outright, so criterion 7 holds in three
+               places as before. It was inert while `11i` did not exist; it is
+               the way out now.
             */
             <>
-              <Button type="button" variant="secondary" disabled block>
+              <Link
+                href="/dashboard/account/close"
+                className="inline-flex h-9 w-full items-center justify-center rounded-ctl border border-line-strong bg-card px-3.5 text-caption font-medium text-ink hover:bg-fill focus-visible:shadow-focus focus-visible:outline-none"
+              >
                 {labels.confirmClosing}
-              </Button>
-              <p className="text-caption leading-relaxed text-muted">{labels.closingBlocked}</p>
+              </Link>
+              <p className="text-caption leading-relaxed text-muted">{labels.closingNote}</p>
             </>
           ) : (
             <>

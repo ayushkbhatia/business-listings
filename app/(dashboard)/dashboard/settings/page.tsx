@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { PageEvent } from "@/components/telemetry/PageEvent";
-import { Tabs } from "@/components/structure";
+import { Card, Tabs } from "@/components/structure";
 import { can } from "@/lib/auth/can";
+import { mayCloseAccount } from "@/lib/auth/guards";
 import { prisma } from "@/lib/db/client";
 import { t } from "@/lib/i18n";
 import { defaultAutoReplyBody } from "@/lib/messaging/auto-reply";
@@ -289,6 +290,28 @@ export default async function SettingsPage({
             {t("settings.team_link")}
           </Link>
         </p>
+
+        {/*
+           Board 11i's way in, and the only one besides board 11j's fork. Owner
+           only (Q4) — a seat that cannot close the account is not shown a door
+           to a 404. Last on the page and plainly worded: it is the rarest thing
+           anybody does here, and cancelling the plan is nearly always what a
+           seller who finds this actually wants, which the card says first.
+        */}
+        {mayCloseAccount(seat.actor) && !seat.viewingAs && (
+          <Card surface="card" padded>
+            <h2 className="text-body font-medium text-ink">{t("settings.close.title")}</h2>
+            <p className="mt-1.5 max-w-prose text-caption leading-relaxed text-body-ink">
+              {t("settings.close.body")}
+            </p>
+            <Link
+              href="/dashboard/account/close"
+              className="mt-3 inline-block rounded-tag text-caption font-medium text-bad-ink underline-offset-2 hover:underline focus-visible:shadow-focus-danger focus-visible:outline-none"
+            >
+              {t("settings.close.link")}
+            </Link>
+          </Card>
+        )}
       </div>
     </SellerPage>
   );

@@ -89,6 +89,10 @@ const EXEMPT = new Map<string, string>([
     "A slot ending because the subscription under it ended. The three callers are the cancellation applier, the scheduled-change applier and the dunning drop, all of them crons following a published sequence — the same shape as `lib/verification/expiry-job.ts`, which CLAUDE.md names as correct without an audit row. `AuditEvent.actorId` is NOT NULL because the log holds decisions, and nobody decided this: the seller decided to cancel, and that decision is already logged where it was made. The `PlacementSlot` row keeps its own dates, and a credit note is a numbered document, so both halves stay evidenced.",
   ],
   [
+    "lib/auth/flow.ts",
+    "The sign-in flow: creating a profile at first sign-in and mirroring roles into the JWT claim. It is reached from the console only through `repairClaims`, which board 11i's reopen and withdraw call after their own `staffMutation` has written the audit row for the decision — the claim mirror is a cache of that decision, not a second one.",
+  ],
+  [
     "lib/crm/call-list.ts",
     "`logCall` records a phone call that happened outside the system. It changes nothing about the directory, and the CallOutcome row carries the staff id and the timestamp — it is the record, not a change needing one.",
   ],

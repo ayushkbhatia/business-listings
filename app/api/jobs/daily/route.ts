@@ -24,6 +24,9 @@ import { sweepSetupNudges } from "@/lib/setup/nudge-job";
 import { sweepExpiringQuotes } from "@/lib/quotes/expiry-job";
 import { sweepRamadanShift } from "@/lib/trade/ramadan-shift-job";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
+import { sweepClosures } from "@/lib/closure/service";
+import { purgeRetainedDocuments } from "@/lib/closure/retention";
+import { revalidateClosure } from "@/lib/closure/revalidate";
 import { rebuildSectorIndex } from "@/lib/onboarding/sector-index";
 
 /**
@@ -221,6 +224,27 @@ export async function GET(request: NextRequest) {
        neither reads the tier.
     */
     expiredLicences: () => sweepExpiredLicences(),
+    /*
+       Board 11i. After the licence sweep, and that is load-bearing: a platform
+       closure notice is withdrawn when the licence has been renewed, and the
+       tier drop above is what reads `licenceExpiry` today. Running this first
+       would apply a closure to a business whose renewal was checked yesterday
+       and whose expiry the sweep had not yet looked at.
+
+       It revalidates the storefront of every listing it takes down, because a
+       route handler has a request context and the service does not.
+    */
+    closures: async () => {
+      const result = await sweepClosures();
+      for (const slug of result.slugs) revalidateClosure(slug);
+      return result;
+    },
+    /*
+       Build note B5 — licence documents deleted twelve months after a closure
+       became final, per Privacy §07. After `closures`, so a closure finalised
+       tonight starts its clock tonight rather than tomorrow.
+    */
+    retainedDocuments: () => purgeRetainedDocuments(),
     /*
        The nightly position snapshot — the 3a/3l amendment's B1 and B2.
 

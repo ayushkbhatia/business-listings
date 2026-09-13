@@ -9,7 +9,7 @@ import {
   type ServiceCatalogueView,
 } from "@/components/domain/ServicesStorefront";
 import { getBusinessBySlug } from "@/lib/db/queries";
-import { absorbedInto, redirectIfMoved } from "@/lib/listing/redirect";
+import { absorbedInto, redirectIfClosed, redirectIfMoved } from "@/lib/listing/redirect";
 import { getActor } from "@/lib/auth/session";
 import { publicServicesFor, type PublicService } from "@/lib/services/service";
 import { navPages } from "@/lib/storefront/pages";
@@ -98,6 +98,8 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
   const business = await getBusinessBySlug(slug);
   if (!business) {
     await redirectIfMoved(`/b/${slug}/services`);
+    // Board 11i: a closed business's subpages go to its notice.
+    await redirectIfClosed(slug);
     notFound();
   }
   const movedTo = await absorbedInto(slug);

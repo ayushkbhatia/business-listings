@@ -206,11 +206,20 @@ describe("every row cites the document", () => {
        row to cite. Owner alone, one rung above `review.reply`: a reply is the
        business answering in public, and a dispute is a formal claim it makes
        about a named customer with a two-working-day decision attached.
+
+       `business.close` joined on board 11i, for build note B8's
+       platform-initiated closure of a lapsed licence and the withdraw and reopen
+       that undo one. §07 has no closure row because closure did not exist. Held
+       at ops lead beside `business.suspend`, which it outranks: a suspension is a
+       pause, a closure revokes the team. `account.close`, the owner's own
+       closure, is not in this list — the owner answered Q4 on 14 Sep 2026, so
+       it cites a decision rather than inferring one.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
     );
     expect(inferred.sort()).toEqual([
+      "business.close",
       "business.merge",
       "business.verification_tier.write",
       "question.remove",

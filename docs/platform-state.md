@@ -468,3 +468,16 @@ provisioning outside it, or a decision.
   `events.ts` that does not exist.
 - **WhatsApp OTP** waits on Meta approving an authentication template. Not ours
   to grant, and email works without it.
+- **The board 11i Terms amendment needs a message to account holders.** Terms
+  §14 promises 14 days' notice of a material change and a message to every
+  account holder. Terms 11.p3 and Privacy 08.p2 switch to their closure wording on
+  `CLOSURE_AMENDMENT_FROM` (29 Sep 2026, in `lib/legal/documents.ts`) and the
+  pages show the pending change from today, but nothing sends the message — that
+  is an outward send, not a deploy. Send it before that date, or move the date.
+- **Two retention promises board 11i did not implement.** Privacy §07's "12
+  months after expiry" for licence documents of a business that is still open
+  has no sweep; only a closed business's documents are purged. And its
+  12-month deletion of account and login records conflicts with the five-year
+  thread retention, because `Message.sender` cascades from `User` — deleting a
+  closed owner's user row would delete the buyer's thread with it.
+

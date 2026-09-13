@@ -1,5 +1,5 @@
 import "server-only";
-import { permanentRedirect } from "next/navigation";
+import { permanentRedirect, redirect } from "next/navigation";
 import { prisma } from "@/lib/db/client";
 
 /**
@@ -40,4 +40,22 @@ export async function absorbedInto(slug: string): Promise<string | null> {
     select: { mergedInto: { select: { slug: true } } },
   });
   return business?.mergedInto?.slug ?? null;
+}
+
+/**
+ * Board 11i — every storefront subpage of a closed business sends the buyer to
+ * the notice at `/b/<slug>`.
+ *
+ * Temporary, not permanent. A closure can be reversed for fourteen days, and a
+ * 308 cached by a browser or a crawler would keep sending people to a notice
+ * after the storefront came back.
+ */
+export async function redirectIfClosed(slug: string): Promise<void> {
+  const business = await prisma.business.findUnique({
+    where: { slug },
+    select: { closureRequestedAt: true, mergedIntoId: true, suspendedAt: true },
+  });
+  if (business?.closureRequestedAt && !business.mergedIntoId && !business.suspendedAt) {
+    redirect(`/b/${slug}`);
+  }
 }

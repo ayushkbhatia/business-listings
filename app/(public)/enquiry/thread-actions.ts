@@ -33,7 +33,12 @@ export async function sendBuyerMessage(input: {
   if (!result.ok) {
     return {
       ok: false,
-      error: result.error === "closed" ? t("thread.closed") : t("thread.not_yours"),
+      error:
+        result.error === "supplier_closed"
+          ? t("thread.supplier_closed")
+          : result.error === "closed"
+            ? t("thread.closed")
+            : t("thread.not_yours"),
     };
   }
 

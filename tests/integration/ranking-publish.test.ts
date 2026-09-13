@@ -88,6 +88,41 @@ afterAll(async () => {
   await prisma.$disconnect();
 });
 
+/**
+ * A published business nothing is boosting, chosen the same way every run.
+ *
+ * The budget is per business and counts category boosts it falls under, so a
+ * test that asserts "20 then 10 is refused" or "an 8-point boost is written"
+ * silently depends on the pick starting at zero. It did not: the seed boosts
+ * one business by 8 and its category by 15, and an unordered `findFirst`
+ * returned exactly that business whenever the heap happened to put it first —
+ * 23 of 25 points spent before the test began. Excluding every live target, and
+ * every category holding one, makes the precondition true rather than likely.
+ */
+async function unboostedBusiness() {
+  const live = await prisma.listingBoost.findMany({
+    where: { expiresAt: { gt: new Date() } },
+    select: { businessId: true, categoryId: true },
+  });
+  const businesses = live.flatMap((boost) => (boost.businessId ? [boost.businessId] : []));
+  const categories = new Set(live.flatMap((boost) => (boost.categoryId ? [boost.categoryId] : [])));
+  for (const member of await prisma.business.findMany({
+    where: { id: { in: businesses } },
+    select: { primaryCategoryId: true },
+  })) {
+    categories.add(member.primaryCategoryId);
+  }
+  return prisma.business.findFirstOrThrow({
+    where: {
+      publishedAt: { not: null },
+      id: { notIn: businesses },
+      primaryCategoryId: { notIn: [...categories] },
+    },
+    orderBy: { id: "asc" },
+    select: { id: true, primaryCategoryId: true },
+  });
+}
+
 /** Save a draft and run its preview, leaving it fresh and publishable. */
 async function draftWithPreview(next = redistribute(DEFAULT_WEIGHTS, "responseTime", 24)) {
   const mode = await liveBrowseRelevanceMode("goods");
@@ -341,10 +376,7 @@ describe("the plan ceiling on the effective browse vector", () => {
  */
 describe("the boost budget", () => {
   it("refuses a second boost that would take one business past the cap", async () => {
-    const business = await prisma.business.findFirstOrThrow({
-      where: { publishedAt: { not: null } },
-      select: { id: true },
-    });
+    const business = await unboostedBusiness();
 
     const first = await boostListing({
       actor: lead,
@@ -374,10 +406,7 @@ describe("the boost budget", () => {
   }, 120_000);
 
   it("counts a category boost against every member business", async () => {
-    const business = await prisma.business.findFirstOrThrow({
-      where: { publishedAt: { not: null } },
-      select: { id: true, primaryCategoryId: true },
-    });
+    const business = await unboostedBusiness();
 
     const onCategory = await boostListing({
       actor: lead,
@@ -408,6 +437,7 @@ describe("the boost budget", () => {
 
   it("refuses a boost that names both a listing and a category, and one that names neither", async () => {
     const business = await prisma.business.findFirstOrThrow({
+      orderBy: { id: "asc" },
       select: { id: true, primaryCategoryId: true },
     });
 
@@ -434,6 +464,7 @@ describe("the boost budget", () => {
 
   it("refuses the pair the database also refuses", async () => {
     const business = await prisma.business.findFirstOrThrow({
+      orderBy: { id: "asc" },
       select: { id: true, primaryCategoryId: true },
     });
 

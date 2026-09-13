@@ -119,7 +119,7 @@ export default async function CancelConfirmPage() {
           keepPlan: t("cancel.keep_plan", { plan: view.planName }),
           confirm: t("cancel.confirm", { when: freeStartsOn }),
           confirmClosing: t("cancel.confirm_closing"),
-          closingBlocked: t("cancel.closing_blocked"),
+          closingNote: t("cancel.closing_note"),
           resumeNote: t("cancel.resume_note", { plan: view.planName, when: paidTo }),
           errorNoReason: t("cancel.error.no_reason"),
           errorNoteRequired: t("cancel.error.note_required"),

@@ -1,3 +1,4 @@
+import { formatDate } from "@/lib/format";
 import { t, type MessageKey } from "@/lib/i18n";
 import { COOKIE_CATEGORIES, COOKIE_REGISTER } from "./cookie-register";
 import type { LegalPageSlug } from "./pages";
@@ -67,6 +68,30 @@ export interface LegalSection {
   blocks: LegalBlock[];
 }
 
+/** One clause whose wording changes on a date. */
+export interface LegalChangeItem {
+  /** `11`, as the section is numbered on the page. */
+  section: string;
+  before: string;
+  after: string;
+}
+
+/**
+ * A dated change to a document, before or after it takes effect.
+ *
+ * Terms §14 is the rule this exists for: material changes are *announced on
+ * the site at least fourteen days before they take effect, and every previous
+ * version stays on this page with the date it applied from*. Until board 11i
+ * the rail could only say "this is the first published version", which was true
+ * and left no way to keep that promise the first time a clause changed.
+ */
+export interface LegalChange {
+  effectiveFrom: Date;
+  /** The last day the earlier wording applied. */
+  until: Date;
+  items: LegalChangeItem[];
+}
+
 export interface LegalDocument {
   slug: LegalPageSlug;
   href: string;
@@ -75,6 +100,10 @@ export interface LegalDocument {
   metaLine: string;
   /** When this wording took effect. Drives the version rail and the print line. */
   effectiveFrom: Date;
+  /** A change announced and not yet in effect. The page still shows today's wording. */
+  pendingChange?: LegalChange | null;
+  /** The change that produced today's wording, with the words it replaced. */
+  previousChange?: LegalChange | null;
   /** Six lines, hand-written per page. Never generated from the body — 13f §2. */
   glance: string[];
   sections: LegalSection[];
@@ -123,17 +152,61 @@ function glance(prefix: string): string[] {
 */
 const EFFECTIVE_FROM = new Date(Date.UTC(2026, 8, 4));
 
+/*
+   Board 11i's amendment, and the date it takes effect: 29 September 2026.
+
+   The owner decided on 14 Sep 2026 that closing an account takes the listing
+   out of the directory. Terms §11 had promised the opposite — *"the underlying
+   licence record stays published, unclaimed"* — and Privacy §08 that the
+   licence record *"is public information that we cannot unpublish"*. Both are
+   rewritten, and Terms §14 decides how: announced on the site at least fourteen
+   days ahead, messaged to account holders, and the earlier wording kept on the
+   page with its dates.
+
+   The page announces it from the deploy. **The message to account holders is
+   not sent by this code** — it is an outward-facing act for the owner to make,
+   and if it goes out later than 15 September this date has to move with it, or
+   §14's fourteen days are not honoured.
+*/
+export const CLOSURE_AMENDMENT_FROM = new Date(Date.UTC(2026, 8, 29));
+
+const DAY_MS = 86_400_000;
+
+function closureAmendment(): Omit<LegalChange, "items"> {
+  return {
+    effectiveFrom: CLOSURE_AMENDMENT_FROM,
+    until: new Date(CLOSURE_AMENDMENT_FROM.getTime() - DAY_MS),
+  };
+}
+
+/** Today's wording, and the change on either side of it, for one document. */
+function dated(
+  now: Date,
+  items: LegalChangeItem[],
+): { amended: boolean; effectiveFrom: Date; pendingChange: LegalChange | null; previousChange: LegalChange | null } {
+  const amended = now.getTime() >= CLOSURE_AMENDMENT_FROM.getTime();
+  const change = { ...closureAmendment(), items };
+  return amended
+    ? { amended, effectiveFrom: CLOSURE_AMENDMENT_FROM, pendingChange: null, previousChange: change }
+    : { amended, effectiveFrom: EFFECTIVE_FROM, pendingChange: change, previousChange: null };
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 13f · Terms of use — sixteen clauses
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function termsDocument(): LegalDocument {
+export function termsDocument(now: Date = new Date()): LegalDocument {
+  const version = dated(now, [
+    { section: "11", before: t("legal.terms.11.p3"), after: t("legal.terms.11.p3.v2") },
+  ]);
   return {
     slug: "terms",
     href: "/terms",
     title: t("legal.terms.title"),
-    metaLine: t("legal.terms.meta"),
-    effectiveFrom: EFFECTIVE_FROM,
+    metaLine: t("legal.terms.meta", { date: formatDate(version.effectiveFrom) }),
+    effectiveFrom: version.effectiveFrom,
+    pendingChange: version.pendingChange,
+    previousChange: version.previousChange,
     glance: glance("legal.terms"),
     sections: [
       section({
@@ -209,7 +282,11 @@ export function termsDocument(): LegalDocument {
       section({
         number: "11",
         headingKey: "legal.terms.11.heading",
-        blocks: [p("legal.terms.11.p1"), p("legal.terms.11.p2"), p("legal.terms.11.p3")],
+        blocks: [
+          p("legal.terms.11.p1"),
+          p("legal.terms.11.p2"),
+          p(version.amended ? "legal.terms.11.p3.v2" : "legal.terms.11.p3"),
+        ],
       }),
       section({
         number: "12",
@@ -282,13 +359,18 @@ function retentionTable(): LegalBlock {
   };
 }
 
-export function privacyDocument(): LegalDocument {
+export function privacyDocument(now: Date = new Date()): LegalDocument {
+  const version = dated(now, [
+    { section: "08", before: t("legal.privacy.08.p2"), after: t("legal.privacy.08.p2.v2") },
+  ]);
   return {
     slug: "privacy",
     href: "/privacy",
     title: t("legal.privacy.title"),
-    metaLine: t("legal.privacy.meta"),
-    effectiveFrom: EFFECTIVE_FROM,
+    metaLine: t("legal.privacy.meta", { date: formatDate(version.effectiveFrom) }),
+    effectiveFrom: version.effectiveFrom,
+    pendingChange: version.pendingChange,
+    previousChange: version.previousChange,
     glance: glance("legal.privacy"),
     sections: [
       section({
@@ -336,7 +418,11 @@ export function privacyDocument(): LegalDocument {
       section({
         number: "08",
         headingKey: "legal.privacy.08.heading",
-        blocks: [p("legal.privacy.08.p1"), p("legal.privacy.08.p2"), p("legal.privacy.08.p3")],
+        blocks: [
+          p("legal.privacy.08.p1"),
+          p(version.amended ? "legal.privacy.08.p2.v2" : "legal.privacy.08.p2"),
+          p("legal.privacy.08.p3"),
+        ],
       }),
       section({
         number: "09",
