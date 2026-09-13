@@ -3727,6 +3727,44 @@ async function seedStorefrontTemplates(
   console.log("→ storefront templates");
   const { sectionType } = await import("../lib/storefront/section-types.js");
 
+  /*
+     Board `5c-s` — a draft for a trade that sells only work.
+
+     So the section library has a services template to filter: *For service
+     listings*, *Shared*, and the goods sections disabled with their reasons.
+     A draft rather than live, on purpose — a live template would move every
+     storefront in the trade onto it, and the acceptance suites already assert
+     those pages as they are. No `rnd()` draw, so no slug below it moves.
+  */
+  const practiceSector = sectorBySlug.get("legal-audit-and-business-setup");
+  if (practiceSector) {
+    const types = [
+      "header", "hero", "scope_grid", "credential_wall", "coverage", "sectors_served",
+      "reviews", "enquiry_form",
+    ];
+    await db.storefrontTemplate.create({
+      data: {
+        sectorId: practiceSector,
+        name: "Practice",
+        status: "draft",
+        defaultTheme: "mono",
+        offeredThemes: ["mono", "default"],
+        sections: {
+          create: types.map((type, index) => {
+            const definition = sectionType(type)!;
+            return {
+              type,
+              sortOrder: index,
+              fixed: definition.fixed,
+              singleton: definition.singleton,
+              sellerEditableFields: definition.sellerFields.map((field) => field.key),
+            };
+          }),
+        },
+      },
+    });
+  }
+
   const plans = [
     {
       sector: "valves-and-fittings",

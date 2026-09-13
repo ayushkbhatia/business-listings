@@ -26,9 +26,9 @@ describe("the section registry", () => {
     expect(extra).toEqual([]);
   });
 
-  it("is the same size as the catalogue, coming-soon included", () => {
-    // Services renders — as a disabled card on the specimens page and in the
-    // library. `resolveSections` is what keeps it off a real storefront.
+  it("is the same size as the catalogue, held types included", () => {
+    // Process steps renders — as a disabled card on the specimens page naming
+    // the decision it waits on. `resolveSections` keeps it off a storefront.
     expect(Object.keys(SECTION_RENDERERS)).toHaveLength(SECTION_TYPES.length);
   });
 });

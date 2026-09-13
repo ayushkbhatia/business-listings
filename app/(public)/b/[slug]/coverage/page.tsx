@@ -4,8 +4,8 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { buttonClassName } from "@/components/primitives";
 import { ChipLink } from "@/components/display";
-import { scopeWords } from "@/components/domain";
 import { CoverageTable, type CoverageTableRow } from "@/components/domain/ServicesStorefront";
+import { coverageRowView } from "@/components/domain/service-views";
 import { getBusinessBySlug } from "@/lib/db/queries";
 import { absorbedInto, redirectIfMoved } from "@/lib/listing/redirect";
 import { navPages } from "@/lib/storefront/pages";
@@ -16,12 +16,10 @@ import {
 } from "@/lib/storefront/services";
 import {
   coverageDiffers,
-  coversEveryEmirate,
   emirateOptions,
   fanoutOffer,
   filterRowsByEmirate,
   offerService,
-  rowQualifiers,
   showsEmirateFilter,
   uncoveredEmirates,
   EMIRATE_ORDER,
@@ -346,23 +344,11 @@ function InfoCard({ id, eyebrow, children }: { id: string; eyebrow: string; chil
   );
 }
 
-/** One service, as its row reads: places worded, free zones qualified, `How` worded. */
+/** One service, as its row reads — worded once, in `components/domain/service-views.ts`. */
 function wordRow(
   row: { service: { slug: string; name: string; rows: { key: string; value: string | null }[] }; places: CoveragePlace[] },
   freeZones: readonly { emirate: string; name: string }[],
 ): CoverageTableRow {
   const delivered = row.service.rows.find((entry) => entry.key === "delivered_where")?.value ?? null;
-  const zones = rowQualifiers(row.places, freeZones);
-  return {
-    slug: row.service.slug,
-    name: row.service.name,
-    where:
-      row.places.length === 0
-        ? t("storefront_services.not_stated")
-        : coversEveryEmirate(row.places)
-          ? t("storefront_services.coverage_all_seven")
-          : formatList(row.places.map((place) => place.label)),
-    qualifier: zones.length > 0 ? t("storefront_services.coverage_registered_in", { zones: formatList(zones) }) : null,
-    how: delivered === null ? null : scopeWords("delivered_where", delivered),
-  };
+  return coverageRowView({ ...row.service, deliveredWhere: delivered }, row.places, freeZones);
 }

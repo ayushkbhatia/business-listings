@@ -61,6 +61,15 @@ describe("what a storefront renders", () => {
     expect(resolved).toEqual([]);
   });
 
+  it("never renders a held type, even from a row that says it is enabled", () => {
+    // A row written by hand, or before the hold, must not reach a storefront.
+    const resolved = resolveSections([
+      row({ id: "a", type: "scope_grid", sortOrder: 0 }),
+      row({ id: "b", type: "process_steps", sortOrder: 1 }),
+    ]);
+    expect(resolved.map((section) => section.type)).toEqual(["scope_grid"]);
+  });
+
   it("carries the definition through, so a renderer needs no second lookup", () => {
     const [hero] = resolveSections([row({ id: "a", type: "hero" })]);
     expect(hero!.definition.singleton).toBe(true);
@@ -71,13 +80,36 @@ describe("adding a section", () => {
   it("refuses a second singleton and allows a second of anything else", () => {
     // Criterion 7.
     const existing = [{ type: "hero" }, { type: "offer_banner" }];
-    expect(canAddSection("hero", existing)).toBe("singleton_exists");
-    expect(canAddSection("offer_banner", existing)).toBeNull();
+    expect(canAddSection("hero", existing, "goods")).toBe("singleton_exists");
+    expect(canAddSection("offer_banner", existing, "goods")).toBeNull();
   });
 
   it("refuses a type nobody has built", () => {
-    expect(canAddSection("services", [])).toBe("coming_soon");
-    expect(canAddSection("invented", [])).toBe("unknown_type");
+    expect(canAddSection("invented", [], "both")).toBe("unknown_type");
+    // The placeholder this board replaced is gone, not kept as a second name.
+    expect(canAddSection("services", [], "services")).toBe("unknown_type");
+  });
+
+  it("refuses what this template's listings have nothing to fill with — 5c-s", () => {
+    /*
+       The disabled card on the screen is an opinion; this is the URL. A
+       product grid on a template whose stores sell only work, and a scope grid
+       on one whose stores sell only goods, are both refused in words.
+    */
+    expect(canAddSection("catalogue_grid", [], "services")).toBe("unavailable_here");
+    expect(canAddSection("branches", [], "services")).toBe("unavailable_here");
+    expect(canAddSection("scope_grid", [], "goods")).toBe("unavailable_here");
+    expect(canAddSection("scope_grid", [], "services")).toBeNull();
+    // B9: a template whose stores sell both is offered both sets.
+    expect(canAddSection("catalogue_grid", [], "both")).toBeNull();
+    expect(canAddSection("credential_wall", [], "both")).toBeNull();
+  });
+
+  it("refuses a held type on every template, with the held refusal where it is in scope", () => {
+    expect(canAddSection("process_steps", [], "services")).toBe("held");
+    expect(canAddSection("process_steps", [], "both")).toBe("held");
+    // Out of scope says out of scope first — that is the more useful reason.
+    expect(canAddSection("process_steps", [], "goods")).toBe("unavailable_here");
   });
 });
 

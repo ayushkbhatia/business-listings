@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { buttonClassName } from "@/components/primitives";
-import { scopeWords } from "@/components/domain";
+import { serviceFieldValue } from "@/components/domain/service-views";
 import {
   ServiceCatalogueCard,
   type ServiceCatalogueView,
@@ -353,19 +353,21 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
  */
 function catalogueView(service: PublicService): ServiceCatalogueView {
   const row = (key: string) => service.rows.find((entry) => entry.key === key)?.value ?? null;
-  const worded = (key: string) => {
-    const value = row(key);
-    return value === null ? null : scopeWords(key, value);
+  const source = {
+    engagementType: row("engagement_type"),
+    turnaround: row("turnaround"),
+    feeBasis: row("fee_basis"),
+    deliveredWhere: row("delivered_where"),
   };
   return {
     slug: service.slug,
     name: service.name,
     summary: service.scope,
     fields: [
-      { key: "engagement", value: worded("engagement_type") },
-      { key: "turnaround", value: row("turnaround") },
-      { key: "fee_basis", value: row("fee_basis") },
-      { key: "delivered", value: worded("delivered_where") },
+      { key: "engagement", value: serviceFieldValue("engagement", source) },
+      { key: "turnaround", value: serviceFieldValue("turnaround", source) },
+      { key: "fee_basis", value: serviceFieldValue("fee_basis", source) },
+      { key: "delivered", value: serviceFieldValue("delivered", source) },
     ],
     provides: row("requires_from_client"),
   };

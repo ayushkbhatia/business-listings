@@ -3,7 +3,10 @@ import { prisma } from "@/lib/db/client";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
-import { BUILDABLE_SECTION_TYPES, sectionType } from "./section-types";
+import { sectionType, type TradeScope } from "./section-types";
+import { getTradeKinds } from "@/lib/taxonomy/service";
+import { templateScope } from "./library";
+import { checkSettings, isConfigurable, type SettingsRefusal } from "./section-settings";
 import { checkBrandHex, isThemePreset, type HexRefusal as BaseHexRefusal, type ThemePreset } from "@/lib/theme/contrast";
 import {
   applyOrder,
@@ -37,6 +40,7 @@ export type TemplateResult<T = unknown> =
 /** Every way this service says no, and the sentence it says it with. */
 type Refusal =
   | SectionRefusal
+  | SettingsRefusal
   | "not_found"
   | "not_a_sector"
   | "sector_taken"
@@ -46,7 +50,12 @@ type Refusal =
 
 const REFUSAL_MESSAGE: Record<Refusal, string> = {
   unknown_type: "That section type is not one we have built.",
-  coming_soon: "Services and packages needs the services model, which is not built yet.",
+  held: "Process steps is waiting on a decision: whether steps are written here or asked on every scope sheet.",
+  unavailable_here: "Nothing on this trade's storefronts could fill that section, so it is not offered here.",
+  not_configurable: "That section has nothing to configure. It shows what the listing already holds.",
+  unknown_setting: "That is not a setting this section has.",
+  not_an_option: "That value is not one of the options this setting offers.",
+  no_columns: "Keep at least one column. A scope grid with only names in it is a list.",
   singleton_exists: "This template already has one of those, and it is a section that can only appear once.",
   section_is_fixed: "The header stays where it is. Every storefront needs one and it is always first.",
   unknown_field: "That field is not one this section type declares.",
@@ -225,7 +234,8 @@ export async function addSection(input: AddSectionInput): Promise<TemplateResult
   const template = await templateFor(input.templateId);
   if (!template) return refuse("not_found");
 
-  const refusal = canAddSection(input.type, template.sections);
+  const scope = await templateScopeFor(template.sectorId);
+  const refusal = canAddSection(input.type, template.sections, scope);
   if (refusal) return refuse(refusal);
 
   const definition = sectionType(input.type)!;
@@ -721,11 +731,90 @@ export async function setBrandHex(
   return { ok: true, ratio: check.ratio };
 }
 
-/** The library screen's catalogue, with what is in use in this template. */
-export function sectionLibrary(inUse: readonly { type: string }[]) {
-  const used = new Set(inUse.map((section) => section.type));
-  return BUILDABLE_SECTION_TYPES.map((type) => ({
-    ...type,
-    state: used.has(type.key) ? ("in_use" as const) : ("available" as const),
-  }));
+/**
+ * The published storefronts a template governs, by what they sell — board `5c-s`.
+ *
+ * The library's reach line reads this: a firm that sells only work renders its
+ * own services storefront (`1d-s`) and no template section reaches it yet, and
+ * the screen composing the template says so with the number rather than letting
+ * staff believe a scope grid added here changes that firm's page.
+ */
+export async function storeKinds(sectorId: string): Promise<Record<"unset" | "goods" | "services" | "both", number>> {
+  const rows = await prisma.business.groupBy({
+    by: ["sellsKind"],
+    where: { sectorId, publishedAt: { not: null }, mergedIntoId: null, suspendedAt: null },
+    _count: { _all: true },
+  });
+  const counts = { unset: 0, goods: 0, services: 0, both: 0 };
+  for (const row of rows) counts[row.sellsKind] = row._count._all;
+  return counts;
+}
+
+/**
+ * Which library a sector's template gets: goods, services or both.
+ *
+ * From the sector's leaves as the taxonomy resolves them, and from what its
+ * published stores have said they sell — see `templateScope`.
+ */
+export async function templateScopeFor(sectorId: string): Promise<TradeScope> {
+  const [taxonomy, kinds] = await Promise.all([getTradeKinds(), storeKinds(sectorId)]);
+  const said = (Object.keys(kinds) as (keyof typeof kinds)[]).filter((kind) => kinds[kind] > 0);
+  return templateScope(taxonomy, sectorId, said);
+}
+
+export interface SectionSettingsInput {
+  actor: Actor;
+  templateId: string;
+  sectionId: string;
+  settings: unknown;
+  reason: string;
+}
+
+/**
+ * Configure a live section — board `5c-s` B2.
+ *
+ * Only a closed-list choice can be stored: `checkSettings` refuses a key the
+ * type does not declare and a value off its list, so no write through here can
+ * put a word, let alone a fee, into `TemplateSection.settings` (B4). Audited
+ * with the store count like every other edit, because a column change on a
+ * scope grid changes every storefront on the template.
+ */
+export async function setSectionSettings(input: SectionSettingsInput): Promise<TemplateResult> {
+  const template = await templateFor(input.templateId);
+  if (!template) return refuse("not_found");
+
+  const section = template.sections.find((candidate) => candidate.id === input.sectionId);
+  if (!section) return refuse("not_found");
+  if (!isConfigurable(section.type)) return refuse("not_configurable");
+
+  const refusal = checkSettings(section.type, input.settings);
+  if (refusal) return refuse(refusal);
+
+  const count = await storeCount(template.sectorId);
+  const settings = input.settings as object;
+
+  await prisma.$transaction(async (tx) =>
+    staffMutation(
+      {
+        actor: input.actor,
+        capability: "storefront.template.write",
+        subject: `StorefrontTemplate:${template.id}`,
+        reason: input.reason,
+        tx,
+      },
+      async () => {
+        await tx.templateSection.update({
+          where: { id: section.id },
+          data: { settings },
+        });
+        return {
+          result: null,
+          before: { section: section.type, settings: section.settings },
+          after: { section: section.type, settings, storeCount: count },
+        };
+      },
+    ),
+  );
+
+  return { ok: true, storeCount: count };
 }

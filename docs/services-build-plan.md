@@ -1716,8 +1716,8 @@ and the exact slot `1d-s` wants where stock would be — is stripped on the Free
 (`app/(public)/b/[slug]/page.tsx:600-604`). A free service supplier's storefront would show neither
 a catalogue nor credentials. That is a pricing decision hiding inside a layout one.
 
-`5c-s` has a labelled placeholder already: `components/storefront/Services.tsx`, registered and held
-off live storefronts by `comingSoon: true`.
+~~`5c-s` has a labelled placeholder already~~ — **replaced by `5c-s` itself** (§4s): four live
+services sections and one held, the placeholder and `comingSoon` both gone.
 
 ---
 
@@ -1884,6 +1884,67 @@ seller screen and the buyer pages cannot disagree about what a buyer sees.
 
 ---
 
+## 4s · Handoff `5c-s` — the section library, filtered by trade kind
+
+*Placed here rather than after §4o, where three sibling boards were appending at once.*
+
+### The handoff drew a seller's builder; the tree has a staff one
+
+The render is `/builder/sections`, a PRO seller composing their own page. No such route exists and
+no seller writes `StorefrontContent` anywhere — the builder is `5a`, **staff composing a sector's
+template**, and a storefront renders its sector's live template. So the library belongs to a
+template: `/admin/storefront-templates/:id/sections`, beside `/theme` and `/pages`. The filter, the
+groups, the reasons and the no-price rule are the board's; only the address and the author moved.
+
+### What shipped
+
+- **`SectionType` says who it is for** — `availableFor`, `unavailableKey`, `source`, `heldKey` —
+  and `comingSoon` is gone. Nineteen types: four live services sections (`scope_grid`,
+  `credential_wall`, `coverage`, `sectors_served`), `process_steps` held, six goods-only types
+  that now carry a reason line.
+- **`lib/storefront/library.ts` is the one rule.** A template's scope is its sector's **leaves**,
+  resolved, unioned with what its published stores have said they sell — not the sector's own
+  `tradeKind`, which is not its answer when `4d-s` put services leaves under goods sectors. The
+  seeded valves trade resolves `both` because Meridian is filed there. `canAddSection` refuses
+  `unavailable_here` and `held` server-side; the builder's add list and the library both read it.
+- **Settings are closed lists** (`section-settings.ts`): scope-grid columns (reorder yes, rename
+  no — Q2), credential rows (all / checked), coverage rows (per service / union). Audited through
+  `staffMutation` with the store count; diffed on publish.
+- **Renderers reuse the shipped blocks.** The scope grid words its cells through
+  `components/domain/service-views.ts`, which `1e-s` and `1f-s` now share instead of wording their
+  own; the wall is `CredentialTable`; coverage is `CoverageTable`; sectors are `DeclaredSectors`.
+- **Shared sections speak by kind** through `lib/storefront/paired-copy.ts` (B5) until `12g-s`'s
+  table exists: *What clients said*, *Enquire about your situation*, *Request a quote*.
+- **Seller content is sanitised at the read** (`seller-content.ts`): only opened keys, declared
+  shapes and lengths, and no line or paragraph that states a price, a fee or a rate (B4,
+  `no-price.ts`). The model promised validation on write; nothing writes, so the read is where it
+  holds for every future writer.
+
+### Decisions taken rather than asked
+
+- **Process steps is held, not built** (B3, Q1). Authored steps need a seller editor that does not
+  exist; a scope-sheet field is a migration and a thirteenth field against the owner's modular
+  rule. Both are the owner's call. It is listed with the decision named and refused everywhere.
+- **No `About` type.** The render's shared *About* is the hero's paragraph in this tree —
+  `Hero` already prints the description, and a second type printing the same field puts it on the
+  page twice.
+- **Services-only storefronts still ignore templates.** `1d-s` is its own composition and
+  reconciling it with the builder is `5f`'s job. The library says so with the number: *N
+  storefronts on this template sell only work and keep the standard services storefront.* A firm
+  that sells both renders the template's services sections, and the fixed services and
+  credentials blocks yield when the template places its own.
+
+### Found on the way, and fixed
+
+- The builder canvas and the specimens page linked a section's enquiry action to
+  `/rfq/new?to=…` — the fan-out, which `SectionProps.enquireHref`'s own note forbids.
+
+### Still owed
+
+- `5c` itself is unexported (Q4); the goods half of the library is still defined only by the tree.
+- Q1 — process steps. Q3 — a preview of the default storefront inside the builder.
+- The `Nexus` fixture sweep the README asks for is a design-canvas task: the tree has no `Nexus`.
+
 ## 4b · What the re-sequence opens up
 
 Three questions the new order forces, in the order they bite.
@@ -2048,7 +2109,7 @@ edit**.
 | **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **shipped 12 Sep.** One handoff, three screens, and it was right: the editor fixed the field set, the list reported on it, the page rendered it. See §4g |
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | **Complete.** `2b-s`, `2c-s`, `2d-s` shipped 11 Sep; `3b-s` and `3c-s` 13 Sep (§4r) |
-| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **`1d-s`, `1e-s` and `1f-s` shipped 13 Sep** (§4m–§4o) — the public storefront set is complete. `5c-s` has a placeholder waiting |
+| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **All four shipped 13 Sep** (§4m–§4o, §4s) — the public storefront set is complete, and the builder's library is filtered by kind |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p). `3j-s` and `1n-s` must be consecutive, and both read the brief |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. `4c-s`, `12g-s` and `6g-s` remain. `1c-s` is unblocked on Q1, which `rankBlended` answers |

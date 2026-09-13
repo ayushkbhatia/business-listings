@@ -179,9 +179,20 @@ describe("criterion 2 — at the storefront, not just at the service", () => {
       where: { name: "Industrial", status: "live" },
       select: { sectorId: true, sections: { select: { type: true }, orderBy: { sortOrder: "asc" } } },
     });
+    /*
+       Not a firm that sells only work. Board `5c-s`: a storefront shows the
+       half of its template it can fill, and Meridian — a services fixture
+       filed under this goods trade — would rightly resolve fewer sections
+       than the template holds.
+    */
     const listing = await prisma.business.findFirstOrThrow({
-      where: { sectorId: industrial.sectorId, publishedAt: { not: null }, suspendedAt: null },
-      select: { id: true, slug: true, sectorId: true, themePreset: true },
+      where: {
+        sectorId: industrial.sectorId,
+        publishedAt: { not: null },
+        suspendedAt: null,
+        sellsKind: { not: "services" },
+      },
+      select: { id: true, slug: true, sectorId: true, themePreset: true, sellsKind: true },
     });
 
     const plan = await storefrontPlan(listing);
@@ -205,12 +216,12 @@ describe("criterion 2 — at the storefront, not just at the service", () => {
 
     const inSector = await prisma.business.findMany({
       where: { sectorId: industrial.sectorId, publishedAt: { not: null }, suspendedAt: null },
-      select: { id: true, slug: true, sectorId: true, themePreset: true },
+      select: { id: true, slug: true, sectorId: true, themePreset: true, sellsKind: true },
       take: 3,
     });
     const outside = await prisma.business.findFirstOrThrow({
       where: { sectorId: stockist.sectorId, publishedAt: { not: null }, suspendedAt: null },
-      select: { id: true, slug: true, sectorId: true, themePreset: true },
+      select: { id: true, slug: true, sectorId: true, themePreset: true, sellsKind: true },
     });
 
     expect(inSector.length).toBeGreaterThan(1);
@@ -274,7 +285,7 @@ describe("criterion 2 — at the storefront, not just at the service", () => {
         suspendedAt: null,
         sectorId: { notIn: templated.map((template) => template.sectorId) },
       },
-      select: { id: true, slug: true, sectorId: true, themePreset: true },
+      select: { id: true, slug: true, sectorId: true, themePreset: true, sellsKind: true },
     });
     if (!listing) return;
 
@@ -299,7 +310,7 @@ describe("criterion 2 — at the storefront, not just at the service", () => {
         suspendedAt: null,
         documents: { some: {} },
       },
-      select: { id: true, slug: true, sectorId: true, themePreset: true },
+      select: { id: true, slug: true, sectorId: true, themePreset: true, sellsKind: true },
       take: 5,
     });
 
@@ -445,15 +456,16 @@ describe("criterion 7 — singletons", () => {
     ).rejects.toThrow();
   }, 60_000);
 
-  it("will not add the section whose model is not built", async () => {
+  it("will not add a section this trade's storefronts have nothing to fill with — 5c-s", async () => {
+    // A fresh sector with nothing set resolves to goods, so a scope grid is refused.
     const { templateId } = await draft("Services");
     const result = await addSection({
       actor: actor(opsLeadId, "staff_ops_lead"),
       templateId,
-      type: "services",
-      reason: "Trying to add services.",
+      type: "scope_grid",
+      reason: "Trying to add a scope grid to a goods trade.",
     });
-    expect(result).toMatchObject({ ok: false, error: "coming_soon" });
+    expect(result).toMatchObject({ ok: false, error: "unavailable_here" });
   }, 60_000);
 });
 

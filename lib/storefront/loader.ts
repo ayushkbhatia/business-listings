@@ -4,8 +4,13 @@ import { PUBLISHED } from "@/lib/db/queries/reviews";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { PUBLISHABLE_DOCUMENT_KINDS, sectionType } from "./section-types";
 import { resolveSections, type ResolvedSection, type SectionRow } from "./sections";
-import type { SectionContent, SectionData } from "./render-data";
+import type { SectionContent, SectionData, SectionWork } from "./render-data";
 import type { Availability } from "@/components/domain";
+import { rendersFor, type ListingKind } from "./library";
+import { sanitiseContent } from "./seller-content";
+import { sellsWork, type SellsKindValue } from "./tabs";
+import { coveragePageFor, serviceEnquiryVolume, servicesStorefrontFor } from "./services";
+import { sortByVolume } from "./services-catalogue";
 
 /**
  * What a storefront renders, loaded once.
@@ -79,6 +84,17 @@ interface BusinessRef {
   slug: string;
   sectorId: string | null;
   themePreset: string | null;
+  /**
+   * Decides which of a template's sections this storefront shows — board
+   * `5c-s`. A sector template can carry a scope grid and a catalogue grid at
+   * once, and each store renders the half it has something to put in.
+   */
+  sellsKind: SellsKindValue;
+}
+
+/** The words a shared section speaks for this listing. `both` leads with its catalogue. */
+export function listingKind(sellsKind: SellsKindValue): ListingKind {
+  return sellsKind === "services" ? "services" : "goods";
 }
 
 export async function storefrontPlan(business: BusinessRef): Promise<StorefrontPlan> {
@@ -99,11 +115,16 @@ export async function storefrontPlan(business: BusinessRef): Promise<StorefrontP
       })
     : null;
 
-  const sections = resolveSections(template ? template.sections : defaultSections());
+  const sections = resolveSections(template ? template.sections : defaultSections()).filter(
+    (section) => rendersFor(section.definition, business.sellsKind),
+  );
 
   const [data, content] = await Promise.all([
-    sectionData(business.id, business.slug),
-    template ? sellerContent(business.id, sections.map((section) => section.id)) : {},
+    sectionData(business.id, business.slug, {
+      kind: listingKind(business.sellsKind),
+      work: needsWork(sections, business.sellsKind),
+    }),
+    template ? sellerContent(business.id, sections) : {},
   ]);
 
   return {
@@ -123,23 +144,104 @@ export async function storefrontPlan(business: BusinessRef): Promise<StorefrontP
   };
 }
 
+/** Whether any section here reads a firm's work, and the firm has any to read. */
+function needsWork(sections: readonly ResolvedSection[], sellsKind: SellsKindValue): boolean {
+  return sellsWork(sellsKind) && sections.some((section) => section.definition.availableFor === "services");
+}
+
+/**
+ * Seller-filled values, by section id — through `sanitiseContent`, so only a
+ * key the template opened, in its declared shape, with no price in it, reaches
+ * a renderer.
+ */
 async function sellerContent(
   businessId: string,
-  sectionIds: string[],
+  sections: readonly Pick<ResolvedSection, "id" | "type" | "sellerEditableFields">[],
 ): Promise<Record<string, SectionContent>> {
-  if (sectionIds.length === 0) return {};
+  if (sections.length === 0) return {};
+  const byId = new Map(sections.map((section) => [section.id, section]));
   const rows = await prisma.storefrontContent.findMany({
-    where: { businessId, sectionId: { in: sectionIds } },
+    where: { businessId, sectionId: { in: [...byId.keys()] } },
     select: { sectionId: true, values: true },
   });
   return Object.fromEntries(
-    rows.map((row) => [row.sectionId, (row.values ?? {}) as SectionContent]),
+    rows.map((row) => [row.sectionId, sanitiseContent(byId.get(row.sectionId)!, row.values)]),
   );
 }
 
-/** Everything the fourteen types can read, for one business. */
-async function sectionData(businessId: string, slug: string): Promise<SectionData> {
-  const [business, products, productCount, reviews, documents, media, team] = await Promise.all([
+/**
+ * What a firm that sells work brings to a section — board `5c-s`.
+ *
+ * Every half comes from the loader its own storefront tab already uses, so a
+ * section and the tab it mirrors cannot disagree about a firm: services and
+ * per-service coverage from `coveragePageFor` (`1f-s`), credentials, sectors and
+ * the union from `servicesStorefrontFor` (`1d-s`), and the order from the
+ * 90-day volume `1e-s` sorts by (B8). None of them selects a fee amount.
+ */
+export async function sectionWorkFor(businessId: string): Promise<SectionWork> {
+  const [page, storefront] = await Promise.all([
+    coveragePageFor(businessId),
+    servicesStorefrontFor(businessId),
+  ]);
+  const volume = await serviceEnquiryVolume(
+    businessId,
+    page.rows.map((row) => row.service.id),
+  );
+  const rows = page.rows.map((row) => ({
+    ...row,
+    id: row.service.id,
+    position: row.service.position,
+    engagementType: row.service.engagementType,
+    feeBasis: row.service.feeBasis,
+    feeBasisLabel: null,
+  }));
+
+  const value = (row: (typeof rows)[number], key: string) =>
+    row.service.rows.find((entry) => entry.key === key)?.value ?? null;
+
+  return {
+    services: sortByVolume(rows, volume).map((row) => ({
+      id: row.service.id,
+      slug: row.service.slug,
+      name: row.service.name,
+      scope: row.service.scope,
+      engagementType: row.service.engagementType,
+      turnaround: value(row, "turnaround"),
+      feeBasis: value(row, "fee_basis"),
+      deliveredWhere: value(row, "delivered_where"),
+      places: row.places.map((place) => ({ emirate: place.emirate, areaId: place.areaId, label: place.label })),
+    })),
+    credentials: storefront.credentials,
+    coverage: storefront.coverage.map((place) => ({
+      emirate: place.emirate,
+      areaId: place.areaId,
+      label: place.label,
+    })),
+    freeZones: page.freeZones,
+    sectors: storefront.sectors,
+    deliveryModes: storefront.deliveryModes,
+  };
+}
+
+/** The data a section preview reads for a real store, for the builder's library screen. */
+export async function sectionDataFor(business: {
+  id: string;
+  slug: string;
+  sellsKind: SellsKindValue;
+}): Promise<SectionData> {
+  return sectionData(business.id, business.slug, {
+    kind: listingKind(business.sellsKind),
+    work: sellsWork(business.sellsKind),
+  });
+}
+
+/** Everything the section types can read, for one business. */
+async function sectionData(
+  businessId: string,
+  slug: string,
+  options: { kind: ListingKind; work: boolean },
+): Promise<SectionData> {
+  const [business, products, productCount, reviews, documents, media, team, work] = await Promise.all([
     prisma.business.findUniqueOrThrow({
       where: { id: businessId },
       select: {
@@ -226,12 +328,15 @@ async function sectionData(businessId: string, slug: string): Promise<SectionDat
         media: { select: { storagePath: true } },
       },
     }),
+    options.work ? sectionWorkFor(businessId) : Promise.resolve(null),
   ]);
 
   const cover = media.find((entry) => entry.kind === "storefront" || entry.kind === "cover");
   const logo = media.find((entry) => entry.kind === "logo");
 
   return {
+    kind: options.kind,
+    work,
     business: {
       slug,
       displayName: business.displayName,

@@ -180,6 +180,7 @@ and it is the one that argues back.
 /b/:slug/:page                          A template page on a storefront  [5d]  built h4s6
 /admin/storefront-templates/:id/theme   Theme presets                    [5b]  built h4s6
 /admin/storefront-templates/:id/pages   Page template editor             [5d]  built h4s6
+/admin/storefront-templates/:id/sections  Section library, by trade kind [5c-s]  built h5cs
 /admin/domains                          Custom domain verification       [5e]
 /admin/areas                            Emirates, areas, free zones          [12h]
 /admin/api                              API keys & webhooks                  [12h]

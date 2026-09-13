@@ -1,3 +1,4 @@
+import { isConfigurable, readSettings } from "./section-settings";
 import { sectionType } from "./section-types";
 import type { SectionRow } from "./sections";
 
@@ -24,6 +25,7 @@ export type ChangeKind =
   | "section_moved"
   | "section_fields_changed"
   | "section_mobile_changed"
+  | "section_settings_changed"
   | "theme_changed"
   | "setting_changed";
 
@@ -172,6 +174,24 @@ export function diffTemplate(
         },
         // Closing a field a seller had open leaves what they wrote unreachable.
         destructive: lost.length > 0,
+      });
+    }
+
+    /*
+       Board `5c-s` — a column added to a scope grid, a credential wall narrowed
+       to checked rows. Compared as read rather than as stored, so a section
+       written `{}` and one written with the defaults are the same section.
+    */
+    if (
+      isConfigurable(section.type) &&
+      JSON.stringify(readSettings(section.type, was.settings)) !==
+        JSON.stringify(readSettings(section.type, section.settings))
+    ) {
+      changes.push({
+        kind: "section_settings_changed",
+        labelKey: "diff.settings_changed",
+        values: { section: nameOf(section.type) },
+        destructive: false,
       });
     }
   }

@@ -12,6 +12,7 @@ import { Ranking } from "./_sections/Ranking";
 import { Reviews } from "./_sections/Reviews";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
 import { ServiceBriefGallery } from "./_sections/ServiceBrief";
+import { BuilderSectionsGallery } from "./_sections/BuilderSections";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
 import { Tokens } from "./_sections/Tokens";
@@ -249,6 +250,7 @@ export default function Gallery() {
       <Reviews />
       <ServicesStorefrontGallery />
       <ServiceBriefGallery />
+      <BuilderSectionsGallery />
       <Overlays />
       <Shells />
       <Tokens />
