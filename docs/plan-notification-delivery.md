@@ -1,6 +1,6 @@
 # Notification delivery, and the pending migration flags
 
-**Date** 9 Sep 2026 · **Base** `main` at `36e74bb` · **Status: planned, not built**
+**Date** 9 Sep 2026 · **Base** `main` at `36e74bb`, rechecked 14 Sep at `ee2a9a7` · **Status: planned, not built**
 
 A plan rather than a record. It lives in `docs/` because everything in it was read off
 **production** on the day, and those readings go stale — a phase that has since shipped, or a
@@ -8,6 +8,29 @@ count that has since moved, should be corrected here rather than remembered diff
 
 Companion to `docs/platform-state.md`, which says what is wired; this says what is wired and
 still silent.
+
+## Rechecked 14 Sep 2026, against `ee2a9a7`
+
+Thirty-one PRs landed after the base. None of them touches this plan's substance, and every
+code claim below was re-read on the new tree:
+
+- `DEFAULT_ROUTING` exists nowhere. `route()` still reads `preference.matrix[context.event] ?? []`.
+- `NotificationEvent` has no `payment_failed` or `payment_final_notice`, and the `send` branch of
+  `lib/billing/dunning-job.ts` still advances the stage with no emitter.
+- `search_impression_day` is still keyed `[businessId, day, normalised]` with no `source`, and
+  `docs/platform-state.md` still carries the flag.
+- The seeded routing matrix (`prisma/seed.mts`) carries five of fifteen events. The gap is
+  reproducible on a fresh seed, not only on production.
+
+**One claim was wrong and is corrected below:** the missing templates cannot be authored
+through `/admin/notifications`. `saveTemplate` supersedes an existing row by id and returns
+`not_found` without one, and `templateLibrary()` lists only rows that exist — so an event with
+no template has no way in. `docs/build-plan.md` workstream 7.4 already owns that create path.
+
+**Not rechecked:** the production readings. The database connection was unavailable on
+14 Sep, so the counts, the four missing templates and the Ironbridge dates are as read on 9 Sep.
+
+New migrations in Phases 2 and 3 must sort after `20261015090000_ranking_vector_by_kind`.
 
 I flagged two things as "waiting on the next migration": a payment-failure notification event
 so dunning's D3/D7/D14 stop sending nothing, and a source column on
@@ -121,9 +144,10 @@ No migration. Ships alone, first, because of the 19 September date.
    neither still returns `[]`.
 2. Board 7e's screen shows the effective routing and marks which rows are defaults, so a
    seller can see what they will receive without having chosen it.
-3. The four missing templates, authored through `/admin/notifications` — they are content, and
-   `lib/notify/templates.ts` plus its editor already exist. **Not a code change and not mine
-   to invent copy for**; see §Yours below.
+3. The four missing templates. **Blocked on a create path** (corrected 14 Sep): the editor
+   at `/admin/notifications` can only supersede a template that already has a row, and none of
+   these do on production. Build-plan 7.4 adds the path; the copy itself is still content, not
+   a commit — see §Yours below.
 4. A check that fails the build when an emitted event has no default route. The class of bug
    here is "nobody noticed", and the answer to that is a scan, not vigilance.
 
@@ -200,8 +224,9 @@ Phases 2 and 3** (one migration, stops for you), then Phase 4 folded into whatev
 
 1. **Six templates need copy.** Four that already emit and send nothing
    (`subscription_renewed`, `setup_nudge`, `ramadan_dates_moved`, `review_dispute_decided`)
-   and the two new dunning ones. They are content in the database with an admin screen —
-   CLAUDE.md is explicit that content does not belong in a commit. I can draft all six in the
+   and the two new dunning ones. They are content in the database — CLAUDE.md is explicit that
+   content does not belong in a commit — but the admin screen cannot create a first version
+   yet (see Phase 1, step 3), so the copy waits on build-plan 7.4. I can draft all six in the
    product's voice and you publish them, or you write them; either way they are not code.
 
 2. **Can a seller switch off a payment-failure notice?** My recommendation: it appears on
@@ -210,8 +235,8 @@ Phases 2 and 3** (one migration, stops for you), then Phase 4 folded into whatev
    worst outcome this sequence can produce.
 
 3. **The 19 September drop.** Ironbridge is seed data, so the honest options are to let it run
-   as a live test of the sequence, or to reset `past_due_since`. Worth deciding before the
-   11 Sep step rather than after.
+   as a live test of the sequence, or to reset `past_due_since`. The 11 Sep step has passed
+   without a recheck; read the row before deciding.
 
 ## Not in any phase
 
