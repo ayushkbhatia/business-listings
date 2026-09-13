@@ -20,8 +20,23 @@ async function removeFixtures() {
 
 beforeAll(async () => {
   await removeFixtures();
-  const category = await prisma.category.findFirstOrThrow({
-    where: { products: { some: { status: { not: "draft" } } } },
+  /*
+     Pinned by slug, and the reason is worth keeping.
+
+     It was `findFirstOrThrow` on "a category with a non-draft product", with no
+     `orderBy` — so Postgres returned whatever the heap handed back. That was
+     the sector, `Valves & fittings`, for as long as nothing updated a category
+     row; classifying the taxonomy updated eighty-three of them, which moved
+     them in the heap, and the same query started returning the leaf `Gate
+     valves` — one supplier, and a fan-out test asserting *however many sellers*
+     that could only ever find one.
+
+     The suite files its suppliers here (`seed.mts` says so: sixty assertions
+     expect to find them in this trade), so this is the category the test always
+     meant. `created_at is not a total order` is the same defect one table over.
+  */
+  const category = await prisma.category.findUniqueOrThrow({
+    where: { slug: "valves-and-fittings" },
     select: { id: true },
   });
   categoryId = category.id;
