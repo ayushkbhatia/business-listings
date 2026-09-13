@@ -22,13 +22,19 @@ export const HEADLINE_MAX = 90;
 export const SERVICES_MAX = 5;
 
 /**
- * And how many sectors. Not in the board, and needed all the same.
+ * And how many sectors — `3b-s` Q1, six.
  *
- * The field is free text with free entry, which is an unbounded array on a row
- * every search result reads. A seller pasting two hundred sectors is not a
- * malicious act, it is a Friday afternoon — and the card would render it.
+ * `2c-s` shipped with twenty, "not in the board, and needed all the same",
+ * because the field is free entry and an unbounded array on a row every search
+ * result reads. `3b-s` then answered the question `2c-s` left open: *a firm
+ * claiming twelve sectors is claiming none*, four to six with the cap stated.
+ *
+ * One constant for both screens, which is `3b-s` B8: onboarding and the
+ * dashboard cannot hold different caps on one field. Changing it cost nothing
+ * the day it changed — no services listing in production had yet named a
+ * sector — and would only have got more expensive.
  */
-export const SECTORS_MAX = 20;
+export const SECTORS_MAX = 6;
 
 /** Longest a single free-entry sector may be. A sentence is not a sector. */
 export const SECTOR_MAX_LENGTH = 40;
@@ -43,6 +49,40 @@ export const SECTOR_MAX_LENGTH = 40;
  * number somebody meant as a year.
  */
 export const ENGAGEMENTS_MAX = 99_999;
+
+/** Languages a firm works in. A claim, labelled as one wherever it is published. */
+export const LANGUAGES_MAX = 12;
+export const LANGUAGE_MAX_LENGTH = 30;
+
+/**
+ * Qualified professionals — `3b-s` B9, and closer to a credential than a
+ * headcount for an audit, legal or engineering practice.
+ *
+ * Stored beside `teamSize` rather than replacing it. The board draws practice
+ * size as a number (*14 — of whom 9 are qualified*) with the public band
+ * derived from it (B4). The tree already stores the band itself, typed by the
+ * seller from a list on `2c` and `3b`, and filtered and compared on across the
+ * directory — so there is one field and nothing that could drift from it, which
+ * is the thing B4 is actually guarding against. What the band cannot hold is
+ * the qualified count, so that is the column that is new.
+ */
+export const QUALIFIED_MAX = 99_999;
+
+/** Typical client, in the seller's words — `3b-s` Q2, free text as drawn. */
+export const TYPICAL_CLIENT_MAX = 80;
+
+/**
+ * The top of each team-size band, for the one cross-field check this field set
+ * has: a practice cannot have more qualified professionals than people. Null is
+ * open-ended.
+ */
+const BAND_CEILING: Record<string, number | null> = {
+  b1_10: 10,
+  b11_50: 50,
+  b51_200: 200,
+  b201_500: 500,
+  b500_plus: null,
+};
 
 /**
  * The matching form of a sector — B3.
@@ -86,7 +126,13 @@ export type ProfileRefusal =
   | { field: "servicesOffered"; reason: "too_many"; max: number }
   | { field: "sectorsServed"; reason: "too_many"; max: number }
   | { field: "sectorsServed"; reason: "entry_too_long"; max: number }
-  | { field: "sectorEngagements"; reason: "out_of_range"; max: number };
+  | { field: "sectorEngagements"; reason: "out_of_range"; max: number }
+  | { field: "languages"; reason: "too_many"; max: number }
+  | { field: "languages"; reason: "entry_too_long"; max: number }
+  | { field: "qualifiedCount"; reason: "out_of_range"; max: number }
+  /** More qualified professionals than the top of the team-size band. */
+  | { field: "qualifiedCount"; reason: "exceeds_team"; max: number }
+  | { field: "typicalClient"; reason: "too_long"; max: number };
 
 export interface ServiceProfileInput {
   headline?: string | null;
@@ -98,14 +144,36 @@ export interface ServiceProfileInput {
    * replaces them.
    */
   sectorEngagements?: Readonly<Record<string, number | null>>;
+  /** Absent leaves the stored languages alone. `2c-s` shipped never sending them. */
+  languages?: readonly string[];
+  /** `3b-s` B9. Null clears it; absent leaves it alone. */
+  qualifiedCount?: number | null;
+  /** `3b-s` Q2. Null or empty clears it; absent leaves it alone. */
+  typicalClient?: string | null;
+  /**
+   * The team-size band the qualified count is checked against. Not saved from
+   * here — `teamSize` is written by the shared field set that owns it — only
+   * read, so the two fields cannot contradict each other on one save.
+   */
+  teamSize?: string | null;
+  /**
+   * Whether `servicesOffered` is part of this save. The dashboard does not send
+   * it (see `fieldSetFor`), and an absent list must not be read as *none*.
+   */
+  withServicesOffered?: boolean;
 }
 
 export interface ServiceProfileClean {
   headline: string | null;
   sectorsServed: string[];
-  servicesOffered: string[];
+  /** Undefined when the caller did not send the list. */
+  servicesOffered: string[] | undefined;
   /** Only for sectors still listed, and only positive whole numbers. Null = untouched. */
   sectorEngagements: { sectorSlug: string; engagements: number }[] | null;
+  /** Undefined = untouched. */
+  languages: string[] | undefined;
+  qualifiedCount: number | null | undefined;
+  typicalClient: string | null | undefined;
 }
 
 /**
@@ -129,6 +197,39 @@ export function checkServiceProfile(
   const services = dedupeSectors(input.servicesOffered ?? []);
   if (services.length > SERVICES_MAX) {
     refusals.push({ field: "servicesOffered", reason: "too_many", max: SERVICES_MAX });
+  }
+
+  /*
+     Languages, case-insensitively deduplicated like sectors and for the same
+     reason: "Arabic" and "arabic" are one claim. Refused past the cap rather
+     than trimmed to it.
+  */
+  const languages = input.languages === undefined ? undefined : dedupeSectors(input.languages);
+  if (languages && languages.length > LANGUAGES_MAX) {
+    refusals.push({ field: "languages", reason: "too_many", max: LANGUAGES_MAX });
+  }
+  if (languages?.some((language) => language.length > LANGUAGE_MAX_LENGTH)) {
+    refusals.push({ field: "languages", reason: "entry_too_long", max: LANGUAGE_MAX_LENGTH });
+  }
+
+  const qualified = input.qualifiedCount;
+  if (qualified !== undefined && qualified !== null) {
+    if (!Number.isInteger(qualified) || qualified < 0 || qualified > QUALIFIED_MAX) {
+      refusals.push({ field: "qualifiedCount", reason: "out_of_range", max: QUALIFIED_MAX });
+    } else {
+      const ceiling = input.teamSize ? (BAND_CEILING[input.teamSize] ?? null) : null;
+      if (ceiling !== null && qualified > ceiling) {
+        refusals.push({ field: "qualifiedCount", reason: "exceeds_team", max: ceiling });
+      }
+    }
+  }
+
+  const typical =
+    input.typicalClient === undefined
+      ? undefined
+      : (input.typicalClient ?? "").trim().replace(/\s+/g, " ");
+  if (typical && typical.length > TYPICAL_CLIENT_MAX) {
+    refusals.push({ field: "typicalClient", reason: "too_long", max: TYPICAL_CLIENT_MAX });
   }
 
   const sectors = dedupeSectors(input.sectorsServed ?? []);
@@ -169,8 +270,12 @@ export function checkServiceProfile(
     value: {
       headline: headline && headline.length > 0 ? headline : null,
       sectorsServed: sectors,
-      servicesOffered: services,
+      servicesOffered:
+        input.withServicesOffered === false ? undefined : services,
       sectorEngagements: engagements,
+      languages,
+      qualifiedCount: qualified,
+      typicalClient: typical === undefined ? undefined : typical.length > 0 ? typical : null,
     },
   };
 }

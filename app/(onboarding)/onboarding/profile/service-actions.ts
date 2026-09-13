@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { getActor } from "@/lib/auth/session";
+import { mayEditListing } from "@/lib/auth/guards";
 import { saveServiceProfile } from "@/lib/onboarding/profile";
 import { searchSectors } from "@/lib/onboarding/sector-index";
 import type { SectorOption } from "@/components/domain/ServiceProfileFields";
 import { t } from "@/lib/i18n";
-import { formatCount } from "@/lib/format";
-import type { ProfileRefusal } from "@/lib/onboarding/service-profile";
+import { sayServiceRefusal } from "@/lib/onboarding/service-profile-words";
 
 /**
  * Board `2c-s` — the services half of the profile step.
@@ -20,37 +20,12 @@ import type { ProfileRefusal } from "@/lib/onboarding/service-profile";
 
 export type SaveServiceResult = { ok: true; savedAt: string } | { ok: false; error: string };
 
-/** A refusal in the seller's own terms, naming the cap rather than the field. */
-function say(refusal: ProfileRefusal, counts: { services: number; sectors: number }): string {
-  if (refusal.field === "headline") {
-    return t("profile_svc.headline_over", {
-      count: formatCount(counts.services),
-      max: formatCount(refusal.max),
-    });
-  }
-  if (refusal.field === "servicesOffered") {
-    return t("profile_svc.services_capped", {
-      count: formatCount(counts.services),
-      max: formatCount(refusal.max),
-      over: formatCount(Math.max(0, counts.services - refusal.max)),
-    });
-  }
-  if (refusal.field === "sectorEngagements") {
-    return t("profile_svc.engagements_range", { max: formatCount(refusal.max) });
-  }
-  if (refusal.reason === "entry_too_long") {
-    return t("profile_svc.sectors_too_long", { max: formatCount(refusal.max) });
-  }
-  return t("profile_svc.sectors_capped", {
-    count: formatCount(counts.sectors),
-    max: formatCount(refusal.max),
-    over: formatCount(Math.max(0, counts.sectors - refusal.max)),
-  });
-}
-
 export async function saveServiceFields(formData: FormData): Promise<SaveServiceResult> {
   const actor = await getActor();
   if (!actor?.businessId) return { ok: false, error: t("dev.no_seat_title") };
+  // `listing.edit`, as every other write to the public profile checks. This
+  // guarded only on having a seat.
+  if (!mayEditListing(actor)) return { ok: false, error: t("profile_step.extras_error.forbidden") };
 
   const list = (key: string): string[] =>
     String(formData.get(key) ?? "")
@@ -61,11 +36,24 @@ export async function saveServiceFields(formData: FormData): Promise<SaveService
   const servicesOffered = list("servicesOffered");
   const sectorsServed = list("sectorsServed");
 
+  const headline = String(formData.get("headline") ?? "");
+  const languages = formData.getAll("language").map(String);
+  const qualifiedRaw = String(formData.get("qualifiedCount") ?? "").trim();
+
   const result = await saveServiceProfile(actor.businessId, {
-    headline: String(formData.get("headline") ?? ""),
+    headline,
     servicesOffered,
     sectorsServed,
     ...engagementsFrom(formData.get("sectorEngagements")),
+    // Only when the form says it sent them — an older client that never did
+    // must not be read as *no languages*.
+    ...(formData.get("languagesSent") === "1" ? { languages } : {}),
+    ...(formData.has("qualifiedCount")
+      ? { qualifiedCount: qualifiedRaw === "" ? null : Number(qualifiedRaw) }
+      : {}),
+    ...(formData.has("typicalClient")
+      ? { typicalClient: String(formData.get("typicalClient") ?? "") }
+      : {}),
   });
 
   if (!result.ok) {
@@ -78,7 +66,12 @@ export async function saveServiceFields(formData: FormData): Promise<SaveService
     const first = result.refusals[0]!;
     return {
       ok: false,
-      error: say(first, { services: servicesOffered.length, sectors: sectorsServed.length }),
+      error: sayServiceRefusal(first, {
+        headline: headline.trim().length,
+        services: servicesOffered.length,
+        sectors: sectorsServed.length,
+        languages: languages.length,
+      }),
     };
   }
 

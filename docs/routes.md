@@ -91,6 +91,7 @@ and it is the one that argues back.
 /dashboard/setup/done                   Setup complete, once only             [8e]  built h8s5
 /dashboard/listing                      Listing profile                       [3b]  built h3 wave 3
 /dashboard/locations                    Locations                             [3c]
+/dashboard/coverage                     Coverage — default and per service    [3c-s] built 13 Sep
 /dashboard/hours                        Hours & Ramadan                       [3d]
 /dashboard/verification                 Verification & documents              [3e]  built h3 wave 3
 /dashboard/products                     Catalogue                             [3f]  built h3 wave 2

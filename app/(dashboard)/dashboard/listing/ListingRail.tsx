@@ -23,9 +23,17 @@ export interface ListingRailProps {
   description: string;
   withdrawAction: (formData: FormData) => Promise<ActionResult>;
   editable: boolean;
+  /** Board `3b-s` — a firm that sells work sees what changes for it. */
+  sellsWork?: boolean;
 }
 
-export function ListingRail({ view, description, withdrawAction, editable }: ListingRailProps) {
+export function ListingRail({
+  view,
+  description,
+  withdrawAction,
+  editable,
+  sellsWork = false,
+}: ListingRailProps) {
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [pending, startTransition] = useTransition();
 
@@ -53,6 +61,36 @@ export function ListingRail({ view, description, withdrawAction, editable }: Lis
           <PreviewCard view={view} description={description} />
         </div>
       </Panel>
+
+      {/*
+         Board `3b-s` — what this version of the screen asks, in the seller's
+         terms. The board draws two rail cards that name other boards ("mirrors
+         2c-s"); those are notes for the people building it, and a seller
+         reading a board number is reading our filing system. What survives is
+         the substance: what is gone, what is new, and that this is where the
+         onboarding answers stay current.
+      */}
+      {sellsWork && (
+        <Panel eyebrow={t("listing.services_rail_title")}>
+          <ul className="flex flex-col gap-2 text-body-sm text-body">
+            <li className="flex gap-2">
+              <span aria-hidden="true" className="w-3 shrink-0 text-bad-ink">−</span>
+              <span>{t("listing.services_rail_out")}</span>
+            </li>
+            <li className="flex gap-2">
+              <span aria-hidden="true" className="w-3 shrink-0 text-ok-ink">+</span>
+              <span>{t("listing.services_rail_in")}</span>
+            </li>
+            <li className="flex gap-2">
+              <span aria-hidden="true" className="w-3 shrink-0 text-muted">=</span>
+              <span>{t("listing.services_rail_same")}</span>
+            </li>
+          </ul>
+          <p className="mt-3 border-t border-line pt-3 text-caption text-body">
+            {t("listing.services_rail_mirror")}
+          </p>
+        </Panel>
+      )}
 
       {/* ── Moderation: both halves, always ─────────────────────────────── */}
       <Panel eyebrow={t("listing.moderation")}>

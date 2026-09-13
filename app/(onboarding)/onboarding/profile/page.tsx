@@ -105,6 +105,8 @@ export default async function ProfileStepPage() {
         sectorsServed: true,
         servicesOffered: true,
         languages: true,
+        qualifiedCount: true,
+        typicalClient: true,
         sectorEngagements: { select: { sectorSlug: true, engagements: true } },
         primaryCategoryId: true,
         categories: { select: { categoryId: true } },
@@ -169,12 +171,19 @@ export default async function ProfileStepPage() {
             lift={lift ? { multiple: lift.multiple, threshold: lift.threshold } : null}
             form={{
               /*
-                 Board 2c-s. A services seller's prose field is the one-liner
-                 below, and their year reads "practising since". Same screen,
-                 same columns — only the field set and two labels change, which
-                 is what makes this a variant rather than a fork.
+                 Board 2c-s. A services seller's year reads "practising since".
+                 Same screen, same columns — only the field set and a label
+                 change, which is what makes this a variant rather than a fork.
+
+                 The description is asked of every seller, and for a services
+                 firm it was not. This read `fields.goods`, which left the
+                 one-liner as the only prose onboarding collected — while `1d-s`
+                 leads the services storefront with the description, under
+                 *What we take on*, and renders nothing when it is empty. So a
+                 firm that finished onboarding had no lead section on its own
+                 storefront. `3b-s` B8 found it: one field set on both screens.
               */
-              showDescription: fields.goods,
+              showDescription: true,
               practisingLabel: fields.services && !fields.goods,
               /*
                  Board 2c is where the split between the two names is created,
@@ -235,6 +244,8 @@ export default async function ProfileStepPage() {
                   profile.sectorEngagements.map((row) => [row.sectorSlug, row.engagements]),
                 ),
                 languages: profile.languages,
+                qualifiedCount: profile.qualifiedCount?.toString() ?? "",
+                typicalClient: profile.typicalClient ?? "",
               }}
               chips={chips}
               save={saveServiceFields}

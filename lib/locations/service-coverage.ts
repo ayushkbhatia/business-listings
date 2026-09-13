@@ -159,6 +159,89 @@ export function businessCoverage(
   );
 }
 
+/* ── Board `3c-s` — how one service's coverage relates to the default ─────── */
+
+/**
+ * Whether a coverage set reaches one scope.
+ *
+ * An emirate-wide claim reaches every area inside it; an area claim reaches that
+ * area and nothing else. Three area rows in Dubai do not reach Dubai, for the
+ * reason `unionCoverage` gives: collapsing them upward would widen a claim the
+ * seller did not make.
+ */
+export function reachesScope(set: readonly CoverageScope[], scope: CoverageScope): boolean {
+  return set.some(
+    (held) =>
+      sameScope(held, scope) || (held.areaId === null && held.emirate === scope.emirate),
+  );
+}
+
+/** Every scope in `inner` is reached by `outer`. */
+export function withinCoverage(
+  inner: readonly CoverageScope[],
+  outer: readonly CoverageScope[],
+): boolean {
+  return inner.every((scope) => reachesScope(outer, scope));
+}
+
+/**
+ * The four states a service's coverage can be in, measured against the default.
+ *
+ * `3c-s` B3 — **derived at read time, never stored.** A stored marker goes stale
+ * the moment the default is edited: a service marked *narrowed* against a
+ * three-emirate default is *wider* against a one-emirate default, and nothing
+ * would rewrite it.
+ *
+ * The board draws three and its own spec contradicts itself about the fourth.
+ * The prose says *equal is inherited*; the pseudocode files equal under
+ * *narrowed*. Neither is true. A service whose own rows happen to match the
+ * default does **not** inherit — edit the default and it stays where it is,
+ * which is exactly the `2d-s` B5 trap the whole model exists to avoid — and it
+ * has not narrowed anything either. So it is its own state, `same`, and the
+ * screen says what it means: set on this service, not following the default.
+ */
+export type CoverageMarker = "inherited" | "same" | "narrowed" | "wider";
+
+export function coverageMarker(
+  businessDefault: readonly CoverageScope[],
+  ownRows: readonly CoverageScope[],
+): CoverageMarker {
+  if (ownRows.length === 0) return "inherited";
+  if (!withinCoverage(ownRows, businessDefault)) return "wider";
+  return withinCoverage(businessDefault, ownRows) ? "same" : "narrowed";
+}
+
+/**
+ * The header chip's counts — `3c-s` B4, **derived from the rows, never typed.**
+ *
+ * The board shipped a chip reading `4 EMIRATES DEFAULT` over a three-emirate
+ * default line. The only way that cannot happen again is for the chip and the
+ * line to read the same array.
+ */
+export interface CoverageTally {
+  /** Distinct emirates the default reaches, whole or through an area. */
+  defaultEmirates: number;
+  inherited: number;
+  same: number;
+  narrowed: number;
+  wider: number;
+}
+
+export function coverageTally(
+  businessDefault: readonly CoverageScope[],
+  services: readonly (readonly CoverageScope[])[],
+): CoverageTally {
+  const tally: CoverageTally = {
+    defaultEmirates: emiratesCovered(businessDefault).length,
+    inherited: 0,
+    same: 0,
+    narrowed: 0,
+    wider: 0,
+  };
+  for (const own of services) tally[coverageMarker(businessDefault, own)] += 1;
+  return tally;
+}
+
 /** The emirates a coverage set reaches, for `1h`'s locality term and the facets. */
 export function emiratesCovered(scopes: readonly CoverageScope[]): Emirate[] {
   return [...new Set(scopes.map((scope) => scope.emirate))];

@@ -753,6 +753,21 @@ model Business {
   trn              String?
   establishedYear  Int?          @map("established_year")
   teamSize         TeamSizeBand? @map("team_size")
+  /// Qualified professionals in the practice — board `3b-s` B9.
+  ///
+  /// For an audit, legal or engineering firm this ratio is closer to a
+  /// credential than to a headcount. Beside `teamSize` rather than replacing
+  /// it: the band is what buyers filter and compare on, and it is typed by the
+  /// seller from a list, so there is one practice-size field and nothing that
+  /// could drift from it. A CHECK keeps it non-negative; the ceiling against the
+  /// band is a service-layer rule, because the band has no number to CHECK.
+  qualifiedCount   Int?          @map("qualified_count")
+  /// Who the firm typically works for, in its own words — `3b-s` Q2.
+  ///
+  /// Free text as drawn, which makes it unfilterable. If buyers should filter by
+  /// client size it has to become bands, and that is a decision rather than a
+  /// migration this column should pre-empt.
+  typicalClient    String?       @map("typical_client")
   languages        String[]      @default([])
   /// One line on what this business does — board `2c-s`.
   ///

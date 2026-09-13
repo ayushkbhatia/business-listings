@@ -6,6 +6,8 @@ import { saveListing } from "@/lib/listing/save";
 import { pick, setCover, unpick } from "@/lib/listing/photos";
 import type { RamadanHours, WeekHours } from "@/lib/trade/hours";
 import { t } from "@/lib/i18n";
+import { searchSectors } from "@/lib/onboarding/sector-index";
+import type { SectorOption } from "@/components/domain/ServiceProfileFields";
 import { getSellerSeat } from "../_shell";
 
 /**
@@ -54,27 +56,88 @@ export async function saveListingProfile(formData: FormData): Promise<SaveAction
     .map((value) => value.trim())
     .filter(Boolean);
 
+  const qualifiedRaw = String(formData.get("qualifiedCount") ?? "").trim();
+
   const result = await saveListing(seat.actor, seat.businessId, {
     description: String(formData.get("description") ?? ""),
-    paymentTerms: String(formData.get("paymentTerms") ?? ""),
+    /*
+       Only when the form drew the field. A services listing's form has no
+       payment-terms input, and reading the absence as an empty string would
+       clear a value the seller set before they changed kind — the `2b-s` B5
+       rule that switching kind converts and deletes nothing.
+    */
+    ...(formData.has("paymentTerms")
+      ? { paymentTerms: String(formData.get("paymentTerms") ?? "") }
+      : {}),
     establishedYear: year === "" ? null : Number(year),
     teamSize: String(formData.get("teamSize") ?? "") || null,
     languages,
     primaryCategoryId: String(formData.get("primaryCategoryId") ?? "") || undefined,
     addCategoryIds: formData.getAll("addCategory").map(String).filter(Boolean),
     removeCategoryIds: formData.getAll("removeCategory").map(String).filter(Boolean),
+    /*
+       Board `3b-s` — the services field set, posted only when the screen drew
+       it. The same input shape onboarding's `saveServiceFields` builds, because
+       the two screens save one field set (B8).
+    */
+    ...(formData.get("servicesSent") === "1"
+      ? {
+          services: {
+            headline: String(formData.get("headline") ?? ""),
+            sectorsServed: formData.getAll("sector").map(String),
+            ...engagementsFrom(formData.get("sectorEngagements")),
+            qualifiedCount: qualifiedRaw === "" ? null : Number(qualifiedRaw),
+            typicalClient: String(formData.get("typicalClient") ?? ""),
+          },
+        }
+      : {}),
   });
 
   if (!result.ok) return result;
 
   revalidatePath("/dashboard/listing");
   revalidatePath("/dashboard");
+  /*
+     The storefront too. `3b-s` B3: the description is published verbatim on
+     the overview, and a save that left the cached page showing the old text
+     would be a seller told their words are live when they are not.
+  */
+  revalidatePath(`/b/${seat.businessSlug}`, "layout");
   return {
     ok: true,
     live: result.live,
     held: result.held.map((row) => row.value),
     refused: result.refused.map((row) => row.error),
   };
+}
+
+/**
+ * Declared engagement counts, posted as one JSON object keyed by sector — the
+ * same encoding onboarding posts. Anything that does not parse leaves the
+ * stored counts alone rather than clearing every one.
+ */
+function engagementsFrom(raw: FormDataEntryValue | null): {
+  sectorEngagements?: Record<string, number | null>;
+} {
+  if (typeof raw !== "string" || raw === "") return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return {
+      sectorEngagements: Object.fromEntries(
+        Object.entries(parsed).map(([key, value]) => [key, typeof value === "number" ? value : null]),
+      ),
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** The sector type-ahead — the same index onboarding searches. */
+export async function findListingSectors(query: string): Promise<SectorOption[]> {
+  const seat = await getSellerSeat();
+  if (!seat) return [];
+  return searchSectors(query);
 }
 
 /* ── Photographs: references into 3i, never uploads ──────────────────────── */

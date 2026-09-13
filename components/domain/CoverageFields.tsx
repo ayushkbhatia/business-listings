@@ -3,7 +3,7 @@
 import { useId, useMemo, useState } from "react";
 import { Button, Checkbox, Input, Label } from "@/components/primitives";
 import { Close } from "@/components/primitives/icons";
-import { cn } from "@/lib/cn";
+import { CoverageChipGroup } from "./CoverageChipGroup";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { DELIVERY_MODES, framingFor } from "@/lib/locations/service-coverage";
@@ -176,33 +176,13 @@ export function CoverageFields({
 
         <p className="mt-1 max-w-prose text-caption text-muted">{t("coverage_step.areas_hint")}</p>
 
-        <ul
-          className={cn(
-            "mt-3 flex list-none flex-wrap gap-1.5 p-0",
-            !answered && "opacity-50",
-          )}
-        >
-          {chips.map((chip) => (
-            <li key={chip.key}>
-              <button
-                type="button"
-                aria-pressed={chip.on}
-                disabled={disabled || !answered}
-                onClick={() => onChip(chip.key, !chip.on)}
-                className={cn(
-                  "rounded-pill border px-3 py-1.5 text-caption",
-                  "focus-visible:shadow-focus focus-visible:outline-none",
-                  "disabled:cursor-not-allowed",
-                  chip.on
-                    ? "border-moss bg-moss-wash text-moss-deep"
-                    : "border-line bg-card text-body hover:border-moss-muted",
-                )}
-              >
-                {chip.label}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <CoverageChipGroup
+          className="mt-3"
+          chips={chips}
+          onToggle={onChip}
+          disabled={disabled}
+          inert={!answered}
+        />
 
         {/*
            The count and the cost, in one line each. Q1 says `Select all` gets no

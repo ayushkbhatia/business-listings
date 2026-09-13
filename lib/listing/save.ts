@@ -4,6 +4,14 @@ import { assertCanEditListing } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import { DESCRIPTION_LIMIT } from "./constants";
 import { isModerated, requestModeratedChange, type ModeratedField } from "./service";
+import { saveServiceProfile } from "@/lib/onboarding/profile";
+import {
+  checkServiceProfile,
+  sectorSlug,
+  type ProfileRefusal,
+  type ServiceProfileInput,
+} from "@/lib/onboarding/service-profile";
+import { sayServiceRefusal } from "@/lib/onboarding/service-profile-words";
 
 /**
  * Board 3b criterion 3 — **one action, two behaviours, and the seller is told
@@ -44,6 +52,15 @@ export interface ListingEdit {
   addCategoryIds?: string[];
   /** Category ids to drop. Instant — giving up reach needs no gate. */
   removeCategoryIds?: string[];
+  /**
+   * Board `3b-s` — the services field set, when the seller sells work.
+   *
+   * The same input `2c-s` saves through `saveServiceProfile`, validated by the
+   * same `checkServiceProfile`, so onboarding and this screen cannot disagree
+   * about what a valid services profile is (B8). Absent for a goods seller,
+   * whose save never touches these columns.
+   */
+  services?: ServiceProfileInput;
 }
 
 export interface SaveOutcome {
@@ -106,8 +123,31 @@ export async function saveListing(
       teamSize: true,
       languages: true,
       primaryCategoryId: true,
+      headline: true,
+      sectorsServed: true,
+      qualifiedCount: true,
+      typicalClient: true,
+      sectorEngagements: { select: { sectorSlug: true, engagements: true } },
     },
   });
+
+  /*
+     The services half, validated before anything is written — the same promise
+     the lines above make about the goods half. The qualified count is checked
+     against the team-size band *this* save is about to write, not the stored
+     one, so a seller moving from 1–10 to 11–50 and entering twelve qualified
+     professionals in the same sitting is not refused against the old band.
+  */
+  const services = edit.services
+    ? checkServiceProfile({
+        ...edit.services,
+        withServicesOffered: false,
+        teamSize: edit.teamSize !== undefined ? edit.teamSize : business.teamSize,
+      })
+    : null;
+  if (services && !services.ok) {
+    return { ok: false, error: wordRefusal(services.refusals[0]!, edit.services!) };
+  }
 
   const live: string[] = [];
   const data: Record<string, unknown> = {};
@@ -161,6 +201,48 @@ export async function saveListing(
 
   if (Object.keys(data).length > 0) {
     await prisma.business.update({ where: { id: businessId }, data });
+  }
+
+  if (services?.ok && edit.services) {
+    /*
+       Written through `saveServiceProfile`, the function onboarding calls,
+       rather than a second copy of its transaction here — the sectors and their
+       declared counts have to move together, and that rule lives in one place.
+       It re-validates, which is cheap and cannot disagree with the check above.
+
+       Languages are not sent to it: the goods half above already owns that
+       column on this screen, and one column with two writers in one save is
+       how a later write undoes an earlier one.
+    */
+    const clean = services.value;
+    const moved: string[] = [];
+    if (clean.headline !== business.headline) moved.push("headline");
+    if (!sameSet(clean.sectorsServed, business.sectorsServed)) moved.push("sectors_served");
+    if (
+      clean.sectorEngagements !== null &&
+      engagementKey(clean.sectorEngagements) !== engagementKey(business.sectorEngagements)
+    ) {
+      if (!moved.includes("sectors_served")) moved.push("sectors_served");
+    }
+    if (clean.qualifiedCount !== undefined && clean.qualifiedCount !== business.qualifiedCount) {
+      moved.push("qualified_count");
+    }
+    if (clean.typicalClient !== undefined && clean.typicalClient !== business.typicalClient) {
+      moved.push("typical_client");
+    }
+
+    if (moved.length > 0) {
+      const written = await saveServiceProfile(businessId, {
+        ...edit.services,
+        languages: undefined,
+        withServicesOffered: false,
+        teamSize: edit.teamSize !== undefined ? edit.teamSize : business.teamSize,
+      });
+      if (!written.ok) {
+        return { ok: false, error: wordRefusal(written.refusals[0]!, edit.services) };
+      }
+      live.push(...moved);
+    }
   }
 
   /* ── The half a person looks at ───────────────────────────────────────── */
@@ -236,6 +318,23 @@ export async function recentRevisions(businessId: string, take = 3) {
       actor: { select: { fullName: true } },
     },
   });
+}
+
+function wordRefusal(refusal: ProfileRefusal, input: ServiceProfileInput): string {
+  return sayServiceRefusal(refusal, {
+    headline: (input.headline ?? "").trim().length,
+    services: input.servicesOffered?.length ?? 0,
+    sectors: input.sectorsServed?.length ?? 0,
+    languages: input.languages?.length ?? 0,
+  });
+}
+
+/** Order-free fingerprint of declared engagement counts, for *did it move*. */
+function engagementKey(rows: readonly { sectorSlug: string; engagements: number }[]): string {
+  return rows
+    .map((row) => `${sectorSlug(row.sectorSlug)}=${row.engagements}`)
+    .sort()
+    .join("|");
 }
 
 function sameSet(a: readonly string[], b: readonly string[]): boolean {
