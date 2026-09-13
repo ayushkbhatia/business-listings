@@ -8,6 +8,7 @@ import { routeLead } from "@/lib/leads/router";
 import { sendAutoReplies } from "@/lib/messaging/auto-reply";
 import { onEnquiryDelivered, onQuoteAccepted } from "@/lib/notify/events";
 import { quoteTotalAed } from "@/lib/quote/money";
+import { resolveEnquiryArea } from "./area";
 import { PLAN_CAPS_SELECT, effectiveCaps, toCaps } from "@/lib/plan/entitlements";
 import type { Attribution } from "@/lib/campaign/attribution";
 import {
@@ -535,6 +536,27 @@ export async function createEnquiry(
         ).map((row) => row.id),
   );
 
+  /*
+     The typed area, resolved to an `Area` row where it resolves to one at all.
+
+     Read here rather than inside the transaction, because it is a lookup
+     against a staff-curated taxonomy and not part of what has to be atomic
+     with the write. Scoped to the emirate the buyer stated, so
+     "Industrial Area 1" on a Sharjah enquiry cannot come back as Ajman's.
+
+     Null is the ordinary answer and it is a real one. `resolveEnquiryArea`
+     refuses prefixes and refuses ambiguity, because the id it produces is what
+     lets a seller covering only Al Quoz be matched — a bad resolve sends the
+     job to somebody who does not work there.
+  */
+  const areaId = input.deliverToArea
+    ? resolveEnquiryArea(
+        input.deliverToArea,
+        input.emirate ?? null,
+        await prisma.area.findMany({ select: { id: true, name: true, emirate: true } }),
+      )
+    : null;
+
   const ref = await nextEnquiryRef();
   // Never zero. An enquiry that closes the instant it is sent is one nobody
   // can answer, and a form can post anything.
@@ -547,7 +569,10 @@ export async function createEnquiry(
         buyerId,
         buyerCompanyId: input.buyerCompanyId ?? null,
         requirement: input.requirement.trim(),
+        // What the buyer wrote, kept as they wrote it — and beside it the row
+        // it resolves to, which is a different claim and often null.
         deliverToArea: input.deliverToArea ?? null,
+        areaId,
         /*
            The emirate the composer already asked for, finally stored.
 

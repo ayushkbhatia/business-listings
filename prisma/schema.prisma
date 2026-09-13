@@ -337,6 +337,7 @@ model Area {
   pages                 AreaPage[]
   lists                 CuratedList[]
   demand                ScopeDemand[]
+  enquiries             Enquiry[]
 
   @@index([emirate])
   @@map("area")
@@ -2611,7 +2612,35 @@ model Enquiry {
   buyerId        String        @map("buyer_id") @db.Uuid
   buyerCompanyId String?       @map("buyer_company_id")
   requirement    String
+
+  /// The area the buyer typed, in their own words. Kept, never replaced.
+  ///
+  /// `areaId` beside it is the row it resolves to, and the two are different
+  /// claims: this is what the buyer said, that is what the taxonomy could make
+  /// of it. A buyer who types *"near the Dragon Mart roundabout"* has told a
+  /// seller something real that no `Area` row holds, and overwriting it with a
+  /// resolved id — or clearing it when nothing resolves — would throw away the
+  /// only description of the site anyone has.
   deliverToArea  String?       @map("deliver_to_area")
+
+  /// The `Area` row that text resolves to, when it resolves to one at all.
+  ///
+  /// The last free-text join between a buyer's brief and the coverage model.
+  /// `ServiceCoverage` and `BusinessCoverage` are both `(emirate, areaId)`;
+  /// the enquiry side had an emirate and a string, so **an area-level coverage
+  /// match was not computable from the enquiry at all** — a facilities
+  /// contractor covering Al Quoz and one covering the whole of Dubai were
+  /// indistinguishable to the fan-out.
+  ///
+  /// Null is the ordinary case and a real answer: the buyer named nowhere, or
+  /// named somewhere the taxonomy does not hold. Nothing guesses — a fuzzy
+  /// match here would be the platform inventing a delivery address.
+  ///
+  /// `Restrict` on delete, deliberately. `SetNull` would rewrite history: an
+  /// enquiry that named Al Quoz would silently become one that named nowhere,
+  /// on a record a seller has already quoted against. Removing an area a buyer
+  /// has used is a decision for staff to make explicitly.
+  areaId         String?       @map("area_id")
   /// Where the goods are going, as the buyer picked it on the composer.
   ///
   /// Board `3l`'s fourth panel. The RFQ form has always collected this and
@@ -2692,6 +2721,9 @@ model Enquiry {
   /// both of these columns together and ran as a sequential scan over every
   /// enquiry on the platform, on a page a seller opens to find two names.
   @@index([contactReleasedToBusinessId, contactReleasedAt])
+  area           Area?              @relation(fields: [areaId], references: [id], onDelete: Restrict)
+
+  @@index([areaId])
   @@map("enquiry")
 }
 

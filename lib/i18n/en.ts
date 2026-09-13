@@ -530,6 +530,20 @@ export const en = {
   // `MAX_TIER`, which is `TOP_ACHIEVABLE_TIER`, which the
   // `business_verification_tier_range` CHECK holds at 2 underneath.
   "admin.businesses.tier_invalid": "Pick a tier between 0 and 2.",
+  /*
+     Refusals from the three service layers behind this screen, worded here.
+
+     `lib/verification/service.ts` and `lib/business/service.ts` returned these
+     as raw English and the action handed them straight to the user — the last
+     of the five modules doing it. A service returns the fact as a key; the
+     action does the wording.
+  */
+  "admin.businesses.error.not_found": "That business is not in the directory.",
+  "admin.businesses.error.out_of_range": "A tier is a whole number from {min} to {max}.",
+  "admin.businesses.error.unchanged": "That business is already tier {tier}.",
+  "admin.businesses.error.licence_expired": "That trade licence expired on {date}. Tier {ceiling} is the ceiling until the renewed licence is recorded.",
+  "admin.businesses.error.already_suspended": "{business} was suspended on {date}.",
+  "admin.businesses.error.not_suspended": "{business} is not suspended.",
   "admin.businesses.suspended": "Suspended. The listing is off the directory.",
   "admin.businesses.lifted": "Suspension lifted. The listing is back.",
   "admin.businesses.suspend_note": "A suspension hides the listing and stops new enquiries. It does not delete anything.",

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { setVerificationTier } from "@/lib/verification/service";
+import { MAX_TIER, MIN_TIER, setVerificationTier } from "@/lib/verification/service";
 import { suspendBusiness, liftSuspension } from "@/lib/business/service";
 import { issueSubscriptionCredit } from "@/lib/billing/service";
 import { staffMutation, SubjectCheckRequiredError } from "@/lib/audit/staff-mutation";
@@ -488,8 +488,14 @@ describe("the ladder stops at 2", () => {
       reason: REASON,
     });
     expect(result).toMatchObject({ ok: false, error: "out_of_range" });
-    if (result.ok) return;
-    expect(result.message).toMatch(/from 0 to 2/i);
+    /*
+       The ceiling itself, rather than the service's sentence about it. This
+       asserted `/from 0 to 2/i` against a string the service wrote — which is
+       what the fix moved out of the service layer. The number is the thing
+       worth pinning: `MAX_TIER` is `TOP_ACHIEVABLE_TIER`, and a rung added or
+       cut has to move it here too.
+    */
+    expect([MIN_TIER, MAX_TIER]).toEqual([0, 2]);
   });
 
   it("and the database refuses it too, if a second path ever tries", async () => {

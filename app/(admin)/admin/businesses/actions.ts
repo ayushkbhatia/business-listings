@@ -3,8 +3,20 @@
 import { revalidatePath } from "next/cache";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import { requireStaff } from "@/lib/auth/staff";
-import { setVerificationTier } from "@/lib/verification/service";
-import { liftSuspension, suspendBusiness } from "@/lib/business/service";
+import {
+  MAX_TIER,
+  MIN_TIER,
+  setVerificationTier,
+  type TierResult,
+} from "@/lib/verification/service";
+import {
+  liftSuspension,
+  suspendBusiness,
+  type LiftResult,
+  type SuspendResult,
+} from "@/lib/business/service";
+import { EXPIRED_LICENCE_TIER } from "@/lib/verification";
+import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
 /**
@@ -35,6 +47,52 @@ function done(): void {
   revalidatePath("/admin");
 }
 
+/**
+ * The refusals from the three services behind this screen, worded here.
+ *
+ * All three returned sentences of raw English that this file handed straight
+ * to the user — the last of the five service layers doing it, and the only
+ * strings on this screen that never reached `lib/i18n/en.ts`. Three of them
+ * also interpolated a bare ISO date or a tier number into that English.
+ *
+ * The services carry the *facts* now — a tier, a date, a display name — and
+ * the wording is here, where every other string on this screen already came
+ * from.
+ */
+function tierRefusal(result: Extract<TierResult, { ok: false }>): string {
+  switch (result.error) {
+    case "out_of_range":
+      return t("admin.businesses.error.out_of_range", {
+        min: String(MIN_TIER),
+        max: String(MAX_TIER),
+      });
+    case "unchanged":
+      return t("admin.businesses.error.unchanged", { tier: String(result.tier) });
+    case "licence_expired":
+      return t("admin.businesses.error.licence_expired", {
+        date: formatDate(result.expiredOn),
+        ceiling: String(EXPIRED_LICENCE_TIER),
+      });
+    default:
+      return t("admin.businesses.error.not_found");
+  }
+}
+
+function suspendRefusal(result: Extract<SuspendResult, { ok: false }>): string {
+  return result.error === "already_suspended"
+    ? t("admin.businesses.error.already_suspended", {
+        business: result.displayName,
+        date: formatDate(result.since),
+      })
+    : t("admin.businesses.error.not_found");
+}
+
+function liftRefusal(result: Extract<LiftResult, { ok: false }>): string {
+  return result.error === "not_suspended"
+    ? t("admin.businesses.error.not_suspended", { business: result.displayName })
+    : t("admin.businesses.error.not_found");
+}
+
 export async function setTier(formData: FormData): Promise<ActionResult> {
   const seat = await requireStaff();
   const raw = String(formData.get("tier") ?? "");
@@ -51,7 +109,7 @@ export async function setTier(formData: FormData): Promise<ActionResult> {
       tier,
       reason: String(formData.get("reason") ?? ""),
     });
-    if (!result.ok) return { ok: false, error: result.message };
+    if (!result.ok) return { ok: false, error: tierRefusal(result) };
     done();
     return { ok: true, message: t("admin.businesses.tier_set", { tier: String(result.tier) }) };
   } catch (error) {
@@ -67,7 +125,7 @@ export async function suspend(formData: FormData): Promise<ActionResult> {
       businessId: String(formData.get("businessId") ?? ""),
       reason: String(formData.get("reason") ?? ""),
     });
-    if (!result.ok) return { ok: false, error: result.message };
+    if (!result.ok) return { ok: false, error: suspendRefusal(result) };
     done();
     return { ok: true, message: t("admin.businesses.suspended") };
   } catch (error) {
@@ -83,7 +141,7 @@ export async function lift(formData: FormData): Promise<ActionResult> {
       businessId: String(formData.get("businessId") ?? ""),
       reason: String(formData.get("reason") ?? ""),
     });
-    if (!result.ok) return { ok: false, error: result.message };
+    if (!result.ok) return { ok: false, error: liftRefusal(result) };
     done();
     return { ok: true, message: t("admin.businesses.lifted") };
   } catch (error) {
