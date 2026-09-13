@@ -9357,6 +9357,52 @@ export const en = {
   "storefront_services.page_next": "Next page",
   "storefront_services.page_of": "Page {page} of {pages}",
 
+  // ── Board 1f-s · coverage, where branches and hours were ──────────────────
+  "storefront_services.coverage_tab": "Coverage",
+  "storefront_services.coverage_page_title": "Coverage — {name}",
+  "storefront_services.coverage_page_description":
+    "Where each service {name} offers reaches, how the work is delivered, and how fast they reply — measured, not claimed.",
+  "storefront_services.coverage_subline": {
+    one: "Where its {formatted} service reaches, and how fast they reply",
+    other: "Where each of {formatted} services reaches, and how fast they reply",
+  },
+  "storefront_services.coverage_heading": "Where they work",
+  "storefront_services.coverage_lead":
+    "Coverage differs by service here, which is common. Check the row for the work you need rather than the headline.",
+  "storefront_services.coverage_filter_label": "Show services that reach an emirate",
+  "storefront_services.coverage_caption": "Where each service from {name} reaches",
+  "storefront_services.coverage_col_service": "Service",
+  "storefront_services.coverage_col_where": "Where",
+  "storefront_services.coverage_col_how": "How",
+  "storefront_services.coverage_all_seven": "All seven emirates",
+  "storefront_services.coverage_registered_in": "Registered in {zones}",
+  "storefront_services.coverage_office": "Their office",
+  "storefront_services.coverage_office_meets": "They see clients here.",
+  "storefront_services.coverage_office_registered":
+    "Their registered office. The work itself reaches clients where the table says.",
+  "storefront_services.coverage_reply": "When they reply",
+  "storefront_services.coverage_reply_usually": "Usually within {duration}",
+  "storefront_services.coverage_reply_measured": {
+    one: "Measured by us across {formatted} reply in the last {days} days, not a claim.",
+    other: "Measured by us across {formatted} replies in the last {days} days, not a claim.",
+  },
+  "storefront_services.coverage_reply_unmeasured": "Not measured yet",
+  "storefront_services.coverage_reply_unmeasured_note":
+    "We publish a reply time once a firm has answered {min} enquiries in {days} days. Before that there is nothing honest to show, and firms cannot set it themselves.",
+  "storefront_services.coverage_languages": "Languages",
+  "storefront_services.coverage_languages_claim": "Their own claim. We do not check it.",
+  "storefront_services.coverage_rail_label": "Work they do not cover",
+  "storefront_services.coverage_offer_title": "Need work somewhere they do not cover?",
+  "storefront_services.coverage_offer_body":
+    "Describe it once and we will send it to the firms that do.",
+  "storefront_services.coverage_offer_count": {
+    one: "{formatted} firm covers {emirate} for {service}.",
+    other: "{formatted} firms cover {emirate} for {service}.",
+  },
+  "storefront_services.coverage_offer_seed": "{service} in {emirate}",
+  "storefront_services.coverage_hours_note":
+    "There is no opening-hours table on this page. For work delivered remotely or at your site, when the office door is unlocked tells you little about when the work gets done — so we show how fast they reply instead.",
+
   // Credentials as a buyer reads them — the form's prompts are not names.
   "credentials_public.col_credential": "Credential",
   "credentials_public.col_detail": "Issuer and number",

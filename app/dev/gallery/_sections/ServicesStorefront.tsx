@@ -2,6 +2,7 @@ import { Section, Specimen, States } from "../_kit";
 import { CredentialTable, type CredentialView } from "@/components/domain/CredentialTable";
 import {
   CoverageSummary,
+  CoverageTable,
   DeclaredSectors,
   ServiceCatalogueCard,
   ServiceSummaryCard,
@@ -171,6 +172,32 @@ export function ServicesStorefrontGallery() {
                 ],
                 provides: null,
               }}
+            />
+          </div>
+        </States>
+      </Section>
+
+      <Section id="coverage-table" title="coverage-table" note="board 1f-s · one row per service, free zones as a qualifier">
+        <States label="typical — coverage differs by service" stack>
+          <div className="w-full">
+            <CoverageTable
+              businessSlug={SLUG}
+              caption="Coverage — typical"
+              rows={[
+                { slug: "vat-return-filing", name: "VAT return filing", where: "Dubai, Sharjah and Abu Dhabi", qualifier: null, how: "Remotely" },
+                { slug: "bookkeeping", name: "Monthly bookkeeping", where: "Dubai and Sharjah", qualifier: null, how: "Remotely" },
+                { slug: "corporate-tax-registration", name: "Corporate tax registration", where: "All seven emirates", qualifier: null, how: null },
+                { slug: "statutory-audit", name: "Statutory audit", where: "Dubai", qualifier: "Registered in DMCC and JAFZA", how: "On the client’s site" },
+              ]}
+            />
+          </div>
+        </States>
+        <States label="one service — the header stays" stack>
+          <div className="w-full">
+            <CoverageTable
+              businessSlug={SLUG}
+              caption="Coverage — one service"
+              rows={[{ slug: "marine-survey", name: "Condition survey", where: "Al Ain and Dubai", qualifier: null, how: "On the client’s site" }]}
             />
           </div>
         </States>

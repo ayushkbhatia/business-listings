@@ -22,6 +22,7 @@ and it is the one that argues back.
 /b/:slug                                Storefront overview                   [1d]
 /b/:slug (sells work)                   Storefront, catalogue taken out     [1d-s] built h1ds
 /b/:slug/credentials                    Credentials tab, with a count       [1d-s] built h1ds
+/b/:slug/coverage                       Coverage, one row per service       [1f-s] built h1fs
 /b/:slug/products                       Catalogue                             [1e]
 /b/:slug/branches                       Branches & hours                      [1f]
 /b/:slug/reviews                        Reviews & ratings                     [1m]  built h4s6
@@ -417,7 +418,9 @@ the three cannot disagree. A firm that sells `both` keeps the goods overview and
 gains the services and credentials sections, with a service row opening its
 composer in a drawer. The overview takes `?service=<slug>`, which the composer
 opens on (B11) — `1g-s`'s *Enquire about this* and the services tab link there.
-`services`, `s` and `credentials` are reserved template-page slugs.
+`services`, `s`, `credentials` and `coverage` are reserved template-page slugs.
+`/b/:slug/coverage` replaces `/b/:slug/branches` for a firm that sells only work — the old
+address 308s to it — and 404s for a seller of goods; a firm selling `both` has both tabs.
 
 `indicativeFee` reaches neither. It is excluded from `publicServiceFor`'s
 `select`, so it cannot appear in the page, the payload, the meta description or

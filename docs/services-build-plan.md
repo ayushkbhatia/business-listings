@@ -1411,6 +1411,69 @@ sit behind a button in a drawer. Axe at 1280: nothing.
 
 ---
 
+## 4o · Handoff `1f-s` — coverage, where branches and hours were
+
+**Shipped 13 Sep 2026.** No migration: `ServiceCoverage.serviceId` (#173) and `FreeZoneRegistration`
+(`2d-s`) were already the model. **The public storefront set is complete** — `1d-s`, `1e-s`,
+`1g-s`, `1f-s`.
+
+### D11 was already closed, so the H1 is two words shorter
+
+*Where they work*, and the title is *Coverage*. The render's *and whether they are taking it on*
+promised a column the board never drew; with D11 closed as no there is nothing to promise.
+
+### Four corrections
+
+1. **The reply time is the platform's one measurement, not a second one.** The board asks for a
+   median over *the last 40 enquiries* with a floor of 10 (Q1). The header of the same page already
+   prints `Business.responseTimeMedianMs`, measured nightly over **90 days with a floor of 3**
+   (`lib/metrics/response-time.ts`). A second definition would print two reply times for one firm
+   on one screen. So the card shows the header's figure and the sample it stands on — *measured by
+   us across N replies in the last 90 days* — counted through the same `latencies` function. **Raising
+   the floor to 10 is a platform decision** — it would move search ranking and every card's reply
+   line — and is left for the owner rather than taken on one page.
+2. **Free zones say *registered in*, not *approved*.** A `FreeZoneRegistration` is where the firm is
+   registered; *DMCC approved* is a claim about an auditor list nothing records. They print beside a
+   row only where that service reaches the zone's emirate, and are never places or filter values (B4).
+3. **The office line is derived, not invented.** *Visits by appointment* is a claim no field holds;
+   the card says *they see clients here* when the firm's delivery modes include its office, and
+   *their registered office* otherwise.
+4. **The fan-out CTA is *Request a quote*, not *Ask for quotes*.** The vocabulary rule. It opens
+   `/rfq/new` with the service's subcategory and *{service} in {emirate}* seeded, and is `nofollow`.
+
+### How the offer picks its emirate
+
+The service with the narrowest reach, then the emirate it does not reach where the most other
+firms' same service does — counted live in SQL with effective coverage resolved the way
+`effectiveCoverage` resolves it, over published, claimed, unsuspended firms. A zero is not printed;
+the offer then makes itself without a number. A firm whose every service reaches all seven has no
+offer.
+
+### Q2 and Q3
+
+- **Q2 — the emirate filter** renders past eight services, the threshold `1e-s`'s filters use, as
+  `nofollow` chips; a filtered view is `noindex`.
+- **Q3 — `How`** is `Service.deliveredWhere`, one value per service. A mixed-mode service needs the
+  field to become a set, which is a `3g-s` change, not this page's.
+
+### Found on the way
+
+- **`/b/:slug/branches` for a firm that sells only work now 308s to coverage.** The tab was gone and
+  the old address still rendered a branch page.
+- **`coverage` joined the reserved template-page slugs.**
+
+### Verified by clicking it
+
+With the audit narrowed to Dubai and a DIFC registration on the local database: *Coverage differs
+by service here* above two rows reading *Dubai · Registered in DIFC · Remotely* and *Abu Dhabi,
+Dubai, and Sharjah · Not stated*; *Not measured yet* with the floor stated; *English and Arabic ·
+Their own claim*; *2 firms cover Ajman for Statutory audit* on the offer, whose link landed on
+`/rfq/new?category=valves-and-fittings&q=Statutory+audit+in+Ajman`. `/branches` 308'd to
+`/coverage`; a goods seller's `/coverage` 404'd. No map, no second table, no horizontal overflow at
+375. Axe at 1280: nothing.
+
+---
+
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`
 
@@ -1609,7 +1672,7 @@ edit**.
 | **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **shipped 12 Sep.** One handoff, three screens, and it was right: the editor fixed the field set, the list reported on it, the page rendered it. See §4g |
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | `2b-s`, `2c-s` and `2d-s` shipped 11 Sep. `3c-s` is mostly built and now owes the services mirror as well as the per-service rows |
-| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **`1d-s` and `1e-s` shipped 13 Sep** (§4m, §4n) — credentials render on every plan. `5c-s` has a placeholder waiting; `1f-s` is next |
+| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **`1d-s`, `1e-s` and `1f-s` shipped 13 Sep** (§4m–§4o) — the public storefront set is complete. `5c-s` has a placeholder waiting |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | The expensive one, and the two that must be consecutive |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | `12c-s` waits on §2's three ranking defects |

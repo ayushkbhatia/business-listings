@@ -35,7 +35,7 @@ export type PageResult<T = unknown> =
 const MESSAGE: Record<PageRefusal, string> = {
   not_found: "That page is not here.",
   slug_taken: "This template already has a page at that address.",
-  slug_is_reserved: "That address is one the storefront already uses for its catalogue, services, credentials, branches or reviews.",
+  slug_is_reserved: "That address is one the storefront already uses for its catalogue, services, credentials, coverage, branches or reviews.",
   not_a_slug: "Lowercase letters, numbers and hyphens.",
   already_published: "This page is live, so its address is fixed. Publish a new page and this one will redirect to it.",
 };
@@ -64,6 +64,8 @@ const RESERVED = [
   "services",
   "s",
   "credentials",
+  // Board `1f-s`'s coverage tab.
+  "coverage",
 ];
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;

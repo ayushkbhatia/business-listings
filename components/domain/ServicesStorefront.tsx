@@ -347,3 +347,85 @@ export function ServiceCatalogueCard({
     </article>
   );
 }
+
+/* ── Board 1f-s — coverage, one row per service ─────────────────────────── */
+
+export interface CoverageTableRow {
+  slug: string;
+  name: string;
+  /** Already worded — *Dubai, Sharjah and Abu Dhabi*, or *All seven emirates*. */
+  where: string;
+  /** Free-zone registrations in emirates this row reaches, already worded. */
+  qualifier: string | null;
+  /** Delivered where, worded. Null reads *Not stated* (B11). */
+  how: string | null;
+}
+
+/**
+ * The coverage table — board `1f-s`.
+ *
+ * **One row per published service** (B1), because coverage genuinely differs
+ * by service and a buyer in Sharjah needing an audit must read the audit row,
+ * not the headline. A real table, with column heads a buyer is reading down
+ * (the board's *one service* state keeps the header for that reason).
+ *
+ * The free-zone qualifier renders in the `Where` cell as a second line, in a
+ * quieter tone, and says *registered in* — the model's word. It is a fact about
+ * the firm printed beside the place a buyer acts on it (B4), never a place.
+ *
+ * An unstated `How` reads *Not stated* (B11), matching `1e-s`: this table is
+ * read down its columns, and an empty cell misaligns the comparison.
+ */
+export function CoverageTable({
+  rows,
+  businessSlug,
+  caption,
+}: {
+  rows: readonly CoverageTableRow[];
+  businessSlug: string;
+  caption: string;
+}) {
+  return (
+    <div className="overflow-x-auto rounded-card border border-line bg-card">
+      <table className="w-full min-w-[36rem] border-collapse text-body-sm">
+        <caption className="sr-only">{caption}</caption>
+        <thead>
+          <tr className="border-b border-line bg-paper-sunk">
+            <th scope="col" className="w-[34%] py-2.5 pe-4 ps-5 text-start font-mono text-colhead font-normal uppercase text-muted">
+              {t("storefront_services.coverage_col_service")}
+            </th>
+            <th scope="col" className="py-2.5 pe-4 text-start font-mono text-colhead font-normal uppercase text-muted">
+              {t("storefront_services.coverage_col_where")}
+            </th>
+            <th scope="col" className="w-[22%] py-2.5 pe-5 text-start font-mono text-colhead font-normal uppercase text-muted">
+              {t("storefront_services.coverage_col_how")}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.slug} className="border-b border-line last:border-b-0">
+              <th scope="row" className="py-3.5 pe-4 ps-5 text-start align-top font-normal">
+                <Link
+                  href={`/b/${businessSlug}/s/${row.slug}`}
+                  className="rounded-tag text-ink underline-offset-4 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+                >
+                  {row.name}
+                </Link>
+              </th>
+              <td className="py-3.5 pe-4 align-top text-body">
+                {row.where}
+                {row.qualifier && (
+                  <span className="mt-0.5 block text-caption text-muted">{row.qualifier}</span>
+                )}
+              </td>
+              <td className={cn("py-3.5 pe-5 align-top", row.how === null ? "text-muted" : "text-body")}>
+                {row.how ?? t("storefront_services.not_stated")}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

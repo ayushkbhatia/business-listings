@@ -439,6 +439,11 @@ function tabsFor(
       href: `/b/${business.slug}/credentials`,
       badge: counts.credentials,
     },
+    // Board `1f-s` — no count, because what the page answers is not a number.
+    coverage: {
+      label: t("storefront_services.coverage_tab"),
+      href: `/b/${business.slug}/coverage`,
+    },
     branches: {
       label: t("storefront.branches"),
       href: `/b/${business.slug}/branches`,

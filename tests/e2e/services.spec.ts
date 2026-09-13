@@ -1234,3 +1234,86 @@ test.describe("board 1e-s — the services list, rows not a photo grid", () => {
     expect(results.violations).toEqual([]);
   });
 });
+
+test.describe("board 1f-s — coverage, where branches and hours were", () => {
+  const storefront = "/b/meridian-chartered-accountants";
+  const coverage = `${storefront}/coverage`;
+
+  test("sits in 1d-s's tab row where branches were, and the old address follows it — AC9", async ({ page }) => {
+    await page.goto(coverage);
+    const tabs = await page.getByLabel("Storefront sections").getByRole("link").allInnerTexts();
+    const order = tabs.map((tab) => tab.replace(/\s*\d+$/, "").trim());
+    expect(order.slice(0, 4)).toEqual(["Overview", "Services", "Credentials", "Coverage"]);
+    expect(order).not.toContain("Branches");
+    await expect(page.getByLabel("Storefront sections").getByRole("link", { name: /^Services\s*\d+/ })).toBeVisible();
+
+    await page.goto(`${storefront}/branches`);
+    await expect(page).toHaveURL(/\/coverage$/);
+  });
+
+  test("renders one row per live service, Not stated where delivery is unanswered — AC1, AC10", async ({ page }) => {
+    await page.goto(coverage);
+    const table = page.getByRole("table", { name: /Where each service from Meridian/ });
+    expect((await table.locator("thead th").allInnerTexts()).map((h) => h.toUpperCase())).toEqual(["SERVICE", "WHERE", "HOW"]);
+    // Two live services; the draft transfer-pricing sheet is not a row.
+    await expect(table.locator("tbody tr")).toHaveCount(2);
+    await expect(table.getByRole("row", { name: /Transfer pricing/ })).toHaveCount(0);
+    await expect(table.getByRole("row", { name: /Statutory audit/ }).getByText("Remotely")).toBeVisible();
+    await expect(table.getByRole("row", { name: /VAT and corporate tax filing/ }).getByText("Not stated")).toBeVisible();
+  });
+
+  test("has no hours table, Ramadan band, pin or map, and says why — AC2", async ({ page }) => {
+    await page.goto(coverage);
+    await expect(page.getByRole("table")).toHaveCount(1);
+    await expect(page.locator(".maplibregl-map")).toHaveCount(0);
+    const text = (await page.locator("main").innerText()).toLowerCase();
+    expect(text).not.toContain("ramadan");
+    expect(text).not.toContain("open until");
+    await expect(page.getByText(/There is no opening-hours table on this page/)).toBeVisible();
+  });
+
+  test("labels the reply time as measured, with its window, or says it is not yet — AC3", async ({ page }) => {
+    await page.goto(coverage);
+    const card = page.getByRole("region", { name: "When they reply" });
+    await expect(
+      card.getByText(/Measured by us across \d+ repl(y|ies) in the last 90 days, not a claim\.|We publish a reply time once a firm has answered/),
+    ).toBeVisible();
+  });
+
+  test("labels languages as the firm's own claim — AC5", async ({ page }) => {
+    await page.goto(coverage);
+    const card = page.getByRole("region", { name: "Languages" });
+    await expect(card.getByText("English and Arabic")).toBeVisible();
+    await expect(card.getByText("Their own claim. We do not check it.")).toBeVisible();
+  });
+
+  test("promises nothing about availability, in the heading or anywhere — AC8", async ({ page }) => {
+    await page.goto(coverage);
+    await expect(page.getByRole("heading", { level: 2, name: "Where they work" })).toBeVisible();
+    const text = (await page.locator("main").innerText()).toLowerCase();
+    for (const word of ["taking it on", "availability", "accepting", "waitlist", "at capacity"]) {
+      expect(text).not.toContain(word);
+    }
+  });
+
+  test("turns the miss into a fan-out that stays out of the crawl — B6", async ({ page }) => {
+    await page.goto(coverage);
+    const offer = page.getByRole("complementary", { name: "Work they do not cover" });
+    await expect(offer.getByText("Need work somewhere they do not cover?")).toBeVisible();
+    const cta = offer.getByRole("link", { name: "Request a quote" });
+    await expect(cta).toHaveAttribute("href", /^\/rfq\/new\?category=.+&q=.+/);
+    await expect(cta).toHaveAttribute("rel", "nofollow");
+  });
+
+  test("has no coverage page for a seller of goods", async ({ page }) => {
+    const response = await page.request.get("/b/al-marwan-industrial-supplies-llc/coverage");
+    expect(response.status()).toBe(404);
+  });
+
+  test("has no axe violations at the acceptance width", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto(coverage);
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});

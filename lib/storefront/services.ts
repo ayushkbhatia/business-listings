@@ -9,6 +9,7 @@ import { businessCoverage, effectiveCoverage } from "@/lib/locations/service-cov
 import type { CoverageScope } from "@/lib/locations/coverage";
 import { EMIRATES } from "@/lib/uae";
 import { declaredSectors, type DeclaredSector } from "./services-overview";
+import { latencies, windowStart } from "@/lib/metrics/response-time";
 import { ENQUIRY_VOLUME_DAYS } from "./services-catalogue";
 
 /**
@@ -196,6 +197,123 @@ export async function serviceEnquiryVolume(
      group by l."service_id"`;
 
   return new Map(rows.map((row) => [row.service_id, Number(row.enquiries)]));
+}
+
+/* ── Board 1f-s — the coverage page ─────────────────────────────────────── */
+
+export interface CoverageServiceRow {
+  service: PublicService;
+  /** This service's effective coverage — own rows, else the default (B1). */
+  places: CoveragePlace[];
+}
+
+export interface CoveragePageData {
+  rows: CoverageServiceRow[];
+  /** The firm's free-zone registrations — a second axis, never a place (B4). */
+  freeZones: { emirate: string; name: string }[];
+  /** How many first replies the reply-time figure is measured over (B3). */
+  replies: number;
+}
+
+/**
+ * Everything `/b/:slug/coverage` reads, in four queries.
+ *
+ * **One row per live service** (B1), each resolved through `effectiveCoverage`
+ * — the helper `1g-s` uses, so a service's row here and its own page cannot
+ * disagree. The union the overview prints (`2d-s` B6) is not this page's
+ * subject: the page tells a buyer to read the rows.
+ */
+export const coveragePageFor = cache(
+  async (businessId: string, now: Date = new Date()): Promise<CoveragePageData> => {
+    const services = await publicServicesFor(businessId);
+    const [rows, registrations, replies] = await Promise.all([
+      coverageRows(businessId, { in: services.map((service) => service.id) }),
+      prisma.freeZoneRegistration.findMany({
+        where: { businessId },
+        orderBy: { area: { name: "asc" } },
+        select: { area: { select: { emirate: true, name: true } } },
+      }),
+      replySampleFor(businessId, now),
+    ]);
+
+    const defaults = rows.filter((row) => row.serviceId === null);
+    return {
+      rows: services.map((service) => ({
+        service,
+        places: worded(
+          effectiveCoverage(
+            defaults,
+            rows.filter((row) => row.serviceId === service.id),
+          ),
+          rows,
+        ),
+      })),
+      freeZones: registrations.map((row) => ({ emirate: row.area.emirate, name: row.area.name })),
+      replies,
+    };
+  },
+);
+
+/**
+ * How many replies the published reply time stands on — `1f-s` B3.
+ *
+ * The same observations the nightly job measures `responseTimeMedianMs` over —
+ * recipient rows delivered inside `WINDOW_DAYS` with a first reply — counted
+ * through the same `latencies` function, so the sample the page states is the
+ * sample the header's figure came from. A page that published its own median
+ * over a different window would print two reply times for one firm on one
+ * screen.
+ */
+export async function replySampleFor(businessId: string, now: Date = new Date()): Promise<number> {
+  const observations = await prisma.enquiryRecipient.findMany({
+    where: { businessId, createdAt: { gte: windowStart(now) }, firstReplyAt: { not: null } },
+    select: { createdAt: true, firstReplyAt: true },
+  });
+  return latencies(
+    observations.map((row) => ({ deliveredAt: row.createdAt, firstReplyAt: row.firstReplyAt })),
+  ).length;
+}
+
+/**
+ * Other firms whose live service in this subcategory reaches each emirate —
+ * `1f-s` B6, the count on the fan-out offer.
+ *
+ * **Live, every render.** Effective coverage is resolved in SQL the same way
+ * `effectiveCoverage` resolves it in TypeScript: a service's own rows where it
+ * has any, the business default where it has none. Only published, claimed,
+ * unsuspended firms count, because the offer is *we will send it to the firms
+ * that do* and a firm the fan-out would not deliver to is not one of them. This
+ * firm is excluded — it is the firm that does not cover the place.
+ */
+export async function coveringFirmsByEmirate(
+  categoryId: string,
+  excludeBusinessId: string,
+): Promise<Map<string, number>> {
+  const rows = await prisma.$queryRaw<{ emirate: string; firms: bigint }[]>`
+    with svc as (
+      select s."id", s."business_id"
+        from "service" s
+        join "business" b on b."id" = s."business_id"
+       where s."status" = 'live'
+         and s."category_id" = ${categoryId}
+         and b."id" <> ${excludeBusinessId}
+         and b."published_at" is not null
+         and b."suspended_at" is null
+         and b."claim_status" = 'claimed'
+    ),
+    reach as (
+      select svc."business_id", sc."emirate"::text as emirate
+        from svc
+        join "service_coverage" sc on sc."service_id" = svc."id"
+      union
+      select svc."business_id", sc."emirate"::text as emirate
+        from svc
+        join "service_coverage" sc on sc."business_id" = svc."business_id" and sc."service_id" is null
+       where not exists (select 1 from "service_coverage" own where own."service_id" = svc."id")
+    )
+    select emirate, count(distinct "business_id") as firms from reach group by emirate`;
+
+  return new Map(rows.map((row) => [row.emirate, Number(row.firms)]));
 }
 
 /** The federal order — the one every other emirate list on the platform uses. */

@@ -113,7 +113,7 @@ describe("addresses a page may have", () => {
      * silently never render. Refusing it is better than shipping a page nobody
      * can reach.
      */
-    for (const slug of ["products", "branches", "reviews", "p", "d", "services", "s", "credentials"]) {
+    for (const slug of ["products", "branches", "reviews", "p", "d", "services", "s", "credentials", "coverage"]) {
       const result = await createPage({
         actor: actor(opsLeadId, "staff_ops_lead"),
         templateId,
