@@ -63,6 +63,15 @@ export function ServiceProfileSection({
       form.set("servicesOffered", value.servicesOffered.join("\n"));
       form.set("sectorsServed", value.sectorsServed.join("\n"));
       form.set("sectorEngagements", JSON.stringify(value.sectorEngagements));
+      /*
+         Posted now. The languages chips rendered here from the day `2c-s`
+         shipped and this form never sent them, so every value a services
+         seller picked was dropped on the way to the server.
+      */
+      form.set("languagesSent", "1");
+      for (const language of value.languages) form.append("language", language);
+      form.set("qualifiedCount", value.qualifiedCount);
+      form.set("typicalClient", value.typicalClient);
 
       void save(form).then((result) => {
         if (result.ok) {
@@ -81,7 +90,11 @@ export function ServiceProfileSection({
 
   return (
     <div className="flex flex-col gap-3">
-      {error && <Alert tone="bad">{error}</Alert>}
+      {error && (
+        <Alert tone="bad" fix={t("profile_svc.save_fix")}>
+          {error}
+        </Alert>
+      )}
 
       <ServiceProfileFields
         value={value}

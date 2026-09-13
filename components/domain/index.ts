@@ -101,3 +101,4 @@ export {
   type CoverageChipView,
   type FreeZoneView,
 } from "./CoverageFields";
+export { CoverageChipGroup, type CoverageChipOption } from "./CoverageChipGroup";

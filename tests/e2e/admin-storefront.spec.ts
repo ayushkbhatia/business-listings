@@ -33,10 +33,16 @@ test.describe("board 5c — templates and the section library", () => {
     await expect(page.getByText(/would hide the work/)).toBeVisible();
   });
 
-  test("lists the catalogue with the services card visibly disabled", async ({ page }) => {
-    const services = page.getByRole("listitem").filter({ hasText: "Services & packages" }).first();
-    await expect(services).toBeVisible();
-    await expect(services).toContainText(/Not built yet/);
+  test("lists the catalogue with process steps held and each type's listings named", async ({ page }) => {
+    /*
+       Board `5c-s` filled the services gap with four live sections and kept
+       the visible-gap rule for the one it could not build.
+    */
+    const steps = page.getByRole("listitem").filter({ hasText: "Process steps" }).first();
+    await expect(steps).toBeVisible();
+    await expect(steps).toContainText(/Held for a decision/);
+    const grid = page.getByRole("listitem").filter({ hasText: "Scope grid" }).first();
+    await expect(grid).toContainText("Service listings");
   });
 
   test("is axe clean", async ({ page }) => {
@@ -50,10 +56,10 @@ test.describe("criterion 10 — the specimens page", () => {
     await page.goto("/admin/storefront-templates/specimens");
   });
 
-  test("renders all fifteen, numbered", async ({ page }) => {
+  test("renders all nineteen, numbered", async ({ page }) => {
     const specimens = page.getByRole("listitem").filter({ has: page.locator("h2") });
-    // Fourteen buildable plus the disabled services card.
-    await expect(specimens).toHaveCount(15);
+    // Eighteen buildable plus process steps, held.
+    await expect(specimens).toHaveCount(19);
   });
 
   test("labels each with its source and what the seller fills", async ({ page }) => {
@@ -69,9 +75,15 @@ test.describe("criterion 10 — the specimens page", () => {
     await expect(trust).toContainText("Nothing — everything on it is derived");
   });
 
-  test("shows the services card and says why it is empty", async ({ page }) => {
-    const services = page.getByRole("listitem").filter({ hasText: "Services & packages" }).first();
-    await expect(services).toContainText(/gap is legible rather than hidden/);
+  test("shows process steps held and says which decision it waits on", async ({ page }) => {
+    const steps = page.getByRole("listitem").filter({ hasText: "Process steps" }).first();
+    await expect(steps).toContainText(/scope sheet/);
+  });
+
+  test("renders the scope grid against the firm that sells work, the gap reading Not stated", async ({ page }) => {
+    const grid = page.getByRole("listitem").filter({ hasText: "Scope grid" }).first();
+    const row = grid.getByRole("row").filter({ hasText: "Corporate tax registration" });
+    await expect(row.getByRole("cell").first()).toHaveText("Not stated");
   });
 
   test("puts no price anywhere on any specimen", async ({ page }) => {
@@ -381,5 +393,103 @@ test.describe("the storefront builder is staff-only", () => {
       expect(response?.status(), path).toBe(404);
     }
     await context.close();
+  });
+});
+
+test.describe("board 5c-s — the section library, filtered by trade kind", () => {
+  /*
+   * Read-only on purpose. The seed's *Practice* template is a draft on a trade
+   * that sells only work, and every assertion here reads it; the writes —
+   * adding a section, saving settings — are the integration suite's, where a
+   * fixture of its own is made and removed. A destructive walk here would eat
+   * the one services template the acceptance shard has.
+   */
+  async function openLibrary(page: import("@playwright/test").Page, template: string, section?: string) {
+    await page.goto("/admin/storefront-templates");
+    await page.getByRole("link", { name: template, exact: true }).click();
+    await page.waitForURL(/\/admin\/storefront-templates\/[a-z0-9]+$/);
+    await page.getByRole("link", { name: "Section library", exact: true }).click();
+    await page.waitForURL(/\/sections/);
+    if (section) {
+      await page
+        .getByRole("navigation", { name: "Section library" })
+        .getByRole("link", { name: new RegExp(`^${section}`) })
+        .click();
+      await page.waitForURL(new RegExp(`section=`));
+    }
+  }
+
+  test("groups a services template's library, with the goods sections disabled and saying why", async ({ page }) => {
+    await openLibrary(page, "Practice");
+    const rail = page.getByRole("navigation", { name: "Section library" });
+    await expect(rail.getByRole("heading", { name: "For service listings" })).toBeVisible();
+    await expect(rail.getByRole("heading", { name: "Shared" })).toBeVisible();
+    await expect(rail.getByRole("heading", { name: "Unavailable here" })).toBeVisible();
+
+    // B1: listed, not a link, reason printed.
+    const catalogue = rail.getByRole("listitem").filter({ hasText: "Catalogue grid" });
+    await expect(catalogue).toContainText("Nothing to populate it");
+    await expect(catalogue.getByRole("link")).toHaveCount(0);
+    const branches = rail.getByRole("listitem").filter({ hasText: "Branches & map" });
+    await expect(branches).toContainText("Coverage rows instead");
+
+    // B3: held, in its own group, with the decision.
+    const steps = rail.getByRole("listitem").filter({ hasText: "Process steps" });
+    await expect(steps).toContainText(/Held for a decision/);
+    await expect(steps.getByRole("link")).toHaveCount(0);
+  });
+
+  test("previews the scope grid live, gaps as Not stated, with configuration and no content field", async ({ page }) => {
+    await openLibrary(page, "Practice", "Scope grid");
+    const table = page.getByRole("table", { name: /^Services from/ });
+    await expect(table.getByRole("columnheader", { name: "Fee basis" })).toBeVisible();
+    await expect(
+      table.getByRole("row").filter({ hasText: "Corporate tax registration" }).getByRole("cell").first(),
+    ).toHaveText("Not stated");
+    await expect(page.getByText(/no way to publish a fee/)).toBeVisible();
+
+    // B2, B4: the settings are closed lists. The only box that takes words is the audit reason.
+    const settings = page.locator("#section-settings");
+    await expect(settings.getByRole("checkbox", { name: "Fee basis" })).toBeChecked();
+    await expect(settings.getByRole("textbox")).toHaveCount(1);
+    await expect(settings.getByRole("textbox")).toHaveAccessibleName("Why");
+  });
+
+  test("renders coverage as rows, never a map", async ({ page }) => {
+    await openLibrary(page, "Practice", "Coverage");
+    await expect(page.getByRole("table", { name: /^Where each service from/ })).toBeVisible();
+    await expect(page.locator(".maplibregl-map, canvas")).toHaveCount(0);
+  });
+
+  test("mounts the service composer in the enquiry section for a firm that sells work", async ({ page }) => {
+    await openLibrary(page, "Practice", "Enquiry form");
+    const form = page.getByRole("form", { name: "Service enquiry — preview" });
+    await expect(form).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Enquire about your situation" })).toBeVisible();
+    await expect(form.getByLabel(/quantity/i)).toHaveCount(0);
+  });
+
+  test("gives a template whose stores sell both both libraries, neither disabled (B9)", async ({ page }) => {
+    await openLibrary(page, "Industrial");
+    const rail = page.getByRole("navigation", { name: "Section library" });
+    await expect(rail.getByRole("heading", { name: "For product listings" })).toBeVisible();
+    await expect(rail.getByRole("heading", { name: "For service listings" })).toBeVisible();
+    await expect(rail.getByRole("heading", { name: "Unavailable here" })).toHaveCount(0);
+  });
+
+  test("keeps the builder's add list to what the trade can fill, and counts the rest", async ({ page }) => {
+    await page.goto("/admin/storefront-templates");
+    await page.getByRole("link", { name: "Practice", exact: true }).click();
+    await page.waitForURL(/\/admin\/storefront-templates\/[a-z0-9]+$/);
+    const add = page.getByRole("list", { name: "Add a section" });
+    await expect(add.getByRole("button", { name: "Catalogue grid", exact: true })).toHaveCount(0);
+    await expect(add.getByRole("button", { name: "Process steps", exact: true })).toHaveCount(0);
+    await expect(page.getByText(/7 sections are not offered for this trade/)).toBeVisible();
+  });
+
+  test("is axe clean", async ({ page }) => {
+    await openLibrary(page, "Practice", "Scope grid");
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
   });
 });

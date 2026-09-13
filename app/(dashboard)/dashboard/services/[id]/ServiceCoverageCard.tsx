@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Alert } from "@/components/display";
 import { Button } from "@/components/primitives";
 import { Card } from "@/components/structure";
+import { CoverageChipGroup } from "@/components/domain";
 import { cn } from "@/lib/cn";
 import { t } from "@/lib/i18n";
 import type { ServiceCoverageChip, ServiceCoverageState } from "@/lib/services/coverage";
@@ -66,7 +67,9 @@ export function ServiceCoverageCard({
     setError(
       result.reason === "unknown_area"
         ? t("service_coverage.error.unknown_area")
-        : t("service_coverage.error.save_failed"),
+        : result.reason === "forbidden"
+          ? t("service_coverage.error.forbidden")
+          : t("service_coverage.error.save_failed"),
     );
   };
 
@@ -141,28 +144,7 @@ export function ServiceCoverageCard({
         <span id="svc-coverage-label" className="sr-only">
           {t("service_coverage.title")}
         </span>
-        <ul className="mt-3 flex list-none flex-wrap gap-1.5 p-0">
-          {chips.map((chip) => (
-            <li key={chip.key}>
-              <button
-                type="button"
-                aria-pressed={chip.on}
-                disabled={busy}
-                onClick={() => onChip(chip.key, !chip.on)}
-                className={cn(
-                  "rounded-pill border px-3 py-1.5 text-caption",
-                  "focus-visible:shadow-focus focus-visible:outline-none",
-                  "disabled:cursor-not-allowed",
-                  chip.on
-                    ? "border-moss bg-moss-wash text-moss-deep"
-                    : "border-line bg-card text-body hover:border-moss-muted",
-                )}
-              >
-                {chip.label}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <CoverageChipGroup className="mt-3" chips={chips} onToggle={onChip} disabled={busy} />
 
         {/*
            What a buyer sees, said in full rather than as a count. The whole

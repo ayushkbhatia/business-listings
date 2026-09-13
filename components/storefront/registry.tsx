@@ -2,6 +2,8 @@ import type { SectionProps } from "@/lib/storefront/render-data";
 import { Brands } from "./Brands";
 import { Branches } from "./Branches";
 import { CatalogueGrid } from "./CatalogueGrid";
+import { Coverage } from "./Coverage";
+import { CredentialWall } from "./CredentialWall";
 import { Certifications } from "./Certifications";
 import { Downloads } from "./Downloads";
 import { EnquiryForm } from "./EnquiryForm";
@@ -9,8 +11,10 @@ import { FeaturedProducts } from "./FeaturedProducts";
 import { Header } from "./Header";
 import { Hero } from "./Hero";
 import { OfferBanner } from "./OfferBanner";
+import { ProcessSteps } from "./ProcessSteps";
 import { Reviews } from "./Reviews";
-import { Services } from "./Services";
+import { ScopeGrid } from "./ScopeGrid";
+import { SectorsServed } from "./SectorsServed";
 import { SpecComparison } from "./SpecComparison";
 import { Team } from "./Team";
 import { TrustStrip } from "./TrustStrip";
@@ -39,7 +43,11 @@ export const SECTION_RENDERERS: Record<string, (props: SectionProps) => React.Re
   offer_banner: OfferBanner,
   spec_comparison: SpecComparison,
   downloads: Downloads,
-  services: Services,
+  scope_grid: ScopeGrid,
+  credential_wall: CredentialWall,
+  coverage: Coverage,
+  sectors_served: SectorsServed,
+  process_steps: ProcessSteps,
 };
 
 export function renderSection(props: SectionProps): React.ReactNode {

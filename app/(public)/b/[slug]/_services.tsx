@@ -179,14 +179,36 @@ export async function ServicesStorefrontPage({
           </div>
 
           <div className="order-2 flex min-w-0 flex-col gap-10 lg:order-none lg:col-start-1 lg:row-span-2 lg:row-start-1">
-            {business.description && (
+            {(business.description || business.typicalClient) && (
               <section aria-labelledby="take-on">
                 <h2 id="take-on" className="text-h2 text-brand-ink">
                   {t("storefront_services.take_on_title")}
                 </h2>
-                <p className="mt-3 max-w-[var(--measure-prose)] whitespace-pre-line text-prose text-prose">
-                  {business.description}
-                </p>
+                {business.description && (
+                  <p className="mt-3 max-w-[var(--measure-prose)] whitespace-pre-line text-prose text-prose">
+                    {business.description}
+                  </p>
+                )}
+                {/*
+                   Board `3b-s` — typical client, beside the prose it has to
+                   agree with. The board's own correction was a description
+                   saying *AED 10m to 150m* over a field saying *AED 5m–80m*;
+                   printing them together is what makes a contradiction visible
+                   to the seller before a buyer finds it. Their words, and the
+                   line says so.
+                */}
+                {business.typicalClient && (
+                  <p className="mt-3 text-body-sm text-body">
+                    <span className="font-mono text-eyebrow uppercase tracking-wide text-muted">
+                      {t("storefront_services.typical_client")}
+                    </span>{" "}
+                    {business.typicalClient}
+                    <span className="text-caption text-muted">
+                      {" "}
+                      · {t("storefront_services.typical_client_claim")}
+                    </span>
+                  </p>
+                )}
               </section>
             )}
 

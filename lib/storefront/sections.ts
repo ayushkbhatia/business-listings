@@ -1,4 +1,5 @@
-import { sectionType, sellerFieldKeys, type SectionType } from "./section-types";
+import { isAvailable } from "./library";
+import { sectionType, sellerFieldKeys, type SectionType, type TradeScope } from "./section-types";
 
 /**
  * What a storefront renders, and what a seller may put in it. Pure.
@@ -44,13 +45,14 @@ export function resolveSections(rows: readonly SectionRow[]): ResolvedSection[] 
       const definition = sectionType(row.type);
       return definition ? { ...row, definition } : null;
     })
-    .filter((row): row is ResolvedSection => row !== null && !row.definition.comingSoon)
+    .filter((row): row is ResolvedSection => row !== null && row.definition.heldKey === null)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
 }
 
 export type SectionRefusal =
   | "unknown_type"
-  | "coming_soon"
+  | "held"
+  | "unavailable_here"
   | "singleton_exists"
   | "section_is_fixed"
   | "unknown_field";
@@ -61,14 +63,20 @@ export type SectionRefusal =
  * Criterion 7. The database refuses a second singleton by a partial unique
  * index, and this refuses it in words first — a constraint violation surfaced
  * to staff as "an unexpected error" is a constraint nobody can act on.
+ *
+ * And board `5c-s`: a type with nothing to populate it for this template's
+ * listings is refused here as well as disabled on the screen. The screen is an
+ * opinion; a server action is a URL.
  */
 export function canAddSection(
   typeKey: string,
   existing: readonly Pick<SectionRow, "type">[],
+  scope: TradeScope,
 ): SectionRefusal | null {
   const definition = sectionType(typeKey);
   if (!definition) return "unknown_type";
-  if (definition.comingSoon) return "coming_soon";
+  if (!isAvailable(definition, scope)) return "unavailable_here";
+  if (definition.heldKey) return "held";
   if (definition.singleton && existing.some((row) => row.type === typeKey)) {
     return "singleton_exists";
   }

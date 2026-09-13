@@ -1327,3 +1327,139 @@ test.describe("board 1f-s — coverage, where branches and hours were", () => {
     expect(results.violations).toEqual([]);
   });
 });
+
+test.describe("board 3c-s — the coverage manager", () => {
+  const path = "/dashboard/coverage";
+
+  test("lists one row per service under the default, with markers derived — B1, B3", async ({ page }) => {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { level: 1, name: "Coverage" })).toBeVisible();
+
+    const table = page.getByRole("table", { name: /Where each service is available/ });
+    // Meridian's three services, the draft among them and marked as one.
+    await expect(table.getByRole("rowheader")).toHaveCount(3);
+    await expect(table.getByRole("row", { name: /Transfer pricing documentation/ }).getByText("Draft")).toBeVisible();
+    // Nothing overridden in the seed, so every row inherits.
+    await expect(table.getByText("Inherited", { exact: true })).toHaveCount(3);
+  });
+
+  test("names what the public page reads for a service with no delivery mode — B7", async ({ page }) => {
+    await page.goto(path);
+    const row = page.getByRole("row", { name: /VAT and corporate tax filing/ });
+    await expect(row.getByText("Not set", { exact: true })).toBeVisible();
+    await expect(row.getByText("Public page reads Not stated")).toBeVisible();
+  });
+
+  test("narrows a row, recounts the header, and inherits again on Use the default — B2, B4", async ({ page }) => {
+    await page.goto(path);
+    const row = page.getByRole("row", { name: /Statutory audit/ });
+    await row.getByRole("button", { name: "Edit where Statutory audit is available" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "Statutory audit" });
+    await dialog.getByRole("button", { name: "Dubai", exact: true }).click();
+    await expect(dialog.getByText("Covers only Dubai, narrower than the default.")).toBeVisible();
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+
+    await expect(row.getByText("Narrowed", { exact: true })).toBeVisible();
+    await expect(page.getByText(/1 narrower/i)).toBeVisible();
+
+    // Put it back through the same editor — the next test, and the next run,
+    // read the seed.
+    await row.getByRole("button", { name: "Edit where Statutory audit is available" }).click();
+    await dialog.getByRole("button", { name: "Use the default" }).click();
+    await dialog.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(row.getByText("Inherited", { exact: true })).toBeVisible();
+  });
+
+  test("states how many services move before the default is saved — B11", async ({ page }) => {
+    await page.goto(path);
+    await page.getByRole("button", { name: "Edit the default" }).click();
+    const dialog = page.getByRole("dialog", { name: "The business default" });
+    await expect(dialog.getByText(/3 services inherit this default \(2 live\)/)).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Save — 3 services move" })).toBeDisabled();
+    await dialog.getByRole("button", { name: "Close" }).click();
+  });
+
+  test("states that briefs match per service, and names briefs rather than every enquiry — B8", async ({ page }) => {
+    /*
+       True of the tree since #179. In the seed no live service is narrower than
+       the listing, so there is no firm-specific example and the rule is stated
+       on its own.
+    */
+    await page.goto(path);
+    await expect(
+      page.getByText("Briefs are matched to each service’s own coverage, never to the listing"),
+    ).toBeVisible();
+  });
+
+  test("carries no availability control, and says why — B10", async ({ page }) => {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { name: "There is no availability field" })).toBeVisible();
+    await expect(page.getByRole("checkbox", { name: /waitlist|accepting/i })).toHaveCount(0);
+  });
+
+  test("replaces Locations in the rail for a firm that sells work", async ({ page }) => {
+    await page.goto(path);
+    const rail = page.getByRole("navigation");
+    await expect(rail.getByRole("link", { name: "Coverage areas" })).toBeVisible();
+    await expect(rail.getByRole("link", { name: "Locations", exact: true })).toHaveCount(0);
+  });
+
+  test("has no axe violations at the acceptance width", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto(path);
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+test.describe("board 3b-s — the listing profile for a firm that sells work", () => {
+  const path = "/dashboard/listing";
+
+  test("renders the services field set and not the goods-only field — B1, B2", async ({ page }) => {
+    await page.goto(path);
+    await expect(page.getByText("What you do — the first thing a buyer reads")).toBeVisible();
+    await expect(page.getByLabel("One line on what you do")).toBeVisible();
+    await expect(page.getByText("Sectors you have worked in")).toBeVisible();
+    await expect(page.getByLabel("Qualified professionals")).toBeVisible();
+    await expect(page.getByLabel("Typical client")).toBeVisible();
+    await expect(page.getByLabel("Payment terms")).toHaveCount(0);
+    // Services offered is onboarding's question; here the rows live on Services.
+    await expect(page.getByText("The services you offer are managed on the Services screen")).toBeVisible();
+  });
+
+  test("states the sector cap where the seller picks — Q1", async ({ page }) => {
+    await page.goto(path);
+    await expect(page.getByText("Up to 6. The single strongest filter buyers use")).toBeVisible();
+    await expect(page.getByText(/^\d of 6$/)).toBeVisible();
+  });
+
+  test("shows the listing's own primary category, not the first leaf in the list", async ({ page }) => {
+    /*
+       Meridian is filed under Valves & fittings, which has children. The picker
+       lists leaves, and a select whose value is not an option shows its first —
+       so this read "3D printing & prototyping", and a save queued a request to
+       move the listing there.
+    */
+    await page.goto(path);
+    const select = page.locator('select[name="primaryCategoryId"]');
+    await expect(select.locator("option:checked")).toHaveText("Valves & fittings");
+  });
+
+  test("explains the mechanism under the categories, counted", async ({ page }) => {
+    await page.goto(path);
+    /*
+       Meridian's one category is Valves & fittings, a goods trade — the seed
+       files the track's demo firm there — so the sentence is the mismatch
+       case, and it says so rather than claiming the category is services.
+    */
+    await expect(page.getByText(/in the directory’s taxonomy, but you told us you sell work/)).toBeVisible();
+  });
+
+  test("has no axe violations at the acceptance width", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto(path);
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});

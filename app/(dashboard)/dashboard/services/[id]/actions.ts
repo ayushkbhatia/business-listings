@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { mayEditListing } from "@/lib/auth/guards";
 import { requireSellerSeat } from "../../_shell";
 import {
   isEditableField,
@@ -75,6 +76,10 @@ export async function setStatus(formData: FormData): Promise<StatusResult> {
  */
 export async function saveServiceArea(formData: FormData): Promise<ServiceCoverageWrite> {
   const seat = await requireSellerSeat();
+  // `listing.edit`, the capability every other coverage write on the platform
+  // checks. This shipped guarding only on having a seat, so a sales or finance
+  // seat could change where a service is offered — board 3c-s found it.
+  if (!mayEditListing(seat.actor)) return { ok: false, reason: "forbidden" };
   const id = String(formData.get("id") ?? "");
 
   const result = await setServiceCoverageArea(
@@ -93,6 +98,7 @@ export async function saveServiceArea(formData: FormData): Promise<ServiceCovera
 /** Back to the business default — every own row gone. */
 export async function useDefaultCoverage(formData: FormData): Promise<ServiceCoverageWrite> {
   const seat = await requireSellerSeat();
+  if (!mayEditListing(seat.actor)) return { ok: false, reason: "forbidden" };
   const id = String(formData.get("id") ?? "");
 
   const result = await resetServiceCoverage(seat.businessId, id);

@@ -205,7 +205,14 @@ export async function StorefrontHeader({
         key: "since",
         node: (
           <span className="tabular-nums">
-            {t("listing.years", { year: business.establishedYear })}
+            {/*
+               *Practising since* for a firm that sells work — the label `2c-s`
+               and `3b-s` put on this same field — and *Trading since* for one
+               that sells goods. One field, worded for what the firm does.
+            */}
+            {work
+              ? t("storefront_services.practising_since_year", { year: business.establishedYear })
+              : t("listing.years", { year: business.establishedYear })}
           </span>
         ),
       }
@@ -216,9 +223,20 @@ export async function StorefrontHeader({
           key: "team",
           node: (
             <span className="tabular-nums">
-              {t("storefront_services.team_people", {
-                band: t(`storefront.team_band.${business.teamSize}` as never),
-              })}
+              {/*
+                 Board `3b-s` B4 and B9. The band, never a number — it is what
+                 the seller picked — and the qualified count beside it where the
+                 firm gave one, which for an audit or legal practice is closer to
+                 a credential than a headcount.
+              */}
+              {business.qualifiedCount !== null
+                ? t("storefront_services.team_people_qualified", {
+                    band: t(`storefront.team_band.${business.teamSize}` as never),
+                    qualified: formatCount(business.qualifiedCount),
+                  })
+                : t("storefront_services.team_people", {
+                    band: t(`storefront.team_band.${business.teamSize}` as never),
+                  })}
             </span>
           ),
         }

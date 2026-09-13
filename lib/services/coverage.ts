@@ -81,7 +81,7 @@ export interface ServiceCoverageState {
 
 export type ServiceCoverageWrite =
   | { ok: true; savedAt: Date; narrowed: boolean; effective: string[] }
-  | { ok: false; reason: "not_found" | "unknown_area" };
+  | { ok: false; reason: "not_found" | "unknown_area" | "forbidden" };
 
 const EMIRATE_LABEL: Record<string, string> = Object.fromEntries(
   EMIRATES.map((row) => [row.value, row.label]),

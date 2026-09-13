@@ -246,7 +246,24 @@ export async function getListing(businessId: string): Promise<ListingView | null
 
     primary: shape(business.primaryCategory),
     additional,
-    choices: choices.map(shape),
+    /*
+       The current primary is always a choice, even when it is not a leaf.
+
+       The picker offers leaves only, and a `<select>` whose value is not among
+       its options displays — and posts — its **first** option. 89 of the 123
+       listings in production carry a primary category with children, so for
+       every one of them this screen showed *3D printing & prototyping*, the
+       alphabetically first leaf, and any `Save changes` — a corrected
+       description, a new opening year — also queued a moderation request to
+       move the listing into 3D printing. Eleven of those listings are claimed.
+       Board `3b-s` found it by opening the screen as its own services firm.
+    */
+    choices: [
+      ...(choices.some((row) => row.id === business.primaryCategory.id)
+        ? []
+        : [shape(business.primaryCategory)]),
+      ...choices.map(shape),
+    ],
 
     held: pending.map((row) => ({
       id: row.id,

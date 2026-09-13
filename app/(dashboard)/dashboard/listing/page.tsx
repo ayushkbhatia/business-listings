@@ -1,10 +1,16 @@
 import { notFound } from "next/navigation";
+import { prisma } from "@/lib/db/client";
+import { fieldSetFor } from "@/lib/onboarding/service-profile";
+import { sectorChipsFor } from "@/lib/onboarding/sector-index";
+import { getTradeKinds } from "@/lib/taxonomy/service";
+import { resolveTradeKind } from "@/lib/taxonomy/trade-kind";
 import { getListing } from "@/lib/db/queries/listing";
 import { unpickedPhotos } from "@/lib/listing/photos";
 import { mayEditListing } from "@/lib/auth/guards";
 import { t } from "@/lib/i18n";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 import {
+  findListingSectors,
   makeCover,
   pickPhoto,
   saveListingProfile,
@@ -38,12 +44,53 @@ export const dynamic = "force-dynamic";
 export default async function ListingPage() {
   const seat = await requireSellerSeat();
 
-  const [view, badges, library] = await Promise.all([
+  const [view, badges, library, profile, kinds] = await Promise.all([
     getListing(seat.businessId),
     getNavBadges(seat.businessId),
     unpickedPhotos(seat.businessId),
+    /*
+       Board `3b-s` — the services field set, read here beside the goods view
+       rather than folded into `getListing`, which every goods seller's page
+       reads and none of whom needs these columns.
+    */
+    prisma.business.findUnique({
+      where: { id: seat.businessId },
+      select: {
+        headline: true,
+        sectorsServed: true,
+        qualifiedCount: true,
+        typicalClient: true,
+        primaryCategoryId: true,
+        categories: { select: { categoryId: true } },
+        sectorEngagements: { select: { sectorSlug: true, engagements: true } },
+      },
+    }),
+    getTradeKinds(),
   ]);
-  if (!view) notFound();
+  if (!view || !profile) notFound();
+
+  /*
+     `3b-s` B1 — one screen, the field set chosen by what the seller sells.
+     `fieldSetFor` is the function the onboarding step uses, so the two
+     screens cannot disagree about which fields a seller is shown (B8).
+  */
+  const fieldSet = fieldSetFor(seat.sellsKind);
+  const categoryIds = [
+    ...new Set([profile.primaryCategoryId, ...profile.categories.map((row) => row.categoryId)]),
+  ];
+  const chips = fieldSet.services ? await sectorChipsFor(categoryIds) : [];
+
+  /*
+     The mechanism, counted. `3b-s` asks the categories block to say *why* the
+     dashboard looks the way it does; the honest way to say it is to resolve
+     each category's trade kind the way every other reader does and count.
+  */
+  const resolved = categoryIds.map((id) => resolveTradeKind(kinds, id));
+  const kindCounts = {
+    services: resolved.filter((kind) => kind === "services").length,
+    goods: resolved.filter((kind) => kind === "goods").length,
+    total: resolved.length,
+  };
 
   /*
      Criterion 11. A staff seat looking through board 12f's view-as holds no
@@ -79,6 +126,27 @@ export default async function ListingPage() {
         unpickAction={unpickPhoto}
         pickAction={pickPhoto}
         coverAction={makeCover}
+        fieldSet={fieldSet}
+        services={
+          fieldSet.services
+            ? {
+                initial: {
+                  headline: profile.headline ?? "",
+                  servicesOffered: [],
+                  sectorsServed: profile.sectorsServed,
+                  sectorEngagements: Object.fromEntries(
+                    profile.sectorEngagements.map((row) => [row.sectorSlug, row.engagements]),
+                  ),
+                  languages: view.languages,
+                  qualifiedCount: profile.qualifiedCount?.toString() ?? "",
+                  typicalClient: profile.typicalClient ?? "",
+                },
+                chips,
+              }
+            : null
+        }
+        kinds={kindCounts}
+        searchSectors={findListingSectors}
       />
     </SellerPage>
   );

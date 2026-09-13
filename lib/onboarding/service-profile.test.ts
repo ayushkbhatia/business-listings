@@ -194,3 +194,78 @@ describe("checkServiceProfile — declared sector counts, board 1d-s B8", () => 
     }
   });
 });
+
+describe("board 3b-s — the fields the dashboard added to the shared set", () => {
+  it("holds sectors at six and says so rather than trimming the seventh — Q1", async () => {
+    const { SECTORS_MAX: max } = await import("./service-profile");
+    expect(max).toBe(6);
+    const seven = ["A", "B", "C", "D", "E", "F", "G"].map((letter) => `Sector ${letter}`);
+    expect(checkServiceProfile({ sectorsServed: seven })).toEqual({
+      ok: false,
+      refusals: [{ field: "sectorsServed", reason: "too_many", max: 6 }],
+    });
+  });
+
+  it("leaves languages alone when the caller did not send them", () => {
+    /*
+       `2c-s` shipped rendering a languages field and never posting it. The fix
+       sends them; an older client that still does not must not be read as
+       "this firm works in no language".
+    */
+    const result = checkServiceProfile({ headline: "Audit" });
+    expect(result.ok && result.value.languages).toBeUndefined();
+  });
+
+  it("deduplicates languages case-insensitively, keeping the first spelling", () => {
+    const result = checkServiceProfile({ languages: ["Arabic", "arabic", " English "] });
+    expect(result.ok && result.value.languages).toEqual(["Arabic", "English"]);
+  });
+
+  it("refuses more languages than the cap", async () => {
+    const { LANGUAGES_MAX } = await import("./service-profile");
+    const many = Array.from({ length: LANGUAGES_MAX + 1 }, (_, i) => `Language ${i}`);
+    const result = checkServiceProfile({ languages: many });
+    expect(result.ok).toBe(false);
+  });
+
+  it("accepts a qualified count within the team band, and zero as a real answer", () => {
+    expect(checkServiceProfile({ qualifiedCount: 9, teamSize: "b11_50" }).ok).toBe(true);
+    const zero = checkServiceProfile({ qualifiedCount: 0, teamSize: "b1_10" });
+    expect(zero.ok && zero.value.qualifiedCount).toBe(0);
+  });
+
+  it("refuses more qualified professionals than the band holds, naming the ceiling", () => {
+    expect(checkServiceProfile({ qualifiedCount: 12, teamSize: "b1_10" })).toEqual({
+      ok: false,
+      refusals: [{ field: "qualifiedCount", reason: "exceeds_team", max: 10 }],
+    });
+  });
+
+  it("does not cap against an open-ended band or no band at all", () => {
+    expect(checkServiceProfile({ qualifiedCount: 900, teamSize: "b500_plus" }).ok).toBe(true);
+    expect(checkServiceProfile({ qualifiedCount: 900, teamSize: null }).ok).toBe(true);
+  });
+
+  it("refuses a fraction or a negative, and keeps null as not stated", () => {
+    expect(checkServiceProfile({ qualifiedCount: 2.5 }).ok).toBe(false);
+    expect(checkServiceProfile({ qualifiedCount: -1 }).ok).toBe(false);
+    const none = checkServiceProfile({ qualifiedCount: null });
+    expect(none.ok && none.value.qualifiedCount).toBeNull();
+  });
+
+  it("trims typical client, stores empty as null, and refuses past eighty characters", async () => {
+    const { TYPICAL_CLIENT_MAX } = await import("./service-profile");
+    const clean = checkServiceProfile({ typicalClient: "  AED 10m–150m   turnover " });
+    expect(clean.ok && clean.value.typicalClient).toBe("AED 10m–150m turnover");
+    const empty = checkServiceProfile({ typicalClient: "   " });
+    expect(empty.ok && empty.value.typicalClient).toBeNull();
+    expect(checkServiceProfile({ typicalClient: "x".repeat(TYPICAL_CLIENT_MAX + 1) }).ok).toBe(false);
+  });
+
+  it("does not send services offered when the dashboard says it has none to send", () => {
+    // `3b-s` leaves the services-offered list on onboarding; an absent list
+    // from the dashboard must not wipe the one onboarding collected.
+    const result = checkServiceProfile({ headline: "Audit", withServicesOffered: false });
+    expect(result.ok && result.value.servicesOffered).toBeUndefined();
+  });
+});

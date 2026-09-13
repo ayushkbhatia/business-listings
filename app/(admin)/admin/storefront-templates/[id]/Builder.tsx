@@ -50,6 +50,10 @@ export interface BuilderProps {
   changes: TemplateChange[];
   canvas: React.ReactNode;
   addable: { key: string; label: string; group: string }[];
+  /** The section library for this template — board `5c-s`. */
+  libraryHref: string;
+  /** *3 sections are not offered for this trade*, worded on the server. */
+  refusedNote: string;
   actions: {
     toggleSection: (formData: FormData) => Promise<ActionResult>;
     reorder: (formData: FormData) => Promise<ActionResult>;
@@ -69,6 +73,8 @@ export function Builder({
   changes,
   canvas,
   addable,
+  libraryHref,
+  refusedNote,
   actions,
 }: BuilderProps) {
   const [selectedId, setSelectedId] = useState<string | null>(sections[0]?.id ?? null);
@@ -256,6 +262,20 @@ export function Builder({
             </ul>
           </div>
         )}
+
+        {/*
+          Board `5c-s` B1 from the builder's side: what is not offered is not
+          silently absent. The count, and where the reasons are.
+        */}
+        <p className="mt-3 text-caption text-muted">
+          {refusedNote}{" "}
+          <a
+            href={libraryHref}
+            className="rounded-tag text-ink underline underline-offset-4 focus-visible:shadow-focus focus-visible:outline-none"
+          >
+            {t("section.library.open")}
+          </a>
+        </p>
       </aside>
 
       {/* ── Centre: the canvas ── */}

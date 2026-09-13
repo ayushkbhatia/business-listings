@@ -435,7 +435,18 @@ export async function saveServiceProfile(
   businessId: string,
   input: ServiceProfileInput,
 ): Promise<{ ok: true; savedAt: Date } | { ok: false; refusals: ProfileRefusal[] }> {
-  const checked = checkServiceProfile(input);
+  /*
+     The qualified count is checked against the team-size band, which this save
+     does not write. Read it off the row when the caller did not say — the band
+     was set on the same screen a moment ago, or on an earlier visit.
+  */
+  const teamSize =
+    input.teamSize !== undefined || input.qualifiedCount === undefined || input.qualifiedCount === null
+      ? input.teamSize
+      : ((await prisma.business.findUnique({ where: { id: businessId }, select: { teamSize: true } }))
+          ?.teamSize ?? null);
+
+  const checked = checkServiceProfile({ ...input, teamSize });
   if (!checked.ok) return { ok: false, refusals: checked.refusals };
 
   const { sectorEngagements } = checked.value;
@@ -454,10 +465,23 @@ export async function saveServiceProfile(
   const [saved] = await prisma.$transaction([
     prisma.business.update({
       where: { id: businessId },
+      /*
+         Undefined means the caller did not send the field, and Prisma leaves
+         an undefined key alone — which is what keeps a dashboard save that has
+         no services-offered list from wiping the one onboarding collected.
+
+         `languages` is the one `2c-s` shipped rendering and never writing: the
+         chips were on the step, the value was in the component's state, and
+         nothing posted it. A services seller's languages were silently dropped
+         on every onboarding. `3b-s` B8 is what found it.
+      */
       data: {
         headline: checked.value.headline,
         sectorsServed: checked.value.sectorsServed,
         servicesOffered: checked.value.servicesOffered,
+        languages: checked.value.languages,
+        qualifiedCount: checked.value.qualifiedCount,
+        typicalClient: checked.value.typicalClient,
       },
       select: { updatedAt: true },
     }),

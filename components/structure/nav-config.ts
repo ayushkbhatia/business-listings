@@ -119,6 +119,12 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
     items: [
       { key: "products", labelKey: "nav.products", href: "/dashboard/products", capability: "product.edit" },
       { key: "services", labelKey: "nav.services", href: "/dashboard/services", capability: "product.edit" },
+      /*
+         Board `3c-s`. Beside Services because it is about services — one row
+         each — and `listing.edit` because every coverage write on the platform
+         checks that capability.
+      */
+      { key: "coverage", labelKey: "nav.coverage", href: "/dashboard/coverage", capability: "listing.edit" },
       { key: "media", labelKey: "nav.media", href: "/dashboard/media", capability: "listing.edit" },
     ],
   },
@@ -369,9 +375,24 @@ export function dashboardNavFor(sellsKind: "unset" | "goods" | "services" | "bot
   if (sellsKind === "unset" || sellsKind === "both") {
     return sellsKind === "both"
       ? DASHBOARD_NAV
-      : withoutItems(DASHBOARD_NAV, ["services"]);
+      : withoutItems(DASHBOARD_NAV, ["services", "coverage"]);
   }
-  return withoutItems(DASHBOARD_NAV, sellsKind === "services" ? ["products"] : ["services"]);
+  /*
+     Board `3c-s`. A firm that sells work manages coverage, not branches —
+     `/dashboard/locations` is a branch list with addresses and pins, and for a
+     practice with one licensed office it manages nothing. `1f-s` made the same
+     move publicly: `/b/:slug/branches` redirects to `/coverage` for a
+     services-only firm. The route stays, per the rule above.
+
+     Hours stays, and deliberately so for now. `2d-s` and `1f-s` both drop
+     opening hours for a services firm, and the handoff names the nav item as
+     either one to remove or the placeholder for `3d-s` — a decision, not a
+     change to make on a render.
+  */
+  return withoutItems(
+    DASHBOARD_NAV,
+    sellsKind === "services" ? ["products", "locations"] : ["services", "coverage"],
+  );
 }
 
 function withoutItems(groups: readonly NavGroup[], drop: readonly string[]): readonly NavGroup[] {

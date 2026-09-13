@@ -9,7 +9,11 @@ import { t } from "@/lib/i18n";
 import {
   ENGAGEMENTS_MAX,
   HEADLINE_MAX,
+  LANGUAGES_MAX,
+  QUALIFIED_MAX,
+  SECTORS_MAX,
   SERVICES_MAX,
+  TYPICAL_CLIENT_MAX,
   sectorSlug,
 } from "@/lib/onboarding/service-profile";
 
@@ -51,6 +55,13 @@ export interface ServiceProfileValue {
    */
   sectorEngagements: Record<string, number>;
   languages: string[];
+  /**
+   * `3b-s` B9 — qualified professionals, as typed. A string so an empty box is
+   * *not stated* rather than zero, which is a real and different answer.
+   */
+  qualifiedCount: string;
+  /** `3b-s` Q2 — who the firm typically works for, in its own words. */
+  typicalClient: string;
 }
 
 export interface ServiceProfileFieldsProps {
@@ -63,6 +74,22 @@ export interface ServiceProfileFieldsProps {
   /** Rendered under the group heading when the seller sells both. */
   grouped?: boolean;
   disabled?: boolean;
+  /**
+   * Whether to ask *which services do you offer*.
+   *
+   * Onboarding asks, because the answer picks the scope sheet on `8c-s`. The
+   * dashboard does not: by then the firm's services are real `Service` rows,
+   * managed on `/dashboard/services`, and a second list of names beside them
+   * would be a stale draft of the first. Every other field renders on both —
+   * `3b-s` B8.
+   */
+  showServicesOffered?: boolean;
+  /**
+   * Whether to render languages here. Off only where another field set on the
+   * same screen already owns the column — a `both` seller's goods group — so
+   * one business field is never two inputs.
+   */
+  showLanguages?: boolean;
 }
 
 export function ServiceProfileFields({
@@ -72,6 +99,8 @@ export function ServiceProfileFields({
   search,
   grouped = false,
   disabled = false,
+  showServicesOffered = true,
+  showLanguages = true,
 }: ServiceProfileFieldsProps) {
   const set = (patch: Partial<ServiceProfileValue>) => onChange({ ...value, ...patch });
 
@@ -126,21 +155,24 @@ export function ServiceProfileFields({
       </div>
 
       {/* ── Services offered, capped ──────────────────────────────────── */}
-      <ChipField
-        id="svc-services"
-        label={t("profile_svc.services")}
-        hint={t("profile_svc.services_hint", { max: formatCount(SERVICES_MAX) })}
-        fullNote={t("profile_svc.services_full", { max: formatCount(SERVICES_MAX) })}
-        addLabel={t("profile_svc.services_add")}
-        values={value.servicesOffered}
-        max={SERVICES_MAX}
-        disabled={disabled}
-        onChange={(next) => set({ servicesOffered: next })}
-      />
+      {showServicesOffered && (
+        <ChipField
+          id="svc-services"
+          label={t("profile_svc.services")}
+          hint={t("profile_svc.services_hint", { max: formatCount(SERVICES_MAX) })}
+          fullNote={t("profile_svc.services_full", { max: formatCount(SERVICES_MAX) })}
+          addLabel={t("profile_svc.services_add")}
+          values={value.servicesOffered}
+          max={SERVICES_MAX}
+          disabled={disabled}
+          onChange={(next) => set({ servicesOffered: next })}
+        />
+      )}
 
       {/* ── Sectors: chips, search, free entry ────────────────────────── */}
       <SectorField
         values={value.sectorsServed}
+        max={SECTORS_MAX}
         chips={chips}
         search={search}
         disabled={disabled}
@@ -166,14 +198,69 @@ export function ServiceProfileFields({
       )}
 
       {/* ── Languages ─────────────────────────────────────────────────── */}
-      <ChipField
-        id="svc-languages"
-        label={t("profile_svc.languages")}
-        addLabel={t("profile_svc.languages_add")}
-        values={value.languages}
-        disabled={disabled}
-        onChange={(next) => set({ languages: next })}
-      />
+      {showLanguages && (
+        <ChipField
+          id="svc-languages"
+          label={t("profile_svc.languages")}
+          hint={t("profile_svc.languages_hint")}
+          fullNote={t("profile_svc.languages_full", { max: formatCount(LANGUAGES_MAX) })}
+          addLabel={t("profile_svc.languages_add")}
+          values={value.languages}
+          max={LANGUAGES_MAX}
+          disabled={disabled}
+          onChange={(next) => set({ languages: next })}
+        />
+      )}
+
+      {/* ── Practice facts — `3b-s` ───────────────────────────────────── */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="svc-qualified" hint={t("profile_svc.qualified_hint")}>
+            {t("profile_svc.qualified")}
+          </Label>
+          {/*
+             Empty is *not stated*, and zero is a real answer that is not the
+             same one. So the box is text with a numeric keyboard rather than a
+             number input, which would turn an emptied field into `0` on some
+             browsers and report a claim the seller never made.
+          */}
+          <Input
+            id="svc-qualified"
+            inputMode="numeric"
+            disabled={disabled}
+            value={value.qualifiedCount}
+            onChange={(event) =>
+              set({ qualifiedCount: event.target.value.replace(/[^0-9]/g, "").slice(0, String(QUALIFIED_MAX).length) })
+            }
+          />
+        </div>
+        <div>
+          <Label htmlFor="svc-typical-client" hint={t("profile_svc.typical_client_hint")}>
+            {t("profile_svc.typical_client")}
+          </Label>
+          <Input
+            id="svc-typical-client"
+            disabled={disabled}
+            value={value.typicalClient}
+            placeholder={t("profile_svc.typical_client_placeholder")}
+            aria-describedby="svc-typical-client-count"
+            onChange={(event) => set({ typicalClient: event.target.value })}
+          />
+          <p
+            id="svc-typical-client-count"
+            aria-live="polite"
+            className={cn(
+              "mt-1 text-caption",
+              value.typicalClient.trim().length > TYPICAL_CLIENT_MAX ? "text-warn-ink" : "text-faint",
+            )}
+          >
+            {t("profile_svc.typical_client_count", {
+              count: formatCount(value.typicalClient.trim().length),
+              max: formatCount(TYPICAL_CLIENT_MAX),
+            })}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
@@ -366,12 +453,15 @@ function EngagementCounts({
 /** Sectors: the chips, the search, and free entry when nothing matches. */
 function SectorField({
   values,
+  max,
   chips,
   search,
   disabled,
   onChange,
 }: {
   values: string[];
+  /** `3b-s` Q1 — stated, and the picker stops offering past it. */
+  max: number;
   chips: readonly SectorOption[];
   search: (query: string) => Promise<SectorOption[]>;
   disabled?: boolean;
@@ -412,9 +502,11 @@ function SectorField({
   // nothing, without the effect having to write the emptiness back.
   const visible = query.trim().length < 2 ? [] : matches;
 
+  const full = values.length >= max;
+
   function pick(label: string) {
     const entry = label.trim().replace(/\s+/g, " ");
-    if (!entry || held.has(sectorSlug(entry))) return;
+    if (!entry || full || held.has(sectorSlug(entry))) return;
     onChange([...values, entry]);
     setQuery("");
     setMatches([]);
@@ -422,11 +514,14 @@ function SectorField({
 
   const typed = query.trim().replace(/\s+/g, " ");
   const exact = visible.some((row) => sectorSlug(row.label) === sectorSlug(typed));
-  const offerNew = typed.length >= 2 && !exact && !held.has(sectorSlug(typed));
+  const offerNew = !full && typed.length >= 2 && !exact && !held.has(sectorSlug(typed));
 
   return (
     <div>
-      <Label htmlFor="svc-sectors" hint={t("profile_svc.sectors_hint")}>
+      <Label
+        htmlFor="svc-sectors"
+        hint={t("profile_svc.sectors_hint_capped", { max: formatCount(max) })}
+      >
         {t("profile_svc.sectors")}
       </Label>
 
@@ -444,10 +539,21 @@ function SectorField({
         </ul>
       )}
 
+      {/*
+         Full is said where the seller is typing, not discovered at save. The
+         count is the only thing that changes as they pick, so it is the part
+         announced.
+      */}
+      <p aria-live="polite" className={cn("mb-1 text-caption", full ? "text-warn-ink" : "text-faint")}>
+        {full
+          ? t("profile_svc.sectors_full", { max: formatCount(max) })
+          : t("profile_svc.sectors_count", { count: formatCount(values.length), max: formatCount(max) })}
+      </p>
+
       <Input
         id="svc-sectors"
         value={query}
-        disabled={disabled}
+        disabled={disabled || full}
         placeholder={t("profile_svc.sectors_search")}
         onChange={(event) => setQuery(event.target.value)}
         onKeyDown={(event) => {
@@ -467,7 +573,7 @@ function SectorField({
                 <button
                   type="button"
                   onClick={() => pick(row.label)}
-                  disabled={disabled}
+                  disabled={disabled || full}
                   className="rounded-pill border border-line bg-card px-2.5 py-1 text-caption text-body hover:border-moss-muted focus-visible:shadow-focus focus-visible:outline-none"
                 >
                   {row.label}
@@ -505,7 +611,7 @@ function SectorField({
                   <button
                     type="button"
                     onClick={() => pick(chip.label)}
-                    disabled={disabled}
+                    disabled={disabled || full}
                     className="rounded-pill border border-line bg-wash px-2.5 py-1 text-caption text-body hover:border-moss-muted focus-visible:shadow-focus focus-visible:outline-none"
                   >
                     {chip.label}

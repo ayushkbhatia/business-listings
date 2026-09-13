@@ -7,6 +7,12 @@ import { Panel, Tabs } from "@/components/structure";
 import { DESCRIPTION_LIMIT } from "@/lib/listing/constants";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import {
+  ServiceProfileFields,
+  type SectorOption,
+  type ServiceProfileValue,
+} from "@/components/domain/ServiceProfileFields";
+import { HEADLINE_MAX } from "@/lib/onboarding/service-profile";
 import type { ActionResult, SaveActionResult } from "./actions";
 import { ListingRail } from "./ListingRail";
 import { PhotoPicker } from "./PhotoPicker";
@@ -97,6 +103,16 @@ export interface ListingWorkspaceProps {
   unpickAction: (formData: FormData) => Promise<ActionResult>;
   pickAction: (formData: FormData) => Promise<ActionResult>;
   coverAction: (formData: FormData) => Promise<ActionResult>;
+  /**
+   * Board `3b-s` B1 — which field sets render. From `fieldSetFor`, the function
+   * the onboarding step uses, so the two screens are chosen by one rule.
+   */
+  fieldSet: { goods: boolean; services: boolean };
+  /** The services field set's initial value and sector chips. Null for goods. */
+  services: { initial: ServiceProfileValue; chips: SectorOption[] } | null;
+  /** How the listing's categories resolve, for the explanation under them. */
+  kinds: { services: number; goods: number; total: number };
+  searchSectors: (query: string) => Promise<SectorOption[]>;
 }
 
 const TABS = ["basics", "services", "media", "seo"] as const;
@@ -112,6 +128,9 @@ export function ListingWorkspace(props: ListingWorkspaceProps) {
   const [year, setYear] = useState(view.establishedYear?.toString() ?? "");
   const [teamSize, setTeamSize] = useState(view.teamSize ?? "");
   const [languages, setLanguages] = useState<string[]>(view.languages);
+  const [servicesValue, setServicesValue] = useState<ServiceProfileValue | null>(
+    props.services?.initial ?? null,
+  );
   /** Category ids asked for in this sitting, before the save posts them. */
   const [adding, setAdding] = useState<string[]>([]);
   const [removing, setRemoving] = useState<string[]>([]);
@@ -120,7 +139,15 @@ export function ListingWorkspace(props: ListingWorkspaceProps) {
   const [notice, setNotice] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  const overLimit = description.length > DESCRIPTION_LIMIT;
+  const overLimit =
+    description.length > DESCRIPTION_LIMIT ||
+    (servicesValue !== null && servicesValue.headline.trim().length > HEADLINE_MAX);
+
+  /*
+     A services-only seller's languages live in the services field set, and a
+     `both` seller's in the goods one — never both, so one column is one input.
+  */
+  const servicesOwnLanguages = props.fieldSet.services && !props.fieldSet.goods;
 
   /*
      Held ids, so a chip can mark itself.
@@ -147,7 +174,9 @@ export function ListingWorkspace(props: ListingWorkspaceProps) {
     teamSize !== (view.teamSize ?? "") ||
     languages.join("|") !== view.languages.join("|") ||
     adding.length > 0 ||
-    removing.length > 0;
+    removing.length > 0 ||
+    (servicesValue !== null &&
+      JSON.stringify(servicesValue) !== JSON.stringify(props.services?.initial ?? null));
 
   const byId = useMemo(() => new Map(view.choices.map((row) => [row.id, row])), [view.choices]);
 
@@ -221,6 +250,7 @@ export function ListingWorkspace(props: ListingWorkspaceProps) {
     setYear(view.establishedYear?.toString() ?? "");
     setTeamSize(view.teamSize ?? "");
     setLanguages(view.languages);
+    setServicesValue(props.services?.initial ?? null);
     setAdding([]);
     setRemoving([]);
     setError(null);
@@ -229,6 +259,31 @@ export function ListingWorkspace(props: ListingWorkspaceProps) {
 
   return (
     <form onSubmit={onSave} className="flex flex-col gap-[var(--gutter)]">
+      {/*
+         Board `3b-s`. The services field set is a controlled component with no
+         named inputs of its own — it is shared with onboarding, which autosaves
+         — so its value is posted here, with the same keys onboarding posts.
+      */}
+      {servicesValue && (
+        <>
+          <input type="hidden" name="servicesSent" value="1" />
+          <input type="hidden" name="headline" value={servicesValue.headline} />
+          {servicesValue.sectorsServed.map((sector) => (
+            <input key={`sector-${sector}`} type="hidden" name="sector" value={sector} />
+          ))}
+          <input
+            type="hidden"
+            name="sectorEngagements"
+            value={JSON.stringify(servicesValue.sectorEngagements)}
+          />
+          <input type="hidden" name="qualifiedCount" value={servicesValue.qualifiedCount} />
+          <input type="hidden" name="typicalClient" value={servicesValue.typicalClient} />
+          {servicesOwnLanguages &&
+            servicesValue.languages.map((language) => (
+              <input key={`language-${language}`} type="hidden" name="language" value={language} />
+            ))}
+        </>
+      )}
       {/* ── Header row: the held count, and the two buttons ─────────────── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -296,7 +351,10 @@ export function ListingWorkspace(props: ListingWorkspaceProps) {
               removing={removing}
               setRemoving={setRemoving}
               capReached={capReached}
-              overLimit={overLimit}
+              overLimit={description.length > DESCRIPTION_LIMIT}
+              servicesValue={servicesValue}
+              setServicesValue={setServicesValue}
+              servicesOwnLanguages={servicesOwnLanguages}
             />
           ) : (
             /*
@@ -316,6 +374,7 @@ export function ListingWorkspace(props: ListingWorkspaceProps) {
           description={description}
           withdrawAction={props.withdrawAction}
           editable={editable}
+          sellsWork={props.fieldSet.services}
         />
       </div>
     </form>
@@ -347,6 +406,9 @@ interface BasicsProps extends ListingWorkspaceProps {
   setRemoving: (value: string[]) => void;
   capReached: boolean;
   overLimit: boolean;
+  servicesValue: ServiceProfileValue | null;
+  setServicesValue: (value: ServiceProfileValue) => void;
+  servicesOwnLanguages: boolean;
 }
 
 function Basics(props: BasicsProps) {
@@ -402,7 +464,16 @@ function Basics(props: BasicsProps) {
 
       <label className="flex flex-col gap-1">
         <span className="flex items-baseline justify-between gap-3">
-          <span className="text-body-sm text-ink">{t("listing.description")}</span>
+          <span className="text-body-sm text-ink">
+            {/*
+               `3b-s` — for a firm that sells work this is the lead of its
+               storefront, published verbatim under *What we take on*, and the
+               label says so rather than calling it a description.
+            */}
+            {props.fieldSet.services && !props.fieldSet.goods
+              ? t("listing.description_services")
+              : t("listing.description")}
+          </span>
           <span
             className={`font-mono text-caption tabular-nums ${props.overLimit ? "text-warn-ink" : "text-body"}`}
           >
@@ -424,9 +495,12 @@ function Basics(props: BasicsProps) {
             {t("listing.over_limit", { limit: formatCount(DESCRIPTION_LIMIT) })}
           </span>
         )}
+        {props.fieldSet.services && !props.fieldSet.goods && (
+          <span className="text-caption text-body">{t("listing.description_services_note")}</span>
+        )}
       </label>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className={props.fieldSet.goods ? "grid gap-4 md:grid-cols-2" : "grid gap-4"}>
         <label className="flex flex-col gap-1">
           <span className="flex flex-wrap items-center gap-2">
             <span className="text-body-sm text-ink">{t("listing.primary_category")}</span>
@@ -449,17 +523,26 @@ function Basics(props: BasicsProps) {
           <span className="text-caption text-body">{t("listing.primary_reviewed")}</span>
         </label>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-body-sm text-ink">{t("listing.payment_terms")}</span>
-          <Input
-            name="paymentTerms"
-            value={props.paymentTerms}
-            disabled={!editable}
-            maxLength={160}
-            onChange={(event) => props.setPaymentTerms(event.target.value)}
-          />
-          <span className="text-caption text-body">{t("listing.payment_terms_hint")}</span>
-        </label>
+        {/*
+           Goods only. Payment terms are published on the goods storefront rail
+           and a product page, and nowhere a firm that sells work is read — its
+           terms travel with each quote. Not drawn is not posted, and the action
+           leaves the column alone when it is absent (`2b-s` B5: switching kind
+           deletes nothing).
+        */}
+        {props.fieldSet.goods && (
+          <label className="flex flex-col gap-1">
+            <span className="text-body-sm text-ink">{t("listing.payment_terms")}</span>
+            <Input
+              name="paymentTerms"
+              value={props.paymentTerms}
+              disabled={!editable}
+              maxLength={160}
+              onChange={(event) => props.setPaymentTerms(event.target.value)}
+            />
+            <span className="text-caption text-body">{t("listing.payment_terms_hint")}</span>
+          </label>
+        )}
       </div>
 
       {/* ── Additional categories ─────────────────────────────────────────── */}
@@ -595,6 +678,39 @@ function Basics(props: BasicsProps) {
           </span>
         )}
 
+        {/*
+           `3b-s` — the mechanism, said where the categories are. This is the
+           only seller-facing place that explains why the dashboard looks the
+           way it does: the taxonomy sets each category to goods or services,
+           and the screens follow. Counted from how each category resolves, so a
+           listing with one of each says so rather than repeating a sentence
+           written for a firm with three.
+        */}
+        {props.fieldSet.services && props.kinds.total > 0 && (
+          <p className="max-w-prose text-caption text-body">
+            {props.kinds.goods === 0
+              ? t("listing.kinds_all_services", {
+                  count: props.kinds.total,
+                  formatted: formatCount(props.kinds.total),
+                })
+              : props.kinds.services === 0
+                ? /*
+                     Every category resolves to goods while the seller said they
+                     sell work. The screen follows what they said, and the
+                     sentence says so — this is the listing filed under the wrong
+                     trade, and buyers searching for the work will not find it.
+                  */
+                  t("listing.kinds_all_goods", {
+                    count: props.kinds.total,
+                    formatted: formatCount(props.kinds.total),
+                  })
+                : t("listing.kinds_mixed", {
+                    services: formatCount(props.kinds.services),
+                    goods: formatCount(props.kinds.goods),
+                  })}
+          </p>
+        )}
+
         {/* The form posts intent, not state: what to ask for and what to drop. */}
         {props.adding.map((id) => (
           <input key={`add-${id}`} type="hidden" name="addCategory" value={id} />
@@ -618,7 +734,11 @@ function Basics(props: BasicsProps) {
 
       <div className="grid gap-4 md:grid-cols-3">
         <label className="flex flex-col gap-1">
-          <span className="text-body-sm text-ink">{t("listing.established")}</span>
+          <span className="text-body-sm text-ink">
+            {props.fieldSet.services && !props.fieldSet.goods
+              ? t("listing.practising_since")
+              : t("listing.established")}
+          </span>
           <Input
             name="establishedYear"
             inputMode="numeric"
@@ -628,7 +748,11 @@ function Basics(props: BasicsProps) {
           />
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-body-sm text-ink">{t("listing.team_size")}</span>
+          <span className="text-body-sm text-ink">
+            {props.fieldSet.services && !props.fieldSet.goods
+              ? t("listing.practice_size")
+              : t("listing.team_size")}
+          </span>
           <Select
             name="teamSize"
             value={props.teamSize}
@@ -643,6 +767,7 @@ function Basics(props: BasicsProps) {
             ]}
           />
         </label>
+        {!props.servicesOwnLanguages && (
         <fieldset className="flex flex-col gap-1">
           <legend className="text-body-sm text-ink">{t("listing.languages")}</legend>
           <div className="flex flex-wrap gap-1.5">
@@ -676,7 +801,35 @@ function Basics(props: BasicsProps) {
             })}
           </div>
         </fieldset>
+        )}
       </div>
+
+      {/*
+         Board `3b-s` — the services field set, the same component the
+         onboarding step mounts (B8). Grouped and headed for a seller who sells
+         both, exactly as `2c-s` B6 does there.
+
+         `showServicesOffered` is off: onboarding asks which services a firm
+         will offer because the answer picks its scope sheet, and by the time
+         a seller is here those services are real rows on the Services screen.
+      */}
+      {props.fieldSet.services && props.servicesValue && props.services && (
+        <div className="flex flex-col gap-3 border-t border-line pt-5">
+          <ServiceProfileFields
+            value={props.servicesValue}
+            onChange={props.setServicesValue}
+            chips={props.services.chips}
+            search={props.searchSectors}
+            grouped={props.fieldSet.goods}
+            disabled={!editable}
+            showServicesOffered={false}
+            showLanguages={props.servicesOwnLanguages}
+          />
+          <p className="max-w-prose text-caption text-body">
+            {t("listing.services_offered_elsewhere")}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

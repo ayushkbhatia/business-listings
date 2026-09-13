@@ -78,6 +78,7 @@ export default async function TemplatePageRoute({ params }: Params) {
     slug: business.slug,
     sectorId: business.sectorId,
     themePreset: business.themePreset,
+    sellsKind: business.sellsKind,
   });
 
   // Template pages marked for the nav. Empty where the trade has no template.

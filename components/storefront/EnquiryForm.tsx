@@ -1,6 +1,6 @@
 import { buttonClassName } from "@/components/primitives";
 import { line, type SectionProps } from "@/lib/storefront/render-data";
-import { t } from "@/lib/i18n";
+import { paired } from "@/lib/storefront/paired-copy";
 
 /**
  * Section 10 — the enquiry form.
@@ -13,13 +13,19 @@ import { t } from "@/lib/i18n";
  * is a client component with its own state and its own server action, and a
  * storefront section that inlined it would put an unauthenticated write path on
  * every page of every storefront — which is the same reason the embed was cut.
+ *
+ * **Not kind-neutral** (board `5c-s` B5). For a firm that sells work the slot
+ * carries the service composer — which service, the job in the buyer's words,
+ * the scale, needed by; no quantity and no target price — and the heading and
+ * fallback intro are that composer's. The caller mounts the right island; this
+ * section only knows which words go around it.
  */
-export function EnquiryForm({ content, enquireHref, enquireSlot }: SectionProps) {
-  const intro = line(content, "intro", t("section.enquiry.default_intro"));
+export function EnquiryForm({ data, content, enquireHref, enquireSlot }: SectionProps) {
+  const intro = line(content, "intro", paired("section.enquiry.default_intro", data.kind));
 
   return (
     <section className="rounded-card border border-brand-line bg-brand-wash p-6">
-      <h2 className="text-h2 text-brand-ink">{t("section.enquiry.title")}</h2>
+      <h2 className="text-h2 text-brand-ink">{paired("section.enquiry.title", data.kind)}</h2>
       <p className="mt-2 max-w-[var(--measure-prose)] text-body-sm text-prose">{intro}</p>
       <div className="mt-4">
         {/*
@@ -29,7 +35,7 @@ export function EnquiryForm({ content, enquireHref, enquireSlot }: SectionProps)
           */}
           {enquireSlot ?? (
             <a className={buttonClassName({ variant: "primary" })} href={enquireHref}>
-              {t("section.hero.enquire")}
+              {paired("section.hero.enquire", data.kind)}
             </a>
           )}
       </div>

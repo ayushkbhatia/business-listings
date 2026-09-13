@@ -25,7 +25,7 @@ migration directories, none touching services.
 | State | Count | Of 28 |
 |---|---|---|
 | **built** | **0** | |
-| partial | 1 | `3c-s` coverage manager — per-service rows shipped #173, dashboard mirror owed |
+| partial | 0 | `3c-s` shipped 13 Sep (§4r) |
 | scaffold | 5 | |
 | **not started** | **22** | |
 
@@ -375,8 +375,8 @@ drawn apart, the list shows a column the editor cannot fill or omits one it can.
 | **`8a-s`** Setup hub | **shipped 12 Sep** | **Four tasks**, and the epic was right after all — the *code's* stale prose said three. Credentials lead at 32, photographs fall to 4. See §4h |
 | **`8b-s`** Credentials task | **shipped 12 Sep** | `/dashboard/setup/credentials`. Two tiers rather than three, the trade licence is not a credential row, and the FTA register is a seam nothing is plugged into. See §4i |
 | **`8c-s`** Scope sheet + first 3 services | **shipped 12 Sep** | `/dashboard/setup/services`. D11 was already closed, three authored sheets rather than seven, and the hub's task 2 now counts completeness rather than live rows. See §4j |
-| **`3b-s`** Listing profile | | A schema diff, not copy: `ModeratedField` is a Prisma enum, so it **stops for a person** |
-| **`3c-s`** Coverage manager | **per-service coverage shipped 13 Sep** (#173) | `ServiceCoverage.service_id`, with the card on the service editor that writes it. The panel, writer, capability guard and listing revision were already there; what was missing was any way for one service to narrow itself, which left `1g-s` B8's `effectiveCoverage` with an unreachable branch. The **dashboard mirror** — a services seller editing the business default from `/dashboard/locations` rather than onboarding — is still owed |
+| **`3b-s`** Listing profile | **shipped 13 Sep** | `/dashboard/listing` with the services field set, the same component onboarding mounts. See §4r |
+| **`3c-s`** Coverage manager | **shipped 13 Sep** | Per-service rows in #173; the manager at `/dashboard/coverage` with this handoff. See §4r |
 
 **`profileStrength` was fixed with `8a-s`, 12 Sep.** `catalogue: 20` + `filterableSpecs: 15` of 100
 were unreachable without products, against a published `STRONG_ENOUGH` of 80, so a service supplier
@@ -1716,8 +1716,8 @@ and the exact slot `1d-s` wants where stock would be — is stripped on the Free
 (`app/(public)/b/[slug]/page.tsx:600-604`). A free service supplier's storefront would show neither
 a catalogue nor credentials. That is a pricing decision hiding inside a layout one.
 
-`5c-s` has a labelled placeholder already: `components/storefront/Services.tsx`, registered and held
-off live storefronts by `comingSoon: true`.
+~~`5c-s` has a labelled placeholder already~~ — **replaced by `5c-s` itself** (§4s): four live
+services sections and one held, the placeholder and `comingSoon` both gone.
 
 ---
 
@@ -1787,6 +1787,163 @@ These exist only if scope sheets are templated. See the open questions below —
 documents disagree, and the answer decides whether these are two boards or none.
 
 ---
+
+## 4r · Handoff `3b-s` + `3c-s` — the two maintenance screens
+
+Shipped 13 Sep at `/dashboard/coverage` (new) and `/dashboard/listing` (the goods `3b`, with a
+second field set). The seller-dashboard lane closes with these two. Migration
+`20261014130000_practice_facts_3bs` adds `business.qualified_count` and `business.typical_client`.
+
+### `3c-s` — the coverage manager
+
+One row per service under the business default, and **every marker, count and union on the page is
+derived from the rows on the request** (B3, B4). The union is `businessCoverage` over live services —
+the function `1d-s` renders — and the free-zone qualifier is `1f-s`'s own `rowQualifiers`, so the
+seller screen and the buyer pages cannot disagree about what a buyer sees.
+
+- **The board's spec contradicts itself on a fourth state.** Its prose says *equal is inherited*;
+  its pseudocode files equal under *narrowed*. Neither is true: rows that match the default do not
+  follow it. So `coverageMarker` has four states, and `same` is labelled *Same as default, set
+  separately* with the one action that fixes it.
+- **Both editors stage.** Onboarding saves each chip as it is clicked; here a default edit moves
+  every inheriting service at once, so the dialog names the count (B11) and nothing is written until
+  Save. The fields are `2d-s`'s `CoverageFields`; the chips became one `CoverageChipGroup`, used by
+  onboarding, the service editor and this screen.
+- **The publish gate still holds after publish.** A live listing cannot empty its default modes or
+  areas through the back door — the same refusal `2d-s` B2 gives before publish.
+- **The free zone renders beside every row that reaches its emirate**, not only the audit row the
+  board draws — `1f-s`'s rule, since that is the page buyers read.
+- **No availability control** (B10). The tree carries no services waitlist state anywhere; `D11` was
+  cut before `1d-s` was built, so the handoff's worry about a public state with no field does not
+  apply to what shipped.
+- **Brief matching (B8) is `1h-s`'s** and is per service since #179: `findBriefCandidates` routes
+  through a live service in the asked trade whose `effectiveCoverage` reaches the site. The first
+  build of #179 matched on the union, from an older 1h-s export; the amended spec in this handoff
+  won. The footer now states the rule, with an example drawn from the firm's own rows when a live
+  service is narrower than the listing. It names *briefs*: the goods enquiry fan-out still matches
+  per business.
+- The nav gains *Coverage areas*; *Locations* leaves the rail for a services-only firm, as `1f-s`
+  made `/branches` redirect to `/coverage`. **Hours stays** — the handoff names it a decision
+  (remove, or the `3d-s` placeholder), not a render change.
+
+### `3b-s` — the listing profile
+
+- **Route is `/dashboard/listing`, not `/dashboard/profile`.** That is where the goods `3b` lives and
+  where the nav has always pointed.
+- **The three goods fields the board takes out never existed on `business`.** Brands, minimum order
+  and lead time were drawn against a goods profile that does not carry them, so B2 is true by
+  construction. What is goods-only on this screen is payment terms, and the action leaves it
+  untouched when the field is not drawn.
+- **Practice size stays a band.** The board wants a number with the band derived (B4); the tree
+  stores the band the seller picks, filtered and compared on across the directory. One field, so
+  nothing drifts — B4's actual concern. What a band cannot hold is the qualified count, which is the
+  new column, checked against the band's ceiling.
+- **Sectors are free entry with a suggestion index, not a closed list** (B5). That is what `2c-s`
+  shipped and its own spec required (*deliberately not the attribute dictionary*), and B8 requires
+  one field set. **The cap is six** (Q1), down from twenty; no services listing in production had
+  named a sector, so it cost nothing on the day it changed.
+- **Categories stay editable through moderation** rather than read-only (B7). The board's premise —
+  categories follow from a subcategory assignment — is the same `BusinessCategory` row this screen
+  already queues for review, and `2c-s` edits them; read-only here would strand the seller B8 warns
+  about. The mechanism sentence is added beneath, counted from how each category resolves.
+- **Qualified count renders for every services seller** (Q3). `ScopeSheetFamily.credentialKind` looked
+  like the family signal and is not: *Professional services* has none. Tying it to a family needs a
+  flag that does not exist.
+- The board's two rail notes name other boards (*mirrors 2c-s*, *— 4d-s*). They are annotations for
+  the build, and a seller reading a board number is reading our filing system; the substance ships
+  in the seller's voice.
+- On the storefront: **Practising since** replaces *Trading since* for a firm that sells work, the
+  qualified count joins the team band, and typical client sits under *What we take on* beside the
+  prose it has to agree with.
+
+### Found on the way, and fixed
+
+1. **The primary-category picker moved listings.** It offers leaves only, and a `<select>` whose value
+   is not an option shows and posts its first. **89 of 123** production listings carry a non-leaf
+   primary, so the screen showed *3D printing & prototyping* and any save — a corrected description —
+   also queued a request to move the listing there. Eleven were claimed.
+2. **`2c-s` dropped every services seller's languages.** The chips rendered, the value sat in state,
+   and nothing posted it.
+3. **`2c-s` never asked a services seller for a description**, while `1d-s` leads the storefront with
+   it and renders nothing when it is empty — every onboarded firm had no lead section.
+4. **`ServiceProfileFields` said the dashboard mounted it.** Nothing did, so the one-liner and sectors
+   were uneditable after onboarding.
+5. **Three seller writes guarded on having a seat, not a capability** — the per-service coverage
+   actions from #173 and onboarding's services save. A sales seat could change where a firm works.
+6. An over-long one-liner was reported with the *services* count in place of its own length.
+
+### Still owed
+
+- **Seed fixture: Meridian is filed under *Valves & fittings***, a goods trade, so the mechanism
+  sentence shows its mismatch case — *set to goods, but you told us you sell work* — for the track's
+  demo firm. Moving it touches the
+  fan-out counts other suites pin; worth doing once, deliberately.
+- The fixture-name split the handoff raises (*Nexus* on `8b-s` and `4e-s`'s preview) is design-side.
+- A `both` seller's languages use the goods screen's fixed list of eight, while a services-only
+  seller types free entries. One column, two vocabularies; only matters on a change of kind.
+
+---
+
+## 4s · Handoff `5c-s` — the section library, filtered by trade kind
+
+*Placed here rather than after §4o, where three sibling boards were appending at once.*
+
+### The handoff drew a seller's builder; the tree has a staff one
+
+The render is `/builder/sections`, a PRO seller composing their own page. No such route exists and
+no seller writes `StorefrontContent` anywhere — the builder is `5a`, **staff composing a sector's
+template**, and a storefront renders its sector's live template. So the library belongs to a
+template: `/admin/storefront-templates/:id/sections`, beside `/theme` and `/pages`. The filter, the
+groups, the reasons and the no-price rule are the board's; only the address and the author moved.
+
+### What shipped
+
+- **`SectionType` says who it is for** — `availableFor`, `unavailableKey`, `source`, `heldKey` —
+  and `comingSoon` is gone. Nineteen types: four live services sections (`scope_grid`,
+  `credential_wall`, `coverage`, `sectors_served`), `process_steps` held, six goods-only types
+  that now carry a reason line.
+- **`lib/storefront/library.ts` is the one rule.** A template's scope is its sector's **leaves**,
+  resolved, unioned with what its published stores have said they sell — not the sector's own
+  `tradeKind`, which is not its answer when `4d-s` put services leaves under goods sectors. The
+  seeded valves trade resolves `both` because Meridian is filed there. `canAddSection` refuses
+  `unavailable_here` and `held` server-side; the builder's add list and the library both read it.
+- **Settings are closed lists** (`section-settings.ts`): scope-grid columns (reorder yes, rename
+  no — Q2), credential rows (all / checked), coverage rows (per service / union). Audited through
+  `staffMutation` with the store count; diffed on publish.
+- **Renderers reuse the shipped blocks.** The scope grid words its cells through
+  `components/domain/service-views.ts`, which `1e-s` and `1f-s` now share instead of wording their
+  own; the wall is `CredentialTable`; coverage is `CoverageTable`; sectors are `DeclaredSectors`.
+- **Shared sections speak by kind** through `lib/storefront/paired-copy.ts` (B5) until `12g-s`'s
+  table exists: *What clients said*, *Enquire about your situation*, *Request a quote*.
+- **Seller content is sanitised at the read** (`seller-content.ts`): only opened keys, declared
+  shapes and lengths, and no line or paragraph that states a price, a fee or a rate (B4,
+  `no-price.ts`). The model promised validation on write; nothing writes, so the read is where it
+  holds for every future writer.
+
+### Decisions taken rather than asked
+
+- **Process steps is held, not built** (B3, Q1). Authored steps need a seller editor that does not
+  exist; a scope-sheet field is a migration and a thirteenth field against the owner's modular
+  rule. Both are the owner's call. It is listed with the decision named and refused everywhere.
+- **No `About` type.** The render's shared *About* is the hero's paragraph in this tree —
+  `Hero` already prints the description, and a second type printing the same field puts it on the
+  page twice.
+- **Services-only storefronts still ignore templates.** `1d-s` is its own composition and
+  reconciling it with the builder is `5f`'s job. The library says so with the number: *N
+  storefronts on this template sell only work and keep the standard services storefront.* A firm
+  that sells both renders the template's services sections, and the fixed services and
+  credentials blocks yield when the template places its own.
+
+### Found on the way, and fixed
+
+- The builder canvas and the specimens page linked a section's enquiry action to
+  `/rfq/new?to=…` — the fan-out, which `SectionProps.enquireHref`'s own note forbids.
+
+### Still owed
+
+- `5c` itself is unexported (Q4); the goods half of the library is still defined only by the tree.
+- Q1 — process steps. Q3 — a preview of the default storefront inside the builder.
+- The `Nexus` fixture sweep the README asks for is a design-canvas task: the tree has no `Nexus`.
 
 ## 4b · What the re-sequence opens up
 
@@ -1951,8 +2108,8 @@ edit**.
 |---|---|---|---|---|
 | **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **shipped 12 Sep.** One handoff, three screens, and it was right: the editor fixed the field set, the list reported on it, the page rendered it. See §4g |
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
-| **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | `2b-s`, `2c-s` and `2d-s` shipped 11 Sep; `3c-s`'s per-service rows shipped 13 Sep (#173). What is left in this wave is `3b-s` and `3c-s`'s dashboard mirror |
-| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **`1d-s`, `1e-s` and `1f-s` shipped 13 Sep** (§4m–§4o) — the public storefront set is complete. `5c-s` has a placeholder waiting |
+| **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | **Complete.** `2b-s`, `2c-s`, `2d-s` shipped 11 Sep; `3b-s` and `3c-s` 13 Sep (§4r) |
+| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **All four shipped 13 Sep** (§4m–§4o, §4s) — the public storefront set is complete, and the builder's library is filtered by kind |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p). `3j-s` and `1n-s` must be consecutive, and both read the brief |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. `4c-s`, `12g-s` and `6g-s` remain. `1c-s` is unblocked on Q1, which `rankBlended` answers |
