@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { liveWeights } from "@/lib/search/settings";
-import { WEIGHT_KEYS, type RankingWeights } from "@/lib/search/ranking";
+import { vectorForBusiness } from "@/lib/search/settings";
+import { WEIGHT_KEYS, type RankingKind, type RankingWeights } from "@/lib/search/ranking";
 import { readBaseline, specFacetCount } from "./baseline";
 
 /**
@@ -93,6 +93,8 @@ export interface SetupCompletion {
    */
   specFilterGain: number | null;
   factors: RankingFactor[];
+  /** The vector the six bars belong to — its fourth and fifth are named for it. */
+  rankingVector: RankingKind;
   /** Hours from first hub view to completion. §7's one number worth watching. */
   hoursToComplete: number | null;
 }
@@ -138,7 +140,7 @@ export async function setupCompletion(
   });
   if (!business) return null;
 
-  const [media, products, seats, baseline, weights, facetsNow] = await Promise.all([
+  const [media, products, seats, baseline, ranking, facetsNow] = await Promise.all([
     prisma.media.findMany({
       where: { businessId, reviewId: null },
       select: { kind: true },
@@ -159,7 +161,7 @@ export async function setupCompletion(
     */
     prisma.user.count({ where: { businessId } }),
     readBaseline(businessId),
-    liveWeights(),
+    vectorForBusiness(businessId),
     specFacetCount(businessId).catch(() => null),
   ]);
 
@@ -178,7 +180,13 @@ export async function setupCompletion(
       { key: "team", count: seats },
     ],
     specFilterGain: gainOf(facetsNow, baseline?.baselineFacets ?? null),
-    factors: factorsFrom(weights),
+    factors: factorsFrom(ranking.weights),
+    /*
+       Board `12c-s`. Which vector drew the six bars, so a services firm whose
+       vector is live reads *scope completeness* and *coverage match* where the
+       goods card reads spec and distance.
+    */
+    rankingVector: ranking.vector,
     hoursToComplete: hoursBetween(baseline?.firstSeenAt ?? null, baseline?.completedAt ?? null),
   };
 }

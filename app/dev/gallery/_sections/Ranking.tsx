@@ -1,13 +1,16 @@
 "use client";
 
-import { StatusBadge } from "@/components/display";
+import { Alert, StatusBadge } from "@/components/display";
 import { ImpactTable } from "@/app/(admin)/admin/search/ImpactTable";
 import { PublishStrip } from "@/app/(admin)/admin/search/PublishStrip";
+import { RankingEditor } from "@/app/(admin)/admin/search/RankingEditor";
 import { RankingSlider } from "@/app/(admin)/admin/search/RankingSlider";
 import {
+  DEFAULT_SERVICES_WEIGHTS,
   DEFAULT_WEIGHTS,
   PLAN_TIER_CEILING,
   redistribute,
+  unwiredSlots,
   WEIGHT_KEYS,
   weightsForBrowse,
   weightsTotal,
@@ -73,6 +76,7 @@ function strip(
   over: Partial<React.ComponentProps<typeof PublishStrip>>,
 ): React.ComponentProps<typeof PublishStrip> {
   return {
+    kind: "goods",
     hasDraft: true,
     draftSummary: "Measured reply time 18 → 24, Relevance to the query 34 → 28",
     draftAuthor: "r.haddad",
@@ -80,7 +84,7 @@ function strip(
     previewState: "fresh",
     previewWhen: "14:32",
     previewSummary: t("ranking.step.preview_body", {
-      categories: t("ranking.count.categories", { count: 4 }),
+      categories: t("ranking.count.categories_move", { count: 4 }),
       listings: t("ranking.count.listings", { count: 180 }),
     }),
     sellerCount: t("ranking.count.sellers", { count: 431 }),
@@ -225,6 +229,85 @@ export function Ranking() {
         <States label="impact, empty" stack>
           <div className="w-full">
             <ImpactTable rows={[]} unread={0} />
+          </div>
+        </States>
+
+        {/*
+           Board `12c-s` — the services vector on the same board. The counts are
+           illustrative here and queries on the page; the arithmetic below them is
+           the real functions.
+        */}
+        <States label="12c-s · services, not published" stack>
+          <div className="w-full max-w-3xl">
+            <Alert tone="bad" title={t("ranking.defect.title")} fix={t("ranking.defect.fix")}>
+              {t("ranking.defect.body", {
+                points: DEFAULT_WEIGHTS.specCompleteness,
+                listings: t("ranking.count.services_listings", { count: 41 }),
+              })}
+            </Alert>
+          </div>
+        </States>
+
+        <States label="12c-s · services, live" stack>
+          <div className="w-full max-w-3xl">
+            <Alert tone="ok" title={t("ranking.defect.fixed.title")}>
+              {t("ranking.defect.fixed.body_partial", {
+                listings: t("ranking.count.services_listings", { count: 41 }),
+                measured: "17",
+                unmeasured: "24",
+              })}
+            </Alert>
+          </div>
+        </States>
+
+        <States label="12c-s · status" stack>
+          <div className="flex flex-wrap gap-2">
+            <StatusBadge tone="neutral">{t("ranking.vector.status.none")}</StatusBadge>
+            <StatusBadge tone="warn">{t("ranking.vector.status.draft")}</StatusBadge>
+            <StatusBadge tone="ok">{t("ranking.vector.status.live", { date: "13 Sep" })}</StatusBadge>
+          </div>
+        </States>
+
+        {/*
+           One editor, and only one in this section: its `Panel` has a title and
+           is a landmark, and two would be two regions with one name.
+        */}
+        <States label="12c-s · services editor, the proposal" stack>
+          <div className="w-full max-w-3xl">
+            <RankingEditor
+              kind="services"
+              weights={DEFAULT_SERVICES_WEIGHTS}
+              browseMode="redistribute"
+              isDraft={false}
+              isProposal
+              compareWith={DEFAULT_WEIGHTS}
+              otherPlanTier={{ kind: "goods", live: DEFAULT_WEIGHTS.planTier, draft: null }}
+              mayWrite
+              saveDraft={inert}
+            />
+          </div>
+        </States>
+
+        <States label="12c-s · plan tier disagrees, B5" stack>
+          <div className="w-full max-w-3xl">
+            <Alert tone="warn" fix={t("ranking.plan_disagrees_fix", { planTier: 7 })}>
+              {t("ranking.plan_disagrees", {
+                value: DEFAULT_WEIGHTS.planTier,
+                other: t("ranking.vector_inline.goods"),
+              })}
+            </Alert>
+          </div>
+        </States>
+
+        <States label="12c-s · publish refused, B2" stack>
+          <div className="w-full max-w-3xl">
+            <Alert tone="bad" fix={t("ranking.defect.fix")}>
+              {t("ranking.refuse.not_wired", {
+                slots: unwiredSlots("services", { specCompleteness: "spec", distance: "distance" })
+                  .map((key) => t(`factors.${key}`))
+                  .join(", "),
+              })}
+            </Alert>
           </div>
         </States>
       </div>

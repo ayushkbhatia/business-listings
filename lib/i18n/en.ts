@@ -5442,6 +5442,10 @@ export const en = {
   "factors.specCompleteness": "spec completeness",
   "factors.distance": "distance from the buyer",
   "factors.planTier": "plan tier",
+  "factors.services.specCompleteness": "scope completeness",
+  "factors.services.distance": "coverage match",
+  "factors.value.covered": "covered",
+  "factors.value.not_covered": "not covered",
   "factors.value.tier": "tier {tier}",
   "factors.value.ratio": "{percent}%",
   "factors.value.multiplier": "×{multiplier}",
@@ -6518,6 +6522,8 @@ export const en = {
   "setup_done.rank.specCompleteness": "Spec completeness",
   "setup_done.rank.distance": "Distance",
   "setup_done.rank.planTier": "Plan",
+  "setup_done.rank.services.specCompleteness": "Scope completeness",
+  "setup_done.rank.services.distance": "Coverage",
   "setup_done.rank_moved": "moved by this session",
   "setup_done.rank_open": "still yours to change",
 
@@ -7056,6 +7062,63 @@ export const en = {
   "ranking.tab.boosts": "Manual boosts",
   "ranking.tab.history": "Weight history",
   "ranking.weights": "What decides the order of results",
+  // Board `12c-s` — the second vector, on the same board.
+  "ranking.vector.label": "Which ranking vector",
+  "ranking.vector.goods": "Goods vector",
+  "ranking.vector.services": "Services vector",
+  "ranking.vector_inline.goods": "goods vector",
+  "ranking.vector_inline.services": "services vector",
+  "ranking.vector.status.live": "Live · published {date}",
+  "ranking.vector.status.live_undated": "Live",
+  "ranking.vector.status.draft": "Draft · not published",
+  "ranking.vector.status.none": "Not published",
+  "ranking.weights.services": "What decides the order of service results",
+  "ranking.weights_hint.services":
+    "The same six slots and the same 100 as the goods vector, so the two stay comparable. Scope completeness and coverage match take the places of spec completeness and distance.",
+  "ranking.weights_total_proposed": "Six factors · proposed total {total}",
+  "ranking.weight.services.specCompleteness": "Scope completeness",
+  "ranking.weight.services.distance": "Coverage match",
+  "ranking.weight.replaces_spec": "replaces spec completeness",
+  "ranking.weight.replaces_distance": "replaces distance, pinned",
+  "ranking.weight.compare": "Goods vector: {value}.",
+  "ranking.weight.services.verification_note":
+    "Scores the verification tier only, which staff set against a register. Credentials a seller uploads are shown to buyers and score nothing here.",
+  "ranking.weight.services.response_note":
+    "With no stock signal there is less to show a supplier is trading, and a reply time the platform measured is the best evidence left.",
+  "ranking.weight.services.scope_note":
+    "Live services with all six required fields answered, out of live services — measured the way spec completeness is. Optional fields score nothing.",
+  "ranking.weight.services.coverage_note":
+    "Yes or no. A firm whose matched service covers the place the buyer named scores it, and one that does not scores nothing. With no place named, every firm scores half.",
+  "ranking.weight.services.plan_note":
+    "The same number and the same ceiling as the goods vector. A different plan weight here would be a pricing decision, not a ranking one.",
+  "ranking.plan_disagrees": "Plan tier is {value} on the {other}. Publishing refuses a different number on this one.",
+  "ranking.plan_disagrees_fix":
+    "To move plan tier, save a draft at {planTier} on both vectors. They publish one after the other.",
+  "ranking.browse_hint.services":
+    "A services area page carries no query either, so this vector needs the same answer. Sharing the points out lifts plan tier on those pages too, and the ceiling holds on that effective number here as it does on the goods vector.",
+  "ranking.defect.title": "Services rank on a factor they cannot move",
+  "ranking.defect.body":
+    "Spec completeness is {points} of 100 on the goods vector, and a service supplier holds no products for it to measure. They score it as unmeasured — half, whatever they fill in — so {listings} rank on points none of them can earn.",
+  "ranking.defect.fix":
+    "Scope completeness and coverage match are wired in its place. Save a draft of this vector, run the preview, and publish it.",
+  "ranking.defect.fixed.title": "Services listings rank on this vector",
+  "ranking.defect.fixed.body":
+    "Scope completeness and coverage match replace spec completeness and distance. {listings} rank on it, and every one holds a live service to measure.",
+  "ranking.defect.fixed.body_partial":
+    "Scope completeness and coverage match replace spec completeness and distance. {listings} rank on it; {measured} hold a live service, and the other {unmeasured} score scope completeness as unmeasured.",
+  "ranking.two_vectors": "One board, two vectors",
+  "ranking.two_vectors_body":
+    "The draft, the preview, the publish and the history on this screen act on the vector selected above. Publishing one leaves the other's weights and history as they were.",
+  "ranking.reach": "Publishing this vector",
+  "ranking.reach.goods_shared":
+    "Reorders {goods}, and {services} too while no services vector is published. The count on the button is counted from the listings that move.",
+  "ranking.reach.goods_only":
+    "Reorders {goods}. Services listings rank on their own vector and do not move.",
+  "ranking.reach.services":
+    "Reorders {services} only, and tells only the sellers whose position in a services category moves. {goods} do not move.",
+  "ranking.count.goods_listings": { one: "1 goods listing", other: "{count} goods listings" },
+  "ranking.count.services_listings": { one: "1 services listing", other: "{count} services listings" },
+  "ranking.draft.replaces": "scope completeness and coverage match replace spec completeness and distance",
   // Board 6a §Ranking — the relevance weight on a page with no query.
   "ranking.browse_mode": "What relevance means on a page with no search box",
   "ranking.browse_hint": "Area and emirate landing pages carry no query, so relevance has nothing to score. Share the points out spreads them across the other five in proportion. Score category-match depth keeps them and scores how exactly a listing's own trade matches the page's.",
@@ -7095,11 +7158,13 @@ export const en = {
   "ranking.step.preview_stale": "Stale",
   "ranking.step.preview_stale_body": "The draft moved after this ran. Run it again before publishing.",
   "ranking.step.preview_fresh": "Fresh · {when}",
-  "ranking.step.preview_body": "{categories} move, {listings}. Sampled nightly, exhaustive on demand.",
+  "ranking.step.preview_body": "{categories}, {listings}. Sampled nightly, exhaustive on demand.",
   "ranking.step.publish": "Publish",
   "ranking.step.publish_body": "Reorders results and tells up to {count}.",
   "ranking.step.publish_blocked": "Publish needs a fresh preview.",
   "ranking.count.categories": { one: "1 category", other: "{count} categories" },
+  // The verb agrees with the count. "1 category move" was on the strip from 12c until 12c-s clicked it.
+  "ranking.count.categories_move": { one: "1 category moves", other: "{count} categories move" },
   "ranking.count.listings": { one: "1 listing", other: "{count} listings" },
   "ranking.count.sellers": { one: "1 seller", other: "{count} sellers" },
   "ranking.run_preview": "Run the impact preview",
@@ -7110,7 +7175,7 @@ export const en = {
   "ranking.save": "Save draft",
   "ranking.draft_saved": "Draft saved. Search results are unchanged until you publish.",
   "ranking.published": "Published. Search results reorder on the next request, and up to {count} will see a note on their dashboard.",
-  "ranking.preview_ran": "Preview ran. {categories} move, {listings}.",
+  "ranking.preview_ran": "Preview ran. {categories}, {listings}.",
   "ranking.not_yours": "Ranking and boosts are an ops lead decision.",
   "ranking.read_only": "You can read these numbers and not change them. They are how anyone here answers a seller asking why they moved.",
 
@@ -7133,6 +7198,8 @@ export const en = {
   "ranking.impact.gains.specCompleteness": "Complete spec sheets",
   "ranking.impact.gains.distance": "Suppliers near the buyer",
   "ranking.impact.gains.planTier": "Paid plans",
+  "ranking.impact.gains.services.specCompleteness": "Complete scope sheets",
+  "ranking.impact.gains.services.distance": "Firms covering the emirate",
   "ranking.impact.gains.none": "No material change",
   "ranking.impact.note": "Ordered by listings moved. A category where nothing moves is not listed. Browse pages are sampled under the mode above, not under the raw weights.",
   "ranking.impact.empty": "Nothing moves. The draft reorders no category on last night's sample.",
@@ -7196,6 +7263,9 @@ export const en = {
   "ranking.history.mode": "Browse mode",
   "ranking.history.empty": "Nothing published yet. The weights are the ones the platform shipped with.",
   "ranking.history.vector": "Relevance {relevance} · Verification {verificationTier} · Reply {responseTime} · Spec {specCompleteness} · Distance {distance} · Plan {planTier}",
+  "ranking.history.vector.services": "Relevance {relevance} · Verification {verificationTier} · Reply {responseTime} · Scope {specCompleteness} · Coverage {distance} · Plan {planTier}",
+  "ranking.history.empty.services":
+    "Nothing published on this vector yet. Services listings rank on the goods vector until it is.",
 
   // Refusals. Each says what is wrong and what correct looks like.
   "ranking.refuse.out_of_range": "Each weight is a whole number from 0 to 100.",
@@ -7208,6 +7278,11 @@ export const en = {
   "ranking.refuse.preview_missing": "Run the impact preview first. Publishing without one is telling several hundred sellers something nobody has read.",
   "ranking.refuse.preview_running": "The preview is still running. Publishing on a half-finished ranking would state a count nobody has checked.",
   "ranking.refuse.preview_stale": "The draft moved after the preview ran, so the count on the button describes a draft that no longer exists. Run it again.",
+  "ranking.refuse.not_wired":
+    "This vector still scores {slots} on the goods measure, which a service supplier cannot earn. Publishing it would rename the defect, not remove it.",
+  "ranking.refuse.plan_tier_diverges":
+    "Plan tier is {planTier} here and {otherPlanTier} on the {other}. It is the same number on both vectors, because a different one is a pricing decision. Set both to the same number, then publish.",
+  "ranking.refuse.unknown_vector": "There are two ranking vectors, goods and services. Pick one.",
   "ranking.boost.not_found": "That listing is not here.",
   "ranking.boost.category_not_found": "That category is not here.",
   "ranking.boost.no_target": "A boost lifts one listing or one category. Name which.",

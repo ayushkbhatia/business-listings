@@ -1587,6 +1587,123 @@ under the first name only.
 
 ---
 
+## 4q · Handoff `12c-s` — a second vector on the ranking board
+
+**Shipped 13 Sep 2026.** One additive migration, `20261015090000_ranking_vector_by_kind`:
+`RankingWeights`, `RankingDraft` and `RankingPublish` gain a `kind`, and `ListingFactorDay` gains the
+`vector` that ranked each listing that night. **No services row is seeded**, so on the day this ships
+the services vector is *not published*, services listings rank on the goods vector, and no result
+anywhere moves until an ops lead publishes one.
+
+### One board, keyed — and where the key lives
+
+Every function in `lib/search/settings.ts` that reads or writes a weight takes the kind with no
+default, so the amendment's fourth item — *anything that reads or writes a weight needs the key* — is
+a compile error rather than a review note. The editor, preview, publish strip and history are the
+`12c` components with a `kind` prop; `?vector=services` is a query parameter on `/admin/search`, not
+a second route. The goods row keeps `id = 'current'` (pinned by `ranking_weights_one_row_per_kind`)
+because the code serving production when the migration applies reads nothing else.
+
+**The slots keep their column names.** `spec_completeness` and `distance` are what each vector stores
+in its fourth and fifth slot; `FACTOR_SOURCES` in `lib/search/ranking.ts` is what a slot *measures* —
+spec or scope, kilometres or coverage. Renaming the columns would have made the migration a
+drop-and-add, which has no safe order. `factorScores` reads the map, and so does B2's gate.
+
+### Six corrections to the handoff
+
+1. **The defect is a stuck half, not a zero.** A business with no products has `specCompleteness =
+   null`, and the ranker scores null as unmeasured — half. So a services firm holds 6 of the 12
+   points and can move neither way, whatever it fills in; *"half the directory ranks 12 points
+   light"* is 6. The board's argument survives (a factor nobody can earn is a fixed input dressed as
+   a signal) and the copy on the board says *half, whatever they fill in*. Distance behaves the same
+   way for an unpinned branch.
+2. **B10 describes a `setWeights` that no longer exists.** `validateWeights` has refused a total other
+   than 100 since `12c`'s second pass (`WEIGHT_TOTAL` carries the argument). What B10 protects — no
+   second convention on the services vector — is kept by running both vectors through the same five
+   rules, the total among them. `ranking-services.test.ts` asserts the refusals are identical.
+3. **Q1 is answered in one function, as the board recommends.** `rankBlended` ranks each kind on its
+   own vector and merges the two orders by relevance band — the one signal both vectors score
+   identically — and inside a band in proportion to how many of each there are. Scores from two
+   vectors are never compared, within-kind order is exactly `rank`'s, and with no services vector
+   published there is one group and the result is the single-vector ranking. `1c-s` changes this
+   function and nothing else. Category listings in the snapshot and preview never blend: a scope is
+   one category, and the category decides the vector.
+4. **The status chip has three states, not one.** *Not published* (no row, no draft), *Draft · not
+   published*, *Live · published {date}* from the vector's own history.
+5. **"Up from 22" is a query.** Each services slot states the goods vector's live number beside its
+   reason, so the comparison survives the goods vector moving.
+6. **The amendment panel is not on the product.** *"The 12c handoff has shipped twice without
+   mentioning any of this"* is a note to a developer about a design document; it is recorded below
+   instead of rendered to an ops lead.
+
+### What each build note became
+
+| # | How it holds |
+|---|---|
+| B1 | One editor, strip, preview and history, keyed by `kind` |
+| B2 | `unwiredSlots(kind)` reads `FACTOR_SOURCES`; `publishDraft` refuses `not_wired`. Unit-tested against a map that is wrong, so the closed branch has been seen |
+| B3 | `scopeCompleteness` in `lib/search/service-signals.ts` — complete sheets out of live sheets, six of six, two places, null with none. **Computed on read**, as `3g-s` B3 requires |
+| B4 | `coverageMatch` resolves each *matched* service through `effectiveCoverage`; an unmatched service's reach is never lent to the listing, and with no match the default is read, not the union |
+| B5 | `planTierAgrees` checks the other vector's live number **or the draft waiting to follow it** — against the live number alone the pair deadlocks. Refused at publish, warned at save |
+| B6 | Both vectors pass `validateWeights`, so the effective-browse ceiling holds on both |
+| B7 | The sampler ranks each scope on its category's vector, so a services draft moves only services scopes and every count is counted from those |
+| B8 | Every write is keyed; the integration test publishes services over a sitting goods draft and diffs the goods row, draft and history |
+| B9 | By construction — `verificationTier`'s writers are the verification service and the expiry sweep. A credential added to a services firm leaves its score unchanged, asserted |
+| B10 | See correction 2 |
+| B11 | Live search resolves each listing's kind from the category the result set matched it through; seller screens from the primary category (`vectorForBusiness`). Reclassifying a sector moves a firm's vector with `sellsKind` untouched, asserted |
+
+`weightsForShape` moves the goods vector only: coverage match already answers *does the firm come
+to you*, and moving it again because the words typed looked service-shaped would be the same
+judgement made twice. Attribution treats a change of vector between two nights as state 09 — the
+night a services firm's slots start measuring scope, `decompose` alone would tell them their scope
+completeness rose.
+
+### The amendment to `12c`, as it now stands in the tree
+
+1. `spec completeness` cannot be earned by a services listing; the services vector scores scope
+   completeness in that slot, at the same weight.
+2. `distance` scores kilometres between offices; the services vector scores coverage match — binary,
+   per matched service — in that slot, at the same weight, pinned.
+3. `browseRelevanceMode` and the effective-browse plan ceiling apply to both vectors.
+4. `RankingWeights`, drafts, publishes and nightly factor rows are keyed by kind; the affected-seller
+   count is scoped to the vector by construction.
+
+### Found on the way, and fixed
+
+- **Any staff seat could run the preview.** `runPreview` required a staff seat and never checked
+  `search.ranking.write`, so a moderator on the read-only board could start a whole-directory
+  ranking and overwrite the preview an ops lead was about to publish against.
+- **The strip said *1 category move*.** The verb now agrees with the count.
+- **The editor's *Draft saved* notice outlived the draft**, standing over a board with nothing
+  drafted after a publish.
+
+### Still owed
+
+- **Emirate listings are branch membership, not coverage.** `businessWhere` filters an emirate by
+  published `Location`, and the snapshot's emirate scopes do the same, so a remote practice that
+  covers Sharjah with no branch there is absent from Sharjah — coverage match only ever separates
+  firms that already have a branch. Kept consistent with the live pages on purpose; it is `10c-s` and
+  `6a-s`'s to change, and both should change together.
+- **No seeded published listing sits in a services category**, and Meridian Chartered Accountants —
+  the track's fixture firm — is filed under *Valves & fittings*, so on a fresh database the services
+  vector moves nothing and Meridian ranks on goods. Not repurposed: four boards assert on it.
+- **Q3 and Q4 are the owner's.** The tier ladder is shared (register-checked licence and VAT only,
+  per D10), and reply time weighs 20 on the same 3-reply floor `1f-s` left open.
+
+### Verified by clicking it
+
+On a throwaway database with four services firms in *Testing & commissioning*: the services toggle
+opened on *Not published*, the defect stating *4 services listings*, and the six slots with each
+goods number beside its reason. A draft saved as *Draft · not published*; the preview listed
+*Testing & commissioning · UAE* and *· Dubai*, *Who gains: Complete scope sheets*, and Gulf
+Commissioning Engineers — tier 2 with a half-finished sheet — falling two places; publish read *up
+to 4 sellers told*. After it the chip read *Live · published 13 Sep 2026*, the goods vector still
+read 34 · 22 · 18 · 12 · 8 · 6 live since 4 Sep, the two histories held one row each, and
+`/c/hvac-and-ventilation/hvac-testing` listed the two complete sheets above Gulf. Keyboard: toggle,
+sliders, mode, reason and rail links in order, no trap. One `h1`. No server errors.
+
+---
+
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`
 
@@ -1652,7 +1769,7 @@ kind badges, not for the stated reason.
 ### Stage 8 · Ranking and ops
 `12c` defects → `12c-s` → `4c-s` → `12g-s` + `6g-s`
 
-**`12c-s` is unblocked.** Two of §2's three ranking defects went in #173 — the shape vector totals
+**`12c-s` shipped 13 Sep — see §4q.** Two of §2's three ranking defects went in #173 — the shape vector totals
 100 on every query shape now, and the affected-seller counter is a real count. The third,
 `RankingWeights` being a Postgres singleton with `CHECK ("id" = 'current')`, is deliberately left:
 a kind key is a drop-and-re-key on the live ranking table, which is this board's own opening move
@@ -1838,7 +1955,7 @@ edit**.
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **`1d-s`, `1e-s` and `1f-s` shipped 13 Sep** (§4m–§4o) — the public storefront set is complete. `5c-s` has a placeholder waiting |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p). `3j-s` and `1n-s` must be consecutive, and both read the brief |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
-| **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | **Unblocked.** Two of §2's three ranking defects are fixed (#173); the third is `12c-s`'s own first step, not a prerequisite — see §2.4 |
+| **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. `4c-s`, `12g-s` and `6g-s` remain. `1c-s` is unblocked on Q1, which `rankBlended` answers |
 | — | **Q1 said families** | `4e-s` · `3h-s` | — | Both **shipped 13 Sep** — `3h-s` closed wave 2 (§4k) and `4e-s` authored the five families (§4l) |
 
 **What needs no handoff at all:**

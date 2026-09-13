@@ -2,14 +2,14 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
+import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
 import { boostListing } from "@/lib/search/boosts";
 import { runImpact } from "@/lib/search/impact";
 import {
   discardDraft,
   draftState,
-  liveBrowseRelevanceMode,
-  liveWeights,
+  liveVectors,
   clearPreviewRun,
   markPreviewRunning,
   publishDraft,
@@ -17,7 +17,7 @@ import {
   storePreview,
 } from "@/lib/search/settings";
 import { RANKING_CACHE_TAG } from "@/lib/db/queries/pricing";
-import { WEIGHT_KEYS } from "@/lib/search/ranking";
+import { isRankingKind, WEIGHT_KEYS, type RankingKind } from "@/lib/search/ranking";
 import type { Emirate } from "@/lib/db/generated/client";
 import type { RankingWeights } from "@/lib/search/ranking";
 import { t } from "@/lib/i18n";
@@ -61,6 +61,20 @@ function revalidateRanking(): void {
   revalidateTag(RANKING_CACHE_TAG, { expire: 0 });
 }
 
+/**
+ * Which vector the form acts on — board `12c-s`.
+ *
+ * From the form rather than bound into the action, so every control on the
+ * board posts the vector it was rendered for: an ops lead who switched vectors
+ * in another tab cannot publish the goods draft from a strip drawn for services.
+ * An unrecognised value is refused rather than defaulted, because defaulting to
+ * goods would publish the vector the form was not about.
+ */
+function kindFrom(formData: FormData): RankingKind | null {
+  const value = String(formData.get("kind") ?? "");
+  return isRankingKind(value) ? value : null;
+}
+
 function weightsFrom(formData: FormData): RankingWeights {
   return Object.fromEntries(
     WEIGHT_KEYS.map((key) => [key, Number(formData.get(key) ?? 0)]),
@@ -70,9 +84,12 @@ function weightsFrom(formData: FormData): RankingWeights {
 /** Save the draft. Nothing a buyer sees moves until it is published. */
 export async function saveDraftWeights(formData: FormData): Promise<ActionResult> {
   const seat = await requireStaff();
+  const kind = kindFrom(formData);
+  if (!kind) return { ok: false, error: t("ranking.refuse.unknown_vector") };
   try {
     const result = await saveDraft(
       seat.actor,
+      kind,
       weightsFrom(formData),
       /*
          Board 6a §Ranking. The landing pages have no query, so the relevance
@@ -96,8 +113,10 @@ export async function saveDraftWeights(formData: FormData): Promise<ActionResult
 
 export async function discardDraftWeights(formData: FormData): Promise<ActionResult> {
   const seat = await requireStaff();
+  const kind = kindFrom(formData);
+  if (!kind) return { ok: false, error: t("ranking.refuse.unknown_vector") };
   try {
-    const result = await discardDraft(seat.actor, String(formData.get("reason") ?? ""));
+    const result = await discardDraft(seat.actor, kind, String(formData.get("reason") ?? ""));
     if (!result.ok) return { ok: false, error: result.message };
 
     revalidatePath("/admin/search");
@@ -119,29 +138,39 @@ export async function discardDraftWeights(formData: FormData): Promise<ActionRes
  * draft may have moved, and a preview filed against the newer vector would
  * claim to describe a draft it never saw.
  */
-export async function runPreview(): Promise<ActionResult> {
-  await requireStaff();
+export async function runPreview(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  /*
+     The capability, checked here because nothing below checks it. The other
+     three weight actions reach `staffMutation`, which refuses a seat without
+     `search.ranking.write`; this one writes the preview columns directly and
+     never did, so a moderator's seat — which may open this board read-only —
+     could start a whole-directory ranking and overwrite the preview an ops lead
+     was about to publish against. Found building `12c-s`.
+  */
+  if (!can(seat.actor, "search.ranking.write")) return { ok: false, error: t("ranking.not_yours") };
+  const kind = kindFrom(formData);
+  if (!kind) return { ok: false, error: t("ranking.refuse.unknown_vector") };
   try {
-    const draft = await draftState();
+    const draft = await draftState(kind);
     if (!draft) return { ok: false, error: t("ranking.refuse.no_draft") };
 
-    await markPreviewRunning();
+    await markPreviewRunning(kind);
 
-    const [live, liveMode] = await Promise.all([liveWeights(), liveBrowseRelevanceMode()]);
     const preview = await runImpact({
+      kind,
       draft: draft.weights,
       draftMode: draft.browseMode,
-      live,
-      liveMode,
+      live: await liveVectors(),
     });
 
-    await storePreview(draft.weights, draft.browseMode, preview);
+    await storePreview(kind, draft.weights, draft.browseMode, preview);
     revalidatePath("/admin/search");
 
     return {
       ok: true,
       message: t("ranking.preview_ran", {
-        categories: t("ranking.count.categories", { count: preview.categoriesMoved }),
+        categories: t("ranking.count.categories_move", { count: preview.categoriesMoved }),
         listings: t("ranking.count.listings", { count: preview.listingsMoved }),
       }),
     };
@@ -149,7 +178,7 @@ export async function runPreview(): Promise<ActionResult> {
     // A failed run must not leave the board reading `running` for ever. The
     // draft is untouched, so clearing the marker returns it to `stale` or
     // `none`, which is what it truthfully is.
-    await clearPreviewRun();
+    await clearPreviewRun(kind);
     revalidatePath("/admin/search");
     return refused(error);
   }
@@ -158,8 +187,10 @@ export async function runPreview(): Promise<ActionResult> {
 /** Promote the draft. This is the one that reorders the platform. */
 export async function publishWeights(formData: FormData): Promise<ActionResult> {
   const seat = await requireStaff();
+  const kind = kindFrom(formData);
+  if (!kind) return { ok: false, error: t("ranking.refuse.unknown_vector") };
   try {
-    const result = await publishDraft(seat.actor, String(formData.get("reason") ?? ""));
+    const result = await publishDraft(seat.actor, kind, String(formData.get("reason") ?? ""));
     if (!result.ok) return { ok: false, error: result.message };
 
     revalidateRanking();

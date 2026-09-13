@@ -4,7 +4,7 @@ import { can } from "@/lib/auth/can";
 import type { StatusTone } from "@/components/display";
 import { prisma } from "@/lib/db/client";
 import { t } from "@/lib/i18n";
-import { liveWeights } from "@/lib/search/settings";
+import { vectorForBusiness } from "@/lib/search/settings";
 import { rosterFor, type RosterSeat } from "@/lib/team/roster";
 import { escalationOptions } from "@/lib/team/escalation";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
@@ -57,8 +57,12 @@ export default async function TeamPage() {
        Read, not written down. The lede states what reply time is worth in
        search, and board 12c lets staff change that weight — a hardcoded 18
        would be a number on a seller's screen that nothing keeps true.
+
+       The vector this listing ranks on (`12c-s`): reply time is 20 on the
+       services vector and 18 on goods, and a services firm told 18 would be
+       told the other kind's number.
     */
-    liveWeights(),
+    vectorForBusiness(seat.businessId).then((ranking) => ranking.weights),
     prisma.location.findMany({
       where: { businessId: seat.businessId, published: true },
       orderBy: { type: "asc" },

@@ -141,6 +141,7 @@ and it is the one that argues back.
 /admin/ingest/:id                       One import run                       [12a]  built h4s2
 /admin/ingest/dedupe                    Dedupe & merge                       [12b]  built h4s2
 /admin/search                           Ranking, boosts, weight history      [12c]  built h4s8
+/admin/search?vector=services           The services vector, same board      [12c-s] built s19
 /admin/categories                       Taxonomy                              [4d]  rename h5s6
 /admin/categories?tab=kind              Taxonomy — trade kind                [4d-s] built h4ds
 /admin/spec-library                     Spec library                          [4e]  built h4e

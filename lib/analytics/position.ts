@@ -1,7 +1,7 @@
 import "server-only";
 import type { Emirate } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
-import { WEIGHT_KEYS, type WeightKey } from "@/lib/search/ranking";
+import { WEIGHT_KEYS, type RankingKind, type WeightKey } from "@/lib/search/ranking";
 import { attribute, decompose, type Attribution, type FactorDay } from "./attribution";
 import { placeChange, windowFor, type Delta } from "./model";
 
@@ -384,7 +384,7 @@ async function reasonFor(input: ReasonInput): Promise<Attribution> {
 async function factorDay(businessId: string, day: Date): Promise<FactorDay | null> {
   const row = await prisma.listingFactorDay.findUnique({
     where: { businessId_day: { businessId, day } },
-    select: { scores: true, raw: true, weights: true, boostPoints: true },
+    select: { scores: true, raw: true, weights: true, boostPoints: true, vector: true },
   });
   return row ? asFactorDay(row) : null;
 }
@@ -461,11 +461,25 @@ async function improvedMost(
   const [beforeRows, afterRows] = await Promise.all([
     prisma.listingFactorDay.findMany({
       where: { businessId: { in: [...businessIds] }, day: from },
-      select: { businessId: true, scores: true, raw: true, weights: true, boostPoints: true },
+      select: {
+        businessId: true,
+        scores: true,
+        raw: true,
+        weights: true,
+        boostPoints: true,
+        vector: true,
+      },
     }),
     prisma.listingFactorDay.findMany({
       where: { businessId: { in: [...businessIds] }, day: to },
-      select: { businessId: true, scores: true, raw: true, weights: true, boostPoints: true },
+      select: {
+        businessId: true,
+        scores: true,
+        raw: true,
+        weights: true,
+        boostPoints: true,
+        vector: true,
+      },
     }),
   ]);
 
@@ -481,6 +495,10 @@ async function improvedMost(
     const start = asFactorDay(row);
     const end = asFactorDay(pair);
     if (!start || !end) continue;
+    // A listing that changed vector between the two nights moved because we
+    // moved it. Its score change is not effort, and counting it as such would
+    // tell a seller a competitor improved a factor nobody touched.
+    if ((start.vector ?? "goods") !== (end.vector ?? "goods")) continue;
     const parts = decompose(start, end);
     for (const key of WEIGHT_KEYS) gained[key] += Math.max(0, parts.byFactor[key]);
   }
@@ -507,11 +525,18 @@ function asFactorDay(row: {
   raw: unknown;
   weights: unknown;
   boostPoints: number;
+  vector: RankingKind;
 }): FactorDay | null {
   const scores = numbersByFactor(row.scores);
   const weights = numbersByFactor(row.weights);
   if (!scores || !weights || typeof row.raw !== "object" || row.raw === null) return null;
-  return { scores, weights, raw: row.raw as FactorDay["raw"], boostPoints: row.boostPoints };
+  return {
+    scores,
+    weights,
+    raw: row.raw as FactorDay["raw"],
+    boostPoints: row.boostPoints,
+    vector: row.vector,
+  };
 }
 
 /** Every weight key present and finite, or nothing. */

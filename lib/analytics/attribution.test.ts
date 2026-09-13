@@ -193,7 +193,12 @@ describe("attribute", () => {
       input({ overtakenBy: { count: 2, factor: "responseTime" } }),
     );
 
-    expect(result).toEqual({ kind: "competitor", count: 2, factor: "responseTime" });
+    expect(result).toEqual({
+      kind: "competitor",
+      count: 2,
+      factor: "responseTime",
+      vector: "goods",
+    });
   });
 
   it("says nothing rather than guessing when no competitor is identified", () => {
@@ -246,6 +251,49 @@ describe("attribute", () => {
     const result = attribute(input({ before, after, overtakenBy: null }));
 
     expect(result.kind).toBe("none");
+  });
+});
+
+describe("board 12c-s — a change of vector is the platform's move", () => {
+  it("never bills a seller for the night their slots started measuring something else", () => {
+    // A services firm's completeness slot goes from spec (unmeasured, half) to
+    // scope (a real 1.0) the night the services vector is published, at the
+    // same weight. With no weight moving, `decompose` alone reads that as the
+    // seller improving — and the sentence would say their scope completeness
+    // rose, on a night they did nothing.
+    const before = day({ vector: "goods", scores: { ...day().scores, specCompleteness: 0.5 } });
+    const after = day({ vector: "services", scores: { ...day().scores, specCompleteness: 1 } });
+
+    expect(decompose(before, after).platform).toBe(0);
+    expect(attribute(input({ before, after, positionBefore: 9, positionAfter: 4 }))).toEqual({
+      kind: "platform",
+      on: new Date("2026-09-02T00:00:00Z"),
+    });
+  });
+
+  it("reads a row with no vector as goods, which every night before 12c-s was", () => {
+    const before = day();
+    const after = day({ vector: "goods" });
+    expect(attribute(input({ before, after, overtakenBy: null })).kind).toBe("none");
+  });
+
+  it("quotes the services measure when the seller's own scope completeness moved", () => {
+    const raw = { ...RAW, specCompleteness: null, scopeCompleteness: 0.5 };
+    const before = day({ vector: "services", raw, scores: { ...day().scores, specCompleteness: 0.5 } });
+    const after = day({
+      vector: "services",
+      raw: { ...raw, scopeCompleteness: 1 },
+      scores: { ...day().scores, specCompleteness: 1 },
+    });
+
+    const result = attribute(input({ before, after, positionBefore: 9, positionAfter: 6 }));
+
+    expect(result.kind).toBe("seller");
+    if (result.kind !== "seller") return;
+    expect(result.vector).toBe("services");
+    expect(result.factor).toBe("specCompleteness");
+    // The trend comes from the scope ratio, which is the measure the slot scored.
+    expect(result.trend).toBe("up");
   });
 });
 

@@ -8,12 +8,15 @@ import {
   BROWSE_RELEVANCE_MODES,
   PINNED_KEYS,
   PLAN_TIER_CEILING,
+  planTierAgrees,
   redistribute,
   WEIGHT_KEYS,
   WEIGHT_TOTAL,
+  weightLabelKey,
   weightsForBrowse,
   weightsTotal,
   type BrowseRelevanceMode,
+  type RankingKind,
   type RankingWeights,
   type WeightKey,
 } from "@/lib/search/ranking";
@@ -40,24 +43,45 @@ import type { ActionResult } from "./actions";
  * would be the ceiling defeated sideways. Both stay editable — the cap's copy
  * would be a lie beside a slider nobody can move — they are simply not part of
  * the give and take.
+ *
+ * ## One editor, two vectors — board `12c-s` B1
+ *
+ * The same component for both, keyed by `kind`, rather than a services copy
+ * beside it. What differs is data: the fourth and fifth slots are named for what
+ * they measure, the notes say why the services numbers are what they are, and
+ * each slot states the goods vector's number beside it so the difference is read
+ * off the screen rather than remembered. Everything that is a rule — the total,
+ * the pins, the ceiling, the effective browse vector — runs through the same
+ * functions for both.
  */
 
 const PINNED = new Set<WeightKey>(PINNED_KEYS);
 
 export interface RankingEditorProps {
-  /** The draft where one exists, otherwise the live weights. */
+  kind: RankingKind;
+  /** The draft where one exists, otherwise the live weights, otherwise the proposal. */
   weights: RankingWeights;
   browseMode: BrowseRelevanceMode;
   /** True when the numbers above are a saved draft rather than the live row. */
   isDraft: boolean;
+  /** True when nothing is saved or live for this vector — the numbers are the board's proposal. */
+  isProposal: boolean;
+  /** The goods vector as it is live, stated beside each services slot. Null on the goods editor. */
+  compareWith: RankingWeights | null;
+  /** The other vector's plan tier, live and in draft — `12c-s` B5. */
+  otherPlanTier: { kind: RankingKind; live: number | null; draft: number | null };
   mayWrite: boolean;
   saveDraft: (formData: FormData) => Promise<ActionResult>;
 }
 
 export function RankingEditor({
+  kind,
   weights,
   browseMode,
   isDraft,
+  isProposal,
+  compareWith,
+  otherPlanTier,
   mayWrite,
   saveDraft,
 }: RankingEditorProps) {
@@ -70,6 +94,7 @@ export function RankingEditor({
   const total = weightsTotal(values);
   const effective = useMemo(() => weightsForBrowse(values, mode), [values, mode]);
   const ready = reason.trim().length >= 4 && total === WEIGHT_TOTAL;
+  const services = kind === "services";
 
   /*
      `B9`. `redistribute` lifts plan tier's effective weight on every landing
@@ -80,12 +105,21 @@ export function RankingEditor({
   */
   const breachesBrowseCeiling = effective.planTier > PLAN_TIER_CEILING;
 
+  /*
+     `12c-s` B5. Said here, before the save, and refused only at publish — a
+     rule about a pair refused at save would leave neither vector able to move
+     first. The number stated is the one the refusal will compare against.
+  */
+  const planDisagrees = !planTierAgrees(values.planTier, otherPlanTier);
+  const otherPlan = otherPlanTier.live ?? otherPlanTier.draft;
+
   function move(key: WeightKey, next: number) {
     setValues((current) => redistribute(current, key, next));
   }
 
   function send() {
     const form = new FormData();
+    form.set("kind", kind);
     form.set("reason", reason);
     form.set("browseRelevanceMode", mode);
     for (const key of WEIGHT_KEYS) form.set(key, String(values[key]));
@@ -96,6 +130,8 @@ export function RankingEditor({
     });
   }
 
+  const label = (key: WeightKey) => t(weightLabelKey(kind, key) as never);
+
   return (
     <div className="flex flex-col gap-[var(--gutter)]">
       {result && (
@@ -105,29 +141,28 @@ export function RankingEditor({
       )}
 
       <Panel
-        title={t("ranking.weights")}
-        description={t("ranking.weights_hint")}
-        eyebrow={t(isDraft ? "ranking.weights_total" : "ranking.weights_total_live", { total })}
+        title={t(services ? "ranking.weights.services" : "ranking.weights")}
+        description={t(services ? "ranking.weights_hint.services" : "ranking.weights_hint")}
+        eyebrow={t(
+          isDraft
+            ? "ranking.weights_total"
+            : isProposal
+              ? "ranking.weights_total_proposed"
+              : "ranking.weights_total_live",
+          { total },
+        )}
       >
         <div className="flex flex-col gap-5">
           {WEIGHT_KEYS.map((key) => (
             <RankingSlider
               key={key}
-              label={t(`ranking.weight.${key}` as never)}
+              label={label(key)}
               value={values[key]}
               onChange={(next) => move(key, next)}
               disabled={!mayWrite}
               {...(key === "planTier" ? { ceiling: PLAN_TIER_CEILING } : {})}
-              {...(PINNED.has(key)
-                ? {
-                    hint:
-                      key === "planTier"
-                        ? t("ranking.weight.pinned_capped", { ceiling: PLAN_TIER_CEILING })
-                        : t("ranking.weight.pinned"),
-                  }
-                : {})}
-              {...(key === "responseTime" ? { note: t("ranking.weight.response_note") } : {})}
-              {...(key === "planTier" ? { note: t("ranking.plan_cap") } : {})}
+              {...(hintFor(kind, key) ? { hint: hintFor(kind, key)! } : {})}
+              {...(noteFor(kind, key, compareWith) ? { note: noteFor(kind, key, compareWith)! } : {})}
             />
           ))}
         </div>
@@ -136,6 +171,21 @@ export function RankingEditor({
           <div className="mt-4">
             <Alert tone="bad" live="polite">
               {t("ranking.refuse.total_not_100", { total, expected: WEIGHT_TOTAL })}
+            </Alert>
+          </div>
+        )}
+
+        {planDisagrees && otherPlan !== null && (
+          <div className="mt-4">
+            <Alert
+              tone="warn"
+              live="polite"
+              fix={t("ranking.plan_disagrees_fix", { planTier: values.planTier })}
+            >
+              {t("ranking.plan_disagrees", {
+                value: otherPlan,
+                other: t(`ranking.vector_inline.${otherPlanTier.kind}` as never),
+              })}
             </Alert>
           </div>
         )}
@@ -157,7 +207,9 @@ export function RankingEditor({
              is how a group ends up announced as its first option.
           */}
           <p className="text-caption font-medium text-ink">{t("ranking.browse_mode")}</p>
-          <p className="mt-0.5 max-w-prose text-caption text-body">{t("ranking.browse_hint")}</p>
+          <p className="mt-0.5 max-w-prose text-caption text-body">
+            {t(services ? "ranking.browse_hint.services" : "ranking.browse_hint")}
+          </p>
 
           <div className="mt-2">
             <SegmentedControl
@@ -177,10 +229,12 @@ export function RankingEditor({
             </p>
             <p className="mt-1 font-mono text-body-sm tabular-nums text-ink">
               {WEIGHT_KEYS.filter((key) => effective[key] > 0)
-                .map((key) => `${t(`ranking.weight.${key}` as never)} ${effective[key]}`)
+                .map((key) => `${label(key)} ${effective[key]}`)
                 .join(" · ")}
             </p>
-            <p className="mt-1.5 max-w-prose text-caption text-body">{effectiveNote(effective, values)}</p>
+            <p className="mt-1.5 max-w-prose text-caption text-body">
+              {effectiveNote(effective, values, label)}
+            </p>
           </div>
 
           {breachesBrowseCeiling && (
@@ -200,14 +254,14 @@ export function RankingEditor({
           <div className="mt-6 flex flex-col gap-3 border-t border-line pt-4">
             <div className="flex flex-col gap-1">
               <Label
-                htmlFor="ranking-reason"
+                htmlFor={`ranking-reason-${kind}`}
                 requirement="required"
                 requirementLabel={t("field.required")}
               >
                 {t("builder.reason_label")}
               </Label>
               <Textarea
-                id="ranking-reason"
+                id={`ranking-reason-${kind}`}
                 rows={2}
                 value={reason}
                 onChange={(event) => setReason(event.target.value)}
@@ -229,6 +283,56 @@ export function RankingEditor({
   );
 }
 
+/** "pinned", "replaces distance, pinned", "pinned, ceiling 10" — beside the label. */
+function hintFor(kind: RankingKind, key: WeightKey): string | null {
+  if (kind === "services" && key === "specCompleteness") return t("ranking.weight.replaces_spec");
+  if (kind === "services" && key === "distance") return t("ranking.weight.replaces_distance");
+  if (!PINNED.has(key)) return null;
+  return key === "planTier"
+    ? t("ranking.weight.pinned_capped", { ceiling: PLAN_TIER_CEILING })
+    : t("ranking.weight.pinned");
+}
+
+/**
+ * The line under a slot: why the number is what it is.
+ *
+ * On the services vector every slot but relevance says the goods vector's live
+ * number beside its reason. The board wrote *"up from 22"*, which is true of the
+ * proposal on the day it was drawn and false the first time anybody moves the
+ * goods vector; the comparison is read from the live row instead.
+ */
+function noteFor(
+  kind: RankingKind,
+  key: WeightKey,
+  compareWith: RankingWeights | null,
+): string | null {
+  const compare =
+    compareWith && key !== "relevance"
+      ? ` ${t("ranking.weight.compare", { value: compareWith[key] })}`
+      : "";
+
+  if (kind === "goods") {
+    if (key === "responseTime") return t("ranking.weight.response_note");
+    if (key === "planTier") return t("ranking.plan_cap");
+    return null;
+  }
+
+  switch (key) {
+    case "verificationTier":
+      return `${t("ranking.weight.services.verification_note")}${compare}`;
+    case "responseTime":
+      return `${t("ranking.weight.services.response_note")} ${t("ranking.weight.response_note")}${compare}`;
+    case "specCompleteness":
+      return `${t("ranking.weight.services.scope_note")}${compare}`;
+    case "distance":
+      return `${t("ranking.weight.services.coverage_note")}${compare}`;
+    case "planTier":
+      return `${t("ranking.weight.services.plan_note")} ${t("ranking.plan_cap")}`;
+    default:
+      return null;
+  }
+}
+
 /**
  * The sentence under the effective vector.
  *
@@ -242,7 +346,11 @@ export function RankingEditor({
  * about a pair that was already in that order and stayed in it. A sentence that
  * describes a change nothing made is the same defect as a padded row.
  */
-function effectiveNote(effective: RankingWeights, authored: RankingWeights): string {
+function effectiveNote(
+  effective: RankingWeights,
+  authored: RankingWeights,
+  label: (key: WeightKey) => string,
+): string {
   const others = WEIGHT_KEYS.filter((key) => key !== "relevance");
   const leaderOf = (weights: RankingWeights) =>
     [...others].sort((a, b) => weights[b] - weights[a])[0];
@@ -255,15 +363,15 @@ function effectiveNote(effective: RankingWeights, authored: RankingWeights): str
 
   if (was !== now && was && now) {
     return t("ranking.effective_note", {
-      leader: t(`ranking.weight.${now}` as never),
-      runner_up: t(`ranking.weight.${was}` as never),
+      leader: label(now),
+      runner_up: label(was),
       authored: authored.planTier,
       effective: effective.planTier,
     });
   }
 
   return t("ranking.effective_leads", {
-    leader: t(`ranking.weight.${now}` as never),
+    leader: now ? label(now) : "",
     authored: authored.planTier,
     effective: effective.planTier,
   });

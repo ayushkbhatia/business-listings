@@ -7,6 +7,7 @@ import {
   discardDraft,
   draftState,
   liveBrowseRelevanceMode,
+  liveVectors,
   liveWeights,
   publishDraft,
   saveDraft,
@@ -43,15 +44,19 @@ async function publish(
   reason: string,
   mode?: string,
 ): Promise<void> {
-  const browseMode = mode ?? (await liveBrowseRelevanceMode());
-  const saved = await saveDraft(by, next, browseMode, reason);
+  const browseMode = mode ?? (await liveBrowseRelevanceMode("goods"));
+  const saved = await saveDraft(by, "goods", next, browseMode, reason);
   if (!saved.ok) throw new Error(`draft refused: ${saved.error}`);
 
-  const [live, liveMode] = await Promise.all([liveWeights(), liveBrowseRelevanceMode()]);
-  const preview = await runImpact({ draft: next, draftMode: browseMode as never, live, liveMode });
-  await storePreview(next, browseMode as never, preview);
+  const preview = await runImpact({
+    kind: "goods",
+    draft: next,
+    draftMode: browseMode as never,
+    live: await liveVectors(),
+  });
+  await storePreview("goods", next, browseMode as never, preview);
 
-  const published = await publishDraft(by, reason);
+  const published = await publishDraft(by, "goods", reason);
   if (!published.ok) throw new Error(`publish refused: ${published.error}`);
 }
 
@@ -92,7 +97,7 @@ afterAll(async () => {
   // seeded database.
   await prisma.rankingPublish.deleteMany({ where: { id: { notIn: publishesBefore } } });
   // And back to the numbers the migration seeded, whatever the tests did.
-  await prisma.rankingWeights.update({ where: { id: "current" }, data: DEFAULT_WEIGHTS });
+  await prisma.rankingWeights.update({ where: { kind: "goods" }, data: DEFAULT_WEIGHTS });
   await prisma.$disconnect();
 });
 
@@ -155,7 +160,7 @@ describe("criterion 5 — weights reorder live results", () => {
       "Leaning harder on verification while the directory is young.",
     );
 
-    const stored = await liveWeights();
+    const stored = await liveWeights("goods");
     expect(stored.verificationTier).toBe(40);
     expect(stored).not.toEqual(DEFAULT_WEIGHTS);
   }, 120_000);
@@ -227,13 +232,13 @@ describe("criterion 5 — weights reorder live results", () => {
        stay where they are. `saveDraft` has to accept it, and the history row
        has to record it, or the change is invisible to everything downstream.
     */
-    await publish(lead, await liveWeights(), "Switching how relevance is read.", "category_depth");
-    expect(await liveBrowseRelevanceMode()).toBe("category_depth");
+    await publish(lead, await liveWeights("goods"), "Switching how relevance is read.", "category_depth");
+    expect(await liveBrowseRelevanceMode("goods")).toBe("category_depth");
 
     // Not a third answer. Leaving the weight to multiply zero is not one of the
     // two, and neither is anything somebody types into the column by hand.
     expect(
-      await saveDraft(lead, await liveWeights(), "whatever", "Trying a mode that does not exist."),
+      await saveDraft(lead, "goods", await liveWeights("goods"), "whatever", "Trying a mode that does not exist."),
     ).toMatchObject({ ok: false, error: "unknown_browse_mode" });
 
     // A weight change with the mode left alone keeps the stored mode. A silent
@@ -241,17 +246,18 @@ describe("criterion 5 — weights reorder live results", () => {
     // nobody would think to look for.
     await publish(
       lead,
-      redistribute(await liveWeights(), "specCompleteness", 11),
+      redistribute(await liveWeights("goods"), "specCompleteness", 11),
       "Moving a weight without touching the mode.",
     );
-    expect(await liveBrowseRelevanceMode()).toBe("category_depth");
+    expect(await liveBrowseRelevanceMode("goods")).toBe("category_depth");
 
-    await publish(lead, await liveWeights(), "Back to the recommendation.", "redistribute");
+    await publish(lead, await liveWeights("goods"), "Back to the recommendation.", "redistribute");
   }, 180_000);
 
   it("refuses a set that does not add to 100", async () => {
     const result = await saveDraft(
       actor(opsLeadId, "staff_ops_lead"),
+      "goods",
       { relevance: 0, verificationTier: 0, responseTime: 0, specCompleteness: 0, distance: 0, planTier: 0 },
       "redistribute",
       "Trying to zero everything.",
@@ -266,6 +272,7 @@ describe("criterion 5 — weights reorder live results", () => {
      */
     const refused = await saveDraft(
       actor(opsLeadId, "staff_ops_lead"),
+      "goods",
       { relevance: 30, verificationTier: 20, responseTime: 5, specCompleteness: 5, distance: 0, planTier: 40 },
       "redistribute",
       "Trying to make the plan the main signal.",
@@ -273,7 +280,7 @@ describe("criterion 5 — weights reorder live results", () => {
     expect(refused).toMatchObject({ ok: false, error: "plan_tier_too_high" });
 
     await expect(
-      prisma.rankingWeights.update({ where: { id: "current" }, data: { planTier: 40 } }),
+      prisma.rankingWeights.update({ where: { kind: "goods" }, data: { planTier: 40 } }),
     ).rejects.toThrow(/plan_tier_is_capped/);
   }, 60_000);
 
@@ -287,6 +294,7 @@ describe("criterion 5 — weights reorder live results", () => {
   it("holds the plan ceiling on the effective browse vector, not only the authored one", async () => {
     const refused = await saveDraft(
       actor(opsLeadId, "staff_ops_lead"),
+      "goods",
       { relevance: 50, verificationTier: 22, responseTime: 12, specCompleteness: 6, distance: 4, planTier: 6 },
       "redistribute",
       "Raising relevance a long way, with plan left where it is.",
@@ -297,20 +305,22 @@ describe("criterion 5 — weights reorder live results", () => {
     // instead, because then nothing is redistributed into plan.
     const allowed = await saveDraft(
       actor(opsLeadId, "staff_ops_lead"),
+      "goods",
       { relevance: 50, verificationTier: 22, responseTime: 12, specCompleteness: 6, distance: 4, planTier: 6 },
       "category_depth",
       "The same weights, with the landing pages scoring category depth.",
     );
     expect(allowed).toMatchObject({ ok: true });
 
-    await discardDraft(actor(opsLeadId, "staff_ops_lead"), "Clearing the test draft.");
-    expect(await draftState()).toBeNull();
+    await discardDraft(actor(opsLeadId, "staff_ops_lead"), "goods", "Clearing the test draft.");
+    expect(await draftState("goods")).toBeNull();
   }, 60_000);
 
   it("refuses a moderator and finance — ranking is ops", async () => {
     await expect(
       saveDraft(
         actor(financeId, "staff_finance"),
+        "goods",
         redistribute(DEFAULT_WEIGHTS, "relevance", 30),
         "redistribute",
         "Not my row.",
