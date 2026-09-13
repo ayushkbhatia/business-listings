@@ -105,7 +105,11 @@ export default async function AcceptedPage({
                     <th scope="row" className="px-3 py-2 text-left font-normal text-body-sm text-ink">
                       {line.description}
                     </th>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-body-sm">{line.qty}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-body-sm">
+                      {/* Blank, not one: the cell says what was ordered, and a
+                          line priced as a whole had no count. */}
+                      {line.qty ?? ""}
+                    </td>
                     <td className="px-3 py-2 text-right font-mono tabular-nums text-body-sm">
                       {formatAED(line.unitPrice, { style: "quote" })}
                     </td>

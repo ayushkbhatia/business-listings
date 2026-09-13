@@ -129,7 +129,10 @@ export async function setupHubState(
         select: {
           team: true,
 
-          serviceCoverage: true,
+          // `3c-s` put a `serviceId` on this table. Filtered to the default,
+          // because the task is "say where you work" and a service that
+          // narrowed itself has answered a different question.
+          serviceCoverage: { where: { serviceId: null } },
           /*
              Board `8b-s`. Credentials, and no longer `Document(kind:
              certificate)` — which counted files rather than credentials and so
@@ -366,7 +369,10 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
         select: {
           team: true,
 
-          serviceCoverage: true,
+          // `3c-s` put a `serviceId` on this table. Filtered to the default,
+          // because the task is "say where you work" and a service that
+          // narrowed itself has answered a different question.
+          serviceCoverage: { where: { serviceId: null } },
           /*
              Board `8b-s`. Credentials, and no longer `Document(kind:
              certificate)` — which counted files rather than credentials and so

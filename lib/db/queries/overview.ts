@@ -21,7 +21,7 @@ export interface MissedEnquiryRow {
   ref: string;
   requirement: string;
   /** The line items, so "what did I miss" is answerable without a buyer. */
-  lines: { description: string; qty: number; unit: string | null }[];
+  lines: { description: string; qty: number | null; unit: string | null }[];
   deliverToArea: string | null;
   neededBy: Date | null;
   missedAt: Date;

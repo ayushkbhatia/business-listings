@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Alert } from "@/components/display";
 import { Button, Input, Label, Select, Textarea } from "@/components/primitives";
@@ -83,10 +83,20 @@ export function ServiceForm({
   state,
   publicHref,
   actions,
+  coverage,
 }: {
   state: ServiceEditorState;
   publicHref: string;
   actions: { save: typeof saveServiceField; setStatus: typeof setStatus };
+  /**
+   * Board `3c-s`'s card, rendered by the page and handed down as an element.
+   *
+   * An element rather than a component or a loader, because this file is a
+   * client boundary and a function crossing it is the repo's most repeated
+   * bug. The card reads its own state on the server and posts its own
+   * actions; the form only decides where it sits in the column.
+   */
+  coverage?: ReactNode;
 }) {
   const router = useRouter();
 
@@ -375,6 +385,9 @@ export function ServiceForm({
             })}
           </div>
         </Card>
+
+        {/* ── Where it is available — board `3c-s` ─────────────────────── */}
+        {coverage}
       </div>
 
       {/* ── The rail ────────────────────────────────────────────────────── */}

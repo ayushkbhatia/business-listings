@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { EMIRATE_CENTRES, type Point } from "@/lib/geo/distance";
 import { isCode } from "./index-text";
 import type { SearchQuery } from "./query";
-import type { RankingWeights } from "./ranking";
+import type { QueryShape, RankingWeights } from "./ranking";
 
 /**
  * Where a search measures distance from, and how much distance should matter.
@@ -72,7 +72,7 @@ function emirateLabel(emirate: string): string {
  *     own example. Somebody who will come to the site, so being nearby is much
  *     of the point. Distance rises to 14.
  */
-export type QueryShape = "sku" | "spec" | "service";
+export type { QueryShape };
 
 export interface ShapedRanking {
   shape: QueryShape;
@@ -120,15 +120,12 @@ export async function shapeOf(query: SearchQuery): Promise<QueryShape> {
   return productHits > 0 ? "spec" : "service";
 }
 
-/**
- * The stored weights with distance moved to suit the query.
- *
- * Only distance moves. The other five are what staff set in the admin editor,
- * and a search that quietly rewrote three of them would make that screen a
- * suggestion rather than a setting.
- */
-export function weightsForShape(weights: RankingWeights, shape: QueryShape): RankingWeights {
-  if (shape === "sku") return { ...weights, distance: 4 };
-  if (shape === "service") return { ...weights, distance: 14 };
-  return weights;
-}
+/*
+   `weightsForShape` lives in `ranking.ts`, with every other rule about the six.
+
+   It was here, and being here is why the hundred-total rule never reached it:
+   this module is `server-only`, so the arithmetic could not be unit-tested
+   beside `redistribute` and `weightsForBrowse`, and the one invariant the
+   weights have went unasserted on the only path that measures it.
+*/
+export { weightsForShape } from "./ranking";

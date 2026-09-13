@@ -8,6 +8,11 @@ import {
   setServiceStatus,
   type ServiceWrite,
 } from "@/lib/services/service";
+import {
+  resetServiceCoverage,
+  setServiceCoverageArea,
+  type ServiceCoverageWrite,
+} from "@/lib/services/coverage";
 
 /**
  * Board `3g-s`'s writes — one field at a time.
@@ -53,4 +58,49 @@ export async function setStatus(formData: FormData): Promise<StatusResult> {
     revalidatePath(`/b/${seat.businessSlug}/services`);
   }
   return { ok: result.ok };
+}
+
+/* ── Board `3c-s` — this service's own coverage ──────────────────────────── */
+
+/**
+ * One chip, on or off.
+ *
+ * `revalidatePath` on the public service page and nowhere else, and only when
+ * the write lands: coverage is the one thing on this screen a buyer reads
+ * without the seller publishing anything, so a narrowed service that still
+ * showed the firm's coverage to buyers would be the card lying by a cache.
+ * The dashboard is not revalidated for `2c-s`'s reason — the seller is still
+ * typing in the form beside this card, and re-rendering the server component
+ * would replace their draft with the record.
+ */
+export async function saveServiceArea(formData: FormData): Promise<ServiceCoverageWrite> {
+  const seat = await requireSellerSeat();
+  const id = String(formData.get("id") ?? "");
+
+  const result = await setServiceCoverageArea(
+    seat.businessId,
+    id,
+    {
+      emirate: String(formData.get("emirate") ?? ""),
+      areaId: String(formData.get("areaId") ?? "") || null,
+    },
+    String(formData.get("on") ?? "") === "1",
+  );
+  if (result.ok) revalidateService(seat.businessSlug, id);
+  return result;
+}
+
+/** Back to the business default — every own row gone. */
+export async function useDefaultCoverage(formData: FormData): Promise<ServiceCoverageWrite> {
+  const seat = await requireSellerSeat();
+  const id = String(formData.get("id") ?? "");
+
+  const result = await resetServiceCoverage(seat.businessId, id);
+  if (result.ok) revalidateService(seat.businessSlug, id);
+  return result;
+}
+
+function revalidateService(businessSlug: string, id: string): void {
+  revalidatePath(`/b/${businessSlug}/services`);
+  revalidatePath(`/dashboard/services/${id}`);
 }

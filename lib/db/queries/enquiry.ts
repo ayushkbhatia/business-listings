@@ -32,7 +32,8 @@ function byRefOrId(buyerId: string, refOrId: string) {
 export interface BuyerQuoteLine {
   id: string;
   description: string;
-  qty: number;
+  /** Null on a service line — priced as a whole, not per unit. */
+  qty: number | null;
   unitPrice: string;
   leadTimeDays: number | null;
 }
@@ -63,7 +64,7 @@ export interface BuyerEnquiry {
   createdAt: Date;
   contactReleasedToBusinessId: string | null;
   contactReleasedAt: Date | null;
-  lines: { id: string; description: string; qty: number; unit: string | null; size: string | null; targetUnitPriceAed: string | null }[];
+  lines: { id: string; description: string; qty: number | null; unit: string | null; size: string | null; targetUnitPriceAed: string | null }[];
   recipients: { businessId: string; slug: string; displayName: string; state: string; openedAt: Date | null }[];
   /** Current revision per supplier, newest first. Superseded ones are not shown. */
   quotes: BuyerQuote[];

@@ -164,13 +164,25 @@ fi
 # claimed twice on their own listing. `business_coverage` carries the same pair
 # for the same reason; this asserts the newer one, where a regeneration is the
 # thing most likely to drop it.
+#
+# Four since board `3c-s` put a `service_id` on the table: two for the business
+# default and two for a service's own narrowing. The default pair keeps its
+# original names deliberately — renaming them would leave this grep finding
+# them in the `2d-s` migration file and passing while the live indexes were
+# gone.
 if grep -qE '^[[:space:]]*model[[:space:]]+ServiceCoverage[[:space:]]*\{' <<<"$CODE"; then
-  if grep -rqE '"service_coverage_business_id_area_id_key"' prisma/migrations \
-     && grep -rqE '"service_coverage_business_id_emirate_key"' prisma/migrations; then
-    echo "   pass — one service coverage row per scope, by two partial unique indexes"
+  missing=""
+  for idx in service_coverage_business_id_area_id_key \
+             service_coverage_business_id_emirate_key \
+             service_coverage_service_id_area_id_key \
+             service_coverage_service_id_emirate_key; do
+    grep -rqE "\"$idx\"" prisma/migrations || missing="$missing $idx"
+  done
+  if [ -z "$missing" ]; then
+    echo "   pass — one service coverage row per scope per owner, by four partial unique indexes"
   else
-    echo "   FAIL — service_coverage has lost a partial unique index."
-    echo "     Without both, one business claims the same emirate any number of times."
+    echo "   FAIL — service_coverage has lost a partial unique index:$missing"
+    echo "     Without all four, one business or one service claims the same emirate twice."
     fail=1
   fi
 fi

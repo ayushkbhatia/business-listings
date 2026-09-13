@@ -128,7 +128,9 @@ export async function goLive(businessId: string): Promise<GoLiveResult> {
       sellsKind: true,
       deliveryModes: true,
       locations: { select: { id: true } },
-      serviceCoverage: { select: { id: true } },
+      // The default only — `3c-s`. The publish gate asks the listing-level
+      // question, and a single narrowed service has not answered it.
+      serviceCoverage: { where: { serviceId: null }, select: { id: true } },
     },
   });
   if (!business) return { ok: false, error: "That listing cannot be found." };

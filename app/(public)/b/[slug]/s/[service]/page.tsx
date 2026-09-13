@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { Emirate } from "@/lib/db/generated/enums";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { Breadcrumb, Card, Panel, PublicShell } from "@/components/structure";
@@ -8,7 +9,7 @@ import { getBusinessBySlug } from "@/lib/db/queries";
 import { prisma } from "@/lib/db/client";
 import { publicServiceFor, publicServicesFor } from "@/lib/services/service";
 import { publicCredentialsFor, type PublicCredential } from "@/lib/credentials/service";
-import { businessCoverage } from "@/lib/locations/service-coverage";
+import { effectiveCoverage } from "@/lib/locations/service-coverage";
 import { formatMonth } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { EMIRATES } from "@/lib/uae";
@@ -82,6 +83,11 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
   };
 }
 
+/** One row, as the shape `effectiveCoverage` reads. */
+function toScope(row: { emirate: Emirate; areaId: string | null }) {
+  return { emirate: row.emirate, areaId: row.areaId };
+}
+
 export default async function ServiceDetailPage({ params }: Params) {
   const { slug, service: serviceSlug } = await params;
   const service = await publicServiceFor(slug, serviceSlug);
@@ -103,9 +109,23 @@ export default async function ServiceDetailPage({ params }: Params) {
 
   const [siblings, coverage, credentials] = await Promise.all([
     publicServicesFor(service.businessId),
+    /*
+       The business default *and* this service's own rows, in one query. Board
+       `3c-s` gave the table a `serviceId`; before it, every row here was the
+       default and this page could only ever show the firm's coverage on a
+       page about one engagement.
+    */
     prisma.serviceCoverage.findMany({
-      where: { businessId: service.businessId },
-      select: { emirate: true, areaId: true, area: { select: { name: true } } },
+      where: {
+        businessId: service.businessId,
+        OR: [{ serviceId: null }, { serviceId: service.id }],
+      },
+      select: {
+        emirate: true,
+        areaId: true,
+        serviceId: true,
+        area: { select: { name: true } },
+      },
     }),
     /*
        Board `8b-s`'s Feeds note. The file never travels: `publicCredentialsFor`
@@ -118,17 +138,21 @@ export default async function ServiceDetailPage({ params }: Params) {
 
   /*
      Board `1g-s` B8 — the service's *effective* coverage: its own rows if it
-     has any, otherwise the business default from `2d-s`. Today no service has
-     rows of its own, because `3c-s` is the screen that writes them, so the
-     helper resolves to the default for every one of them. Calling it anyway is
-     what makes the rule true on the day those rows arrive rather than a thing
-     somebody has to remember.
+     has any, otherwise the business default from `2d-s`.
+
+     `businessCoverage` used to stand here, and on a page about one engagement
+     it was the wrong helper twice over: it answers *where does this firm
+     work*, and with `3c-s`'s rows in the table it would have unioned a
+     service's narrowing back into the default it was narrowing away from — so
+     restricting one service to Dubai would have published it as covering
+     everywhere, which is the seller punished for being precise.
   */
   const areaNames = new Map(
     coverage.filter((row) => row.areaId).map((row) => [row.areaId!, row.area?.name ?? ""]),
   );
-  const scopes = businessCoverage(
-    coverage.map((row) => ({ emirate: row.emirate, areaId: row.areaId })),
+  const scopes = effectiveCoverage(
+    coverage.filter((row) => row.serviceId === null).map(toScope),
+    coverage.filter((row) => row.serviceId !== null).map(toScope),
   );
   const places = scopes.map((scope) =>
     scope.areaId

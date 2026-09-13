@@ -4,8 +4,10 @@ import { StatusBadge } from "@/components/display";
 import { can } from "@/lib/auth/can";
 import { t } from "@/lib/i18n";
 import { serviceForEditor } from "@/lib/services/service";
+import { serviceCoverageFor } from "@/lib/services/coverage";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../../_shell";
-import { saveServiceField, setStatus } from "./actions";
+import { saveServiceArea, saveServiceField, setStatus, useDefaultCoverage } from "./actions";
+import { ServiceCoverageCard } from "./ServiceCoverageCard";
 import { ServiceForm } from "./ServiceForm";
 
 /**
@@ -42,9 +44,10 @@ export default async function ServiceEditorPage({
   // sales seat opened the editor, filled it in, and met the guard on submit.
   if (!can(seat.actor, "product.edit")) notFound();
 
-  const [service, badges] = await Promise.all([
+  const [service, badges, coverage] = await Promise.all([
     serviceForEditor(seat.businessId, id),
     getNavBadges(seat.businessId),
+    serviceCoverageFor(seat.businessId, id),
   ]);
   if (!service) notFound();
 
@@ -83,6 +86,24 @@ export default async function ServiceEditorPage({
         state={service}
         publicHref={`/b/${seat.businessSlug}/s/${service.slug}`}
         actions={{ save: saveServiceField, setStatus }}
+        /*
+           Board `3c-s`. An element, not a component — this crosses the client
+           boundary and a function would be the repo's most repeated bug. Null
+           only when the service vanished between the two reads, and the page
+           has already 404'd by then.
+        */
+        coverage={
+          coverage && (
+            <ServiceCoverageCard
+              /* Explicit, because React validates keys on a child that
+                 crossed the server boundary as a prop and cannot see that
+                 this one is never in a list. */
+              key="coverage"
+              state={coverage}
+              actions={{ saveArea: saveServiceArea, useDefault: useDefaultCoverage }}
+            />
+          )
+        }
       />
     </SellerPage>
   );

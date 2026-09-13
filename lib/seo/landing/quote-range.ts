@@ -102,7 +102,12 @@ export async function quoteRangeFor(
 
   if (lines.length < MIN_QUOTE_SAMPLE) return null;
 
-  const totals = lines.map((line) => Number(line.unitPrice) * line.qty).sort((a, b) => a - b);
+  // A line with no quantity is priced as a whole, so its total is its price —
+  // the same rule `lineTotalFils` applies, stated once more where the sample is
+  // built from raw columns rather than through it.
+  const totals = lines
+    .map((line) => Number(line.unitPrice) * (line.qty ?? 1))
+    .sort((a, b) => a - b);
 
   /*
      The tenth and ninetieth percentile, not the minimum and maximum.

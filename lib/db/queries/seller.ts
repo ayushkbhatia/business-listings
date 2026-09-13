@@ -86,7 +86,12 @@ export async function getLeadsForBusiness(businessId: string): Promise<LeadRow[]
       state: r.state,
       requirement: e.requirement,
       lineCount: e.lines.length,
-      totalQty: e.lines.reduce((n, l) => n + l.qty, 0),
+      /*
+         Lines priced as a whole contribute nothing to a *quantity* total, and
+         that is the honest answer rather than a shortcut: "12 items" over an
+         audit and two boxes of valves would be counting two different things.
+      */
+      totalQty: e.lines.reduce((n, l) => n + (l.qty ?? 0), 0),
       deliverToArea: e.deliverToArea,
       neededBy: e.neededBy,
       closesAt: e.closesAt,
@@ -112,7 +117,8 @@ export async function getLeadsForBusiness(businessId: string): Promise<LeadRow[]
 export interface LeadLine {
   id: string;
   description: string;
-  qty: number;
+  /** Null on a service line — priced as a whole, not per unit. */
+  qty: number | null;
   unit: string | null;
   size: string | null;
   /** The buyer's own budget per unit. Optional, and never a supplier price. */
@@ -171,7 +177,7 @@ export interface LeadDetail {
       enquiryLineId: string | null;
       productId: string | null;
       description: string;
-      qty: number;
+      qty: number | null;
       unitPrice: string;
       leadTimeDays: number | null;
       sortOrder: number;
