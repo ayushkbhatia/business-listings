@@ -41,17 +41,32 @@ export function filsToAed(fils: bigint): string {
 }
 
 export interface PricedLine {
-  qty: number;
+  /**
+   * Null where the line is priced as a whole rather than per unit.
+   *
+   * A statutory audit at AED 14,000 has no quantity, and a required count made
+   * every service line carry a `1` that meant nothing.
+   */
+  qty: number | null;
   /** As stored: a Decimal string, or a number from an unsaved form. */
   unitPrice: string | number;
 }
 
-/** One line. Quantity is a count, so integer multiplication stays exact. */
+/**
+ * One line. Quantity is a count, so integer multiplication stays exact.
+ *
+ * **Null multiplies by one**, and the distinction is worth stating: null is
+ * *unquantified*, not *none*. A line priced as a whole still has to total, and
+ * treating it as nought would silently drop it out of the quote. What the
+ * renderers must not do is print the one back — `×1` on an audit is the
+ * platform inventing a unit for work sold as a job, which is why they omit the
+ * figure instead.
+ */
 export function lineTotalFils(line: PricedLine): bigint {
-  if (!Number.isInteger(line.qty) || line.qty < 0) {
+  if (line.qty !== null && (!Number.isInteger(line.qty) || line.qty < 0)) {
     throw new TypeError(`A quote line quantity must be a non-negative whole number: ${String(line.qty)}`);
   }
-  return parseAedToFils(line.unitPrice) * BigInt(line.qty);
+  return parseAedToFils(line.unitPrice) * BigInt(line.qty ?? 1);
 }
 
 export function quoteTotalFils(lines: readonly PricedLine[]): bigint {

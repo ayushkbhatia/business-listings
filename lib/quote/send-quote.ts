@@ -26,7 +26,8 @@ export interface SendQuoteLineInput {
   enquiryLineId: string;
   productId: string | null;
   description: string;
-  qty: number;
+  /** Null where the line is priced as a whole. See `EnquiryLine.qty`. */
+  qty: number | null;
   unitPrice: string;
   leadTimeDays: number | null;
 }
@@ -111,7 +112,16 @@ export async function sendQuoteForBusiness(
     if (fils < 0n) {
       return { ok: false, error: t("quote.error.bad_price", { line: line.description }) };
     }
-    if (!Number.isInteger(line.qty) || line.qty < 1) {
+    /*
+       Null is allowed and is not "no quantity given" — it is a line priced as a
+       whole, which is how work is sold. This check gated the accepted quote,
+       the terminal state of the product: while it refused anything but a
+       positive integer, a service enquiry could be sent and never answered.
+
+       A quantity that *is* present still has to be a positive whole number. A
+       seller who typed one meant it.
+    */
+    if (line.qty !== null && (!Number.isInteger(line.qty) || line.qty < 1)) {
       return { ok: false, error: t("quote.error.bad_qty", { line: line.description }) };
     }
   }

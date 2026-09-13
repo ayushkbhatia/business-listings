@@ -186,6 +186,111 @@ test.describe("board 3g-s — the scope sheet", () => {
   });
 });
 
+test.describe("board 3c-s — where one service is available", () => {
+  const editorPath = "/dashboard/services";
+  const publicPath = "/b/meridian-chartered-accountants/s/statutory-audit";
+
+  /*
+     The card and the chips. `exact` on every chip name, because a role name
+     matches as a substring and "Dubai" is also inside the sentence under the
+     chips and inside the firm's own coverage line — the trap this suite has
+     hit four times.
+  */
+  const openEditor = async (page: import("@playwright/test").Page) => {
+    await page.goto(editorPath);
+    await page.getByRole("link", { name: "Statutory audit" }).click();
+    await page.waitForURL(/\/dashboard\/services\/[a-z0-9]+/);
+    return page.getByRole("group", { name: "Where this service is available" });
+  };
+
+  test("starts inherited, with the firm's coverage written out beside it", async ({ page }) => {
+    const group = await openEditor(page);
+
+    // The seed firm covers Dubai, Sharjah and Abu Dhabi, and this service has
+    // no rows of its own — so it is shown all three and nothing is ticked.
+    await expect(
+      page.getByText("Buyers see this service in Dubai, Sharjah, Abu Dhabi, the same as the firm."),
+    ).toBeVisible();
+    await expect(page.getByText("Where the firm works")).toBeVisible();
+
+    for (const chip of ["Dubai", "Sharjah", "Abu Dhabi"]) {
+      await expect(group.getByRole("button", { name: chip, exact: true })).toHaveAttribute(
+        "aria-pressed",
+        "false",
+      );
+    }
+
+    // Nothing to reset while nothing is narrowed.
+    await expect(page.getByRole("button", { name: "Use our coverage" })).toBeDisabled();
+  });
+
+  test("one tick narrows the service, and the buyer sees the narrowing", async ({ page }) => {
+    const group = await openEditor(page);
+    const dubai = group.getByRole("button", { name: "Dubai", exact: true });
+
+    await dubai.click();
+    await expect(dubai).toHaveAttribute("aria-pressed", "true");
+    await expect(
+      page.getByText("Narrowed to 1 area: Dubai. Buyers see this service there and nowhere else."),
+    ).toBeVisible();
+
+    /*
+       The firm's own line is unchanged, which is B6: narrowing one service is
+       not an edit of the listing. It is read below the chips, where the card
+       writes the default out in full.
+    */
+    await expect(page.getByText("Dubai, Sharjah, Abu Dhabi")).toBeVisible();
+
+    // And the public page follows — this is the only reason the column exists.
+    await page.goto(publicPath);
+    const coverage = page.getByRole("region", {
+      name: "Where this service is available",
+    });
+    await expect(coverage.getByText("Dubai", { exact: true })).toBeVisible();
+    await expect(coverage.getByText("Sharjah", { exact: true })).toHaveCount(0);
+
+    // Put the fixture back — the next test, and the next run, read the seed.
+    const back = await openEditor(page);
+    await back.getByRole("button", { name: "Dubai", exact: true }).click();
+    await expect(
+      page.getByText("Buyers see this service in Dubai, Sharjah, Abu Dhabi, the same as the firm."),
+    ).toBeVisible();
+  });
+
+  test("`Use our coverage` puts a narrowed service back to inheriting", async ({ page }) => {
+    const group = await openEditor(page);
+    await group.getByRole("button", { name: "Sharjah", exact: true }).click();
+    await expect(page.getByText(/Narrowed to 1 area: Sharjah/)).toBeVisible();
+
+    await page.getByRole("button", { name: "Use our coverage" }).click();
+    await expect(
+      page.getByText("Buyers see this service in Dubai, Sharjah, Abu Dhabi, the same as the firm."),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Use our coverage" })).toBeDisabled();
+    await expect(group.getByRole("button", { name: "Sharjah", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
+  test("the card passes axe where it sits", async ({ page }) => {
+    await openEditor(page);
+    /*
+       `color-contrast` off, the same as every other axe assertion in this
+       suite. The project's token pairings sit below the §09.2 floor and are
+       pinned pending a canvas decision — `text-muted` on white is 4.45:1 —
+       so leaving the rule on here would fail this card for a defect it did
+       not introduce and cannot fix, and take the serial tests after it down
+       with it.
+    */
+    const result = await new AxeBuilder({ page })
+      .include("main")
+      .disableRules(["color-contrast"])
+      .analyze();
+    expect(result.violations).toEqual([]);
+  });
+});
+
 test.describe("board 1g-s — the public scope table", () => {
   const path = "/b/meridian-chartered-accountants/s/statutory-audit";
 

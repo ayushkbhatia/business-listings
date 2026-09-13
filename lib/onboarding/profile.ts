@@ -201,7 +201,9 @@ async function profileFacts(
        the select every reader of this rule shares.
     */
     prisma.service.findMany({ where: { businessId }, select: COUNTABLE_SELECT }),
-    prisma.serviceCoverage.count({ where: { businessId } }),
+    // `3c-s`: the default, not a service's own narrowing. A firm whose only
+    // row belongs to one service has still not filled in the coverage step.
+    prisma.serviceCoverage.count({ where: { businessId, serviceId: null } }),
     /*
        Board `8b-s`. `Credential` rows, not `Document(kind: certificate)`.
 

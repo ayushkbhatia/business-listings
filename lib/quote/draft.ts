@@ -41,7 +41,8 @@ export interface DraftLineInput {
   enquiryLineId: string;
   productId: string | null;
   description: string;
-  qty: number;
+  /** Null where the buyer's line is work rather than a count of things. */
+  qty: number | null;
   /** As typed. An empty string is a line the seller has not got to yet. */
   unitPrice: string;
   leadTimeDays: number | null;
@@ -151,7 +152,13 @@ export async function saveDraft(
     .map((line, i) => ({
       productId: line.productId,
       description: line.description,
-      qty: Number.isInteger(line.qty) && line.qty > 0 ? line.qty : 1,
+      /*
+         Null survives, and that is the change. It used to coerce anything that
+         was not a positive integer to `1` — which was right while the column
+         was NOT NULL and is now the bug it was covering for: a service line has
+         no quantity, and writing one back would put `×1` on an audit.
+      */
+      qty: line.qty === null ? null : Number.isInteger(line.qty) && line.qty > 0 ? line.qty : 1,
       unitPrice: priceOf(line.unitPrice) as string,
       leadTimeDays: line.leadTimeDays,
       sortOrder: i,

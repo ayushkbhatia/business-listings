@@ -197,14 +197,33 @@ export function redistribute(
   value: number,
 ): RankingWeights {
   const pinned = new Set<WeightKey>(PINNED_KEYS);
-  const absorbers = WEIGHT_KEYS.filter((other) => other !== key && !pinned.has(other));
-  const pool = absorbers.reduce((total, other) => total + weights[other], 0);
 
   // A pinned weight is set directly and nothing else moves — the total is then
   // wrong, and `setWeights` refuses it. Pinned means "not part of the give and
   // take", not "uneditable": the ceiling copy on plan tier would be a lie if
   // the slider could not be moved at all.
   if (pinned.has(key)) return { ...weights, [key]: value };
+
+  return spread(weights, key, value, WEIGHT_KEYS.filter((other) => other !== key && !pinned.has(other)));
+}
+
+/**
+ * Set one weight and take the difference out of the named absorbers, in
+ * proportion, preserving `WEIGHT_TOTAL`.
+ *
+ * The arithmetic `redistribute` was, extracted so that `weightsForShape` can
+ * use it too. The two callers differ only in which factors absorb, and having
+ * one body means they cannot differ in how they round: `Math.round` per weight
+ * loses or invents points depending on the numbers, and a total that is 99 on
+ * some queries and 101 on others is not a rule.
+ */
+export function spread(
+  weights: RankingWeights,
+  key: WeightKey,
+  value: number,
+  absorbers: readonly WeightKey[],
+): RankingWeights {
+  const pool = absorbers.reduce((total, other) => total + weights[other], 0);
 
   const headroom = weights[key] + pool;
   const next = Math.max(0, Math.min(value, headroom));
@@ -241,6 +260,71 @@ export function redistribute(
   }
   return result;
 }
+
+/**
+ * What a query is about, as far as the weights are concerned.
+ *
+ * Declared here rather than imported from `origin.ts` because that module is
+ * `server-only` and this one is the pure half — and because the shape only
+ * matters here, where it decides a vector.
+ */
+export type QueryShape = "sku" | "spec" | "service";
+
+/** What distance is worth on a query of each shape. */
+const DISTANCE_FOR_SHAPE: Partial<Record<QueryShape, number>> = {
+  // A part number is the same part in Sharjah as in Dubai.
+  sku: 4,
+  // "AMC contractor" is mostly a question about who can get there.
+  service: 14,
+};
+
+/**
+ * The stored weights with distance moved to suit the query, and the rest
+ * rebalanced so the six still add to a hundred.
+ *
+ * ## The rebalance is the fix, and the total is the reason
+ *
+ * This used to write the literal and return: `{ ...weights, distance: 4 }`.
+ * Against the seeded 34/22/18/12/8/6 that totals **96** on a SKU query and
+ * **106** on a service-shaped one, so the ranking scale differed by ten per
+ * cent between two searches a buyer might run a minute apart.
+ *
+ * `WEIGHT_TOTAL`'s own docblock argues at length that the hundred is a rule and
+ * not a workaround — *"a cap written once in points quietly means something
+ * different every time somebody moves a slider"* — and `validateWeights`
+ * enforces it. But it only ever saw the authored vector: the shape vector is
+ * built after the settings are read and nothing checked it. So the rule held
+ * everywhere except on the live search path, which is the one place it is
+ * measured.
+ *
+ * ## Which factors absorb, and why not the other two
+ *
+ * The four that are neither distance nor plan tier, in proportion, through the
+ * same largest-remainder arithmetic the admin editor uses — one body, so the
+ * two cannot round differently.
+ *
+ * Plan tier is excluded for the reason `PINNED_KEYS` gives: it is the
+ * commercial weight, and a shape transform that quietly raised it would be
+ * `PLAN_TIER_CEILING` arrived at sideways. A buyer searching for a part number
+ * would be shown more paid placement than one searching for a trade, and
+ * nobody would have decided that.
+ *
+ * The old comment said *"a search that quietly rewrote three of them would make
+ * that screen a suggestion rather than a setting"*. Proportional redistribution
+ * is not that: every ratio staff set between the four is preserved exactly, and
+ * `weightsForBrowse` already made the same trade for the same reason.
+ */
+export function weightsForShape(weights: RankingWeights, shape: QueryShape): RankingWeights {
+  const distance = DISTANCE_FOR_SHAPE[shape];
+  if (distance === undefined) return weights;
+
+  return spread(weights, "distance", distance, ABSORBERS);
+}
+
+/** Everything but distance, which is moving, and plan tier, which is bought. */
+const ABSORBERS = WEIGHT_KEYS.filter(
+  (key) => key !== "distance" && key !== "planTier",
+);
 
 /** Above this the results stop being useful and buyers notice inside a week. */
 export const PLAN_TIER_CEILING = 10;

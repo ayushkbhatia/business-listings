@@ -155,7 +155,7 @@ export function InvoiceSheet({ document }: { document: TaxInvoiceDocument }) {
                     .join(" · ")}
                 </span>
               </th>
-              <td className="px-2 py-3 text-right tabular-nums text-body-ink">{line.qty}</td>
+              <td className="px-2 py-3 text-right tabular-nums text-body-ink">{line.qty ?? ""}</td>
               <Cell value={line.unitAed} />
               <td className="px-2 py-3 text-right tabular-nums text-body-ink">
                 {line.rate ?? <NotStored />}

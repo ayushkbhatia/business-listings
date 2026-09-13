@@ -48,7 +48,8 @@ export interface QuoteLineDraft {
   key: string;
   /** The requirement in the buyer's own words. Read-only here. */
   description: string;
-  qty: number;
+  /** Null where the buyer asked for work rather than a count of things. */
+  qty: number | null;
   unit: string | null;
   size: string | null;
   /** What the buyer said they hope to pay, per unit. Never a supplier price. */
@@ -148,7 +149,7 @@ export interface QuoteLineEditorValue {
     enquiryLineId: string;
     productId: string | null;
     description: string;
-    qty: number;
+    qty: number | null;
     unitPrice: string;
     leadTimeDays: number | null;
   }[];
@@ -425,7 +426,7 @@ export function QuoteLineEditor({
                     )}
                   </td>
 
-                  <td className="px-3 py-3 text-right font-mono tabular-nums">{line.qty}</td>
+                  <td className="px-3 py-3 text-right font-mono tabular-nums">{line.qty ?? ""}</td>
 
                   <td className="px-3 py-3 text-right">
                     <Input

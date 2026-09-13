@@ -353,10 +353,19 @@ function MissedTable({ rows, cap }: { rows: readonly MissedEnquiryRow[]; cap: nu
                   <ul className="space-y-0.5">
                     {row.lines.slice(0, 3).map((line, i) => (
                       <li key={i} className="text-body-sm">
-                        <span className="font-mono tabular-nums text-muted">
-                          {formatCount(line.qty)}
-                          {line.unit ? ` ${line.unit}` : ""}
-                        </span>{" "}
+                        {/*
+                           Omitted rather than printed as one. A line with no
+                           quantity is priced as a whole, and `×1` on an audit
+                           would be the platform inventing a unit for work.
+                        */}
+                        {line.qty !== null && (
+                          <>
+                            <span className="font-mono tabular-nums text-muted">
+                              {formatCount(line.qty)}
+                              {line.unit ? ` ${line.unit}` : ""}
+                            </span>{" "}
+                          </>
+                        )}
                         {line.description}
                       </li>
                     ))}

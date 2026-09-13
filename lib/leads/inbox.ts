@@ -269,7 +269,7 @@ function summarise(requirement: string): string {
  * one has no figure at all — which is most of them, and is the render the board
  * already draws on its fourth row.
  */
-function budgetOf(lines: readonly { qty: number; targetUnitPriceAed: unknown }[]): string | null {
+function budgetOf(lines: readonly { qty: number | null; targetUnitPriceAed: unknown }[]): string | null {
   const priced = lines.filter((l) => l.targetUnitPriceAed !== null);
   if (priced.length === 0) return null;
   return quoteTotalAed(

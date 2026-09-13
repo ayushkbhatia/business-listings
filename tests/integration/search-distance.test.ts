@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { searchBusinesses } from "@/lib/db/queries";
 import { resolveOrigin, shapeOf, weightsForShape } from "@/lib/search/origin";
-import { DEFAULT_WEIGHTS } from "@/lib/search/ranking";
+import { DEFAULT_WEIGHTS, WEIGHT_TOTAL, weightsTotal } from "@/lib/search/ranking";
 import { EMIRATE_CENTRES, haversineKm } from "@/lib/geo/distance";
 import { measurable } from "@/lib/locations/branch";
 import type { SearchQuery } from "@/lib/search/query";
@@ -84,16 +84,30 @@ describe("criterion 11 — the query's shape moves the distance weight", () => {
     expect(weightsForShape(DEFAULT_WEIGHTS, shape).distance).toBe(14);
   }, 60_000);
 
-  it("leaves every other weight exactly as staff set it", async () => {
+  it("never moves plan tier, and keeps the six at a hundred", async () => {
     /*
-     * The guard on scope. Distance is the only weight a query may move; if a
-     * search quietly rewrote verification or plan tier, the admin editor would
-     * be a suggestion rather than a setting — and board 12c is emphatic that
-     * what money can buy is capped in one place.
+     * The guard on scope, corrected — and it used to assert the defect.
+     *
+     * It read *"leaves every other weight exactly as staff set it"*, which is
+     * only possible if the total moves: writing `distance: 4` over a stored 8
+     * makes the six add to 96, and `distance: 14` makes them add to 106.
+     * `WEIGHT_TOTAL`'s docblock argues at length that the hundred is a rule
+     * rather than a workaround, and `validateWeights` enforces it — but only on
+     * the authored vector, never on this one. So the scale differed by ten per
+     * cent between two searches a buyer might run a minute apart, and this test
+     * was the thing keeping it that way.
+     *
+     * What the guard was actually protecting is the commercial weight, and that
+     * still holds absolutely: board 12c is emphatic that what money can buy is
+     * capped in one place, so plan tier absorbs nothing in either direction.
+     * The other four move in proportion, which preserves every ratio staff set
+     * between them — the same trade `weightsForBrowse` already makes.
      */
     for (const shape of ["sku", "spec", "service"] as const) {
       const moved = weightsForShape(DEFAULT_WEIGHTS, shape);
-      expect({ ...moved, distance: 0 }).toEqual({ ...DEFAULT_WEIGHTS, distance: 0 });
+
+      expect(weightsTotal(moved), shape).toBe(WEIGHT_TOTAL);
+      expect(moved.planTier, shape).toBe(DEFAULT_WEIGHTS.planTier);
     }
   });
 });

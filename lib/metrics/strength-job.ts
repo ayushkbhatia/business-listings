@@ -66,7 +66,10 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
           team: true,
           products: true,
 
-          serviceCoverage: true,
+          // `3c-s` put a `serviceId` on this table. Filtered to the default,
+          // because the task is "say where you work" and a service that
+          // narrowed itself has answered a different question.
+          serviceCoverage: { where: { serviceId: null } },
           // Board `8b-s`: the credential is the thing, the file is optional
           // evidence for it. Lapsed rows count — an expiry changes nothing.
           credentials: true,

@@ -15,7 +15,7 @@ export interface QuoteForThread {
   id: string;
   ref: string;
   revision: number;
-  lines: readonly { qty: number; unitPrice: string }[];
+  lines: readonly { qty: number | null; unitPrice: string }[];
 }
 
 export interface DeltaLabels {

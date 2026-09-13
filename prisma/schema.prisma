@@ -1462,15 +1462,32 @@ model ServiceCoverage {
   /// The named place, or null for the whole emirate.
   areaId String? @map("area_id")
 
+  /// Which service narrowed itself to this scope, or null for the business
+  /// default — board `3c-s`, and the column that makes `effectiveCoverage`'s
+  /// `ownRows` branch reachable.
+  ///
+  /// `2d-s` B5: the default is inherited **at read time**, never copied down.
+  /// So the emptiness is the signal and there is no third state — a service
+  /// with no rows of its own has not been narrowed, and a service that has
+  /// been narrowed has rows. An `inherits` flag beside them could disagree
+  /// with them, and something would eventually write one without the other.
+  ///
+  /// `Cascade` on delete, because `SetNull` would promote a deleted service's
+  /// narrowed rows into the business default — deleting a service would
+  /// silently widen the listing's claim.
+  serviceId String? @map("service_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   area     Area?    @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  service  Service? @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   @@index([businessId])
   @@index([emirate])
   @@index([areaId])
+  @@index([serviceId])
   @@map("service_coverage")
 }
 
@@ -1844,6 +1861,11 @@ model Service {
 
   scopeTemplate  ScopeTemplate?         @relation(fields: [scopeTemplateId], references: [id], onDelete: SetNull)
   declinedOffers ScopeTemplateDecline[]
+
+  /// This service's *own* coverage rows — empty for every service that
+  /// inherits the business default, which is most of them. Never read on its
+  /// own: `effectiveCoverage` is what turns it into what a buyer is shown.
+  coverage ServiceCoverage[]
 
   @@unique([businessId, slug])
   @@index([businessId, status])
@@ -2644,7 +2666,18 @@ model EnquiryLine {
   /// enough rows, that section is manual-pick and says so.
   productId          String?  @map("product_id")
   description        String
-  qty                Int
+  /// **Null on a service enquiry** — an audit is not ordered by the dozen.
+  ///
+  /// `Int` and NOT NULL until board `1h-s`, which is the brief a buyer writes
+  /// for work rather than for things: where, what, how often, when, how big —
+  /// and no quantity. A required count forced every service enquiry to carry a
+  /// `1` that meant nothing, and three render sites printed it as `×1`.
+  ///
+  /// Null is *unquantified*, not *none*. `lineTotalFils` multiplies by one so a
+  /// priced line still totals, and the renderers omit the figure rather than
+  /// showing the one they multiplied by — printing `×1` would be the platform
+  /// inventing a unit for work sold as a job.
+  qty                Int?
   unit               String?
   /// What the buyer hopes to pay, per unit. Optional, private to this enquiry
   /// and its recipients, and never on a public surface. It is the buyer's own
@@ -3611,7 +3644,17 @@ model QuoteLine {
   /// Null means a free-text line, flagged for manual pricing.
   productId     String? @map("product_id")
   description   String
-  qty           Int
+  /// Null where the line is priced as a whole — see `EnquiryLine.qty`.
+  ///
+  /// The harder half of the pair, and the one neither planning document names:
+  /// this column gates the **accepted quote**, which is the terminal state of
+  /// the product. A service enquiry that cannot be quoted cannot convert, and
+  /// `sendQuote` refused `qty < 1` for as long as the column was NOT NULL.
+  ///
+  /// `quote_line_qty_positive` still stands and still means what it says: a
+  /// CHECK passes on NULL, so "greater than nought where there is one" needed
+  /// no change to keep being true.
+  qty           Int?
   /// THE ONLY PRICE FIELD IN THE SCHEMA. Private to one buyer and one seller.
   unitPrice     Decimal @map("unit_price") @db.Decimal(12, 2)
   leadTimeDays  Int?    @map("lead_time_days")

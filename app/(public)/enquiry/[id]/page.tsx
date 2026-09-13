@@ -132,9 +132,13 @@ export default async function EnquiryPage({
                   {enquiry.lines.map((line) => (
                     <li key={line.id} className="text-body-sm text-ink">
                       {line.description}
-                      <span className="ml-1.5 font-mono text-caption tabular-nums text-body">
-                        ×{line.qty}
-                      </span>
+                      {/* `×1` on "Statutory audit" is the platform inventing a
+                          unit for work sold as a job. Omitted instead. */}
+                      {line.qty !== null && (
+                        <span className="ml-1.5 font-mono text-caption tabular-nums text-body">
+                          ×{line.qty}
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>

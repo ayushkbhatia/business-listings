@@ -5912,6 +5912,20 @@ export const en = {
   "service_editor.fee_title": "Indicative fee is optional, and private",
   "service_editor.fee_label": "Indicative fee",
   "service_editor.fee_body": "If you fill it in we use it to route enquiries, and we never publish it. There is no price on any public service page.",
+
+  // Board `3c-s` — one service's own coverage, on the service editor.
+  "service_coverage.title": "Where this service is available",
+  "service_coverage.hint": "Leave every chip off and this service covers wherever the firm works. Tick one and it covers only what you tick — the audit team travels and the on-site desk does not have to.",
+  "service_coverage.use_default": "Use our coverage",
+  "service_coverage.default_label": "Where the firm works",
+  "service_coverage.default_none": "Not set yet. Set it on the coverage step and every service inherits it.",
+  "service_coverage.effective_inherited": "Buyers see this service in {places}, the same as the firm.",
+  "service_coverage.effective_narrowed": { one: "Narrowed to {count} area: {places}. Buyers see this service there and nowhere else.", other: "Narrowed to {count} areas: {places}. Buyers see this service there and nowhere else." },
+  "service_coverage.effective_none": "No coverage anywhere. Tick an area here, or set the firm's on the coverage step.",
+  "service_coverage.other_scopes": "Also narrowed to: {places}. Set from elsewhere, so they are not chips here. They still count.",
+  "service_coverage.error.unknown_area": "That area is no longer on the list.",
+  "service_coverage.error.save_failed": "That change was not saved.",
+  "service_coverage.error.fix": "Try the chip again. If it keeps failing, reload the page — another tab may have changed this service.",
   "service_editor.log_title": "Every change is logged",
   "service_editor.log_empty": "Nothing changed yet.",
   "service_editor.log_line": "{what} · {when} · {actor}",
@@ -5941,7 +5955,10 @@ export const en = {
   "service_public.table_hint": "The same rows on every firm in {family}, so you can compare",
   "service_public.not_provided": "Not provided",
   "service_public.rows_filled": "{filled} of {total} rows filled. The rest are unanswered rather than hidden — ask about them in your enquiry.",
-  "service_public.coverage_title": "Where they work",
+  // `3c-s`: the service's own coverage now, not always the firm's. "Where
+  // they work" on a page that can show one service narrowed to Dubai told the
+  // buyer the firm does not leave Dubai, which is a claim the seller never made.
+  "service_public.coverage_title": "Where this service is available",
   "service_public.coverage_none": "This firm has not said which areas it covers.",
   "service_public.no_price_title": "Why there is no price",
   "service_public.no_price_body": "A fee moves with the size of the job, and a number without the job attached is a number that changes. The fee basis above says what shape it takes; the number comes back with the quote.",

@@ -106,7 +106,14 @@ export default async function ComparePage({
                 <th scope="row" className="px-3 py-2 text-left font-normal">
                   <span className="block text-body-sm text-ink">{line.description}</span>
                   <span className="block font-mono text-caption text-muted">
-                    {[line.size, `${line.qty}${line.unit ? ` ${line.unit}` : ""}`].filter(Boolean).join(" · ")}
+                    {/* A line with no quantity contributes nothing here rather
+                        than a `1` the buyer never asked for. */}
+                    {[
+                      line.size,
+                      line.qty === null ? null : `${line.qty}${line.unit ? ` ${line.unit}` : ""}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </span>
                 </th>
                 {quotes.map((quote) => {

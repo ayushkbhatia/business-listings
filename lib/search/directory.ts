@@ -90,6 +90,25 @@ export interface DirectoryLoad {
   unread: number;
 }
 
+/**
+ * Every ranked listing, and an honest count of the ones that did not fit.
+ *
+ * ## `unread` used to be the number 1, wearing a query's clothes
+ *
+ * The read took `MAX_LISTINGS + 1` and reported `rows.length - MAX_LISTINGS`,
+ * which is **1 whenever it is non-zero** — at 20,001 listings and at 200,000
+ * alike. `ImpactTable` prints it to an ops lead as *"1 past the sampling cap
+ * were not ranked"* immediately before they press publish, so the one number on
+ * that panel meant to convey scale conveyed none, and did it on a decision
+ * surface.
+ *
+ * A `count` beside the read gives the real figure. It is a second query on a
+ * path that already pulls twenty thousand rows into memory, and the alternative
+ * is a constant on a screen whose whole job is to say how much a change moves —
+ * `CLAUDE.md`: *every number is a query, not a constant.*
+ *
+ * The `+ 1` is gone with it. The cap is what `take` should say.
+ */
 export async function loadDirectory(): Promise<DirectoryLoad> {
   const rows = await prisma.business.findMany({
     where: PUBLIC_BUSINESS,
@@ -103,14 +122,21 @@ export async function loadDirectory(): Promise<DirectoryLoad> {
       categories: { select: { categoryId: true } },
       locations: { where: { published: true }, select: { emirate: true } },
     },
-    take: MAX_LISTINGS + 1,
+    take: MAX_LISTINGS,
   });
 
-  const capped = rows.length > MAX_LISTINGS;
+  /*
+     Only where the read filled the cap. Below it there is nothing beyond the
+     page and the count would be a round trip to learn what `rows.length`
+     already said.
+  */
+  const capped = rows.length === MAX_LISTINGS;
+  const total = capped ? await prisma.business.count({ where: PUBLIC_BUSINESS }) : rows.length;
+
   return {
-    rows: capped ? rows.slice(0, MAX_LISTINGS) : rows,
-    capped,
-    unread: capped ? rows.length - MAX_LISTINGS : 0,
+    rows,
+    capped: total > MAX_LISTINGS,
+    unread: Math.max(0, total - MAX_LISTINGS),
   };
 }
 

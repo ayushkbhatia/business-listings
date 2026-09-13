@@ -214,6 +214,19 @@ export async function findFanoutCandidates(
        any products*, and replacing that with geographic match is `1h-s`, not
        this. This is the locality term, and it is a different number.
     */
+    /*
+       Both kinds of row — the default and `3c-s`'s per-service narrowings —
+       and deliberately not filtered to `serviceId: null`. The question here is
+       "does this business reach this emirate at all", and a firm whose audit
+       service travels to Fujairah reaches Fujairah whether or not the default
+       says so.
+
+       It over-claims in exactly one shape: a default wider than every
+       published service's narrowing. That is B6's union, it needs the
+       published-services join this matcher does not do, and it is `1h-s` —
+       the same note the term above carries. Including the service rows does
+       not make it worse; the default alone was already the wider reading.
+    */
     prisma.serviceCoverage.groupBy({
       by: ["businessId", "emirate"],
       where: { businessId: { in: candidateIds } },

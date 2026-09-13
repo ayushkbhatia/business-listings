@@ -105,7 +105,16 @@ export async function coverageStateFor(businessId: string): Promise<CoverageStat
       sellsKind: true,
       deliveryModes: true,
       updatedAt: true,
+      /*
+         The business default, and only it. `3c-s` put a `serviceId` on this
+         table so one service can narrow itself; a row with a `serviceId` is
+         that service's claim, not this firm's default, and rendering it as a
+         chip here would let this screen turn one service's narrowing into
+         everybody's — the default is inherited at read time, never merged
+         back up.
+      */
       serviceCoverage: {
+        where: { serviceId: null },
         select: { id: true, emirate: true, areaId: true, updatedAt: true, area: { select: { name: true } } },
       },
       freeZoneRegistrations: {
@@ -287,13 +296,18 @@ export async function setCoverageArea(
 
   if (!on) {
     await prisma.serviceCoverage.deleteMany({
-      where: { businessId, emirate: emirate.scope.emirate, areaId: emirate.scope.areaId },
+      where: {
+        businessId,
+        serviceId: null,
+        emirate: emirate.scope.emirate,
+        areaId: emirate.scope.areaId,
+      },
     });
     return { ok: true, savedAt: new Date() };
   }
 
   await prisma.serviceCoverage.createMany({
-    data: [{ businessId, emirate: emirate.scope.emirate, areaId: emirate.scope.areaId }],
+    data: [{ businessId, serviceId: null, emirate: emirate.scope.emirate, areaId: emirate.scope.areaId }],
     skipDuplicates: true,
   });
   return { ok: true, savedAt: new Date() };
@@ -317,8 +331,8 @@ export async function selectAllCoverage(businessId: string): Promise<CoverageWri
 
   await prisma.serviceCoverage.createMany({
     data: [
-      ...EMIRATES.map((row) => ({ businessId, emirate: row.value, areaId: null })),
-      ...cities.map((city) => ({ businessId, emirate: city.emirate, areaId: city.id })),
+      ...EMIRATES.map((row) => ({ businessId, serviceId: null, emirate: row.value, areaId: null })),
+      ...cities.map((city) => ({ businessId, serviceId: null, emirate: city.emirate, areaId: city.id })),
     ],
     skipDuplicates: true,
   });
@@ -404,8 +418,14 @@ export async function coverageCheck(businessId: string): Promise<{
 }> {
   const [business, coverage] = await Promise.all([
     prisma.business.findUnique({ where: { id: businessId }, select: { deliveryModes: true } }),
+    /*
+       The default, and the publish gate is deliberately about the default.
+       A firm whose only coverage row belongs to one narrowed service has not
+       answered *where do you work* — it has answered it for one engagement,
+       and B2 asks the listing-level question before anything goes live.
+    */
     prisma.serviceCoverage.findMany({
-      where: { businessId },
+      where: { businessId, serviceId: null },
       select: { emirate: true, areaId: true },
     }),
   ]);
