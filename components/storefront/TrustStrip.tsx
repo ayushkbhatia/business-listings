@@ -53,7 +53,7 @@ export function TrustStrip({ data }: SectionProps) {
 
         {branches > 0 && (
           <li className="text-caption text-muted">
-            {t("section.trust.branches", { count: formatCount(branches) })}
+            {t("section.trust.branches", { count: branches, formatted: formatCount(branches) })}
           </li>
         )}
 
@@ -65,7 +65,10 @@ export function TrustStrip({ data }: SectionProps) {
 
         {data.reviewSummary.count > 0 && (
           <li className="text-caption text-muted">
-            {t("section.trust.reviews", { count: formatCount(data.reviewSummary.count) })}
+            {t("section.trust.reviews", {
+              count: data.reviewSummary.count,
+              formatted: formatCount(data.reviewSummary.count),
+            })}
           </li>
         )}
       </ul>

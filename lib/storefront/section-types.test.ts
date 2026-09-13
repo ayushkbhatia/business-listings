@@ -13,12 +13,47 @@ import {
  */
 
 describe("the catalogue", () => {
-  it("has fourteen buildable types and one visible gap", () => {
-    // Criterion 10: all fourteen render on the specimens page, and the
-    // services card is there and disabled rather than missing.
-    expect(BUILDABLE_SECTION_TYPES).toHaveLength(14);
-    expect(SECTION_TYPES).toHaveLength(15);
-    expect(sectionType("services")!.comingSoon).toBe(true);
+  it("has eighteen buildable types and one held for a decision", () => {
+    /*
+       Criterion 10 kept a visible gap for services. Board `5c-s` fills it with
+       four live services sections and keeps the gap for the one it cannot
+       build yet — process steps, held on Q1.
+    */
+    expect(BUILDABLE_SECTION_TYPES).toHaveLength(18);
+    expect(SECTION_TYPES).toHaveLength(19);
+    expect(SECTION_TYPES.filter((type) => type.heldKey).map((type) => type.key)).toEqual(["process_steps"]);
+    expect(sectionType("services")).toBeUndefined();
+  });
+
+  it("offers five sections only for firms that sell work — 5c-s", () => {
+    const services = SECTION_TYPES.filter((type) => type.availableFor === "services").map((type) => type.key);
+    expect(services).toEqual(["scope_grid", "credential_wall", "coverage", "sectors_served", "process_steps"]);
+  });
+
+  it("gives every kind-limited type a reason line — B1", () => {
+    // A disabled card with no reason is the support ticket the line exists to prevent.
+    for (const type of SECTION_TYPES) {
+      if (type.availableFor === "both") expect(type.unavailableKey, type.key).toBeNull();
+      else expect(type.unavailableKey, type.key).toMatch(/^section\.unavailable\./);
+    }
+  });
+
+  it("names nothing a map — B7", () => {
+    /*
+       The render's *Coverage map* would have put the map `2d-s` and `1f-s` B2
+       removed back through a builder section. The goods branches section keeps
+       its map; the services coverage section may not imply one.
+    */
+    expect(sectionType("coverage")!.labelKey).toBe("section.coverage");
+    expect(sectionType("coverage")!.sellerFields).toEqual([]);
+  });
+
+  it("keeps every services section a view: no free-text field on any of them — B2, B4", () => {
+    for (const type of SECTION_TYPES.filter((candidate) => candidate.availableFor === "services")) {
+      for (const field of type.sellerFields) {
+        expect(["line", "text"], `${type.key}.${field.key}`).not.toContain(field.type);
+      }
+    }
   });
 
   it("marks the header fixed and nothing else", () => {
@@ -34,7 +69,7 @@ describe("the catalogue", () => {
      * measured and never claimed — non-negotiable 6 — and the same reasoning
      * covers the reviews and branches sections.
      */
-    for (const key of ["trust_strip", "reviews", "branches", "header"]) {
+    for (const key of ["trust_strip", "reviews", "branches", "header", "credential_wall", "coverage", "sectors_served"]) {
       expect(sellerFieldKeys(key), key).toEqual([]);
     }
   });

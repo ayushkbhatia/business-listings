@@ -27,6 +27,8 @@ const ANCHOR = Date.UTC(2026, 7, 26);
 const day = (offset: number) => new Date(ANCHOR + offset * 86_400_000);
 
 export const SPECIMEN_DATA: SectionData = {
+  kind: "goods",
+  work: null,
   business: {
     slug: "al-waha-valves-and-fittings",
     displayName: "Al Waha Valves & Fittings",
@@ -146,3 +148,199 @@ export const SPECIMEN_CONTENT: Record<string, Record<string, unknown>> = {
     endsOn: "2026-04-19",
   },
 };
+
+/*
+ * ── Board `5c-s` — the specimen firm that sells work ─────────────────────────
+ *
+ * Meridian's four, in `1d-s` order, with the fee basis and turnaround from that
+ * page's cards — including the unset fee basis on corporate tax registration,
+ * which must render *Not stated* (B6). The render this board was drawn from
+ * showed a firm that no longer exists on the track; since the section reads live
+ * from scope sheets, a specimen showing services the seller does not have would
+ * be showing something the section cannot produce.
+ *
+ * No fee amount anywhere, and no credential identifier carrying a figure: the
+ * specimens page asserts the run holds no price.
+ */
+export const SPECIMEN_WORK_DATA: SectionData = {
+  ...SPECIMEN_DATA,
+  kind: "services",
+  business: {
+    slug: "meridian-chartered-accountants",
+    displayName: "Meridian Chartered Accountants",
+    tradeName: "Meridian Chartered Accountants LLC",
+    description:
+      "Statutory audit, VAT and corporate tax for contractors and trading companies. Audits from our Business Bay office; filings for clients in every emirate.",
+    verificationTier: 2,
+    verifiedAt: day(-88),
+    responseTimeMedianMs: 10_800_000,
+    establishedYear: 2009,
+    logoUrl: null,
+  },
+  locations: [
+    {
+      id: "loc-m1",
+      type: "head_office",
+      emirate: "dubai",
+      areaName: "Business Bay",
+      addressLine: "Office 1406, Bay Square 3",
+      phone: "+97144219930",
+      lat: 25.1865,
+      lng: 55.2797,
+    },
+  ],
+  products: [],
+  productCount: 0,
+  categories: [],
+  brands: [],
+  team: [
+    // The office line, never a mobile. Both consented, as the stockist's did.
+    { id: "t-m1", name: "Farah Siddiqui", role: "Audit partner", phone: "+97144219930", photoUrl: null },
+    { id: "t-m2", name: "Omar Haddad", role: "Tax manager", phone: "+97144219930", photoUrl: null },
+  ],
+  specRows: [],
+  documents: [],
+  reviews: [
+    {
+      id: "r-m1",
+      author: "Gulf Crest Contracting",
+      overall: 5,
+      body: "The audit was signed inside the three weeks they said, and the management letter was specific enough to act on.",
+      sellerReply: null,
+      createdAt: day(-34),
+    },
+  ],
+  reviewSummary: { count: 1, average: 5 },
+  work: {
+    services: [
+      {
+        id: "s1",
+        slug: "statutory-audit",
+        name: "Statutory audit",
+        scope: "Signed report and management letter, IFRS or IFRS for SMEs.",
+        engagementType: "one_off_job",
+        turnaround: "3–4 weeks",
+        feeBasis: "Fixed fee",
+        deliveredWhere: "at_our_office",
+        places: [{ emirate: "dubai", areaId: null, label: "Dubai" }],
+      },
+      {
+        id: "s2",
+        slug: "vat-return-filing",
+        name: "VAT return filing",
+        scope: "Filed return and the FTA acknowledgement, each quarter.",
+        engagementType: "ongoing_contract",
+        turnaround: "5 working days",
+        feeBasis: "Per return",
+        deliveredWhere: "remote",
+        places: [
+          { emirate: "abu_dhabi", areaId: null, label: "Abu Dhabi" },
+          { emirate: "dubai", areaId: null, label: "Dubai" },
+          { emirate: "sharjah", areaId: null, label: "Sharjah" },
+        ],
+      },
+      {
+        id: "s3",
+        slug: "corporate-tax-registration",
+        name: "Corporate tax registration",
+        scope: "Registration confirmation and the first-period filing calendar.",
+        engagementType: "one_off_job",
+        turnaround: "2 weeks",
+        // Unset on purpose — the gap the grid must say rather than hide.
+        feeBasis: null,
+        deliveredWhere: null,
+        places: [
+          { emirate: "abu_dhabi", areaId: null, label: "Abu Dhabi" },
+          { emirate: "dubai", areaId: null, label: "Dubai" },
+          { emirate: "sharjah", areaId: null, label: "Sharjah" },
+        ],
+      },
+      {
+        id: "s4",
+        slug: "monthly-bookkeeping",
+        name: "Monthly bookkeeping",
+        scope: "Management accounts by the 10th, on your ledger or ours.",
+        engagementType: "ongoing_contract",
+        turnaround: "Ongoing",
+        feeBasis: "Retainer",
+        deliveredWhere: "remote",
+        places: [
+          { emirate: "abu_dhabi", areaId: null, label: "Abu Dhabi" },
+          { emirate: "dubai", areaId: null, label: "Dubai" },
+          { emirate: "sharjah", areaId: null, label: "Sharjah" },
+        ],
+      },
+    ],
+    credentials: [
+      {
+        id: "cr1",
+        kind: "fta_tax_agent",
+        identifier: "30014982",
+        issuer: null,
+        expiresOn: day(215),
+        verified: true,
+        verifiedBy: "FTA tax agent register",
+      },
+      {
+        id: "cr2",
+        kind: "mof_audit_approval",
+        identifier: "Register no. 1142",
+        issuer: "Ministry of Finance",
+        expiresOn: day(127),
+        verified: false,
+        verifiedBy: null,
+      },
+      {
+        id: "cr3",
+        kind: "professional_body",
+        identifier: "Two partners",
+        issuer: "ACCA",
+        expiresOn: day(127),
+        verified: false,
+        verifiedBy: null,
+      },
+    ],
+    coverage: [
+      { emirate: "abu_dhabi", areaId: null, label: "Abu Dhabi" },
+      { emirate: "dubai", areaId: null, label: "Dubai" },
+      { emirate: "sharjah", areaId: null, label: "Sharjah" },
+    ],
+    freeZones: [],
+    sectors: [
+      { label: "Contracting", engagements: 40 },
+      { label: "Trading", engagements: 25 },
+      { label: "Free zone entities", engagements: null },
+    ],
+    deliveryModes: ["remote", "at_our_office"],
+  },
+};
+
+/**
+ * What the specimen firm that sells work filled in — board `5c-s`.
+ *
+ * The stockist's hero reads *Valves off the shelf* and its enquiry intro asks
+ * for sizes and quantities; rendered over an audit practice, the canvas showed
+ * a firm that sells work asking for quantities, which is exactly the shared-copy
+ * defect B5 names. No figure in any of it — the specimens page asserts that.
+ */
+export const SPECIMEN_WORK_CONTENT: Record<string, Record<string, unknown>> = {
+  hero: {
+    eyebrow: "Business Bay",
+    headline: "Audits signed on the date we give you",
+    buttonLabel: "Request a quote",
+  },
+  enquiry_form: {
+    intro: "Tell us the entity, the year end and what the audit is for. We reply with a scope and a quote.",
+  },
+  offer_banner: {
+    headline: "Ramadan hours: office open 9am to 3pm",
+    body: "Filings due in Ramadan are prepared the week before, so nothing waits on reduced hours.",
+    reference: "RAMADAN26",
+    endsOn: "2026-04-19",
+  },
+};
+
+/** The specimen content that belongs with a specimen's data. */
+export function specimenContentFor(data: SectionData): Record<string, Record<string, unknown>> {
+  return data.kind === "services" ? SPECIMEN_WORK_CONTENT : SPECIMEN_CONTENT;
+}

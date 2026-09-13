@@ -7,9 +7,10 @@ import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
 import { diffTemplate, type TemplateSnapshot } from "@/lib/storefront/diff";
 import { resolveSections } from "@/lib/storefront/sections";
-import { BUILDABLE_SECTION_TYPES, sectionType } from "@/lib/storefront/section-types";
-import { SPECIMEN_CONTENT, SPECIMEN_DATA } from "@/lib/storefront/specimen-data";
-import { storeCount, templateWithSections } from "@/lib/storefront/service";
+import { sectionType } from "@/lib/storefront/section-types";
+import { addableTypes, refusedCount } from "@/lib/storefront/library";
+import { SPECIMEN_DATA, SPECIMEN_WORK_DATA, specimenContentFor } from "@/lib/storefront/specimen-data";
+import { storeCount, templateScopeFor, templateWithSections } from "@/lib/storefront/service";
 import { prisma } from "@/lib/db/client";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -47,8 +48,9 @@ export default async function BuilderPage({ params }: Params) {
   const template = await templateWithSections(id);
   if (!template) notFound();
 
-  const [stores, lastVersion] = await Promise.all([
+  const [stores, scope, lastVersion] = await Promise.all([
     storeCount(template.sectorId),
+    templateScopeFor(template.sectorId),
     prisma.templateVersion.findFirst({
       where: { templateId: template.id },
       orderBy: { version: "desc" },
@@ -94,15 +96,20 @@ export default async function BuilderPage({ params }: Params) {
    * What can still be added. A singleton already in the template is not
    * offered — the database would refuse it and the service would refuse it
    * first, and a button that always fails is a button nobody should be shown.
+   *
+   * Board `5c-s`: nor is a type this template's listings have nothing to fill
+   * with, or one held for a decision. Those are not hidden — the library lists
+   * them with their reasons, and the line under this list says how many and
+   * links there.
    */
-  const present = new Set(template.sections.map((section) => section.type));
-  const addable = BUILDABLE_SECTION_TYPES.filter(
-    (type) => !(type.singleton && present.has(type.key)),
-  ).map((type) => ({
+  const addable = addableTypes(scope, template.sections).map((type) => ({
     key: type.key,
     label: t(type.labelKey as never),
     group: type.group,
   }));
+
+  const specimenOf = (availableFor: string) =>
+    availableFor === "services" || scope === "services" ? SPECIMEN_WORK_DATA : SPECIMEN_DATA;
 
   const canvas = (
     <div data-theme={template.defaultTheme} className="flex flex-col gap-6">
@@ -110,9 +117,21 @@ export default async function BuilderPage({ params }: Params) {
         <div key={section.id}>
           {renderSection({
             section,
-            data: SPECIMEN_DATA,
-            content: SPECIMEN_CONTENT[section.type] ?? {},
-            enquireHref: `/rfq/new?to=${SPECIMEN_DATA.business.slug}`,
+            /*
+               Board `5c-s`: a services section, or any section on a template
+               whose stores sell only work, renders against the specimen firm
+               that sells work — against the stockist it could only show its
+               empty state.
+            */
+            data: specimenOf(section.definition.availableFor),
+            content: specimenContentFor(specimenOf(section.definition.availableFor))[section.type] ?? {},
+            /*
+               Never the fan-out. Board 1h criterion 3 — and the note on
+               `SectionProps.enquireHref` — say a storefront section must not
+               link to `/rfq/new`; the canvas and the specimens both did.
+            */
+            enquireHref: `/b/${SPECIMEN_DATA.business.slug}#enquire`,
+            preview: true,
           })}
         </div>
       ))}
@@ -138,6 +157,12 @@ export default async function BuilderPage({ params }: Params) {
           <span className="font-mono text-eyebrow uppercase text-muted">
             {t("builder.canvas")}
           </span>
+          <Link
+            className={buttonClassName({ variant: "ghost", size: "sm" })}
+            href={`/admin/storefront-templates/${template.id}/sections`}
+          >
+            {t("section.library.title")}
+          </Link>
           <Link
             className={buttonClassName({ variant: "ghost", size: "sm" })}
             href={`/admin/storefront-templates/${template.id}/theme`}
@@ -168,6 +193,11 @@ export default async function BuilderPage({ params }: Params) {
         changes={changes}
         canvas={canvas}
         addable={addable}
+        libraryHref={`/admin/storefront-templates/${template.id}/sections`}
+        refusedNote={t("section.library.refused_note", {
+          count: refusedCount(scope),
+          formatted: formatCount(refusedCount(scope)),
+        })}
         actions={{ toggleSection, reorder, addToTemplate, setFields, publish }}
       />
     </BuilderChrome>

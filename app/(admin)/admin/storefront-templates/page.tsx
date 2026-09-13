@@ -107,20 +107,30 @@ export default async function StorefrontTemplatesPage() {
               <li
                 key={type.key}
                 className={
-                  type.comingSoon
-                    ? "rounded-card border border-dashed border-line bg-paper-sunk p-3 opacity-70"
+                  type.heldKey
+                    ? "rounded-card border border-dashed border-line bg-paper-sunk p-3"
                     : "rounded-card border border-line bg-card p-3"
                 }
               >
                 <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-body-sm text-ink">{t(type.labelKey as never)}</p>
+                  <p className={type.heldKey ? "text-body-sm text-muted" : "text-body-sm text-ink"}>
+                    {t(type.labelKey as never)}
+                  </p>
                   <span className="font-mono text-eyebrow uppercase text-faint">
                     {t(`section.group.${type.group}` as never)}
                   </span>
                 </div>
                 <p className="mt-1 text-caption text-muted">{t(type.sourceKey as never)}</p>
-                {type.comingSoon && (
-                  <p className="mt-2 text-caption text-faint">{t("section.services.coming")}</p>
+                {/*
+                   Board `5c-s`: which listings a type is for, on every card. A
+                   template's own library filters by it; this page lists the
+                   whole catalogue and says so on each one.
+                */}
+                <p className="mt-2 font-mono text-eyebrow uppercase text-muted">
+                  {t(`section.available_for.${type.availableFor}` as never)}
+                </p>
+                {type.heldKey && (
+                  <p className="mt-2 text-caption text-faint">{t(type.heldKey as never)}</p>
                 )}
               </li>
             ))}
@@ -130,6 +140,7 @@ export default async function StorefrontTemplatesPage() {
             {t("admin.templates.library_count", {
               buildable: formatCount(BUILDABLE_SECTION_TYPES.length),
               total: formatCount(SECTION_TYPES.length),
+              services: formatCount(SECTION_TYPES.filter((type) => type.availableFor === "services").length),
             })}
           </p>
         </Panel>

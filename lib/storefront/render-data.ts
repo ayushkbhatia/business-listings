@@ -1,8 +1,10 @@
 import type { Availability } from "@/components/domain";
+import type { CredentialKind } from "@/lib/db/generated/enums";
 import type { ResolvedSection } from "./sections";
+import type { ListingKind } from "./library";
 
 /**
- * Everything the fourteen section types can render, assembled once.
+ * Everything the section types can render, assembled once.
  *
  * Every section reads from data the seller already has — that is the whole
  * point of the model, and it is why enabling one is a click for staff and no
@@ -115,7 +117,75 @@ export interface StorefrontSpecRow {
   values: (string | null)[];
 }
 
+/**
+ * A service, as a section reads it — board `5c-s`.
+ *
+ * The raw scope-sheet values for the four fields `1e-s` compares, null where
+ * the firm has not said. Worded by the renderer, because a loader has no
+ * business calling `t()`; and never a fee amount, because the loader behind it
+ * is `publicServicesFor`, which does not select one.
+ */
+export interface SectionService {
+  id: string;
+  slug: string;
+  name: string;
+  /** The firm's own scope paragraph — the deliverable line under the name. */
+  scope: string | null;
+  engagementType: string | null;
+  turnaround: string | null;
+  /** The family's own label for it, already a word. */
+  feeBasis: string | null;
+  deliveredWhere: string | null;
+  /** This service's effective coverage: its own rows, else the default (`1f-s` B1). */
+  places: SectionPlace[];
+}
+
+export interface SectionPlace {
+  emirate: string;
+  /** Null for the whole emirate. */
+  areaId: string | null;
+  /** The area's name, or the emirate's where the claim is emirate-wide. */
+  label: string;
+}
+
+export interface SectionCredential {
+  id: string;
+  kind: CredentialKind;
+  identifier: string | null;
+  issuer: string | null;
+  expiresOn: Date | null;
+  verified: boolean;
+  verifiedBy: string | null;
+}
+
+/**
+ * What a firm that sells work brings to a section. Null for one that does not.
+ *
+ * Loaded only when a template carries a services section and the listing sells
+ * work — a goods storefront pays nothing for a scope grid it will never render.
+ */
+export interface SectionWork {
+  /** In the public list's order — 90-day enquiry volume, seller order breaking ties (B8). */
+  services: SectionService[];
+  credentials: SectionCredential[];
+  /** The union of every published service's coverage, as the overview prints it. */
+  coverage: SectionPlace[];
+  /** Free-zone registrations: a qualifier printed beside a place, never a place. */
+  freeZones: { emirate: string; name: string }[];
+  sectors: { label: string; engagements: number | null }[];
+  /** How the work reaches a client — `2d-s`'s answer, printed with the union. */
+  deliveryModes: string[];
+}
+
 export interface SectionData {
+  /**
+   * Which words a shared section speaks — B5.
+   *
+   * A firm that sells both leads with its catalogue, so its shared sections
+   * speak goods; the services half renders in its own sections beside them.
+   */
+  kind: ListingKind;
+  work: SectionWork | null;
   business: StorefrontIdentity;
   locations: StorefrontLocation[];
   products: StorefrontProduct[];
@@ -155,6 +225,15 @@ export interface SectionProps {
    * boundary, which four boards in this repo have each proved once.
    */
   enquireSlot?: React.ReactNode;
+  /**
+   * Rendered in the builder rather than on a storefront — board `5c-s`.
+   *
+   * A storefront drops an empty section or says the buyer's version of why. A
+   * preview says the seller's: *no services published yet, and here is what
+   * fills it* — the seller needs to see what a section will do before it has
+   * anything to do it with.
+   */
+  preview?: boolean;
 }
 
 /** A seller-filled line, or the template's own fallback. */

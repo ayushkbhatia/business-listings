@@ -3,7 +3,7 @@ import { renderSection } from "@/components/storefront";
 import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
 import { SECTION_TYPES } from "@/lib/storefront/section-types";
-import { SPECIMEN_CONTENT, SPECIMEN_DATA } from "@/lib/storefront/specimen-data";
+import { SPECIMEN_DATA, SPECIMEN_WORK_DATA, specimenContentFor } from "@/lib/storefront/specimen-data";
 import type { ResolvedSection } from "@/lib/storefront/sections";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -100,6 +100,9 @@ export default async function SpecimensPage() {
                   {t("section.seller_fills")}:{" "}
                   {fields.length === 0 ? t("section.no_seller_fields") : fields.join(", ")}
                 </span>
+                <span className="font-mono text-eyebrow uppercase text-muted">
+                  {t(`section.available_for.${type.availableFor}` as never)}
+                </span>
               </div>
 
               {/*
@@ -108,11 +111,16 @@ export default async function SpecimensPage() {
                 — and the console must not take a seller theme.
               */}
               <div data-theme="industrial" className="mt-4">
+                {/*
+                   Board `5c-s`: a services section renders against the specimen
+                   firm that sells work. Against the stockist it would render its
+                   empty state and nothing a reviewer could judge.
+                */}
                 {renderSection({
                   section,
-                  data: SPECIMEN_DATA,
-                  content: SPECIMEN_CONTENT[type.key] ?? {},
-                  enquireHref: `/rfq/new?to=${SPECIMEN_DATA.business.slug}`,
+                  data: type.availableFor === "services" ? SPECIMEN_WORK_DATA : SPECIMEN_DATA,
+                  content: specimenContentFor(type.availableFor === "services" ? SPECIMEN_WORK_DATA : SPECIMEN_DATA)[type.key] ?? {},
+                  enquireHref: `/b/${SPECIMEN_DATA.business.slug}#enquire`,
                 })}
               </div>
             </li>

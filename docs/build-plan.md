@@ -453,8 +453,8 @@ the only large piece and the only one selling something it does not deliver.
 | `12f` | Support desk & view-as | partial ↓ | small | View-as is the best-guarded thing in the console. | 7.3 |
 | `5a` | Builder shell | partial | medium | `createTemplate` has no route caller. | 8.4 |
 | `5b` | Theme presets | scaffold ↓ | medium | Five of eight theme columns reach no storefront. | 8.3 |
-| `5c` | Section library | partial ↓ | export only | One dead helper; the library cannot say which sections the template already uses. | 8.5 |
-| `5g` | Section specimens I | partial ↓ | export only | All fifteen types render. | 8.5 |
+| `5c` | Section library | partial ↓ | export only | ~~One dead helper~~ — `5c-s` gave `sectionLibrary` its callers: `/admin/storefront-templates/:id/sections` groups by trade kind and marks what the template carries. Still unexported. | 8.5 |
+| `5g` | Section specimens I | partial ↓ | export only | All nineteen types render; the services ones against a firm that sells work. | 8.5 |
 | `5h` | Section specimens II | partial ↓ | export only | A records gap: one surface where the epic counts two boards. | 8.5 |
 | `5d` | Page template editor | partial ↓ | small | No delete and no unpublish, so a page on 1,842 storefronts cannot be taken down. | 8.4 |
 | `5e` | Domains & publishing | scaffold ↓ | large | No `middleware.ts` — a verified custom domain serves nothing. | 8.1 |

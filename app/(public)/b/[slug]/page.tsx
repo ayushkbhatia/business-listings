@@ -222,6 +222,7 @@ async function ClaimedStorefront({
     slug: business.slug,
     sectorId: business.sectorId,
     themePreset: business.themePreset,
+    sellsKind: business.sellsKind,
   });
   /*
    * Still needed here for the structured data, which describes the business
@@ -606,11 +607,17 @@ async function ClaimedStorefront({
                service composer in a drawer, because this rail's composer asks
                for quantities.
             */}
-            {work && (
-              <>
-                <ServicesSection business={business} data={work} mode="drawer" signedIn={Boolean(actor)} />
-                <CredentialsSection business={business} data={work} />
-              </>
+            {/*
+               Unless the sector's template places them itself — board `5c-s`.
+               A template carrying a scope grid or a credential wall renders
+               those in its own order below, and this page drawing its fixed
+               copy as well would put the same firm's services on it twice.
+            */}
+            {work && !plan.sections.some((section) => section.type === "scope_grid") && (
+              <ServicesSection business={business} data={work} mode="drawer" signedIn={Boolean(actor)} />
+            )}
+            {work && !plan.sections.some((section) => section.type === "credential_wall") && (
+              <CredentialsSection business={business} data={work} />
             )}
 
             <BusinessDetails business={business} lastUpdated={formatDate(business.updatedAt)} />

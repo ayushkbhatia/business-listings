@@ -3,7 +3,7 @@
  *
  * One per `SectionType`, and the catalogue of record is
  * `lib/storefront/section-types.ts` rather than this file or the component
- * inventory. Two lists of fourteen things is one list too many — which is the
+ * inventory. Two lists of the same things is one list too many — which is the
  * failure the inventory's own note on `Thread` describes.
  *
  * `/admin/storefront-templates/specimens` is the gallery for these, the way
@@ -23,6 +23,10 @@ export { Team } from "./Team";
 export { OfferBanner } from "./OfferBanner";
 export { SpecComparison } from "./SpecComparison";
 export { Downloads } from "./Downloads";
-export { Services } from "./Services";
+export { ScopeGrid, SCOPE_GRID_ROWS } from "./ScopeGrid";
+export { CredentialWall } from "./CredentialWall";
+export { Coverage } from "./Coverage";
+export { SectorsServed } from "./SectorsServed";
+export { ProcessSteps } from "./ProcessSteps";
 export { PageBlocks, type PageBlocksProps } from "./PageBlocks";
 export { SECTION_RENDERERS, renderSection } from "./registry";

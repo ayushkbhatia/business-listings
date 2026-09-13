@@ -209,3 +209,29 @@ describe("the order of the list", () => {
     expect(hasChanges(changes)).toBe(true);
   });
 });
+
+describe("board 5c-s — a live section's settings", () => {
+  const withGrid = (settings: unknown): TemplateNow => ({
+    ...base,
+    sections: [...base.sections, section({ id: "grid", type: "scope_grid", sortOrder: 3, settings })],
+  });
+  const snapshotWithGrid = (settings: unknown): TemplateSnapshot => ({
+    ...snapshotOf(),
+    sections: withGrid(settings).sections.map((s) => ({ ...s })),
+  });
+
+  it("says a column change is a change, in words", () => {
+    const changes = diffTemplate(
+      snapshotWithGrid({ columns: ["fee_basis", "turnaround"] }),
+      withGrid({ columns: ["turnaround", "engagement"] }),
+    );
+    expect(changes).toContainEqual(
+      expect.objectContaining({ kind: "section_settings_changed", labelKey: "diff.settings_changed" }),
+    );
+  });
+
+  it("treats an empty settings object and the defaults as the same section", () => {
+    const changes = diffTemplate(snapshotWithGrid({}), withGrid({ columns: ["fee_basis", "turnaround"] }));
+    expect(changes.some((change) => change.kind === "section_settings_changed")).toBe(false);
+  });
+});
