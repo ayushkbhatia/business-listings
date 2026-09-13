@@ -2,9 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublicShell } from "@/components/structure";
 import { Alert } from "@/components/display/Alert";
-import { getBuyerEnquiry } from "@/lib/db/queries/enquiry";
+import { getBuyerEnquiry, type BuyerEnquiry } from "@/lib/db/queries/enquiry";
+import type { EnquiryBrief } from "@/lib/db/queries/enquiry-brief";
+import { briefFactWords } from "@/lib/enquiry/service-brief-words";
 import { getTrackingByRef } from "@/lib/db/queries/enquiry-tracking";
 import {
+  additionalWanted,
   canAddRecipients,
   compareBlockedBy,
   effectiveState,
@@ -97,6 +100,13 @@ export default async function EnquiryPage({
   const declinedCount = rows.filter(
     (row) => effectiveState(row, tracking.closesAt, now) === "declined",
   ).length;
+  // A URL parameter, so clamped to what an add can actually have written.
+  const added = Math.min(8, Math.max(0, Math.floor(Number(one("added")) || 0)));
+  const addable = additionalWanted({
+    sent: header.sent,
+    declined: declinedCount,
+    allDeclined: header.mode === "all_declined",
+  });
 
   return (
     <PublicShell nav={<DirectoryNav />}>
@@ -125,6 +135,13 @@ export default async function EnquiryPage({
            Board `1d-s`. The enquiry went; the file did not. Said once, plainly,
            with the one thing the buyer can do about it.
         */}
+        {/* Board 1i: suppliers added from `/rfq/new?from=`, said once. */}
+        {added > 0 && (
+          <p role="status" className="mt-4 rounded-ctl border border-ok-line bg-ok-wash px-3.5 py-2.5 text-body-sm text-ok-ink">
+            {t("track.added", { count: added, word: spell(added) })}
+          </p>
+        )}
+
         {one("attachment") === "failed" && (
           <div className="mt-4">
             <Alert tone="warn" live="polite" fix={t("enquiry.attachment_failed")}>
@@ -137,47 +154,54 @@ export default async function EnquiryPage({
           <div className="min-w-0 space-y-5">
             {/* ── Two summary cards ─────────────────────────────────────── */}
             <div className="grid gap-3.5 sm:grid-cols-2">
-              <section className="rounded-card border border-line bg-card p-4">
-                <h2 className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
-                  {t("track.asked_for")}
-                </h2>
-                <ul className="mt-2 space-y-1">
-                  {enquiry.lines.map((line) => (
-                    <li key={line.id} className="text-body-sm text-ink">
-                      {line.description}
-                      {/* `×1` on "Statutory audit" is the platform inventing a
-                          unit for work sold as a job. Omitted instead. */}
-                      {line.qty !== null && (
-                        <span className="ml-1.5 font-mono text-caption tabular-nums text-body">
-                          ×{line.qty}
-                        </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-                <p className="mt-2.5 border-t border-line pt-2 text-caption text-body">
-                  {[
-                    enquiry.scale ? `${t("enquiry.scale")}: ${enquiry.scale}` : null,
-                    enquiry.deliverToArea,
-                    enquiry.neededBy ? formatDate(enquiry.neededBy) : null,
-                    /*
-                       Worded. This printed the stored enum — `net_30` — to the
-                       buyer who had picked "Net 30" from a list.
-                    */
-                    enquiry.termsWanted ? t(`terms.${enquiry.termsWanted}` as "terms.net_30") : null,
-                    ...enquiry.attachments.map((file) => `${t("enquiry.attachment")}: ${file.filename}`),
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-              </section>
+              {enquiry.brief ? (
+                <BriefCard enquiry={enquiry} brief={enquiry.brief} />
+              ) : (
+                <section className="rounded-card border border-line bg-card p-4">
+                  <h2 className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
+                    {t("track.asked_for")}
+                  </h2>
+                  <ul className="mt-2 space-y-1">
+                    {enquiry.lines.map((line) => (
+                      <li key={line.id} className="text-body-sm text-ink">
+                        {line.description}
+                        {/* `×1` on "Statutory audit" is the platform inventing a
+                            unit for work sold as a job. Omitted instead. */}
+                        {line.qty !== null && (
+                          <span className="ml-1.5 font-mono text-caption tabular-nums text-body">
+                            ×{line.qty}
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2.5 border-t border-line pt-2 text-caption text-body">
+                    {[
+                      enquiry.scale ? `${t("enquiry.scale")}: ${enquiry.scale}` : null,
+                      enquiry.deliverToArea,
+                      enquiry.neededBy ? formatDate(enquiry.neededBy) : null,
+                      /*
+                         Worded. This printed the stored enum — `net_30` — to the
+                         buyer who had picked "Net 30" from a list.
+                      */
+                      enquiry.termsWanted ? t(`terms.${enquiry.termsWanted}` as "terms.net_30") : null,
+                      ...enquiry.attachments.map((file) => `${t("enquiry.attachment")}: ${file.filename}`),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </section>
+              )}
 
               <section className="rounded-card border border-line bg-card p-4">
                 <h2 className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
                   {t("track.happens_next")}
                 </h2>
                 <ol className="mt-2 space-y-1.5">
-                  {[t("track.next_1"), t("track.next_2"), t("track.next_3")].map((line, i) => (
+                  {(enquiry.brief
+                    ? [t("track.brief.next_1"), t("track.brief.next_2"), t("track.next_3")]
+                    : [t("track.next_1"), t("track.next_2"), t("track.next_3")]
+                  ).map((line, i) => (
                     <li key={line} className="flex gap-2 text-caption text-body">
                       <span className="font-mono text-faint">{i + 1}</span>
                       <span>{line}</span>
@@ -256,24 +280,32 @@ export default async function EnquiryPage({
                 </div>
               )}
 
-              {!tracking.accepted && canAddRecipients(header.sent) && (
+              {/*
+                 Not on a brief. It went to every firm the matcher found, up to
+                 the cap, so "add two more" would offer firms that do not cover
+                 the site — the padding `1h-s` refuses.
+              */}
+              {!tracking.accepted && !closed && !enquiry.brief && canAddRecipients(header.sent) && (
                 /*
                    Absent at the cap, not disabled. A disabled control invites a
                    buyer to work out what they are missing when the answer is
-                   nothing they can change.
+                   nothing they can change. Absent once closed too: a supplier
+                   added then would receive an enquiry with no time left.
+
+                   The count is the one `/rfq/new?from=` offers, so at seven sent
+                   the label says one rather than promising two. The token
+                   travels with it, because the page identifies the buyer the
+                   same way this one does.
                 */
-                <a
-                  href={`/rfq/new?from=${tracking.ref}`}
-                  className={SECONDARY}
-                >
+                <a href={withToken(`/rfq/new?from=${tracking.ref}`)} className={SECONDARY}>
                   {header.mode === "all_declined"
-                    ? t("track.send_more", { count: declinedCount })
-                    : t("track.add_suppliers")}
+                    ? t("track.send_more", { count: addable })
+                    : t("track.add_suppliers", { count: addable, word: spell(addable) })}
                 </a>
               )}
 
               {!tracking.accepted && !closed && (
-                <a href={`/rfq/new?revise=${tracking.ref}`} className={SECONDARY}>
+                <a href={withToken(`/rfq/new?revise=${tracking.ref}`)} className={SECONDARY}>
                   {t("track.edit_requirement")}
                 </a>
               )}
@@ -303,12 +335,15 @@ export default async function EnquiryPage({
               </p>
             </section>
 
-            <section className="rounded-card border border-line bg-card p-4">
-              <h2 className="text-body-sm font-medium text-ink">{t("track.template_title")}</h2>
-              <p className="mt-1.5 text-caption leading-relaxed text-body">
-                {t("track.template_body")}
-              </p>
-            </section>
+            {/* Its copy is about re-buying the same lines, which a brief has none of. */}
+            {!enquiry.brief && (
+              <section className="rounded-card border border-line bg-card p-4">
+                <h2 className="text-body-sm font-medium text-ink">{t("track.template_title")}</h2>
+                <p className="mt-1.5 text-caption leading-relaxed text-body">
+                  {t("track.template_body")}
+                </p>
+              </section>
+            )}
           </aside>
         </div>
       </div>
@@ -348,6 +383,45 @@ export default async function EnquiryPage({
         )}
       </div>
     </PublicShell>
+  );
+}
+
+/**
+ * Board `1h-s` — the brief as the buyer sent it.
+ *
+ * The description exactly as typed (B2), with its line breaks, and the facts a
+ * supplier prices against in a real definition list. A scale left empty says
+ * so in words — B7's null carried to the one page the buyer reads it on, rather
+ * than a missing row that looks like a field the page forgot.
+ */
+function BriefCard({ enquiry, brief }: { enquiry: BuyerEnquiry; brief: EnquiryBrief }) {
+  const facts = briefFactWords(brief);
+  const rows: { key: string; label: string; value: string; muted?: boolean }[] = [
+    { key: "site", label: t("track.brief.site"), value: facts.site },
+    { key: "engagement", label: t("track.brief.engagement"), value: facts.engagement },
+    { key: "start", label: t("track.brief.start"), value: facts.start },
+    enquiry.scale
+      ? { key: "scale", label: t("track.brief.scale"), value: enquiry.scale }
+      : { key: "scale", label: t("track.brief.scale"), value: t("track.brief.scale_none"), muted: true },
+    ...(enquiry.attachments.length > 0
+      ? [{ key: "files", label: t("track.brief.files"), value: enquiry.attachments.map((f) => f.filename).join(", ") }]
+      : []),
+  ];
+
+  return (
+    <section className="rounded-card border border-line bg-card p-4">
+      <h2 className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">{t("track.brief_title")}</h2>
+      <p className="mt-1 text-body-sm font-medium text-ink">{brief.subcategoryName}</p>
+      <p className="mt-2 whitespace-pre-wrap break-words text-body-sm text-body">{enquiry.requirement}</p>
+      <dl className="mt-3 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1.5 border-t border-line pt-3 text-caption">
+        {rows.map((row) => (
+          <div key={row.key} className="contents">
+            <dt className="text-muted">{row.label}</dt>
+            <dd className={cn("min-w-0 break-words", row.muted ? "text-faint" : "text-ink")}>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }
 

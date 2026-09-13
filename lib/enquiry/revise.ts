@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { REQUIREMENT_MAX, REQUIREMENT_MIN, SCALE_MAX } from "./service-enquiry";
 
 /**
  * Board 1i criterion 10: editing a requirement creates a revision, not an edit.
@@ -22,24 +23,47 @@ import { prisma } from "@/lib/db/client";
  */
 
 export type ReviseResult =
-  | { ok: true; revision: number; superseded: number }
-  | { ok: false; error: "not_found" | "empty" | "closed" };
+  | { ok: true; enquiryId: string; revision: number; superseded: number }
+  | { ok: false; error: "not_found" | "empty" | "too_long" | "scale_too_long" | "closed" | "unchanged" };
 
 export async function reviseRequirement(input: {
   buyerId: string;
+  /** The reference or the id — the two the tracking page's links carry. */
   ref: string;
   requirement: string;
+  /**
+   * Board `1h-s`: the brief's scale, in the buyer's words. `undefined` leaves
+   * it as it is; an empty string clears it, which is a real answer (B7).
+   */
+  scale?: string;
   now?: Date;
 }): Promise<ReviseResult> {
   const now = input.now ?? new Date();
-  const requirement = input.requirement.trim();
-  if (requirement.length < 10) return { ok: false, error: "empty" };
+  if (input.requirement.trim().length < REQUIREMENT_MIN) return { ok: false, error: "empty" };
+  if (input.requirement.length > REQUIREMENT_MAX) return { ok: false, error: "too_long" };
+  const scale = input.scale === undefined ? undefined : input.scale.trim().replace(/\s+/g, " ");
+  if (scale !== undefined && scale.length > SCALE_MAX) return { ok: false, error: "scale_too_long" };
 
   const enquiry = await prisma.enquiry.findFirst({
-    where: { ref: input.ref, buyerId: input.buyerId },
-    select: { id: true, revision: true, closesAt: true, contactReleasedToBusinessId: true },
+    where: { OR: [{ ref: input.ref }, { id: input.ref }], buyerId: input.buyerId },
+    select: {
+      id: true,
+      revision: true,
+      closesAt: true,
+      contactReleasedToBusinessId: true,
+      requirement: true,
+      scale: true,
+      serviceBrief: { select: { enquiryId: true } },
+    },
   });
   if (!enquiry) return { ok: false, error: "not_found" };
+
+  /*
+     A brief's description is kept byte for byte — `1h-s` B2 — on revision as on
+     send. A goods requirement keeps the trim it has always had.
+  */
+  const requirement = enquiry.serviceBrief ? input.requirement : input.requirement.trim();
+  const nextScale = scale === undefined || !enquiry.serviceBrief ? enquiry.scale : scale === "" ? null : scale;
 
   /*
      A closed or accepted enquiry is a record, not a live request. Revising one
@@ -50,12 +74,17 @@ export async function reviseRequirement(input: {
     return { ok: false, error: "closed" };
   }
 
+  // A revision that changes nothing would still supersede every quote sent.
+  if (requirement === enquiry.requirement && nextScale === enquiry.scale) {
+    return { ok: false, error: "unchanged" };
+  }
+
   const next = enquiry.revision + 1;
 
   const superseded = await prisma.$transaction(async (tx) => {
     await tx.enquiry.update({
       where: { id: enquiry.id },
-      data: { requirement, revision: next, revisedAt: now },
+      data: { requirement, scale: nextScale, revision: next, revisedAt: now },
     });
 
     /*
@@ -74,5 +103,5 @@ export async function reviseRequirement(input: {
     return count;
   });
 
-  return { ok: true, revision: next, superseded };
+  return { ok: true, enquiryId: enquiry.id, revision: next, superseded };
 }

@@ -10,6 +10,7 @@ import {
 } from "@/lib/storage";
 import { sellsWork } from "@/lib/storefront/tabs";
 import { createEnquiry } from "./service";
+import { MAX_BRIEF_ATTACHMENTS } from "./service-brief";
 import {
   MAX_ENQUIRY_ATTACHMENTS,
   checkEnquiryAttachment,
@@ -54,7 +55,8 @@ export interface StorageDeps {
   remove: (bucket: string, path: string) => Promise<void>;
 }
 
-const storage: StorageDeps = { sign: signUpload, stat: statDocument, remove: removeObject };
+export const storageDeps: StorageDeps = { sign: signUpload, stat: statDocument, remove: removeObject };
+const storage = storageDeps;
 
 export interface SendServiceEnquiryInput {
   businessId: string;
@@ -208,7 +210,8 @@ export type AttachResult =
  *  3. **Storage holds it, and it is what the bucket allows.** Read back from
  *     storage, not from the form — the bytes are not bound by what the browser
  *     said about them. A file that fails is removed, not orphaned.
- *  4. **One file.** A second confirm is refused rather than stacked.
+ *  4. **Within the set.** One file for a storefront enquiry, five for a brief
+ *     (`1h-s` B8). A confirm past the limit is refused rather than stacked.
  *
  * `not_found` for the first two, and for an enquiry that does not exist: the
  * same answer for *not yours* and *not there*, so the endpoint is not an oracle.
@@ -225,6 +228,7 @@ export async function confirmEnquiryAttachment(
       buyerId: true,
       buyer: { select: { claimToken: true } },
       _count: { select: { attachments: true } },
+      serviceBrief: { select: { enquiryId: true } },
     },
   });
   if (!enquiry) return { ok: false, reason: "not_found" };
@@ -238,7 +242,8 @@ export async function confirmEnquiryAttachment(
   if (!isBuyer) return { ok: false, reason: "not_found" };
 
   if (!isEnquiryAttachmentPath(enquiry.id, input.path)) return { ok: false, reason: "not_found" };
-  if (enquiry._count.attachments >= MAX_ENQUIRY_ATTACHMENTS) return { ok: false, reason: "full" };
+  const limit = enquiry.serviceBrief ? MAX_BRIEF_ATTACHMENTS : MAX_ENQUIRY_ATTACHMENTS;
+  if (enquiry._count.attachments >= limit) return { ok: false, reason: "full" };
 
   const stored = await deps.stat(input.path);
   if (!stored) return { ok: false, reason: "missing" };

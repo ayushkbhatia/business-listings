@@ -25,7 +25,7 @@ let otherCategoryId: string;
 let freeZone: { id: string; emirate: string; name: string };
 let buyerId: string;
 
-async function makeFirm(fields: { published?: boolean; claimed?: boolean } = {}) {
+async function makeFirm(fields: { published?: boolean; claimed?: boolean; verified?: boolean } = {}) {
   const mark = stamp();
   const firm = await prisma.business.create({
     data: {
@@ -38,6 +38,8 @@ async function makeFirm(fields: { published?: boolean; claimed?: boolean } = {})
       primaryCategoryId: categoryId,
       claimStatus: fields.claimed === false ? "unclaimed" : "claimed",
       sellsKind: "services",
+      // `1h-s` B5: the offer counts only firms the brief it opens would route to.
+      verificationTier: fields.verified === false ? 0 : 2,
       publishedAt: fields.published === false ? null : new Date(),
     },
     select: { id: true },
@@ -167,10 +169,11 @@ describe("coveringFirmsByEmirate — B6", () => {
 
     const beforeExcluded = await coveringFirmsByEmirate(categoryId, self);
 
-    // Not counted: unpublished, unclaimed, a draft service, another subcategory.
+    // Not counted: unpublished, unclaimed, unverified, a draft service, another subcategory.
     for (const [firm, status, category] of [
       [await makeFirm({ published: false }), "live", categoryId],
       [await makeFirm({ claimed: false }), "live", categoryId],
+      [await makeFirm({ verified: false }), "live", categoryId],
       [await makeFirm(), "draft", categoryId],
       [await makeFirm(), "live", otherCategoryId],
     ] as const) {
@@ -178,7 +181,7 @@ describe("coveringFirmsByEmirate — B6", () => {
       await prisma.serviceCoverage.create({ data: { businessId: firm, emirate: "ajman", areaId: null } });
     }
 
-    // None of those four moved the count.
+    // None of those five moved the count.
     const counts = await coveringFirmsByEmirate(categoryId, self);
     expect(counts.get("ajman") ?? 0).toBe(beforeExcluded.get("ajman") ?? 0);
 

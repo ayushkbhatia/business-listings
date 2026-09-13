@@ -166,6 +166,45 @@ export function canAddRecipients(sent: number): boolean {
   return sent < MAX_RECIPIENTS;
 }
 
+/**
+ * How many suppliers *Add more* offers, and the number its label says.
+ *
+ * Two, as the control has always read — unless every supplier declined, when
+ * it offers as many as declined, since those are the slots that went nowhere.
+ * Never past the cap: at seven sent it offers one, and the label says one,
+ * rather than promising two and delivering whatever fitted.
+ */
+export const ADD_STEP = 2;
+
+export function additionalWanted(input: { sent: number; declined: number; allDeclined: boolean }): number {
+  const room = Math.max(0, MAX_RECIPIENTS - input.sent);
+  return Math.min(room, input.allDeclined ? Math.max(1, input.declined) : ADD_STEP);
+}
+
+/**
+ * The trade an enquiry was for, which `Enquiry` does not store.
+ *
+ * The products its lines were matched to say it most precisely — those are the
+ * things asked for. Failing that, the trade most of its recipients are filed
+ * under, which is the trade the first fan-out routed to; ties go to the first
+ * recipient, the same reading `recordZeroQuote` takes. Null when it has
+ * neither, and nothing is matched rather than something guessed.
+ */
+export function enquiryTrade(input: {
+  productCategoryIds: readonly string[];
+  recipientCategoryIds: readonly string[];
+}): string | null {
+  for (const ids of [input.productCategoryIds, input.recipientCategoryIds]) {
+    if (ids.length === 0) continue;
+    const counts = new Map<string, number>();
+    for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+    let best = ids[0]!;
+    for (const id of ids) if ((counts.get(id) ?? 0) > (counts.get(best) ?? 0)) best = id;
+    return best;
+  }
+  return null;
+}
+
 /** Comparing one quote is not comparing. */
 export const MIN_TO_COMPARE = 2;
 

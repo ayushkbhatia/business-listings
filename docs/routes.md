@@ -31,6 +31,9 @@ and it is the one that argues back.
 /b/:slug/s/:service                     Service detail — the scope table    [1g-s] built h3gs
 /b/:slug (unclaimed variant)            Unclaimed listing                    [10g]
 /rfq/new                                RFQ fan-out                           [1h]  built h2s3
+/rfq/new (trade sold by the job)        Brief — five questions, no quantity [1h-s] built h1hs
+/rfq/new?revise=:ref                    Add detail to a sent enquiry          [1i]  built h1hs
+/rfq/new?from=:ref                      Send a sent enquiry to more suppliers [1i]  built h1i
 /enquiry/:id                            Enquiry sent + tracking               [1i]  built h2s3
 /enquiry/:id/compare                    Compare quotes                        [1n]  built h2s3
 /enquiry/:id/accepted                   Accepted quote record                 [7c]  built h2s3

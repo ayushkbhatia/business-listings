@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { buyerForSeller, buyerSelectFor, type SellerVisibleBuyer } from "./seller-visibility";
 import { matchLines, type LineMatch, type MatchableProduct } from "@/lib/quote/match";
 import { quoteTotalAed } from "@/lib/quote/money";
+import { ENQUIRY_BRIEF_SELECT, toEnquiryBrief, type EnquiryBrief } from "./enquiry-brief";
 
 /**
  * Server-side reads for the seller dashboard.
@@ -150,6 +151,8 @@ export interface LeadDetail {
    * seat is a recipient and mints a short signed link. The path is not here.
    */
   attachments: { id: string; filename: string; bytes: number | null }[];
+  /** Board `1h-s`: the brief, when the enquiry is one. Null on goods. */
+  brief: EnquiryBrief | null;
   closesAt: Date;
   createdAt: Date;
   openedAt: Date | null;
@@ -243,6 +246,9 @@ export async function getLeadDetail(
         orderBy: { createdAt: "asc" },
         select: { id: true, filename: true, bytes: true },
       },
+      emirate: true,
+      area: { select: { name: true } },
+      serviceBrief: { select: ENQUIRY_BRIEF_SELECT },
       quotes: {
         /*
            Sent quotes only, for the same reason: the composer's eyebrow counts
@@ -279,6 +285,7 @@ export async function getLeadDetail(
     termsWanted: enquiry.termsWanted,
     scale: enquiry.scale,
     attachments: enquiry.attachments,
+    brief: toEnquiryBrief(enquiry.serviceBrief, enquiry),
     closesAt: enquiry.closesAt,
     createdAt: enquiry.createdAt,
     openedAt: recipient.openedAt,

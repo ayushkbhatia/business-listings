@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  additionalWanted,
   canAddRecipients,
+  enquiryTrade,
   latencyMs,
   canNudge,
   compareBlockedBy,
@@ -171,6 +173,21 @@ describe("the two limits on the action row", () => {
   it("hides add-more at the cap rather than disabling it", () => {
     expect(canAddRecipients(7)).toBe(true);
     expect(canAddRecipients(8)).toBe(false);
+  });
+
+  it("offers two more, as many as declined when all did, and never past eight", () => {
+    expect(additionalWanted({ sent: 3, declined: 0, allDeclined: false })).toBe(2);
+    expect(additionalWanted({ sent: 7, declined: 0, allDeclined: false })).toBe(1);
+    expect(additionalWanted({ sent: 8, declined: 0, allDeclined: false })).toBe(0);
+    expect(additionalWanted({ sent: 5, declined: 5, allDeclined: true })).toBe(3);
+    expect(additionalWanted({ sent: 3, declined: 3, allDeclined: true })).toBe(3);
+  });
+
+  it("reads the trade off the products asked for, then the recipients, and never guesses", () => {
+    expect(enquiryTrade({ productCategoryIds: ["valves"], recipientCategoryIds: ["hvac", "hvac"] })).toBe("valves");
+    expect(enquiryTrade({ productCategoryIds: [], recipientCategoryIds: ["hvac", "pumps", "pumps"] })).toBe("pumps");
+    expect(enquiryTrade({ productCategoryIds: [], recipientCategoryIds: ["hvac", "pumps"] })).toBe("hvac");
+    expect(enquiryTrade({ productCategoryIds: [], recipientCategoryIds: [] })).toBeNull();
   });
 
   it("refuses to call one quote a comparison, and says why", () => {

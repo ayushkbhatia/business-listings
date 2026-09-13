@@ -695,9 +695,18 @@ test.describe("board 8c-s — the scope sheet and the first services", () => {
     await expect(audit).toContainText("9 rows · 6 required · 5 filterable");
     // A live count, and zero is rendered as zero rather than hidden.
     await expect(audit).toContainText(/used by \d+ firm/);
+    /*
+       The zero state, on a sheet the seed puts nobody on. This was On-site
+       maintenance until `1h-s`'s fixture filed six facilities firms under Hard
+       FM, which resolves to that family — so it now reads a real count, which
+       is the rule working rather than the test.
+    */
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Logistics & clearance" }),
+    ).toContainText("no firms on it yet");
     await expect(
       page.getByRole("listitem").filter({ hasText: "On-site maintenance" }),
-    ).toContainText("no firms on it yet");
+    ).toContainText(/used by \d+ firm/);
   });
 
   test("badges the sheet the seller's own services match — criterion 2", async ({ page }) => {
@@ -1301,7 +1310,8 @@ test.describe("board 1f-s — coverage, where branches and hours were", () => {
     const offer = page.getByRole("complementary", { name: "Work they do not cover" });
     await expect(offer.getByText("Need work somewhere they do not cover?")).toBeVisible();
     const cta = offer.getByRole("link", { name: "Request a quote" });
-    await expect(cta).toHaveAttribute("href", /^\/rfq\/new\?category=.+&q=.+/);
+    // Seeds `1h-s`'s brief with the trade and the emirate, never a sentence in the buyer's name.
+    await expect(cta).toHaveAttribute("href", /^\/rfq\/new\?category=.+&kind=services(&emirate=[a-z_]+)?$/);
     await expect(cta).toHaveAttribute("rel", "nofollow");
   });
 
