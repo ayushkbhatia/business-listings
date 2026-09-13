@@ -49,7 +49,10 @@ export async function getHoursBoard(
   const [locations, calendar] = await Promise.all([
     prisma.location.findMany({
       where: { businessId },
-      orderBy: [{ type: "asc" }, { createdAt: "asc" }],
+      // The locations board's order, tiebreak included — see
+      // lib/db/queries/locations.ts. Two screens listing one seller's branches
+      // must list them the same way.
+      orderBy: [{ type: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       select: {
         id: true,
         type: true,
