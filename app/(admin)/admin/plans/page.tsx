@@ -34,6 +34,7 @@ export default async function PlansPage() {
     serviceLimit: plan.serviceLimit,
     locationLimit: plan.locationLimit,
     photoLimit: plan.photoLimit,
+    publicPhotoLimit: plan.publicPhotoLimit,
     storageMb: plan.storageMb,
     teamSeats: plan.teamSeats,
     categoryLimit: plan.categoryLimit,

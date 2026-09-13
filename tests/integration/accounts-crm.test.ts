@@ -367,12 +367,71 @@ describe("the call list builds itself", () => {
       });
     }
 
-    const list = await callList(500);
+    const { prospects: list } = await callList(500);
     const prospect = list.find((p) => p.businessId === business.id);
     expect(prospect).toBeTruthy();
     expect(prospect!.signal).toBe("missed_at_cap");
     // Lead with their missed demand, not with our product.
     expect(prospect!.value).toBe(3);
+  }, 60_000);
+
+  it("counts what the signals produced, not the page the caller asked for", async () => {
+    /*
+       `/admin/crm` rendered `rows.length` from a `callList(200)` as
+       "{count} prospects, from demand we measured" — a page cap printed as a
+       measurement, on a screen whose whole claim is that nobody types the list.
+       The console tile beside it had the same defect at 500.
+
+       Worse, `take: limit` sat on every source query, so the number a screen
+       wanted to show decided which signals were read at all: the page asked for
+       200 and the console for 500, over two different candidate pools.
+
+       So `total` is counted before the limit, and asking for one row must not
+       change it.
+    */
+    const business = await listing("Total Not Page");
+    const buyer = await prisma.user.create({
+      data: { id: crypto.randomUUID(), fullName: BUYER_NAME, roles: ["buyer"] },
+      select: { id: true },
+    });
+    const enquiry = await prisma.enquiry.create({
+      data: {
+        ref: `${ENQUIRY_PREFIX}total-${Date.now()}${seq}`,
+        buyerId: buyer.id,
+        requirement: "Gate valves, DN100.",
+        closesAt: new Date(Date.now() + 7 * 86_400_000),
+      },
+      select: { id: true },
+    });
+    await prisma.missedEnquiry.create({
+      data: { enquiryId: enquiry.id, businessId: business.id, reason: "at_monthly_cap" },
+    });
+
+    const full = await callList(500);
+    expect(full.total).toBeGreaterThan(0);
+    expect(full.prospects.some((p) => p.businessId === business.id)).toBe(true);
+
+    const onePage = await callList(1);
+    expect(onePage.prospects).toHaveLength(1);
+    // The page shrank and the measurement did not.
+    expect(onePage.total).toBe(full.total);
+    expect(onePage.truncated).toBe(false);
+  }, 60_000);
+
+  it("offers no signal it cannot produce", async () => {
+    /*
+       `reply_rate_falling` was a fourth `SignalKey` with a label in the
+       catalogue and no query anywhere that could set it — a column heading for
+       a call that would never come up. Every signal a prospect can carry has to
+       be one of the three the list actually computes.
+    */
+    const { prospects } = await callList(500);
+    const produced = new Set(prospects.map((prospect) => prospect.signal));
+    for (const signal of produced) {
+      expect(
+        ["missed_at_cap", "zero_result_in_their_trade", "unclaimed_with_demand"],
+      ).toContain(signal);
+    }
   }, 60_000);
 
   it("drops somebody who was called this week", async () => {
@@ -394,7 +453,7 @@ describe("the call list builds itself", () => {
       data: { enquiryId: enquiry.id, businessId: business.id, reason: "at_monthly_cap" },
     });
 
-    expect((await callList(500)).some((p) => p.businessId === business.id)).toBe(true);
+    expect((await callList(500)).prospects.some((p) => p.businessId === business.id)).toBe(true);
 
     await logCall({
       actor: actor(opsLeadId, "staff_ops_lead"),
@@ -404,7 +463,7 @@ describe("the call list builds itself", () => {
     });
 
     // A list that offers the same person every morning gets somebody rung twice.
-    expect((await callList(500)).some((p) => p.businessId === business.id)).toBe(false);
+    expect((await callList(500)).prospects.some((p) => p.businessId === business.id)).toBe(false);
   }, 60_000);
 
   it("records what happened, and which signal it was", async () => {
@@ -470,6 +529,6 @@ describe("the call list builds itself", () => {
       data: { suspendedAt: new Date() },
     });
 
-    expect((await callList(500)).some((p) => p.businessId === business.id)).toBe(false);
+    expect((await callList(500)).prospects.some((p) => p.businessId === business.id)).toBe(false);
   }, 60_000);
 });

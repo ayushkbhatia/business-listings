@@ -8,6 +8,7 @@ import { routeLead } from "@/lib/leads/router";
 import { sendAutoReplies } from "@/lib/messaging/auto-reply";
 import { onEnquiryDelivered, onQuoteAccepted } from "@/lib/notify/events";
 import { quoteTotalAed } from "@/lib/quote/money";
+import { PLAN_CAPS_SELECT, effectiveCaps, toCaps } from "@/lib/plan/entitlements";
 import type { Attribution } from "@/lib/campaign/attribution";
 import {
   MAX_RECIPIENTS,
@@ -67,7 +68,23 @@ const FANOUT_SELECT = (since: Date) =>
     verificationTier: true,
     responseTimeMedianMs: true,
     categories: { select: { categoryId: true } },
-    plan: { select: { enquiriesPerMonth: true, rankingMultiplier: true } },
+    /*
+       The whole cap set, not the two columns this file used to read.
+
+       It read `plan.enquiriesPerMonth` straight off the live `Plan` row, which
+       is the one thing D1's entitlement snapshot exists to prevent: a
+       grandfathered seller was capped at whatever number staff last typed into
+       the plan editor rather than the number they signed up on. The snapshot
+       has been written since handoff 3 and this — the reader that decides
+       whether a seller is shown an enquiry at all — never looked at it.
+
+       `rankingMultiplier` is deliberately still the live plan's, and
+       `effectiveCaps` keeps it that way: its docblock says the name, the price
+       and the multiplier are facts about the plan today, not about what
+       somebody bought.
+    */
+    plan: { select: PLAN_CAPS_SELECT },
+    subscription: { select: { entitlementSnapshot: true } },
     /*
        Every published branch, not the first row Postgres returns.
 
@@ -290,9 +307,21 @@ export async function findFanoutCandidates(
        ever has, so the honest value is "not measured".
     */
     inStockLineCount: null,
-    enquiriesPerMonth: business.plan?.enquiriesPerMonth ?? null,
+    /*
+       D1's grandfathering, finally read. `effectiveCaps` prefers the caps this
+       subscription was signed up on and falls back to the live plan where
+       nothing was frozen — the same one rule billing and the plan console use,
+       rather than a fourth reading of it here.
+
+       No plan at all is no cap, which is what it has always meant: a listing
+       with no plan row is not on a metered tier.
+    */
+    enquiriesPerMonth: business.plan
+      ? effectiveCaps(toCaps(business.plan), business.subscription?.entitlementSnapshot)
+          .enquiriesPerMonth
+      : null,
     enquiriesThisMonth: business._count.recipients,
-    rankingMultiplier: business.plan?.rankingMultiplier ?? 1,
+    rankingMultiplier: business.plan ? Number(business.plan.rankingMultiplier) : 1,
   }));
 }
 

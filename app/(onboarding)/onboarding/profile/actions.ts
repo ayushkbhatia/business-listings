@@ -6,7 +6,10 @@ import {
   addExtraCategory,
   removeExtraCategory,
   type AddCategoryResult,
+  type RemoveCategoryResult,
 } from "@/lib/onboarding/categories";
+import { mayEditListing } from "@/lib/auth/guards";
+import type { Actor } from "@/lib/auth/roles";
 import { patchProfileField, type PatchField, type PatchResult } from "@/lib/onboarding/profile";
 import { t } from "@/lib/i18n";
 
@@ -61,9 +64,32 @@ export async function saveProfileField(formData: FormData): Promise<PatchResult>
   return result;
 }
 
+/**
+ * Who may change the category set — and it is not "whoever holds a seat".
+ *
+ * These two guarded on `actor?.businessId` alone, which every seat has: a sales
+ * or finance seat could add and drop the trades the listing is filed under, and
+ * `removeCategory` then returned `{ ok: true }` whether a row went or not, so
+ * nothing anywhere said no. Its dashboard sibling `removeCoverage` has called
+ * `assertCanEditListing` since board 3c.
+ *
+ * The check sits here rather than in `lib/onboarding/categories.ts` because
+ * that module is `businessId`-scoped throughout and takes no `Actor` anywhere —
+ * threading one through for this would rewrite its whole surface. Every other
+ * mutation in this funnel guards at the action for the same reason.
+ *
+ * `mayEditListing` rather than `assertCanEditListing`: these are autosave
+ * actions whose callers read a result object, and an exception across that
+ * boundary is a 500 where a refusal is the honest answer.
+ */
+function mayEdit(actor: Actor | null): actor is Actor & { businessId: string } {
+  return Boolean(actor?.businessId) && mayEditListing(actor as Actor);
+}
+
 export async function addCategory(formData: FormData): Promise<AddCategoryResult> {
   const actor = await getActor();
   if (!actor?.businessId) return { ok: false, reason: "not_found" };
+  if (!mayEdit(actor)) return { ok: false, reason: "forbidden" };
 
   const result = await addExtraCategory(
     actor.businessId,
@@ -73,13 +99,18 @@ export async function addCategory(formData: FormData): Promise<AddCategoryResult
   return result;
 }
 
-export async function removeCategory(formData: FormData): Promise<{ ok: true }> {
+export async function removeCategory(formData: FormData): Promise<RemoveCategoryResult> {
   const actor = await getActor();
-  if (!actor?.businessId) return { ok: true };
+  if (!mayEdit(actor)) return { ok: false, reason: "forbidden" };
 
-  await removeExtraCategory(actor.businessId, String(formData.get("categoryId") ?? ""));
-  revalidatePath("/onboarding/profile");
-  return { ok: true };
+  const result = await removeExtraCategory(
+    actor.businessId,
+    String(formData.get("categoryId") ?? ""),
+  );
+  // Only when a row actually went. Re-rendering on a no-op would replace the
+  // screen for a click that changed nothing.
+  if (result.removed) revalidatePath("/onboarding/profile");
+  return result;
 }
 
 export type ContinueResult = { ok: true } | { ok: false; error: string };

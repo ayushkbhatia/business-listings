@@ -185,7 +185,13 @@ export async function openConflicts(limit = 50) {
 
 export type ResolveResult =
   | { ok: true; producedBusinessId?: string; producedLocationId?: string }
-  | { ok: false; error: "not_found" | "already_resolved" | "needs_a_name"; message: string };
+  /**
+   * A key, not a sentence — the same correction `lib/reports/service.ts` took.
+   * `admin/queue/actions.ts` returned `result.message` straight to the screen,
+   * so three strings of raw English reached a user without passing through the
+   * catalogue every other string on that screen goes through.
+   */
+  | { ok: false; error: "not_found" | "already_resolved" | "needs_a_name" };
 
 export interface ResolveInput {
   actor: Actor;
@@ -244,13 +250,12 @@ export async function resolveConflict(input: ResolveInput): Promise<ResolveResul
     },
   });
   if (!conflict) {
-    return { ok: false, error: "not_found", message: "That conflict is not in the queue." };
+    return { ok: false, error: "not_found" };
   }
   if (conflict.resolvedAt) {
     return {
       ok: false,
       error: "already_resolved",
-      message: "Somebody already settled this one.",
     };
   }
 
@@ -259,7 +264,6 @@ export async function resolveConflict(input: ResolveInput): Promise<ResolveResul
     return {
       ok: false,
       error: "needs_a_name",
-      message: "A split creates a second listing, so it needs the second company's trade name.",
     };
   }
 

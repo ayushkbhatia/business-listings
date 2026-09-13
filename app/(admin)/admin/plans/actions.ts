@@ -8,6 +8,7 @@ import { PLAN_CACHE_TAG } from "@/lib/db/queries/pricing";
 import { HOME_CACHE_TAG } from "@/lib/db/queries/home";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { NULLABLE_CAP_FIELDS } from "@/lib/plan/editable-caps";
 
 /**
  * One mutation, and it is the destructive-by-choice one.
@@ -33,18 +34,15 @@ export async function saveEntitlements(formData: FormData): Promise<ActionResult
   const seat = await requireStaff();
 
   const changes: Parameters<typeof editPlanEntitlements>[0]["changes"] = {};
-  for (const field of [
-    "enquiriesPerMonth",
-    "productLimit",
-    "locationLimit",
-    "photoLimit",
-    // Nullable like the rest: an empty box is unlimited, which is what every
-    // plan carried before this field had an editor at all.
-    "storageMb",
-    // The fifth cap board 11f compares plans on. Same story as storage: a
-    // column, a comparison row, and no way to set it.
-    "categoryLimit",
-  ] as const) {
+  /*
+     One list with the form that draws the boxes — `lib/plan/editable-caps.ts`.
+
+     This was a second copy, and it had already drifted: `serviceLimit` had a
+     box on the screen from the day board `2e-s` shipped and was missing from
+     here, so a staff member typed the services cap, saved, and was told nothing
+     had changed. Two lists that must agree eventually do not.
+  */
+  for (const field of NULLABLE_CAP_FIELDS) {
     const value = capFrom(formData.get(field));
     if (value !== undefined) changes[field] = value;
   }

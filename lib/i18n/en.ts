@@ -340,6 +340,19 @@ export const en = {
   "admin.queue.rejected": "Rejected. The seller can see the reason.",
   "admin.queue.resolved": "Settled. Both parties have been told.",
   "admin.queue.pick_a_resolution": "Choose one of the four outcomes.",
+  // Two different queues share this screen and each has its own refusal set,
+  // so they get their own namespaces: a `not_found` conflict and a `not_found`
+  // submission are not the same sentence.
+  "admin.queue.conflict_error.not_found": "That conflict is not in the queue.",
+  "admin.queue.conflict_error.already_resolved": "Somebody already settled this one.",
+  "admin.queue.conflict_error.needs_a_name": "A split creates a second listing, so it needs the second company’s trade name.",
+  "admin.queue.change_error.not_found": "That submission is not in the queue.",
+  "admin.queue.change_error.already_decided": "That submission was already {status}.",
+  "admin.queue.change_error.stale": "The listing has changed since this was submitted. Reject it and ask for the change again against what it says now.",
+  "admin.queue.change_error.slug_taken": "Another listing already uses the address /b/{slug}. Reject this and ask for a name that does not collide.",
+  "admin.queue.credential_error.not_found": "That document is not in the queue.",
+  "admin.queue.credential_error.not_a_credential": "A trade licence or VAT certificate is never published, so there is nothing to decide. Set the verification tier instead.",
+  "admin.queue.credential_error.already_decided": "Somebody has already looked at that document.",
 
   "admin.review.title": "Review a submission",
   "admin.review.eyebrow": "Submission",
@@ -524,6 +537,8 @@ export const en = {
   "admin.crm.title": "Recruitment",
   "admin.crm.eyebrow": "Accounts",
   "admin.crm.meta": "{count} prospects, from demand we measured",
+  "admin.crm.meta_more": "Showing {shown} of {count} prospects, from demand we measured",
+  "admin.crm.meta_floor": "and more than that — one signal filled its read.",
   "admin.crm.caption": "The call list, built from demand signals",
   "admin.crm.col.business": "Business",
   "admin.crm.col.signal": "Why they are on the list",
@@ -535,7 +550,6 @@ export const en = {
   "admin.crm.signal.missed_at_cap": "Enquiries their plan capped them out of",
   "admin.crm.signal.zero_result_in_their_trade": "Searches in their trade that found nobody",
   "admin.crm.signal.unclaimed_with_demand": "Enquiries to a listing nobody has claimed",
-  "admin.crm.signal.reply_rate_falling": "Reply rate falling",
 
   "admin.support.title": "Support desk",
   "admin.support.eyebrow": "Platform",
@@ -576,6 +590,10 @@ export const en = {
   "admin.reports.kind.content": "Content",
   "admin.reports.kind.review_integrity": "Review integrity",
   "admin.reports.outcome.seller_corrected": "Seller corrected it",
+  // Refusals from the report queue's own service layer, which used to return
+  // these as raw English.
+  "admin.reports.error.not_found": "That report is not in the queue.",
+  "admin.reports.error.already_resolved": "That report was already resolved as “{outcome}”.",
   "admin.reports.outcome.upheld": "Upheld",
   "admin.reports.outcome.no_action": "No action",
   "admin.record.not_found": "That business is not in the directory.",
@@ -5978,6 +5996,14 @@ export const en = {
   "profile_step.extras_unlimited": "· unlimited on {plan}",
   "profile_step.extras_add": "Add category",
   "profile_step.extras_remove": "Remove {category}",
+
+  // Board 2c's category refusals, which the chip row used to throw away.
+  "profile_step.extras_error.at_cap": "That is one category past what this plan carries.",
+  "profile_step.extras_error.already_there": "This listing is already filed under that category.",
+  "profile_step.extras_error.is_primary": "That is already the primary category.",
+  "profile_step.extras_error.not_found": "That category is no longer on the list.",
+  "profile_step.extras_error.forbidden": "This seat cannot change the categories. An owner or manager can.",
+  "profile_step.extras_error.fix": "Nothing was changed. Reload the page to see what the listing carries now.",
   // The upgrade line replaces the add control once the plan is spent. A control
   // that would be refused on click is a lie.
   "profile_step.extras_upgrade": "{plan} adds {more} more →",
@@ -6895,6 +6921,9 @@ export const en = {
   "admin.plans.col.services": "Services",
   "admin.plans.col.locations": "Locations",
   "admin.plans.col.photos": "Photos",
+  // The public half of the same number: `photoLimit` is what a seller may
+  // upload, `publicPhotoLimit` is how many a visitor is shown.
+  "admin.plans.col.public_photos": "Photos shown",
   // Megabytes, and the unit is in the header because the field is a bare
   // number. `50` in a column called `Storage` is ambiguous in a way the three
   // plans on this screen would resolve differently.

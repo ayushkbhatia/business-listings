@@ -147,10 +147,52 @@ describe("the cap is real on the server, not only in the interface", () => {
     });
   });
 
-  it("removes what it added", async () => {
+  it("removes what it added, and says whether a row actually went", async () => {
+    /*
+       `{ ok: true }` unconditionally was the old answer, and the screen read it
+       as the click having worked. A stale chip, a category already dropped in
+       another tab and an id that names nothing all reported success — so the
+       one signal the chip row has that the `×` did anything was a constant.
+    */
     await addExtraCategory(seller.id, spare.id);
-    await removeExtraCategory(seller.id, spare.id);
+    expect(await removeExtraCategory(seller.id, spare.id)).toEqual({ ok: true, removed: true });
     expect((await profileStateFor(seller.id))!.extras).toEqual([]);
+
+    // A second click changes nothing and says so, rather than erroring or
+    // claiming it removed something.
+    expect(await removeExtraCategory(seller.id, spare.id)).toEqual({ ok: true, removed: false });
+    expect(await removeExtraCategory(seller.id, "no-such-category")).toEqual({
+      ok: true,
+      removed: false,
+    });
+  });
+
+  it("never reaches another listing's categories", async () => {
+    /*
+       Both writers are scoped by the `businessId` the seat carries, never a
+       form value — so a categoryId that belongs to somebody else's listing is
+       simply not found on this one, and `removed: false` is what says so.
+    */
+    const other = await prisma.business.findFirstOrThrow({
+      where: {
+        claimStatus: "claimed",
+        id: { not: seller.id },
+        plan: { categoryLimit: { gt: 1 } },
+        primaryCategoryId: { not: spare.id },
+      },
+      orderBy: { slug: "asc" },
+      select: { id: true },
+    });
+    expect(await addExtraCategory(other.id, spare.id)).toMatchObject({ ok: true });
+
+    expect(await removeExtraCategory(seller.id, spare.id)).toEqual({ ok: true, removed: false });
+    expect(
+      await prisma.businessCategory.count({ where: { businessId: other.id, categoryId: spare.id } }),
+    ).toBe(1);
+
+    await prisma.businessCategory.deleteMany({
+      where: { businessId: other.id, categoryId: spare.id },
+    });
   });
 });
 

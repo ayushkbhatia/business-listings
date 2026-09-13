@@ -6,6 +6,7 @@ import { Button, Checkbox, Input, Label, Textarea } from "@/components/primitive
 import { DataTable, Panel, type Column } from "@/components/structure";
 import { formatAED, formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { EDITABLE_CAPS } from "@/lib/plan/editable-caps";
 import type { ActionResult } from "./actions";
 
 /**
@@ -30,6 +31,7 @@ export interface PlanRowView {
   serviceLimit: number | null;
   locationLimit: number | null;
   photoLimit: number | null;
+  publicPhotoLimit: number | null;
   storageMb: number | null;
   teamSeats: number;
   categoryLimit: number | null;
@@ -42,33 +44,7 @@ export interface PlanRowView {
   grandfathered: number;
 }
 
-const CAPS = [
-  { field: "enquiriesPerMonth", labelKey: "admin.plans.col.enquiries" },
-  { field: "productLimit", labelKey: "admin.plans.col.products" },
-  /*
-     The sixth, added with board `2e-s`.
-
-     `serviceLimit` is what `productLimit` is for a firm that sells work, and
-     the numbers it shipped with — three, fifteen, unlimited — are proposed
-     rather than ratified: D1 settled seven plan numbers and services were not
-     their own model yet. It needs an editor from the first day it exists, or
-     the eighth number is the one only the database can change.
-  */
-  { field: "serviceLimit", labelKey: "admin.plans.col.services" },
-  { field: "locationLimit", labelKey: "admin.plans.col.locations" },
-  { field: "photoLimit", labelKey: "admin.plans.col.photos" },
-  { field: "storageMb", labelKey: "admin.plans.col.storage" },
-  { field: "teamSeats", labelKey: "admin.plans.col.seats" },
-  /*
-     The fifth numeric cap, added by the wave-4 fix batch.
-
-     Board 11f renders `categoryLimit` as its own comparison row, so a seller
-     reads it against the plan they are considering — and it had no editor, no
-     `EditPlanInput` field and no other writer. A number a seller compares plans
-     on that only the database can change is the same defect `storageMb` had.
-  */
-  { field: "categoryLimit", labelKey: "admin.plans.col.categories" },
-] as const;
+const CAPS = EDITABLE_CAPS;
 
 /**
  * The three entitlements that are switches rather than numbers.
@@ -115,24 +91,25 @@ export function PlanEditor({
     setResult(null);
     setReason("");
     setApply(false);
-    setValues({
-      enquiriesPerMonth: plan.enquiriesPerMonth === null ? "" : String(plan.enquiriesPerMonth),
-      productLimit: plan.productLimit === null ? "" : String(plan.productLimit),
-      serviceLimit: plan.serviceLimit === null ? "" : String(plan.serviceLimit),
-      locationLimit: plan.locationLimit === null ? "" : String(plan.locationLimit),
-      photoLimit: plan.photoLimit === null ? "" : String(plan.photoLimit),
-      /*
-         Seeded like the rest, and the omission would not have been cosmetic.
+    /*
+       Seeded from the one list, not from a literal — and the omission was never
+       cosmetic. `submit` posts every field in `CAPS`, and an empty box is
+       `null`, which is unlimited. A row that opened blank while the plan held a
+       real number would have lifted that cap the moment somebody saved a change
+       to a different one, without either appearing in the reason.
 
-         `submit` posts every field in `CAPS`, and an empty box is `null` —
-         unlimited. A storage row that opened blank while the plan held 50 would
-         have lifted the cap the moment somebody saved a change to the enquiry
-         allowance, without either of them appearing in the reason.
-      */
-      storageMb: plan.storageMb === null ? "" : String(plan.storageMb),
-      teamSeats: String(plan.teamSeats),
-      categoryLimit: plan.categoryLimit === null ? "" : String(plan.categoryLimit),
-    });
+       It had already happened twice: `storageMb` was missing here once, and
+       `publicPhotoLimit` was missing from this literal on the day it gained a
+       box. Deriving it is what stops there being a third.
+    */
+    setValues(
+      Object.fromEntries(
+        CAPS.map(({ field }) => {
+          const value = plan[field];
+          return [field, value === null ? "" : String(value)];
+        }),
+      ),
+    );
     setSwitches({
       analytics: plan.analytics,
       csvImport: plan.csvImport,
@@ -276,11 +253,11 @@ export function PlanEditor({
       {open && (
         <Panel title={t("admin.plans.edit", { plan: open.name })}>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {CAPS.map(({ field, labelKey }) => (
+            {CAPS.map(({ field, labelKey, unlimited }) => (
               <div key={field} className="flex flex-col gap-1">
                 <Label
                   htmlFor={`${reasonId}-${field}`}
-                  hint={field === "teamSeats" ? undefined : t("admin.plans.unlimited_hint")}
+                  hint={unlimited ? t("admin.plans.unlimited_hint") : undefined}
                 >
                   {t(labelKey)}
                 </Label>

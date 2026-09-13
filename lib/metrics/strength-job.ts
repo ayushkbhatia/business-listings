@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { resolveTemplateIds } from "@/lib/spec/resolve";
 import {
   COUNTABLE_SELECT,
   countsTowardTask,
@@ -85,7 +86,10 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
       select: {
         businessId: true,
         specValues: true,
-        category: { select: { defaultTemplateId: true } },
+        // The category id, and the three-step rule applied to it below. This
+        // used to select `category.defaultTemplateId` and use it as the
+        // answer — see the note on `specsByBusiness`.
+        categoryId: true,
       },
     }),
     prisma.media.findMany({
@@ -142,16 +146,37 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
   }
 
   /*
-   * Products per business, carrying the template their category points at.
+   * Products per business, carrying the template their category resolves to.
    * `specCompleteness` was `0.4 + rnd() * 0.6` in the seed until now, and
    * `lib/search/ranking.ts` weights it at 12 — so search order has been partly
    * random since handoff 0. This is the column, measured.
+   *
+   * ## The resolver, and why it is not `defaultTemplateId`
+   *
+   * This read `row.category?.defaultTemplateId ?? null` — step 1 of the
+   * three-step rule in `lib/spec/resolve.ts`, applied as though it were the
+   * whole rule, and the eighth reader to answer this question its own way
+   * after board 4e wrote the rule to end exactly that.
+   *
+   * It was reachable by a shipped staff action, not in theory:
+   * `setTemplateCategories` attaches a template to a category and never writes
+   * `defaultTemplateId`, so a product under that category resolved to no
+   * template, `rules` came back empty, and **an empty rule set counts as
+   * complete** — `specCompleteness` 1.00 for a seller who has filled in
+   * nothing, which is twelve ranking points of the search order.
+   *
+   * `resolveTemplateIds` is the same rule in bulk: three queries for the whole
+   * sweep rather than three per product, so the job still finishes.
    */
+  const templateByCategory = await resolveTemplateIds(
+    prisma,
+    productRows.map((row) => row.categoryId),
+  );
   const specsByBusiness = new Map<string, ProductSpecs[]>();
   for (const row of productRows) {
     const list = specsByBusiness.get(row.businessId) ?? [];
     list.push({
-      templateId: row.category?.defaultTemplateId ?? null,
+      templateId: templateByCategory.get(row.categoryId) ?? null,
       values: row.specValues as Record<string, unknown> | null,
     });
     specsByBusiness.set(row.businessId, list);

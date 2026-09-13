@@ -70,7 +70,8 @@ export function allowanceFor(
 
 export type AddCategoryResult =
   | { ok: true; unverifiedActivity: boolean }
-  | { ok: false; reason: "at_cap" | "already_there" | "is_primary" | "not_found" };
+  /** `forbidden` is the seat, not the listing — see the guard in the action. */
+  | { ok: false; reason: "at_cap" | "already_there" | "is_primary" | "not_found" | "forbidden" };
 
 /**
  * Add an extra category, up to the plan's cap.
@@ -140,12 +141,29 @@ export async function addExtraCategory(
   return { ok: true, unverifiedActivity: !covered };
 }
 
+export type RemoveCategoryResult = { ok: true; removed: boolean } | { ok: false; reason: "forbidden" };
+
+/**
+ * Drop an extra category.
+ *
+ * `removed` rather than a bare `{ ok: true }`, and the distinction is the point:
+ * this returned success whether or not a row went, so a stale chip, a category
+ * already dropped in another tab and a `categoryId` that names nothing all
+ * reported the same thing. The caller re-reads either way — it is the screen's
+ * only honest signal that the click did what it looked like.
+ *
+ * `deleteMany` rather than `delete`, so a second click is a no-op rather than a
+ * 500. The primary category is not reachable here: it lives on `Business` and
+ * has no `BusinessCategory` row to delete.
+ */
 export async function removeExtraCategory(
   businessId: string,
   categoryId: string,
-): Promise<{ ok: true }> {
-  await prisma.businessCategory.deleteMany({ where: { businessId, categoryId } });
-  return { ok: true };
+): Promise<{ ok: true; removed: boolean }> {
+  const { count } = await prisma.businessCategory.deleteMany({
+    where: { businessId, categoryId },
+  });
+  return { ok: true, removed: count > 0 };
 }
 
 /**

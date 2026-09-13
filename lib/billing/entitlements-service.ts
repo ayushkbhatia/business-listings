@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import type { Actor } from "@/lib/auth/roles";
-import { effectiveCaps, snapshotOf, type PlanCaps } from "@/lib/plan/entitlements";
+import { effectiveCaps, snapshotOf, toCaps, type PlanCaps } from "@/lib/plan/entitlements";
 
 /**
  * Board 12e — entitlements as data.
@@ -35,33 +35,6 @@ const PLAN_SELECT = {
   // value rather than written blind. See `withdrawalMoved`.
   withdrawnAt: true,
 } as const;
-
-function toCaps(row: {
-  id: string;
-  name: string;
-  monthlyPriceAed: unknown;
-  enquiriesPerMonth: number | null;
-  productLimit: number | null;
-  locationLimit: number | null;
-  photoLimit: number | null;
-  publicPhotoLimit: number | null;
-  storageMb: number | null;
-  teamSeats: number;
-  rankingMultiplier: unknown;
-  customDomain: boolean;
-  analytics: boolean;
-  csvImport: boolean;
-  sponsoredEligible: boolean;
-  categoryLimit: number | null;
-  serviceLimit: number | null;
-  sortOrder: number;
-}): PlanCaps {
-  return {
-    ...row,
-    monthlyPriceAed: Number(row.monthlyPriceAed),
-    rankingMultiplier: Number(row.rankingMultiplier),
-  };
-}
 
 export interface PlanRow extends PlanCaps {
   /** Live subscriptions on this plan. The blast radius of an edit. */
