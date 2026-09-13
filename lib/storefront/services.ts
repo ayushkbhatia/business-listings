@@ -290,9 +290,10 @@ export async function replySampleFor(businessId: string, now: Date = new Date())
  * first clause, which the brief this offer opens routes on. Without it the
  * offer counted firms the brief would never send to: *34 firms cover Ajman*,
  * one click, and a rail matching nine. Every firm counted here is one
- * `findBriefCandidates` also matches (a live service in the trade reaching the
- * emirate is inside the business union), so the offer can understate the
- * brief's match and never overstate it. The monthly cap is not applied, for
+ * `findBriefCandidates` also matches — both route per service, and a live
+ * service in the trade whose effective coverage reaches the emirate is exactly
+ * its clause 3 — so the offer can understate the brief's match (children of the
+ * trade, a cap nobody is shown) and never overstate it. The monthly cap is not applied, for
  * D4's reason: capacity is never a public number.
  */
 export async function coveringFirmsByEmirate(

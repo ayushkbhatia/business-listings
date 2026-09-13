@@ -3,7 +3,7 @@ import type { Emirate, EngagementType } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import type { Attribution } from "@/lib/campaign/attribution";
 import { DOCUMENT_BUCKET } from "@/lib/storage";
-import { businessCoverage } from "@/lib/locations/service-coverage";
+import { effectiveCoverage } from "@/lib/locations/service-coverage";
 import type { CoverageScope } from "@/lib/locations/coverage";
 import { MIN_SAMPLE, windowStart } from "@/lib/metrics/response-time";
 import { PLAN_CAPS_SELECT, effectiveCaps, toCaps } from "@/lib/plan/entitlements";
@@ -91,13 +91,21 @@ const POOL = 400;
 
 /**
  * Clauses 1–3 of B5, in the database where they can be, and in TypeScript where
- * the union of per-service coverage has to be resolved.
+ * a service's effective coverage has to be resolved.
+ *
+ * **Per service, never per business** — the amended `1h-s` B5 and `3c-s` B8.
+ * A firm is a candidate through a **live service filed in the asked trade** (or
+ * one of its children) whose `effectiveCoverage` — its own rows, else the firm's
+ * default — reaches the site. The business-level union is the listing's
+ * headline and routes nothing: a practice whose corporate-tax line covers Ajman
+ * and whose audit is narrowed to Dubai does not receive an Ajman audit brief,
+ * because the only service it would quote is the one that does not go there.
+ * A firm merely listed under the subcategory, with no live service in it, has
+ * nothing that could answer and is not a candidate.
  *
  * `serviceCoverage: { some: { emirate } }` is a necessary condition, not the
- * test: any union that reaches the site has at least one row in its emirate.
- * The exact answer — Al Quoz does not reach Business Bay, a service narrowed
- * away from Sharjah does not count for Sharjah — is `businessCoverage` and
- * `reachesSite`, the same helpers the storefront's coverage renders from.
+ * test: any effective coverage that reaches the site has a row in its emirate,
+ * its own or the default's.
  */
 export async function findBriefCandidates(
   request: BriefMatchRequest,
@@ -118,22 +126,18 @@ export async function findBriefCandidates(
       verificationTier: { gte: VERIFIED_TIER },
       licenceExpiry: { gte: now },
       serviceCoverage: { some: { emirate: request.site.emirate } },
-      OR: [
-        { primaryCategoryId: { in: tree } },
-        // A flagged extra category is out of routing until a reviewer clears
-        // it — board 2c's rule, the same one the goods fan-out applies.
-        { categories: { some: { categoryId: { in: tree }, unverifiedActivityAt: null } } },
-        { services: { some: { status: "live", categoryId: { in: tree } } } },
-      ],
+      // B5, clause 2: a live service in this trade. Routing is per service.
+      services: { some: { status: "live", categoryId: { in: tree } } },
     },
     select: {
       id: true,
       slug: true,
       displayName: true,
-      primaryCategoryId: true,
       responseTimeMedianMs: true,
-      categories: { where: { unverifiedActivityAt: null }, select: { categoryId: true } },
-      services: { where: { status: "live" }, select: { id: true, categoryId: true, engagementType: true } },
+      services: {
+        where: { status: "live", categoryId: { in: tree } },
+        select: { id: true, categoryId: true, engagementType: true },
+      },
       plan: { select: PLAN_CAPS_SELECT },
       subscription: { select: { entitlementSnapshot: true } },
       _count: { select: { recipients: { where: { createdAt: { gte: since } } } } },
@@ -154,36 +158,30 @@ export async function findBriefCandidates(
     else byBusiness.set(row.businessId, [row]);
   }
 
-  const inTree = new Set(tree);
   const out: BriefCandidate[] = [];
   for (const business of businesses) {
     const own = byBusiness.get(business.id) ?? [];
     const scope = (row: (typeof own)[number]): CoverageScope => ({ emirate: row.emirate, areaId: row.areaId });
-    /*
-       `2d-s` B6: the union of every live service's effective coverage, and the
-       default alone for a firm with no live service yet. Not filtered to the
-       services in this trade — the spec's own line is that a firm whose audit
-       does not travel to Sharjah still receives a Sharjah brief for a service
-       that does, and answers from its own scope sheet.
-    */
-    const coverage = businessCoverage(
-      own.filter((row) => row.serviceId === null).map(scope),
-      business.services.map((service) => own.filter((row) => row.serviceId === service.id).map(scope)),
-    );
-    if (!reachesSite(coverage, request.site, request.scope)) continue;
+    const firmDefault = own.filter((row) => row.serviceId === null).map(scope);
 
-    const tradeServices = business.services.filter((service) => inTree.has(service.categoryId));
+    // B5, clause 3: the services of this trade that reach the site themselves.
+    const reaching = business.services.filter((service) =>
+      reachesSite(
+        effectiveCoverage(firmDefault, own.filter((row) => row.serviceId === service.id).map(scope)),
+        request.site,
+        request.scope,
+      ),
+    );
+    if (reaching.length === 0) continue;
+
     out.push({
       businessId: business.id,
       slug: business.slug,
       displayName: business.displayName,
-      exactTrade:
-        business.primaryCategoryId === request.categoryId ||
-        business.categories.some((c) => c.categoryId === request.categoryId) ||
-        tradeServices.some((service) => service.categoryId === request.categoryId),
+      exactTrade: reaching.some((service) => service.categoryId === request.categoryId),
+      // Read off the services that route, not every service the firm sells.
       offersEngagement:
-        request.engagement !== null &&
-        tradeServices.some((service) => service.engagementType === request.engagement),
+        request.engagement !== null && reaching.some((service) => service.engagementType === request.engagement),
       responseTimeMedianMs: business.responseTimeMedianMs,
       enquiriesPerMonth: business.plan
         ? effectiveCaps(toCaps(business.plan), business.subscription?.entitlementSnapshot).enquiriesPerMonth

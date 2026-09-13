@@ -19,8 +19,8 @@ import { getBuyerEnquiry } from "@/lib/db/queries/enquiry";
  * Board `1h-s` — the brief, against a database.
  *
  * What a unit test cannot reach: that the four clauses of B5 are applied by
- * the query and not only by the ranking; that coverage is the union of a firm's
- * live services and not its default line; that a sent brief is **one** enquiry
+ * the query and not only by the ranking; that coverage is resolved per matched
+ * service and never from the listing's union; that a sent brief is **one** enquiry
  * with N recipients, one `ServiceBrief` and one unquantified line; that the
  * description a supplier reads is byte for byte what was typed; that a null
  * scale reaches both sides as null; and that a brief nobody can take writes
@@ -80,11 +80,13 @@ async function makeFirm(fields: {
   await prisma.serviceCoverage.createMany({
     data: (fields.coverage ?? [{ emirate: "dubai", areaId: null }]).map((row) => ({ businessId: firm.id, ...row })),
   });
-  for (const [i, service] of (fields.services ?? []).entries()) {
+  // One live service in the firm's own trade unless the test says otherwise:
+  // routing is per service, so a firm with none can never be a recipient.
+  for (const [i, service] of (fields.services ?? [{}]).entries()) {
     const row = await prisma.service.create({
       data: {
         businessId: firm.id,
-        categoryId: service.categoryId ?? tradeId,
+        categoryId: service.categoryId ?? fields.primary ?? tradeId,
         name: `Service ${i}`,
         slug: `service-${i}`,
         status: service.status ?? "live",
@@ -212,28 +214,27 @@ describe("findBriefCandidates — B5", () => {
     for (const excluded of [unverified, expired, unclaimed, goodsSeller]) expect(found).not.toContain(excluded.id);
   });
 
-  it("matches the trade by listing or by a live service, and the sector's children under it", async () => {
-    const listed = await makeFirm();
-    const byService = await makeFirm({ primary: goodsId, services: [{}] });
-    const byDraft = await makeFirm({ primary: goodsId, services: [{ status: "draft" }] });
+  it("matches through a live service in the trade — a listing alone routes nothing", async () => {
+    const listedOnly = await makeFirm({ services: [] });
+    const byService = await makeFirm({ primary: goodsId, services: [{ categoryId: tradeId }] });
+    const byDraft = await makeFirm({ primary: goodsId, services: [{ categoryId: tradeId, status: "draft" }] });
     const neighbour = await makeFirm({ primary: neighbourId });
 
     const site = { emirate: "dubai" as const, areaId: null };
     const inTrade = await ids({ categoryId: tradeId, site, scope: "area", engagement: null });
-    expect(inTrade).toEqual(expect.arrayContaining([listed.id, byService.id]));
-    expect(inTrade).not.toContain(byDraft.id);
-    expect(inTrade).not.toContain(neighbour.id);
+    expect(inTrade).toContain(byService.id);
+    for (const excluded of [listedOnly, byDraft, neighbour]) expect(inTrade).not.toContain(excluded.id);
 
-    // Downward only: the sector reaches its children.
+    // Downward only: the sector reaches its children's services.
     expect(await ids({ categoryId: sectorId, site, scope: "area", engagement: null })).toEqual(
-      expect.arrayContaining([listed.id, neighbour.id]),
+      expect.arrayContaining([byService.id, neighbour.id]),
     );
   });
 
-  it("reaches an area by the area or its emirate, and reads the union of live services, not the default", async () => {
+  it("reaches an area by the matched service's own coverage, else the firm's default — never the union", async () => {
     const wholeDubai = await makeFirm();
     const alQuozOnly = await makeFirm({ coverage: [{ emirate: "dubai", areaId: alQuoz.id }] });
-    // Default says Sharjah; its one live service narrows to Deira. The union is Deira.
+    // Default says Sharjah; its one live service narrows to Deira.
     const narrowed = await makeFirm({
       coverage: [{ emirate: "sharjah", areaId: null }],
       services: [{ coverage: [{ emirate: "dubai", areaId: deira.id }] }],
@@ -247,13 +248,38 @@ describe("findBriefCandidates — B5", () => {
     expect(atDeira).toEqual(expect.arrayContaining([wholeDubai.id, narrowed.id]));
     expect(atDeira).not.toContain(alQuozOnly.id);
 
-    // Widened to the emirate, a firm working anywhere in Dubai counts.
+    // Widened to the emirate, a service working anywhere in Dubai counts.
     expect(
       await ids({ categoryId: tradeId, site: { emirate: "dubai", areaId: deira.id }, scope: "emirate", engagement: null }),
     ).toContain(alQuozOnly.id);
 
-    const inSharjah = await ids({ categoryId: tradeId, site: { emirate: "sharjah", areaId: null }, scope: "area", engagement: null });
-    expect(inSharjah).not.toContain(narrowed.id);
+    expect(await ids({ categoryId: tradeId, site: { emirate: "sharjah", areaId: null }, scope: "area", engagement: null })).not.toContain(
+      narrowed.id,
+    );
+  });
+
+  it("does not route a brief through another trade's coverage — the Meridian shape, 3c-s B8", async () => {
+    /*
+       The listing's union says Sharjah, because the firm's neighbour-trade
+       service inherits a default that covers it. The service in *this* trade is
+       narrowed to Dubai, and it is the only one that could answer.
+    */
+    const meridian = await makeFirm({
+      coverage: [
+        { emirate: "dubai", areaId: null },
+        { emirate: "sharjah", areaId: null },
+      ],
+      services: [
+        { categoryId: tradeId, coverage: [{ emirate: "dubai", areaId: null }] },
+        { categoryId: neighbourId },
+      ],
+    });
+    const sharjah = { emirate: "sharjah" as const, areaId: null };
+    expect(await ids({ categoryId: tradeId, site: sharjah, scope: "area", engagement: null })).not.toContain(meridian.id);
+    expect(await ids({ categoryId: neighbourId, site: sharjah, scope: "area", engagement: null })).toContain(meridian.id);
+    expect(await ids({ categoryId: tradeId, site: { emirate: "dubai", areaId: null }, scope: "area", engagement: null })).toContain(
+      meridian.id,
+    );
   });
 
   it("marks the engagement a firm sells, for ranking and never for filtering", async () => {

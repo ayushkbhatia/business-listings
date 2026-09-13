@@ -146,7 +146,7 @@ describe("the site", () => {
   });
 });
 
-describe("coverage — B5, the union reaching the site", () => {
+describe("coverage — B5, one service's effective coverage reaching the site", () => {
   const dubai = { emirate: "dubai" as const, areaId: null };
   const alQuoz = { emirate: "dubai" as const, areaId: "area-aq" };
   const businessBay = { emirate: "dubai" as const, areaId: "area-bb" };

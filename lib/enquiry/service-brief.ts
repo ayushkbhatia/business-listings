@@ -33,10 +33,12 @@ import {
  *  1. **A verified trade licence** — `8b-s` tier 1, the licence and nothing
  *     else. A claim-only credential here would turn an unchecked assertion into
  *     routed demand.
- *  2. **Sells work in this trade** — listed under the subcategory, or a live
- *     service filed in it (`4d-s`).
- *  3. **Covers the site** — the business-level union of its live services'
- *     effective coverage (`2d-s` B6), never one service's narrowing.
+ *  2. **Sells this work** — a live service filed in the subcategory, or one
+ *     of its children (`4d-s`). A listing under the trade alone is not enough:
+ *     routing is per service.
+ *  3. **That service covers the site** — its `effectiveCoverage`, its own rows
+ *     else the firm's default (`3c-s` B8). Never the business-level union,
+ *     which is the listing's headline and routes nothing.
  *  4. **Not at the monthly cap** — excluded silently (D4); the buyer is never
  *     shown a firm that cannot reply.
  *
@@ -371,9 +373,9 @@ export interface BriefCandidate {
   businessId: string;
   slug: string;
   displayName: string;
-  /** Listed under, or a live service in, exactly the subcategory asked. */
+  /** A matching service filed in exactly the subcategory asked, not a child of it. */
   exactTrade: boolean;
-  /** A live service in this trade offered on the engagement the buyer chose. */
+  /** A matching service offered on the engagement the buyer chose. */
   offersEngagement: boolean;
   /** Measured, never claimed. Null is unmeasured. */
   responseTimeMedianMs: number | null;
@@ -397,8 +399,8 @@ const UNMEASURED_MS = 12 * 3_600_000;
  * Every candidate here already holds a verified licence and covers the site,
  * so trust and locality cannot separate them. What can, in order:
  *
- *  1. **The engagement they sell.** A firm with a live call-off service in this
- *     trade is the better reading of a call-off brief (B3) — ranked on, never
+ *  1. **The engagement they sell.** A firm whose matching call-off service
+ *     reaches the site is the better reading of a call-off brief (B3) — ranked on, never
  *     filtered on, because a firm whose sheet says *ongoing contract* can still
  *     price a one-off job and excluding it would narrow the match silently.
  *  2. **The exact trade** over a neighbouring one under the same sector.

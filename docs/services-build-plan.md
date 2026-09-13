@@ -1520,16 +1520,22 @@ empty (B6, B7); the files are `Document` rows, one set for every recipient.
 6. **The attachment warning states the match.** *Up to 8* before a site is chosen; *3 firms will each
    hold a copy* once one is — B8's warning, with the number.
 
-### Matching — B5, in the database where it can be
+### Matching — B5, per service
+
+**Per service, never per business.** The first export of this handoff said *the business-level union
+(`2d-s` B6), not per-service*; the amended `1h-s` carried by the `3b-s`/`3c-s` and `5c-s` exports says
+the opposite, and `3c-s` B8 with it — *a fan-out for statutory audit in Ajman does not reach this firm
+even though their listing says Ajman*. The newer record wins. The union is the listing's headline;
+routing reads the rows.
 
 `findBriefCandidates`: published, claimed, `sellsKind` services or both, **verification tier ≥ 2 with
-a licence not yet expired**, listed under the trade (a flagged extra category excluded) **or** a live
-service filed in it, and some `ServiceCoverage` row in the site's emirate. Then, in TypeScript, the
-exact test: the business union of its live services' effective coverage (`businessCoverage`, `2d-s`
-B6) reaching the site — the area or its whole emirate, or anywhere in the emirate once the buyer
-widens. `selectBriefRecipients` drops a firm at its monthly cap into `MissedEnquiry` (D4) and ranks the
-rest: sells the chosen engagement, exact trade, measured reply time, id. **No plan multiplier**, the
-goods fan-out's rule. The preview and the send call the same function.
+a licence not yet expired**, and **a live service filed in the trade** (or a child of it). Then, per
+such service, its `effectiveCoverage` — its own rows, else the firm's default — must reach the site:
+the area or its whole emirate, or anywhere in the emirate once the buyer widens. A firm merely listed
+under the subcategory, with nothing live in it, is not a recipient. `selectBriefRecipients` drops a
+firm at its monthly cap into `MissedEnquiry` (D4) and ranks the rest: a matched service sold on the
+chosen engagement, exact trade, measured reply time, id. **No plan multiplier**, the goods fan-out's
+rule. The preview and the send call the same function.
 
 **The engagement ranks and never filters.** A firm whose sheet says *ongoing contract* can still price
 a one-off job; filtering would narrow the match silently, which is what B3 warns about.
@@ -1553,8 +1559,8 @@ a one-off job; filtering would narrow the match silently, which is what B3 warns
   seed or a migration revalidates nothing, so a freshly seeded Hard FM brief opened the parts list. A
   cache miss on the id now reads the table.
 - **`1f-s`'s offer counted firms the brief could never reach.** It now requires the verified, current
-  licence too, so *N firms cover Ajman* can understate the brief's match and never overstate it; and
-  its link seeds the emirate rather than a sentence the buyer did not write.
+  licence too. Both route per service, so *N firms cover Ajman* can understate the brief's match and
+  never overstate it; and its link seeds the emirate rather than a sentence the buyer did not write.
 - **A constant exported from a `"use client"` module arrives in a server component as a reference.**
   `EMPTY_BRIEF` spread to nothing and the seeded brief lost every key but two — the function-boundary
   defect, in constant form. It lives in the pure module.
@@ -1568,7 +1574,8 @@ a one-off job; filtering would narrow the match silently, which is what B3 warns
 
 ### Verified by clicking it
 
-Anonymous, on the local database with the new fixture: Hard FM · *anywhere in Dubai* named Emirates
+Before the per-service correction, anonymous, on the local database with the new fixture (every
+firm in it has a live Hard FM service, so the names hold): Hard FM · *anywhere in Dubai* named Emirates
 Facilities Group, Al Shirawi and Khansaheb (Al Quoz only) and not Sand and Steel (unverified); Deira
 dropped Khansaheb and said *only 2 suppliers match*; Ajman Free Zone offered *send to suppliers across
 Ajman* and, taken, *Send to 1 supplier*. A sent brief wrote one enquiry, three recipients, one

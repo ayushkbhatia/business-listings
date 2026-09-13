@@ -7535,12 +7535,14 @@ async function seedServicesFirm(db: Db) {
  * Until now the service track had one firm, filed under a goods trade, so every
  * brief matched nobody and the rail only ever rendered its empty state. These
  * sit under *Hard FM & MEP maintenance*, which the taxonomy resolves to
- * `services`, and each one exists to prove one clause of B5:
+ * `services`, and each one exists to prove one clause of B5. Every one has a
+ * live Hard FM service, because routing is per service (`3c-s` B8) — a firm
+ * listed under the trade with nothing live in it is never a recipient:
  *
  *  - **Emirates Facilities Group** — verified, Dubai and Sharjah whole, a live
  *    ongoing-contract service. The ordinary match.
  *  - **Al Shirawi Facilities** — verified, Dubai whole, a call-off service, and
- *    listed under the trade only through that service.
+ *    filed under another trade: it reaches Hard FM through that service alone.
  *  - **Khansaheb Facilities** — verified, **Al Quoz Industrial 1 only**. Matches
  *    a brief anywhere in Dubai or in Al Quoz; never one in Deira.
  *  - **Gulf Towers Maintenance** — verified, Abu Dhabi whole. A thin match of one.
@@ -7572,7 +7574,7 @@ async function seedBriefMatchFirms(db: Db) {
     tier: number;
     replyHours: number | null;
     coverage: { emirate: "dubai" | "sharjah" | "abu_dhabi" | "ajman"; areaId: string | null }[];
-    service: { name: string; slug: string; engagementType: "ongoing_contract" | "call_off" | "one_off_job" } | null;
+    service: { name: string; slug: string; engagementType: "ongoing_contract" | "call_off" | "one_off_job" };
     primary: boolean;
   }[] = [
     {
@@ -7605,7 +7607,7 @@ async function seedBriefMatchFirms(db: Db) {
       tier: 2,
       replyHours: null,
       coverage: [{ emirate: "dubai", areaId: area("al-quoz-industrial-1") }],
-      service: null,
+      service: { name: "Building maintenance", slug: "building-maintenance", engagementType: "ongoing_contract" },
       primary: true,
     },
     {
@@ -7615,7 +7617,7 @@ async function seedBriefMatchFirms(db: Db) {
       tier: 2,
       replyHours: 8,
       coverage: [{ emirate: "abu_dhabi", areaId: null }],
-      service: null,
+      service: { name: "Tower MEP maintenance", slug: "tower-mep-maintenance", engagementType: "ongoing_contract" },
       primary: true,
     },
     {
@@ -7625,7 +7627,7 @@ async function seedBriefMatchFirms(db: Db) {
       tier: 2,
       replyHours: null,
       coverage: [{ emirate: "ajman", areaId: area("ajman-new-industrial-area") }],
-      service: null,
+      service: { name: "Chiller and AHU servicing", slug: "chiller-and-ahu-servicing", engagementType: "one_off_job" },
       primary: true,
     },
     {
@@ -7635,7 +7637,7 @@ async function seedBriefMatchFirms(db: Db) {
       tier: 0,
       replyHours: null,
       coverage: [{ emirate: "dubai", areaId: null }],
-      service: null,
+      service: { name: "Reactive maintenance", slug: "reactive-maintenance", engagementType: "call_off" },
       primary: true,
     },
   ];
@@ -7673,21 +7675,19 @@ async function seedBriefMatchFirms(db: Db) {
       skipDuplicates: true,
     });
 
-    if (firm.service) {
-      await db.service.create({
-        data: {
-          businessId: created.id,
-          categoryId: trade.id,
-          name: firm.service.name,
-          slug: firm.service.slug,
-          engagementType: firm.service.engagementType,
-          deliveredWhere: "on_site",
-          status: "live",
-          publishedAt: days(-120),
-          position: 0,
-        },
-      });
-    }
+    await db.service.create({
+      data: {
+        businessId: created.id,
+        categoryId: trade.id,
+        name: firm.service.name,
+        slug: firm.service.slug,
+        engagementType: firm.service.engagementType,
+        deliveredWhere: "on_site",
+        status: "live",
+        publishedAt: days(-120),
+        position: 0,
+      },
+    });
   }
 
   console.log(`   ${firms.length} facilities firms, ${firms.filter((f) => f.tier >= 2).length} verified`);
