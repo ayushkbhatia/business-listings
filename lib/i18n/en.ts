@@ -5829,7 +5829,8 @@ export const en = {
   "services.add_placeholder": "What is it called?",
   "services.reorder": "Reorder",
   "services.reorder_done": "Done",
-  "services.reorder_hint": "Drag a row to change the order buyers see on your storefront.",
+  "services.reorder_hint":
+    "Drag a row to change the order buyers see on your storefront overview. Your services tab puts the most-enquired service first and uses this order for everything else.",
   "services.move_up": "Move {name} up",
   "services.move_down": "Move {name} down",
   "services.col.service": "Service",
@@ -5972,8 +5973,6 @@ export const en = {
   // with the full public catalogue; this is the link surface, not that board.
   "storefront.services": "Services",
   "services_index.title": "Services from {name}",
-  "services_index.intro": "What each engagement covers, what it does not, how it is charged and how fast.",
-  "services_index.empty": "Nothing listed yet.",
   // The extras allowance — the plan cap minus the primary. Not the total.
   "profile_step.extras_used": "· {used} of {allowed} extra used on {plan}",
   "profile_step.extras_unlimited": "· unlimited on {plan}",
@@ -9282,6 +9281,52 @@ export const en = {
   "enquiry.attachment": "Attached",
   "enquiry.attachment_failed":
     "Nothing else is needed now. Keep the file to hand for when the firm replies.",
+
+  // ── Board 1e-s · the services list, rows not a photo grid ─────────────────
+  "storefront_services.list_subline": {
+    one: "{formatted} service · how it is sold, how fast, and what you provide",
+    other: "{formatted} services · how each is sold, how fast, and what you provide",
+  },
+  "storefront_services.list_meta": {
+    one: "The {formatted} service {name} lists — how it is sold, how fast, what you provide. Fees are quoted on enquiry.",
+    other: "The {formatted} services {name} lists — how each is sold, how fast, what you provide. Fees are quoted on enquiry.",
+  },
+  "storefront_services.list_heading": { one: "{formatted} service", other: "{formatted} services" },
+  "storefront_services.sorted_by_volume": "Sorted by what they take on most",
+  "storefront_services.sorted_by_firm": "In the order the firm lists them — no service has enough enquiries yet to sort by",
+  "storefront_services.enquire_anything": "Enquire about anything",
+  "storefront_services.most_enquired": "Most enquired",
+  "storefront_services.enquiries_window": {
+    one: "{count} enquiry in the last {days} days",
+    other: "{count} enquiries in the last {days} days",
+  },
+  "storefront_services.field.engagement": "Engagement",
+  "storefront_services.field.turnaround": "Turnaround",
+  "storefront_services.field.fee_basis": "Fee basis",
+  "storefront_services.field.delivered": "Delivered",
+  "storefront_services.not_stated": "Not stated",
+  "storefront_services.you_provide": "You provide:",
+  "storefront_services.fee_on_enquiry": "Fee on enquiry",
+  "storefront_services.full_scope": "Full scope",
+  "storefront_services.full_scope_named": "Full scope of {name}",
+  "storefront_services.not_listed":
+    "Not on the list? Describe what you need and they will say whether they take it on.",
+  "storefront_services.enquire_anyway": "Enquire anyway",
+  "storefront_services.filters_label": "Filter services",
+  "storefront_services.filters_applied": { one: "{count} filter applied", other: "{count} filters applied" },
+  "storefront_services.filters_clear": "Clear filters",
+  "storefront_services.filters_all": "All",
+  "storefront_services.filters_none": "No service matches these filters.",
+  "storefront_services.filters_note_few": {
+    one: "One service, so there is nothing to filter here. The filters appear once a firm lists a choice.",
+    other: "{formatted} services means these filters do almost nothing here. They earn their place on a firm with thirty.",
+  },
+  "storefront_services.filters_note_many":
+    "{formatted} services. Filter by how the work is sold and charged, then read the four fields down each card.",
+  "storefront_services.pages_label": "Pages of services",
+  "storefront_services.page_previous": "Previous page",
+  "storefront_services.page_next": "Next page",
+  "storefront_services.page_of": "Page {page} of {pages}",
 
   // Credentials as a buyer reads them — the form's prompts are not names.
   "credentials_public.col_credential": "Credential",

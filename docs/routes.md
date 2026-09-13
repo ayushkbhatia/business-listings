@@ -26,7 +26,7 @@ and it is the one that argues back.
 /b/:slug/branches                       Branches & hours                      [1f]
 /b/:slug/reviews                        Reviews & ratings                     [1m]  built h4s6
 /b/:slug/p/:product                     Product + spec table                  [1g]
-/b/:slug/services                       Services index — the link surface   [1g-s] built h3gs
+/b/:slug/services                       Services list — rows, not a grid    [1e-s] built h1es
 /b/:slug/s/:service                     Service detail — the scope table    [1g-s] built h3gs
 /b/:slug (unclaimed variant)            Unclaimed listing                    [10g]
 /rfq/new                                RFQ fan-out                           [1h]  built h2s3
@@ -401,8 +401,12 @@ template edited again to something else offers again. Accepting goes through
 `/b/:slug/s/:service` is the scope table where the spec table is. Its row order
 comes from `ScopeSheetFamily`, so every firm in a family renders the same rows in
 the same order — that is the comparison, and sorting per service would destroy
-it. `/b/:slug/services` is the **link surface**, not board `1e-s`: `1e-s` is the
-full public catalogue and it replaces the index behind that tab, which stays.
+it. `/b/:slug/services` is board `1e-s`'s list: long cards with the same four
+fields in the same order, sorted by ninety-day enquiry volume with the seller's
+drag order as the tiebreak, filterable by `?engagement=` and `?fee=` (both
+`nofollow` and `noindex`; `?page=` alone stays crawlable at thirty a page). It
+renders for a firm that sells work even with nothing live, because its catch-all
+enquiry is the page's release valve; a goods seller with no services 404s.
 
 `/b/:slug` for a firm whose `sellsKind` is `services` is **its own composition**,
 not the goods overview with sections hidden — board `1d-s`. It has no catalogue

@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { buttonClassName } from "@/components/primitives";
 import { Tag } from "@/components/display";
 import { cn } from "@/lib/cn";
 import { formatCount, formatList } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { EnquireServiceLink } from "./EnquireServiceLink";
+import { ENQUIRY_VOLUME_DAYS } from "@/lib/storefront/services-catalogue";
 
 /**
  * Board `1d-s` — the pieces of a storefront whose catalogue is its work.
@@ -218,5 +220,130 @@ export function CoverageSummary({
         </p>
       )}
     </div>
+  );
+}
+
+/* ── Board 1e-s — a service as a long card ──────────────────────────────── */
+
+export interface ServiceCatalogueField {
+  key: "engagement" | "turnaround" | "fee_basis" | "delivered";
+  /** Already worded. Null where the firm has not said. */
+  value: string | null;
+}
+
+export interface ServiceCatalogueView {
+  slug: string;
+  name: string;
+  /** The firm's own scope paragraph, where it wrote one. */
+  summary: string | null;
+  /** Always four, always in this order — B1. */
+  fields: readonly [ServiceCatalogueField, ServiceCatalogueField, ServiceCatalogueField, ServiceCatalogueField];
+  /** The `requires_from_client` row. Null omits the line and its label — B3. */
+  provides: string | null;
+}
+
+/**
+ * One service on the public services list — board `1e-s`.
+ *
+ * **The four-field block is the page's only comparison mechanism** (B1):
+ * engagement, turnaround, fee basis, delivered, in that order, on every card. A
+ * field the firm has not filled reads *Not stated* rather than vanishing,
+ * because a buyer reads down that column four times and a missing cell moves
+ * every cell after it. This is a deliberate difference from the overview's
+ * summary row (`1d-s` B6) and is written into both boards' notes.
+ *
+ * **No completeness figure** (B2). The render's *THIN SCOPE — 2 OF 6 ROWS
+ * FILLED* is `3f-s`'s seller metric; on a buyer page it tells them nothing they
+ * can act on and makes the smallest firm look careless.
+ *
+ * **Fee on enquiry, always** (B4). There is no prop an amount could arrive in.
+ *
+ * **No availability** (B7). D11 closed as no: no chip, no *Join the waitlist*,
+ * no capacity sentence.
+ */
+export function ServiceCatalogueCard({
+  service,
+  businessSlug,
+  enquiries,
+  enquire,
+}: {
+  service: ServiceCatalogueView;
+  businessSlug: string;
+  /** Set only on the `MOST ENQUIRED` card — B5. */
+  enquiries: number | null;
+  /** The primary action, rendered by the caller — it needs a client island. */
+  enquire: React.ReactNode;
+}) {
+  const scopeHref = `/b/${businessSlug}/s/${service.slug}`;
+  const headingId = `service-${service.slug}`;
+
+  return (
+    <article
+      aria-labelledby={headingId}
+      className="grid gap-5 rounded-card border border-line bg-card p-5 md:grid-cols-[minmax(0,1fr)_13rem] md:gap-8 md:p-6"
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <h3 id={headingId} className="text-h3 text-ink">
+            <Link
+              href={scopeHref}
+              className="rounded-tag underline-offset-4 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+            >
+              {service.name}
+            </Link>
+          </h3>
+          {enquiries !== null && (
+            <span className="rounded-tag border border-line bg-paper-sunk px-2 py-0.5 font-mono text-eyebrow uppercase text-body">
+              {t("storefront_services.most_enquired")}
+            </span>
+          )}
+        </div>
+
+        {service.summary && (
+          <p className="mt-2 line-clamp-3 max-w-[var(--measure-prose)] text-body-sm text-body">
+            {service.summary}
+          </p>
+        )}
+
+        <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+          {service.fields.map((field) => (
+            <div key={field.key} className="min-w-0">
+              <dt className="font-mono text-eyebrow uppercase text-muted">
+                {t(`storefront_services.field.${field.key}` as "storefront_services.field.engagement")}
+              </dt>
+              <dd className={cn("mt-1 text-body-sm", field.value === null ? "text-muted" : "text-ink")}>
+                {field.value ?? t("storefront_services.not_stated")}
+              </dd>
+            </div>
+          ))}
+        </dl>
+
+        {service.provides && (
+          <p className="mt-4 border-t border-line pt-3 text-body-sm text-body">
+            <span className="font-medium text-ink">{t("storefront_services.you_provide")}</span>{" "}
+            {service.provides}
+          </p>
+        )}
+      </div>
+
+      <div className="flex flex-col items-stretch gap-2.5 md:items-end md:text-end">
+        <p className="text-body-sm font-medium text-ink">{t("storefront_services.fee_on_enquiry")}</p>
+        <div className="flex flex-col gap-2 md:w-full">
+          {enquire}
+          <Link
+            href={scopeHref}
+            aria-label={t("storefront_services.full_scope_named", { name: service.name })}
+            className={cn(buttonClassName({ variant: "secondary", block: true }))}
+          >
+            {t("storefront_services.full_scope")}
+          </Link>
+        </div>
+        {enquiries !== null && (
+          <p className="font-mono text-eyebrow uppercase tabular-nums text-muted">
+            {t("storefront_services.enquiries_window", { count: enquiries, days: ENQUIRY_VOLUME_DAYS })}
+          </p>
+        )}
+      </div>
+    </article>
   );
 }

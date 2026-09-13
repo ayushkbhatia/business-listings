@@ -1135,3 +1135,102 @@ test.describe("board 1d-s — the storefront with the catalogue taken out of it"
     expect(results.violations).toEqual([]);
   });
 });
+
+test.describe("board 1e-s — the services list, rows not a photo grid", () => {
+  const list = "/b/meridian-chartered-accountants/services";
+
+  test("gives every card the same four fields in the same order, Not stated when empty — AC1", async ({ page }) => {
+    await page.goto(list);
+    const cards = page.getByRole("article");
+    const count = await cards.count();
+    expect(count).toBeGreaterThan(1);
+    for (let i = 0; i < count; i += 1) {
+      const terms = await cards.nth(i).locator("dt").allInnerTexts();
+      expect(terms.map((term) => term.toUpperCase())).toEqual(["ENGAGEMENT", "TURNAROUND", "FEE BASIS", "DELIVERED"]);
+    }
+    // The VAT sheet never said where the work is delivered.
+    const vat = cards.filter({ hasText: "VAT and corporate tax filing" });
+    await expect(vat.locator("dd").nth(3)).toHaveText("Not stated");
+  });
+
+  test("carries no completeness figure and no fee, and every card reads Fee on enquiry — AC2, AC4", async ({ page }) => {
+    await page.goto(list);
+    const html = (await page.content()).toLowerCase();
+    expect(html).not.toContain("rows filled");
+    expect(html).not.toContain("thin scope");
+    expect(html).not.toContain("14,000");
+    expect(html).not.toContain("indicative");
+    const cards = page.getByRole("article");
+    await expect(page.getByText("Fee on enquiry")).toHaveCount(await cards.count());
+  });
+
+  test("says what the buyer provides only where the firm filled it in — AC3", async ({ page }) => {
+    await page.goto(list);
+    const cards = page.getByRole("article");
+    await expect(cards.filter({ hasText: "Statutory audit" }).getByText("You provide:")).toBeVisible();
+    await expect(cards.filter({ hasText: "VAT and corporate tax filing" }).getByText("You provide:")).toHaveCount(0);
+  });
+
+  test("sorts by enquiry volume and awards Most enquired from the same figure — AC5", async ({ page }) => {
+    // The 1d-s block above sent a buyer's enquiry naming the statutory audit.
+    await page.goto(list);
+    await expect(page.getByText("Sorted by what they take on most")).toBeVisible();
+    const first = page.getByRole("article").first();
+    await expect(first).toContainText("Statutory audit");
+    await expect(first.getByText("Most enquired")).toBeVisible();
+    await expect(first.getByText(/\d+ enquir(y|ies) in the last 90 days/i)).toBeVisible();
+    await expect(page.getByText("Most enquired")).toHaveCount(1);
+  });
+
+  test("keeps its filter note, narrows by fee basis, and keeps filtered views out of the index — AC6", async ({ page }) => {
+    await page.goto(list);
+    // `.first()`: below 1024px the same rail lives in a drawer, which is in the
+    // DOM while closed — the goods catalogue's arrangement, and the same trap.
+    await expect(page.getByText(/services means these filters do almost nothing here/).first()).toBeVisible();
+
+    const rail = page.getByRole("complementary", { name: "Filter services" }).first();
+    const retainer = rail.getByRole("link", { name: /Retainer/ });
+    await expect(retainer).toHaveAttribute("rel", "nofollow");
+    await retainer.click();
+    await page.waitForURL(/fee=retainer/);
+    await expect(page.getByRole("article")).toHaveCount(1);
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+    await expect(page.getByText(/services means these filters do almost nothing here/).first()).toBeVisible();
+  });
+
+  test("ships no availability filter, chip, CTA or capacity copy — AC7", async ({ page }) => {
+    await page.goto(list);
+    const text = (await page.locator("main").innerText()).toLowerCase();
+    for (const word of ["taking work", "accepting", "waitlist", "at capacity"]) expect(text).not.toContain(word);
+  });
+
+  test("links every card to its full scope — AC8", async ({ page }) => {
+    await page.goto(list);
+    const cards = page.getByRole("article");
+    for (let i = 0; i < (await cards.count()); i += 1) {
+      await expect(cards.nth(i).getByRole("link", { name: /^Full scope of / })).toHaveAttribute(
+        "href",
+        /\/b\/meridian-chartered-accountants\/s\//,
+      );
+    }
+  });
+
+  test("opens the composer on the card's service, and the catch-all on something not listed — AC9", async ({ page }) => {
+    await page.goto(list);
+    await page.getByRole("button", { name: "Enquire about VAT and corporate tax filing" }).click();
+    const drawer = page.getByRole("dialog");
+    await expect(drawer.getByRole("combobox", { name: "Which service" })).toHaveValue("vat-and-corporate-tax-filing");
+    await page.keyboard.press("Escape");
+
+    await expect(page.getByText("Not on the list? Describe what you need")).toBeVisible();
+    await page.getByRole("button", { name: "Enquire anyway" }).click();
+    await expect(page.getByRole("dialog").getByRole("combobox", { name: "Which service" })).toHaveValue("");
+  });
+
+  test("has no axe violations at the acceptance width", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.goto(list);
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});

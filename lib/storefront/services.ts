@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/db/client";
+import { Prisma } from "@/lib/db/generated/client";
 import type { DeliveryMode, Emirate } from "@/lib/db/generated/enums";
 import { publicServicesFor, type PublicService } from "@/lib/services/service";
 import { publicCredentialsFor, type PublicCredential } from "@/lib/credentials/service";
@@ -8,6 +9,7 @@ import { businessCoverage, effectiveCoverage } from "@/lib/locations/service-cov
 import type { CoverageScope } from "@/lib/locations/coverage";
 import { EMIRATES } from "@/lib/uae";
 import { declaredSectors, type DeclaredSector } from "./services-overview";
+import { ENQUIRY_VOLUME_DAYS } from "./services-catalogue";
 
 /**
  * Board `1d-s` — everything the storefront of a firm that sells work reads.
@@ -158,6 +160,42 @@ function worded(scopes: readonly CoverageScope[], rows: readonly CoverageRow[]):
       ? (names.get(scope.areaId) ?? emirateName(scope.emirate))
       : emirateName(scope.emirate),
   }));
+}
+
+
+/**
+ * Enquiries per service over the window — the figure `1e-s` sorts by and awards
+ * `MOST ENQUIRED` from.
+ *
+ * **The seller's own volume, not a platform ranking.** Counted from
+ * `EnquiryLine.serviceId`, the line a buyer's enquiry named its subject with,
+ * and only on enquiries this business actually received — a service id on a
+ * fan-out that never reached the firm is not the firm's volume. Distinct
+ * enquiries, so an enquiry that named one service twice counts once.
+ *
+ * A query every render, never a stored counter — *every number is a query* —
+ * and one indexed aggregate over at most a page of service ids. Every service
+ * reads zero until buyers start naming services, which `1d-s` made possible;
+ * the sort then falls back to the seller's own order and says so.
+ */
+export async function serviceEnquiryVolume(
+  businessId: string,
+  serviceIds: readonly string[],
+  now: Date = new Date(),
+): Promise<Map<string, number>> {
+  if (serviceIds.length === 0) return new Map();
+  const since = new Date(now.getTime() - ENQUIRY_VOLUME_DAYS * 86_400_000);
+
+  const rows = await prisma.$queryRaw<{ service_id: string; enquiries: bigint }[]>`
+    select l."service_id", count(distinct l."enquiry_id") as enquiries
+      from "enquiry_line" l
+      join "enquiry" e on e."id" = l."enquiry_id"
+      join "enquiry_recipient" r on r."enquiry_id" = l."enquiry_id" and r."business_id" = ${businessId}
+     where l."service_id" in (${Prisma.join([...serviceIds])})
+       and e."created_at" >= ${since}
+     group by l."service_id"`;
+
+  return new Map(rows.map((row) => [row.service_id, Number(row.enquiries)]));
 }
 
 /** The federal order — the one every other emirate list on the platform uses. */

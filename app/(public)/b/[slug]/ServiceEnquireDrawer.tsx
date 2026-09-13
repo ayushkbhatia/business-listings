@@ -8,15 +8,17 @@ import { t } from "@/lib/i18n";
 import { ServiceEnquiryForm } from "./ServiceEnquiryForm";
 
 /**
- * The service composer in a drawer — for a storefront that sells both.
+ * The service composer in a drawer, on a page that has no composer of its own.
  *
- * `1d-s` B2 keeps the catalogue and the services separate, and a `both`
- * storefront's rail already carries the goods composer, which asks for lines
- * and quantities. Putting the service composer beside it would be two forms on
- * one page — the duplicate-composer defect board 1d removed — and routing a
- * service enquiry through the goods one would ask a buyer the quantity of a
- * statutory audit. So a service row opens its own composer on demand, over the
- * storefront, with the service already chosen.
+ * Two places need it. A `both` storefront's rail already carries the goods
+ * composer, which asks for lines and quantities (`1d-s` B2) — a second inline
+ * form beside it would be the duplicate-composer defect board 1d removed. And
+ * `1e-s`'s services list is a page of cards with an *Enquire* on each and an
+ * *enquire anyway* at the foot: sending the buyer back to the overview to write
+ * would lose the list they were choosing from.
+ *
+ * The composer mounts only while the drawer is open, so a list of thirty cards
+ * is thirty buttons rather than thirty forms.
  */
 export function ServiceEnquireDrawer({
   businessId,
@@ -26,32 +28,46 @@ export function ServiceEnquireDrawer({
   serviceName,
   askForContact,
   responseLine,
+  triggerLabel,
+  triggerClassName = ENQUIRE_LINK,
+  triggerAriaLabel,
 }: {
   businessId: string;
   businessName: string;
   services: readonly ServiceEnquiryOption[];
-  service: string;
-  serviceName: string;
+  /** The service it opens on, or `null` for *something not listed*. */
+  service: string | null;
+  /** Named in the drawer's description; null for the catch-all. */
+  serviceName: string | null;
   askForContact: boolean;
   responseLine: string;
+  /** Defaults to the compact *Enquire*. */
+  triggerLabel?: string;
+  triggerClassName?: string;
+  /** Defaults to *Enquire about {service}* where there is a service. */
+  triggerAriaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const label = triggerAriaLabel ??
+    (serviceName ? t("storefront_services.enquire_named", { name: serviceName }) : undefined);
+
   return (
     <>
       <button
         type="button"
-        className={ENQUIRE_LINK}
-        aria-label={t("storefront_services.enquire_named", { name: serviceName })}
+        className={triggerClassName}
+        aria-label={label}
+        aria-haspopup="dialog"
         onClick={() => setOpen(true)}
       >
-        {t("listing.enquire")}
+        {triggerLabel ?? t("listing.enquire")}
       </button>
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
         size="lg"
         title={t("storefront_services.composer.title")}
-        description={serviceName}
+        description={serviceName ?? t("storefront_services.composer.service_other")}
         closeLabel={t("action.cancel")}
       >
         {open && (
