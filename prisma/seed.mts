@@ -47,6 +47,7 @@ import { seedSubcategories } from "./seed-subcategories.mjs";
 import { seedAreaPages } from "./seed-area-pages.mjs";
 import { auditCuratedLists, seedCurated } from "./seed-curated.mjs";
 import { seedCampaignLegal } from "./seed-campaign-legal.mjs";
+import { seedLicenceImports } from "./seed-licence-imports.mjs";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL! }),
@@ -1019,6 +1020,9 @@ async function main() {
   // and PRNG-free for the same reasons.
   await seedBriefMatchFirms(prisma);
   await seedSeatsAndChannels(prisma);
+  // Board 12a: the importer's four run states. PRNG-free, and it links three
+  // existing listings to a run rather than publishing new ones.
+  await seedLicenceImports(prisma, NOW);
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
   await backfillSeatChannels(prisma);

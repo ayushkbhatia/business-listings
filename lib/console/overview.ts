@@ -157,10 +157,19 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
     prisma.business.count({ where: { planId: "free", claimStatus: "claimed" } }),
     prisma.business.count({ where: { claimStatus: "unclaimed" } }),
 
-    // Staged and waiting for somebody to approve the run. Real now: step 2
-    // built the table that board 4a used to say was not measurable yet.
+    // Staged and not yet a listing. Real now: step 2 built the table that board
+    // 4a used to say was not measurable yet.
+    //
+    // Approved runs count too since board 12a's board-level pass. A run
+    // publishes what is ready and keeps the rest — records waiting on the
+    // categorisation queue, or held for a fix — and those publish from the same
+    // run later. Counting only staged runs made them vanish from this figure the
+    // moment the first half of their file was approved.
     prisma.stagedListing.count({
-      where: { disposition: { in: ["ready", "needs_category"] }, run: { status: "staged" } },
+      where: {
+        disposition: { in: ["ready", "needs_category"] },
+        run: { status: { in: ["staged", "approved"] } },
+      },
     }),
 
     prisma.supplierReport.count({ where: { outcome: null } }),

@@ -8,11 +8,13 @@ import {
   REVERSIBLE_DAYS,
 } from "@/lib/dedupe/service";
 import { formatCount } from "@/lib/format";
+import { queuedRecordCount } from "@/lib/ingest/queue";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
 import { DedupeTable, type CandidateRow, type Signal } from "./DedupeTable";
 import { MergeTable, type MergeRow } from "./MergeTable";
 import { dismiss, merge, unmerge } from "./actions";
+import { IngestTabs } from "../IngestTabs";
 
 /**
  * Board 12b — dedupe and merge.
@@ -29,11 +31,12 @@ export default async function DedupePage() {
   if (!can(seat.actor, "business.merge")) notFound();
 
   const now = new Date();
-  const [candidates, merges, badges, bandCounts] = await Promise.all([
+  const [candidates, merges, badges, bandCounts, queued] = await Promise.all([
     openCandidates(undefined, 200),
     recentMerges(now),
     getAdminNavBadges(seat),
     openCandidateCounts(),
+    queuedRecordCount(),
   ]);
 
   const rows: CandidateRow[] = candidates.map((candidate) => ({
@@ -85,7 +88,12 @@ export default async function DedupePage() {
         </span>
       }
     >
-      <DedupeTable rows={rows} merge={merge} dismiss={dismiss} />
+      {/* The ingestion chain's shared strip, identical on all three of its screens. */}
+      <IngestTabs active="dedupe" queued={queued} showDedupe />
+
+      <div className="mt-[var(--gutter)]">
+        <DedupeTable rows={rows} merge={merge} dismiss={dismiss} />
+      </div>
 
       <p className="mt-[var(--gutter)] max-w-prose text-caption text-muted">
         {t("admin.dedupe.note", { days: String(REVERSIBLE_DAYS) })}
@@ -97,7 +105,8 @@ export default async function DedupePage() {
          screen that called it.
       */}
       <section className="mt-[var(--section-gap)]">
-        <h2 className="mb-3 font-serif text-h2 text-ink">
+        {/* Sans: the handoff-4 README allows no serif anywhere in the console. */}
+        <h2 className="mb-3 text-h2 text-ink">
           {t("admin.dedupe.reversible_title")}
         </h2>
         <MergeTable rows={mergeRows} unmerge={unmerge} />

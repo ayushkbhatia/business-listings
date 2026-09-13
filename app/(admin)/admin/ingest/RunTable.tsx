@@ -9,30 +9,49 @@ import { t } from "@/lib/i18n";
 /**
  * Board 12a's run list. A client component because `Column.render` is a
  * function, which a server component cannot pass.
+ *
+ * The columns are the board's buckets — new, waiting, duplicates, rejected —
+ * so a run's shape reads across a row without opening it, and a staged run is
+ * tinted: a run nobody decides is thousands of companies not in the directory.
  */
 
 export interface RunRow {
   id: string;
+  number: number;
   source: string;
   filename: string;
   status: string;
   rowCount: number;
   stagedCount: number;
+  queuedCount: number;
+  duplicateCount: number;
   rejectedCount: number;
   createdAt: Date;
 }
 
+const TONE: Record<string, "ok" | "warn" | "bad" | "neutral" | "info"> = {
+  parsing: "info",
+  staged: "warn",
+  approved: "ok",
+  discarded: "neutral",
+  rolled_back: "bad",
+};
+
 export function RunTable({ rows }: { rows: readonly RunRow[] }) {
   const router = useRouter();
 
+  const count = (value: number, tone?: string) => (
+    <span className={value > 0 && tone ? tone : "text-body"}>{formatCount(value)}</span>
+  );
+
   const columns: Column<RunRow>[] = [
     {
-      key: "source",
-      header: t("admin.ingest.col.source"),
+      key: "run",
+      header: t("admin.ingest.col.run"),
       render: (row) => (
         <span className="flex flex-col">
-          <span className="text-ink">{row.source}</span>
-          <span className="font-mono text-eyebrow text-faint">{row.filename}</span>
+          <span className="text-ink">{t("admin.run.title", { number: row.number, source: row.source })}</span>
+          <span className="font-mono text-eyebrow text-body">{row.filename}</span>
         </span>
       ),
     },
@@ -40,41 +59,53 @@ export function RunTable({ rows }: { rows: readonly RunRow[] }) {
       key: "rows",
       header: t("admin.ingest.col.rows"),
       numeric: true,
-      width: "7rem",
+      width: "6rem",
       render: (row) => formatCount(row.rowCount),
     },
     {
-      key: "staged",
-      header: t("admin.ingest.col.staged"),
+      key: "new",
+      header: t("admin.ingest.col.new"),
+      numeric: true,
+      width: "6rem",
+      render: (row) => formatCount(row.stagedCount),
+    },
+    {
+      key: "queued",
+      header: t("admin.ingest.col.queued"),
+      numeric: true,
+      width: "6rem",
+      hideBelow: "md",
+      render: (row) => count(row.queuedCount, "text-warn-ink"),
+    },
+    {
+      key: "duplicates",
+      header: t("admin.ingest.col.duplicates"),
       numeric: true,
       width: "7rem",
-      render: (row) => formatCount(row.stagedCount),
+      hideBelow: "lg",
+      render: (row) => count(row.duplicateCount),
     },
     {
       key: "rejected",
       header: t("admin.ingest.col.rejected"),
       numeric: true,
-      width: "7rem",
-      render: (row) => (
-        <span className={row.rejectedCount > 0 ? "text-warn-ink" : "text-muted"}>
-          {formatCount(row.rejectedCount)}
-        </span>
-      ),
+      width: "6rem",
+      render: (row) => count(row.rejectedCount, "text-bad-ink"),
     },
     {
       key: "status",
       header: t("admin.ingest.col.status"),
-      width: "8rem",
+      width: "9rem",
       render: (row) => (
-        <StatusBadge tone={row.status === "approved" ? "ok" : row.status === "discarded" ? "neutral" : "warn"}>
-          {row.status}
+        <StatusBadge tone={TONE[row.status] ?? "neutral"}>
+          {t(`admin.ingest.status.${row.status as "staged"}`)}
         </StatusBadge>
       ),
     },
     {
       key: "when",
       header: t("admin.ingest.col.when"),
-      width: "9rem",
+      width: "8rem",
       hideBelow: "md",
       render: (row) => formatDate(row.createdAt),
     },
@@ -86,7 +117,6 @@ export function RunTable({ rows }: { rows: readonly RunRow[] }) {
       columns={columns}
       rows={rows}
       rowKey={(row) => row.id}
-      stickyHeader
       onRowClick={(row) => router.push(`/admin/ingest/${row.id}`)}
       rowAction={(row) => ({
         label: t("admin.ingest.open"),
@@ -97,7 +127,7 @@ export function RunTable({ rows }: { rows: readonly RunRow[] }) {
       empty={
         <div className="text-center">
           <p className="text-body-sm text-body">{t("admin.ingest.empty.title")}</p>
-          <p className="mx-auto mt-1 max-w-prose text-caption text-muted">
+          <p className="mx-auto mt-1 max-w-prose text-caption text-body">
             {t("admin.ingest.empty.body")}
           </p>
         </div>

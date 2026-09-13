@@ -315,8 +315,26 @@ assigns a category afterwards, so `approveRun` refuses with "Categorise the queu
 queue with no screen. The dedupe candidate list has no production writer, so on a real database
 the screen is permanently empty above copy reading "Run the matcher after an import".
 
-- [ ] **4.1 `12a`** — a categorise screen for `needs_category`, a writer for `discarded`, and a
-  screen that renders a staged row. Approval permanently strands every row it skipped.
+- [x] **4.1 `12a`** — a categorise screen for `needs_category`, a writer for `discarded`, and a
+  screen that renders a staged row. Built against the board-level handoff (14 Sep 2026), which
+  arrived after this line was written and settles its two open decisions the way the build notes
+  read them. `/admin/ingest/categorise` groups the queue by licence activity, so one decision files
+  every waiting record with a phrase across every open run; the chosen category's resolved trade
+  kind is shown with where it came from, an inherited kind has to be confirmed, and a kind nothing
+  sets is refused (B7). A decision can be remembered, and staging applies it before the keyword
+  signals (B5). `/admin/ingest/records/:id` renders the raw row in the file's own column order.
+  Approval no longer strands anything: a run publishes what is complete and categorised, states the
+  split beside the button (B3), and publishes again from the same run as its queue clears. Discard
+  and a thirty-day rollback exist; the rollback unpublishes, never deletes, and leaves any listing
+  somebody has claimed, subscribed or started claiming standing (B4). Upload, publish, categorise,
+  discard and rollback are all `staffMutation`s (B8). **Found on the way and fixed:** approval
+  created every listing unpublished, so the cold-start pages were unreachable; it also invented
+  `PENDING-XXXXXXXX` licence numbers and a "one year from today" expiry for records with neither,
+  and dropped the emirate, area, phone and activity on the floor; a keyword signal whose slug was
+  not in the database staged as `ready` with no category; the 24-month floor was 720 days; the
+  keyword matcher filed "Copper Wire Trading" under PPE and "Food Products" under HVAC; the run
+  screen printed the uploader as the approver. Exact-licence duplicates are marked at staging and
+  at publish and never published here (B9); Q2's renewed-licence case is left to `4.2`.
 - [ ] **4.2 `12b`** — the rescan control, a capability on it, `selectable` bulk merge, and a merge
   rule that is not `a.id < b.id` (`lib/dedupe/service.ts:145`).
 - [ ] **4.3 `4b`** — settle the 62% (see §4), then build the bulk rules.
@@ -423,7 +441,7 @@ the only large piece and the only one selling something it does not deliver.
 | `4i` | Staff, roles & audit | partial | medium | Audit log has a scoped reader and three levels of tests. The staff half has no route, service or writer. | 7.1 |
 | `12e` | Plans, dunning, VAT | partial | medium | Seven caps are staff-editable with an audit row. Price is editable by nobody. | 6.1 |
 | `4d` | Category taxonomy | partial | large | `createCategory` does not exist; `parentId` is written by nothing outside the seed. | 5.1 |
-| `12a` | Licence-record importer | partial | medium | Rows staged `needs_category` are terminal — nothing assigns them a category. | 4.1 |
+| `12a` | Licence-record importer | built | medium | Rows staged `needs_category` are terminal — nothing assigns them a category. Closed by 4.1. | 4.1 |
 | `12b` | Dedupe & merge | scaffold ↓ | small | The candidate list has no production writer, so the screen is permanently empty. | 4.2 |
 | `4b` | Approval queue | partial | medium | The 62% auto-pass figure has no source in the tree and no denominator exists. | 4.3 |
 | `4c` | Review a submission | partial | small | The credential lane cannot open the credential; moderators get conflict rows that 404. | 4.4 |

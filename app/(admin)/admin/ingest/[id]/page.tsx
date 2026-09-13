@@ -1,121 +1,95 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Card, Panel } from "@/components/structure";
-import { StatusBadge } from "@/components/display";
 import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
-import { runSummary } from "@/lib/ingest/service";
-import { prisma } from "@/lib/db/client";
-import { formatCount } from "@/lib/format";
+import { REVERSIBLE_DAYS, isRecordFilter, runOverview, runRecords } from "@/lib/ingest/read";
+import { queuedRecordCount } from "@/lib/ingest/queue";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
-import { ApproveForm } from "./ApproveForm";
-import { approve } from "../actions";
+import { discard, publish, rollback } from "../actions";
+import { IngestTabs } from "../IngestTabs";
+import { RunReview } from "../RunReview";
+import { RecordsTable } from "./RecordsTable";
 
 /**
- * One run: what it staged, what it queued, and why it refused the rest.
+ * One run: its buckets, its decision, and every record it staged.
  *
- * **Rejections by countable reason** is the half of criterion 1 that is easy to
- * ship as prose and useless that way. Four grounds, four counts, adding to the
- * rejected total — so a run that refuses two thousand rows can be argued with
- * rather than only regretted.
+ * The records table is the build plan's "a screen that renders a staged row"
+ * — the run page used to stop at counts, so a rejection could be counted and
+ * never looked at, and a record the queue could not explain could not be
+ * found.
  */
 
 export const dynamic = "force-dynamic";
 
-export default async function RunPage({ params }: { params: Promise<{ id: string }> }) {
+const PAGE_SIZE = 50;
+
+export default async function RunPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ show?: string; page?: string }>;
+}) {
   const seat = await requireStaff();
   if (!can(seat.actor, "queue.decide")) notFound();
 
-  const { id } = await params;
-  const [run, badges] = await Promise.all([runSummary(id), getAdminNavBadges(seat)]);
-  if (!run) notFound();
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const show = isRecordFilter(query.show) ? query.show : "all";
+  const page = Math.max(1, Number.parseInt(query.page ?? "1", 10) || 1);
 
-  const [ready, published] = await Promise.all([
-    prisma.stagedListing.count({ where: { runId: run.id, disposition: "ready" } }),
-    prisma.stagedListing.count({ where: { runId: run.id, disposition: "published" } }),
+  const [run, records, queued, badges] = await Promise.all([
+    runOverview(id),
+    runRecords(id, show, page, PAGE_SIZE),
+    queuedRecordCount(),
+    getAdminNavBadges(seat),
   ]);
-
-  const figures = [
-    { key: "categorised", label: t("admin.run.categorised"), value: run.categorisedCount },
-    { key: "queued", label: t("admin.run.queued"), value: run.queuedCount },
-    { key: "rejected", label: t("admin.run.rejected"), value: run.rejectedCount },
-    { key: "published", label: t("admin.run.published"), value: published },
-  ];
+  if (!run) notFound();
 
   return (
     <AdminPage
       seat={seat}
       badges={badges}
       activeHref="/admin/ingest"
-      title={run.source}
-      eyebrow={t("admin.run.title")}
+      title={t("admin.run.title", { number: run.number, source: run.source })}
+      eyebrow={t("admin.run.eyebrow")}
       breadcrumb={
         <Link
           href="/admin/ingest"
-          className="rounded-tag text-caption text-muted underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+          className="rounded-tag text-caption text-body underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
         >
           {t("admin.run.back")}
         </Link>
       }
-      meta={
-        <span className="flex flex-wrap items-center gap-3 text-caption text-muted">
-          <span className="font-mono text-eyebrow">{run.filename}</span>
-          <span>{t("admin.run.rows", { count: formatCount(run.rowCount) })}</span>
-          <StatusBadge tone={run.status === "approved" ? "ok" : "warn"}>{run.status}</StatusBadge>
-        </span>
-      }
     >
-      <div className="grid gap-[var(--gutter)] sm:grid-cols-2 xl:grid-cols-4">
-        {figures.map((figure) => (
-          <Card key={figure.key}>
-            <p className="text-caption text-muted">{figure.label}</p>
-            <p className="mt-1 font-mono text-h2 tabular-nums text-ink">
-              {formatCount(figure.value)}
-            </p>
-          </Card>
-        ))}
+      <IngestTabs active="runs" queued={queued} showDedupe={can(seat.actor, "business.merge")} />
+
+      <div className="mt-[var(--gutter)]">
+        <RunReview
+          run={run}
+          headingId="run-summary"
+          publish={publish}
+          discard={discard}
+          rollback={rollback}
+          reversibleDays={REVERSIBLE_DAYS}
+        />
       </div>
 
-      <div className="mt-[var(--gutter)] grid gap-[var(--gutter)] lg:grid-cols-2">
-        <Panel title={t("admin.run.grounds")}>
-          {run.byGround.length === 0 ? (
-            <p className="text-caption text-muted">{t("admin.run.no_rejections")}</p>
-          ) : (
-            <ul className="flex flex-col">
-              {run.byGround.map((row) => (
-                <li
-                  key={row.ground}
-                  className="flex items-baseline justify-between gap-3 border-t border-line py-1.5 first:border-t-0"
-                >
-                  <span className="min-w-0 text-body-sm text-body">
-                    {t(`admin.run.ground.${row.ground}` as never)}
-                  </span>
-                  <span className="shrink-0 font-mono text-body-sm tabular-nums text-ink">
-                    {formatCount(row.count)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-
-        <Panel title={t("admin.review.decision_heading")}>
-          {run.status === "staged" ? (
-            <ApproveForm runId={run.id} ready={ready} approve={approve} />
-          ) : (
-            <div className="flex flex-col gap-2">
-              <p className="max-w-prose text-body-sm text-body">{run.decisionReason}</p>
-              <p className="text-caption text-muted">
-                {t("admin.run.decided", {
-                  status: run.status,
-                  name: run.actor.fullName ?? "—",
-                })}
-              </p>
-            </div>
-          )}
-        </Panel>
-      </div>
+      <section aria-labelledby="run-records" className="mt-[var(--section-gap)]">
+        <h2 id="run-records" className="mb-3 text-h2 text-ink">
+          {t("admin.records.title")}
+        </h2>
+        <RecordsTable
+          runId={run.id}
+          runNumber={run.number}
+          show={show}
+          page={page}
+          pageSize={PAGE_SIZE}
+          total={records.total}
+          counts={records.counts}
+          rows={records.rows}
+        />
+      </section>
     </AdminPage>
   );
 }
