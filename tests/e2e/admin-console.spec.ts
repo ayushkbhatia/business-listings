@@ -201,25 +201,52 @@ test.describe("boards 4b, 4d and 4e", () => {
     await expect(page.getByText(/\d+ of \d+ trades are sold by the job/)).toBeVisible();
   });
 
-  test("the trade kind tab lists unset trades first and says how many", async ({ page }) => {
+  test("the trade kind tab sorts the undecided to the top and says how many", async ({
+    page,
+  }) => {
     /*
        Board 4d-s. An unset row is not neutral — it inherits whatever the sector
        says, and no sector is purely one kind — so every unset row is a place a
        supplier may be shown the wrong screens. Sorting them to the top is the
        screen's argument, not a default, and the progress figure beside it comes
        from the same array so the two cannot disagree.
+
+       **The assertion is the ordering, not the first row's band.** It used to
+       pin the first row to `Not set`, which passed only while the taxonomy was
+       six of 440 classified — and broke the moment it was finished, which is
+       the opposite of what a test about a backlog screen should do. Unset sorts
+       above inherited sorts above decided; where there is no backlog the top of
+       the list is simply the next band down.
     */
     await page.goto("/admin/categories?tab=kind");
 
     const table = page.getByRole("table", { name: /how it is sold/i });
     await expect(table).toBeVisible();
 
-    // The first row on the first page is one nobody has decided about.
-    await expect(table.locator("tbody tr").first().getByText("Not set")).toBeVisible();
+    const first = table.locator("tbody tr").first();
+    const unset = await table.getByText("Not set").count();
+    if (unset > 0) {
+      await expect(first.getByText("Not set")).toBeVisible();
+    } else {
+      // Nothing undecided, so the top row is an inherited one — a trade whose
+      // sector answered for it — rather than a trade somebody typed.
+      await expect(first.getByText(/^From /)).toBeVisible();
+    }
 
-    // Both figures rendered, and both derived rather than written down.
+    // The progress figure is a query over the same array the table renders.
     await expect(page.getByText(/\d+ of \d+ decided/)).toBeVisible();
-    await expect(page.getByText(/\d+ still resolve to sold by the item/)).toBeVisible();
+
+    /*
+       And the backlog line only where there is a backlog. It reads "N still
+       resolve to sold by the item because nothing above them has been set",
+       which is a sentence with nothing to say at zero — a screen that printed
+       it anyway would be inventing a queue.
+    */
+    if (unset > 0) {
+      await expect(page.getByText(/\d+ still resolve to sold by the item/)).toBeVisible();
+    } else {
+      await expect(page.getByText(/still resolve to sold by the item/)).toHaveCount(0);
+    }
 
     // The two cards that carry the rules somebody acting here needs.
     await expect(page.getByRole("heading", { name: "How inheritance works" })).toBeVisible();
@@ -236,10 +263,26 @@ test.describe("boards 4b, 4d and 4e", () => {
     */
     await page.goto("/admin/categories?tab=kind");
 
-    await page.locator("tbody input[type=checkbox]").first().check();
+    /*
+       Set it to the kind it is *not*, read off the row.
+
+       Pinning "sold by the job" passed only while the taxonomy was six of 440
+       classified and the top row was undecided; now the top row already resolves
+       to services and asking for services again changes nothing, so the dialog
+       correctly counted zero. The test's subject is the confirmation, not the
+       direction, so the direction comes from the row.
+    */
+    const row = page.getByRole("table", { name: /how it is sold/i }).locator("tbody tr").first();
+    const sellsServices = (await row.getByText(/by the job/i).count()) > 0;
+
+    await row.locator("input[type=checkbox]").check();
     await expect(page.getByText(/1 selected/)).toBeVisible();
 
-    await page.getByRole("button", { name: "Set to sold by the job" }).click();
+    await page
+      .getByRole("button", {
+        name: sellsServices ? "Set to sold by the item" : "Set to sold by the job",
+      })
+      .click();
 
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByText(/1 trade changes/)).toBeVisible();

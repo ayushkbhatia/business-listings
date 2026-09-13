@@ -23,6 +23,8 @@ import {
   SUBCATEGORIES,
   VALVE_TEMPLATE_FIELDS,
 } from "./seed-data.mjs";
+import { LEAF_OVERRIDES, SCOPE_FAMILIES, TRADE_KINDS } from "./trade-kinds.mjs";
+import { resolveTradeKind } from "../lib/taxonomy/trade-kind.js";
 import { DN_SYNONYMS } from "../lib/trade/nominal-size.js";
 import { EXPIRED_LICENCE_TIER } from "../lib/verification.js";
 import { hostnameFor, labelFor } from "../lib/domains/label.js";
@@ -485,45 +487,101 @@ async function main() {
   );
 
   /*
-     How a handful of trades are sold — board 4d-s, decision D5.
+     How every trade is sold — board `4d-s`, decision D5, and `4e-s` B5.
 
-     A sample, not the answer. Production's 440 rows are set by ops through
-     /admin/categories, where each write is audited with a reason; putting them
-     in a seed would make a taxonomy decision cost a deploy, and the seed is
-     refused against any non-loopback host anyway.
+     **The fixture taxonomy is code, so its classification is too.** All 440
+     categories here come from `seed-taxonomy.mts` constants; a fixture set
+     where everything resolves to `goods` lets every services branch pass
+     vacuously, which is what it did while six of the 440 were classified. CI
+     builds its database from this file, so this is the only place the two kinds
+     can both exist for a test to find.
 
-     What it has to give a developer and CI is both kinds and both directions of
-     inheritance, because a fixture set where everything resolves to `goods`
-     would let every service branch pass vacuously:
+     **Production's rows stay ops'.** They are classified once by
+     `20261009090000_classify_trade_kinds`, a backfill, and maintained after
+     that through the admin screens where each write is audited with a reason.
+     A taxonomy decision must not cost a deploy, which is why the two halves are
+     separate rather than this file writing to production.
 
-       - a whole sector set once, so the inherit path has real data;
-       - services overridden inside a goods sector — Logistics holds customs
-         clearance, which is the finding the column exists to record;
-       - goods overridden inside a sector set to services, so the override is
-         shown working in both directions rather than only downward.
+     `prisma/trade-kinds.mts` holds the list and the rule it was applied by, so
+     the migration and the seed cannot disagree about what a trade is.
   */
-  const TRADE_KINDS = [
-    { slug: "legal-audit-and-business-setup", kind: "services" as const },
-    { slug: "customs-clearance", kind: "services" as const },
-    { slug: "freight-forwarding", kind: "services" as const },
-    { slug: "cybersecurity", kind: "services" as const },
-    { slug: "event-management", kind: "services" as const },
-    { slug: "servers-and-storage", kind: "goods" as const },
-  ];
-  let kindsSet = 0;
-  for (const row of TRADE_KINDS) {
+  let sectorsSet = 0;
+  let exceptionsSet = 0;
+  for (const sector of TRADE_KINDS) {
     const { count } = await prisma.category.updateMany({
-      where: { slug: row.slug },
-      data: { tradeKind: row.kind },
+      where: { slug: sector.slug },
+      data: { tradeKind: sector.kind },
     });
     if (count === 0) {
-      // A renamed slug would otherwise leave the fixture silently one-sided,
-      // and the service tests would go green against a taxonomy of one kind.
-      throw new Error(`seed: no category with slug "${row.slug}" to set a trade kind on`);
+      // A renamed slug would otherwise leave a whole sector unclassified and
+      // the services tests green against a taxonomy of one kind.
+      throw new Error(`seed: no category with slug "${sector.slug}" to set a trade kind on`);
     }
-    kindsSet += count;
+    sectorsSet += count;
+
+    const parent = await prisma.category.findUniqueOrThrow({
+      where: { slug: sector.slug },
+      select: { id: true },
+    });
+    const other = sector.kind === "goods" ? "services" : "goods";
+    for (const name of sector.except ?? []) {
+      const { count: hit } = await prisma.category.updateMany({
+        where: { parentId: parent.id, name },
+        data: { tradeKind: other },
+      });
+      if (hit !== 1) {
+        throw new Error(`seed: "${sector.slug} › ${name}" matched ${hit} categories, expected 1`);
+      }
+      exceptionsSet += hit;
+    }
   }
-  console.log(`   ${kindsSet} trade kinds set (the rest inherit or default to goods)`);
+
+  for (const leaf of LEAF_OVERRIDES) {
+    const { count } = await prisma.category.updateMany({
+      where: { slug: leaf.slug },
+      data: { tradeKind: leaf.kind },
+    });
+    if (count !== 1) throw new Error(`seed: no category with slug "${leaf.slug}"`);
+  }
+
+  console.log(
+    `   ${sectorsSet} sectors classified, ${exceptionsSet} subcategories disagreeing`,
+  );
+
+  /*
+     And which scope sheet each services trade answers to — `4e-s` B5.
+
+     After the kinds, because "every services subcategory" is a question only
+     the classification above can answer. Assigned by how the work is *charged*
+     rather than by which sector it sits in — see `prisma/trade-kinds.mts`.
+  */
+  {
+    const rows = await prisma.category.findMany({
+      select: { id: true, parentId: true, tradeKind: true, name: true },
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const parents = new Set(rows.map((row) => row.parentId).filter(Boolean) as string[]);
+    let familiesSet = 0;
+
+    for (const sector of SCOPE_FAMILIES) {
+      const parentId = (
+        await prisma.category.findUniqueOrThrow({
+          where: { slug: sector.slug },
+          select: { id: true },
+        })
+      ).id;
+
+      for (const kid of rows.filter((row) => row.parentId === parentId && !parents.has(row.id))) {
+        if (resolveTradeKind(byId, kid.id) !== "services") continue;
+        await prisma.category.update({
+          where: { id: kid.id },
+          data: { scopeFamilyId: sector.except?.[kid.name] ?? sector.family },
+        });
+        familiesSet += 1;
+      }
+    }
+    console.log(`   ${familiesSet} services subcategories on a scope sheet`);
+  }
 
   console.log("→ spec template");
   const template = await prisma.specTemplate.create({

@@ -103,7 +103,7 @@ export async function scopeLibrary(): Promise<ScopeLibrary> {
           select: { key: true, label: true, position: true, filterable: true },
         },
         common: { orderBy: { position: "asc" }, select: { name: true } },
-        _count: { select: { categories: true, businesses: true, templates: true } },
+        _count: { select: { businesses: true, templates: true } },
       },
     }),
     prisma.category.findMany({
@@ -159,6 +159,21 @@ export async function scopeLibrary(): Promise<ScopeLibrary> {
     (row) => !parents.has(row.id) && resolveTradeKind(kinds as never, row.id) === "services",
   );
 
+  /*
+     Counted over services leaves rather than off `_count.categories`.
+
+     A goods category can carry a `scopeFamilyId` — `valves-and-fittings` does,
+     because the seeded services firm is filed there and the fixture says why —
+     and counting it would tell an admin a family covers a trade that will never
+     render a scope sheet. The question the card answers is "how many services
+     subcategories are on this sheet", so that is what it counts.
+  */
+  const perFamily = new Map<string, number>();
+  for (const leaf of servicesLeaves) {
+    if (leaf.scopeFamilyId === null) continue;
+    perFamily.set(leaf.scopeFamilyId, (perFamily.get(leaf.scopeFamilyId) ?? 0) + 1);
+  }
+
   return {
     families: families.map((family) => ({
       id: family.id,
@@ -173,7 +188,7 @@ export async function scopeLibrary(): Promise<ScopeLibrary> {
       })),
       rows: family.rows,
       common: family.common.map((row) => row.name),
-      subcategories: family._count.categories,
+      subcategories: perFamily.get(family.id) ?? 0,
       businesses: family._count.businesses,
       templates: family._count.templates,
       publishedServices: published.get(family.id) ?? 0,
