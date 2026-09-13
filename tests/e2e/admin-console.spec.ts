@@ -346,25 +346,23 @@ test.describe("what taxonomy.write gates", () => {
 });
 
 test.describe("board 12a — the licence importer", () => {
-  test("opens on the runs, and says nothing publishes itself", async ({ page }) => {
+  test("opens on the run waiting for review, and says nothing publishes itself", async ({ page }) => {
     await page.goto("/admin/ingest");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Licence importer");
-    await expect(
-      page.getByText(/Listings are created only when somebody approves the run/),
-    ).toBeVisible();
+    // The seed stages one run for review, so the decision bar is always drawn here.
+    await expect(page.getByText("Nothing publishes automatically.")).toBeVisible();
   });
 
   test("shows a run table with real column heads", async ({ page }) => {
     /*
      * Not an empty-state assertion. The integration suite stages runs into the
-     * same database, so whether this list is empty depends on what ran before —
-     * and a test whose subject depends on the order of other files is a test
-     * that fails for reasons unrelated to what it is checking. The empty state
-     * is covered where it is stable, in the gallery.
+     * same database, so whether this list is empty depends on what ran before.
+     * The empty state is covered where it is stable, in the gallery.
      */
     await page.goto("/admin/ingest");
-    for (const head of ["Source", "Rows", "Staged", "Rejected", "Status"]) {
-      await expect(page.getByRole("columnheader", { name: head })).toBeVisible();
+    const table = page.getByRole("table", { name: "Import runs, newest first" });
+    for (const head of ["Run", "Rows", "New", "Rejected", "Status"]) {
+      await expect(table.getByRole("columnheader", { name: head, exact: true })).toBeVisible();
     }
   });
 });
@@ -372,6 +370,8 @@ test.describe("board 12a — the licence importer", () => {
 test.describe("board 12b — dedupe", () => {
   test("bands the pairs and says why each one matched", async ({ page }) => {
     await page.goto("/admin/ingest/dedupe");
+    // The ingestion chain's shared tabs, the same on all three screens.
+    await expect(page.getByRole("link", { name: "Dedupe queue" })).toHaveAttribute("aria-current", "page");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Dedupe & merge");
     await expect(
       page.getByText(/A merge moves everything the absorbed listing has/),

@@ -135,3 +135,21 @@ test.describe("the commercial screens a moderator cannot reach", () => {
     await expect(sidebar.getByRole("link", { name: "Failed payments" })).toHaveCount(0);
   });
 });
+
+test.describe("board 12a — the importer is a moderator's, dedupe is not", () => {
+  test("opens the runs and the queue, and offers no dedupe tab", async ({ page }) => {
+    /*
+     * `queue.decide` is moderator and ops lead, so the importer and its
+     * categorisation queue are both a moderator's to work. `business.merge` is
+     * ops lead alone, and the shared tab strip hides the dedupe tab rather than
+     * leaving a moderator one click from a 404.
+     */
+    await page.goto("/admin/ingest");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Licence importer");
+    await expect(page.getByRole("link", { name: "Categorisation queue" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Dedupe queue" })).toHaveCount(0);
+
+    const response = await page.goto("/admin/ingest/dedupe");
+    expect(response?.status()).toBe(404);
+  });
+});

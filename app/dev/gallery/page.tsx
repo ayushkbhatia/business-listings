@@ -9,6 +9,7 @@ import { TextEntry } from "./_sections/TextEntry";
 import { Overlays } from "./_sections/Overlays";
 import { Position } from "./_sections/Position";
 import { Ranking } from "./_sections/Ranking";
+import { Ingest } from "./_sections/Ingest";
 import { Reviews } from "./_sections/Reviews";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
 import { ServiceBriefGallery } from "./_sections/ServiceBrief";
@@ -245,6 +246,7 @@ export default function Gallery() {
       <Domain />
       <Position />
       <Ranking />
+      <Ingest />
       <Billing />
 
       <Reviews />

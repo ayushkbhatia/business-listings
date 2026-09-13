@@ -138,8 +138,12 @@ and it is the one that argues back.
 /admin/queue/:id                        Review a submission                   [4c]
 /admin/queue/conflict/:id               Resolve a conflicting claim           [4c]
 /admin/queue/document/:id               Decide a seller's credential          [3e]  built h3 wave 3
-/admin/ingest                           Licence importer                     [12a]  built h4s2
-/admin/ingest/:id                       One import run                       [12a]  built h4s2
+/admin/ingest                           Licence importer                     [12a]  built h4s2, board pass
+/admin/ingest/:id                       One import run, and its records      [12a]  built h4s2, board pass
+/admin/ingest/:id/rejects               Rejected records as CSV, raw rows    [12a]  built board pass
+/admin/ingest/categorise                Categorisation queue, by activity    [12a]  built board pass
+/admin/ingest/categorise?run=:id        The same queue, one run              [12a]  built board pass
+/admin/ingest/records/:id               One staged record, raw row verbatim  [12a]  built board pass
 /admin/ingest/dedupe                    Dedupe & merge                       [12b]  built h4s2
 /admin/search                           Ranking, boosts, weight history      [12c]  built h4s8
 /admin/search?vector=services           The services vector, same board      [12c-s] built s19

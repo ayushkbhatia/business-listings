@@ -109,6 +109,10 @@ model User {
   categoryActivityCleared BusinessCategory[]       @relation("CategoryActivityClearedBy")
   conflictsResolved       ClaimConflict[]          @relation("ConflictResolvedBy")
   licenceImports          LicenceImportRun[]       @relation("IngestActor")
+  licenceImportsDecided   LicenceImportRun[]       @relation("IngestDecider")
+  licenceImportsRolledBack LicenceImportRun[]      @relation("IngestRollbackActor")
+  stagedCategorised       StagedListing[]          @relation("StagedCategorisedBy")
+  activityMappings        LicenceActivityMapping[] @relation("ActivityMappingActor")
   merges                  BusinessMerge[]          @relation("MergeActor")
   pdplSubjectOf           PdplRequest[]            @relation("PdplSubject")
   pdplClosed              PdplRequest[]            @relation("PdplClosedBy")
@@ -454,6 +458,7 @@ model Category {
   rankDays          CategoryRankDay[]
   placementWaitlist PlacementWaitlist[]
   stagedListings    StagedListing[]
+  activityMappings  LicenceActivityMapping[]
   guideCtas         Guide[]                @relation("GuideCtaCategory")
   areaPages         AreaPage[]
   emiratePages      EmiratePage[]
@@ -1038,7 +1043,8 @@ model Business {
   mergeCandidatesAbsorb  MergeCandidate[]         @relation("CandidateAbsorb")
   mergesKept             BusinessMerge[]          @relation("MergeKeep")
   mergesAbsorbed         BusinessMerge[]          @relation("MergeAbsorb")
-  stagedListings         StagedListing[]
+  stagedListings         StagedListing[]          @relation("StagedBusiness")
+  stagedDuplicates       StagedListing[]          @relation("StagedDuplicateOf")
   viewAsSessions         ViewAsSession[]
   callOutcomes           CallOutcome[]
   claimConflicts         ClaimConflict[]          @relation("ConflictBusiness")
@@ -1073,6 +1079,7 @@ model Business {
   @@index([verificationTier])
   @@index([publishedAt])
   @@index([licenceExpiry])
+  @@index([licenceAuthority, licenceNumber], map: "business_licence_authority_number_idx")
   @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([tradeName(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -3352,26 +3359,58 @@ model ClaimConflict {
 /// Nothing here publishes itself. A run parses, categorises what it can, queues
 /// what it cannot and rejects the rest by countable reason — and then a person
 /// approves it. Criterion 1 is that sequence, in that order.
+///
+/// Board `12a`'s board-level pass added the rest of the life: a run can be
+/// discarded before anything publishes, published more than once as its queue
+/// clears, and rolled back for thirty days — detaching, never deleting.
 model LicenceImportRun {
   id               String          @id @default(cuid())
+  /// "Run 14". A sequence rather than a count of earlier rows, because
+  /// `created_at` is not a total order and a run's name must not change.
+  number           Int             @unique(map: "licence_import_run_number_key") @default(autoincrement())
   actorId          String          @map("actor_id") @db.Uuid
   /// Which authority's export. Free text: a new authority is a Tuesday.
   source           String
   filename         String
   status           IngestRunStatus @default(parsing)
   rowCount         Int             @default(0) @map("row_count")
+  /// Rows past `MAX_LICENCE_ROWS`, dropped unstaged. Kept so the parse bar can
+  /// say the file was longer than the run, rather than reading as whole.
+  truncatedCount   Int             @default(0) @map("truncated_count")
   stagedCount      Int             @default(0) @map("staged_count")
   categorisedCount Int             @default(0) @map("categorised_count")
   queuedCount      Int             @default(0) @map("queued_count")
   rejectedCount    Int             @default(0) @map("rejected_count")
+  /// Records that name a licence already in the directory, or repeat one
+  /// earlier in the same file. Handed to `12b`, never published from here.
+  duplicateCount   Int             @default(0) @map("duplicate_count")
   /// NOT NULL once decided, paired by a CHECK in the migration.
   decisionReason   String?         @map("decision_reason")
   decidedAt        DateTime?       @map("decided_at")
+  /// Who approved or discarded it. `actorId` is who uploaded it, and the run
+  /// screen said "approved by" over the uploader's name until this existed.
+  decidedById      String?         @map("decided_by_id") @db.Uuid
+  /// Set on the first publish: thirty days from then. Null on a run that has
+  /// never published, which is also the state in which there is nothing to
+  /// roll back.
+  reversibleUntil  DateTime?       @map("reversible_until")
+  rolledBackAt     DateTime?       @map("rolled_back_at")
+  rolledBackById   String?         @map("rolled_back_by_id") @db.Uuid
+  rollbackReason   String?         @map("rollback_reason")
+  /// `{ withdrawn: string[], kept: { id, why }[] }` — which listings the
+  /// rollback took down and which it left standing because somebody had
+  /// claimed them. Written once, and the history figure is read from it.
+  rollbackManifest Json?           @map("rollback_manifest")
+  /// The file's header row, in its order. `StagedListing.raw` is JSONB, which
+  /// keeps the values and not the column order (B5).
+  headers          String[]        @default([])
   createdAt        DateTime        @default(now()) @map("created_at")
 
-  actor      User            @relation("IngestActor", fields: [actorId], references: [id], onDelete: Restrict)
-  rows       StagedListing[]
-  businesses Business[]
+  actor        User            @relation("IngestActor", fields: [actorId], references: [id], onDelete: Restrict)
+  decidedBy    User?           @relation("IngestDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  rolledBackBy User?           @relation("IngestRollbackActor", fields: [rolledBackById], references: [id], onDelete: Restrict)
+  rows         StagedListing[]
+  businesses   Business[]
 
   @@index([status, createdAt(sort: Desc)], map: "licence_import_run_status_created_at_idx")
   @@map("licence_import_run")
@@ -3382,6 +3421,8 @@ enum IngestRunStatus {
   staged
   approved
   discarded
+  /// Published, then taken back inside the thirty-day window. Terminal.
+  rolled_back
 
   @@map("ingest_run_status")
 }
@@ -3390,9 +3431,24 @@ enum StagedDisposition {
   ready
   needs_category
   rejected
+  /// Names a licence the directory already holds, or one earlier in the same
+  /// file. Board `12b`'s, and never published from the importer.
+  duplicate
   published
 
   @@map("staged_disposition")
+}
+
+/// How a staged record came by its category — board `12a` B7.
+enum StagedCategorySource {
+  /// A keyword in the activity text, `lib/ingest/classify.ts`.
+  signal
+  /// An activity somebody categorised before, remembered.
+  mapping
+  /// A person chose it on the categorisation queue or the record.
+  staff
+
+  @@map("staged_category_source")
 }
 
 /// The four grounds the README fixes. An enum rather than a string because they
@@ -3413,35 +3469,75 @@ enum RejectionGround {
 /// columns are NOT NULL. A record whose category could not be inferred has
 /// nowhere legal to sit there, which is the whole reason this table exists.
 model StagedListing {
-  id               String            @id @default(cuid())
-  runId            String            @map("run_id")
-  rowNumber        Int               @map("row_number")
+  id               String                @id @default(cuid())
+  runId            String                @map("run_id")
+  rowNumber        Int                   @map("row_number")
   /// As it arrived, before we decided anything. Kept so a rejection can be
   /// argued with.
   raw              Json
-  tradeName        String?           @map("trade_name")
-  licenceNumber    String?           @map("licence_number")
-  licenceAuthority String?           @map("licence_authority")
-  licenceExpiry    DateTime?         @map("licence_expiry")
+  tradeName        String?               @map("trade_name")
+  licenceNumber    String?               @map("licence_number")
+  licenceAuthority String?               @map("licence_authority")
+  licenceExpiry    DateTime?             @map("licence_expiry")
   emirate          String?
-  areaName         String?           @map("area_name")
+  areaName         String?               @map("area_name")
   activity         String?
+  /// `activity`, lower-cased with its whitespace collapsed — `activityKey` in
+  /// `lib/ingest/classify.ts`. What the categorisation queue groups by and what
+  /// a remembered mapping matches on. Empty where the record carried none.
+  activityKey      String                @default("") @map("activity_key")
   phone            String?
   /// Nullable, unlike on `Business`. That is the point of staging.
-  categoryId       String?           @map("category_id")
-  disposition      StagedDisposition @default(needs_category)
-  rejectionGround  RejectionGround?  @map("rejection_ground")
+  categoryId       String?               @map("category_id")
+  categorySource   StagedCategorySource? @map("category_source")
+  /// Set when a person chose the category, paired by a CHECK.
+  categorisedById  String?               @map("categorised_by_id") @db.Uuid
+  categorisedAt    DateTime?             @map("categorised_at")
+  disposition      StagedDisposition     @default(needs_category)
+  rejectionGround  RejectionGround?      @map("rejection_ground")
+  /// The listing this record's licence already belongs to.
+  duplicateOfId    String?               @map("duplicate_of_id")
+  /// The earlier row of the same file carrying the same licence.
+  duplicateOfRow   Int?                  @map("duplicate_of_row")
   /// Set only when the run is approved and this row becomes a listing.
-  businessId       String?           @map("business_id")
-  createdAt        DateTime          @default(now()) @map("created_at")
+  businessId       String?               @map("business_id")
+  createdAt        DateTime              @default(now()) @map("created_at")
 
-  run      LicenceImportRun @relation(fields: [runId], references: [id], onDelete: Cascade)
-  category Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  business Business?        @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  run           LicenceImportRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  category      Category?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  categorisedBy User?            @relation("StagedCategorisedBy", fields: [categorisedById], references: [id], onDelete: Restrict)
+  business      Business?        @relation("StagedBusiness", fields: [businessId], references: [id], onDelete: SetNull)
+  duplicateOf   Business?        @relation("StagedDuplicateOf", fields: [duplicateOfId], references: [id], onDelete: SetNull)
 
   @@unique([runId, rowNumber], map: "staged_listing_run_row_key")
   @@index([runId, disposition], map: "staged_listing_run_disposition_idx")
   @@map("staged_listing")
+}
+
+/// An activity somebody categorised, remembered for the next export.
+///
+/// Board `12a` B5: a mapping fix must not need the file uploaded again. A DED
+/// extract re-sends the same activity phrasing every month, and a person who
+/// decided "Marine Equipment Trading" once should not decide it fourteen
+/// times. Staging reads this before the keyword signals.
+model LicenceActivityMapping {
+  id          String   @id @default(cuid())
+  /// `activityKey` of the phrase. Never empty — a record with no activity is
+  /// not a phrase anybody can remember a decision about.
+  activityKey String   @unique(map: "licence_activity_mapping_activity_key_key") @map("activity_key")
+  /// The phrase as it was first worded, for the screen.
+  activity    String
+  categoryId  String   @map("category_id")
+  actorId     String   @map("actor_id") @db.Uuid
+  reason      String
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  actor    User     @relation("ActivityMappingActor", fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([categoryId], map: "licence_activity_mapping_category_id_idx")
+  @@map("licence_activity_mapping")
 }
 
 enum MergeBand {
