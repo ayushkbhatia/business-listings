@@ -3,6 +3,7 @@ import { can } from "@/lib/auth/can";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { servicesBoardFor } from "@/lib/services/service";
+import Link from "next/link";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 import { addService, publishServices, removeService, saveServiceOrder } from "./actions";
 import { ServicesWorkspace } from "./ServicesWorkspace";
@@ -65,6 +66,25 @@ export default async function ServicesPage() {
             })
       }
     >
+      {/*
+         Board `3h-s`'s route has no nav row — the catalogue group carries
+         Products, Services and Media, and a fourth entry for a screen a
+         practice visits twice would crowd it. So it is reached from here, which
+         is also where the render's own breadcrumb puts it: `Services / Scope
+         templates`.
+      */}
+      {can(seat.actor, "product.edit") && (
+        <p className="mb-4 text-caption text-muted">
+          <Link
+            href="/dashboard/scope-templates"
+            className="text-moss underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
+          >
+            {t("services.scope_templates")}
+          </Link>{" "}
+          {t("services.scope_templates_hint")}
+        </p>
+      )}
+
       <ServicesWorkspace
         board={board}
         businessSlug={seat.businessSlug}

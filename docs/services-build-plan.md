@@ -1056,6 +1056,105 @@ Axe at 1280 found nothing but the project's pinned contrast gap.
 
 ---
 
+## 4k · Handoff `3h-s` — the variant that is not one
+
+Shipped 13 Sep. `/dashboard/scope-templates`, a template per group of work, a clone
+that lands on `8c-s`'s counting bar, and an edit that offers rather than writes.
+**Wave 2 is closed.**
+
+### `3h` is not clone-and-rename, so this was not a copy pass
+
+The handoff's premise, stated three times: *the clone-and-rename mapping behaves
+exactly as `3h` does for spec sheets, which is why this is a variant rather than a new
+build*, and B1 — *if `3h` is built, reuse it: clone, rename, edit, offer-on-edit,
+delete.*
+
+**None of those five interactions exists in `3h`.** What is in the tree is an
+*overlay*: one `SellerTemplate` per platform template per business — enforced by
+`@@unique([businessId, platformTemplateId])` — storing only overrides, with
+`draftMappings` → `applyDraft` → `SellerTemplateRevision` → `rollbackTo` and a
+`/history` route. No clone-into-many, no rename, no delete, no per-product offer, no
+usage count.
+
+So this is a new build that borrows the vocabulary. The one idea worth keeping is the
+one it does keep, and it is `3h`'s best: a change is **proposed and reviewed before it
+lands**, never written through.
+
+That is the fifth handoff running whose central claim about the tree was wrong, and
+the first where it changed the size of the job rather than a number on a card.
+
+### Offers are derived; only the refusal is stored
+
+B4 asks for a template edit to produce a per-service offer, accepted or declined
+individually. The offer is the difference between the template's value and the
+service's own, computed on read — a stored queue would be a second copy of the
+template that goes stale the moment either side moves.
+
+What cannot be derived is a decline: *I saw this and said no* is a fact about the
+past, and without it the same offer reappears for ever. So `ScopeTemplateDecline`
+stores the refused **value** rather than a flag, which means a template edited again
+to something new offers again — declining "Per certificate" says nothing about "Per
+day". Accepting clears the decline, because a stale one would suppress the next
+genuine offer.
+
+Accepting goes through `patchServiceField` rather than a direct write, so `3g-s`'s
+fee-basis validation applies and the change log records that a person accepted it.
+
+### The rule that is a CHECK
+
+B3 asks for the model boundary and gives the reason — *UI-only avoidance will not
+survive the first import script.* `scope_template_travelling_keys_only` is a
+**whitelist**: stripping the five allowed keys must leave `{}`, so a field added to
+`Service` later cannot start travelling by accident. An integration test writes each
+of the four forbidden keys with raw SQL and asserts the refusal.
+
+`name` and `turnaround` join `scope` and `excluded` there, which is this board's
+correction to `3g-s` B6's looser wording. Turnaround is `3h-s` Q2 and the only real
+design decision on the board: templating it would make a clone arrive complete, and
+produce four services claiming the same turnaround.
+
+### One number the screen says differently from the board
+
+The board's arithmetic is two steps — *template fills four, seller names it, five.*
+This screen does both on one press, because an unnamed service is what
+`Service.name` exists to prevent. So a clone arrives at **five** of six with
+turnaround the only field left, and the copy says five rather than restating the
+board's intermediate figure. `CLONE_FILLS` is still four and is still asserted equal
+to `8c-s`'s `COUNTING_BAR` — that relationship is what makes the template worth
+having, so it is a test rather than a sentence.
+
+### Found on the way
+
+- **A heading order jumping h1 → h3.** `SellerPage` owns the `h1` and the card
+  headings started at `h3`; axe's `heading-order` caught it, and a screen reader's
+  heading list is how a seller skips to the part they came for.
+- **A role name matching as a substring, for the fourth time.** `getByRole("combobox",
+  { name: "Scope" })` found *Which scope sheet is it based on*. It is in `docs/`, in
+  the notes and in two previous boards' write-ups, and it still reads as fine.
+- **The row menu is a disclosure, not a menu widget** — `DataTable` says so
+  deliberately, because `role="menu"` without arrow-key navigation is a promise the
+  markup does not keep. So it has no `button` or `menuitem` role to find it by.
+
+### Still owed
+
+- **`4e-s`** authors the families. Two trades and a blank sheet is the cold start, and
+  both this board and `8c-s` are honest about it.
+- **`12c`'s ranking term**, unchanged since `8a-s`.
+
+### Verified by clicking it
+
+The template with its five pre-filled rows and four dashes, the services it is used by
+named beside the count, and eight changes waiting across two of them. Accepted one:
+it left the list and the other four stayed. Declined another: it left, said it would
+be offered again if the template moved, and the service kept its value. Added a
+service from the template: a draft at 5 of 6 with scope and exclusions empty and
+turnaround the one left.
+
+Axe at 1280 found one real defect, now fixed, and otherwise the project's pinned
+contrast gap.
+
+---
+
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`
 
@@ -1258,7 +1357,7 @@ edit**.
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | The expensive one, and the two that must be consecutive |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | `12c-s` waits on §2's three ranking defects |
-| — | **Only if Q1 says families** | `4e-s` · `3h-s` | before Stage 3 | Otherwise these two leave the plan |
+| — | **Q1 said families** | `4e-s` · `3h-s` | — | `3h-s` **shipped 13 Sep** and closes wave 2 — see §4k. `4e-s` authors the families and is the one left |
 
 **What needs no handoff at all:**
 

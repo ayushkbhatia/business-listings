@@ -2,15 +2,17 @@ import { expect, test } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 /**
- * Boards `3g-s`, `3f-s`, `1g-s`, `8a-s`, `8b-s`, `8c-s` — the seat that sells work.
+ * Boards `3g-s`, `3f-s`, `1g-s`, `8a-s`, `8b-s`, `8c-s`, `3h-s` — the seat that
+ * sells work.
  *
  * This spec has its own project and its own seat because every other seller
  * fixture on this platform sells goods: `sells_kind` is `unset` on all 123 live
  * businesses, which means goods, so the services screens could only ever be
  * exercised in their empty state. `seedServicesFirm` builds the firm this signs
  * in as — three services, one of them deliberately live at 4 of 6, one
- * credential of the two its largest task asks for, and the audit scope sheet
- * already chosen so `8c-s` step 2 is reachable.
+ * credential of the two its largest task asks for, the audit scope sheet already
+ * chosen so `8c-s` step 2 is reachable, and one scope template attached to two
+ * of the three services with a change waiting on each.
  *
  * ## One file, and serial, because it is one business
  *
@@ -720,6 +722,147 @@ test.describe("board 8c-s — the scope sheet and the first services", () => {
     const audit = page.getByRole("listitem").filter({ hasText: "Audit & assurance" });
     await audit.getByRole("button", { name: "Choose this sheet" }).click();
     await expect(audit).toContainText("Chosen");
+  });
+
+  test("has no axe violations", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+
+const TEMPLATES = "/dashboard/scope-templates";
+
+/**
+ * Board `3h-s` — scope templates, and the rule that scope is never one of them.
+ *
+ * The fixture holds one template used by two of the three services, with the
+ * template deliberately disagreeing with both — so the screen arrives with
+ * changes waiting, which is B4 in its only visible state.
+ *
+ * These tests write. Each puts back what it moved, and the file is serial.
+ */
+test.describe("board 3h-s — scope templates", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(TEMPLATES);
+  });
+
+  test("travels five fields and blanks four — criterion 1", async ({ page }) => {
+    const prefilled = page.getByRole("heading", { name: "PRE-FILLED FOR EVERY SERVICE THAT USES IT" });
+    await expect(prefilled).toBeVisible();
+
+    for (const field of ["Engagement type", "Fee basis", "Delivered where", "Deliverable", "Accreditation"]) {
+      await expect(page.getByRole("term").filter({ hasText: field })).toBeVisible();
+    }
+
+    /*
+       And the four are rendered rather than omitted. A template that simply did
+       not mention scope would read as one that forgot; § Interface honesty asks
+       for the unfilled to stay visible, and here it is also the argument.
+    */
+    await expect(page.getByRole("heading", { name: "LEFT BLANK PER SERVICE" })).toBeVisible();
+    for (const field of ["Service name", "Scope", "Excluded", "Turnaround"]) {
+      await expect(page.getByRole("term").filter({ hasText: field })).toBeVisible();
+    }
+    await expect(
+      page.getByText("a pre-filled exclusions line is the one that ends up in a dispute"),
+    ).toBeVisible();
+  });
+
+  test("offers no control that could template scope or exclusions — criterion 2", async ({
+    page,
+  }) => {
+    await page.getByRole("button", { name: "Edit the template" }).click();
+
+    /*
+       Scoped to the form, and `exact`. Unscoped, "Service name" finds the
+       clone box further down — which correctly has one — and "Scope" finds
+       *Which scope sheet is it based on* in the aside, because a role name
+       matches as a substring. Fourth time that locator has cost a run here.
+    */
+    const form = page.locator("form").filter({
+      has: page.getByRole("textbox", { name: "Template name", exact: true }),
+    });
+
+    for (const gone of ["Scope", "Excluded", "Turnaround", "Service name"]) {
+      await expect(form.getByRole("textbox", { name: gone, exact: true })).toHaveCount(0);
+      await expect(form.getByRole("combobox", { name: gone, exact: true })).toHaveCount(0);
+    }
+    await expect(form.getByRole("combobox", { name: "Engagement type", exact: true })).toBeVisible();
+    await expect(form.getByRole("textbox", { name: "Accreditation", exact: true })).toBeVisible();
+
+    await page.getByRole("button", { name: "Cancel" }).click();
+  });
+
+  test("names the services it is used by, and counts them — criterion 6", async ({ page }) => {
+    await expect(page.getByText(/Used by \d+ services?/)).toBeVisible();
+    await expect(page.getByText("VAT and corporate tax filing · Transfer pricing documentation")).toBeVisible();
+  });
+
+  test("an edit offers rather than writes through — criteria 3 and 4", async ({ page }) => {
+    /*
+       The rule stated on the screen, and then the mechanism under it. A seller
+       who changes a template sees rows appear saying which services would take
+       it — and nothing has changed until they press one.
+    */
+    await expect(page.getByText("Editing a template does not rewrite live services")).toBeVisible();
+
+    const waiting = page.getByRole("listitem").filter({ hasText: "Transfer pricing documentation" });
+    const offer = waiting.getByRole("listitem").filter({ hasText: "Engagement type" });
+    await expect(offer).toContainText("One-off job → Ongoing contract");
+
+    // Decline it: the service keeps its value and the offer stops.
+    await offer.getByRole("button", { name: "Decline" }).click();
+    await expect(page.getByText("It will be offered again if you change the template")).toBeVisible();
+    await expect(
+      waiting.getByRole("listitem").filter({ hasText: "Engagement type" }),
+    ).toHaveCount(0);
+
+    // And the service is untouched — the editor still says what it always said.
+    await page.goto("/dashboard/services");
+    const row = page.getByRole("row", { name: /Transfer pricing documentation/ });
+    await expect(row.getByText("2 of 6")).toBeVisible();
+  });
+
+  test("a clone arrives as a draft one field short — criterion 5", async ({ page }) => {
+    await expect(page.getByText(/turnaround is the one left/i)).toBeVisible();
+
+    await page.getByRole("textbox", { name: "Service name" }).fill("Excise tax return");
+    await page.getByRole("button", { name: "Add the service" }).click();
+    await expect(page.getByText(/Added as a draft at \d+ of 6/)).toBeVisible();
+
+    // Draft, and one required field short — turnaround.
+    await page.goto("/dashboard/services");
+    const row = page.getByRole("row", { name: /Excise tax return/ });
+    await expect(row.getByText("Draft")).toBeVisible();
+    await expect(row.getByText("5 of 6")).toBeVisible();
+
+    /*
+       Put the fixture back, through the row menu. `3f-s` has no bulk delete —
+       its own test asserts the absence — so deleting is one row at a time
+       behind a confirmation, which is the right shape for an irreversible act.
+
+       `summary`, not a role: `DataTable`'s row menu is a disclosure rather than
+       a menu widget, deliberately — `role="menu"` without arrow-key navigation
+       is a promise the markup does not keep — so it has no `button` or
+       `menuitem` role to find it by.
+    */
+    await row.locator("summary").click();
+    const remove = row.getByRole("button", { name: "Delete", exact: true });
+    await expect(remove).toBeVisible();
+    await remove.click();
+
+    // Wait for the dialog rather than racing it: the confirm is rendered by a
+    // `Modal`, so it is not in the DOM at the moment the menu item is pressed.
+    const confirm = page.getByRole("button", { name: "Delete this service" });
+    await expect(confirm).toBeVisible();
+    await confirm.click();
+    await expect(confirm).toBeHidden();
+
+    // Reloaded rather than waiting on the optimistic table: the assertion is
+    // that the row is gone from the database, which is what the next test needs.
+    await page.reload();
+    await expect(page.getByRole("row", { name: /Excise tax return/ })).toHaveCount(0);
   });
 
   test("has no axe violations", async ({ page }) => {
