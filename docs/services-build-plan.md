@@ -1287,7 +1287,10 @@ header, every tab route and the sitemap. B1 is true three ways at once: no tab, 
   *who checked it* something a firm buys. One condition in `CredentialsSection` reverses it.
 - **B6 on the overview, the scope table's rule on `1g-s`.** A summary row omits an unfilled chip;
   the scope table one click away shows every unanswered row grey, which is where §4g put the
-  honesty rule and where it stays.
+  honesty rule and where it stays. **Amended by `1e-s` Q1:** the services list renders *Not
+  stated* in its four-field block, because four cards are read down one column and a missing
+  cell misaligns every cell after it. Three surfaces, three rules, each for its comparison axis —
+  not a bug to reconcile.
 
 ### What was not there to build on
 
@@ -1346,6 +1349,65 @@ read *VAT and corporate tax filing* with no quantity, *Size of the job* and *Att
 landed private with storage's own byte count. Signed in as the owner: the lead showed
 *Service*, *Size of the job* and the file, which downloaded through a signed link; a guessed
 document id and another enquiry's path both 404.
+
+---
+
+## 4n · Handoff `1e-s` — the services list, rows not a photo grid
+
+**Shipped 13 Sep 2026**, stacked on `1d-s` (#174). No migration: it reads `EnquiryLine.serviceId`,
+which `1d-s` added.
+
+### D11 was already closed, so the board's biggest block was not one
+
+The README calls this *substantially blocked* and asks for a second look before cutting the
+waitlist. D11 closed as **no** on 11 Sep (§3), before this board was drawn. Nothing about
+availability shipped: no *taking work* filter group, no chip, no *Join the waitlist*, no capacity
+sentence. The panel has two groups, not three.
+
+### The three open questions, taken as the board recommends
+
+- **Q1 — `Not stated` stays on this page.** The four-field block is the page's only comparison
+  mechanism; a vanishing cell misaligns the column. Written into §4g and §4m as a deliberate
+  third rule rather than a contradiction.
+- **Q2 — no completeness figure on a buyer page.** The render's *THIN SCOPE — 2 OF 6 ROWS
+  FILLED* is cut, and so is the *n of 9 rows filled* line the placeholder index it replaces had been
+  printing on every card. The scope table on `1g-s` keeps its own line (§4g); B2 is about this list.
+- **Q3 — enquiry volume sorts, the seller's order breaks ties.** And where no service has volume —
+  every firm on the day this ships — the list *is* the seller's order, and the sort line says so:
+  *in the order the firm lists them*. The `3f-s` reorder hint now says what the drag order drives:
+  the overview outright, the services tab after volume.
+
+### Four decisions the board left open or drew loosely
+
+- **Q4, thirty to a page**, with `?page=` as the one crawlable key.
+- **Ninety trailing days, said as "in the last 90 days".** The render's *this quarter* resets on
+  the first of a month and would tell a buyer on 2 April that the firm's busiest service had two
+  enquiries. Counted as distinct enquiries the firm actually received.
+- **`MOST ENQUIRED` only for a clear leader** — not at a tie, not at zero, not with one service.
+  The count shows on that card alone.
+- **The filter note has two wordings.** B6 wants it on every firm; *these filters do almost nothing*
+  is false at thirty, so past eight it says what the filters do instead.
+
+### Every *Enquire* opens the drawer
+
+The card's primary, the heading's *Enquire about anything* and the footer's *Enquire anyway* (B9)
+all open the service composer over the list — on the card's service, or on *something not
+listed*. Sending a buyer to the overview to write would lose the list they were choosing from.
+`ServiceEnquireDrawer` mounts the form only while open, so thirty cards are thirty buttons.
+
+### Found on the way, and fixed
+
+- **The gallery rendered four unnamed composer `<form>`s**, which `landmarks.spec.ts` counts as
+  duplicate landmarks — CI failed `1d-s` on it. The form is named now, per instance.
+
+### Verified by clicking it
+
+At 1280: the audit card leads with *Most enquired* and *1 enquiry in the last 90 days*, the VAT
+card reads *Not stated* under *Delivered* and has no *You provide:*, *Fee on enquiry* on both.
+Ticked *Fixed fee*: one card, `nofollow` on every filtered href, `noindex, follow` in the head;
+*Clear filters* back. *Enquire* on the VAT card opened the drawer on VAT; *Enquire anyway* opened
+it on *Something not listed* and sent an enquiry that arrived with no quantity. At 375 the filters
+sit behind a button in a drawer. Axe at 1280: nothing.
 
 ---
 
@@ -1547,7 +1609,7 @@ edit**.
 | **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **shipped 12 Sep.** One handoff, three screens, and it was right: the editor fixed the field set, the list reported on it, the page rendered it. See §4g |
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | `2b-s`, `2c-s` and `2d-s` shipped 11 Sep. `3c-s` is mostly built and now owes the services mirror as well as the per-service rows |
-| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **`1d-s` shipped 13 Sep** (§4m) — credentials render on every plan. `5c-s` has a placeholder waiting |
+| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **`1d-s` and `1e-s` shipped 13 Sep** (§4m, §4n) — credentials render on every plan. `5c-s` has a placeholder waiting; `1f-s` is next |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | The expensive one, and the two that must be consecutive |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | `12c-s` waits on §2's three ranking defects |

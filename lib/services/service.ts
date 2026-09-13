@@ -791,6 +791,11 @@ export interface PublicService {
   categoryId: string;
   categoryName: string;
   categorySlug: string;
+  /** The seller's manual order — `3f-s` B5. `1e-s` breaks enquiry-volume ties with it. */
+  position: number;
+  /** The raw enum and key, for `1e-s`'s filters. The screen words them. */
+  engagementType: EngagementType | null;
+  feeBasis: string | null;
   /** Engagement type, turnaround and fee basis, already worded. */
   chips: { key: string; label: string; value: string }[];
   rows: ScopeRow[];
@@ -828,6 +833,7 @@ export async function publicServiceFor(
       scope: true,
       excluded: true,
       status: true,
+      position: true,
       category: { select: { name: true, slug: true } },
       values: { select: { fieldKey: true, value: true } },
     },
@@ -860,6 +866,7 @@ export async function publicServicesFor(businessId: string): Promise<PublicServi
       scope: true,
       excluded: true,
       status: true,
+      position: true,
       category: { select: { name: true, slug: true } },
       values: { select: { fieldKey: true, value: true } },
     },
@@ -886,6 +893,7 @@ interface PublicRow {
   scope: string | null;
   excluded: string | null;
   status: ServiceStatus;
+  position: number;
   category: { name: string; slug: string };
   values: { fieldKey: string; value: string }[];
 }
@@ -928,6 +936,9 @@ function toPublic(service: PublicRow, family: ScopeFamily): PublicService {
     categoryId: service.categoryId,
     categoryName: service.category.name,
     categorySlug: service.category.slug,
+    position: service.position,
+    engagementType: service.engagementType,
+    feeBasis: service.feeBasis,
     chips: (["engagement_type", "turnaround", "fee_basis"] as const)
       .map((key) => ({
         key,

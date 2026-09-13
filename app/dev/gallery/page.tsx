@@ -157,6 +157,7 @@ const UNLISTED = [
   "spec-field-row",
   "specs-cell",
   "service-summary-card",
+  "service-catalogue-card",
   "credential-table",
   "declared-sectors",
   "coverage-summary",

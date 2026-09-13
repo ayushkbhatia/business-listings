@@ -3,8 +3,10 @@ import { CredentialTable, type CredentialView } from "@/components/domain/Creden
 import {
   CoverageSummary,
   DeclaredSectors,
+  ServiceCatalogueCard,
   ServiceSummaryCard,
 } from "@/components/domain/ServicesStorefront";
+import { buttonClassName } from "@/components/primitives";
 import {
   ServiceEnquiryComposer,
   type ServiceEnquiryOption,
@@ -123,6 +125,52 @@ export function ServicesStorefrontGallery() {
             <ServiceSummaryCard
               businessSlug={SLUG}
               service={{ slug: "bookkeeping", name: "Monthly bookkeeping", chips: [], deliverable: null }}
+            />
+          </div>
+        </States>
+      </Section>
+
+      <Section id="service-catalogue-card" title="service-catalogue-card" note="board 1e-s · four fields, fixed order, fee on enquiry">
+        <States label="most enquired, with what you provide" stack>
+          <div className="w-full">
+            <ServiceCatalogueCard
+              businessSlug={SLUG}
+              enquiries={17}
+              enquire={<span className={buttonClassName({ block: true })}>Enquire</span>}
+              service={{
+                slug: "statutory-audit",
+                name: "Statutory audit",
+                summary:
+                  "Full statutory audit under IFRS or IFRS for SMEs, for companies filing with a free zone authority. Signed report, audit opinion and a management letter.",
+                fields: [
+                  { key: "engagement", value: "Ongoing contract" },
+                  { key: "turnaround", value: "3–4 weeks from complete records" },
+                  { key: "fee_basis", value: "Fixed fee" },
+                  { key: "delivered", value: "Remotely" },
+                ],
+                provides: "Trial balance, bank confirmations, fixed asset register, contract schedule",
+              }}
+            />
+          </div>
+        </States>
+        <States label="thin — Not stated, no completeness badge (B1, B2)" stack>
+          <div className="w-full">
+            <ServiceCatalogueCard
+              businessSlug={SLUG}
+              enquiries={null}
+              enquire={<span className={buttonClassName({ block: true })}>Enquire</span>}
+              service={{
+                slug: "corporate-tax-registration",
+                name: "Corporate tax registration",
+                summary: null,
+                fields: [
+                  { key: "engagement", value: "One-off job" },
+                  { key: "turnaround", value: null },
+                  { key: "fee_basis", value: null },
+                  { key: "delivered", value: null },
+                ],
+                provides: null,
+              }}
             />
           </div>
         </States>
