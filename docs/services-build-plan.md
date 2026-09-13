@@ -1567,8 +1567,9 @@ a one-off job; filtering would narrow the match silently, which is what B3 warns
 
 ### Not done here
 
-- **`?from=` (*add two more suppliers*)** is still unanswered for goods. A brief hides it: it already
-  went to every firm that covers the site.
+- **`?from=` (*add two more suppliers*)** — answered in the pull request after this one: a
+  confirmation page that re-runs the goods matcher with every current recipient excluded. A brief
+  hides the link: it already went to every firm that covers the site.
 - **The quote composer still says *nothing in your catalogue matches*** on a brief's line — `3j-s`.
 - **Fan-out scoring for goods** still does not read `areaId`; the brief's matcher filters on it.
 

@@ -755,7 +755,9 @@ async function matchGoods(
  * target contributes nothing, so this reads low rather than high, and a seller
  * woken at midnight was woken for an enquiry that really is large.
  */
-function estimatedValueAed(lines: readonly EnquiryLineInput[]): number | null {
+export function estimatedValueAed(
+  lines: readonly Pick<EnquiryLineInput, "qty" | "targetUnitPriceAed">[],
+): number | null {
   let total = 0;
   let known = false;
   for (const line of lines) {
