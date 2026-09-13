@@ -585,20 +585,20 @@ test.describe("board 8c-s — the scope sheet and the first services", () => {
   });
 
   test("states each sheet's shape from its own rows — criterion 2", async ({ page }) => {
-    const audit = page.getByRole("listitem").filter({ hasText: "Audit & assurance" });
+    const audit = page.getByRole("listitem").filter({ hasText: "Professional services" });
     await expect(audit).toContainText("9 rows · 6 required · 5 filterable");
     // A live count, and zero is rendered as zero rather than hidden.
     await expect(audit).toContainText(/used by \d+ firm/);
     await expect(
-      page.getByRole("listitem").filter({ hasText: "Facilities management" }),
+      page.getByRole("listitem").filter({ hasText: "On-site maintenance" }),
     ).toContainText("no firms on it yet");
   });
 
   test("badges the sheet the seller's own services match — criterion 2", async ({ page }) => {
-    const audit = page.getByRole("listitem").filter({ hasText: "Audit & assurance" });
+    const audit = page.getByRole("listitem").filter({ hasText: "Professional services" });
     await expect(audit).toContainText("MATCHES YOUR SERVICES");
     await expect(
-      page.getByRole("listitem").filter({ hasText: "Facilities management" }),
+      page.getByRole("listitem").filter({ hasText: "On-site maintenance" }),
     ).not.toContainText("MATCHES");
   });
 
@@ -707,7 +707,7 @@ test.describe("board 8c-s — the scope sheet and the first services", () => {
   test("step 2 is inert until a sheet is chosen — criterion 1", async ({ page }) => {
     // Switch sheets, which is the reachable half: the fixture has one chosen,
     // and the locked state is what a seller sees before they ever pick.
-    const fm = page.getByRole("listitem").filter({ hasText: "Facilities management" });
+    const fm = page.getByRole("listitem").filter({ hasText: "On-site maintenance" });
     await fm.getByRole("button", { name: "Choose this sheet" }).click();
     await expect(fm).toContainText("Chosen");
 
@@ -719,7 +719,7 @@ test.describe("board 8c-s — the scope sheet and the first services", () => {
     await expect(page.getByText("Your services keep everything you have typed")).toBeVisible();
 
     // Back to the sheet the fixture came with.
-    const audit = page.getByRole("listitem").filter({ hasText: "Audit & assurance" });
+    const audit = page.getByRole("listitem").filter({ hasText: "Professional services" });
     await audit.getByRole("button", { name: "Choose this sheet" }).click();
     await expect(audit).toContainText("Chosen");
   });

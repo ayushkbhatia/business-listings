@@ -137,6 +137,7 @@ and it is the one that argues back.
 /admin/categories                       Taxonomy                              [4d]  rename h5s6
 /admin/categories?tab=kind              Taxonomy — trade kind                [4d-s] built h4ds
 /admin/spec-library                     Spec library                          [4e]  built h4e
+/admin/spec-library?view=scope          Scope-sheet families                [4e-s] built h4es
 /admin/spec-library/:id                 One template's fields                 [4e]  built h4e
 /admin/catalogue-imports                Concierge catalogue queue            [12i]  built h8s1
 /admin/attributes                       Attribute dictionary                  later
@@ -352,6 +353,24 @@ but the hub's task 2 counts only services that are live **and** at `COUNTING_BAR
 four of the six required fields. A thin service is published, findable and excluded,
 and the screen names the missing fields rather than saying "incomplete". Four modules
 read that rule and all four share `COUNTABLE_SELECT` in `lib/services/setup-sheet.ts`.
+
+`/admin/spec-library?view=scope` is board `4e-s` — a tab rather than a route, because
+spec sheets and scope sheets are the same artefact for the two halves of the directory.
+**Five families**, and the `general` fallback is not one of them: it is what an
+unassigned subcategory resolves to, deliberately usable and noticeably worse.
+
+A family varies exactly two things — which fee bases make sense and which credential is
+prompted — plus the optional rows it adds and their order. **The six required fields are
+columns on `Service`**, so a family cannot touch them by construction rather than by
+review. `feeBasisEnum` is per family and is what `3g-s` validates against server-side;
+removing one **flags the services holding it and never clears them**. `rowOrder` is what
+`1g-s` renders, so a reorder reshapes every published page in the family and the count
+is stated before the save.
+
+`credentialKind` is **prompted, never gating** — nothing reads it on a publish path.
+Professional services prompts nothing on purpose: its column reads *regulator-dependent*,
+and the regulator depends on the subcategory, so naming one would prompt a law firm for a
+tax agent number.
 
 `/dashboard/scope-templates` is **not** `/dashboard/templates` with a different
 field list, whatever `3h-s`'s handoff says. Board `3h` is an *overlay* — one

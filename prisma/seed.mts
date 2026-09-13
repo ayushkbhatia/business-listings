@@ -7293,7 +7293,7 @@ async function seedServicesFirm(db: Db) {
   if (!category) return;
 
   const audit = await db.scopeSheetFamily.findUnique({
-    where: { id: "audit-and-assurance" },
+    where: { id: "professional-services" },
     select: { id: true },
   });
 
@@ -7469,7 +7469,7 @@ async function seedServicesFirm(db: Db) {
  */
 async function seedScopeTemplate(db: Db, firmId: string) {
   const family = await db.scopeSheetFamily.findUnique({
-    where: { id: "audit-and-assurance" },
+    where: { id: "professional-services" },
     select: { id: true },
   });
   if (!family) return;

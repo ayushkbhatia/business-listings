@@ -1552,7 +1552,40 @@ model ScopeSheetFamily {
   /// The fallback, and there is exactly one — enforced by a partial unique
   /// index, because Prisma cannot express "at most one row where this is true"
   /// and two defaults is a coin flip over which fee bases a seller is offered.
+  ///
+  /// It is **not** one of board `4e-s`'s five. The board's §States calls an
+  /// unassigned subcategory *"the six required fields and the full fee-basis
+  /// list — usable and noticeably worse, which is the intended pressure to
+  /// assign"*, and this row is that answer made real rather than a sixth family.
   isDefault Boolean @default(false) @map("is_default")
+
+  /// The order the library lists them in — board `4e-s`.
+  position Int @default(0)
+
+  /// The credential buyers look for in this trade — **prompted, never gating.**
+  ///
+  /// `4e-s` B3, and it is the taxonomy's version of `8b-s`'s rule that nothing
+  /// about credentials is required. The board's expanded panel writes
+  /// *Accreditation — required* and the spec says publish is unaffected; the
+  /// word it should use is *prompted*, which is `4e-s` Q2 and what this column
+  /// is called everywhere it is read. There is no code path from this value to
+  /// a publish gate, and `mayPublish()` still returns `true` unconditionally.
+  ///
+  /// **Null for Professional services, deliberately.** The board's column reads
+  /// *Regulator-dependent*, and `4e-s` Q3 answers its own question: that is a
+  /// lookup rather than a kind, because the regulator depends on the
+  /// subcategory — the FTA for tax, the Ministry of Finance for audit,
+  /// ADGM or DIFC for legal. Prompting a law firm for an FTA tax agent number
+  /// is worse than prompting it for nothing, so it prompts for nothing until a
+  /// per-subcategory resolution exists.
+  credentialKind CredentialKind? @map("credential_kind")
+
+  /// Retired — `4e-s` B8, the same rule `3h-s` states for its own templates.
+  ///
+  /// Existing templates and services keep working and keep rendering; the
+  /// family stops being offered to new sellers. A delete would take the scope
+  /// tables of every published service in it, which is why there is no delete.
+  retiredAt DateTime? @map("retired_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

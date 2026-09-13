@@ -142,11 +142,11 @@ describe("the chosen sheet beats the category walk", () => {
     */
     const inherited = await familyFor(categoryId, null);
 
-    const chosen = await chooseScopeSheet(owner(), id, "facilities-management");
+    const chosen = await chooseScopeSheet(owner(), id, "on-site-maintenance");
     expect(chosen.ok).toBe(true);
 
-    const mine = await familyFor(categoryId, "facilities-management");
-    expect(mine.id).toBe("facilities-management");
+    const mine = await familyFor(categoryId, "on-site-maintenance");
+    expect(mine.id).toBe("on-site-maintenance");
     expect(mine.id).not.toBe(inherited.id);
     // And the fee bases travel with it — `3g-s` B2, never a global list.
     expect(mine.feeBases.map((row) => row.key)).not.toEqual(
@@ -165,7 +165,7 @@ describe("the chosen sheet beats the category walk", () => {
 
 describe("the seed list — B8, AC8", () => {
   it("arrives as drafts carrying a name and nothing else", async () => {
-    const id = await makeSeller({ sheet: "audit-and-assurance" });
+    const id = await makeSeller({ sheet: "professional-services" });
     const seeded = await seedFromCommonServices(owner(), id);
     expect(seeded.ok).toBe(true);
     expect(seeded.ok && seeded.created).toBeGreaterThan(0);
@@ -201,7 +201,7 @@ describe("the seed list — B8, AC8", () => {
   });
 
   it("is a no-op the second time rather than six more rows", async () => {
-    const id = await makeSeller({ sheet: "audit-and-assurance" });
+    const id = await makeSeller({ sheet: "professional-services" });
     const first = await seedFromCommonServices(owner(), id);
     expect(first.ok).toBe(true);
     const count = await prisma.service.count({ where: { businessId: id } });
@@ -220,7 +220,7 @@ describe("the seed list — B8, AC8", () => {
        closes there rather than leaving a seller one short of a hub that will
        not shut. The audit family offers six, so the cap is what stops it.
     */
-    const id = await makeSeller({ sheet: "audit-and-assurance" });
+    const id = await makeSeller({ sheet: "professional-services" });
     const seeded = await seedFromCommonServices(owner(), id);
 
     const free = await prisma.plan.findUniqueOrThrow({
@@ -234,7 +234,7 @@ describe("the seed list — B8, AC8", () => {
 
 describe("publishing is not counting — B4, AC3, AC4", () => {
   it("counts a live service at the bar and excludes the one below it", async () => {
-    const id = await makeSeller({ sheet: "audit-and-assurance" });
+    const id = await makeSeller({ sheet: "professional-services" });
     await addService(id, COUNTING_BAR);
     await addService(id, COUNTING_BAR - 1, { name: `${PREFIX}thin` });
 
@@ -247,7 +247,7 @@ describe("publishing is not counting — B4, AC3, AC4", () => {
   });
 
   it("closes the hub's task 2 on three counting services, not three live ones", async () => {
-    const id = await makeSeller({ sheet: "audit-and-assurance" });
+    const id = await makeSeller({ sheet: "professional-services" });
     for (let i = 0; i < SERVICES_TARGET; i += 1) {
       await addService(id, COUNTING_BAR - 1);
     }
@@ -266,7 +266,7 @@ describe("publishing is not counting — B4, AC3, AC4", () => {
   });
 
   it("pays 7, 13 and 20 points at one, two and three — B5, AC6", async () => {
-    const id = await makeSeller({ sheet: "audit-and-assurance" });
+    const id = await makeSeller({ sheet: "professional-services" });
     const earned = async () =>
       (await hubFor(id))!.levers.find((lever) => lever.key === "services")!.earned;
 
@@ -283,7 +283,7 @@ describe("publishing is not counting — B4, AC3, AC4", () => {
   });
 
   it("ignores a draft however complete it is", async () => {
-    const id = await makeSeller({ sheet: "audit-and-assurance" });
+    const id = await makeSeller({ sheet: "professional-services" });
     await addService(id, 6, { live: false });
 
     const state = await setupServicesStateFor(id);
@@ -316,12 +316,12 @@ describe("`used by N firms` is a live count — B3, AC2", () => {
 
   it("counts a firm that chose the sheet and one that inherited it", async () => {
     const seed = await setupServicesStateFor(await makeSeller());
-    const fm = seed!.sheets.find((sheet) => sheet.id === "facilities-management")!;
+    const fm = seed!.sheets.find((sheet) => sheet.id === "on-site-maintenance")!;
 
-    await makeSeller({ sheet: "facilities-management" });
+    await makeSeller({ sheet: "on-site-maintenance" });
 
     const after = await setupServicesStateFor(await makeSeller());
-    const afterFm = after!.sheets.find((sheet) => sheet.id === "facilities-management")!;
+    const afterFm = after!.sheets.find((sheet) => sheet.id === "on-site-maintenance")!;
     expect(afterFm.shape.usedBy).toBe(fm.shape.usedBy + 1);
   });
 
@@ -344,7 +344,7 @@ describe("matching badges — B2, AC2", () => {
       offers: ["Statutory audit", "Corporate tax registration"],
     });
     const state = await setupServicesStateFor(id);
-    const audit = state!.sheets.find((sheet) => sheet.id === "audit-and-assurance")!;
+    const audit = state!.sheets.find((sheet) => sheet.id === "professional-services")!;
     expect(audit.matchRank).toBe(0);
   });
 
@@ -356,7 +356,7 @@ describe("matching badges — B2, AC2", () => {
 
 describe("no fee amount is collected or displayed — B7, AC7", () => {
   it("keeps `indicativeFee` off the state this screen renders", async () => {
-    const id = await makeSeller({ sheet: "audit-and-assurance" });
+    const id = await makeSeller({ sheet: "professional-services" });
     const serviceId = await addService(id, 6);
     await prisma.service.update({
       where: { id: serviceId },
@@ -369,7 +369,7 @@ describe("no fee amount is collected or displayed — B7, AC7", () => {
   });
 
   it("keeps it off the live preview's own loader too — B11, AC9", async () => {
-    const id = await makeSeller({ sheet: "audit-and-assurance" });
+    const id = await makeSeller({ sheet: "professional-services" });
     const serviceId = await addService(id, 6);
     await prisma.service.update({
       where: { id: serviceId },

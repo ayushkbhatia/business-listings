@@ -100,7 +100,22 @@ export async function setupServicesStateFor(
 
   const [families, categories, businesses, services, caps] = await Promise.all([
     prisma.scopeSheetFamily.findMany({
-      orderBy: [{ isDefault: "asc" }, { name: "asc" }],
+      /*
+         Board `4e-s` Q1, and the only open decision on that board: the
+         subcategory fixes the family and the seller picks within it, so the
+         assigned one leads and the rest follow. A marine surveyor filed under
+         Inspection & certification should not find *per container* above the
+         fold.
+
+         Retired families are absent entirely — `4e-s` B8 and the `3h-s`
+         retirement rule: existing work keeps working, and nobody new is offered
+         it. A seller who has already chosen one keeps seeing it, because
+         `chosen` is added back below.
+      */
+      where: {
+        OR: [{ retiredAt: null }, { id: business.scopeSheetFamilyId ?? "" }],
+      },
+      orderBy: [{ position: "asc" }, { isDefault: "asc" }, { name: "asc" }],
       select: {
         id: true,
         name: true,
@@ -109,7 +124,9 @@ export async function setupServicesStateFor(
         common: { orderBy: { position: "asc" }, select: { name: true } },
       },
     }),
-    prisma.category.findMany({ select: { id: true, parentId: true, scopeFamilyId: true } }),
+    prisma.category.findMany({
+      select: { id: true, parentId: true, scopeFamilyId: true },
+    }),
     /*
        Firms on each sheet, for `used by N firms` — B3, AC2.
 
@@ -151,7 +168,9 @@ export async function setupServicesStateFor(
     effectiveFor(businessId),
   ]);
 
-  const taxonomy = new Map<string, ScopeFamilyRow>(categories.map((row) => [row.id, row]));
+  const taxonomy = new Map<string, ScopeFamilyRow>(
+    categories.map((row) => [row.id, row]),
+  );
   const known = new Set(families.map((row) => row.id));
   const fallback = families.find((row) => row.isDefault)?.id ?? null;
 
@@ -175,7 +194,10 @@ export async function setupServicesStateFor(
   );
   const rank = new Map(matches.map((row, index) => [row.id, index]));
 
-  const family = await familyFor(business.primaryCategoryId, business.scopeSheetFamilyId);
+  const family = await familyFor(
+    business.primaryCategoryId,
+    business.scopeSheetFamilyId,
+  );
   const labels = new Map(family.feeBases.map((row) => [row.key, row.label]));
 
   const countable: CountableService[] = services.map((row) => ({
@@ -193,23 +215,35 @@ export async function setupServicesStateFor(
 
   const plan =
     caps ??
-    ((await prisma.plan.findUnique({ where: { id: "free" }, select: PLAN_SELECT })) as
-      | PlanCaps
-      | null);
+    ((await prisma.plan.findUnique({
+      where: { id: "free" },
+      select: PLAN_SELECT,
+    })) as PlanCaps | null);
+
+  /*
+     `4e-s` Q1. The subcategory's own family leads, then the rest by the
+     library's order. Sorting is here rather than in the query because the
+     assigned family is resolved by a walk the database cannot order on.
+  */
+  const assigned = resolveScopeFamily(taxonomy, business.primaryCategoryId);
+  const lead = business.scopeSheetFamilyId ?? assigned;
 
   return {
     businessId: business.id,
     chosenFamilyId: business.scopeSheetFamilyId,
     family,
-    sheets: families.map((row) => ({
-      id: row.id,
-      name: row.name,
-      shape: sheetShape(row.rows, usedBy.get(row.id) ?? 0),
-      matchRank: rank.get(row.id) ?? null,
-      common: row.common.map((one) => one.name),
-      isDefault: row.isDefault,
-      chosen: row.id === business.scopeSheetFamilyId,
-    })),
+    sheets: families
+      .slice()
+      .sort((a, b) => Number(b.id === lead) - Number(a.id === lead))
+      .map((row) => ({
+        id: row.id,
+        name: row.name,
+        shape: sheetShape(row.rows, usedBy.get(row.id) ?? 0),
+        matchRank: rank.get(row.id) ?? null,
+        common: row.common.map((one) => one.name),
+        isDefault: row.isDefault,
+        chosen: row.id === business.scopeSheetFamilyId,
+      })),
     rows: services.map((row, index) => {
       const score = completeness(countable[index]!);
       return {
@@ -218,7 +252,8 @@ export async function setupServicesStateFor(
         slug: row.slug,
         engagementType: row.engagementType,
         feeBasis: row.feeBasis,
-        feeBasisLabel: row.feeBasis === null ? null : (labels.get(row.feeBasis) ?? null),
+        feeBasisLabel:
+          row.feeBasis === null ? null : (labels.get(row.feeBasis) ?? null),
         turnaround: row.turnaround,
         live: row.status === "live",
         filled: score.filled,
@@ -276,14 +311,21 @@ export async function chooseScopeSheet(
     where: { id: businessId },
     data: { scopeSheetFamilyId: family.id },
   });
-  return count > 0 ? { ok: true, familyId: family.id } : { ok: false, reason: "not_found" };
+  return count > 0
+    ? { ok: true, familyId: family.id }
+    : { ok: false, reason: "not_found" };
 }
 
 /* ── Step 2 · the rows ───────────────────────────────────────────────────── */
 
 export type SeedResult =
   | { ok: true; created: number; skipped: number }
-  | { ok: false; reason: "no_sheet" | "not_found" | "at_cap"; cap?: number; planName?: string };
+  | {
+      ok: false;
+      reason: "no_sheet" | "not_found" | "at_cap";
+      cap?: number;
+      planName?: string;
+    };
 
 /**
  * *Start from our audit-firm list* — B8, AC8.
@@ -311,7 +353,8 @@ export async function seedFromCommonServices(
     select: { primaryCategoryId: true, scopeSheetFamilyId: true },
   });
   if (!business) return { ok: false, reason: "not_found" };
-  if (business.scopeSheetFamilyId === null) return { ok: false, reason: "no_sheet" };
+  if (business.scopeSheetFamilyId === null)
+    return { ok: false, reason: "no_sheet" };
 
   const [common, existing, caps] = await Promise.all([
     prisma.scopeSheetCommonService.findMany({
@@ -319,15 +362,19 @@ export async function seedFromCommonServices(
       orderBy: { position: "asc" },
       select: { name: true },
     }),
-    prisma.service.findMany({ where: { businessId }, select: { name: true, slug: true, position: true } }),
+    prisma.service.findMany({
+      where: { businessId },
+      select: { name: true, slug: true, position: true },
+    }),
     effectiveFor(businessId),
   ]);
 
   const plan =
     caps ??
-    ((await prisma.plan.findUnique({ where: { id: "free" }, select: PLAN_SELECT })) as
-      | PlanCaps
-      | null);
+    ((await prisma.plan.findUnique({
+      where: { id: "free" },
+      select: PLAN_SELECT,
+    })) as PlanCaps | null);
 
   const taken = new Set(existing.map((row) => row.name.trim().toLowerCase()));
   const slugs = existing.map((row) => row.slug);

@@ -97,7 +97,7 @@ afterAll(async () => {
 describe("scope and exclusions are never templated — B3, AC2", () => {
   it("refuses them at the model boundary, not only in the form", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     expect(made.ok).toBe(true);
 
     /*
@@ -118,7 +118,7 @@ describe("scope and exclusions are never templated — B3, AC2", () => {
 
   it("strips them from a save rather than failing on one", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     expect(made.ok).toBe(true);
 
     const saved = await saveTemplate(owner(), id, made.ok ? made.id : "", {
@@ -141,7 +141,7 @@ describe("scope and exclusions are never templated — B3, AC2", () => {
 describe("an edit never writes through — B4, AC3", () => {
   it("leaves every service exactly as it was, and offers the change instead", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     const templateId = made.ok ? made.id : "";
     const serviceId = await makeService(id, { engagementType: "one_off_job" });
     await prisma.service.update({ where: { id: serviceId }, data: { scopeTemplateId: templateId } });
@@ -175,7 +175,7 @@ describe("an edit never writes through — B4, AC3", () => {
 describe("accepting and declining — AC3, AC4", () => {
   it("takes one field into one service and leaves the rest alone", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     const templateId = made.ok ? made.id : "";
     await saveTemplate(owner(), id, templateId, {
       name: "Compliance",
@@ -207,7 +207,7 @@ describe("accepting and declining — AC3, AC4", () => {
 
   it("writes a revision, so the change log says a person accepted it", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     const templateId = made.ok ? made.id : "";
     await saveTemplate(owner(), id, templateId, {
       name: "Compliance",
@@ -228,7 +228,7 @@ describe("accepting and declining — AC3, AC4", () => {
 
   it("stops offering a declined value and keeps the provenance", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     const templateId = made.ok ? made.id : "";
     await saveTemplate(owner(), id, templateId, {
       name: "Compliance",
@@ -252,7 +252,7 @@ describe("accepting and declining — AC3, AC4", () => {
 
   it("offers again when the template moves to a different value", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     const templateId = made.ok ? made.id : "";
     await saveTemplate(owner(), id, templateId, {
       name: "Compliance",
@@ -277,7 +277,7 @@ describe("accepting and declining — AC3, AC4", () => {
 
   it("clears a decline when the seller changes their mind", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     const templateId = made.ok ? made.id : "";
     await saveTemplate(owner(), id, templateId, {
       name: "Compliance",
@@ -299,7 +299,7 @@ describe("accepting and declining — AC3, AC4", () => {
 describe("a clone lands on the counting bar — B8, AC5", () => {
   it("arrives as a draft with the template's four and nothing else", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     await saveTemplate(owner(), id, made.ok ? made.id : "", {
       name: "Compliance",
       values: {
@@ -355,7 +355,7 @@ describe("a clone lands on the counting bar — B8, AC5", () => {
 
   it("counts toward `8c-s`'s three the moment it is named", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     await saveTemplate(owner(), id, made.ok ? made.id : "", {
       name: "Compliance",
       values: {
@@ -385,7 +385,7 @@ describe("a clone lands on the counting bar — B8, AC5", () => {
 describe("usage, deletion and tenancy — B6, B7, B9, AC6, AC7, AC8", () => {
   it("counts and names the services using a template", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     const templateId = made.ok ? made.id : "";
     const [one, two] = await Promise.all([makeService(id), makeService(id)]);
     await makeService(id); // not on the template
@@ -402,7 +402,7 @@ describe("usage, deletion and tenancy — B6, B7, B9, AC6, AC7, AC8", () => {
 
   it("leaves a service's values intact when the template goes", async () => {
     const id = await makeSeller();
-    const made = await createTemplate(owner(), id, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), id, "professional-services", "Compliance");
     const templateId = made.ok ? made.id : "";
     await saveTemplate(owner(), id, templateId, {
       name: "Compliance",
@@ -424,7 +424,7 @@ describe("usage, deletion and tenancy — B6, B7, B9, AC6, AC7, AC8", () => {
 
   it("keeps templates to their own business — B9, AC8", async () => {
     const [mine, theirs] = await Promise.all([makeSeller(), makeSeller()]);
-    const made = await createTemplate(owner(), mine, "audit-and-assurance", "Compliance");
+    const made = await createTemplate(owner(), mine, "professional-services", "Compliance");
     const templateId = made.ok ? made.id : "";
 
     expect(await scopeTemplatesFor(theirs)).toEqual([]);
@@ -443,7 +443,7 @@ describe("usage, deletion and tenancy — B6, B7, B9, AC6, AC7, AC8", () => {
 
   it("refuses a template with no name", async () => {
     const id = await makeSeller();
-    expect(await createTemplate(owner(), id, "audit-and-assurance", "   ")).toEqual({
+    expect(await createTemplate(owner(), id, "professional-services", "   ")).toEqual({
       ok: false,
       reason: "name_required",
     });
