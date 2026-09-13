@@ -315,7 +315,8 @@ describe("staff cannot raise a tier the sweep would take back", () => {
   });
 
   it("refuses a raise while the licence is lapsed, and names the fix", async () => {
-    const slug = await addBusiness({ expiry: new Date(Date.now() - 30 * DAY), tier: 0 });
+    const expired = new Date(Date.now() - 30 * DAY);
+    const slug = await addBusiness({ expiry: expired, tier: 0 });
     const business = await prisma.business.findUniqueOrThrow({
       where: { slug },
       select: { id: true },
@@ -330,9 +331,17 @@ describe("staff cannot raise a tier the sweep would take back", () => {
 
     expect(result).toMatchObject({ ok: false, error: "licence_expired" });
     if (result.ok) return;
-    // The date, so a staff member can see which licence, and the ceiling.
-    expect(result.message).toMatch(/expired on \d{4}-\d{2}-\d{2}/);
-    expect(result.message).toMatch(/renewed licence is recorded/i);
+    /*
+       The date the screen needs, as a `Date` rather than a sentence. This used
+       to assert the service's own English — `/expired on \d{4}-\d{2}-\d{2}/`
+       — which is the shape of a service layer wording its own refusals, and
+       the last of five modules doing it. `admin/businesses/actions.ts` does
+       the wording now; what belongs here is the fact.
+    */
+    if (result.error !== "licence_expired") throw new Error("wrong refusal");
+    expect(result.expiredOn.toISOString().slice(0, 10)).toBe(
+      expired.toISOString().slice(0, 10),
+    );
     // Refused, never silently clamped to the ceiling.
     expect((await tierOf(slug)).verificationTier).toBe(0);
   });

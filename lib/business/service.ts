@@ -27,7 +27,9 @@ import type { Actor } from "@/lib/auth/roles";
 
 export type SuspendResult =
   | { ok: true; suspendedAt: Date }
-  | { ok: false; error: "not_found" | "already_suspended"; message: string };
+  | { ok: false; error: "not_found" }
+  /** Who, and since when — the two facts the screen's sentence needs. */
+  | { ok: false; error: "already_suspended"; displayName: string; since: Date };
 
 export interface SuspendInput {
   actor: Actor;
@@ -41,13 +43,14 @@ export async function suspendBusiness(input: SuspendInput): Promise<SuspendResul
     select: { id: true, displayName: true, suspendedAt: true },
   });
   if (!business) {
-    return { ok: false, error: "not_found", message: "That business is not in the directory." };
+    return { ok: false, error: "not_found" };
   }
   if (business.suspendedAt) {
     return {
       ok: false,
       error: "already_suspended",
-      message: `${business.displayName} was suspended on ${business.suspendedAt.toISOString().slice(0, 10)}.`,
+      displayName: business.displayName,
+      since: business.suspendedAt,
     };
   }
 
@@ -78,7 +81,8 @@ export async function suspendBusiness(input: SuspendInput): Promise<SuspendResul
 
 export type LiftResult =
   | { ok: true }
-  | { ok: false; error: "not_found" | "not_suspended"; message: string };
+  | { ok: false; error: "not_found" }
+  | { ok: false; error: "not_suspended"; displayName: string };
 
 /**
  * Lifting a suspension. Same capability, same audit action, opposite direction —
@@ -91,14 +95,10 @@ export async function liftSuspension(input: SuspendInput): Promise<LiftResult> {
     select: { id: true, displayName: true, suspendedAt: true },
   });
   if (!business) {
-    return { ok: false, error: "not_found", message: "That business is not in the directory." };
+    return { ok: false, error: "not_found" };
   }
   if (!business.suspendedAt) {
-    return {
-      ok: false,
-      error: "not_suspended",
-      message: `${business.displayName} is not suspended.`,
-    };
+    return { ok: false, error: "not_suspended", displayName: business.displayName };
   }
 
   const before = { suspendedAt: business.suspendedAt };

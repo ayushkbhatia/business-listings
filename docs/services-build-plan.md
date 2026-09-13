@@ -25,7 +25,7 @@ migration directories, none touching services.
 | State | Count | Of 28 |
 |---|---|---|
 | **built** | **0** | |
-| partial | 1 | `3c-s` coverage manager |
+| partial | 1 | `3c-s` coverage manager — per-service rows shipped #173, dashboard mirror owed |
 | scaffold | 5 | |
 | **not started** | **22** | |
 
@@ -118,31 +118,36 @@ principle — a listed business is taking work.
 ### 4. §4's ranking amendment rests on a factual error, and the real defect is elsewhere
 
 The epic says a service supplier *"can never earn those 12"* spec-completeness points. On the tree
-they earn **six**. `lib/metrics/spec-completeness.ts:102` returns `null` for a business with no
-products, and `lib/search/ranking.ts:349` scores a null at `UNKNOWN = 0.5`
-(`lib/search/ranking.ts:296`). The exposure is half what the epic states.
+they earn **six**. `lib/metrics/spec-completeness.ts` returns `null` for a business with no
+products, and `lib/search/ranking.ts` scores a null at `UNKNOWN = 0.5`. The exposure is half what
+the epic states.
 
-Three things the amendment does not know, all of them worse:
+Three things the amendment does not know, all of them worse. **Two are fixed, 13 Sep, in #173.**
 
-- **The total is not 100 on the live search path.** `weightsForShape`
-  (`lib/search/origin.ts:130-134`) overwrites `distance` with a literal `4` on a SKU query and `14`
-  on a service-shaped one, renormalising nothing. Against the seeded 34/22/18/12/8/6 the six total
-  **96 and 106** at `lib/db/queries/search.ts:409` and `:609`. `lib/search/ranking.ts:130-152`
-  argues at length that the 100 total is a rule and not a workaround, and
-  `lib/search/settings.ts:136-137` enforces it on the authored vector only — `validateWeights` never
-  sees the shape vector. So "12 of 100" is false on two of three query shapes.
-- **`RankingWeights` is a Postgres singleton.**
-  `prisma/migrations/20260827220000_ranking_weights/migration.sql` carries
-  `CHECK ("id" = 'current')`. "Gains a kind key" is a drop-and-re-key migration on the live ranking
-  table, not a column add.
-- **The affected-seller count already lies.** `lib/search/directory.ts:106` takes
-  `MAX_LISTINGS + 1`, so `unread` at `:113` is **1 whenever it is non-zero**, at any directory size
-  above the cap. `app/(admin)/admin/search/ImpactTable.tsx:96-98` prints "1 past the sampling cap
-  were not ranked" before an ops lead presses publish. That is a constant wearing a query's clothes
-  on a decision surface. And the 30,000 in §4 cannot be printed at all — the sampler caps at 20,000.
+- ~~**The total is not 100 on the live search path.**~~ **Fixed #173.** `weightsForShape` overwrote
+  `distance` with a literal `4` on a SKU query and `14` on a service-shaped one and renormalised
+  nothing, so the six totalled **82 or 92** — the rule held on the stored row and not on the number
+  that ranks results. `redistribute`'s largest-remainder body is extracted as `spread`, and
+  `weightsForShape` spends the difference across the absorbers with `planTier` pinned.
 
-The epic is right that a second vector is owed. It is wrong about the size of the hole, and it does
-not name the three defects that have to be fixed before a second vector is even coherent.
+  It also moved out of the `server-only` `lib/search/origin.ts` into the pure
+  `lib/search/ranking.ts`, which is the part worth remembering: **being behind that wall is why the
+  invariant never reached it.** The seven unit tests in `lib/search/shape-weights.test.ts` are only
+  possible on this side of it.
+- **`RankingWeights` is a Postgres singleton.** Still true, and deliberately not fixed.
+  `prisma/migrations/20260827220000_ranking_weights/migration.sql` carries `CHECK ("id" =
+  'current')`, so "gains a kind key" is a drop-and-re-key on the live ranking table rather than a
+  column add. One vector is correct while there is one vector; restructuring it is `12c-s`'s own
+  first step and undesigned board work, not a defect. **It is a cost note for that handoff.**
+- ~~**The affected-seller count already lies.**~~ **Fixed #173.** `lib/search/directory.ts` took
+  `MAX_LISTINGS + 1` and reported `unread` as **1 whenever it was non-zero**, at any directory size
+  above the cap — printed to an ops lead as "1 past the sampling cap were not ranked" on the screen
+  where they press publish. It counts now, and only when the cap was actually reached.
+
+  The 30,000 in §4 still cannot be printed: the sampler caps at 20,000.
+
+So `12c-s` is blocked on **one** thing rather than three, and that one thing is its own opening
+move rather than a prerequisite somebody else owes it.
 
 ---
 
@@ -371,7 +376,7 @@ drawn apart, the list shows a column the editor cannot fill or omits one it can.
 | **`8b-s`** Credentials task | **shipped 12 Sep** | `/dashboard/setup/credentials`. Two tiers rather than three, the trade licence is not a credential row, and the FTA register is a seam nothing is plugged into. See §4i |
 | **`8c-s`** Scope sheet + first 3 services | **shipped 12 Sep** | `/dashboard/setup/services`. D11 was already closed, three authored sheets rather than seven, and the hub's task 2 now counts completeness rather than live rows. See §4j |
 | **`3b-s`** Listing profile | | A schema diff, not copy: `ModeratedField` is a Prisma enum, so it **stops for a person** |
-| **`3c-s`** Coverage manager | mostly built | Panel, writer, capability guard and listing revision all ship |
+| **`3c-s`** Coverage manager | **per-service coverage shipped 13 Sep** (#173) | `ServiceCoverage.service_id`, with the card on the service editor that writes it. The panel, writer, capability guard and listing revision were already there; what was missing was any way for one service to narrow itself, which left `1g-s` B8's `effectiveCoverage` with an unreachable branch. The **dashboard mirror** — a services seller editing the business default from `/dashboard/locations` rather than onboarding — is still owed |
 
 **`profileStrength` was fixed with `8a-s`, 12 Sep.** `catalogue: 20` + `filterableSpecs: 15` of 100
 were unreachable without products, against a published `STRONG_ENOUGH` of 80, so a service supplier
@@ -1492,19 +1497,36 @@ off live storefronts by `comingSoon: true`.
 ---
 
 ### Stage 6 · The buyer can ask, and the seller can answer
-*Two migrations, and the second is the one that gates the terminal state.*
+*Three migrations. Both blockers are gone; what is left is the expensive screen.*
 
 | Step | What | Note |
 |---|---|---|
-| **6.1** | `EnquiryLine.qty` nullable | `Int` NOT NULL today. **Stops for a person.** Three render sites print `×{qty}` |
-| **6.2** | **`1h-s` / S2** — the brief | The expensive screen. Where, what, how often, when, how big — and no quantity |
-| **6.3** | `QuoteLine.qty` | **The harder blocker, and neither planning document names it.** Also NOT NULL, and `lib/quote/send-quote.ts:114-116` refuses `qty < 1`. It gates the **accepted quote** — the terminal state of the whole product. A service enquiry that cannot be quoted cannot convert |
+| **6.1** | ~~`EnquiryLine.qty` nullable~~ | **Shipped #173**, `20261010090000_nullable_line_qty`. Null means **unquantified, not none**: `lineTotalFils` multiplies by 1 so a priced line still totals, and every render site omits the figure rather than printing `×1` |
+| **6.3** | ~~`QuoteLine.qty`~~ | **Shipped in the same migration.** It was the harder half and neither planning document named it: `sendQuote` refused `qty < 1`, so it gated the **accepted quote** — the terminal state of the whole product |
+| **6.1b** | `Enquiry.areaId` | **Shipped #178.** The third migration, below |
+| **6.2** | **`1h-s` / S2** — the brief | The expensive screen, and now the only thing in this stage that needs a handoff. **Read the note below before commissioning it** |
 | **6.4** | `3j-s` Reply with a proposal | |
 | **6.5** | `1n-s` Compare proposals | Consecutive with `3j-s`. Four fee bases do not compare the way four unit prices do |
 
-**`Enquiry.deliverToArea` is free text**, not an `areaId`, so an area-level coverage match is not
-computable from the enquiry side. That is a third migration plus a composer control, and it belongs
-to `1h-s` rather than to stage 1's locality fix, which used the emirate.
+~~**`Enquiry.deliverToArea` is free text**, not an `areaId`~~ — **fixed #178**. It is a real
+`areaId` beside the free text now, so an area-level coverage match is computable from the enquiry
+side for the first time, against the same `(emirate, areaId)` shape `ServiceCoverage` and
+`BusinessCoverage` already use. The composer control that would let a buyer *pick* one is still
+`1h-s`'s: what shipped is the column, the backfill and the resolver.
+
+**Scoring is deliberately untouched.** `lib/enquiry/fanout.ts` still scores
+same-emirate and nothing finer, because "how much is an area match worth
+against an emirate match" is a design decision with a weight behind it, and
+changing who receives an enquiry without one is not a migration. The data is
+there for the board that makes that call. The one reader that did move is
+`lib/leads/router.ts`, which routes a lead between one seller's own seats and
+was already matching area names as lower-cased strings.
+
+**`1d-s` has already built most of `1h-s`.** `lib/enquiry/service-enquiry.ts` is a four-field
+services composer — which service, what you need in your own words, how big the job is (D7's
+`Enquiry.scale`, a new column), needed by, plus one attachment. A handoff drawn cold will draw a
+screen that mostly exists. What is genuinely still owed is the *where* — now that `areaId` exists,
+a control to set it — and "how often", which has no field at all.
 
 ---
 
@@ -1522,9 +1544,11 @@ kind badges, not for the stated reason.
 ### Stage 8 · Ranking and ops
 `12c` defects → `12c-s` → `4c-s` → `12g-s` + `6g-s`
 
-**`12c-s` cannot be built until §2's three ranking defects are fixed**: the vector totals 96 and 106
-on two of three query shapes, `RankingWeights` is a Postgres singleton so a kind key is a
-drop-and-re-key, and the affected-seller counter can only ever print `1`.
+**`12c-s` is unblocked.** Two of §2's three ranking defects went in #173 — the shape vector totals
+100 on every query shape now, and the affected-seller counter is a real count. The third,
+`RankingWeights` being a Postgres singleton with `CHECK ("id" = 'current')`, is deliberately left:
+a kind key is a drop-and-re-key on the live ranking table, which is this board's own opening move
+rather than something owed to it. Budget for it in the handoff.
 
 `4c-s` narrows under D10 to the two kinds a register can answer. `12g-s` and `6g-s` are one piece of
 work and there is currently no instrument in the tree that can charge D9's accepted drift.
@@ -1595,44 +1619,75 @@ short of a hub that will not close.
 
 ---
 
-## 5 · Found on the way — not services work, and one of them is money
+## 5 · Found on the way — not services work, and one of them was money
 
-Ranked by what it costs.
+**All eight are closed.** Seven went in #176, item 1 was already fixed by the
+time this register was re-read, and each entry below keeps what it was so the
+next reader can tell a fixed defect from one nobody has looked at.
 
-1. **The placement credit over-credits an annual seller.** `lib/placement/service.ts:225` writes the
-   slot term as a literal `30 * 86_400_000` and never imports `SLOT_TERM_DAYS`, whose own docblock
-   (`lib/placement/term.ts:46`) names `takeSlot` as the caller that reads it. Then
-   `lib/billing/renewal-job.ts:335` resets `endsOn` to `nextRenewsAt` — a **year** out on an annual
-   term (`:228`) — while `lib/placement/term.ts:81` always divides by 30. An annual seller who
-   cancels with ~365 days left is credited roughly **12.2 months of placement against the 10 months
-   actually charged** (`lib/billing/renewal-job.ts:140-151`), and it is issued as a real
-   `credit_note` correcting a `tax_invoice` (`lib/placement/term.ts:198-213`). Even on monthly terms
-   the denominator is wrong every month that is not 30 days. **This is mine, from #152.**
-2. **The enquiry cap bypasses the entitlement snapshot D1 rests on.** `lib/enquiry/service.ts:186`
-   reads `business.plan?.enquiriesPerMonth` straight off the live `Plan` row; `fanout.ts:103-104`
-   caps on it. A grandfathered seller is capped at the new number.
-3. **`publicPhotoLimit` has no editor.** `app/(admin)/admin/plans/PlanEditor.tsx:44-60` lists seven
-   caps and omits it; `actions.ts:35-46` never writes it. An eighth plan number, staff-invisible —
-   the exact thing D1 ratified against.
-4. **An eighth divergent template resolver, in the writer of the ranking column.**
-   `lib/metrics/strength-job.ts:109` resolves a product's template as
-   `row.category?.defaultTemplateId ?? null` instead of `resolveTemplateId`
-   (`lib/spec/resolve.ts:44-69`), the three-step rule board 4e wrote to end exactly this. Reachable
-   by a shipped staff action: `setTemplateCategories` attaches a template and never writes
-   `defaultTemplateId`, so the product resolves `rules = []` and counts **complete**, inflating that
-   seller's `specCompleteness` to 1.00 — which is 12 ranking points.
-5. **`removeCategory` has no capability check.** `app/(onboarding)/onboarding/profile/actions.ts:76-83`
-   guards only on `actor?.businessId` and returns `{ ok: true }` whether or not a row was removed.
-   Its dashboard sibling `removeCoverage` calls `assertCanEditListing`.
-6. **`nav-config.ts:102`** — the verification row is the only one in the storefront group with no
-   `capability`.
-7. **12d prints a page cap as a total.** `app/(admin)/admin/crm/page.tsx:44` renders
-   `rows.length` from `callList(200)` as "{count} prospects, from demand we measured". Its
-   `reply_rate_falling` signal has a label and no producer, and `CallOutcome`'s only writer is
-   `logCall`, whose only caller is an integration test — so the recently-called suppression is dead.
-8. **Untranslated strings** at `lib/reports/service.ts:147,151`, returned to the UI verbatim.
+Ranked by what it cost.
 
-Items 1–3 are one coherent billing batch. Item 4 is a ranking-honesty fix and belongs with `12c-s`.
+1. ~~**The placement credit over-credits an annual seller.**~~ **Already fixed
+   when re-checked, 13 Sep.** `unusedPlacementFils` takes a `BilledPeriod` and
+   caps `billable` at `periodDays`; `lib/placement/term.ts:153-165` now records
+   the 975 AED over-credit in the past tense, and `takeSlot` imports
+   `SLOT_TERM_DAYS` rather than writing `30 * 86_400_000`. The register was
+   stale about its own most expensive item, which is the reason every entry
+   here is now dated.
+2. ~~**The enquiry cap bypasses the entitlement snapshot D1 rests on.**~~
+   **Fixed #176.** `findFanoutCandidates` reads the whole cap set through
+   `effectiveCaps`, so a grandfathered seller keeps the allowance they signed up
+   on in the one reader that decides whether they are shown an enquiry at all.
+   `rankingMultiplier` stays the live plan's, deliberately — `effectiveCaps`
+   says the name, the price and the multiplier are facts about the plan today.
+   Found underneath: `toCaps` and its column list existed twice, so both moved
+   to `PLAN_CAPS_SELECT` in `lib/plan/entitlements.ts`.
+3. ~~**`publicPhotoLimit` has no editor.**~~ **Fixed #176**, and it was worse
+   than recorded: `serviceLimit` had had a box on the screen since board `2e-s`
+   and no read-back in the action, so staff typed the services cap, saved, and
+   were told nothing had changed. Both lists are one now,
+   `lib/plan/editable-caps.ts`, read by the form that draws the boxes and the
+   action that reads them back — and the editor's seed map was a third literal
+   with `publicPhotoLimit` already missing from it.
+4. ~~**An eighth divergent template resolver, in the writer of the ranking
+   column.**~~ **Fixed #176.** `lib/spec/resolve.ts` gained `resolveTemplateIds`
+   — board 4e's three-step rule in bulk, three queries for a whole-table sweep
+   — and `lib/metrics/strength-job.ts` uses it. Nine integration cases assert
+   the bulk reader against the single one on the same category, including step
+   3's quirk of preferring the newest live template across the category *and*
+   its parent rather than the category's own.
+5. ~~**`removeCategory` has no capability check.**~~ **Fixed #176**, with
+   `addCategory`, which had the identical gap. `removeExtraCategory` reports
+   whether a row actually went, and the chip row renders the refusal instead of
+   discarding it — `at_cap` and the rest were being swallowed too.
+6. ~~**`nav-config.ts:102`**~~ **Fixed #176.** The verification row carries
+   `listing.edit`, like the three siblings above it and like all four of the
+   writes on the screen it points at.
+7. ~~**12d prints a page cap as a total.**~~ **Fixed #176.** `callList` returns
+   a real `total` counted before the screen's limit, scan depth is its own
+   constant so the page and the console tile no longer read different candidate
+   pools, and `reply_rate_falling` — a `SignalKey` with a catalogue label and no
+   producer — came out with the query that would have set it.
+
+   **Still open, and not a defect:** `CallOutcome`'s only writer is `logCall`,
+   whose only caller is an integration test, so the recently-called suppression
+   can never fire in production. That needs a call-logging screen, which is
+   board 12d's work.
+8. ~~**Untranslated strings** at `lib/reports/service.ts:147,151`.~~ **Fixed,
+   #176 and #178**, and the same shape was in five modules rather than one:
+   `lib/reports/service.ts`, `lib/onboarding/conflict.ts`,
+   `lib/moderation/service.ts` and `lib/verification/review.ts` in #176, and
+   `lib/verification/service.ts` and `lib/business/service.ts` in #178. Every one of them is a staff-facing
+   service layer returning raw English that an action handed straight to the
+   screen; two interpolated a raw enum and one a raw slug. The rule they now
+   follow: **a service returns the fact as a key, the action does the wording.**
+
+   **Still open, and buyer-facing:** `lib/alerts/service.ts` returns nine
+   sentences of raw English across three refusal keys — five different wordings
+   share `no_identity` alone, so moving them needs finer keys rather than a
+   mechanical swap, and flattening nine considered sentences into three would
+   be worse than leaving them. It is the one remaining module of this kind and
+   the only one a *buyer* reads.
 
 ---
 
@@ -1671,11 +1726,11 @@ edit**.
 |---|---|---|---|---|
 | **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **shipped 12 Sep.** One handoff, three screens, and it was right: the editor fixed the field set, the list reported on it, the page rendered it. See §4g |
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
-| **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | `2b-s`, `2c-s` and `2d-s` shipped 11 Sep. `3c-s` is mostly built and now owes the services mirror as well as the per-service rows |
+| **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | `2b-s`, `2c-s` and `2d-s` shipped 11 Sep; `3c-s`'s per-service rows shipped 13 Sep (#173). What is left in this wave is `3b-s` and `3c-s`'s dashboard mirror |
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **`1d-s`, `1e-s` and `1f-s` shipped 13 Sep** (§4m–§4o) — the public storefront set is complete. `5c-s` has a placeholder waiting |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | The expensive one, and the two that must be consecutive |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
-| **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | `12c-s` waits on §2's three ranking defects |
+| **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | **Unblocked.** Two of §2's three ranking defects are fixed (#173); the third is `12c-s`'s own first step, not a prerequisite — see §2.4 |
 | — | **Q1 said families** | `4e-s` · `3h-s` | — | Both **shipped 13 Sep** — `3h-s` closed wave 2 (§4k) and `4e-s` authored the five families (§4l) |
 
 **What needs no handoff at all:**

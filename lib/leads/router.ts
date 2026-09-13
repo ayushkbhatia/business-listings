@@ -199,7 +199,7 @@ async function byBranch(enquiryId: string, seats: readonly string[]): Promise<st
   const [enquiry, scoped] = await Promise.all([
     prisma.enquiry.findUnique({
       where: { id: enquiryId },
-      select: { deliverToArea: true },
+      select: { deliverToArea: true, areaId: true },
     }),
     prisma.user.findMany({
       where: { id: { in: [...seats] } },
@@ -208,7 +208,7 @@ async function byBranch(enquiryId: string, seats: readonly string[]): Promise<st
   ]);
 
   const unscoped = scoped.filter((seat) => seat.branchId === null).map((seat) => seat.id).sort();
-  if (!enquiry?.deliverToArea) return unscoped[0] ?? null;
+  if (!enquiry || (!enquiry.deliverToArea && !enquiry.areaId)) return unscoped[0] ?? null;
 
   const branchIds = scoped.map((seat) => seat.branchId).filter((id): id is string => id !== null);
   if (branchIds.length > 0) {
@@ -224,11 +224,25 @@ async function byBranch(enquiryId: string, seats: readonly string[]): Promise<st
     */
     const branches = await prisma.location.findMany({
       where: { id: { in: branchIds }, published: true },
-      select: { id: true, area: { select: { name: true } } },
+      select: { id: true, areaId: true, area: { select: { name: true } } },
     });
-    const match = branches.find(
-      (branch) => branch.area?.name?.toLowerCase() === enquiry.deliverToArea?.toLowerCase(),
-    );
+    /*
+       The resolved `areaId` first, the typed string only where there is none.
+
+       This was a `toLowerCase()` comparison of two names, which is the same
+       match `resolveEnquiryArea` now does once at write time and does better:
+       it collapses inner spacing and it scopes to the stated emirate. Matching
+       on ids where we have them means a branch in Al Quoz is found however the
+       buyer spaced it, and the string path stays for the enquiries written
+       before the column existed.
+    */
+    const match =
+      branches.find((branch) => enquiry.areaId !== null && branch.areaId === enquiry.areaId) ??
+      branches.find(
+        (branch) =>
+          enquiry.deliverToArea !== null &&
+          branch.area?.name?.toLowerCase() === enquiry.deliverToArea.toLowerCase(),
+      );
     if (match) {
       const seat = scoped.find((s) => s.branchId === match.id);
       if (seat) return seat.id;

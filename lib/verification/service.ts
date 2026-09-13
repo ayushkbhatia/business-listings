@@ -33,13 +33,12 @@ export type TierResult =
   | { ok: true; tier: number }
   | {
       ok: false;
-      error:
-        | "not_found"
-        | "out_of_range"
-        | "licence_expired"
-        | "unchanged";
-      message: string;
-    };
+      error: "not_found" | "out_of_range";
+    }
+  /** The tier it already holds, so the screen can name it. */
+  | { ok: false; error: "unchanged"; tier: number }
+  /** The date on the licence, so the screen can name that instead of a tier. */
+  | { ok: false; error: "licence_expired"; expiredOn: Date };
 
 export interface SetTierInput {
   actor: Actor;
@@ -48,7 +47,7 @@ export interface SetTierInput {
   reason: string;
 }
 
-const MIN_TIER = 0;
+export const MIN_TIER = 0;
 /**
  * Two, not three, and the ladder is the reason.
  *
@@ -68,7 +67,7 @@ const MIN_TIER = 0;
  * clamps to `TOP_ACHIEVABLE_TIER` as well. One number, one place — a ceiling
  * written twice is a ceiling that drifts.
  */
-const MAX_TIER = TOP_ACHIEVABLE_TIER;
+export const MAX_TIER = TOP_ACHIEVABLE_TIER;
 
 export async function setVerificationTier(input: SetTierInput): Promise<TierResult> {
   const business = await prisma.business.findUnique({
@@ -81,7 +80,7 @@ export async function setVerificationTier(input: SetTierInput): Promise<TierResu
     },
   });
   if (!business) {
-    return { ok: false, error: "not_found", message: "That business is not in the directory." };
+    return { ok: false, error: "not_found" };
   }
 
   /*
@@ -96,19 +95,11 @@ export async function setVerificationTier(input: SetTierInput): Promise<TierResu
   assertCan(input.actor, "business.verification_tier.write");
 
   if (!Number.isInteger(input.tier) || input.tier < MIN_TIER || input.tier > MAX_TIER) {
-    return {
-      ok: false,
-      error: "out_of_range",
-      message: `A tier is a whole number from ${MIN_TIER} to ${MAX_TIER}.`,
-    };
+    return { ok: false, error: "out_of_range" };
   }
 
   if (input.tier === business.verificationTier) {
-    return {
-      ok: false,
-      error: "unchanged",
-      message: `That business is already tier ${business.verificationTier}.`,
-    };
+    return { ok: false, error: "unchanged", tier: business.verificationTier };
   }
 
   /*
@@ -128,13 +119,7 @@ export async function setVerificationTier(input: SetTierInput): Promise<TierResu
      returns to allowing the tier.
   */
   if (input.tier > EXPIRED_LICENCE_TIER && licenceExpired(business.licenceExpiry, new Date())) {
-    return {
-      ok: false,
-      error: "licence_expired",
-      message:
-        `That trade licence expired on ${business.licenceExpiry.toISOString().slice(0, 10)}. ` +
-        `Tier ${EXPIRED_LICENCE_TIER} is the ceiling until the renewed licence is recorded.`,
-    };
+    return { ok: false, error: "licence_expired", expiredOn: business.licenceExpiry };
   }
 
   const before = {
