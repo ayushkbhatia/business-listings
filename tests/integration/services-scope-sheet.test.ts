@@ -78,7 +78,7 @@ beforeAll(async () => {
       slug: `${PREFIX}audit`,
       code: "SS",
       name: "Scope sheet — audit",
-      scopeFamilyId: "audit-and-assurance",
+      scopeFamilyId: "professional-services",
     },
     select: { id: true },
   });
@@ -111,7 +111,7 @@ describe("the family — B2", () => {
     const general = await familyFor(categoryId);
     const audit = await familyFor(auditCategoryId);
 
-    expect(audit.id).toBe("audit-and-assurance");
+    expect(audit.id).toBe("professional-services");
     expect(audit.feeBases.map((row) => row.key)).not.toEqual(general.feeBases.map((r) => r.key));
     // The label is what makes a family a family: the same key reads differently.
     expect(audit.rows.find((row) => row.key === "sectors")?.label).toBe("Sectors most audited");

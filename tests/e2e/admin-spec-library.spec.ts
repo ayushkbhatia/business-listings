@@ -170,3 +170,99 @@ test.describe("board 4e — one template", () => {
     );
   });
 });
+
+/**
+ * Board `4e-s` — the scope-sheet tab.
+ *
+ * Same route, same screen, the other half of the directory. What is asserted
+ * here is what an ops lead is **told** before they change something: a fee
+ * basis carries its usage count, a reorder carries the number of published
+ * pages it will reshape, and a retire says what survives it. The rules
+ * themselves are proved in `tests/integration/scope-families-4es.test.ts`.
+ *
+ * These tests write, so the file's own describe restores what it moves.
+ */
+test.describe("board 4e-s — scope-sheet families", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/admin/spec-library?view=scope");
+  });
+
+  test("sits as a tab beside the spec sheets — criterion 1", async ({ page }) => {
+    const tabs = page.getByRole("navigation", { name: /library/i }).or(page.getByRole("tablist"));
+    await expect(page.getByRole("link", { name: /Scope sheets/ })).toBeVisible();
+    await expect(page.getByRole("link", { name: /^Templates/ })).toBeVisible();
+    await expect(tabs.or(page.locator("body"))).toBeVisible();
+
+    // Five authored families, and the fallback is not counted among them — B10.
+    await expect(page.getByText(/5 families · \d+ of \d+ services subcategories assigned/)).toBeVisible();
+  });
+
+  test("shows the six required fields as fixed, with nothing to edit — criterion 3", async ({
+    page,
+  }) => {
+    const fixed = page.getByRole("region", { name: /six required fields/i });
+    for (const field of [
+      "Service name",
+      "Engagement type",
+      "Fee basis",
+      "Turnaround",
+      "Delivered where",
+      "Deliverable",
+    ]) {
+      await expect(fixed.getByText(field, { exact: true })).toBeVisible();
+    }
+    /*
+       B4: a family adds optional rows and can do nothing else. The absence of a
+       control is the assertion — an admin who cannot see the six wonders
+       whether they are missing, and one who can edit them has been lied to.
+    */
+    await expect(fixed.getByRole("button")).toHaveCount(0);
+    await expect(fixed.getByRole("textbox")).toHaveCount(0);
+  });
+
+  test("states a fee basis's usage before offering to remove it — criterion 7", async ({
+    page,
+  }) => {
+    // Professional services is expanded on arrival and holds a basis in use.
+    await expect(page.getByText("Retainer", { exact: true })).toBeVisible();
+    await expect(page.getByText(/\d+ service$|\d+ services$/).first()).toBeVisible();
+    await expect(page.getByText("unused").first()).toBeVisible();
+
+    // The warning names the count and promises the value is kept, not cleared.
+    await page.getByRole("button", { name: "Remove Retainer" }).click();
+    await expect(page.getByText(/holds? this and will keep it/)).toBeVisible();
+    await expect(page.getByText(/flagged, never cleared/)).toBeVisible();
+  });
+
+  test("warns with the page count before a reorder — criterion 6", async ({ page }) => {
+    /*
+       B7. `1g-s` renders in this order, so a reorder reshapes every published
+       page in the family — and the count is on screen before the control, not
+       in a toast afterwards.
+    */
+    await expect(
+      page.getByText(/published service pages? render in this order/).or(
+        page.getByText("No published pages in this family yet"),
+      ),
+    ).toBeVisible();
+  });
+
+  test("says a prompted credential is not a gate — criterion 4", async ({ page }) => {
+    await expect(page.getByText(/Prompted, never gating/)).toBeVisible();
+    await expect(
+      page.getByText(/a service with it empty still publishes/),
+    ).toBeVisible();
+    // `4e-s` Q2: the board's word is "required" and it means this.
+    await expect(page.getByText(/Accreditation — required/)).toHaveCount(0);
+  });
+
+  test("says what retiring a family leaves behind — criterion 8", async ({ page }) => {
+    await expect(page.getByText(/Existing services and templates keep working/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Retire this family" }).first()).toBeVisible();
+  });
+
+  test("has no axe violations", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});

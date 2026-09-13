@@ -1155,6 +1155,88 @@ contrast gap.
 
 ---
 
+## 4l · Handoff `4e-s` — five families, and a taxonomy nobody has classified
+
+Shipped 13 Sep. A tab on `/admin/spec-library`, the five families authored with their fee
+bases and rows, every services subcategory assigned, and the three rules that make the
+three shipped boards downstream of it work.
+
+### The board's 420 is 39 here, and that is `4d-s`'s gap rather than this board's
+
+B5 asks for *420 subcategories, 420 assignments*. **`Category.tradeKind` is null on 434 of
+440 rows** — `4d-s` shipped the column and the resolver and classified six — so the walk
+resolves **39** leaves to services and everything else to goods.
+
+All 39 are assigned. Reaching 420 would have meant inventing 381 classifications, which is
+`4d-s`'s job done badly by this board and exactly the padding § Interface honesty forbids.
+The screen counts what is there — *5 families · 39 of 39 services subcategories assigned* —
+so the number moves on its own as the taxonomy is classified.
+
+### `8c-s` Q1 closed, and the README's reconciliation is right
+
+The README argues that *seven trades* and *five families* count different things one level
+apart, and it is correct. What this build takes from it is the narrower half — Q1, the only
+open decision — in the position the board itself argues for: **the assigned family leads the
+card list on `8c-s` and the rest follow**. A marine surveyor filed under Inspection &
+certification is not one click from a per-container fee basis, and is not prevented from
+reaching one either.
+
+The two families this tree already had were **renamed rather than joined by five more**.
+`audit-and-assurance` became `professional-services` and `facilities-management` became
+`on-site-maintenance`; seven families would have left B10's *resist new families* with
+nothing to resist. Every foreign key to the table is `ON UPDATE CASCADE`, checked before
+the migration was written, so the templates, businesses, categories, fee bases, rows and
+seed lists moved with them.
+
+### Three rules, and each is enforced where it cannot be forgotten
+
+- **B4 — the six are platform-level.** They are columns on `Service` and a family holds
+  rows, so there is no shape a family could take that adds a seventh. A test writes an
+  invented row key and watches `scopeRows` drop it, because a label with nowhere to read a
+  value from renders an empty row for ever.
+- **B9 — removing a fee basis flags, never clears.** The count comes back with the result
+  and is stated before the press as well as after. A seller's fee basis is their statement
+  about their own pricing, and tidying a taxonomy is not a reason to unmake it; `3g-s`
+  refuses the key on the *next* save, where the seller is present to choose a replacement.
+- **B3 — a prompted credential is not a gate.** `mayPublish()` takes no argument at all, so
+  no family can reach it. The test asserts `mayPublish.length === 0`, which is the strongest
+  available form of that claim.
+
+### Q3 answered by prompting nothing
+
+The board's credential column reads *Regulator-dependent* for Professional services, and Q3
+answers its own question: that is a lookup, not a kind — the FTA for tax, the Ministry of
+Finance for audit, ADGM or DIFC for legal. Prompting a law firm for an FTA tax agent number
+is worse than prompting it for nothing, so it prompts for nothing and the panel says why.
+Inspection & certification prompts `professional_body` and Logistics & clearance `other`;
+the two families whose column reads *trade licence only* prompt nothing, because the trade
+licence is on `business` rather than a `credential` row.
+
+### Q4, in the label
+
+*Percentage of value* ships on Project & advisory as **"A percentage of the value (yours,
+not ours)"**. The platform takes nothing either way, and on a no-commission directory
+somebody would otherwise read it as our cut.
+
+### Still owed
+
+- **`4d-s`'s classification.** 39 of 440 subcategories carry a trade kind. Every one of the
+  39 has a family; the other 401 are goods by default and may not all be.
+- **`12c`'s ranking term**, unchanged since `8a-s`.
+
+### Verified by clicking it
+
+The tab reading *Scope sheets · 5* beside *Templates*, the six required fields rendered with
+no control at all, Professional services expanded with *Retainer · 1 service* beside *Per
+return · unused*, the reorder warning naming two published pages, and the credential panel
+saying prompted-never-gating and then why this family prompts nothing. Unassigned one
+subcategory, assigned it from the screen with a reason, watched the header move 38 → 39 and
+the audit row land with the reason and the before/after.
+
+Axe at 1280 found nothing but the project's pinned contrast gap.
+
+---
+
 ### Stage 5 · The buyer can read it
 `1g-s` → `1d-s` → `1e-s` → `5c-s` → `1f-s`
 
@@ -1357,7 +1439,7 @@ edit**.
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | The expensive one, and the two that must be consecutive |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | `12c-s` waits on §2's three ranking defects |
-| — | **Q1 said families** | `4e-s` · `3h-s` | — | `3h-s` **shipped 13 Sep** and closes wave 2 — see §4k. `4e-s` authors the families and is the one left |
+| — | **Q1 said families** | `4e-s` · `3h-s` | — | Both **shipped 13 Sep** — `3h-s` closed wave 2 (§4k) and `4e-s` authored the five families (§4l) |
 
 **What needs no handoff at all:**
 

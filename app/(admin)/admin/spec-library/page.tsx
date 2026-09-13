@@ -8,7 +8,9 @@ import { coverage, libraryHeader, proposedFields, specLibrary } from "@/lib/spec
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
+import { scopeLibrary } from "@/lib/services/family-library";
 import { TemplateTable } from "./TemplateTable";
+import { ScopeTab } from "./ScopeTab";
 import { CoverageCard, DraftCard, ProposedCard } from "./_rail";
 import { CoverageTable } from "./CoverageTable";
 import { ProposedTable } from "./ProposedTable";
@@ -45,9 +47,15 @@ import { NewTemplatePanel } from "./NewTemplatePanel";
 
 export const dynamic = "force-dynamic";
 
-type View = "templates" | "coverage" | "drafts" | "proposed";
+type View = "templates" | "scope" | "coverage" | "drafts" | "proposed";
 
-const VIEWS: View[] = ["templates", "coverage", "drafts", "proposed"];
+/*
+   Board `4e-s` B1: a tab at the same route rather than a screen of its own.
+   Spec sheets and scope sheets are the same kind of artefact for the two halves
+   of the directory, and an admin editing one should not have to learn a second
+   screen to edit the other.
+*/
+const VIEWS: View[] = ["templates", "scope", "coverage", "drafts", "proposed"];
 
 function viewFrom(raw: string | undefined): View {
   return VIEWS.includes(raw as View) ? (raw as View) : "templates";
@@ -61,11 +69,12 @@ export default async function SpecLibraryPage({
   const seat = await requireStaff();
   if (!can(seat.actor, "taxonomy.write")) notFound();
 
-  const [header, rows, gaps, proposals, badges] = await Promise.all([
+  const [header, rows, gaps, proposals, scope, badges] = await Promise.all([
     libraryHeader(),
     specLibrary(),
     coverage(),
     proposedFields(),
+    scopeLibrary(),
     getAdminNavBadges(seat),
   ]);
 
@@ -142,12 +151,25 @@ export default async function SpecLibraryPage({
             href: "/admin/spec-library?view=proposed",
             badge: proposals.length,
           },
+          /*
+             Board `4e-s`. The badge counts the five rather than every row: the
+             fallback is what a subcategory with no family resolves to, not a
+             family somebody authored, and counting it would make the screen
+             claim six where the design says five.
+          */
+          {
+            key: "scope",
+            label: t("admin.scope.tab"),
+            href: "/admin/spec-library?view=scope",
+            badge: scope.families.filter((family) => !family.isDefault).length,
+          },
         ]}
       />
 
       <div className="mt-[var(--gutter)] flex flex-col gap-[var(--gutter)] xl:flex-row">
         <div className="min-w-0 flex-1">
           {view === "templates" && <TemplateTable rows={rows} />}
+          {view === "scope" && <ScopeTab library={scope} specs={header.templates} />}
           {view === "drafts" && <TemplateTable rows={drafts} />}
           {view === "coverage" && <CoverageTable gaps={gaps.gaps} />}
           {view === "proposed" && <ProposedTable rows={proposals} />}

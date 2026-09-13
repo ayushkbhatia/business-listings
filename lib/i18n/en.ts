@@ -8651,6 +8651,119 @@ export const en = {
   "service_public.credential_until": "valid to {when}",
   "service_public.credential_by": "checked against {register}",
 
+  // ── Board `4e-s` — scope-sheet families, a tab on the spec library ───────
+  //
+  // A spec sheet describes an object and a valve and a server share almost
+  // nothing; a scope sheet describes an arrangement, and there are only so many
+  // ways to sell work. Five families against 61 spec sheets is the finding.
+  "admin.scope.tab": "Scope sheets",
+  "admin.scope.title": "Scope-sheet families",
+  "admin.scope.intro":
+    "What a service is described by. Five families cover how work is sold — by time, by output, by asset, by retainer — against {specs} spec sheets for objects. A family varies which fee bases make sense and which credential buyers look for; it cannot touch the six required fields.",
+  "admin.scope.meta": "{families} families · {assigned} of {total} services subcategories assigned",
+
+  // B4, AC3. Platform-level and fixed, and the screen shows them as such so an
+  // admin can see there is nothing here to edit.
+  "admin.scope.fixed_title": "The six required fields, on every family",
+  "admin.scope.fixed_note":
+    "Platform-level and not a family's to change. They are columns on the service itself, which is why a family can add optional rows and do nothing else — if a family could change the six, the comparison table stops comparing.",
+  "admin.scope.field.name": "Service name",
+  "admin.scope.field.engagementType": "Engagement type",
+  "admin.scope.field.feeBasis": "Fee basis",
+  "admin.scope.field.turnaround": "Turnaround",
+  "admin.scope.field.deliveredWhere": "Delivered where",
+  "admin.scope.field.deliverable": "Deliverable",
+
+  "admin.scope.fee_bases": "Fee bases",
+  "admin.scope.fee_bases_note":
+    "Per family, and the only source anywhere. Offering “per container” to a tax practice is the same failure as offering a stock level to a service seller.",
+  "admin.scope.fee_used": {
+    one: "{formatted} service",
+    other: "{formatted} services",
+  },
+  "admin.scope.fee_unused": "unused",
+  "admin.scope.fee_remove": "Remove {label}",
+  // B9, AC7. The count travels with the warning, before and after.
+  "admin.scope.fee_remove_warn": {
+    one: "{formatted} service holds this and will keep it. It is flagged, never cleared — the seller picks a replacement the next time they save.",
+    other: "{formatted} services hold this and will keep it. They are flagged, never cleared — the seller picks a replacement the next time they save.",
+  },
+  "admin.scope.fee_removed": {
+    one: "Removed. {formatted} service kept the value it had.",
+    other: "Removed. {formatted} services kept the values they had.",
+  },
+  "admin.scope.fee_add": "Add a fee basis",
+  "admin.scope.fee_key": "Key",
+  "admin.scope.fee_label": "What a seller sees",
+  "admin.scope.fee_last": "A family needs at least one fee basis. Add another before removing this one.",
+
+  "admin.scope.rows": "Public rows, in the order a buyer reads them",
+  // B7, AC6. Changing this reshapes every published page in the family.
+  "admin.scope.rows_note": {
+    one: "{formatted} published service page renders in this order. Changing it changes that page.",
+    other: "{formatted} published service pages render in this order. Changing it changes all of them.",
+  },
+  "admin.scope.rows_none": "No published pages in this family yet, so nothing moves.",
+  "admin.scope.row_up": "Move {label} up",
+  "admin.scope.row_down": "Move {label} down",
+  "admin.scope.rows_save": "Save the order",
+  "admin.scope.rows_saved": {
+    one: "Saved. {formatted} published page now renders in the new order.",
+    other: "Saved. {formatted} published pages now render in the new order.",
+  },
+  "admin.scope.filterable": "FILTER",
+
+  // B3, AC4, and `4e-s` Q2 — the board writes "required" and means this.
+  "admin.scope.credential": "Credential prompted",
+  "admin.scope.credential_none": "None beyond the trade licence",
+  "admin.scope.credential_note":
+    "Prompted, never gating. The seller is told buyers look for it and a service with it empty still publishes — nothing reads this on a publish path.",
+  // `4e-s` Q3 answered: the regulator depends on the subcategory, so there is
+  // no single kind to prompt for, and prompting the wrong one is worse than
+  // prompting nothing.
+  "admin.scope.credential_lookup":
+    "Regulator-dependent, so nothing is prompted: the FTA for tax, the Ministry of Finance for audit, ADGM or DIFC for legal. Naming one would prompt a law firm for a tax agent number.",
+
+  "admin.scope.common": "What a firm in this trade usually sells",
+  "admin.scope.common_note": "The list {board} seeds from, as drafts. Names only.",
+  // Three counts, three plural forms. One string holding all three cannot
+  // pluralise any of them — `t()` takes a single `count` — and "1 templates" is
+  // the kind of detail that makes a screen read as unfinished.
+  "admin.scope.used_subcats": { one: "{formatted} subcategory", other: "{formatted} subcategories" },
+  "admin.scope.used_live": { one: "{formatted} live service", other: "{formatted} live services" },
+  "admin.scope.used_templates": { one: "{formatted} template", other: "{formatted} templates" },
+  "admin.scope.fallback": "The fallback",
+  "admin.scope.fallback_note":
+    "Not one of the five. It is what a subcategory with no family resolves to — the six required fields and every fee basis — and it is meant to be usable and noticeably worse.",
+
+  // B8, AC8.
+  "admin.scope.retire": "Retire this family",
+  "admin.scope.restore": "Bring it back",
+  "admin.scope.retired": "Retired",
+  "admin.scope.retire_note":
+    "Existing services and templates keep working and keep rendering. It stops being offered to sellers who have not chosen it.",
+  "admin.scope.retire_fallback": "The fallback cannot be retired — every unassigned subcategory resolves to it.",
+
+  // B5, B6. 39 rather than the board's 420, and the screen says which and why.
+  "admin.scope.unassigned_title": "Services subcategories with no family",
+  "admin.scope.unassigned_none": "Every services subcategory has a family.",
+  "admin.scope.unassigned_note":
+    "They work: the six required fields and every fee basis. They are noticeably worse, which is the point of leaving them usable.",
+  "admin.scope.assign": "Assign",
+  "admin.scope.assign_to": "Family for {name}",
+  "admin.scope.assigned": "Assigned.",
+  "admin.scope.reason": "Why",
+  "admin.scope.reason_hint": "Recorded in the audit log against your name.",
+
+  "admin.scope.error.reason": "Every taxonomy change needs a reason.",
+  "admin.scope.error.reason_fix": "Say what you are changing and why, in a sentence.",
+  "admin.scope.error.save": "That change was not saved.",
+  "admin.scope.error.save_fix": "Check your connection and try again.",
+  "admin.scope.error.duplicate": "That key is already on this family.",
+  "admin.scope.error.duplicate_fix": "Pick a different key, or edit the one that exists.",
+  "admin.scope.error.blank": "A fee basis needs a key and a label.",
+  "admin.scope.error.blank_fix": "Type both, for example “per_survey” and “Per survey”.",
+
   // ── Board `3h-s` — scope templates ───────────────────────────────────────
   //
   // "You inspect four different things and describe each one the same way." The
