@@ -303,8 +303,22 @@ export async function getInbox(input: {
          One ordering, not two. See the header: nulls first puts every unanswered
          lead above every answered one, and oldest-first inside that is already
          breached, then approaching, then not yet due.
+
+         `enquiryId` last, so the order is total. The cursor below resumes after
+         a row, and Prisma expresses that as "sort values at or after the cursor
+         row's" — which leaves rows tied with it ambiguous on paper. Two
+         unanswered leads that arrived in one millisecond do tie (9 of 376
+         recipients on the seeded database). Deliberate attempts to make a page
+         repeat or drop a lead through this query did not reproduce either, so
+         this is the contract made explicit rather than a fix for an observed
+         failure. `enquiryId` is the unique key within one business — the one
+         the cursor already names.
       */
-      orderBy: [{ firstReplyAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
+      orderBy: [
+        { firstReplyAt: { sort: "asc", nulls: "first" } },
+        { createdAt: "asc" },
+        { enquiryId: "asc" },
+      ],
       take: PAGE_SIZE + 1,
       ...(input.cursor
         ? { skip: 1, cursor: { enquiryId_businessId: { enquiryId: input.cursor, businessId: input.businessId } } }

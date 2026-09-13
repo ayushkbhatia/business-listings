@@ -74,7 +74,14 @@ export function ageInDays(from: Date, now = new Date()): number {
 export async function pendingQueue(limit = 50, offset = 0) {
   const rows = await prisma.listingChangeRequest.findMany({
     where: { status: "pending" },
-    orderBy: { createdAt: "asc" },
+    /*
+       `id` last, because `take` and `skip` cut this list and a cut is only
+       well defined over a total order. Requests are written one per
+       transaction, so a tie needs two sellers submitting in one millisecond —
+       rare, and the only caller passes no offset today. Closed while it is
+       one line rather than after a second page exists.
+    */
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     take: limit,
     skip: offset,
     select: {
