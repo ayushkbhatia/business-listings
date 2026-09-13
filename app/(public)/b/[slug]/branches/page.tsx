@@ -23,6 +23,7 @@ import { navPages } from "@/lib/storefront/pages";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
+import { sellsGoods } from "@/lib/storefront/tabs";
 import { BranchesClient, type ClientBranch } from "./_client";
 
 /**
@@ -98,6 +99,14 @@ export default async function BranchesPage({ params }: Params) {
   // An unclaimed listing has no subpages. It is a licence record, not a
   // storefront, and there is nothing here for it to show.
   if (business.claimStatus === "unclaimed") notFound();
+
+  /*
+     Board `1f-s`: a firm that sells only work has coverage where branches were.
+     Permanent, because the tab is gone for good and the address answers the
+     same question better on the other page — an old link to a services firm's
+     branches still lands a buyer on where the firm works.
+  */
+  if (!sellsGoods(business.sellsKind)) permanentRedirect(`/b/${business.slug}/coverage`);
 
   /*
      Criterion 10's second half: no published location means no tab, and

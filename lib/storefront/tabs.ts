@@ -22,6 +22,16 @@
  * seller's certificates are board 3e's documents, rendered as a section, and
  * are not this table.
  *
+ * ## Board `1f-s`
+ *
+ * **Coverage replaces branches for a firm that sells work** — `Overview ·
+ * Services · Credentials · Coverage · Reviews`, in that order (B10). It carries
+ * no count and is not hidden at zero: the page always has something true to
+ * say — the office, the reply time, and where to send work the firm does not
+ * take — even before a service is live. A firm that sells `both` keeps its
+ * branches tab beside it, because its depots are still real places a buyer
+ * drives to.
+ *
  * Every other tab keeps board 1d's criterion 9: hidden at zero, never empty.
  */
 
@@ -32,6 +42,7 @@ export type StorefrontTabKey =
   | "products"
   | "services"
   | "credentials"
+  | "coverage"
   | "branches"
   | "reviews";
 
@@ -62,7 +73,8 @@ export function storefrontTabs(
   if (sellsGoods(kind) && counts.products > 0) tabs.push("products");
   if (counts.services > 0) tabs.push("services");
   if (sellsWork(kind) && counts.credentials > 0) tabs.push("credentials");
-  if (counts.locations > 0) tabs.push("branches");
+  if (sellsWork(kind)) tabs.push("coverage");
+  if (sellsGoods(kind) && counts.locations > 0) tabs.push("branches");
   if (counts.reviews > 0) tabs.push("reviews");
   return tabs;
 }

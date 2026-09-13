@@ -28,9 +28,14 @@ describe("storefrontTabs", () => {
       "overview",
       "services",
       "credentials",
-      "branches",
+      "coverage",
       "reviews",
     ]);
+  });
+
+  it("puts coverage where branches were, in 1d-s order, and never hides it — 1f-s B10", () => {
+    expect(storefrontTabs("services", { ...full, locations: 3 })).not.toContain("branches");
+    expect(storefrontTabs("services", none)).toEqual(["overview", "coverage"]);
   });
 
   it("gives `both` the catalogue and the services as separate tabs — B2", () => {
@@ -39,6 +44,7 @@ describe("storefrontTabs", () => {
       "products",
       "services",
       "credentials",
+      "coverage",
       "branches",
       "reviews",
     ]);
@@ -61,8 +67,8 @@ describe("storefrontTabs", () => {
   });
 
   it("hides every tab at zero and keeps overview — criterion 9", () => {
-    expect(storefrontTabs("services", none)).toEqual(["overview"]);
-    expect(storefrontTabs("both", none)).toEqual(["overview"]);
+    expect(storefrontTabs("goods", none)).toEqual(["overview"]);
+    expect(storefrontTabs("both", none)).toEqual(["overview", "coverage"]);
   });
 
   it("omits the reviews tab when there are none — the `No reviews` state", () => {
@@ -72,7 +78,7 @@ describe("storefrontTabs", () => {
 
 describe("tabRoutes", () => {
   it("is the tab row without the overview, which is the page itself", () => {
-    expect(tabRoutes("services", full)).toEqual(["services", "credentials", "branches", "reviews"]);
+    expect(tabRoutes("services", full)).toEqual(["services", "credentials", "coverage", "reviews"]);
   });
 });
 
