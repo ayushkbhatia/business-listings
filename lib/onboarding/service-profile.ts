@@ -34,6 +34,17 @@ export const SECTORS_MAX = 20;
 export const SECTOR_MAX_LENGTH = 40;
 
 /**
+ * The largest engagement count a firm may declare in one sector — board `1d-s`
+ * B8, and the database's own CHECK.
+ *
+ * A declaration, not a measurement: the storefront prints it with *declared,
+ * not audited by us* beneath it. The ceiling is there to catch a typo rather
+ * than to judge a practice — five figures of engagements in one sector is a
+ * number somebody meant as a year.
+ */
+export const ENGAGEMENTS_MAX = 99_999;
+
+/**
  * The matching form of a sector — B3.
  *
  * Trimmed, inner whitespace collapsed, case-folded. *Free Zone*, *free  zone*
@@ -74,18 +85,27 @@ export type ProfileRefusal =
   | { field: "headline"; reason: "too_long"; max: number }
   | { field: "servicesOffered"; reason: "too_many"; max: number }
   | { field: "sectorsServed"; reason: "too_many"; max: number }
-  | { field: "sectorsServed"; reason: "entry_too_long"; max: number };
+  | { field: "sectorsServed"; reason: "entry_too_long"; max: number }
+  | { field: "sectorEngagements"; reason: "out_of_range"; max: number };
 
 export interface ServiceProfileInput {
   headline?: string | null;
   sectorsServed?: readonly string[];
   servicesOffered?: readonly string[];
+  /**
+   * Board `1d-s` B8 — engagements the firm declares per sector, keyed by the
+   * sector's matching form. Absent leaves the stored counts alone; present
+   * replaces them.
+   */
+  sectorEngagements?: Readonly<Record<string, number | null>>;
 }
 
 export interface ServiceProfileClean {
   headline: string | null;
   sectorsServed: string[];
   servicesOffered: string[];
+  /** Only for sectors still listed, and only positive whole numbers. Null = untouched. */
+  sectorEngagements: { sectorSlug: string; engagements: number }[] | null;
 }
 
 /**
@@ -119,6 +139,29 @@ export function checkServiceProfile(
     refusals.push({ field: "sectorsServed", reason: "entry_too_long", max: SECTOR_MAX_LENGTH });
   }
 
+  /*
+     A count for a sector no longer listed is dropped, not refused: the seller
+     removed the chip, and the number went with it. An empty or null count is
+     *not declared*, which is a real answer. Anything else must be a whole
+     number in range — a refusal names the ceiling rather than clamping.
+  */
+  let engagements: ServiceProfileClean["sectorEngagements"] = null;
+  if (input.sectorEngagements !== undefined) {
+    const listed = new Set(sectors.map(sectorSlug));
+    engagements = [];
+    for (const [key, raw] of Object.entries(input.sectorEngagements)) {
+      const slug = sectorSlug(key);
+      if (!listed.has(slug) || raw === null) continue;
+      if (!Number.isInteger(raw) || raw < 1 || raw > ENGAGEMENTS_MAX) {
+        refusals.push({ field: "sectorEngagements", reason: "out_of_range", max: ENGAGEMENTS_MAX });
+        break;
+      }
+      if (!engagements.some((row) => row.sectorSlug === slug)) {
+        engagements.push({ sectorSlug: slug, engagements: raw });
+      }
+    }
+  }
+
   if (refusals.length > 0) return { ok: false, refusals };
 
   return {
@@ -127,6 +170,7 @@ export function checkServiceProfile(
       headline: headline && headline.length > 0 ? headline : null,
       sectorsServed: sectors,
       servicesOffered: services,
+      sectorEngagements: engagements,
     },
   };
 }

@@ -9,6 +9,7 @@ import { prisma } from "@/lib/db/client";
 import { getLeadDetail, type LeadDetail } from "@/lib/db/queries/seller";
 import {
   formatAED,
+  formatBytes,
   formatCount,
   formatCountdown,
   formatDate,
@@ -427,7 +428,19 @@ function RequestHeader({
   const canMark =
     can(seat.actor, "enquiry.respond") && (canAssign || assignedToId === seat.actor.id);
 
+  /*
+     Board `1d-s` — what a service enquiry carries that a goods one does not.
+     The service it asked about, when it is one of this seller's, and D7's
+     free-text scale. Added only where present, so a goods lead's facts row is
+     exactly what it was: *Not provided* under a column a goods buyer was never
+     asked is a gap nobody left.
+  */
+  const askedService = lead.lines.find((line) => line.service !== null)?.service ?? null;
   const facts: { key: string; label: string; value: string }[] = [
+    ...(askedService
+      ? [{ key: "service", label: t("lead.service_asked"), value: askedService.name }]
+      : []),
+    ...(lead.scale ? [{ key: "scale", label: t("lead.scale"), value: lead.scale }] : []),
     { key: "deliver", label: t("lead.deliver_to"), value: lead.deliverToArea ?? t("table.not_provided") },
     {
       key: "needed",
@@ -560,6 +573,34 @@ function RequestHeader({
           {lead.requirement}
         </p>
       </blockquote>
+
+      {/*
+         The buyer's file — `1d-s`'s trial balance. A link to a route that
+         re-checks this seat received the enquiry and mints a two-minute signed
+         link; the storage path never reaches this page.
+      */}
+      {lead.attachments.length > 0 ? (
+        <div className="mt-3">
+          <p className="font-mono text-eyebrow uppercase text-muted">{t("lead.attachments")}</p>
+          <ul className="mt-1 flex list-none flex-col gap-1 p-0">
+            {lead.attachments.map((file) => (
+              <li key={file.id} className="text-body-sm">
+                <a
+                  href={`/dashboard/leads/${lead.enquiryId}/attachments/${file.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-tag text-moss underline-offset-4 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+                >
+                  {file.filename}
+                </a>
+                {file.bytes ? (
+                  <span className="ms-2 text-caption text-muted">{formatBytes(file.bytes)}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <ContactBlock lead={lead} />
 

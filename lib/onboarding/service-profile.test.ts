@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ENGAGEMENTS_MAX,
   HEADLINE_MAX,
   SECTORS_MAX,
   SECTOR_MAX_LENGTH,
@@ -154,5 +155,42 @@ describe("which field set a seller sees — B1", () => {
        filled in.
     */
     expect(fieldSetFor("unset")).toEqual({ services: false, goods: true });
+  });
+});
+
+describe("checkServiceProfile — declared sector counts, board 1d-s B8", () => {
+  it("leaves the stored counts alone when the form sent none", () => {
+    const result = checkServiceProfile({ sectorsServed: ["Trading"] });
+    expect(result.ok && result.value.sectorEngagements).toBeNull();
+  });
+
+  it("keeps counts for listed sectors, on the matching form, and drops the rest", () => {
+    const result = checkServiceProfile({
+      sectorsServed: ["Construction & contracting", "Free Zone entities"],
+      sectorEngagements: {
+        "construction & contracting": 41,
+        "Free Zone entities": 19,
+        hospitality: 12,
+      },
+    });
+    expect(result.ok && result.value.sectorEngagements).toEqual([
+      { sectorSlug: "construction & contracting", engagements: 41 },
+      { sectorSlug: "free zone entities", engagements: 19 },
+    ]);
+  });
+
+  it("reads a blank as not declared, and sends an empty set to clear", () => {
+    const result = checkServiceProfile({ sectorsServed: ["Trading"], sectorEngagements: { trading: null } });
+    expect(result.ok && result.value.sectorEngagements).toEqual([]);
+  });
+
+  it("refuses zero, a fraction and anything past the ceiling, naming the ceiling", () => {
+    for (const bad of [0, 2.5, ENGAGEMENTS_MAX + 1]) {
+      const result = checkServiceProfile({ sectorsServed: ["Trading"], sectorEngagements: { trading: bad } });
+      expect(result, String(bad)).toEqual({
+        ok: false,
+        refusals: [{ field: "sectorEngagements", reason: "out_of_range", max: ENGAGEMENTS_MAX }],
+      });
+    }
   });
 });

@@ -126,6 +126,12 @@ export interface LeadLine {
   sortOrder: number;
   /** What the seller's own catalogue has, or nothing. */
   match: LineMatch;
+  /**
+   * The service this line asked about — board `1d-s` B11 — when it is one of
+   * this seller's own. Another firm's service on a shared enquiry is not this
+   * seller's to see named.
+   */
+  service: { id: string; name: string; slug: string } | null;
 }
 
 export interface LeadDetail {
@@ -136,6 +142,14 @@ export interface LeadDetail {
   deliverToArea: string | null;
   neededBy: Date | null;
   termsWanted: string | null;
+  /** How big the job is, in the buyer's words — decision D7. Null on goods. */
+  scale: string | null;
+  /**
+   * The buyer's file — board `1d-s`'s trial balance. Private: reached only
+   * through `/dashboard/leads/:id/attachments/:document`, which re-checks the
+   * seat is a recipient and mints a short signed link. The path is not here.
+   */
+  attachments: { id: string; filename: string; bytes: number | null }[];
   closesAt: Date;
   createdAt: Date;
   openedAt: Date | null;
@@ -215,11 +229,20 @@ export async function getLeadDetail(
       deliverToArea: true,
       neededBy: true,
       termsWanted: true,
+      scale: true,
       closesAt: true,
       createdAt: true,
       contactReleasedToBusinessId: true,
       buyer: { select: buyerSelectFor(released.contactReleasedToBusinessId, businessId) },
-      lines: { orderBy: { sortOrder: "asc" } },
+      lines: {
+        orderBy: { sortOrder: "asc" },
+        include: { service: { select: { id: true, name: true, slug: true, businessId: true } } },
+      },
+      attachments: {
+        where: { kind: "enquiry_attachment" },
+        orderBy: { createdAt: "asc" },
+        select: { id: true, filename: true, bytes: true },
+      },
       quotes: {
         /*
            Sent quotes only, for the same reason: the composer's eyebrow counts
@@ -254,6 +277,8 @@ export async function getLeadDetail(
     deliverToArea: enquiry.deliverToArea,
     neededBy: enquiry.neededBy,
     termsWanted: enquiry.termsWanted,
+    scale: enquiry.scale,
+    attachments: enquiry.attachments,
     closesAt: enquiry.closesAt,
     createdAt: enquiry.createdAt,
     openedAt: recipient.openedAt,
@@ -273,6 +298,10 @@ export async function getLeadDetail(
       targetUnitPriceAed: l.targetUnitPriceAed?.toString() ?? null,
       sortOrder: l.sortOrder,
       match: matches[i] ?? { best: null, alternatives: [] },
+      service:
+        l.service && l.service.businessId === businessId
+          ? { id: l.service.id, name: l.service.name, slug: l.service.slug }
+          : null,
     })),
     quotes: enquiry.quotes.map((q) => ({
       id: q.id,

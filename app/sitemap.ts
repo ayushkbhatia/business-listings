@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { prisma } from "@/lib/db/client";
 import { STOREFRONT_TAB_COUNTS } from "@/lib/db/queries/business";
+import { tabRoutes } from "@/lib/storefront/tabs";
 import { LEGAL_PAGES } from "@/lib/legal/pages";
 import { guideIndex } from "@/lib/guides/queries";
 import { absoluteUrl } from "@/lib/site";
@@ -31,6 +32,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const [
     businesses,
     products,
+    services,
     categories,
     areaPages,
     lists,
@@ -44,6 +46,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         slug: true,
         updatedAt: true,
         claimStatus: true,
+        sellsKind: true,
         /*
            The three counts each storefront tab 404s on when it is zero.
 
@@ -66,6 +69,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }),
     prisma.product.findMany({
       where: { status: { not: "draft" }, business: PUBLIC_BUSINESS },
+      select: { slug: true, updatedAt: true, business: { select: { slug: true } } },
+    }),
+    prisma.service.findMany({
+      where: { status: "live", business: PUBLIC_BUSINESS },
       select: { slug: true, updatedAt: true, business: { select: { slug: true } } },
     }),
     /*
@@ -263,18 +270,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     });
 
     if (business.claimStatus !== "unclaimed") {
-      // Each tab only where it has something to render — see the counts in the
-      // query above. The condition here has to stay the same one the route
-      // uses; a tab that 404s and a tab we submit are the same question asked
-      // in two places.
-      const tabs = [
-        ["products", business._count.products],
-        ["branches", business._count.locations],
-        ["reviews", business._count.reviews],
-      ] as const;
-
-      for (const [suffix, count] of tabs) {
-        if (count === 0) continue;
+      /*
+         Each tab only where it has something to render — and the list of tabs
+         is `tabRoutes`, the same rule the header draws and every tab route
+         404s by. Asked here a second way, it submitted the catalogue of a firm
+         that sells only work (board `1d-s` B1), and it never submitted the
+         services tab `1g-s` added at all.
+      */
+      for (const suffix of tabRoutes(business.sellsKind, {
+        products: business._count.products,
+        services: business._count.services,
+        credentials: business._count.credentials,
+        locations: business._count.locations,
+        reviews: business._count.reviews,
+      })) {
         entries.push({
           url: absoluteUrl(`/b/${business.slug}/${suffix}`),
           lastModified: business.updatedAt,
@@ -283,6 +292,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         });
       }
     }
+  }
+
+  /*
+     Board `1g-s`'s service pages, live ones on published storefronts — the same
+     predicate `publicServiceFor` renders by, so nothing submitted here redirects.
+  */
+  for (const service of services) {
+    entries.push({
+      url: absoluteUrl(`/b/${service.business.slug}/s/${service.slug}`),
+      lastModified: service.updatedAt,
+      changeFrequency: "weekly",
+      priority: 0.6,
+    });
   }
 
   for (const product of products) {

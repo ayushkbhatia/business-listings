@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PublicShell } from "@/components/structure";
+import { Alert } from "@/components/display/Alert";
 import { getBuyerEnquiry } from "@/lib/db/queries/enquiry";
 import { getTrackingByRef } from "@/lib/db/queries/enquiry-tracking";
 import {
@@ -120,6 +121,18 @@ export default async function EnquiryPage({
           )}
         </header>
 
+        {/*
+           Board `1d-s`. The enquiry went; the file did not. Said once, plainly,
+           with the one thing the buyer can do about it.
+        */}
+        {one("attachment") === "failed" && (
+          <div className="mt-4">
+            <Alert tone="warn" live="polite" fix={t("enquiry.attachment_failed")}>
+              {t("storefront_services.composer.upload_unavailable")}
+            </Alert>
+          </div>
+        )}
+
         <div className="mt-6 grid gap-[var(--gutter)] lg:grid-cols-[minmax(0,1fr)_18.75rem] xl:grid-cols-[minmax(0,1fr)_21.25rem]">
           <div className="min-w-0 space-y-5">
             {/* ── Two summary cards ─────────────────────────────────────── */}
@@ -144,9 +157,15 @@ export default async function EnquiryPage({
                 </ul>
                 <p className="mt-2.5 border-t border-line pt-2 text-caption text-body">
                   {[
+                    enquiry.scale ? `${t("enquiry.scale")}: ${enquiry.scale}` : null,
                     enquiry.deliverToArea,
                     enquiry.neededBy ? formatDate(enquiry.neededBy) : null,
-                    enquiry.termsWanted,
+                    /*
+                       Worded. This printed the stored enum — `net_30` — to the
+                       buyer who had picked "Net 30" from a list.
+                    */
+                    enquiry.termsWanted ? t(`terms.${enquiry.termsWanted}` as "terms.net_30") : null,
+                    ...enquiry.attachments.map((file) => `${t("enquiry.attachment")}: ${file.filename}`),
                   ]
                     .filter(Boolean)
                     .join(" · ")}

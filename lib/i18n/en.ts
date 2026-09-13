@@ -9152,6 +9152,149 @@ export const en = {
   "credentials.nothing_body":
     "A seller who uploads nothing still trades. We show what you give us, verify what we can check against a register, and mark the rest as your own claim. We do not hold a compliance record on you and we do not chase renewals.",
 
+  // ── Board 1d-s · the storefront of a firm that sells work ─────────────────
+  // What a buyer is shown in place of a catalogue. Specific, sentence case, and
+  // no fee anywhere: the composer says why in the firm's favour.
+  "storefront_services.team_people": "{band} people",
+  "storefront_services.take_on_title": "What we take on",
+  "storefront_services.all_services": {
+    one: "The {formatted} service",
+    other: "All {formatted} services",
+  },
+  "storefront_services.services_none":
+    "{name} has not published a service yet. Describe the work in the form and they reply to what you describe.",
+  "storefront_services.service_scope_link": "Scope and exclusions",
+  "storefront_services.service_scope_named": "Scope and exclusions for {name}",
+  "storefront_services.enquire_named": "Enquire about {name}",
+  "storefront_services.credentials_tab": "Credentials",
+  "storefront_services.credentials_hint": "What they hold, and who checked it",
+  "storefront_services.credentials_caption": "Credentials held by {name}",
+  "storefront_services.credentials_more": {
+    one: "{formatted} more credential",
+    other: "{formatted} more credentials",
+  },
+  "storefront_services.credentials_see_all": "See all credentials",
+  "storefront_services.credentials_subline": {
+    one: "{formatted} credential · {verified} checked against a register",
+    other: "{formatted} credentials · {verified} checked against a register",
+  },
+  "storefront_services.credentials_note":
+    "Validity dates are printed as the certificate states them. We do not track expiry, send reminders or change a listing when a date passes — a checked row names the register that answered, and every other row is the firm's own statement.",
+  "storefront_services.credentials_page_title": "Credentials — {name}",
+  "storefront_services.credentials_page_description":
+    "What {name} holds, who issued it, and which lines were checked against a register.",
+  "storefront_services.sectors_title": "Sectors they work in",
+  "storefront_services.sector_count_sr": {
+    one: "{count} engagement declared",
+    other: "{count} engagements declared",
+  },
+  "storefront_services.sectors_disclaimer":
+    "Counts are engagements the firm has declared, not audited by us. Shown because sector experience is the filter buyers actually use.",
+  "storefront_services.coverage_title": "Coverage",
+  "storefront_services.coverage_places": "Works across {places}.",
+  "storefront_services.coverage_none":
+    "This firm has not said which areas it covers. Ask in your enquiry.",
+  "storefront_services.coverage_modes": "The work reaches you {modes}.",
+  "storefront_services.mode.remote": "remotely",
+  "storefront_services.mode.at_our_office": "at their office",
+  "storefront_services.mode.at_client_site": "at your site",
+
+  // The composer. It asks for a situation, never a quantity; the placeholders
+  // speak the trade by scope-sheet family, with a general line for any family
+  // nobody has written copy for yet.
+  "storefront_services.composer.title": "Enquire about your situation",
+  "storefront_services.composer.form_label": "Enquiry to {name}",
+  "storefront_services.composer.intro":
+    "Goes to whoever handles new work at {name}. No fee is published — they quote against what you describe.",
+  "storefront_services.composer.service": "Which service",
+  "storefront_services.composer.service_other": "Something not listed",
+  "storefront_services.composer.need": "What you need, in your words",
+  "storefront_services.composer.need_placeholder.general":
+    "What the job is, where it is, and anything that makes it unusual.",
+  "storefront_services.composer.need_placeholder.professional_services":
+    "FY2025 audit for a contracting company, three projects. Previous auditor is not continuing.",
+  "storefront_services.composer.need_placeholder.on_site_maintenance":
+    "Quarterly HVAC maintenance for a two-floor office in Al Quoz. Current contract ends in March.",
+  "storefront_services.composer.need_placeholder.inspection_certification":
+    "Annual lifting equipment inspection for six cranes on one yard in Mussafah.",
+  "storefront_services.composer.need_placeholder.logistics_clearance":
+    "Import clearance for two 40ft containers of machinery arriving at Jebel Ali next month.",
+  "storefront_services.composer.need_placeholder.project_advisory":
+    "Feasibility study for a 120-room hotel in Ras Al Khaimah, with a report for the bank.",
+  "storefront_services.composer.scale_label.general": "How big the job is",
+  "storefront_services.composer.scale_placeholder.general": "Size, volume or headcount",
+  "storefront_services.composer.scale_label.professional_services": "Size of your business",
+  "storefront_services.composer.scale_placeholder.professional_services": "AED 20–50m turnover, 40 staff",
+  "storefront_services.composer.scale_label.on_site_maintenance": "Size of the site",
+  "storefront_services.composer.scale_placeholder.on_site_maintenance": "4,000 sq m across two floors",
+  "storefront_services.composer.scale_label.inspection_certification": "What needs inspecting",
+  "storefront_services.composer.scale_placeholder.inspection_certification": "6 cranes, 40 slings",
+  "storefront_services.composer.scale_label.logistics_clearance": "Volume",
+  "storefront_services.composer.scale_placeholder.logistics_clearance": "2 × 40ft containers a month",
+  "storefront_services.composer.scale_label.project_advisory": "Size of the project",
+  "storefront_services.composer.scale_placeholder.project_advisory": "AED 80m, 120 rooms",
+  "storefront_services.composer.needed_by": "Needed by",
+  "storefront_services.composer.attach": "Attach anything that describes the job",
+  "storefront_services.composer.attach_named": "Attach what they work from: {what}",
+  "storefront_services.composer.attach_add": "Add a file",
+  "storefront_services.composer.attach_hint":
+    "Optional. A PDF, JPEG or PNG up to {mb} MB — export a spreadsheet as a PDF first. Only this firm can open it.",
+  "storefront_services.composer.attach_remove": "Remove the file",
+  "storefront_services.composer.send": "Send enquiry",
+  "storefront_services.composer.reply_measured": "Typically replies in about {duration} during business hours.",
+  "storefront_services.composer.reply_unmeasured":
+    "New to the directory — no reply time measured yet.",
+  "storefront_services.composer.fix_fields": "Some answers need another look. Each one is marked below.",
+  "storefront_services.composer.error_fix": "Change the marked answers and send again. Nothing was sent.",
+  "storefront_services.composer.error_service":
+    "That service is no longer listed. Pick one from the list, or choose Something not listed.",
+  "storefront_services.composer.error_requirement_short":
+    "Say a little more about the job — at least {min} characters, so the firm can quote on it.",
+  "storefront_services.composer.error_requirement_long":
+    "Keep this to {max} characters. Attach a file for anything longer.",
+  "storefront_services.composer.error_scale":
+    "Keep the size to {max} characters, like AED 20–50m or 4,000 sq m. Put the detail in the box above.",
+  "storefront_services.composer.error_date_past": "Pick today or a later date.",
+  "storefront_services.composer.error_date_invalid": "Pick a date from the calendar, like 31 Dec 2026.",
+  "storefront_services.composer.error_file_type": "Attach a PDF, JPEG or PNG. Export a spreadsheet as a PDF first.",
+  "storefront_services.composer.error_file_size": "Attach a file up to {mb} MB. A scan saved at a lower resolution usually fits.",
+  "storefront_services.composer.undelivered":
+    "This enquiry could not be delivered to this firm, and nothing was sent. Search for other firms offering the same work.",
+  "storefront_services.composer.gone":
+    "This storefront is no longer taking enquiries. Search the directory for firms offering the same work.",
+  "storefront_services.composer.upload_unavailable":
+    "Your enquiry was delivered, but the file you chose did not arrive.",
+
+  // The declared counts, on `2c-s`'s field set, said as a public declaration.
+  "profile_svc.engagements": "Engagements in each sector, roughly",
+  "profile_svc.engagements_hint":
+    "Optional. Shown beside each sector on your storefront, marked as your own declaration rather than something we checked. Leave a sector blank to show it without a number.",
+  "profile_svc.engagements_placeholder": "Not stated",
+  "profile_svc.engagements_range": "Enter a whole number from 1 to {max}, or leave the sector blank.",
+
+  // The same enquiry, from the seller's side.
+  "lead.service_asked": "Service",
+  "lead.scale": "Size of the job",
+  "lead.attachments": "Attached by the buyer",
+
+  // And from the buyer's own tracking page.
+  "enquiry.scale": "Size of the job",
+  "enquiry.attachment": "Attached",
+  "enquiry.attachment_failed":
+    "Nothing else is needed now. Keep the file to hand for when the firm replies.",
+
+  // Credentials as a buyer reads them — the form's prompts are not names.
+  "credentials_public.col_credential": "Credential",
+  "credentials_public.col_detail": "Issuer and number",
+  "credentials_public.col_validity": "Valid to",
+  "credentials_public.valid_to": "Valid to {when}",
+  "credentials_public.hero_chip": "{name} {identifier}",
+  "credentials_public.kind.fta_tax_agent": "FTA registered tax agent",
+  "credentials_public.kind.mof_audit_approval": "Ministry of Finance audit approval",
+  "credentials_public.kind.professional_body": "Professional body membership",
+  "credentials_public.kind.indemnity_insurance": "Professional indemnity cover",
+  "credentials_public.kind.other": "Other credential",
+
   // ── Not found ─────────────────────────────────────────────────────────────
   "notfound.title": "That page is not here",
   "notfound.body": "The address may be mistyped, the page may have moved, or you may not be signed in to the account it belongs to.",

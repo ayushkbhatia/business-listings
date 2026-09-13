@@ -298,13 +298,22 @@ export async function findFanoutCandidates(
 
 export interface EnquiryLineInput {
   description: string;
-  qty: number;
+  /**
+   * Null is unquantified — work sold as a job, `1d-s`'s service line — and the
+   * column has allowed it since pull request 173. Every goods composer still sends a number.
+   */
+  qty: number | null;
   /** The product the buyer was looking at, where they were looking at one. */
   productId?: string | null;
   unit?: string | null;
   size?: string | null;
   /** The buyer's own budget per unit. Never a supplier price. */
   targetUnitPriceAed?: string | null;
+  /**
+   * The service this line asks about — board `1d-s` B11, the service-side twin
+   * of `productId`. Checked against the recipients below rather than trusted.
+   */
+  serviceId?: string | null;
 }
 
 export interface CreateEnquiryInput {
@@ -322,6 +331,8 @@ export interface CreateEnquiryInput {
   deliverToArea?: string | null;
   neededBy?: Date | null;
   termsWanted?: string | null;
+  /** How big the job is, in the buyer's words — decision D7. Service enquiries only. */
+  scale?: string | null;
   /** How long sellers have. Board 1h's third step. */
   closesInDays?: number;
 
@@ -470,6 +481,31 @@ export async function createEnquiry(
       )?.id ?? null)
     : null;
 
+  /*
+     A line's service, kept only where it is a live service of a business this
+     enquiry actually reaches.
+
+     The id arrives from a form. Trusting it would let a buyer's enquiry to one
+     firm name another firm's service as its subject — and `EnquiryLine.serviceId`
+     is what the seller's inbox and, later, `3l`'s funnel will read as *which of
+     my services was asked about*. One query, and only when a line carries one.
+  */
+  const askedServices = input.lines.flatMap((line) => (line.serviceId ? [line.serviceId] : []));
+  const ownServices = new Set(
+    askedServices.length === 0
+      ? []
+      : (
+          await prisma.service.findMany({
+            where: {
+              id: { in: askedServices },
+              status: "live",
+              businessId: { in: recipients.map((r) => r.businessId) },
+            },
+            select: { id: true },
+          })
+        ).map((row) => row.id),
+  );
+
   const ref = await nextEnquiryRef();
   // Never zero. An enquiry that closes the instant it is sent is one nobody
   // can answer, and a form can post anything.
@@ -499,6 +535,7 @@ export async function createEnquiry(
         emirate: (input.emirate as Emirate | null | undefined) ?? null,
         neededBy: input.neededBy ?? null,
         termsWanted: (input.termsWanted as never) ?? null,
+        scale: input.scale?.trim() ? input.scale.trim() : null,
         closesAt,
         /*
            Criterion 9. Whatever the buyer arrived tagged with, carried here by
@@ -516,6 +553,7 @@ export async function createEnquiry(
             description: line.description.trim(),
             qty: line.qty,
             productId: line.productId ?? null,
+            serviceId: line.serviceId && ownServices.has(line.serviceId) ? line.serviceId : null,
             unit: line.unit ?? null,
             size: line.size ?? null,
             targetUnitPriceAed: line.targetUnitPriceAed ?? null,
@@ -612,7 +650,9 @@ function estimatedValueAed(lines: readonly EnquiryLineInput[]): number | null {
   for (const line of lines) {
     const target = Number(line.targetUnitPriceAed);
     if (Number.isFinite(target) && target > 0) {
-      total += target * line.qty;
+      // An unquantified line is one of whatever it is — the same reading
+      // `lineTotalFils` takes on the quote side.
+      total += target * (line.qty ?? 1);
       known = true;
     }
   }

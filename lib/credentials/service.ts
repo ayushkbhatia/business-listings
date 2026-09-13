@@ -305,7 +305,15 @@ export interface PublicCredential {
 export async function publicCredentialsFor(businessId: string): Promise<PublicCredential[]> {
   const rows = await prisma.credential.findMany({
     where: { businessId },
-    orderBy: [{ trust: "asc" }, { createdAt: "asc" }],
+    /*
+       Verified first, then by kind, then oldest — `1d-s`'s data model, `trust
+       desc, kind`. "Desc" on the board means *most trusted first*; the enum is
+       declared `register_verified` before `seller_claim`, so that is ascending
+       here. Kind is the enum's declared order, which is the order the `8b-s`
+       form offers them in, so the overview's first four are the checkable kind
+       and the regulatory ones before the loose `other`.
+    */
+    orderBy: [{ trust: "asc" }, { kind: "asc" }, { createdAt: "asc" }],
     select: {
       id: true,
       kind: true,

@@ -10,6 +10,7 @@ import { Overlays } from "./_sections/Overlays";
 import { Position } from "./_sections/Position";
 import { Ranking } from "./_sections/Ranking";
 import { Reviews } from "./_sections/Reviews";
+import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
 import { Tokens } from "./_sections/Tokens";
@@ -147,7 +148,20 @@ const TIER_4 = [
    that lives beside one route has no row in it — but the pre-flight list still
    asks for every documented state to render somewhere clickable.
 */
-const UNLISTED = ["plan-comparison", "spec-field-row", "specs-cell"] as const;
+/*
+   Board `1d-s` adds five, all service-track and all shared between screens —
+   the credential table is `1g-s`'s and `1d-s`'s at once, which is the point.
+*/
+const UNLISTED = [
+  "plan-comparison",
+  "spec-field-row",
+  "specs-cell",
+  "service-summary-card",
+  "credential-table",
+  "declared-sectors",
+  "coverage-summary",
+  "service-enquiry-composer",
+] as const;
 
 export default function Gallery() {
   return (
@@ -228,6 +242,7 @@ export default function Gallery() {
       <Billing />
 
       <Reviews />
+      <ServicesStorefrontGallery />
       <Overlays />
       <Shells />
       <Tokens />

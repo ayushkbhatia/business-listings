@@ -1,12 +1,17 @@
+import { Fragment } from "react";
 import { Tabs } from "@/components/structure";
 import { ImagePlaceholder, LogoTile, StatusBadge } from "@/components/display";
 import { ResponseTime, VerificationBadge, tierSpec } from "@/components/domain";
+import { credentialName } from "@/components/domain/CredentialTable";
 import { formatCount, formatDate, formatDuration, formatRating } from "@/lib/format";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { cn } from "@/lib/cn";
 import { licenceExpired as hasLapsed } from "@/lib/verification";
 import { t } from "@/lib/i18n";
 import type { PublicBusiness } from "@/lib/db/queries";
+import { sellsWork, storefrontTabs, type StorefrontTabKey } from "@/lib/storefront/tabs";
+import { heroCredential } from "@/lib/storefront/services-overview";
+import { storefrontCredentials } from "@/lib/storefront/services";
 
 /**
  * The cover, the identity block and the tab row — board 1d sections 2 to 4.
@@ -24,7 +29,7 @@ import type { PublicBusiness } from "@/lib/db/queries";
 /** Board 1d: the logo overlaps the cover by about a third of its 104px. */
 const LOGO_OVERLAP = "-34px";
 
-export function StorefrontHeader({
+export async function StorefrontHeader({
   business,
   active,
   pages = [],
@@ -108,6 +113,120 @@ export function StorefrontHeader({
      if the tiers below it are silent.
   */
   const proChip = business.plan?.id === "pro";
+
+  /*
+     Board `1d-s` — the identity a firm that sells work carries on every tab.
+
+     The one-liner from `2c-s` sits under the name, because *what they do* is
+     the question a buyer brings to a practice and the category alone does not
+     answer it: "Valves and fittings" is where the firm is filed, "statutory
+     audit, VAT and corporate tax for contracting companies" is the firm.
+
+     The hero pairs the licence badge with a credential only when a register
+     answered for it — B3. A claim there would read as a second platform check
+     sitting beside the first. No register is connected today, so this is null
+     on every live listing; the credentials section below still lists the
+     claims, labelled as claims.
+
+     Loaded here rather than passed in, and that is the shared-component rule:
+     this header renders on six routes, and a chip that only the overview
+     remembered to pass would change the firm's identity between tabs. The
+     query is `cache`d, so the overview asking for the same rows costs nothing.
+  */
+  const work = sellsWork(business.sellsKind);
+  const checked = work ? heroCredential(await storefrontCredentials(business.id)) : null;
+
+  /*
+     The meta row, as clauses joined by a separator rather than separators
+     written beside each clause. Every clause is dropped rather than rendered
+     empty — "· ·" with nothing between reads as a broken page, and a supplier
+     with no rating yet is not a supplier with a bad one — and a list is the one
+     shape where dropping the first clause cannot leave a leading dot.
+
+     A firm that sells work leads with where it is rather than the category it
+     is filed under, which its one-liner has already said better, and gains its
+     team size: *11–50 people* is how a buyer sizes a practice before asking it
+     to size a job.
+  */
+  const category = { key: "category", node: <span>{business.primaryCategory.name}</span> };
+  const place = head
+    ? {
+        key: "place",
+        node: (
+          <span>
+            {head.area.name}, {t(`emirate.${head.emirate}` as never)}
+          </span>
+        ),
+      }
+    : null;
+  const rating =
+    business.ratingOverall !== null && business._count.reviews > 0
+      ? {
+          key: "rating",
+          /*
+             `formatRating`, not `toFixed(1)`. The locale owns the decimal
+             separator, and board 1m's rating card prints the same average one
+             section down — a page where the header says 4.2 and the card says 4
+             is one figure with two renderings.
+
+             The count is `_count.reviews`, which excludes removed and held rows
+             in this request. `reviewCount` is a denormalised column a job
+             writes, and it was the number here until the reviews page could
+             disagree with it.
+          */
+          node: (
+            <span className="tabular-nums">
+              {formatRating(business.ratingOverall)}{" "}
+              {t("listing.reviews", { count: business._count.reviews })}
+            </span>
+          ),
+        }
+      : null;
+  const reply = {
+    key: "reply",
+    node: (
+      <ResponseTime
+        size="sm"
+        medianMs={business.responseTimeMedianMs}
+        durationLabel={
+          business.responseTimeMedianMs ? formatDuration(business.responseTimeMedianMs) : undefined
+        }
+        label={
+          business.responseTimeMedianMs
+            ? t("response.median", { duration: formatDuration(business.responseTimeMedianMs) })
+            : undefined
+        }
+        unmeasuredLabel={t("response.unmeasured")}
+      />
+    ),
+  };
+  const since = business.establishedYear
+    ? {
+        key: "since",
+        node: (
+          <span className="tabular-nums">
+            {t("listing.years", { year: business.establishedYear })}
+          </span>
+        ),
+      }
+    : null;
+  const team =
+    work && business.teamSize
+      ? {
+          key: "team",
+          node: (
+            <span className="tabular-nums">
+              {t("storefront_services.team_people", {
+                band: t(`storefront.team_band.${business.teamSize}` as never),
+              })}
+            </span>
+          ),
+        }
+      : null;
+
+  const metaClauses = (
+    work ? [place, rating, since, team, reply] : [category, place, rating, reply, since]
+  ).filter((clause): clause is { key: string; node: React.ReactElement } => clause !== null);
 
   return (
     <header>
@@ -195,6 +314,12 @@ export function StorefrontHeader({
                 )}
               </div>
 
+              {work && business.headline && (
+                <p className="mt-1 max-w-[var(--measure-prose)] text-body text-body">
+                  {business.headline}
+                </p>
+              )}
+
               {subline && (
                 <p className="mt-1 text-body-sm text-muted">{subline}</p>
               )}
@@ -209,70 +334,38 @@ export function StorefrontHeader({
                   tierLabel={t("verify.tier", { tier: business.verificationTier })}
                 />
                 )}
+                {/*
+                   Neutral, mono, and from the status palette's ground rather
+                   than the seller's theme — a trust signal renders the same on
+                   every storefront. The words carry the check: "checked
+                   against" is in the accessible name, not only in a colour.
+                */}
+                {checked && (
+                  <span
+                    className="inline-flex items-center rounded-tag border border-line-strong bg-card px-2 py-1 font-mono text-eyebrow uppercase text-ink"
+                    title={
+                      checked.verifiedBy
+                        ? t("service_public.credential_by", { register: checked.verifiedBy })
+                        : t("credentials.tier.register_verified")
+                    }
+                  >
+                    {checked.identifier
+                      ? t("credentials_public.hero_chip", {
+                          name: credentialName(checked),
+                          identifier: checked.identifier,
+                        })
+                      : credentialName(checked)}
+                  </span>
+                )}
               </div>
 
-              {/*
-                 The meta row. Every clause is dropped rather than rendered
-                 empty — "· ·" with nothing between reads as a broken page, and
-                 a supplier with no rating yet is not a supplier with a bad one.
-              */}
               <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm text-muted">
-                <span>{business.primaryCategory.name}</span>
-                {head && (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span>
-                      {head.area.name}, {t(`emirate.${head.emirate}` as never)}
-                    </span>
-                  </>
-                )}
-                {business.ratingOverall !== null && business._count.reviews > 0 && (
-                  <>
-                    <span aria-hidden>·</span>
-                    {/*
-                       `formatRating`, not `toFixed(1)`. The locale owns the
-                       decimal separator, and board 1m's rating card prints the
-                       same average one section down — a page where the header
-                       says 4.2 and the card says 4 is one figure with two
-                       renderings.
-
-                       The count is `_count.reviews`, which excludes removed and
-                       held rows in this request. `reviewCount` is a
-                       denormalised column a job writes, and it was the number
-                       here until the reviews page could disagree with it.
-                    */}
-                    <span className="tabular-nums">
-                      {formatRating(business.ratingOverall)}{" "}
-                      {t("listing.reviews", { count: business._count.reviews })}
-                    </span>
-                  </>
-                )}
-                <span aria-hidden>·</span>
-                <ResponseTime
-                  size="sm"
-                  medianMs={business.responseTimeMedianMs}
-                  durationLabel={
-                    business.responseTimeMedianMs
-                      ? formatDuration(business.responseTimeMedianMs)
-                      : undefined
-                  }
-                  label={
-                    business.responseTimeMedianMs
-                      ? t("response.median", {
-                          duration: formatDuration(business.responseTimeMedianMs),
-                        })
-                      : undefined
-                  }
-                  unmeasuredLabel={t("response.unmeasured")}
-                />
-                {business.establishedYear && (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span className="tabular-nums">
-                      {t("listing.years", { year: business.establishedYear })}
-                    </span>
-                  </>
-                )}
+                {metaClauses.map((clause, index) => (
+                  <Fragment key={clause.key}>
+                    {index > 0 && <span aria-hidden>·</span>}
+                    {clause.node}
+                  </Fragment>
+                ))}
               </p>
             </div>
 
@@ -308,58 +401,60 @@ export function StorefrontHeader({
  * having something behind them — a Products tab reading 0 invites a click that
  * lands on an apology, and a storefront that offers four of those looks
  * abandoned rather than new.
+ *
+ * Which tabs exist is `storefrontTabs`, not this function. Board `1d-s` adds a
+ * fork — a firm that sells work has no catalogue tab and gains a credentials
+ * tab with a count — and the sitemap and the tab routes have to ask exactly the
+ * same question, so the rule lives in one pure module and this only words it.
+ *
+ * `1g-s`'s services tab stays the link surface for a service page, and `1e-s`
+ * replaces the index behind it; the tab itself stays.
  */
 function tabsFor(
   business: PublicBusiness,
   pages: readonly { slug: string; title: string }[],
 ) {
-  const items: { key: string; label: string; href: string; badge?: number }[] = [
-    { key: "overview", label: t("storefront.overview"), href: `/b/${business.slug}` },
-  ];
+  const counts = {
+    products: business._count.products,
+    services: business._count.services,
+    credentials: business._count.credentials,
+    locations: business.locations.length,
+    reviews: business._count.reviews,
+  };
 
-  if (business._count.products > 0) {
-    items.push({
-      key: "products",
+  const tab: Record<StorefrontTabKey, { label: string; href: string; badge?: number }> = {
+    overview: { label: t("storefront.overview"), href: `/b/${business.slug}` },
+    products: {
       label: t("storefront.products"),
       href: `/b/${business.slug}/products`,
-      badge: business._count.products,
-    });
-  }
-
-  /*
-     Board `1g-s`'s link surface.
-
-     `1e-s` is the full public catalogue — grouped, filtered, ordered — and it
-     is a later board. This is the tab that makes a service page reachable at
-     all, because a detail page linked from nowhere is a route rather than a
-     screen. `1e-s` replaces the index behind it; the tab stays.
-  */
-  if (business._count.services > 0) {
-    items.push({
-      key: "services",
+      badge: counts.products,
+    },
+    services: {
       label: t("storefront.services"),
       href: `/b/${business.slug}/services`,
-      badge: business._count.services,
-    });
-  }
-
-  if (business.locations.length > 0) {
-    items.push({
-      key: "branches",
+      badge: counts.services,
+    },
+    credentials: {
+      label: t("storefront_services.credentials_tab"),
+      href: `/b/${business.slug}/credentials`,
+      badge: counts.credentials,
+    },
+    branches: {
       label: t("storefront.branches"),
       href: `/b/${business.slug}/branches`,
-      badge: business.locations.length,
-    });
-  }
-
-  if (business._count.reviews > 0) {
-    items.push({
-      key: "reviews",
+      badge: counts.locations,
+    },
+    reviews: {
       label: t("storefront.reviews"),
       href: `/b/${business.slug}/reviews`,
-      badge: business._count.reviews,
-    });
-  }
+      badge: counts.reviews,
+    },
+  };
+
+  const items: { key: string; label: string; href: string; badge?: number }[] = storefrontTabs(
+    business.sellsKind,
+    counts,
+  ).map((key) => ({ key, ...tab[key] }));
 
   /*
    * Template pages last, after the ones the storefront always has. A

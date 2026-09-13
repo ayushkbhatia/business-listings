@@ -4,6 +4,7 @@ import { MapCanvas, StatusBadge, Tag } from "@/components/display";
 import { cn } from "@/lib/cn";
 import { formatDate, maskTRN } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { sellsGoods } from "@/lib/storefront/tabs";
 import { DAYS, type RamadanHours, type WeekHours } from "@/lib/trade/hours";
 import { openNow } from "@/lib/trade/open-now";
 import { VERIFIED_TIER, licenceExpired as hasLapsed } from "@/lib/verification";
@@ -501,16 +502,27 @@ export function BusinessDetails({
                 ? t(`storefront.team_band.${business.teamSize}` as never)
                 : undefined,
             },
-            {
-              key: "payment",
-              label: t("storefront.payment_terms"),
-              value: business.paymentTerms ?? undefined,
-            },
-            {
-              key: "delivery",
-              label: t("storefront.delivery"),
-              value: business.deliveryNote ?? undefined,
-            },
+            /*
+               Payment terms and delivery are the goods field set. A firm that
+               sells only work is never asked them — `2c-s` removes them from its
+               profile step on purpose — so a grey *Not provided* here would
+               report a gap the seller was never given the chance to fill, which
+               is the one thing that rule is not for. Board `1d-s`.
+            */
+            ...(sellsGoods(business.sellsKind)
+              ? [
+                  {
+                    key: "payment",
+                    label: t("storefront.payment_terms"),
+                    value: business.paymentTerms ?? undefined,
+                  },
+                  {
+                    key: "delivery",
+                    label: t("storefront.delivery"),
+                    value: business.deliveryNote ?? undefined,
+                  },
+                ]
+              : []),
             {
               key: "languages",
               label: t("storefront.languages"),

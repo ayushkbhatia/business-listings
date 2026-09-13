@@ -3,13 +3,18 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Breadcrumb, Card, PublicShell } from "@/components/structure";
 import { Tag } from "@/components/display";
+import { scopeWords } from "@/components/domain";
+import { ENQUIRE_LINK } from "@/components/domain/ServicesStorefront";
 import { getBusinessBySlug } from "@/lib/db/queries";
 import { publicServicesFor } from "@/lib/services/service";
 import { navPages } from "@/lib/storefront/pages";
-import { formatCount } from "@/lib/format";
+import { formatCount, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { getActor } from "@/lib/auth/session";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
+import { composerOptions } from "../_services";
+import { ServiceEnquireDrawer } from "../ServiceEnquireDrawer";
 
 /**
  * The link surface for board `1g-s`, and deliberately not board `1e-s`.
@@ -46,10 +51,18 @@ export default async function StorefrontServicesPage({ params }: Params) {
   const business = await getBusinessBySlug(slug);
   if (!business) notFound();
 
-  const [services, pages] = await Promise.all([
+  const [services, pages, actor] = await Promise.all([
     publicServicesFor(business.id),
-    navPages(business.id),
+    /*
+       By sector, not by business id. `navPages` takes a sector and this passed
+       the business's own id, so the tab row here never carried the template
+       pages every other storefront tab carries — the shared header rendering
+       differently on one tab.
+    */
+    business.sectorId ? navPages(business.sectorId) : Promise.resolve([]),
+    getActor(),
   ]);
+  const options = composerOptions(services);
 
   return (
     <PublicShell
@@ -91,11 +104,7 @@ export default async function StorefrontServicesPage({ params }: Params) {
                       <ul className="mt-2 flex list-none flex-wrap gap-1.5 p-0">
                         {service.chips.map((chip) => (
                           <li key={chip.key}>
-                            <Tag>
-                              {chip.key === "engagement_type"
-                                ? t(`engagement.${chip.value}` as "engagement.ongoing_contract")
-                                : chip.value}
-                            </Tag>
+                            <Tag>{scopeWords(chip.key, chip.value)}</Tag>
                           </li>
                         ))}
                       </ul>
@@ -113,6 +122,40 @@ export default async function StorefrontServicesPage({ params }: Params) {
                         total: formatCount(service.total),
                       })}
                     </p>
+
+                    {/*
+                       Board `1d-s` B11 — "Enquire" from the services tab opens
+                       the composer on this service: the storefront's own for a
+                       firm that sells only work, a drawer for one that sells
+                       both, whose storefront rail is the goods composer.
+                    */}
+                    <div className="mt-3 border-t border-line pt-3 text-end">
+                      {business.sellsKind === "both" ? (
+                        <ServiceEnquireDrawer
+                          businessId={business.id}
+                          businessName={business.displayName}
+                          services={options}
+                          service={service.slug}
+                          serviceName={service.name}
+                          askForContact={!actor}
+                          responseLine={
+                            business.responseTimeMedianMs === null
+                              ? t("storefront_services.composer.reply_unmeasured")
+                              : t("storefront_services.composer.reply_measured", {
+                                  duration: formatDuration(business.responseTimeMedianMs),
+                                })
+                          }
+                        />
+                      ) : (
+                        <Link
+                          href={`/b/${business.slug}?service=${encodeURIComponent(service.slug)}#enquire`}
+                          className={ENQUIRE_LINK}
+                          aria-label={t("storefront_services.enquire_named", { name: service.name })}
+                        >
+                          {t("listing.enquire")}
+                        </Link>
+                      )}
+                    </div>
                   </Card>
                 </li>
               ))}

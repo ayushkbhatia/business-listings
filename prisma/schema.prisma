@@ -1047,6 +1047,7 @@ model Business {
   customDomain           CustomDomain?
   boosts                 ListingBoost[]
   scopeTemplates         ScopeTemplate[]
+  sectorEngagements      SectorEngagement[]
 
   @@index([primaryCategoryId])
   @@index([sectorId], map: "business_sector_idx")
@@ -1861,6 +1862,8 @@ model Service {
 
   scopeTemplate  ScopeTemplate?         @relation(fields: [scopeTemplateId], references: [id], onDelete: SetNull)
   declinedOffers ScopeTemplateDecline[]
+  /// Board `1d-s`. The enquiry lines that named this service as their subject.
+  enquiryLines   EnquiryLine[]
 
   /// This service's *own* coverage rows — empty for every service that
   /// inherits the business default, which is most of them. Never read on its
@@ -2080,6 +2083,37 @@ model Credential {
   @@index([businessId, trust])
   @@index([kind, trust])
   @@map("credential")
+}
+
+/// How many engagements a firm says it has done in one sector — board `1d-s` B8.
+///
+/// **Declared, never computed, and never presented as verified.** The storefront
+/// prints these beside each sector with the disclaimer directly beneath: *counts
+/// are engagements the firm has declared, not audited by us.* A computed count
+/// would need a delivery record the platform does not have and will not have —
+/// an accepted quote is the terminal state, and nothing is recorded after it.
+///
+/// A separate table rather than a second array beside `Business.sectorsServed`,
+/// because two arrays that must stay index-aligned are one bug away from
+/// printing contracting's count under real estate. Keyed by the sector's
+/// matching form (`sectorSlug`), so *Free Zone* and *free zone* are one row.
+/// A row whose sector has since been removed from `sectorsServed` is not read —
+/// the save that removes the sector deletes it in the same transaction.
+///
+/// Optional per sector. A sector with no row renders as a chip with no number,
+/// which is the difference between *we have not said* and *zero*.
+model SectorEngagement {
+  businessId  String   @map("business_id")
+  /// `sectorSlug(label)` — trimmed, collapsed, case-folded.
+  sectorSlug  String   @map("sector_slug")
+  /// 1 to 99,999, enforced by a CHECK. Zero is not a declaration worth printing.
+  engagements Int
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@id([businessId, sectorSlug])
+  @@map("sector_engagement")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2595,6 +2629,14 @@ model Enquiry {
   neededBy       DateTime?     @map("needed_by")
   termsWanted    PaymentTerms? @map("terms_wanted")
   closesAt       DateTime      @map("closes_at")
+  /// How big the job is, in the buyer's own words — decision D7, 9 Sep 2026.
+  ///
+  /// One free-text field, never a controlled set per subcategory: *AED 20–50m
+  /// turnover*, *4,000 sq m across two floors*, *three vehicles a week*. The
+  /// structured version is a second dictionary for ops to own, and there is no
+  /// service enquiry yet to learn its shape from. Null on every goods enquiry,
+  /// where the lines carry the size.
+  scale          String?
 
   /// Board 1i: editing a requirement creates a revision, never a silent edit.
   ///
@@ -2687,15 +2729,26 @@ model EnquiryLine {
   /// Free text as the buyer wrote it, e.g. `DN100` or `4"`.
   size               String?
   sortOrder          Int      @default(0) @map("sort_order")
+  /// The service this line asks about — board `1d-s` B11, and the service-side
+  /// twin of `productId`.
+  ///
+  /// `docs/services-spec.md` S1: the enquiry action *"carries the service in as
+  /// the subject the way `1g` carries a product."* Until this column, a buyer
+  /// who enquired from a service page reached the seller as free text with no
+  /// record of which engagement they had been reading.
+  serviceId          String?  @map("service_id")
 
   enquiry    Enquiry     @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
   /// `SetNull`, not `Cascade`. A seller deleting a product must not delete the
   /// buyer's enquiry line — what they asked for still happened.
   product    Product?    @relation(fields: [productId], references: [id], onDelete: SetNull)
+  /// `SetNull` for the same reason, and the description keeps the name as sent.
+  service    Service?    @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   quoteLines QuoteLine[]
 
   @@index([enquiryId])
   @@index([productId], map: "enquiry_line_product_idx")
+  @@index([serviceId], map: "enquiry_line_service_idx")
   @@map("enquiry_line")
 }
 

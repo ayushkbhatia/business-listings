@@ -62,6 +62,7 @@ export function ServiceProfileSection({
       form.set("headline", value.headline);
       form.set("servicesOffered", value.servicesOffered.join("\n"));
       form.set("sectorsServed", value.sectorsServed.join("\n"));
+      form.set("sectorEngagements", JSON.stringify(value.sectorEngagements));
 
       void save(form).then((result) => {
         if (result.ok) {
