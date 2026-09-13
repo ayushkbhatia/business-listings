@@ -13,6 +13,7 @@ import { Ingest } from "./_sections/Ingest";
 import { Reviews } from "./_sections/Reviews";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
 import { ServiceBriefGallery } from "./_sections/ServiceBrief";
+import { AcceptedRecordGallery } from "./_sections/AcceptedRecord";
 import { BuilderSectionsGallery } from "./_sections/BuilderSections";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
@@ -168,6 +169,8 @@ const UNLISTED = [
   "service-enquiry-composer",
   // Board `1h-s`: the brief on `/rfq/new` for work sold by the job.
   "service-brief-composer",
+  // Board `7c`: the accepted quote record, a page view rendered from one value.
+  "accepted-record",
 ] as const;
 
 export default function Gallery() {
@@ -252,6 +255,7 @@ export default function Gallery() {
       <Reviews />
       <ServicesStorefrontGallery />
       <ServiceBriefGallery />
+      <AcceptedRecordGallery />
       <BuilderSectionsGallery />
       <Overlays />
       <Shells />

@@ -2075,6 +2075,13 @@ Ranked by what it cost.
 
 ## 6 · Records
 
+- **`7c-s` is missing from the track** — raised by board `7c`'s handoff, 14 Sep 2026, as its Q4.
+  `3j-s` promises that a proposal's scope and exclusions *travel into `7c`, the accepted record*,
+  and `7c` is goods-shaped: line, quantity, unit, line total. A services acceptance has a fee basis
+  rather than a unit price and a scope and exclusions rather than a parts list. `7c` renders a
+  brief's accepted quote honestly today — lines as quoted, *Priced as a whole* where there is no
+  quantity, and a note that scope lives in the thread — but the exclusions block, the one line that
+  prevents the argument later, has nowhere to go. Place it with `3j-s` and `1n-s`, not after them.
 - **`2e-s` is an orphan.** It appears once, in D1's *Blocks* column
   (`docs/epic-2026-09-11.md:90`), and in no phase. A 29th `-s` id in a document that says 28.
 - **§5 says "72 boards, each placed once."** The phases hold **70**; `3b-s` and `3c-s` are placed

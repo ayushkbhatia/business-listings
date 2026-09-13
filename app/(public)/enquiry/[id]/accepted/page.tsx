@@ -1,22 +1,43 @@
-import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { Card, KeyValuePanel, Panel, PublicShell } from "@/components/structure";
-import { getAcceptedRecord } from "@/lib/db/queries/enquiry";
-import { formatAED, formatDate, formatPhone } from "@/lib/format";
+import { Breadcrumb, PublicShell } from "@/components/structure";
+import { getAcceptedRecord } from "@/lib/db/queries/accepted-record";
 import { t } from "@/lib/i18n";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { resolveBuyerId, trackingTokenFor } from "../../_buyer";
+import { AcceptedRecordView } from "./_record";
+import { ReferenceForm } from "./ReferenceForm";
+import { ReportForm } from "./ReportForm";
 
 /**
- * Board 7c — the accepted quote record.
+ * Board `7c` — the accepted quote record, `/enquiry/:id/accepted`.
  *
- * The terminal state, and it is a record rather than a receipt. Nothing was
- * paid here and nothing will be: the supplier contacts the buyer, they settle
- * it between them, and this page is the evidence of what was agreed. The copy
- * says that plainly, because a page that looks like a checkout confirmation
- * will be read as one.
+ * The end of the enquiry flow, and the page that states what the platform is
+ * not. A buyer sent one requirement to several suppliers, compared what came
+ * back, accepted one — and this is what they hold afterwards: who to call, where
+ * to collect from, what was agreed, and where our part stops.
+ *
+ * ## The route stays where it is
+ *
+ * The handoff names `/account/enquiries/:id/accepted` and says the board and
+ * `docs/routes.md` agree on it. They do not: `docs/routes.md` has registered
+ * `/enquiry/:id/accepted` since handoff 1, and every acceptance redirect, email
+ * and test links it. More to the point, most buyers have no account — the claim
+ * token in `?t=` is how they reach their own enquiry — so an `/account/` path
+ * would lock out the buyer the page is for. Board `7a` gates accounts; this
+ * record is reachable by whoever `resolveBuyerId` says owns it.
+ *
+ * `B6` is enforced by the loader, not here: a null record and somebody else's
+ * enquiry are the same 404.
  */
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: t("accepted.meta_title"),
+  // Private to one buyer, and every link out carries a bearer token.
+  robots: { index: false, follow: false },
+  referrer: "no-referrer",
+};
 
 export default async function AcceptedPage({
   params,
@@ -27,136 +48,47 @@ export default async function AcceptedPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const token = typeof query["t"] === "string" ? query["t"] : null;
+  const tokenParam = typeof query["t"] === "string" ? query["t"] : null;
 
-  const buyerId = await resolveBuyerId(token);
+  const buyerId = await resolveBuyerId(tokenParam);
   if (!buyerId) notFound();
 
   const record = await getAcceptedRecord(buyerId, id);
   if (!record) notFound();
 
-  const carry = (await trackingTokenFor(buyerId)) ?? null;
-  const location = record.business.locations[0];
+  // Null once the buyer has an account; the session carries them then.
+  const token = await trackingTokenFor(buyerId);
+  const withToken = (path: string) =>
+    token ? `${path}${path.includes("?") ? "&" : "?"}t=${encodeURIComponent(token)}` : path;
+
+  const base = `/enquiry/${record.enquiryId}`;
 
   return (
     <PublicShell nav={<DirectoryNav />} footer={<DirectoryFooter />}>
-      <div className="mx-auto w-full max-w-[46rem] px-[var(--section-pad)] py-8">
-      <p className="font-mono text-eyebrow uppercase text-faint">{t("enquiry.ref", { ref: record.ref })}</p>
-      <h1 className="mt-2 font-serif text-h1-serif text-ink">{t("accepted.title")}</h1>
-      <p className="mt-2 max-w-[var(--measure-prose)] text-prose text-prose">
-        {t("accepted.lede", { supplier: record.business.displayName })}
-      </p>
-
-      <div className="mt-6 space-y-[var(--gutter)]">
-        <Panel title={t("accepted.contact")}>
-          <p className="text-body text-ink">{record.business.displayName}</p>
-          {location?.addressLine ? (
-            <p className="mt-0.5 text-body-sm text-muted">
-              {[location.addressLine, location.area?.name].filter(Boolean).join(", ")}
-            </p>
-          ) : null}
-          <dl className="mt-3 space-y-1">
-            {location?.phone ? (
-              <div className="flex gap-2">
-                <dt className="text-caption text-muted">{t("storefront.phone")}</dt>
-                <dd className="font-mono text-body-sm text-ink">{formatPhone(location.phone)}</dd>
-              </div>
-            ) : null}
-            {location?.whatsapp ? (
-              <div className="flex gap-2">
-                <dt className="text-caption text-muted">WhatsApp</dt>
-                <dd className="font-mono text-body-sm text-ink">{formatPhone(location.whatsapp)}</dd>
-              </div>
-            ) : null}
-          </dl>
-        </Panel>
-
-        <Panel title={t("accepted.record")} description={t("accepted.record_body")}>
-          <KeyValuePanel
-            columns={2}
-            notProvidedLabel={t("table.not_provided")}
-            entries={[
-              { key: "quote", label: t("term.quote"), value: `${record.quoteRef} · r${record.revision}` },
-              {
-                key: "accepted",
-                label: t("accepted.accepted_on"),
-                value: record.acceptedAt ? formatDate(record.acceptedAt) : undefined,
-              },
-              { key: "value", label: t("accepted.value"), value: formatAED(record.totalAed) },
-              { key: "supplier", label: t("accepted.supplier"), value: record.business.displayName },
+      <AcceptedRecordView
+        record={record}
+        now={new Date()}
+        breadcrumb={
+          <Breadcrumb
+            label={t("accepted.breadcrumb")}
+            items={[
+              // A claim-token buyer has no inbox to go back to; a signed-in one does.
+              ...(token ? [] : [{ label: t("accepted.crumb.enquiries"), href: "/account/enquiries" }]),
+              { label: record.ref, href: withToken(base) },
+              { label: t("accepted.crumb.current", { ref: record.quote.ref }) },
             ]}
           />
-          <p className="mt-2 text-caption text-muted">{t("accepted.value_note")}</p>
-
-          <div className="mt-4 overflow-x-auto">
-            <table className="w-full border-collapse text-left">
-              <caption className="sr-only">{t("compare.quotes_caption")}</caption>
-              <thead>
-                <tr className="bg-paper-sunk">
-                  <th scope="col" className="px-3 py-1.5 text-caption font-normal text-muted">{t("compare.line")}</th>
-                  <th scope="col" className="px-3 py-1.5 text-right text-caption font-normal text-muted">{t("quote.col.qty")}</th>
-                  <th scope="col" className="px-3 py-1.5 text-right text-caption font-normal text-muted">{t("quote.col.unit_price")}</th>
-                  <th scope="col" className="px-3 py-1.5 text-right text-caption font-normal text-muted">{t("compare.lead_time")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {record.lines.map((line) => (
-                  <tr key={line.id} className="border-t border-line">
-                    <th scope="row" className="px-3 py-2 text-left font-normal text-body-sm text-ink">
-                      {line.description}
-                    </th>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-body-sm">
-                      {/* Blank, not one: the cell says what was ordered, and a
-                          line priced as a whole had no count. */}
-                      {line.qty ?? ""}
-                    </td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-body-sm">
-                      {formatAED(line.unitPrice, { style: "quote" })}
-                    </td>
-                    <td className="px-3 py-2 text-right text-body-sm text-muted">
-                      {line.leadTimeDays === null
-                        ? t("table.not_provided")
-                        : t("quote.validity_days", { count: line.leadTimeDays })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {record.note ? (
-            <p className="mt-3 max-w-[var(--measure-prose)] text-body-sm text-prose">{record.note}</p>
-          ) : null}
-        </Panel>
-
-        {/* No invoice, no payment, no delivery tracking. Said, not implied. */}
-        <Card padded>
-          <h2 className="text-body-sm text-ink">{t("accepted.what_next")}</h2>
-          <p className="mt-1 max-w-[var(--measure-prose)] text-body-sm text-muted">
-            {t("accepted.what_next_body")}
-          </p>
-        </Card>
-
-        <p className="flex flex-wrap gap-4">
-          <Link
-            href={
-              carry
-                ? `/review/new?enq=${record.enquiryId}&t=${carry}`
-                : `/review/new?enq=${record.enquiryId}`
-            }
-            className="rounded-tag text-body-sm text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
-          >
-            {t("accepted.review")}
-          </Link>
-          <Link
-            href={carry ? `/enquiry/${record.enquiryId}?t=${carry}` : `/enquiry/${record.enquiryId}`}
-            className="rounded-tag text-body-sm text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
-          >
-            {t("enquiry.track")}
-          </Link>
-        </p>
-      </div>
-      </div>
+        }
+        links={{
+          pdf: withToken(`${base}/accepted/pdf`),
+          thread: withToken(`${base}/thread/${record.supplier.slug}`),
+          review: withToken(`/review/new?enq=${record.enquiryId}`),
+        }}
+        referenceForm={
+          <ReferenceForm enquiryId={record.enquiryId} token={token} current={record.buyerReference} />
+        }
+        reportForm={<ReportForm enquiryId={record.enquiryId} token={token} />}
+      />
     </PublicShell>
   );
 }

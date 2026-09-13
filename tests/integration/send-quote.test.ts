@@ -318,7 +318,13 @@ describe("what a send refuses", () => {
         ],
       },
     );
-    expect(result).toEqual({ ok: false, error: expect.stringContaining("can no longer be sent") });
+    /*
+       ENQ-8802 is closed *and* accepted by this very supplier. Board `7c`'s fence
+       answers the terminal state first — the supplier most needs to know their
+       quote was accepted — so the refusal says that. A closed enquiry that was
+       never accepted is refused as closed: tests/integration/accepted-record-7c.
+    */
+    expect(result).toEqual({ ok: false, error: expect.stringContaining("accepted your quote") });
   });
 });
 

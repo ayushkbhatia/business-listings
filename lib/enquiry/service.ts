@@ -783,7 +783,18 @@ async function nextEnquiryRef(): Promise<string> {
 
 export type AcceptQuoteResult =
   | { ok: true; enquiryId: string; businessId: string; declined: number }
-  | { ok: false; error: "not_found" | "not_yours" | "already_accepted" | "quote_expired" };
+  | {
+      ok: false;
+      error:
+        | "not_found"
+        | "not_yours"
+        | "already_accepted"
+        | "quote_expired"
+        /** Lost, expired by the sweep, or a draft — not a quote a buyer holds. */
+        | "not_open"
+        /** The supplier has sent a later revision; accept that one. */
+        | "revised";
+    };
 
 /**
  * Accepting a quote. The terminal state of the whole product.
@@ -799,6 +810,13 @@ export type AcceptQuoteResult =
  * leave four sellers holding a live enquiry that is already lost, and a decline
  * without the release would lose the buyer the number they just earned.
  */
+/** A refusal found under the lock, thrown so the claim rolls back with it. */
+class AcceptRefused extends Error {
+  constructor(readonly code: "not_open" | "revised") {
+    super(code);
+  }
+}
+
 export async function acceptQuote(
   buyerId: string,
   quoteId: string,
@@ -810,6 +828,7 @@ export async function acceptQuote(
       id: true,
       businessId: true,
       ref: true,
+      revision: true,
       status: true,
       expiresAt: true,
       enquiry: { select: { id: true, buyerId: true, contactReleasedToBusinessId: true } },
@@ -818,19 +837,60 @@ export async function acceptQuote(
   if (!quote) return { ok: false, error: "not_found" };
   // Somebody else's enquiry and a missing one are the same answer.
   if (quote.enquiry.buyerId !== buyerId) return { ok: false, error: "not_found" };
+  // A draft is invisible to the buyer, so an id for one is a guessed id.
+  if (quote.status === "draft") return { ok: false, error: "not_found" };
   if (quote.enquiry.contactReleasedToBusinessId) return { ok: false, error: "already_accepted" };
   if (quote.expiresAt && quote.expiresAt.getTime() < now.getTime()) {
     return { ok: false, error: "quote_expired" };
   }
 
   const accepted = await prisma.$transaction(async (tx) => {
-    await tx.enquiry.update({
-      where: { id: quote.enquiry.id },
+    /*
+       Board `7c`: the claim is conditional, and it is the lock.
+
+       This was an unconditional update after a read made outside the
+       transaction, so two accepts a second apart — two tabs, a double tap on a
+       slow connection — both passed the read and both committed: contact
+       released to one supplier, then to the other, and two quotes marked
+       accepted on one enquiry. The terminal state of the product, reached twice.
+
+       `updateMany` with the null in its `where` takes the row lock and re-reads
+       the column under it, so the second accept waits for the first and then
+       matches nothing. It is also the lock `lockQuoteFence` waits on, which is
+       what stops a supplier's send landing between the two.
+    */
+    const claimed = await tx.enquiry.updateMany({
+      where: { id: quote.enquiry.id, contactReleasedToBusinessId: null },
       data: {
         contactReleasedToBusinessId: quote.businessId,
         contactReleasedAt: now,
       },
     });
+    if (claimed.count === 0) return { ok: false as const, error: "already_accepted" as const };
+
+    /*
+       Read again under the lock. A sweep can expire the quote, and a supplier
+       can send revision 3, between the page the buyer pressed on and this
+       instant — and accepting revision 2 once revision 3 exists would fix as
+       the record a price the supplier has already replaced. Throwing rolls the
+       claim back with it; the caller turns the code into the refusal.
+    */
+    const current = await tx.quote.findUniqueOrThrow({
+      where: { id: quote.id },
+      select: { status: true },
+    });
+    if (current.status !== "sent" && current.status !== "read") {
+      throw new AcceptRefused("not_open");
+    }
+    const later = await tx.quote.count({
+      where: {
+        enquiryId: quote.enquiry.id,
+        businessId: quote.businessId,
+        revision: { gt: quote.revision },
+        status: { not: "draft" },
+      },
+    });
+    if (later > 0) throw new AcceptRefused("revised");
 
     await tx.quote.update({
       where: { id: quote.id },
@@ -875,6 +935,9 @@ export async function acceptQuote(
       businessId: quote.businessId,
       declined: declined.count,
     };
+  }).catch((error: unknown) => {
+    if (error instanceof AcceptRefused) return { ok: false as const, error: error.code };
+    throw error;
   });
 
   if (accepted.ok) {

@@ -5,6 +5,7 @@ import { t } from "@/lib/i18n";
 import { assignLead } from "@/lib/leads/assign";
 import { clearOutcome, markOutcome, type Outcome } from "@/lib/leads/outcome";
 import { saveDraft, discardDraft, type DraftLineInput } from "@/lib/quote/draft";
+import { quoteFenceMessage } from "@/lib/quote/fence-words";
 import {
   sendQuoteForBusiness,
   type SendQuoteInput,
@@ -109,13 +110,23 @@ export async function saveDraftAction(input: {
   enquiryId: string;
   note: string;
   validityDays: number;
+  paymentTerms: string | null;
+  delivery: string | null;
   lines: DraftLineInput[];
 }): Promise<{ ok: boolean; savedAt?: number; error?: string }> {
   const seat = await getSellerSeat();
   if (!seat) return { ok: false, error: t("lead.error.not_yours") };
 
   const result = await saveDraft(seat.actor, seat.businessId, input);
-  if (!result.ok) return { ok: false, error: leadError(result.error) };
+  if (!result.ok) {
+    return {
+      ok: false,
+      error:
+        result.error === "fenced"
+          ? quoteFenceMessage(result.reason, result.closesAt)
+          : leadError(result.error),
+    };
+  }
 
   return { ok: true, savedAt: result.savedAt.getTime() };
 }

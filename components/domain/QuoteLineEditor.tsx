@@ -109,6 +109,18 @@ export interface QuoteLineEditorLabels {
   validityHelp: string;
   validityDayOptions: readonly { value: string; label: string }[];
 
+  /**
+   * Board `7c`: the two terms the accepted record shows beside the lines. Both
+   * option lists must open with an empty value reading *Not stated* — a select
+   * with no empty option posts its first value, and a quote would then state a
+   * term nobody chose.
+   */
+  paymentTermsLabel: string;
+  paymentTermsOptions: readonly { value: string; label: string }[];
+  deliveryLabel: string;
+  deliveryOptions: readonly { value: string; label: string }[];
+  termsHelp: string;
+
   submit: string;
   submitting: string;
   /** Names the lines that block sending. Never "fix errors". */
@@ -122,6 +134,15 @@ export interface QuoteLineEditorProps {
   labels: QuoteLineEditorLabels;
   initialNote?: string;
   initialValidityDays?: number;
+  /** The draft's or last quote's terms. Null, or absent, is *not stated*. */
+  initialPaymentTerms?: string | null;
+  initialDelivery?: string | null;
+  /**
+   * What the buyer asked for, already worded — shown under the payment control
+   * and never selected in it. The seller answers the ask; the form does not
+   * answer it for them.
+   */
+  termsHint?: string;
   /** Formats a fils total for display. Passed in — a server page owns locale. */
   formatTotal: (aed: string) => string;
   onSubmit?: (value: QuoteLineEditorValue) => void | Promise<void>;
@@ -145,6 +166,10 @@ export interface QuoteLineEditorProps {
 export interface QuoteLineEditorValue {
   note: string;
   validityDays: number;
+  /** A `PaymentTerms` value, or null for *not stated*. */
+  paymentTerms: string | null;
+  /** A `DeliveryTerms` value, or null for *not stated*. */
+  delivery: string | null;
   lines: {
     enquiryLineId: string;
     productId: string | null;
@@ -169,6 +194,9 @@ export function QuoteLineEditor({
   labels,
   initialNote = "",
   initialValidityDays = 14,
+  initialPaymentTerms = null,
+  initialDelivery = null,
+  termsHint,
   formatTotal,
   onSubmit,
   onChange,
@@ -193,6 +221,8 @@ export function QuoteLineEditor({
   );
   const [note, setNote] = useState(initialNote);
   const [validityDays, setValidityDays] = useState(String(initialValidityDays));
+  const [paymentTerms, setPaymentTerms] = useState(initialPaymentTerms ?? "");
+  const [delivery, setDelivery] = useState(initialDelivery ?? "");
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const update = (key: string, patch: Partial<RowState>) =>
@@ -223,6 +253,8 @@ export function QuoteLineEditor({
     () => ({
       note: note.trim(),
       validityDays: Number(validityDays),
+      paymentTerms: paymentTerms || null,
+      delivery: delivery || null,
       lines: lines
         .filter((line) => rows[line.key]?.included)
         .map((line) => {
@@ -238,7 +270,7 @@ export function QuoteLineEditor({
           };
         }),
     }),
-    [lines, rows, note, validityDays],
+    [lines, rows, note, validityDays, paymentTerms, delivery],
   );
 
   /*
@@ -516,6 +548,38 @@ export function QuoteLineEditor({
           />
           <p className="mt-1.5 text-caption text-muted">{labels.validityHelp}</p>
         </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 md:grid-cols-2">
+        <div>
+          <label htmlFor={`${formId}-payment`} className="mb-1.5 block text-body-sm text-ink">
+            {labels.paymentTermsLabel}
+          </label>
+          <Select
+            id={`${formId}-payment`}
+            value={paymentTerms}
+            onChange={(e) => setPaymentTerms(e.target.value)}
+            options={labels.paymentTermsOptions}
+            {...(termsHint ? { "aria-describedby": `${formId}-payment-hint` } : {})}
+          />
+          {termsHint ? (
+            <p id={`${formId}-payment-hint`} className="mt-1.5 text-caption text-muted">
+              {termsHint}
+            </p>
+          ) : null}
+        </div>
+        <div>
+          <label htmlFor={`${formId}-delivery`} className="mb-1.5 block text-body-sm text-ink">
+            {labels.deliveryLabel}
+          </label>
+          <Select
+            id={`${formId}-delivery`}
+            value={delivery}
+            onChange={(e) => setDelivery(e.target.value)}
+            options={labels.deliveryOptions}
+          />
+        </div>
+        <p className="text-caption text-muted md:col-span-2">{labels.termsHelp}</p>
       </div>
 
       {message ? (

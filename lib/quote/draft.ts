@@ -4,6 +4,9 @@ import { assertCan } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import { parseAedToFils } from "@/lib/quote/money";
 import { DEFAULT_VALIDITY_DAYS, VALIDITY_CHOICES } from "@/lib/quote/send-quote";
+import { quoteFence, type QuoteFenceReason } from "./fence";
+import { readQuoteFence } from "./fence-server";
+import { parseDeliveryTerms, parsePaymentTerms } from "./terms";
 
 /**
  * Board 3j §5 — "line edits autosave as a draft. Send quote is the only commit."
@@ -52,12 +55,17 @@ export interface SaveDraftInput {
   enquiryId: string;
   note: string;
   validityDays: number;
+  /** As chosen so far; anything that is not a value saves as *not stated*. */
+  paymentTerms?: string | null;
+  delivery?: string | null;
   lines: DraftLineInput[];
 }
 
 export type SaveDraftResult =
   | { ok: true; savedAt: Date; lines: number }
-  | { ok: false; error: "not_your_enquiry" | "decided" };
+  | { ok: false; error: "not_your_enquiry" }
+  /** Board `7c`'s fence refused, for the same reason a send would have. */
+  | { ok: false; error: "fenced"; reason: QuoteFenceReason; closesAt: Date };
 
 /**
  * Where a draft's revision number comes from.
@@ -84,6 +92,8 @@ export async function findDraft(enquiryId: string, businessId: string) {
       revision: true,
       note: true,
       validityDays: true,
+      paymentTerms: true,
+      delivery: true,
       updatedAt: true,
       lines: {
         orderBy: { sortOrder: "asc" },
@@ -121,18 +131,27 @@ export async function saveDraft(
 ): Promise<SaveDraftResult> {
   assertCan(actor, "quote.send");
 
-  const recipient = await prisma.enquiryRecipient.findUnique({
-    where: { enquiryId_businessId: { enquiryId: input.enquiryId, businessId } },
-    select: { outcome: true },
-  });
-  if (!recipient) return { ok: false, error: "not_your_enquiry" };
-  // §7: a marked outcome makes the composer read-only. Autosave must not be the
-  // way around a rule the buttons enforce.
-  if (recipient.outcome) return { ok: false, error: "decided" };
+  /*
+     §7: the composer is read-only on a marked outcome, a suspended listing or a
+     closed enquiry — and, since board `7c`, on an accepted one. Autosave must
+     not be the way around a rule the buttons enforce, so it asks the same fence
+     a send does.
+
+     No row lock here, unlike the send. A draft is invisible to the buyer and
+     cannot become a quote except through `sendQuoteForBusiness`, which checks
+     again under the lock; a draft written in the instant an accept commits
+     changes nothing anyone reads.
+  */
+  const fence = await readQuoteFence(prisma, input.enquiryId, businessId);
+  if (!fence) return { ok: false, error: "not_your_enquiry" };
+  const refusal = quoteFence(fence, new Date());
+  if (refusal) return { ok: false, error: "fenced", reason: refusal, closesAt: fence.closesAt };
 
   const validityDays = VALIDITY_CHOICES.includes(input.validityDays as (typeof VALIDITY_CHOICES)[number])
     ? input.validityDays
     : DEFAULT_VALIDITY_DAYS;
+  const paymentTerms = parsePaymentTerms(input.paymentTerms);
+  const delivery = parseDeliveryTerms(input.delivery);
 
   /*
      Only the lines that carry a price.
@@ -179,6 +198,8 @@ export async function saveDraft(
         data: {
           note: input.note || null,
           validityDays,
+          paymentTerms,
+          delivery,
           updatedAt: now,
           lines: { create: lines },
         },
@@ -200,6 +221,8 @@ export async function saveDraft(
       revision,
       validityDays,
       note: input.note || null,
+      paymentTerms,
+      delivery,
       status: "draft",
       lines: { create: lines },
     },

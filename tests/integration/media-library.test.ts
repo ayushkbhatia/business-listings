@@ -220,8 +220,17 @@ describe("a file a buyer holds a quote for", () => {
   async function quoteHeldDocument() {
     const id = await document();
 
+    /*
+       An enquiry this seller has not quoted on yet. The quote below takes the
+       default revision 1, and `Quote` is unique on (enquiry, business,
+       revision) — so "any enquiry sent to them" held only while the first row
+       Postgres returned happened to carry no quote from them. Board 7c's seed
+       fixtures gave the first claimed seller by slug a lost quote, and it
+       stopped holding.
+    */
     const enquiry = await prisma.enquiry.findFirstOrThrow({
-      where: { recipients: { some: { businessId } } },
+      where: { recipients: { some: { businessId } }, quotes: { none: { businessId } } },
+      orderBy: { id: "asc" },
       select: { id: true },
     });
     const quote = await prisma.quote.create({
@@ -284,8 +293,10 @@ describe("a file a buyer holds a quote for", () => {
 
   it("does not refuse for a quote still in draft", async () => {
     const id = await document();
+    // Unquoted by this seller, for the reason `quoteHeldDocument` gives.
     const enquiry = await prisma.enquiry.findFirstOrThrow({
-      where: { recipients: { some: { businessId } } },
+      where: { recipients: { some: { businessId } }, quotes: { none: { businessId } } },
+      orderBy: { id: "asc" },
       select: { id: true },
     });
     const quote = await prisma.quote.create({

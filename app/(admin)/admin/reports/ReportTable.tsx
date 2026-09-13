@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { Button, Input } from "@/components/primitives";
 import { DataTable, type Column } from "@/components/structure";
@@ -26,6 +27,8 @@ export interface ReportRow {
   detail: string | null;
   businessName: string;
   automatic: boolean;
+  /** Board `7c`: the thread behind a report filed from an accepted record. */
+  evidenceHref: string | null;
   priorsOnField: number;
   ageDays: number;
 }
@@ -73,6 +76,14 @@ export function ReportTable({
             <span className="font-mono text-eyebrow uppercase text-faint">
               {t("admin.reports.automatic")}
             </span>
+          )}
+          {row.evidenceHref && (
+            <Link
+              href={row.evidenceHref}
+              className="w-fit rounded-tag text-caption text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+            >
+              {t("admin.reports.evidence_link")}
+            </Link>
           )}
         </span>
       ),

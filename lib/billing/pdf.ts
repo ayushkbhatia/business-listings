@@ -278,6 +278,59 @@ export function renderPdf(ops: readonly PdfOp[]): Buffer {
 }
 
 /**
+ * Several A4 pages of ops, as PDF bytes — board `7c`'s quote record.
+ *
+ * A tax invoice is one page by rule; a quote is as long as its lines. This is
+ * `renderPdf` generalised rather than changed: `renderPdf` keeps its exact
+ * object layout, because an issued invoice is served byte for byte and a
+ * renumbered object table would make a regenerated one differ from the stored
+ * file even where every figure matched.
+ *
+ * The fonts are shared by every page, and each page gets its own content
+ * stream. Same determinism rules — no creation date, no producer, offsets from
+ * the bytes actually written.
+ */
+export function renderPdfPages(pages: readonly (readonly PdfOp[])[]): Buffer {
+  const pageOps = pages.length > 0 ? pages : [[]];
+  const FONTS = 3;
+  const firstPage = 3 + FONTS;
+
+  const kids = pageOps.map((_, i) => `${firstPage + i * 2} 0 R`).join(" ");
+  const objects: string[] = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    `<< /Type /Pages /Kids [${kids}] /Count ${pageOps.length} >>`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Courier /Encoding /WinAnsiEncoding >>",
+  ];
+  pageOps.forEach((ops, i) => {
+    const stream = contentStream(ops);
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${num(A4.width)} ${num(A4.height)}] ` +
+        `/Resources << /Font << /F1 3 0 R /F2 4 0 R /F3 5 0 R >> >> /Contents ${firstPage + i * 2 + 1} 0 R >>`,
+    );
+    objects.push(`<< /Length ${Buffer.byteLength(stream, "latin1")} >>\nstream\n${stream}\nendstream`);
+  });
+
+  let body = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(body, "latin1"));
+    body += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+
+  const xrefAt = Buffer.byteLength(body, "latin1");
+  let xref = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) {
+    xref += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  }
+  const trailer =
+    `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefAt}\n%%EOF\n`;
+
+  return Buffer.from(body + xref + trailer, "latin1");
+}
+
+/**
  * Break `text` to fit `maxWidth`, on spaces.
  *
  * A word longer than the column is left to overhang rather than being cut: a

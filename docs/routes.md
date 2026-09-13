@@ -36,7 +36,8 @@ and it is the one that argues back.
 /rfq/new?from=:ref                      Send a sent enquiry to more suppliers [1i]  built h1i
 /enquiry/:id                            Enquiry sent + tracking               [1i]  built h2s3
 /enquiry/:id/compare                    Compare quotes                        [1n]  built h2s3
-/enquiry/:id/accepted                   Accepted quote record                 [7c]  built h2s3
+/enquiry/:id/accepted                   Accepted quote record                 [7c]  built h7c
+/enquiry/:id/accepted/pdf               Accepted quote as a PDF (route handler) [7c] built h7c
 /enquiry/:id/thread/:seller             Negotiation thread                   [10h]  built h2s4
 /pricing                                Plans                                 [1l]  built h1s1l
 /guides                                 Guide index                          [10b]  built h5s3
@@ -165,6 +166,7 @@ and it is the one that argues back.
 /admin/tax                              VAT export                           [12e]  built h4s5
 /admin/revenue                          Revenue                               [4g]  built h4s5
 /admin/reports                          Supplier reports & flags              [4h]  built h4s3
+/admin/reports/:id                      Report evidence — the thread attached [7c]  built h7c
 /admin/support                          Support desk & view-as               [12f]  built h4s4
 /admin/notifications                    Notification templates              [12g]  built h4s7
 /admin/strings                          Localisation                         [12g]  built h4s7

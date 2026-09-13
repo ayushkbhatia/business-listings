@@ -47,6 +47,7 @@ export default async function ReportsPage() {
         detail: report.detail,
         businessName: report.subjectBusiness.displayName,
         automatic: report.automatic,
+        evidenceHref: report.enquiryId ? `/admin/reports/${report.id}` : null,
         priorsOnField: priors.onField,
         ageDays: report.ageDays,
       };

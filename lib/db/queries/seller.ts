@@ -175,6 +175,9 @@ export interface LeadDetail {
     status: string;
     note: string | null;
     validityDays: number;
+    /** Board `7c`: the terms this quote stated. Null is *not stated*. */
+    paymentTerms: string | null;
+    delivery: string | null;
     sentAt: Date | null;
     expiresAt: Date | null;
     /** Board 3k. Non-zero puts a system line in the thread saying what moved. */
@@ -317,6 +320,8 @@ export async function getLeadDetail(
       status: q.status,
       note: q.note,
       validityDays: q.validityDays,
+      paymentTerms: q.paymentTerms,
+      delivery: q.delivery,
       sentAt: q.sentAt,
       expiresAt: q.expiresAt,
       extensionCount: q.extensionCount,

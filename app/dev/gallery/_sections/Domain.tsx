@@ -42,6 +42,7 @@ import type { DeliveryMode } from "@/lib/db/generated/enums";
 import type { RamadanHours, WeekHours } from "@/lib/trade/hours";
 import { formatAED, formatDate, formatDuration, formatSize } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { DELIVERY_TERMS, PAYMENT_TERMS } from "@/lib/quote/terms";
 import { Frame, Section, Specimen, States } from "../_kit";
 import { SpecGridStates } from "./SpecGridStates";
 import { SPECS_CELL_STATES } from "./SpecsCellStates";
@@ -744,6 +745,17 @@ const QUOTE_LABELS: QuoteLineEditorLabels = {
     value: String(days),
     label: t("quote.validity_days", { count: days }),
   })),
+  paymentTermsLabel: t("quote.terms.label"),
+  paymentTermsOptions: [
+    { value: "", label: t("quote.terms.not_stated") },
+    ...PAYMENT_TERMS.map((value) => ({ value, label: t(`terms.${value}` as "terms.net_30") })),
+  ],
+  deliveryLabel: t("quote.delivery.label"),
+  deliveryOptions: [
+    { value: "", label: t("quote.terms.not_stated") },
+    ...DELIVERY_TERMS.map((value) => ({ value, label: t(`quote.delivery.${value}` as "quote.delivery.included") })),
+  ],
+  termsHelp: t("quote.terms.help"),
   submit: t("quote.send"),
   submitting: t("quote.sending"),
   unpricedError: (lines) => t("quote.error.unpriced", { count: lines.length, lines: lines.join("; ") }),

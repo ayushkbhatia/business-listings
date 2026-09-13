@@ -10,6 +10,7 @@ import {
 } from "@/components/domain/QuoteLineEditor";
 import { formatAED, formatRelative } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { DELIVERY_TERMS, PAYMENT_TERMS } from "@/lib/quote/terms";
 import { saveDraftAction, sendQuote } from "./actions";
 
 /**
@@ -45,6 +46,11 @@ export interface ComposerProps {
   lines: readonly QuoteLineDraft[];
   initialNote?: string;
   initialValidityDays?: number;
+  /** Board `7c`: the terms to open with — the draft's, else the last quote's. */
+  initialPaymentTerms?: string | null;
+  initialDelivery?: string | null;
+  /** The buyer's ask, as the stored enum value. Shown as a hint, never selected. */
+  termsWanted?: string | null;
   /** True when a draft was restored, so the panel can say where it came from. */
   restored?: boolean;
   /** When that draft was last written, for the first "Saved" label. */
@@ -56,6 +62,9 @@ export function Composer({
   lines,
   initialNote = "",
   initialValidityDays = 14,
+  initialPaymentTerms = null,
+  initialDelivery = null,
+  termsWanted = null,
   restored = false,
   restoredAt,
 }: ComposerProps) {
@@ -128,6 +137,11 @@ export function Composer({
         formatTotal={(aed) => formatAED(aed, { style: "quote" })}
         initialNote={initialNote}
         initialValidityDays={initialValidityDays}
+        initialPaymentTerms={initialPaymentTerms}
+        initialDelivery={initialDelivery}
+        {...(termsWanted
+          ? { termsHint: t("quote.terms.buyer_asked", { terms: t(`terms.${termsWanted}` as "terms.net_30") }) }
+          : {})}
         onChange={handleChange}
         onSubmit={handleSubmit}
         busy={sending}
@@ -182,6 +196,23 @@ function editorLabels(): QuoteLineEditorLabels {
       value: String(days),
       label: t("quote.validity_days", { count: days }),
     })),
+
+    paymentTermsLabel: t("quote.terms.label"),
+    // The empty value first, and selectable: *not stated* is an answer a
+    // seller may give, and a select without it posts its first option.
+    paymentTermsOptions: [
+      { value: "", label: t("quote.terms.not_stated") },
+      ...PAYMENT_TERMS.map((value) => ({ value, label: t(`terms.${value}` as "terms.net_30") })),
+    ],
+    deliveryLabel: t("quote.delivery.label"),
+    deliveryOptions: [
+      { value: "", label: t("quote.terms.not_stated") },
+      ...DELIVERY_TERMS.map((value) => ({
+        value,
+        label: t(`quote.delivery.${value}` as "quote.delivery.included"),
+      })),
+    ],
+    termsHelp: t("quote.terms.help"),
 
     submit: t("quote.send"),
     submitting: t("quote.sending"),

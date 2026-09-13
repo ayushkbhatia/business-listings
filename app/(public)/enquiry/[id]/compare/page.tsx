@@ -154,6 +154,42 @@ export default async function ComparePage({
                 </td>
               ))}
             </tr>
+            {/*
+               Board `7c`: the terms each supplier quoted, beside the total and
+               before the accept button. The accepted record shows these as
+               *payment agreed*, and they are only agreed if the buyer could read
+               them at the moment of accepting. Not stated is shown, grey.
+            */}
+            <tr className="border-t border-line">
+              <th scope="row" className="px-3 py-2 text-left text-body-sm font-normal text-ink">
+                {t("quote.terms.label")}
+              </th>
+              {quotes.map((quote) => (
+                <td
+                  key={quote.id}
+                  className={quote.paymentTerms ? "px-3 py-2 text-body-sm text-ink" : "px-3 py-2 text-body-sm text-muted"}
+                >
+                  {quote.paymentTerms
+                    ? t(`terms.${quote.paymentTerms}` as "terms.net_30")
+                    : t("accepted.not_stated")}
+                </td>
+              ))}
+            </tr>
+            <tr className="border-t border-line">
+              <th scope="row" className="px-3 py-2 text-left text-body-sm font-normal text-ink">
+                {t("quote.delivery.label")}
+              </th>
+              {quotes.map((quote) => (
+                <td
+                  key={quote.id}
+                  className={quote.delivery ? "px-3 py-2 text-body-sm text-ink" : "px-3 py-2 text-body-sm text-muted"}
+                >
+                  {quote.delivery
+                    ? t(`compare.delivery.${quote.delivery}` as "compare.delivery.included")
+                    : t("accepted.not_stated")}
+                </td>
+              ))}
+            </tr>
             <tr className="border-t border-line">
               <th scope="row" className="px-3 py-3 text-left font-normal">
                 <span className="sr-only">{t("compare.accept", { ref: "", total: "" })}</span>
