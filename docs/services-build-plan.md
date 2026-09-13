@@ -25,7 +25,7 @@ migration directories, none touching services.
 | State | Count | Of 28 |
 |---|---|---|
 | **built** | **0** | |
-| partial | 0 | `3c-s` shipped 13 Sep (§4p) |
+| partial | 0 | `3c-s` shipped 13 Sep (§4q) |
 | scaffold | 5 | |
 | **not started** | **22** | |
 
@@ -375,8 +375,8 @@ drawn apart, the list shows a column the editor cannot fill or omits one it can.
 | **`8a-s`** Setup hub | **shipped 12 Sep** | **Four tasks**, and the epic was right after all — the *code's* stale prose said three. Credentials lead at 32, photographs fall to 4. See §4h |
 | **`8b-s`** Credentials task | **shipped 12 Sep** | `/dashboard/setup/credentials`. Two tiers rather than three, the trade licence is not a credential row, and the FTA register is a seam nothing is plugged into. See §4i |
 | **`8c-s`** Scope sheet + first 3 services | **shipped 12 Sep** | `/dashboard/setup/services`. D11 was already closed, three authored sheets rather than seven, and the hub's task 2 now counts completeness rather than live rows. See §4j |
-| **`3b-s`** Listing profile | **shipped 13 Sep** | `/dashboard/listing` with the services field set, the same component onboarding mounts. See §4p |
-| **`3c-s`** Coverage manager | **shipped 13 Sep** | Per-service rows in #173; the manager at `/dashboard/coverage` with this handoff. See §4p |
+| **`3b-s`** Listing profile | **shipped 13 Sep** | `/dashboard/listing` with the services field set, the same component onboarding mounts. See §4q |
+| **`3c-s`** Coverage manager | **shipped 13 Sep** | Per-service rows in #173; the manager at `/dashboard/coverage` with this handoff. See §4q |
 
 **`profileStrength` was fixed with `8a-s`, 12 Sep.** `catalogue: 20` + `filterableSpecs: 15` of 100
 were unreachable without products, against a published `STRONG_ENOUGH` of 80, so a service supplier
@@ -1788,7 +1788,7 @@ documents disagree, and the answer decides whether these are two boards or none.
 
 ---
 
-## 4p · Handoff `3b-s` + `3c-s` — the two maintenance screens
+## 4q · Handoff `3b-s` + `3c-s` — the two maintenance screens
 
 Shipped 13 Sep at `/dashboard/coverage` (new) and `/dashboard/listing` (the goods `3b`, with a
 second field set). The seller-dashboard lane closes with these two. Migration
@@ -1816,8 +1816,12 @@ seller screen and the buyer pages cannot disagree about what a buyer sees.
 - **No availability control** (B10). The tree carries no services waitlist state anywhere; `D11` was
   cut before `1d-s` was built, so the handoff's worry about a public state with no field does not
   apply to what shipped.
-- **Fan-out matching (B8) is `1h-s`'s**, built by a sibling session. This board exports
-  `reachesScope`, `withinCoverage` and `coverageMarker` for it and does not touch the matcher.
+- **Brief matching (B8) is `1h-s`'s** and is per service since #179: `findBriefCandidates` routes
+  through a live service in the asked trade whose `effectiveCoverage` reaches the site. The first
+  build of #179 matched on the union, from an older 1h-s export; the amended spec in this handoff
+  won. The footer now states the rule, with an example drawn from the firm's own rows when a live
+  service is narrower than the listing. It names *briefs*: the goods enquiry fan-out still matches
+  per business.
 - The nav gains *Coverage areas*; *Locations* leaves the rail for a services-only firm, as `1f-s`
   made `/branches` redirect to `/coverage`. **Hours stays** — the handoff names it a decision
   (remove, or the `3d-s` placeholder), not a render change.
@@ -2043,7 +2047,7 @@ edit**.
 |---|---|---|---|---|
 | **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **shipped 12 Sep.** One handoff, three screens, and it was right: the editor fixed the field set, the list reported on it, the page rendered it. See §4g |
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
-| **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | **Complete.** `2b-s`, `2c-s`, `2d-s` shipped 11 Sep; `3b-s` and `3c-s` 13 Sep (§4p) |
+| **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | **Complete.** `2b-s`, `2c-s`, `2d-s` shipped 11 Sep; `3b-s` and `3c-s` 13 Sep (§4q) |
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **`1d-s`, `1e-s` and `1f-s` shipped 13 Sep** (§4m–§4o) — the public storefront set is complete. `5c-s` has a placeholder waiting |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p). `3j-s` and `1n-s` must be consecutive, and both read the brief |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |

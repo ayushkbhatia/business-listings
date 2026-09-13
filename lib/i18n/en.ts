@@ -6054,6 +6054,8 @@ export const en = {
   "coverage_manager.no_services": "No services yet. Each service you add gets a row here, inheriting the default above until you narrow it.",
   "coverage_manager.no_services_link": "Add a service",
   "coverage_manager.public_line": "Buyers see {places} on the listing, and the exact set on each service’s page.",
+  "coverage_manager.match_example": "A brief for {service} in {emirate} does not reach you, even though your listing says {emirate} — briefs are matched to each service’s own coverage, never to the listing.",
+  "coverage_manager.match_rule": "Briefs are matched to each service’s own coverage, never to the listing — so narrowing a service stops briefs for it reaching places it does not go.",
   "coverage_manager.public_none": "Buyers see no coverage on the listing yet. It is the union of your live services’ rows, and no live service has any.",
   "coverage_manager.uncovered": { one: "{formatted} live service has no coverage at all, because it inherits an empty default.", other: "{formatted} live services have no coverage at all, because they inherit an empty default." },
   "coverage_manager.rail.availability_title": "There is no availability field",

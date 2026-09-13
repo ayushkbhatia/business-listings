@@ -93,6 +93,15 @@ export interface CoverageManagerState {
   /** What the listing headline reads — the union over live services only (B5). */
   publicPlaces: string[];
   /**
+   * B8, made concrete from this firm's own rows: a live service and an emirate
+   * the listing claims that the service does not reach. The sentence it feeds is
+   * true of the tree since PR 179 — `findBriefCandidates` routes a brief through a
+   * service's `effectiveCoverage`, never the union. Null when no live service is
+   * narrower than the listing, and the screen then states the rule without an
+   * example rather than inventing one.
+   */
+  matchExample: { service: string; emirate: string } | null;
+  /**
    * Live services that resolve to no coverage at all. Only possible when the
    * default is empty and they inherit it; the screen says so rather than
    * rendering an empty cell as if it were an answer.
@@ -188,6 +197,19 @@ export async function coverageManagerFor(businessId: string): Promise<CoverageMa
     ),
   ).map(place);
 
+  const listed = [...new Set(publicScopes.map((row) => row.emirate))];
+  let matchExample: CoverageManagerState["matchExample"] = null;
+  for (const service of live) {
+    const reached = new Set<string>(
+      effectiveCoverage(defaultScopes, ownBy.get(service.id) ?? []).map((scope) => scope.emirate),
+    );
+    const missed = listed.find((emirate) => !reached.has(emirate));
+    if (missed) {
+      matchExample = { service: service.name, emirate: emirateLabel(missed) };
+      break;
+    }
+  }
+
   return {
     businessId,
     displayName: defaults.displayName,
@@ -205,6 +227,7 @@ export async function coverageManagerFor(businessId: string): Promise<CoverageMa
       live: live.filter((service) => !ownBy.has(service.id)).length,
     },
     publicPlaces: publicScopes.map((row) => row.label),
+    matchExample,
     uncovered: live.filter(
       (service) => effectiveCoverage(defaultScopes, ownBy.get(service.id) ?? []).length === 0,
     ).length,

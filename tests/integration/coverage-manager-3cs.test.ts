@@ -121,6 +121,14 @@ describe("the board's four rows, read back", () => {
 
     // `3 EMIRATES DEFAULT · 2 NARROWER · 1 WIDER`, counted, not typed.
     expect(state!.tally).toEqual({ defaultEmirates: 3, inherited: 1, same: 0, narrowed: 2, wider: 1 });
+
+    /*
+       B8, drawn from the firm's own rows. The listing reads all seven because
+       corporate tax covers them; VAT, the first live service, inherits three —
+       so a VAT brief in Ajman does not reach this firm, and since #179 that is
+       what `findBriefCandidates` does.
+    */
+    expect(state!.matchExample).toEqual({ service: "VAT return filing", emirate: "Ajman" });
   });
 });
 
@@ -204,6 +212,9 @@ describe("the public union — B5, and it agrees with 1d-s", () => {
 
     const state = await coverageManagerFor(f.id);
     expect(state!.publicPlaces).toEqual(["Dubai"]);
+    // The one live service covers exactly what the listing says, so there is
+    // no honest example to give — the rule is stated without one.
+    expect(state!.matchExample).toBeNull();
 
     // The same answer the storefront renders, from the function it renders with.
     const storefront = await publicCoverageFor(f.id, [live]);

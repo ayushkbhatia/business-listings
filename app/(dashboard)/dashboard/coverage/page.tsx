@@ -182,6 +182,19 @@ export default async function CoveragePage() {
                       places: formatList(state.publicPlaces),
                     })}
               </p>
+              {/*
+                 B8. True of the tree since PR 179: a brief routes through the
+                 matched service's own effective coverage, never the listing
+                 line. Named as *briefs*, deliberately — the goods enquiry
+                 fan-out still matches per business, and a sentence claiming
+                 every enquiry routes per service would be false for a firm that
+                 sells both.
+              */}
+              <p className="mt-2 max-w-prose text-body-sm text-body">
+                {state.matchExample
+                  ? t("coverage_manager.match_example", state.matchExample)
+                  : t("coverage_manager.match_rule")}
+              </p>
               {state.uncovered > 0 && (
                 <p className="mt-2 text-caption text-warn-ink">
                   {t("coverage_manager.uncovered", {

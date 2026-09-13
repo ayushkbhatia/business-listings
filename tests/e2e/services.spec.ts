@@ -1380,6 +1380,18 @@ test.describe("board 3c-s — the coverage manager", () => {
     await dialog.getByRole("button", { name: "Close" }).click();
   });
 
+  test("states that briefs match per service, and names briefs rather than every enquiry — B8", async ({ page }) => {
+    /*
+       True of the tree since #179. In the seed no live service is narrower than
+       the listing, so there is no firm-specific example and the rule is stated
+       on its own.
+    */
+    await page.goto(path);
+    await expect(
+      page.getByText("Briefs are matched to each service’s own coverage, never to the listing"),
+    ).toBeVisible();
+  });
+
   test("carries no availability control, and says why — B10", async ({ page }) => {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: "There is no availability field" })).toBeVisible();
