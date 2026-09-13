@@ -10,6 +10,7 @@ import { RfqComposer } from "../RfqComposer";
 import type { RfqLine } from "../rfq-state";
 import { ServiceBriefPage } from "./_brief";
 import { RevisePage } from "./_revise";
+import { AddSuppliersPage } from "./_add";
 
 /**
  * Board 1h — the RFQ fan-out. One route, three arrival states.
@@ -71,6 +72,13 @@ export default async function RfqNewPage({
   */
   const revise = one("revise");
   if (revise) return <RevisePage refOrId={revise} token={one("t") ?? null} />;
+
+  /*
+     Board 1i's *Add two more suppliers*, which linked here and landed on a blank
+     composer for the same reason: nothing read the parameter.
+  */
+  const from = one("from");
+  if (from) return <AddSuppliersPage refOrId={from} token={one("t") ?? null} />;
 
   /*
      `?to=slug` from a storefront, `?to=a,b,c` from the comparison tray.

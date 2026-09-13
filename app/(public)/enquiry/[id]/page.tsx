@@ -7,6 +7,7 @@ import type { EnquiryBrief } from "@/lib/db/queries/enquiry-brief";
 import { briefFactWords } from "@/lib/enquiry/service-brief-words";
 import { getTrackingByRef } from "@/lib/db/queries/enquiry-tracking";
 import {
+  additionalWanted,
   canAddRecipients,
   compareBlockedBy,
   effectiveState,
@@ -99,6 +100,13 @@ export default async function EnquiryPage({
   const declinedCount = rows.filter(
     (row) => effectiveState(row, tracking.closesAt, now) === "declined",
   ).length;
+  // A URL parameter, so clamped to what an add can actually have written.
+  const added = Math.min(8, Math.max(0, Math.floor(Number(one("added")) || 0)));
+  const addable = additionalWanted({
+    sent: header.sent,
+    declined: declinedCount,
+    allDeclined: header.mode === "all_declined",
+  });
 
   return (
     <PublicShell nav={<DirectoryNav />}>
@@ -127,6 +135,13 @@ export default async function EnquiryPage({
            Board `1d-s`. The enquiry went; the file did not. Said once, plainly,
            with the one thing the buyer can do about it.
         */}
+        {/* Board 1i: suppliers added from `/rfq/new?from=`, said once. */}
+        {added > 0 && (
+          <p role="status" className="mt-4 rounded-ctl border border-ok-line bg-ok-wash px-3.5 py-2.5 text-body-sm text-ok-ink">
+            {t("track.added", { count: added, word: spell(added) })}
+          </p>
+        )}
+
         {one("attachment") === "failed" && (
           <div className="mt-4">
             <Alert tone="warn" live="polite" fix={t("enquiry.attachment_failed")}>
@@ -270,19 +285,22 @@ export default async function EnquiryPage({
                  the cap, so "add two more" would offer firms that do not cover
                  the site — the padding `1h-s` refuses.
               */}
-              {!tracking.accepted && !enquiry.brief && canAddRecipients(header.sent) && (
+              {!tracking.accepted && !closed && !enquiry.brief && canAddRecipients(header.sent) && (
                 /*
                    Absent at the cap, not disabled. A disabled control invites a
                    buyer to work out what they are missing when the answer is
-                   nothing they can change.
+                   nothing they can change. Absent once closed too: a supplier
+                   added then would receive an enquiry with no time left.
+
+                   The count is the one `/rfq/new?from=` offers, so at seven sent
+                   the label says one rather than promising two. The token
+                   travels with it, because the page identifies the buyer the
+                   same way this one does.
                 */
-                <a
-                  href={`/rfq/new?from=${tracking.ref}`}
-                  className={SECONDARY}
-                >
+                <a href={withToken(`/rfq/new?from=${tracking.ref}`)} className={SECONDARY}>
                   {header.mode === "all_declined"
-                    ? t("track.send_more", { count: declinedCount })
-                    : t("track.add_suppliers")}
+                    ? t("track.send_more", { count: addable })
+                    : t("track.add_suppliers", { count: addable, word: spell(addable) })}
                 </a>
               )}
 

@@ -2320,7 +2320,7 @@ export const en = {
   "track.compare": "Compare the quotes",
   "track.compare_none": "Quotes will appear here as they arrive",
   "track.compare_one": "One more quote and you can compare side by side",
-  "track.add_suppliers": "Add two more suppliers",
+  "track.add_suppliers": { one: "Add {word} more supplier", other: "Add {word} more suppliers" },
   "track.edit_requirement": "Edit the requirement",
   "track.view_accepted": "View the accepted quote",
   "track.more_actions": "More",
@@ -9594,6 +9594,41 @@ export const en = {
   "brief.engagement_cadence": "{engagement} · {cadence}",
   "brief.site_building": "{site} · {building}",
   "brief.site_area": "{area}, {emirate}",
+
+  // ── Board 1i · adding suppliers to an enquiry that has already gone ───────
+  "add.h1": "Send {ref} to more suppliers",
+  "add.sub":
+    "The requirement goes to them as it stands now, with the time left before it closes. The suppliers already on it keep what they have sent.",
+  "add.matched_on":
+    "Matched on the trade, the emirate and what they list, the way the first send was — and never a supplier already on this enquiry.",
+  "add.list": "Suppliers who would receive it",
+  "add.pick": "Send to {name}",
+  "add.verified": "Licence",
+  "add.send": {
+    one: "Send to {formatted} more supplier",
+    other: "Send to {formatted} more suppliers",
+  },
+  "add.none": {
+    one: "No other supplier matches this requirement right now. The {formatted} already on it is the one who does.",
+    other: "No other supplier matches this requirement right now. The {formatted} already on it are the ones who do.",
+  },
+  "add.fewer": {
+    one: "Only {formatted} more supplier matches, so it goes to them alone rather than to one who does not.",
+    other: "Only {formatted} more suppliers match, so it goes to those rather than to ones who do not.",
+  },
+  "add.closed": "This enquiry has closed, so no more suppliers can be added to it. Post a new one if you still need quotes.",
+  "add.accepted": "You have accepted a quote on this enquiry, so it is not sent to anybody else.",
+  "add.full": "This enquiry has reached eight suppliers, the most one enquiry goes to.",
+  "add.brief": "A brief goes to every supplier who covers the site when it is sent, so there is nobody further to add.",
+  "add.none_chosen": "Tick at least one supplier, or go back to the enquiry.",
+  "add.none_available":
+    "Those suppliers cannot take this enquiry through the directory right now, and nothing was sent. Go back to the enquiry and try again later.",
+  "add.error_fix": "Nothing was sent. Change the ticks and send again.",
+  "add.back": "Back to the enquiry",
+  "track.added": {
+    one: "Sent to {word} more supplier. They see the requirement as it stands now.",
+    other: "Sent to {word} more suppliers. They see the requirement as it stands now.",
+  },
 
   // ── Not found ─────────────────────────────────────────────────────────────
   "notfound.title": "That page is not here",

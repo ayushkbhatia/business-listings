@@ -139,6 +139,55 @@ test.describe("the action row's limits", () => {
   });
 });
 
+test.describe("adding suppliers to an enquiry that has gone", () => {
+  /*
+     `/rfq/new?from=` opened a blank composer for as long as the tracking page
+     linked to it. Non-destructive by design: the seeded enquiries are shared by
+     every test in this file, so this proves the link and the confirmation and
+     leaves the send — which writes recipients — to the integration project.
+  */
+  test("the link carries the token, and offers suppliers who are not already on it", async ({ page }) => {
+    await page.goto(URL);
+    const link = page.locator('a[href*="/rfq/new?from="]');
+    await expect(link).toHaveAttribute("href", `/rfq/new?from=${REF}&t=${TOKEN}`);
+    await expect(link).toHaveText("Add two more suppliers");
+
+    const onIt = (await rows(page).evaluateAll((els) => els.map((el) => el.textContent ?? ""))).join(" | ");
+
+    await page.goto(`/rfq/new?from=${REF}&t=${TOKEN}`);
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText(`Send ${REF} to more suppliers`);
+    await expect(page.locator("table")).toHaveCount(0);
+
+    const offered = page.getByRole("checkbox", { name: /^Send to / });
+    const count = await offered.count();
+    expect(count).toBeGreaterThan(0);
+    expect(count).toBeLessThanOrEqual(2);
+    for (let i = 0; i < count; i += 1) {
+      await expect(offered.nth(i)).toBeChecked();
+      const name = ((await offered.nth(i).getAttribute("aria-label")) ?? "").replace(/^Send to /, "");
+      expect(onIt).not.toContain(name);
+    }
+    await expect(page.getByRole("button", { name: `Send to ${count} more supplier${count === 1 ? "" : "s"}` })).toBeEnabled();
+
+    // Unticking every one says why the send is off, rather than a dead button.
+    for (let i = 0; i < count; i += 1) await offered.nth(i).uncheck();
+    await expect(page.getByText("Tick at least one supplier, or go back to the enquiry.")).toBeVisible();
+  });
+
+  test("is the same 404 without the token, and refuses an accepted enquiry", async ({ page }) => {
+    expect((await page.goto(`/rfq/new?from=${REF}`))?.status()).toBe(404);
+    await page.goto(`/rfq/new?from=ENQ-8879&t=${TOKEN}`);
+    await expect(page.getByText("You have accepted a quote on this enquiry, so it is not sent to anybody else.")).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+  });
+
+  test("has no axe violations", async ({ page }) => {
+    await page.goto(`/rfq/new?from=${REF}&t=${TOKEN}`);
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
 test.describe("once a quote is accepted", () => {
   test("the page reframes and stays the record", async ({ page }) => {
     /*
