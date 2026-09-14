@@ -3319,8 +3319,7 @@ async function seedAcceptedRecords(db: Db, claimed: Biz[], taken: Biz[]) {
       termsWanted: "net_30",
       closesAt: pre(1),
       createdAt: pre(8),
-      contactReleasedToBusinessId: winner!.id,
-      contactReleasedAt: pre(2),
+      // Released below, after the quotes — the order acceptance writes them in.
       buyerReference: "PO-2026-0418",
       lines: {
         create: [
@@ -3416,6 +3415,17 @@ async function seedAcceptedRecords(db: Db, claimed: Biz[], taken: Biz[]) {
       },
     });
   }
+
+  /*
+     Accepted last. Revision 1 stays `sent`, as a superseded revision of the
+     winner's does, and the database refuses a quote sent onto an enquiry that is
+     already accepted (board 7c) — so the release is written after the quotes, in
+     the order `acceptQuote` writes it.
+  */
+  await db.enquiry.update({
+    where: { id: typical.id },
+    data: { contactReleasedToBusinessId: winner!.id, contactReleasedAt: pre(2) },
+  });
 
   await db.message.createMany({
     data: [

@@ -93,9 +93,6 @@ async function quoted(label: string, options: QuoteOptions = {}): Promise<string
         Date.now() + (options.enquiryClosed ? -2 : 20) * 86_400_000,
       ),
       createdAt: at,
-      ...(options.acceptedByUs
-        ? { contactReleasedToBusinessId: businessId, contactReleasedAt: replied }
-        : {}),
       lines: {
         create: [{ description: `${PREFIX} valve`, qty: 4, unit: "pcs", sortOrder: 0 }],
       },
@@ -151,6 +148,14 @@ async function quoted(label: string, options: QuoteOptions = {}): Promise<string
           ],
         },
       },
+    });
+  }
+  // Released after the quotes, as acceptance does: the database refuses a quote
+  // sent onto an enquiry that has already been accepted (board 7c).
+  if (options.acceptedByUs) {
+    await prisma.enquiry.update({
+      where: { id: enquiry.id },
+      data: { contactReleasedToBusinessId: businessId, contactReleasedAt: replied },
     });
   }
   return ref;

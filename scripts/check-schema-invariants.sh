@@ -100,6 +100,18 @@ if grep -qE '^[[:space:]]*model[[:space:]]+ServiceBrief[[:space:]]*\{' <<<"$CODE
   fi
 fi
 
+# Board `7c`: nothing is sent on an enquiry once a quote on it is accepted — the
+# fence in lib/quote/fence.ts, held by the database for a writer that skips it.
+if grep -qE '^[[:space:]]*model[[:space:]]+Quote[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE 'CREATE TRIGGER "quote_not_sent_after_acceptance"' prisma/migrations; then
+    echo "   pass — no quote is sent after acceptance, by trigger"
+  else
+    echo "   FAIL — quote_not_sent_after_acceptance is missing."
+    echo "     Prisma cannot express a trigger; it lives in the 7c quote-fence migration."
+    fail=1
+  fi
+fi
+
 # Invariants Prisma has no syntax for, so a regeneration cannot express them and
 # would quietly drop them. Each is asserted against the migration that owns it.
 #

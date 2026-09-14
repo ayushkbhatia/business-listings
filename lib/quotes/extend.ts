@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { assertCan, can } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import { decidedReason } from "@/lib/quote/fence";
+import { lockQuoteFence } from "@/lib/quote/fence-server";
 import { recordEvent } from "@/lib/telemetry/record";
 
 /**
@@ -137,16 +138,31 @@ export async function extendQuote(
   );
   const daysRemaining = Math.round((quote.expiresAt.getTime() - now.getTime()) / 86_400_000);
 
-  const updated = await prisma.quote.update({
-    where: { id: quote.id },
-    data: {
-      expiresAt: input.until,
-      extensionCount: { increment: 1 },
-      lastExtendedAt: now,
-      extendedById: actor.id,
-    },
-    select: { expiresAt: true, extensionCount: true },
+  /*
+     Board `7c`: asked again under the enquiry lock, then written. The check above
+     is the fast answer; by the time the update runs a buyer may have accepted,
+     and an extension written after acceptance is a price moved on a record. The
+     accept's claim takes the same row lock, so one of the two waits for the other
+     and reads what it wrote — the database refuses the write regardless, and this
+     is what turns that refusal into `decided` rather than a failed request.
+  */
+  const updated = await prisma.$transaction(async (tx) => {
+    const fence = await lockQuoteFence(tx, quote.enquiryId, businessId);
+    if (!fence) return null;
+    if (decidedReason(fence)) return "decided" as const;
+    return tx.quote.update({
+      where: { id: quote.id },
+      data: {
+        expiresAt: input.until,
+        extensionCount: { increment: 1 },
+        lastExtendedAt: now,
+        extendedById: actor.id,
+      },
+      select: { expiresAt: true, extensionCount: true },
+    });
   });
+  if (updated === null) return { ok: false, error: "not_your_quote" };
+  if (updated === "decided") return { ok: false, error: "decided" };
 
   /*
      §11's number worth watching. `timesPreviouslyExtended` points somewhere
