@@ -9,6 +9,7 @@ import { guideList } from "@/lib/guides/service";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
 import { GuideTable, type GuideRowView } from "./GuideTable";
+import { ContentTabs } from "../_tabs";
 
 /**
  * Boards 10b and 6d — the guide list.
@@ -56,6 +57,7 @@ export default async function GuidesAdminPage() {
         </Link>
       }
     >
+      <ContentTabs active="guides" />
       <GuideTable rows={rows} />
 
       <p className="mt-[var(--gutter)] max-w-prose text-caption text-muted">

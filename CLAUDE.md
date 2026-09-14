@@ -77,9 +77,10 @@ looks like, and never blame the user. Full rules in `docs/design-system.md` §08
 A directory's only asset is that its numbers are true. These are the rules most likely to be
 broken quietly, in the name of a fuller-looking page.
 
-- **Never pad a list to fill a grid.** "Verified this week" shows only businesses whose tier
-  actually rose in the window. Widen the window, then drop the section. A padded row is a lie
-  with a layout reason.
+- **Never pad a list to fill a grid.** "Verified this week" shows only the slots an ops lead
+  filled that still hold Tier 2 at render (board 6h). A slot that lost it renders empty and is
+  never backfilled; with none eligible the section is dropped. A padded row is a lie with a
+  layout reason.
 - **Every number is a query, not a constant.** Counts, subcategory tallies, "218 companies".
   A hardcoded count is the fastest way to make a directory look unreliable.
 - **Derived metrics have no writable path.** Response time, profile strength, spec

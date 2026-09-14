@@ -1381,14 +1381,6 @@ export function categoryIdsFor(category: PublicCategory): string[] {
   return [category.id, ...category.children.map((child) => child.id)];
 }
 
-export async function getHomeCategories() {
-  return prisma.category.findMany({
-    where: { showOnHome: true, parentId: null },
-    orderBy: { sortOrder: "asc" },
-    include: { _count: { select: { primaryFor: { where: PUBLIC_BUSINESS } } } },
-  });
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Home and compare
 // ─────────────────────────────────────────────────────────────────────────────

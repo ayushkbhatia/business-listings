@@ -29,6 +29,7 @@ import { ProposalComparisonGallery } from "./_sections/ProposalComparison";
 import { BuilderSectionsGallery } from "./_sections/BuilderSections";
 import { BuyerInboxGallery } from "./_sections/BuyerInbox";
 import { NotificationTemplatesGallery } from "./_sections/NotificationTemplates";
+import { HomeCurationGallery } from "./_sections/HomeCuration";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
 import { Tokens } from "./_sections/Tokens";
@@ -201,6 +202,8 @@ const UNLISTED = [
   "buyer-inbox",
   // Board `12g`: the notification templates list, the rail, and Meta's queue.
   "notification-templates",
+  // Board `6h`: the four homepage slots, the chips and the rails map.
+  "home-curation",
 ] as const;
 
 export default function Gallery() {
@@ -313,6 +316,7 @@ export default function Gallery() {
       {/* After CRM, for the same reason: nothing new above Shells. */}
       <BuyerInboxGallery />
       <NotificationTemplatesGallery />
+      <HomeCurationGallery />
     </main>
   );
 }

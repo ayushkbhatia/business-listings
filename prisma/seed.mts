@@ -27,6 +27,7 @@ import { LEAF_OVERRIDES, SCOPE_FAMILIES, TRADE_KINDS } from "./trade-kinds.mjs";
 import { resolveTradeKind } from "../lib/taxonomy/trade-kind.js";
 import { DN_SYNONYMS } from "../lib/trade/nominal-size.js";
 import { EXPIRED_LICENCE_TIER } from "../lib/verification.js";
+import { CARRIED_OVER_CHIPS } from "../lib/content/homepage-rules.js";
 import { hostnameFor, labelFor } from "../lib/domains/label.js";
 // The key and the estimates from the module that owns both — a typo here would
 // be a row nothing reads.
@@ -2244,9 +2245,8 @@ async function seedHomeSignals(db: Db, businesses: Biz[], opsLeadId: string) {
   console.log("→ home signals");
 
   /*
-   * Verified in the last week. Four, because the section asks for four and
-   * widening to fourteen and thirty days is a fallback rather than the state
-   * worth demonstrating.
+   * Verified in the last week. Four tier increases, which the console offers as
+   * candidates for the home page's slots.
    *
    * Claimed and already verified: an unclaimed listing has nobody to have
    * verified, and tier 0 never rose to anything.
@@ -2281,6 +2281,32 @@ async function seedHomeSignals(db: Db, businesses: Biz[], opsLeadId: string) {
     });
   }
   console.log(`   ${recentlyVerified.length} tier increases inside 7 days`);
+
+  /*
+   * Board 6h — three of the four "Verified this week" slots, and one left empty.
+   *
+   * The rail is chosen by a person now, so the seed chooses like one: three of
+   * the businesses whose tier just rose, in the order they rose. The fourth
+   * stays out of a slot on purpose. It is what the console's "Tier rose to 2 in
+   * the last 30 days" list offers, and an empty slot 4 is what the acceptance
+   * suite fills and empties again without eating a fixture.
+   */
+  const featured = recentlyVerified.slice(0, 3);
+  await db.homepageSlot.createMany({
+    data: featured.map((business, index) => ({ position: index + 1, businessId: business.id, addedById: opsLeadId })),
+  });
+  console.log(`   ${featured.length} homepage slots filled, slot 4 empty`);
+
+  /*
+   * The chips, re-written rather than trusted to the migration. `curated_query`
+   * has no foreign key, so the truncate at the top of `main` never reaches it
+   * and a local database keeps whatever a previous afternoon left there.
+   */
+  await db.curatedQuery.deleteMany({});
+  await db.curatedQuery.createMany({
+    data: CARRIED_OVER_CHIPS.map((chip, index) => ({ label: chip.label, query: chip.query, position: index + 1 })),
+  });
+  console.log(`   ${CARRIED_OVER_CHIPS.length} popular-search chips`);
 
   /*
    * Thirty days of search history, weighted so the top five are stable.

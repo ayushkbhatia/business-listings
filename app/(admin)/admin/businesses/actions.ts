@@ -1,6 +1,7 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { HOME_CACHE_TAG } from "@/lib/db/queries/home";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import { requireStaff } from "@/lib/auth/staff";
 import {
@@ -48,7 +49,14 @@ function refused(error: unknown): ActionResult {
   throw error;
 }
 
-function done(businessId: string): void {
+function done(businessId: string, { home = false }: { home?: boolean } = {}): void {
+  /*
+     Board 6h: a suspension and a tier change are the two decisions that empty
+     a "Verified this week" card, and the home page's data is cached for five
+     minutes. A suspended business still on the home page for that long is a
+     stale claim about verification on the most-linked page on the site.
+  */
+  if (home) revalidateTag(HOME_CACHE_TAG, { expire: 0 });
   revalidatePath("/admin/businesses");
   // The account's own page, where every decision below is now made (4f B10).
   revalidatePath(`/admin/businesses/${businessId}`);
@@ -119,7 +127,7 @@ export async function setTier(formData: FormData): Promise<ActionResult> {
       reason: String(formData.get("reason") ?? ""),
     });
     if (!result.ok) return { ok: false, error: tierRefusal(result) };
-    done(String(formData.get("businessId") ?? ""));
+    done(String(formData.get("businessId") ?? ""), { home: true });
     return { ok: true, message: t("admin.businesses.tier_set", { tier: String(result.tier) }) };
   } catch (error) {
     return refused(error);
@@ -135,7 +143,7 @@ export async function suspend(formData: FormData): Promise<ActionResult> {
       reason: String(formData.get("reason") ?? ""),
     });
     if (!result.ok) return { ok: false, error: suspendRefusal(result) };
-    done(String(formData.get("businessId") ?? ""));
+    done(String(formData.get("businessId") ?? ""), { home: true });
     return { ok: true, message: t("admin.businesses.suspended") };
   } catch (error) {
     return refused(error);
@@ -151,7 +159,7 @@ export async function lift(formData: FormData): Promise<ActionResult> {
       reason: String(formData.get("reason") ?? ""),
     });
     if (!result.ok) return { ok: false, error: liftRefusal(result) };
-    done(String(formData.get("businessId") ?? ""));
+    done(String(formData.get("businessId") ?? ""), { home: true });
     return { ok: true, message: t("admin.businesses.lifted") };
   } catch (error) {
     return refused(error);

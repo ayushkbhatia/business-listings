@@ -495,6 +495,15 @@ reader and three levels of tests. **The staff half has nothing at all.**
   `20261027091000_notification_template_backfill` wrote the rest — and `ramadan_dates_moved` had
   no template **and** no routing row; it is on the platform floor with licence expiry now.
   `/admin/strings` stays a report and belongs to `12g-s`. `7f` and `10i` are still owed.
+- [x] **7.4b `6h`** — homepage curation, split out of `12g` and shipped against its board-level
+  handoff (14 Sep 2026). `/admin/content/home` is the four "Verified this week" slots
+  (`HomepageSlot`, eligibility read live through `featureBlock`, a lapsed or suspended business
+  held and rendered empty rather than backfilled), the popular-search chips typed as a label and
+  the `/search` query they run (`CuratedQuery`, six at most), and a map of the nine rails with
+  counts read through the home page's own getters. The sector grid stopped being chosen by hand
+  and computes by listing count; the mined popular chips and their fallback list went into the
+  table by migration. New capability `homepage.curate`, ops lead only (Q5). Q1 (per-slot
+  click-through), Q3 (`1a`'s LLC) and Q4 (scheduling) remain the owner's.
 - ~~**7.5 `6g`**~~ — **cut 14 Sep 2026.** Not needed for launch, and nothing had been built. The
   gap it named stays open: `check:vocabulary` reads `lib/i18n/en.ts` alone, so prose held in the
   database, such as the template copy `12g` owns, is checked by no scan.
@@ -576,6 +585,7 @@ the only large piece and the only one selling something it does not deliver.
 | `13a` | Contact reveal | partial | medium | The only layout that actually masks has no caller. | 3.6 |
 | `13b` | WhatsApp hand-off | not started | medium | Must be reconciled with a detector that reports sellers for off-platform steering. | 9.3 |
 | `12g` | Notification templates | built | 14 Sep 2026 | Versions per line, a services twin the carrier picks, Meta's queue recorded, volume queried, a delivery log. Strings moved to `12g-s`. | 7.4 |
+| `6h` | Homepage curation | built | 14 Sep 2026 | Four slots chosen by a person with eligibility read live, chips typed not mined, a rails map whose counts are the page's own queries. | 7.4b |
 | `7f` | Notification specimens | partial ↓ | export only | All four channels render; SMS has no carrier and records a skip with a reason. | 7.4 |
 | ~~`6g`~~ | ~~Admin copy audit~~ | **cut** | — | Cut 14 Sep 2026, unbuilt. The CI scan still reads exactly one file; every word held in the database is invisible to it. | ~~7.5~~ |
 | `10c` | Search — products tab | scaffold ↓ | medium | No facet rail of any kind on `/search`. | 5.3 |

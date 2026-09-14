@@ -378,15 +378,15 @@ describe("criterion 8 — a search that found nobody is a recruitment signal", (
     expect(await prisma.zeroResultQuery.count({ where: { query: found } })).toBe(0);
   });
 
-  it("keeps a supplier's own trade name off the buyer home page", async () => {
-    // `SearchQueryLog` feeds the "Popular:" chips. Without the tab marker, the
-    // first week of supplier traffic would put trade names on the directory
-    // home as things buyers search for.
-    const { readPopularQueries } = await import("@/lib/db/queries/home");
+  it("keeps a supplier's own trade name out of the buyer search report", async () => {
+    // `SearchQueryLog` is what a curator reads beside the home page's chips.
+    // Without the tab marker, the first week of supplier traffic would rank
+    // trade names there as things buyers search for.
+    const { searchedTerms } = await import("@/lib/content/homepage");
     const query = `${PREFIX}popular leak check`;
     await recordClaimSearch(query, 9);
 
-    expect(await readPopularQueries(50)).not.toContain(query);
+    expect((await searchedTerms([], new Date(), 500)).map((row) => row.query)).not.toContain(query);
   });
 });
 

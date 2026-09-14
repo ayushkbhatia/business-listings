@@ -126,7 +126,7 @@ model Category {
   code              String            // two-letter mono mark, e.g. "IN"
   synonyms          String[]          // includes Arabic terms for query routing
   defaultTemplateId String?
-  showOnHome        Boolean  @default(false)
+  showOnHome        Boolean  @default(false)  // /rfq/new's default trade; not the home grid since 6h
   acceptsRfq        Boolean  @default(true)
   requiresExtraCheck Boolean @default(false)
   publishThreshold  Int      @default(60)   // listings needed before landing pages publish
@@ -862,6 +862,37 @@ Two rules, both load-bearing:
 - **A staff write is a staff state change and owes an audit row with a reason.** There is
   deliberately no writer in this codebase yet; board `12h` owns it, and it goes through the
   audit service rather than around it.
+
+## Homepage curation — board 6h
+
+```prisma
+model HomepageSlot {
+  id         String   @id @default(cuid())
+  position   Int                // 1–4, unique, CHECK in SQL — the order is the decision
+  businessId String   @unique   // one slot per business
+  addedById  String   @db.Uuid  // staff actor; every change is also an audit row
+  addedAt    DateTime @default(now())
+}
+
+model CuratedQuery {
+  id        String  @id @default(cuid())
+  label     String            // "HVAC maintenance AMC", 2–40 chars
+  query     String            // the /search query string it runs, normalised
+  position  Int               // 1–6, unique — six is the hero row's cap
+  addedById String? @db.Uuid  // null only for the six the migration carried over
+}
+```
+
+The home page has nine rails and these are the two a person chooses.
+
+- **No `eligible` column and no `featuredUntil`.** Eligibility is `featureBlock` in
+  `lib/content/homepage-rules.ts`, read live on every render: Tier 2, published, not suspended,
+  merged or closed. A lapsed licence empties the card on the next sweep without anything writing
+  to the slot, and the slot stays held — rendered empty, never backfilled — until a person
+  removes it. Scheduling, if it comes, is a second model.
+- **No plan or payment input.** Paid visibility is `PlacementSlot`, in search results, labelled.
+- **A chip's query goes through `parseSearchQuery` and `toSearchParams`** on the way in, so it can
+  carry only keys the results page understands.
 
 ## The Pro trial, and what a plan drop does to a catalogue
 

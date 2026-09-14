@@ -199,7 +199,7 @@ and it is the one that argues back.
 /admin/content/guides                   Guides                          [10b, 6d]  built h5s1
 /admin/content/guides/:id               One guide, or new               [10b, 6d]  built h5s1
 /admin/content/attribution              Enquiry attribution                  [10i]  built h5s5
-/admin/content/home                     Homepage curation                    [12g]  built h4s7
+/admin/content/home                     Homepage curation                     [6h]  built 6h
 /admin/content/testimonials             Entry page testimonials                     built h5s7
 /admin/content/redirects                Redirects                            [12g]  built h4s7
 /admin/storefront-templates             Templates & section library      [5c]  built h4s6

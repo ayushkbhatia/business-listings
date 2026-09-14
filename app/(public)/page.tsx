@@ -11,11 +11,12 @@ import {
   getHomeSectors,
   getHomeStats,
   getNewCatalogueProducts,
+  getCuratedQueries,
   getOpenRfqTeasers,
-  getPopularQueries,
-  getRecentlyVerified,
+  getVerifiedSlots,
 } from "@/lib/db/queries";
 import { homeSummaryOf } from "@/lib/billing/plan-features";
+import { HOME_HEADLINE } from "@/lib/content/homepage-rules";
 import { formatCount, formatDuration, formatRelative } from "@/lib/format";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
@@ -80,14 +81,14 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function HomePage() {
-  const [stats, popular, rfqs, sectors, emirates, verified, products, plans, actor] =
+  const [stats, chips, rfqs, sectors, emirates, verified, products, plans, actor] =
     await Promise.all([
       getHomeStats(),
-      getPopularQueries(),
+      getCuratedQueries(),
       getOpenRfqTeasers(),
       getHomeSectors(),
       getEmirateChips(),
-      getRecentlyVerified(),
+      getVerifiedSlots(),
       getNewCatalogueProducts(),
       getHomePlans(),
       getActor(),
@@ -96,20 +97,6 @@ export default async function HomePage() {
   const isSeller = Boolean(actor?.roles.some(isSellerRole));
   const signedIn = Boolean(actor);
 
-  /*
-     The five seeded terms, for a directory with no search history yet. The
-     spec names them and calls them a fallback: the live five are the top real
-     queries of the last thirty days that returned something, and a fresh
-     install has none of those rather than having five bad ones.
-  */
-  const FALLBACK_QUERIES = [
-    "HVAC maintenance AMC",
-    "Steel fabrication",
-    "Pallet racking",
-    "Trade licence renewal",
-    "Corporate catering",
-  ];
-  const chips = popular.length > 0 ? popular : FALLBACK_QUERIES;
 
   return (
     <PublicShell bleed nav={<DirectoryNav />} footer={<DirectoryFooter />}>
@@ -141,7 +128,7 @@ export default async function HomePage() {
         <div className="mx-auto flex max-w-7xl flex-col gap-10 px-5 pt-11 pb-11 lg:flex-row lg:items-start lg:gap-12">
           <div className="min-w-0 flex-1">
             <h1 className="max-w-[560px] font-serif text-[2.375rem] leading-[1.08] tracking-[-0.02em] text-ink sm:text-[2.875rem]">
-              {t("home.hero_title")}
+              {t(HOME_HEADLINE.title)}
             </h1>
             <p className="mt-3.5 mb-6 max-w-[500px] text-prose leading-[1.6] text-body">
               {/*
@@ -159,19 +146,26 @@ export default async function HomePage() {
               formLabel={t("home.search_landmark")}
               whatLabel={t("home.search_what")}
               whereLabel={t("home.search_where")}
-              whatPlaceholder={t("home.search_what_placeholder")}
+              whatPlaceholder={t(HOME_HEADLINE.prompt)}
               anywhereLabel={t("home.search_where_all")}
               submitLabel={t("home.search_cta")}
             />
 
-            <div className="mt-4.5 flex flex-wrap items-center gap-2">
-              <span className="me-0.5 text-caption text-muted">{t("home.popular")}</span>
-              {chips.map((query) => (
-                <ChipLink key={query} size="sm" href={`/search?q=${encodeURIComponent(query)}`}>
-                  {query}
-                </ChipLink>
-              ))}
-            </div>
+            {/*
+               Typed at /admin/content/home (board 6h), each a label plus the
+               search it runs. No chips, no row: the label alone would be a
+               promise with nothing after it.
+            */}
+            {chips.length > 0 && (
+              <div className="mt-4.5 flex flex-wrap items-center gap-2">
+                <span className="me-0.5 text-caption text-muted">{t("home.popular")}</span>
+                {chips.map((chip) => (
+                  <ChipLink key={chip.href} size="sm" href={chip.href}>
+                    {chip.label}
+                  </ChipLink>
+                ))}
+              </div>
+            )}
           </div>
 
           {/*
@@ -289,10 +283,10 @@ export default async function HomePage() {
 
       {/* ── 5 · Verified this week ────────────────────────────────────── */}
       {/*
-         Dropped entirely when fewer than four businesses had their tier raised
-         in the window. A card here must be genuinely newly verified or the
-         section is a lie, and there is no version of it filled from general
-         listings.
+         The four slots an ops lead chose at /admin/content/home (board 6h), in
+         their order, each still holding Tier 2 at render. A slot that lost it
+         renders nothing rather than a card from general listings — three cards
+         is the honest rail — and with none eligible the section is dropped.
       */}
       {verified.length > 0 && (
         <section className="border-b border-line bg-paper">

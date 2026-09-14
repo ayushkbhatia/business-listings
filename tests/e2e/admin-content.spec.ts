@@ -59,7 +59,7 @@ test.describe("board 6f — the page matrix", () => {
     await expect(page.getByText(/A rule change takes two ops leads/).first()).toBeVisible();
   });
 
-  test("carries all five queues with a count and a named owner", async ({ page }) => {
+  test("carries all six queues with a count and a named owner", async ({ page }) => {
     const queues = page.getByRole("region", { name: /Editorial queues/ }).or(page.locator("section"));
     await expect(page.getByRole("heading", { name: "Editorial queues" })).toBeVisible();
     for (const label of [
@@ -68,6 +68,7 @@ test.describe("board 6f — the page matrix", () => {
       "Curated lists due a re-audit",
       "Lists where the ranking left the prose",
       "Guides overdue a regulatory re-check",
+      "Homepage slots emptied by a lost tier",
     ]) {
       await expect(queues.getByText(label).first()).toBeVisible();
     }
@@ -311,7 +312,7 @@ test.describe("board 12g — localisation is a report, not an editor", () => {
   });
 });
 
-test.describe("board 12g — redirects and the home page", () => {
+test.describe("board 12g — redirects", () => {
   test("refuses a redirect that would chain, and says where to point it", async ({ page }) => {
     await page.goto("/admin/content/redirects");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Redirects");
@@ -327,28 +328,130 @@ test.describe("board 12g — redirects and the home page", () => {
     await expect(page.getByRole("button", { name: "Add it" })).toBeEnabled();
   });
 
-  test("cannot feature a trade whose own page does not publish", async ({ page }) => {
-    /*
-     * The home page is the most-linked page on the site. A link from it to a
-     * thin page is the worst one to have — the page matrix doing a second job.
-     */
-    await page.goto("/admin/content/home");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Home page");
-    await expect(page.getByText(/most-linked page on the site/)).toBeVisible();
+  test("is axe clean", async ({ page }) => {
+    await page.goto("/admin/content/redirects");
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
 
-    const table = page.getByRole("table", { name: /Which trades/ });
-    const thin = table.getByRole("row").filter({ hasText: "Does not publish" }).first();
-    if ((await thin.count()) > 0) {
-      await expect(thin.getByRole("checkbox")).toBeDisabled();
-    }
+/*
+ * Board 6h — homepage curation.
+ *
+ * Serial, because the three writes below share the seed's slots and chips, and
+ * each puts back what it changed: slot 4 is filled and emptied, slot 1 moved
+ * and moved back, the last chip removed and added again. The seed leaves slot 4
+ * empty for exactly this.
+ */
+test.describe("board 6h — homepage curation", () => {
+  test.describe.configure({ mode: "serial" });
+
+  const REASON = "Rotating the rail for this week's newly verified suppliers.";
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/admin/content/home");
   });
 
-  test("both are axe clean", async ({ page }) => {
-    for (const path of ["/admin/content/redirects", "/admin/content/home"]) {
-      await page.goto(path);
-      const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
-      expect(results.violations, path).toEqual([]);
+  test("shows the four slots, the nine rails and the chips, with the counts the rows hold", async ({ page }) => {
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Homepage curation");
+    await expect(page.getByRole("heading", { name: "Verified this week" })).toBeVisible();
+
+    const slots = page.getByRole("region", { name: "Verified this week" }).getByRole("listitem");
+    await expect(slots).toHaveCount(4);
+    // Tier 3 is gone from the ladder, so the eligibility line names Tier 2 as the top rung and nothing above it.
+    await expect(page.getByText(/Only Tier 2 · Licence verified is eligible/)).toBeVisible();
+    await expect(page.getByText(/Tier 3/)).toHaveCount(0);
+
+    const rails = page.getByRole("table", { name: /home page's rails/ });
+    await expect(rails.locator("tbody tr")).toHaveCount(9);
+    await expect(rails.getByRole("cell", { name: "Curated here" })).toHaveCount(2);
+    await expect(rails.getByRole("link", { name: "6c" })).toHaveAttribute("href", "/admin/categories");
+
+    const chips = page.getByRole("complementary", { name: /Popular searches and what/ }).getByRole("listitem");
+    const count = await chips.count();
+    await expect(page.getByText(`${count} of 6`, { exact: true })).toBeVisible();
+    await expect(page.getByText(/Nobody can pay to be here/i)).toBeVisible();
+  });
+
+  test("features a business in the empty slot and takes it off again, each with a reason", async ({ page }) => {
+    await page.getByText("+ Add a business").click();
+    let pick = page.locator("input[type=radio]:not([disabled])").first();
+    if ((await pick.count()) === 0) {
+      await page.getByLabel("Business name").fill("Al");
+      await page.getByRole("button", { name: "Find" }).click();
+      pick = page.locator("input[type=radio]:not([disabled])").first();
     }
+    const name = (await page.locator(`label[for="${await pick.getAttribute("id")}"]`).innerText()).trim();
+    await pick.check();
+
+    const feature = page.getByRole("button", { name: "Feature in slot 4" });
+    await expect(feature).toBeDisabled();
+    await page.getByLabel(/Why this business/).fill(REASON);
+    await feature.click();
+    await expect(page.getByText("Featured in slot 4.", { exact: false })).toBeVisible();
+
+    const slot = page.getByRole("listitem", { name: `Slot 4: ${name}` });
+    await expect(slot).toBeVisible();
+    await slot.getByRole("button", { name: `Remove ${name} from the home page` }).click();
+    const remove = slot.getByRole("button", { name: "Remove from slot 4" });
+    await expect(remove).toBeDisabled();
+    await slot.getByLabel(/Why it comes off/).fill(REASON);
+    await remove.click();
+    await expect(page.getByText(/Removed\. Slot 4 is empty/)).toBeVisible();
+    await expect(page.getByRole("listitem", { name: "Slot 4", exact: true })).toContainText("Empty.");
+  });
+
+  test("reorders from the keyboard and will not save without a reason, then puts it back", async ({ page }) => {
+    const first = page.getByRole("listitem", { name: /^Slot 1: / });
+    const label = (await first.getAttribute("aria-label"))!;
+    const name = label.replace(/^Slot 1: /, "");
+
+    await first.getByRole("button", { name: `Move ${name} down a slot` }).click();
+    await expect(page.getByText("The order has changed and is not saved.")).toBeVisible();
+    await expect(page.getByRole("listitem", { name: `Slot 2: ${name}` })).toBeVisible();
+
+    const save = page.getByRole("button", { name: "Save order" });
+    await expect(save).toBeDisabled();
+    await page.getByLabel(/Why the new order/).fill(REASON);
+    await save.click();
+    await expect(page.getByText("Order saved.", { exact: false })).toBeVisible();
+
+    await page.getByRole("listitem", { name: `Slot 2: ${name}` }).getByRole("button", { name: `Move ${name} up a slot` }).click();
+    await page.getByLabel(/Why the new order/).fill("Putting the order back after checking it.");
+    await page.getByRole("button", { name: "Save order" }).click();
+    await expect(page.getByRole("listitem", { name: `Slot 1: ${name}` })).toBeVisible();
+  });
+
+  test("takes a chip off and types it back, and the home page links where the chip says", async ({ page }) => {
+    const aside = page.getByRole("complementary", { name: /Popular searches and what/ });
+    const last = aside.getByRole("listitem").last();
+    const chipLabel = (await last.getByRole("link").innerText()).trim();
+    const href = (await last.getByRole("link").getAttribute("href"))!;
+    const before = await aside.getByRole("listitem").count();
+
+    await last.getByRole("button", { name: `Remove ${chipLabel}`, exact: true }).click();
+    await page.getByLabel(new RegExp(`Why ${chipLabel} comes off`)).fill(REASON);
+    await page.getByRole("button", { name: "Remove chip", exact: true }).click();
+    await expect(page.getByText("Chip removed.")).toBeVisible();
+    await expect(aside.getByRole("link", { name: chipLabel, exact: true })).toHaveCount(0);
+
+    await page.getByText("+ Add a search").click();
+    await page.getByLabel(/Chip reads/).fill(chipLabel);
+    await page.getByLabel(/^Runs/).fill(href);
+    await expect(page.getByText(`Links to ${href}`)).toBeVisible();
+    await page.getByLabel(/Why this search/).fill(REASON);
+    await page.getByRole("button", { name: "Add chip" }).click();
+    await expect(page.getByText("Chip added.", { exact: false })).toBeVisible();
+    await expect(aside.getByRole("listitem")).toHaveCount(before);
+
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: chipLabel, exact: true }).first()).toHaveAttribute("href", href);
+  });
+
+  test("is axe clean, with the search open", async ({ page }) => {
+    await page.goto("/admin/content/home?find=Al");
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
   });
 });
 

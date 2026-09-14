@@ -23,10 +23,8 @@
  * finer cuts of the industrial supply the first six already cover.
  *
  * They have no listings yet, and the home page says so rather than padding:
- * sectors are ordered by listing count and an empty one sorts last with a real
- * zero on it. `showOnHome` is the ops lead's control over that, and
- * `/admin/content/home` already refuses to put a sector on the home page while
- * its own landing page is too thin to publish.
+ * since board 6h its sector grid computes — every sector with a listing, by
+ * listing count — so a sector with none is left off it until it recruits one.
  *
  * ## Subcategories
  *
@@ -51,10 +49,9 @@ export interface SubcategorySeed {
 /**
  * The six sectors board 1a adds. Same shape as `CATEGORIES` in seed-data.
  *
- * `showOnHome` is false on all six. They have no listings, and the curator's
- * own rule is that a sector goes on the home page when its landing page can
- * publish — sixty listings and thirty per cent verified. Turning them on from
- * here would be the seed overruling the rule the admin screen enforces.
+ * `showOnHome` is false on all six. It no longer decides the home page's grid
+ * (board 6h), only which trade `/rfq/new` opens on, and none of these six has a
+ * listing to open on.
  */
 export const EXTRA_CATEGORIES = [
   /*
@@ -74,9 +71,8 @@ export const EXTRA_CATEGORIES = [
      This sector gets its own suppliers instead, built after the main run and
      touching nothing that already exists.
 
-     `showOnHome` stays false like its neighbours: the curator's rule is that a
-     sector reaches the home page when its landing page can publish, and a
-     dozen listings is well under the sixty that takes.
+     `showOnHome` stays false like its neighbours. Its dozen listings put it on
+     the home page's grid anyway, which computes by listing count since 6h.
   */
   {
     slug: "pumps-and-motors",

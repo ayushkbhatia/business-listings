@@ -239,6 +239,10 @@ describe("every row cites the document", () => {
        templates" to ops lead alone — a save changes what every recipient is
        sent, and on WhatsApp it submits wording to Meta. The read adds the
        moderator, who answers a seller asking why they were not told.
+
+       `homepage.curate` joined on board 6h, whose Q5 names the gap: the screen
+       borrowed `taxonomy.write`. Ops lead alone, the rung that owns the tier the
+       four cards assert.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
@@ -247,6 +251,7 @@ describe("every row cites the document", () => {
       "business.close",
       "business.merge",
       "business.verification_tier.write",
+      "homepage.curate",
       "notification.read",
       "notification.template.write",
       "question.remove",
