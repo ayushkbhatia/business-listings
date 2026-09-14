@@ -390,6 +390,149 @@ export const en = {
   "admin.queue.position.left": "No longer waiting · {scope}",
   "admin.queue.position.next": "Next submission",
   "admin.queue.position.done": "That was the last one in this view",
+  "admin.queue.position.skip": "Skip",
+
+  // Board 4c-s — review a credential against the register that issued it.
+  // A lookup with three fields that match or do not, so every sentence names
+  // which of the three it is about, and the licence row is a cross-check.
+  "admin.credential_review.eyebrow": "Credential · {kind}",
+  "admin.credential_review.storefront": "Open their storefront",
+  "admin.credential_review.check_eyebrow": "The check",
+  "admin.credential_review.check_body":
+    "Three fields have to agree between what they submitted and the FTA public register: the agent number, the registered name and the status. The trade licence row beneath them is a cross-check that the register is describing this business, not a fourth field. You are not judging whether a document looks real; you are confirming a number resolves to this company and has not lapsed.",
+  "admin.credential_review.table_caption": "What they submitted, against the FTA public register",
+  "admin.credential_review.col.field": "Field",
+  "admin.credential_review.col.submitted": "What they submitted",
+  "admin.credential_review.col.register": "FTA public register",
+  "admin.credential_review.col.result": "Result",
+  "admin.credential_review.fetched": "Fetched {when}",
+  "admin.credential_review.field.number": "Agent number",
+  "admin.credential_review.field.name": "Registered name",
+  "admin.credential_review.field.status": "Status",
+  "admin.credential_review.field.entity": "Trade licence on file",
+  "admin.credential_review.field.entity_note": "Cross-check, not one of the three",
+  "admin.credential_review.submitted.no_expiry": "No expiry given",
+  "admin.credential_review.register.not_held": "No agent under this number",
+  "admin.credential_review.register.active_until": "Active until {date}",
+  "admin.credential_review.register.active": "Active, no end date",
+  "admin.credential_review.register.status": "{status} · {date}",
+  "admin.credential_review.register.no_licence": "No licence named",
+  "admin.credential_review.status.active": "Active",
+  "admin.credential_review.status.suspended": "Suspended",
+  "admin.credential_review.status.deregistered": "Deregistered",
+  "admin.credential_review.status.expired": "Expired",
+  "admin.credential_review.result.match": "Match",
+  "admin.credential_review.result.near": "Near match",
+  "admin.credential_review.result.mismatch": "No match",
+  "admin.credential_review.result.lapsed": "Lapsed",
+  "admin.credential_review.result.contradicts": "Dates differ",
+  "admin.credential_review.result.same": "Same entity",
+  "admin.credential_review.result.different": "Different entity",
+  "admin.credential_review.result.unconfirmed": "Not confirmed",
+  "admin.credential_review.differs": "(differs)",
+  "admin.credential_review.tally": { one: "{n} of the three fields matches.", other: "{n} of the three fields match." },
+  "admin.credential_review.document.label": "Document",
+  "admin.credential_review.document.none": "No certificate uploaded",
+  "admin.credential_review.document.file_size": "{filename} · {size}",
+  "admin.credential_review.notice.no_number":
+    "There is no agent number on this credential to look up, so there is nothing to compare.",
+  "admin.credential_review.notice.not_read": "The register has not been read for this number yet.",
+  "admin.credential_review.notice.unavailable":
+    "The FTA register did not answer at {when}: {cause}. Nothing can be decided against a panel that did not load.",
+  "admin.credential_review.notice.unavailable_fix":
+    "Fetch it again now, or leave it: the hourly sweep asks again, and verifies it if everything matches.",
+  "admin.credential_review.notice.not_found": "The FTA register holds no agent under {number}.",
+  "admin.credential_review.notice.not_found_fix":
+    "Reject it as not on the register, or ask for a clearer document if the certificate shows a different number.",
+  "admin.credential_review.notice.no_number_fix": "Ask the seller for the agent number printed on their FTA certificate.",
+  "admin.credential_review.notice.stale": "This register read is from {when}. A credential is decided only against a read from the last hour.",
+  "admin.credential_review.notice.stale_fix": "Fetch the register again, then decide.",
+  "admin.credential_review.cause.not_configured": "no register is connected",
+  "admin.credential_review.cause.timeout": "it timed out",
+  "admin.credential_review.cause.http_status": "it returned an error",
+  "admin.credential_review.cause.bad_response": "its answer could not be read",
+  "admin.credential_review.cause.network": "it could not be reached",
+  "admin.credential_review.refetch": "Fetch the register again",
+  "admin.credential_review.refetching": "Fetching…",
+  "admin.credential_review.refetched": "Fetched the register again.",
+  "admin.credential_review.unlocks.title": "What verifying this changes",
+  "admin.credential_review.unlocks.storefront":
+    "Their storefront reads this agent number as verified against the FTA register. Until then it reads as their own claim.",
+  "admin.credential_review.unlocks.unpublished":
+    "Their listing is not on the directory yet, so no buyer reads the change until it is.",
+  "admin.credential_review.unlocks.proposals": {
+    one: "It also reads as verified on {n} proposal a buyer is comparing now.",
+    other: "It also reads as verified on {n} proposals buyers are comparing now.",
+  },
+  "admin.credential_review.unlocks.nothing_withheld": {
+    one: "Nothing is withheld from publishing: their {n} live service does not wait on this credential.",
+    other: "Nothing is withheld from publishing: none of their {n} live services waits on this credential.",
+  },
+  "admin.credential_review.unlocks.no_services": "Nothing is withheld from publishing: no service waits on a credential.",
+  "admin.credential_review.waiting": "In review for {waiting}",
+  "admin.credential_review.waiting_on_seller": "Asked the seller for a clearer document {when}: {note}",
+  "admin.credential_review.resubmitted": "The seller sent a corrected number or document {when}.",
+  "admin.credential_review.decision.reason_hint":
+    "Recorded with the decision. On a request or a rejection, the seller reads it beside the reason.",
+  "admin.credential_review.decision.reject_legend": "If you reject it, why — sent to the seller verbatim",
+  "admin.credential_review.decision.reason_unsupported": "The register read does not show this",
+  "admin.credential_review.decision.verify": "Verify — all three match",
+  "admin.credential_review.decision.more_info": "Ask for a clearer document",
+  "admin.credential_review.decision.reject": "Reject",
+  "admin.credential_review.decision.blocked_read":
+    "Nothing can be decided until the register has answered, within the last hour.",
+  "admin.credential_review.decision.blocked_not_found": "Verify is unavailable: the number does not resolve on the register.",
+  "admin.credential_review.decision.blocked_fields": {
+    one: "Verify is unavailable: {n} of the three fields matches.",
+    other: "Verify is unavailable: {n} of the three fields match.",
+  },
+  "admin.credential_review.decision.blocked_entity":
+    "Verify is unavailable: all three fields match, but the register names a different trade licence.",
+  "admin.credential_review.decision.blocked_unconfirmed":
+    "Verify is unavailable: all three fields match, but the register names no trade licence to confirm the entity.",
+  "admin.credential_review.decision.error_fix": "Reload the page to see where it stands, then decide again.",
+  "admin.credential_review.reject.not_on_register": "Number does not resolve on the register",
+  "admin.credential_review.reject.different_entity": "Resolves to a different entity",
+  "admin.credential_review.reject.lapsed": "Lapsed on the register",
+  "admin.credential_review.reject.unreadable": "Document unreadable",
+  "admin.credential_review.done.verified": "Verified. Their storefront reads it as checked against the FTA register.",
+  "admin.credential_review.done.more_info": "Asked for a clearer document. It stays in the queue while the seller answers.",
+  "admin.credential_review.done.rejected": "Rejected. The seller reads the reason on their credentials screen.",
+  "admin.credential_review.error.not_found": "That credential does not exist.",
+  "admin.credential_review.error.not_pending":
+    "That credential is not waiting for a decision any more. Somebody decided it, the seller changed it, or the register was read again.",
+  "admin.credential_review.error.register_unread": "Fetch the register again first. A decision is only taken against a read from the last hour.",
+  "admin.credential_review.error.register_disagrees":
+    "The register does not agree on all three fields and the licence, so this cannot be verified.",
+  "admin.credential_review.error.reason_unsupported": "Choose one of the four reasons that the register read supports.",
+  "admin.credential_review.error.not_configured": "No FTA register is connected on this deployment, so there is nothing to fetch.",
+  "admin.credential_review.decided.title": "Decided",
+  "admin.credential_review.decided.someone": "a member of staff who has since left",
+  "admin.credential_review.decided.verified": "Verified against the FTA register by {name}, {when}.",
+  "admin.credential_review.decided.auto_verified":
+    "Verified by the register read itself, {when}. All three fields and the licence matched, so no person needed to look.",
+  "admin.credential_review.decided.rejected": "Rejected by {name}, {when}: {reason}.",
+  "admin.credential_review.decided.never":
+    "This credential never entered review. It was saved without an agent number, or when no FTA register was connected, so it is the seller's own claim.",
+  "admin.credential_review.decided.note": "They wrote: {note}",
+  "admin.credential_review.unverifiable.title": "Nothing to review",
+  "admin.credential_review.unverifiable.body":
+    "{kind} is not a credential any register can answer for. It is the seller's own claim and renders as one, so there is no review to decide.",
+  "admin.credential_review.rail_label": "About this check",
+  "admin.credential_review.rail.lookup_title": "A lookup, not a judgement",
+  "admin.credential_review.rail.lookup_body":
+    "Reviewing a product submission is a judgement about photographs and stock claims, and two reviewers can reasonably disagree. This is a lookup with three fields that either match or do not. Where the register answers and everything matches, the platform verifies it without anybody opening this screen.",
+  "admin.credential_review.rail.registers_title": "Which registers we can reach",
+  "admin.credential_review.rail.fta_live":
+    "The FTA tax agent register is connected. Only what it could not settle reaches this queue.",
+  "admin.credential_review.rail.fta_off":
+    "No FTA register is connected on this deployment, so no new agent number reaches this queue.",
+  "admin.credential_review.rail.licence": "Trade licences are checked on the claim screen.",
+  "admin.credential_review.rail.claims":
+    "MoF audit approval, professional-body membership and indemnity insurance stay their claim, rendered as such. No step here pretends to verify them.",
+  "admin.credential_review.rail.reasons_title": "Rejection reasons",
+  "admin.credential_review.rail.reasons_note":
+    "The reason is sent to the seller verbatim. “Rejected” with no cause generates a support ticket every time.",
   "admin.queue.tune": "Tune auto-check rules",
   "admin.queue.empty_board.body": "Median decision time over the last 30 days: {time}. Last decision {when}.",
   "admin.queue.empty_board.body_none": "Nobody has decided a submission in the last 30 days.",
@@ -442,6 +585,9 @@ export const en = {
   "admin.queue.skip.listing_claimed": "the listing already has an owner",
   "admin.queue.skip.not_staff": "that person does not work the queue",
   "admin.queue.skip.not_found": "not found",
+  "admin.queue.skip.register_unread": "the register read is missing or over an hour old",
+  "admin.queue.skip.register_disagrees": "the register does not agree on all three",
+  "admin.queue.skip.reason_code_required": "a credential is rejected on its own screen, with one of four reasons",
   "admin.queue.skip_count": "{reason} ({n})",
   "admin.queue.error.not_eligible": "A check on this submission did not pass, so it cannot be bulk approved. Open it and decide it on its own.",
   "admin.queue.error.not_pending": "That submission is no longer waiting. Somebody decided it, or the seller withdrew it.",
@@ -455,6 +601,9 @@ export const en = {
   "admin.queue.error.listing_claimed": "Somebody already owns this listing. A second claim should be settled as a conflict.",
   "admin.queue.error.not_staff": "That person does not work the approval queue. Choose a moderator or an ops lead.",
   "admin.queue.error.not_found": "That submission is not in the queue.",
+  "admin.queue.error.register_unread": "Fetch the register again before deciding. A credential is only decided against a read from the last hour.",
+  "admin.queue.error.register_disagrees": "The register does not agree on all three fields and the licence, so this cannot be verified. Ask for a clearer document, or reject it with the reason the read shows.",
+  "admin.queue.error.reason_code_required": "Reject a credential on its own screen, with one of the four reasons the seller reads.",
   "admin.queue.error.fix": "Reload the queue and choose again.",
   "admin.queue.summary.trade_name": "Trade name: {from} → {to}",
   "admin.queue.summary.licence": "Licence number: {from} → {to}",
@@ -465,6 +614,7 @@ export const en = {
   "admin.queue.summary.conflict": "{a} and {b} both claim this listing",
   "admin.queue.summary.credential": "Credential: {name}",
   "admin.queue.summary.location": "{type} in {area}, {emirate}",
+  "admin.queue.summary.register_credential": "FTA tax agent {number}",
   "admin.queue.check.business_closing.closing": "Business is closing",
   "admin.queue.check.licence_current.valid": "Licence current",
   "admin.queue.check.licence_current.expiring": { one: "Licence expires in {n} day", other: "Licence expires in {n} days" },
@@ -507,6 +657,26 @@ export const en = {
   "admin.queue.check.two_claims.open": { one: "{n} claim on one listing", other: "{n} claims on one listing" },
   "admin.queue.check.claim_evidence.documents": "Both claims uploaded a licence",
   "admin.queue.check.claim_evidence.by_phone": { one: "{n} claim by phone only", other: "{n} claims by phone only" },
+  // Board 4c-s. What the register said, a field at a time — the three fields and
+  // the licence join each have their own sentence, so no row can add them up.
+  "admin.queue.check.register_answered.no_number": "No agent number to look up",
+  "admin.queue.check.register_answered.not_read": "Not looked up on the register yet",
+  "admin.queue.check.register_answered.unavailable": "FTA register did not answer",
+  "admin.queue.check.register_answered.stale": "Register read is over an hour old",
+  "admin.queue.check.register_number.match": "Agent number on the FTA register",
+  "admin.queue.check.register_number.not_found": "Agent number not on the FTA register",
+  "admin.queue.check.register_number.other": "Register returned agent number {number}",
+  "admin.queue.check.register_name.match": "Name matches the register",
+  "admin.queue.check.register_name.near": "Name near-match: {name} on the register",
+  "admin.queue.check.register_name.other": "Register names {name}",
+  "admin.queue.check.register_status.active_until": "Active on the register until {date}",
+  "admin.queue.check.register_status.active": "Active on the register",
+  "admin.queue.check.register_status.ended": "Lapsed on the register {date}",
+  "admin.queue.check.register_status.inactive": "Register status: {status}",
+  "admin.queue.check.register_status.contradicts": "Certificate says {certificate}, register says {register}",
+  "admin.queue.check.register_entity.same": "Same entity as the trade licence",
+  "admin.queue.check.register_entity.different": "Register names licence {licence}, not this listing's",
+  "admin.queue.check.register_entity.unconfirmed": "Register names no trade licence",
   "admin.queue.trade_kind.goods": "products",
   "admin.queue.trade_kind.services": "services",
   "admin.review.checks_title": "Automated checks",
@@ -615,6 +785,16 @@ export const en = {
   "admin.queue_rules.rule.two_claims.body": "A conflict is never approved in bulk. Who owns a company is a person's call. Cannot be switched off.",
   "admin.queue_rules.rule.claim_evidence.name": "Both claims sent a licence",
   "admin.queue_rules.rule.claim_evidence.body": "Flags a conflict where a claim came by phone only.",
+  "admin.queue_rules.rule.register_answered.name": "Register answered",
+  "admin.queue_rules.rule.register_answered.body": "An FTA tax agent number is decided against a read of the register from the last hour. A register that did not answer, or a read older than that, decides nothing. Cannot be switched off.",
+  "admin.queue_rules.rule.register_number.name": "Agent number on the register",
+  "admin.queue_rules.rule.register_number.body": "The number resolves on the FTA register. Cannot be switched off.",
+  "admin.queue_rules.rule.register_name.name": "Registered name matches",
+  "admin.queue_rules.rule.register_name.body": "The register's name for the agent against the listing's licensed trade name, ignoring case, punctuation and how the legal form is spelled. Cannot be switched off.",
+  "admin.queue_rules.rule.register_status.name": "Active on the register",
+  "admin.queue_rules.rule.register_status.body": "The register lists the agent as active, and any expiry on the certificate agrees with it. Cannot be switched off.",
+  "admin.queue_rules.rule.register_entity.name": "Same entity as the licence",
+  "admin.queue_rules.rule.register_entity.body": "The trade licence the register names is the one on the listing. A cross-check that the register describes this business, not a fourth field. Cannot be switched off.",
   "admin.queue_rules.thresholds": "Thresholds",
   "admin.queue_rules.expiry": "Expiry notice",
   "admin.queue_rules.expiry_hint": "Flag a licence or credential expiring within this many days. Between {min} and {max}.",
@@ -11107,7 +11287,7 @@ export const en = {
   // carries its own fix. The third is not a warning at all — nobody could have
   // done anything differently and there is nothing to put right — so it is
   // information, and giving it a fix line would be inventing one.
-  "credentials.register.not_found": "Saved as your own claim. The FTA register does not hold that number.",
+  "credentials.register.not_found": "Saved as your own claim. The FTA register does not hold that number, so a person on our team will look at it.",
   "credentials.register.not_found_fix":
     "Check it against your certificate. If it was mistyped, remove the row and add it again.",
   "credentials.register.bad_format": "Saved as your own claim. That is not the shape of a tax agent number.",
@@ -11118,6 +11298,38 @@ export const en = {
   // Said once, above the form, where a register is not wired up at all. The
   // alternative is a field wearing a WE VERIFY THIS badge that verifies nothing.
   "credentials.register.off": "We are not connected to the FTA register yet, so a tax agent number saves as your own claim for now.",
+  // Board 4c-s. Two answers the register can give that are nobody's fault and
+  // settle nothing on their own: it did not answer, or it answered and did not
+  // agree on everything. Both wait for a person, and neither blames the seller.
+  "credentials.register.register_retry":
+    "Saved as your own claim for now. The FTA register did not answer, so we will ask it again within the hour.",
+  "credentials.register.mismatch":
+    "Saved as your own claim for now. The FTA register holds that number, but not everything matched, so a person on our team will compare the two.",
+
+  // Where a credential stands with our team — board 4c-s. The reason for a
+  // rejection is sent verbatim, and each one says what the seller can do.
+  "credentials.review.pending": "With our team. The register did not settle it on its own, so a person is comparing the two.",
+  "credentials.review.more_info": "We need a clearer document: {note}",
+  "credentials.review.more_info_fix":
+    "Upload a clearer copy of the certificate, or correct the number, and send it back. It stays with us while you do.",
+  "credentials.review.rejected": "Not verified: {reason}. {note}",
+  "credentials.review.hidden": "Buyers do not see a credential we could not verify.",
+  "credentials.review.reason.not_on_register": "the number does not resolve on the FTA register",
+  "credentials.review.reason.different_entity": "the FTA register lists this number under a different company or licence",
+  "credentials.review.reason.lapsed": "the approval has lapsed on the FTA register",
+  "credentials.review.reason.unreadable": "the document could not be read",
+  "credentials.review.fix.not_on_register": "Check the number against your FTA approval and send it again.",
+  "credentials.review.fix.different_entity": "Send the agent number issued to this business, under the licence on your listing.",
+  "credentials.review.fix.lapsed": "Renew the approval with the FTA, then send it again.",
+  "credentials.review.fix.unreadable": "Upload a clearer scan of the certificate and send it again.",
+  "credentials.review.resubmit": "Send it again",
+  "credentials.review.resubmit_title": "Correct and send again",
+  "credentials.review.resubmitting": "Sending…",
+  "credentials.review.resubmitted": "Sent. It is back with our team.",
+  "credentials.review.resubmitted_verified": "Sent, and the FTA register now agrees on all three. It is verified.",
+  "credentials.review.cancel": "Cancel",
+  "credentials.review.error.not_open": "That credential is not waiting on you any more.",
+  "credentials.review.error.not_open_fix": "Reload the page to see where it stands.",
 
   // Every refusal on this screen is structural, and each one says what to do.
   // "Something went wrong" is not a notice, it is an apology — `Alert` refuses

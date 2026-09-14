@@ -1,26 +1,35 @@
+import { resolveTarget } from "@/lib/db/target-url";
+import { fixtureRecord, fixtureUnreachable } from "./fta-fixture";
+import {
+  FTA_REGISTER_SOURCE,
+  registerRecordSchema,
+  type RegisterFetch,
+  type UnavailableCause,
+} from "./register-fetch";
+
 /**
- * The FTA tax agent register — board `8b-s`, and the one check on this screen.
+ * The FTA tax agent register — board `8b-s`'s one check, and board `4c-s`'s
+ * right-hand column.
  *
  * ## There is no register integration on this platform, and this is where it
- * would land
+ * lands
  *
- * The handoff says "the trade-licence register lookup already exists from
- * onboarding verification". **It does not.** What exists in
- * `lib/verification/licence/` is number normalisation and text extraction from
- * an uploaded PDF; the tier that follows is set by an `ops_lead` who looked the
- * licence up themselves. `lib/verification/review.ts` says it in as many words:
- * *"Nothing on this platform checks an ISO number against a registrar."*
+ * `8b-s`'s handoff said the trade-licence lookup already existed from
+ * onboarding verification. It does not: `lib/verification/licence/` is number
+ * normalisation and text extraction, and the tier that follows is set by an
+ * `ops_lead` who looked the licence up themselves. The FTA publishes no API a
+ * platform can call either. So this module is the seam and the contract:
+ * `fetchTaxAgent` answers from whatever `FTA_REGISTER_URL` names, speaking the
+ * body `registerRecordSchema` describes, and until something is configured it
+ * answers `unavailable · not_configured` — which every screen says plainly
+ * rather than converting into a failure somebody is blamed for.
  *
- * So this module is the seam and not the integration. `checkTaxAgent` is the
- * one function a real FTA client has to satisfy, it is pure of Prisma, and
- * until a register is configured it answers `register_unavailable` — which the
- * screen surfaces inline rather than converting into a failure the seller is
- * blamed for.
+ * ## What changed at `4c-s`
  *
- * Board `8b-s` Q2 asked whether a failed lookup should block the save. It does
- * not, and the reason is stronger with no register than with one: a hard block
- * on a live external call is a bad failure mode, and a hard block on a call
- * that cannot be made at all is a screen nobody can finish.
+ * `8b-s`'s version returned `ok` on any 200 and threw the body away. A register
+ * that answered for the number under a different company's name verified the
+ * credential anyway — the check compared nothing. This returns the whole read,
+ * `./compare.ts` decides whether it matches, and the caller keeps the read.
  */
 
 /**
@@ -37,57 +46,105 @@ export function normaliseTaan(value: string): string | null {
   return digits;
 }
 
-export type RegisterAnswer =
-  | { ok: true; verifiedBy: string; verifiedOn: Date }
-  /** The number is well-formed and the register does not hold it. */
-  | { ok: false; reason: "not_found" }
-  /** Malformed before anything was asked. */
-  | { ok: false; reason: "bad_format" }
-  /** No register is configured, or it did not answer. Not the seller's fault. */
-  | { ok: false; reason: "register_unavailable" };
+export type RegisterMode = "http" | "fixture" | "off";
 
 /**
- * Whether a register is wired up at all.
+ * Which register answers, if any.
  *
- * An environment variable rather than a build flag, so the day the integration
- * lands it is configuration and not a deploy of this file. Absent everywhere
- * today, which is why every FTA number currently saves as a claim.
+ * An environment variable rather than a build flag, so the day an integration
+ * lands it is configuration and not a deploy of this file. `fixture` is the
+ * stand-in in `./fta-fixture.ts`, and it is honoured only against a loopback
+ * database outside a production deployment — the same two conditions
+ * `lib/dev/guard.ts` puts on `/dev`, restated here because that module is
+ * server-only and this one is read by unit tests. Anywhere else a fixture reads
+ * as no register at all.
  */
-export function registerConfigured(): boolean {
-  return Boolean(process.env.FTA_REGISTER_URL);
+export function registerMode(env: NodeJS.ProcessEnv = process.env): RegisterMode {
+  const value = env["FTA_REGISTER_URL"]?.trim() ?? "";
+  if (value === "") return "off";
+  if (value === "fixture") {
+    const target = resolveTarget(env);
+    return env["VERCEL_ENV"] !== "production" && target?.isLoopback === true ? "fixture" : "off";
+  }
+  return /^https?:\/\//.test(value) ? "http" : "off";
+}
+
+export function registerConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
+  return registerMode(env) !== "off";
+}
+
+/** Four seconds, then the read is unavailable. A seller's save is waiting on it. */
+const TIMEOUT_MS = 4000;
+
+function unavailable(asked: string, now: Date, cause: UnavailableCause, httpStatus?: number): RegisterFetch {
+  return {
+    v: 1,
+    asked,
+    fetchedAt: now.toISOString(),
+    source: FTA_REGISTER_SOURCE,
+    outcome: "unavailable",
+    cause,
+    ...(httpStatus === undefined ? {} : { httpStatus }),
+  };
 }
 
 /**
- * Ask the register. Returns what actually happened, never a flattering version.
+ * Ask the register about one well-formed number. Returns what actually
+ * happened, never a flattering version — a timeout is not a "not found", and a
+ * body that does not parse is not a match.
  *
- * `now` is a parameter and never `Date.now()` in the body — the same rule
- * `credentialState` follows, because this runs inside a request.
+ * `now` is a parameter and never `Date.now()` in the body, because the read's
+ * timestamp is the one a reviewer is shown and the one freshness is judged by.
  */
-export async function checkTaxAgent(
-  raw: string,
+export async function fetchTaxAgent(
+  number: string,
   now: Date = new Date(),
-): Promise<RegisterAnswer> {
-  const number = normaliseTaan(raw);
-  if (number === null) return { ok: false, reason: "bad_format" };
+  env: NodeJS.ProcessEnv = process.env,
+  fetcher: typeof fetch = fetch,
+): Promise<RegisterFetch> {
+  const asked = number;
+  const mode = registerMode(env);
+  if (mode === "off") return unavailable(asked, now, "not_configured");
 
-  /*
-     No register, no check. Returning `not_found` here would tell a seller with
-     a perfectly good agent number that the FTA has never heard of them, which
-     is a claim this platform is in no position to make.
-  */
-  if (!registerConfigured()) return { ok: false, reason: "register_unavailable" };
+  if (mode === "fixture") {
+    if (fixtureUnreachable(asked)) return unavailable(asked, now, "timeout");
+    const record = fixtureRecord(asked);
+    return record
+      ? { v: 1, asked, fetchedAt: now.toISOString(), source: FTA_REGISTER_SOURCE, outcome: "found", record }
+      : { v: 1, asked, fetchedAt: now.toISOString(), source: FTA_REGISTER_SOURCE, outcome: "not_found" };
+  }
 
+  const base = env["FTA_REGISTER_URL"]!.trim().replace(/\/+$/, "");
+  let response: Response;
   try {
-    const response = await fetch(
-      `${process.env.FTA_REGISTER_URL}/tax-agents/${encodeURIComponent(number)}`,
-      { headers: { accept: "application/json" }, signal: AbortSignal.timeout(4000) },
-    );
-    if (response.status === 404) return { ok: false, reason: "not_found" };
-    if (!response.ok) return { ok: false, reason: "register_unavailable" };
-    return { ok: true, verifiedBy: "FTA tax agent register", verifiedOn: now };
-  } catch {
+    response = await fetcher(`${base}/tax-agents/${encodeURIComponent(asked)}`, {
+      headers: {
+        accept: "application/json",
+        ...(env["FTA_REGISTER_TOKEN"] ? { authorization: `Bearer ${env["FTA_REGISTER_TOKEN"]}` } : {}),
+      },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+      cache: "no-store",
+    });
+  } catch (error) {
     // A timeout, a DNS failure, a certificate the runtime does not like. None
     // of them is evidence about the seller.
-    return { ok: false, reason: "register_unavailable" };
+    const timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+    return unavailable(asked, now, timedOut ? "timeout" : "network");
   }
+
+  if (response.status === 404) {
+    return { v: 1, asked, fetchedAt: now.toISOString(), source: FTA_REGISTER_SOURCE, outcome: "not_found" };
+  }
+  if (!response.ok) return unavailable(asked, now, "http_status", response.status);
+
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    return unavailable(asked, now, "bad_response", response.status);
+  }
+  const parsed = registerRecordSchema.safeParse(body);
+  if (!parsed.success) return unavailable(asked, now, "bad_response", response.status);
+
+  return { v: 1, asked, fetchedAt: now.toISOString(), source: FTA_REGISTER_SOURCE, outcome: "found", record: parsed.data };
 }

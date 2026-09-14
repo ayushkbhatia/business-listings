@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/client";
 import { resolveTemplate } from "@/lib/spec/resolve";
 import { VERIFIED_TIER } from "@/lib/verification";
 import { hostnameFor } from "@/lib/domains/label";
+import { STANDING_CREDENTIAL } from "@/lib/credentials/kinds";
 
 /**
  * Server-side reads for the public directory.
@@ -58,7 +59,8 @@ export const STOREFRONT_TAB_COUNTS = {
   services: { where: { status: "live" as const } },
   // Board `1d-s`. Every row, lapsed or not — an expiry changes nothing on this
   // tab (B4), and the tab counts what the table below it lists.
-  credentials: true,
+  // Board `4c-s`: less the ones a person rejected, which the table does not list either.
+  credentials: { where: STANDING_CREDENTIAL },
   locations: { where: { published: true } },
   reviews: { where: { removedAt: null, heldAt: null } },
 } as const;

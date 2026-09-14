@@ -12,6 +12,7 @@ import type {
   AddCredentialResult,
   CredentialSignResult,
   RemoveCredentialResult,
+  ResubmitCredentialResult,
 } from "./actions";
 
 /**
@@ -47,6 +48,13 @@ export interface CredentialTile {
   /** The register's name, once one has answered. */
   verifiedBy: string | null;
   verifiedOn: string | null;
+  /**
+   * Board `4c-s` — where it stands with our team, already in words. Null on
+   * every credential that is not in review, which is most of them.
+   */
+  standing: { tone: "info" | "warn" | "bad"; body: string; fix?: string } | null;
+  /** Asked for a clearer document, or rejected: the seller may send it again, starting from this. */
+  resubmit: { identifier: string; expires: string } | null;
 }
 
 export interface SuggestionTile {
@@ -74,6 +82,7 @@ export interface CredentialsWorkspaceProps {
   sign: (formData: FormData) => Promise<CredentialSignResult>;
   add: (formData: FormData) => Promise<AddCredentialResult>;
   remove: (formData: FormData) => Promise<RemoveCredentialResult>;
+  resubmit: (formData: FormData) => Promise<ResubmitCredentialResult>;
 }
 
 interface Picked {
@@ -101,6 +110,10 @@ const NOTE: Record<RegisterNote, { tone: "warn" | "info"; body: string; fix?: st
     fix: t("credentials.register.bad_format_fix"),
   },
   register_unavailable: { tone: "info", body: t("credentials.register.unavailable") },
+  // Board 4c-s. Neither is the seller's to fix: one waits for the register,
+  // the other for a person. Information, so no invented fix line.
+  register_retry: { tone: "info", body: t("credentials.register.register_retry") },
+  mismatch: { tone: "info", body: t("credentials.register.mismatch") },
 };
 
 export function CredentialsWorkspace({
@@ -112,6 +125,7 @@ export function CredentialsWorkspace({
   sign,
   add,
   remove,
+  resubmit,
 }: CredentialsWorkspaceProps) {
   const router = useRouter();
   const form = useId();
@@ -221,7 +235,7 @@ export function CredentialsWorkspace({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h3 className="font-mono text-eyebrow uppercase text-faint">
+        <h3 id={`${form}-add`} className="font-mono text-eyebrow uppercase text-faint">
           {t("credentials.add_eyebrow")}
         </h3>
         <p className="mt-1 text-caption text-muted">{t("credentials.add_note")}</p>
@@ -231,7 +245,14 @@ export function CredentialsWorkspace({
         <ul className="flex list-none flex-col gap-2.5">
           {held.map((row) => (
             <li key={row.id}>
-              <HeldRow row={row} onRemove={onRemove} busy={pending} />
+              <HeldRow
+                row={row}
+                onRemove={onRemove}
+                busy={pending}
+                accept={accept}
+                sign={sign}
+                resubmit={resubmit}
+              />
             </li>
           ))}
         </ul>
@@ -269,6 +290,9 @@ export function CredentialsWorkspace({
       <form
         ref={formRef}
         action={onAdd}
+        // Named, so the form is a landmark a screen reader can tell from the
+        // "Correct and send again" form a request or rejection opens above it.
+        aria-labelledby={`${form}-add`}
         className="flex flex-col gap-3.5 rounded-card border border-line-strong bg-card px-5 py-4"
       >
         <div className="grid gap-3.5 sm:grid-cols-2">
@@ -367,11 +391,20 @@ function HeldRow({
   row,
   onRemove,
   busy,
+  accept,
+  sign,
+  resubmit,
 }: {
   row: CredentialTile;
   onRemove: (id: string) => void;
   busy: boolean;
+  accept: string;
+  sign: (formData: FormData) => Promise<CredentialSignResult>;
+  resubmit: (formData: FormData) => Promise<ResubmitCredentialResult>;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [sent, setSent] = useState<string | null>(null);
+
   return (
     <div className="rounded-card border border-line-strong bg-card px-4 py-3.5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -418,7 +451,188 @@ function HeldRow({
           {t("credentials.verified_on", { register: row.verifiedBy, when: row.verifiedOn })}
         </p>
       )}
+
+      {/*
+         Board 4c-s. Where it stands with our team, on the screen the seller
+         would come to act on it — a request nobody reads is a submission that
+         waits for ever. The reason for a rejection is the one the reviewer
+         chose, verbatim, with what to do about it.
+      */}
+      {row.standing && !sent && (
+        <div className="mt-3">
+          <Alert
+            tone={row.standing.tone}
+            {...(row.standing.fix ? { fix: row.standing.fix } : {})}
+            {...(row.resubmit && !editing
+              ? {
+                  action: (
+                    <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
+                      {t("credentials.review.resubmit")}
+                    </Button>
+                  ),
+                }
+              : {})}
+          >
+            {row.standing.body}
+          </Alert>
+        </div>
+      )}
+
+      {sent && (
+        <div className="mt-3">
+          <Alert tone="ok" live="polite">
+            {sent}
+          </Alert>
+        </div>
+      )}
+
+      {row.resubmit && editing && !sent && (
+        <ResubmitForm
+          id={row.id}
+          name={row.name}
+          start={row.resubmit}
+          accept={accept}
+          sign={sign}
+          resubmit={resubmit}
+          onCancel={() => setEditing(false)}
+          onSent={(message) => {
+            setEditing(false);
+            setSent(message);
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Board `4c-s` — correct and send again. The number and the expiry start from
+ * what was sent before, and a new certificate is optional: a typo fixed is a
+ * complete answer to "number does not resolve".
+ */
+function ResubmitForm({
+  id,
+  name,
+  start,
+  accept,
+  sign,
+  resubmit,
+  onCancel,
+  onSent,
+}: {
+  id: string;
+  name: string;
+  start: { identifier: string; expires: string };
+  accept: string;
+  sign: (formData: FormData) => Promise<CredentialSignResult>;
+  resubmit: (formData: FormData) => Promise<ResubmitCredentialResult>;
+  onCancel: () => void;
+  onSent: (message: string) => void;
+}) {
+  const router = useRouter();
+  const ids = { identifier: useId(), expires: useId(), file: useId(), title: useId() };
+  const [picked, setPicked] = useState<Picked | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<{ error: string; fix: string } | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  async function onPick(files: FileList): Promise<void> {
+    const file = files[0];
+    if (!file) return;
+    setError(null);
+    setUploading(true);
+    const signForm = new FormData();
+    signForm.set("filename", file.name);
+    signForm.set("type", file.type);
+    signForm.set("bytes", String(file.size));
+    const signed = await sign(signForm);
+    if (!signed.ok) {
+      setUploading(false);
+      setError({ error: signed.error, fix: signed.fix });
+      return;
+    }
+    const put = await fetch(signed.url, { method: "PUT", headers: { "content-type": file.type }, body: file });
+    setUploading(false);
+    if (!put.ok) {
+      setError({ error: t("credentials.error.upload"), fix: t("credentials.error.upload_fix") });
+      return;
+    }
+    setPicked({ file, path: signed.path });
+  }
+
+  function onSubmit(formData: FormData): void {
+    setError(null);
+    formData.set("id", id);
+    if (picked) {
+      formData.set("path", picked.path);
+      formData.set("filename", picked.file.name);
+      formData.set("type", picked.file.type);
+      formData.set("bytes", String(picked.file.size));
+    }
+    startTransition(async () => {
+      const saved = await resubmit(formData);
+      if (!saved.ok) {
+        setError({ error: saved.error, fix: saved.fix });
+        return;
+      }
+      onSent(saved.message);
+      router.refresh();
+    });
+  }
+
+  return (
+    <form
+      action={onSubmit}
+      aria-labelledby={ids.title}
+      className="mt-3 flex flex-col gap-3 rounded-card border border-line bg-paper-sunk px-4 py-3.5"
+    >
+      <p id={ids.title} className="text-body-sm font-medium text-ink">
+        {t("credentials.review.resubmit_title")}
+        <span className="sr-only"> · {name}</span>
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={ids.identifier} hint={t("credentials.field.identifier_hint")}>
+            {t("credentials.field.identifier")}
+          </Label>
+          <Input id={ids.identifier} name="identifier" defaultValue={start.identifier} autoComplete="off" />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label htmlFor={ids.expires} hint={t("credentials.field.expires_hint")}>
+            {t("credentials.field.expires")}
+          </Label>
+          <Input id={ids.expires} name="expiresOn" type="date" defaultValue={start.expires} />
+        </div>
+      </div>
+      <div className="flex flex-col gap-1">
+        <Label htmlFor={ids.file}>{t("credentials.field.file")}</Label>
+        <FileDrop
+          state={uploading ? "uploading" : picked ? "done" : "idle"}
+          idleLabel={t("credentials.file_idle")}
+          idleHint={t("credentials.file_hint")}
+          uploadingLabel={t("credentials.file_uploading")}
+          removeLabel={t("credentials.file_remove")}
+          filename={picked?.file.name}
+          accept={accept}
+          disabled={pending}
+          onSelect={(files) => void onPick(files)}
+          onRemove={() => setPicked(null)}
+        />
+      </div>
+      {error && (
+        <Alert tone="bad" live="assertive" fix={error.fix}>
+          {error.error}
+        </Alert>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" size="sm" disabled={pending || uploading}>
+          {pending ? t("credentials.review.resubmitting") : t("credentials.review.resubmit")}
+        </Button>
+        <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={pending}>
+          {t("credentials.review.cancel")}
+        </Button>
+      </div>
+    </form>
   );
 }
 

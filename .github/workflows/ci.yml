@@ -237,6 +237,12 @@ jobs:
       # projects existed the whole time; this line did not name them.
       - name: Axe and the acceptance surface
         run: pnpm test:e2e ${{ matrix.projects }}
+        # Board 4c-s. The stand-in FTA register, which the app honours only
+        # against a loopback database — this job's own. Without it every
+        # credential review reads "no register is connected" and the screen
+        # has one state to test.
+        env:
+          FTA_REGISTER_URL: fixture
 
       - uses: actions/upload-artifact@v4
         if: failure()

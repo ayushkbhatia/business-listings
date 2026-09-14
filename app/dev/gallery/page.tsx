@@ -12,6 +12,7 @@ import { Ranking } from "./_sections/Ranking";
 import { Ingest } from "./_sections/Ingest";
 import { Dedupe } from "./_sections/Dedupe";
 import { ApprovalQueueGallery } from "./_sections/ApprovalQueue";
+import { CredentialReviewGallery } from "./_sections/CredentialReview";
 import { Reviews } from "./_sections/Reviews";
 import { AuthGallery } from "./_sections/Auth";
 import { CloseAccountGallery } from "./_sections/CloseAccount";
@@ -189,6 +190,8 @@ const UNLISTED = [
   "proposal-comparison",
   // Board `4b`: the approval queue's rows and its bounded bulk bar.
   "approval-queue",
+  // Board `4c-s`: a credential against the register, in every state.
+  "credential-review",
   // Board `7c-s`: the accepted proposal, the end of the services demand chain.
   "accepted-proposal",
 ] as const;
@@ -272,6 +275,7 @@ export default function Gallery() {
       <Ingest />
       <Dedupe />
       <ApprovalQueueGallery />
+      <CredentialReviewGallery />
       <Billing />
 
       <Reviews />

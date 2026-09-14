@@ -13,6 +13,7 @@ import {
 } from "@/lib/storage";
 import { formatCount } from "@/lib/format";
 import { addCredential, removeCredential, type RegisterNote } from "@/lib/credentials/service";
+import { resubmitCredential } from "@/lib/credentials/review";
 import { isCredentialKind } from "@/lib/credentials/kinds";
 import { t } from "@/lib/i18n";
 import { requireSellerSeat } from "../../_shell";
@@ -201,4 +202,77 @@ export async function removeCredentialAction(
   revalidatePath("/dashboard/setup/credentials");
   revalidatePath("/dashboard/setup");
   return { ok: true };
+}
+
+export type ResubmitCredentialResult = { ok: true; message: string } | Refusal;
+
+/**
+ * Board `4c-s` — the seller's answer to a request for a clearer document, or to
+ * a rejection: a corrected number, a renewed date, a clearer scan.
+ *
+ * The same order as `addCredentialAction`: the new file's row first, removed
+ * again if the credential will not take it. Once it has, the certificate it
+ * replaced goes — file and row. The platform keeps the read and the decision,
+ * not a drawer of every scan a seller ever sent.
+ */
+export async function resubmitCredentialAction(formData: FormData): Promise<ResubmitCredentialResult> {
+  const seat = await requireSellerSeat();
+  const id = String(formData.get("id") ?? "");
+
+  let documentId: string | null = null;
+  const path = String(formData.get("path") ?? "").trim();
+  if (path !== "") {
+    if (!path.startsWith(`${seat.businessId}/`)) {
+      return { ok: false, error: t("media.storage_off"), fix: t("credentials.error.storage_fix") };
+    }
+    const mimeType = String(formData.get("type") ?? "");
+    const created = await prisma.document.create({
+      data: {
+        businessId: seat.businessId,
+        kind: "certificate",
+        storagePath: path,
+        filename: String(formData.get("filename") ?? "credential"),
+        bytes: Number(formData.get("bytes") ?? 0) || null,
+        mimeType: (DOCUMENT_TYPES as readonly string[]).includes(mimeType) ? mimeType : null,
+      },
+      select: { id: true },
+    });
+    documentId = created.id;
+  }
+
+  const saved = await resubmitCredential(seat.actor, seat.businessId, id, {
+    identifier: String(formData.get("identifier") ?? ""),
+    expiresOn: String(formData.get("expiresOn") ?? ""),
+    documentId,
+  });
+
+  if (!saved.ok) {
+    if (documentId !== null) {
+      await prisma.document.delete({ where: { id: documentId } }).catch(() => undefined);
+      await removeObject(DOCUMENT_BUCKET, path).catch(() => undefined);
+    }
+    return {
+      ok: false,
+      error: t(saved.reason === "not_found" ? "credentials.error.gone" : "credentials.review.error.not_open"),
+      fix: t(saved.reason === "not_found" ? "credentials.error.gone_fix" : "credentials.review.error.not_open_fix"),
+    };
+  }
+
+  if (saved.replacedDocumentId) {
+    const replaced = await prisma.document.findFirst({
+      where: { id: saved.replacedDocumentId, businessId: seat.businessId },
+      select: { id: true, storagePath: true },
+    });
+    if (replaced) {
+      await prisma.document.delete({ where: { id: replaced.id } }).catch(() => undefined);
+      await removeObject(DOCUMENT_BUCKET, replaced.storagePath).catch(() => undefined);
+    }
+  }
+
+  revalidatePath("/dashboard/setup/credentials");
+  revalidatePath("/dashboard/setup");
+  return {
+    ok: true,
+    message: t(saved.review === "auto_verified" ? "credentials.review.resubmitted_verified" : "credentials.review.resubmitted"),
+  };
 }
