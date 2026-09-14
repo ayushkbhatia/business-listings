@@ -84,6 +84,13 @@ export type SignalFacts =
       categoryName: string;
       searches30d: number;
       searchesWeek: number;
+      /**
+       * Board 10e `B6`: saved searches in this trade that found nothing and are
+       * still waiting for a listing. Not windowed — an alert stands until
+       * something is listed. Optional because tasks written before it carry no
+       * such field.
+       */
+      alertsWaiting?: number;
     }
   | { kind: "unclaimed_demand"; enquiries30d: number }
   | {
@@ -118,7 +125,8 @@ export function demandScoreOf(facts: SignalFacts): number {
     case "held_page":
       return facts.monthlySearches ?? 0;
     case "zero_result":
-      return facts.searches30d;
+      // A buyer waiting on an alert is a search that is still failing, counted once more.
+      return facts.searches30d + (facts.alertsWaiting ?? 0);
     case "unclaimed_demand":
       return facts.enquiries30d;
     case "cap_reached":

@@ -45,6 +45,14 @@ const KNOWN_CONTRAST_PAIRS: readonly string[] = [
 
 test.describe("gallery", () => {
   test("has no axe violations outside contrast", async ({ page }) => {
+    /*
+       Every board adds a section, and one axe pass over the whole gallery is the
+       test's cost, not a fault. With 12d and 10e in it the full rule set ran past
+       thirty seconds on CI's runner three times running, while the contrast pass
+       below, with one rule, did not. Tripled rather than split, so the gallery is
+       still checked as one page.
+    */
+    test.slow();
     await page.goto("/dev/gallery");
     // Not networkidle: the gallery carries a live map, and a tile stream never
     // goes quiet. The last section rendering is the real signal.
@@ -67,6 +75,7 @@ test.describe("gallery", () => {
   });
 
   test("contrast failures are the known token-level set and no more", async ({ page }) => {
+    test.slow(); // the same page, and the same growth, as the pass above
     await page.goto("/dev/gallery");
     // Not networkidle: the gallery carries a live map, and a tile stream never
     // goes quiet. The last section rendering is the real signal.

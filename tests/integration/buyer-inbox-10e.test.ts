@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { callList } from "@/lib/crm/call-list";
+import { deriveSignals } from "@/lib/crm/derive";
 import { getBuyerInbox } from "@/lib/enquiry/inbox";
 import { nudgeUnanswered } from "@/lib/enquiry/nudge";
 import { resendSource, resendSourceIdFor } from "@/lib/enquiry/resend";
@@ -452,24 +452,29 @@ describe("saved searches (B6, B7)", () => {
     expect(await prisma.savedSearch.count({ where: { id } })).toBe(0);
   });
 
-  it("feeds a search that found nothing into the call list's demand for that trade (B6)", async () => {
-    const before = await callList(500);
+  it("feeds a search that found nothing into the CRM's demand for that trade (B6)", async () => {
+    const before = await deriveSignals();
+    const stronger = before.filter((signal) => signal.signal !== "zero_result").map((signal) => signal.businessId);
     const business = await prisma.business.findFirst({
       where: {
         claimStatus: "claimed",
         planId: "free",
         suspendedAt: null,
         mergedIntoId: null,
-        id: {
-          notIn: before.prospects.filter((p) => p.signal !== "zero_result_in_their_trade").map((p) => p.businessId),
-        },
+        closedAt: null,
+        closureRequestedAt: null,
+        id: { notIn: stronger },
       },
       orderBy: [{ slug: "asc" }, { id: "asc" }],
       select: { id: true, primaryCategoryId: true },
     });
     expect(business, "a claimed Free business whose strongest signal is not something else").not.toBeNull();
     if (!business) return;
-    const valueBefore = before.prospects.find((p) => p.businessId === business.id)?.value ?? 0;
+    const waitingOf = (signals: Awaited<ReturnType<typeof deriveSignals>>) => {
+      const found = signals.find((signal) => signal.businessId === business.id);
+      return found?.facts.kind === "zero_result" ? (found.facts.alertsWaiting ?? 0) : 0;
+    };
+    const waitingBefore = waitingOf(before);
 
     const saved = await saveSearchFor({
       userId: buyerId,
@@ -479,10 +484,10 @@ describe("saved searches (B6, B7)", () => {
     });
     expect(saved.zeroResult).toBe(true);
 
-    const after = await callList(500);
-    expect(after.prospects.find((p) => p.businessId === business.id)).toMatchObject({
-      signal: "zero_result_in_their_trade",
-      value: valueBefore + 1,
-    });
+    const after = await deriveSignals();
+    const signal = after.find((row) => row.businessId === business.id);
+    expect(signal?.signal).toBe("zero_result");
+    expect(waitingOf(after)).toBe(waitingBefore + 1);
+    expect(signal!.demandScore).toBeGreaterThan(before.find((row) => row.businessId === business.id)?.demandScore ?? 0);
   });
 });

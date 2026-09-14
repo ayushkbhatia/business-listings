@@ -685,8 +685,9 @@ A new match is a business whose `publishedAt`, or a product whose `createdAt`, i
 `lastSeenAt` (or the save), counted with the results page's own `businessWhere` / `productWhere`.
 The legacy `alerts` boolean is unread and can be dropped in a later migration.
 
-The CRM call list counts saved searches with `zeroResult` and no `lastMatchAt` into the same
-per-trade demand as zero-result queries. The inbox's history card is the buyer's alone (`B9`,
+Board 12d's `zero_result` signal (`lib/crm/derive.ts`) carries saved searches with `zeroResult` and
+no `lastMatchAt` as `alertsWaiting` per trade: counted into the demand score, said in the WHY cell,
+and enough on its own to put a trade on the list in a month with no fresh empty searches. The inbox's history card is the buyer's alone (`B9`,
 `B10`): nothing on a seller surface reads it.
 
 ## Closing a business — board 11i

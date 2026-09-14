@@ -82,8 +82,17 @@ function whyOf(row: CrmRow): { text: string; tone: Tone } {
         }),
         tone: "neutral",
       };
-    case "zero_result":
-      return { text: t("admin.crm.why.zero_result", { count: f.searches30d, n: formatCount(f.searches30d), category: f.categoryName }), tone: "neutral" };
+    case "zero_result": {
+      // Board 10e B6: buyers waiting on an alert in this trade, said beside the searches.
+      const waiting = f.alertsWaiting ?? 0;
+      const searches = t("admin.crm.why.zero_result", { count: f.searches30d, n: formatCount(f.searches30d), category: f.categoryName });
+      if (waiting === 0) return { text: searches, tone: "neutral" };
+      const alerts = t("admin.crm.why.zero_result_alerts", { count: waiting, n: formatCount(waiting), category: f.categoryName });
+      return {
+        text: f.searches30d === 0 ? alerts : t("admin.crm.why.zero_result_and_alerts", { searches, alerts: t("admin.crm.why.alerts_waiting", { count: waiting, n: formatCount(waiting) }) }),
+        tone: "neutral",
+      };
+    }
     case "unclaimed_demand":
       return { text: t("admin.crm.why.unclaimed_demand", { count: f.enquiries30d, n: formatCount(f.enquiries30d) }), tone: "neutral" };
     case "cap_reached":
