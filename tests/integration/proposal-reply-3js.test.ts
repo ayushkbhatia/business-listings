@@ -129,6 +129,7 @@ function proposal(firmRow: Firm, overrides: Partial<ProposalInput> = {}): Propos
     mobilisation: "6,000",
     termMonths: "24",
     validityDays: 30,
+    paymentTerms: "in_arrears",
     scope: `${SCOPE} Across both towers.`,
     deliverable: "Monthly report with photographs",
     deliveredWhere: "On site, both towers",
@@ -432,7 +433,8 @@ describe("what reads a proposal", () => {
 
     const pdf = acceptedQuotePdf(record!, new Date());
     const text = pdf.bytes.toString("latin1");
-    expect(text).toContain("What was proposed");
+    // Board `7c-s` renamed the section; the fields are what this board promised.
+    expect(text).toContain("What was agreed");
     expect(text).toContain("24 months");
     expect(text).toContain(`${PREFIX} Major plant replacement and civil works.`);
   });

@@ -5,6 +5,7 @@ import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { prisma } from "@/lib/db/client";
 import { canReview, EDITABLE_DAYS } from "@/lib/reviews/eligibility";
 import { enquiryForReview } from "@/lib/reviews/service";
+import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { resolveBuyerId, trackingTokenFor } from "@/app/(public)/enquiry/_buyer";
 import { ReviewForm } from "./ReviewForm";
@@ -97,7 +98,9 @@ export default async function WriteReviewPage({
             <div className="mt-4">
               <Card padded>
                 <p className="max-w-[var(--measure-prose)] text-body-sm text-prose">
-                  {t(`review.error.${verdict.reason}` as "review.error.no_confirmed_enquiry")}
+                  {verdict.reason === "not_yet_open"
+                    ? t("review.error.not_yet_open", { when: formatDate(verdict.opensOn) })
+                    : t(`review.error.${verdict.reason}` as "review.error.no_confirmed_enquiry")}
                 </p>
                 {/* The gate said out loud, because it is the product. */}
                 <p className="mt-2 max-w-[var(--measure-prose)] text-caption text-muted">

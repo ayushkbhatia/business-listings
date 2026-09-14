@@ -22,7 +22,7 @@ function column(input: Partial<ComparisonColumn> & Pick<ComparisonColumn, "busin
     slug: input.businessId,
     licenceVerified: true,
     credentials: [],
-    quote: { id: `q-${input.businessId}`, ref: `QT-40812-${input.businessId.toUpperCase()}R1`, revision: 1, status: "sent", sentAt: at(41), expiresAt: new Date("2026-10-09T06:00:00Z") },
+    quote: { id: `q-${input.businessId}`, ref: `QT-40812-${input.businessId.toUpperCase()}R1`, revision: 1, status: "sent", sentAt: at(41), expiresAt: new Date("2026-10-09T06:00:00Z"), paymentTerms: null },
     arrivedAt: at(41),
     repliedInMs: 41 * 60_000,
     state: "open",

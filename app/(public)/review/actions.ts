@@ -45,7 +45,12 @@ export async function postReview(formData: FormData): Promise<PostReviewResult> 
   if (!result.ok) {
     return {
       ok: false,
-      error: t(`review.error.${result.error}` as "review.error.no_confirmed_enquiry"),
+      // The page states the day; a refusal at submit only reaches here if the
+      // form was opened some other way, and says where the day is written.
+      error:
+        result.error === "not_yet_open"
+          ? t("review.error.not_yet_open_short")
+          : t(`review.error.${result.error}` as "review.error.no_confirmed_enquiry"),
     };
   }
 

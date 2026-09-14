@@ -87,6 +87,19 @@ if grep -qE '^[[:space:]]*model[[:space:]]+QuoteProposal[[:space:]]*\{' <<<"$COD
   fi
 fi
 
+# Board `7c-s`: acceptance criterion 8 — an accepted quote's terms and the brief
+# its dates come from cannot be edited, by trigger.
+if grep -qE '^[[:space:]]*model[[:space:]]+ServiceBrief[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE 'CREATE TRIGGER "quote_accepted_terms_fixed"' prisma/migrations \
+     && grep -rqE 'CREATE TRIGGER "service_brief_fixed_once_accepted"' prisma/migrations; then
+    echo "   pass — an accepted quote's terms and its brief are fixed, by trigger"
+  else
+    echo "   FAIL — quote_accepted_terms_fixed or service_brief_fixed_once_accepted is missing."
+    echo "     Prisma cannot express a trigger; both live in the 7c-s migration."
+    fail=1
+  fi
+fi
+
 # Invariants Prisma has no syntax for, so a regeneration cannot express them and
 # would quietly drop them. Each is asserted against the migration that owns it.
 #

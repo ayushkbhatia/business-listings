@@ -42,6 +42,8 @@ export interface SentProposalRow {
   fee: string;
   term: string;
   mobilisation: string;
+  /** Board `7c-s`: the payment terms as sent, or *Not stated*. */
+  payment: string;
   validUntil: string;
   status: string;
 }
@@ -269,7 +271,7 @@ function SentProposals({ rows }: { rows: SentProposalRow[] }) {
     <div className="overflow-hidden rounded-card border border-line bg-card">
       <h3 className="px-5 pt-4 text-h3 text-ink">{t("proposal.sent_title")}</h3>
       <div className="mt-2 overflow-x-auto" tabIndex={0} role="group" aria-label={t("proposal.sent_title")}>
-        <table className="w-full min-w-[40rem] border-collapse text-left">
+        <table className="w-full min-w-[46rem] border-collapse text-left">
           <caption className="sr-only">{t("proposal.sent_caption")}</caption>
           <thead>
             <tr className="border-y border-line bg-paper-sunk">
@@ -284,6 +286,9 @@ function SentProposals({ rows }: { rows: SentProposalRow[] }) {
               </th>
               <th scope="col" className="px-3 py-2 font-mono text-eyebrow font-normal uppercase text-muted">
                 {t("proposal.col.mobilisation")}
+              </th>
+              <th scope="col" className="px-3 py-2 font-mono text-eyebrow font-normal uppercase text-muted">
+                {t("proposal.col.payment")}
               </th>
               <th scope="col" className="px-3 py-2 font-mono text-eyebrow font-normal uppercase text-muted">
                 {t("proposal.col.valid_until")}
@@ -303,6 +308,7 @@ function SentProposals({ rows }: { rows: SentProposalRow[] }) {
                 <td className="px-3 py-2.5 font-mono text-body-sm tabular-nums text-ink">{row.fee}</td>
                 <td className="px-3 py-2.5 text-body-sm text-ink">{row.term}</td>
                 <td className="px-3 py-2.5 text-body-sm text-ink">{row.mobilisation}</td>
+                <td className="px-3 py-2.5 text-body-sm text-ink">{row.payment}</td>
                 <td className="px-3 py-2.5 text-body-sm text-ink">{row.validUntil}</td>
                 <td className="px-5 py-2.5 text-body-sm text-ink">{row.status}</td>
               </tr>

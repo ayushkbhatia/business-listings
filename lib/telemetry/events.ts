@@ -360,6 +360,7 @@ export const EVENT_SPECS = {
       validityDays: "number",
       termStated: "boolean",
       mobilisationStated: "boolean",
+      paymentTermsStated: "boolean",
       scopeEdited: "boolean",
       exclusionsEdited: "boolean",
       late: "boolean",

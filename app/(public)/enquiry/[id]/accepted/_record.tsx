@@ -5,10 +5,24 @@ import { StatusBadge } from "@/components/display";
 import type { AcceptedRecord } from "@/lib/enquiry/accepted-record";
 import { windowExpired } from "@/lib/enquiry/accepted-record";
 import { formatAED, formatDate, formatPhone } from "@/lib/format";
+import { contractCard } from "@/lib/enquiry/accepted-proposal-words";
 import { t } from "@/lib/i18n";
 import { leadTime, recordSummaryParts, totalLabel, windowLine } from "@/lib/enquiry/accepted-record-words";
-import type { ProposalRecord } from "@/lib/quote/proposal";
-import { feeOnBasis, mobilisationWords, termWords } from "@/lib/quote/proposal-words";
+import {
+  isAcceptedProposal,
+  paymentLine,
+  proposalSummaryParts,
+  siteLines,
+  type ProposalRecordValue,
+} from "@/lib/enquiry/accepted-proposal-words";
+import {
+  AgreedCard,
+  ContractCard,
+  ExclusionsCard,
+  ProposalCommitmentsCard,
+  ProposalReviewCard,
+  ScopeCard,
+} from "./_proposal-record";
 
 /**
  * Board `7c` — the accepted quote record, rendered.
@@ -35,6 +49,11 @@ export interface AcceptedRecordLinks {
   pdf: string;
   thread: string;
   review: string;
+  /**
+   * Board `7c-s`: briefing again, offered as a term nears its end. Built by the
+   * page, because a gallery has no `/rfq/new` to send anybody to.
+   */
+  rebrief?: { supplier: string; others: string | null } | null;
 }
 
 export function AcceptedRecordView({
@@ -61,18 +80,26 @@ export function AcceptedRecordView({
 }) {
   const { quote, supplier } = record;
   const expired = windowExpired(quote.expiresAt, now);
+  // Board `7c-s`: one route, two shapes, chosen by what was accepted.
+  const accepted: ProposalRecordValue | null = isAcceptedProposal(record) ? record : null;
+  const contract = accepted ? (
+    <ContractCard record={accepted} now={now} rebrief={links.rebrief ?? null} />
+  ) : null;
+  const contractLeads = accepted ? leadsRail(accepted, now) : false;
 
   const summary = [
     record.acceptedAt ? t("accepted.summary.accepted", { when: formatDate(record.acceptedAt) }) : null,
-    ...recordSummaryParts(record),
+    ...(accepted ? proposalSummaryParts(accepted) : recordSummaryParts(record)),
   ].filter(Boolean);
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-5 pb-16 pt-8">
-      <div className="grid gap-[var(--gutter)] lg:grid-cols-[minmax(0,1fr)_22rem]">
+    // Container queries rather than viewport ones: the record lays out by its own
+    // width, so it reads the same in the gallery's column as on the full page.
+    <div className="@container mx-auto w-full max-w-7xl px-5 pb-16 pt-8">
+      <div className="grid gap-[var(--gutter)] @4xl:grid-cols-[minmax(0,1fr)_22rem]">
         {/* ── The record ──────────────────────────────────────────────────── */}
-        <div className="flex min-w-0 flex-col gap-[var(--gutter)]">
-          <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div className="@container flex min-w-0 flex-col gap-[var(--gutter)]">
+          <header className="flex flex-col gap-4 @2xl:flex-row @2xl:items-end @2xl:justify-between">
             <div className="min-w-0">
               {breadcrumb}
               {/* Seller identity is `displayName`, here as everywhere. */}
@@ -83,7 +110,7 @@ export function AcceptedRecordView({
             <div className="flex shrink-0 flex-wrap gap-2">
               {/* A plain link to a route handler: a file download, not a navigation. */}
               <a href={links.pdf} className={buttonClassName({ variant: "secondary" })}>
-                {t("accepted.action.pdf")}
+                {accepted ? t("accepted.action.pdf_proposal") : t("accepted.action.pdf")}
               </a>
               <Link href={links.thread} className={buttonClassName({ variant: "primary" })}>
                 {t("accepted.action.message")}
@@ -102,7 +129,7 @@ export function AcceptedRecordView({
               </p>
             </div>
 
-            <dl className="mt-5 grid gap-5 sm:grid-cols-3">
+            <dl className="mt-5 grid gap-5 @xl:grid-cols-3">
               <div>
                 <dt className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
                   {t("accepted.contact.who")}
@@ -113,10 +140,13 @@ export function AcceptedRecordView({
               </div>
               <div>
                 <dt className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
-                  {t("accepted.where.label")}
+                  {accepted ? t("accepted_proposal.where.label") : t("accepted.where.label")}
                 </dt>
                 <dd className="mt-1.5 flex flex-col gap-0.5 text-body text-ink">
-                  {supplier.location ? (
+                  {accepted ? (
+                    // Work happens at the buyer's site, not at the supplier's warehouse.
+                    <SiteLines record={accepted} />
+                  ) : supplier.location ? (
                     <>
                       <span>{supplier.location.addressLine}</span>
                       <span>
@@ -138,7 +168,11 @@ export function AcceptedRecordView({
                   {t("accepted.payment.label")}
                 </dt>
                 <dd className="mt-1.5 flex flex-col gap-0.5 text-body">
-                  {quote.paymentTerms ? (
+                  {accepted ? (
+                    <span className={paymentLine(accepted).muted ? "text-muted" : "text-ink"}>
+                      {paymentLine(accepted).value}
+                    </span>
+                  ) : quote.paymentTerms ? (
                     <span className="text-ink">{t(`terms.${quote.paymentTerms}` as "terms.net_30")}</span>
                   ) : (
                     // Unfilled data stays visible, grey, rather than hidden.
@@ -150,14 +184,13 @@ export function AcceptedRecordView({
             </dl>
           </Card>
 
-          {/* ── What was proposed — board `3j-s` ─────────────────────────────── */}
-          {quote.proposal ? (
-            <ProposalRecordCard
-              proposal={quote.proposal}
-              supplier={supplier.displayName}
-              windowText={windowLine(record, now)}
-              expired={expired}
-            />
+          {/* ── What was agreed — board `7c-s` ────────────────────────────────── */}
+          {accepted ? (
+            <>
+              <AgreedCard record={accepted} />
+              <ScopeCard record={accepted} />
+              <ExclusionsCard record={accepted} />
+            </>
           ) : (
           <Card padded={false}>
             <div className="flex flex-wrap items-baseline justify-between gap-2 px-[var(--card-pad)] pb-3 pt-[var(--card-pad)]">
@@ -288,12 +321,14 @@ export function AcceptedRecordView({
           )}
 
           {/* ── Where our part ends ───────────────────────────────────────── */}
-          <div className="flex flex-col gap-4 rounded-card border border-line bg-paper-sunk p-[var(--card-pad)] md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-4 rounded-card border border-line bg-paper-sunk p-[var(--card-pad)] @2xl:flex-row @2xl:items-center @2xl:justify-between">
             <div className="max-w-[var(--measure-prose)]">
               <h2 className="text-body font-medium text-ink">
                 {t("accepted.between.title", { supplier: supplier.displayName })}
               </h2>
-              <p className="mt-1 text-body-sm text-body">{t("accepted.between.body")}</p>
+              <p className="mt-1 text-body-sm text-body">
+                {accepted ? t("accepted_proposal.between.body") : t("accepted.between.body")}
+              </p>
             </div>
             <Link href={links.thread} className={buttonClassName({ variant: "secondary" })}>
               {t("accepted.thread")}
@@ -308,8 +343,20 @@ export function AcceptedRecordView({
            appear there more than once — which axe fails the build over.
         */}
         <div className="flex flex-col gap-[var(--gutter)]">
-          <CommitmentsCard record={record} />
-          <ReviewCard record={record} reviewHref={links.review} />
+          {accepted ? (
+            <>
+              {/* §States: once the term has started, coming back is the page's use. */}
+              {contractLeads ? contract : null}
+              <ProposalCommitmentsCard record={accepted} />
+              <ProposalReviewCard record={accepted} now={now} reviewHref={links.review} />
+              {contractLeads ? null : contract}
+            </>
+          ) : (
+            <>
+              <CommitmentsCard record={record} />
+              <ReviewCard record={record} reviewHref={links.review} />
+            </>
+          )}
           <ProblemCard record={record} reportForm={reportForm} />
         </div>
       </div>
@@ -317,119 +364,21 @@ export function AcceptedRecordView({
   );
 }
 
-/**
- * Board `3j-s` — the accepted proposal, term by term.
- *
- * A description list rather than the quote's table: there are no rows of the
- * same kind to compare down a column, there is one fee and the terms around it.
- * Every term renders, stated or not — *Not stated* in grey is information a
- * buyer holding this record in month four needs. The exclusions sit last and
- * apart, because they are the line that prevents the argument.
- */
-function ProposalRecordCard({
-  proposal,
-  supplier,
-  windowText,
-  expired,
-}: {
-  proposal: ProposalRecord;
-  supplier: string;
-  windowText: string;
-  expired: boolean;
-}) {
-  const facts: { key: string; label: string; value: string; muted: boolean; mono?: boolean }[] = [
-    { key: "fee", label: t("accepted.proposal.fee"), value: feeOnBasis(proposal), muted: false, mono: true },
-    { key: "term", label: t("accepted.proposal.term"), value: termWords(proposal.termMonths), muted: proposal.termMonths === null },
-    {
-      key: "mobilisation",
-      label: t("accepted.proposal.mobilisation"),
-      value: mobilisationWords(proposal.mobilisationAed),
-      muted: proposal.mobilisationAed === null,
-    },
-    { key: "service", label: t("accepted.proposal.service"), value: proposal.serviceName, muted: false },
-    {
-      key: "turnaround",
-      label: t("accepted.proposal.turnaround"),
-      value: proposal.turnaround ?? t("accepted.not_stated"),
-      muted: proposal.turnaround === null,
-    },
-    {
-      key: "deliverable",
-      label: t("accepted.proposal.deliverable"),
-      value: proposal.deliverable ?? t("accepted.not_stated"),
-      muted: proposal.deliverable === null,
-    },
-    {
-      key: "where",
-      label: t("accepted.proposal.delivered_where"),
-      value: proposal.deliveredWhere ?? t("accepted.not_stated"),
-      muted: proposal.deliveredWhere === null,
-    },
-  ];
+function leadsRail(record: ProposalRecordValue, now: Date): boolean {
+  return contractCard(record, now)?.leadsRail ?? false;
+}
 
+function SiteLines({ record }: { record: ProposalRecordValue }) {
+  const lines = siteLines(record);
+  if (lines.length === 0) {
+    return <span className="text-body-sm text-muted">{t("accepted_proposal.where.none")}</span>;
+  }
   return (
-    <Card padded={false}>
-      <div className="flex flex-wrap items-baseline justify-between gap-2 px-[var(--card-pad)] pb-3 pt-[var(--card-pad)]">
-        <h2 className="text-h3 text-ink">{t("accepted.proposal.title")}</h2>
-        <p
-          className={
-            expired
-              ? "font-mono text-eyebrow uppercase tracking-eyebrow text-warn-ink"
-              : "font-mono text-eyebrow uppercase tracking-eyebrow text-faint"
-          }
-        >
-          {windowText}
-        </p>
-      </div>
-      {expired ? (
-        <p className="mx-[var(--card-pad)] mb-3 max-w-[var(--measure-prose)] text-body-sm text-muted">
-          {t("accepted.expired_note")}
-        </p>
-      ) : null}
-
-      <dl className="grid gap-x-6 gap-y-4 border-t border-line px-[var(--card-pad)] py-4 sm:grid-cols-3">
-        {facts.map((fact) => (
-          <div key={fact.key}>
-            <dt className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">{fact.label}</dt>
-            <dd
-              className={[
-                "mt-1",
-                fact.muted ? "text-body-sm text-muted" : "text-body text-ink",
-                fact.mono ? "font-mono tabular-nums" : "",
-              ].join(" ")}
-            >
-              {fact.value}
-            </dd>
-          </div>
-        ))}
-      </dl>
-      <p className="px-[var(--card-pad)] pb-4 text-caption text-muted">
-        {t("accepted.proposal.fee_note", { supplier })}
-      </p>
-
-      <div className="border-t border-line px-[var(--card-pad)] py-4">
-        <p className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">{t("accepted.proposal.scope")}</p>
-        <p className="mt-1 max-w-[var(--measure-prose)] whitespace-pre-line text-body-sm text-prose">{proposal.scope}</p>
-      </div>
-
-      <div className="rounded-b-card border-t border-warn-line bg-warn-surface px-[var(--card-pad)] py-4">
-        <p className="font-mono text-eyebrow uppercase tracking-eyebrow text-warn-ink">
-          {t("accepted.proposal.excluded")}
-        </p>
-        <p
-          className={
-            proposal.exclusions
-              ? "mt-1 max-w-[var(--measure-prose)] whitespace-pre-line text-body-sm text-warn-ink"
-              : "mt-1 text-body-sm text-warn-ink"
-          }
-        >
-          {proposal.exclusions ?? t("accepted.proposal.excluded_none", { supplier })}
-        </p>
-        <p className="mt-2 max-w-[var(--measure-prose)] text-caption text-warn-ink">
-          {t("accepted.proposal.excluded_note")}
-        </p>
-      </div>
-    </Card>
+    <>
+      {lines.map((line) => (
+        <span key={line}>{line}</span>
+      ))}
+    </>
   );
 }
 

@@ -1,9 +1,18 @@
 import { A4, MARGIN, renderPdfPages, wrap, type PdfFont, type PdfOp } from "@/lib/billing/pdf";
 import type { AcceptedRecord } from "@/lib/enquiry/accepted-record";
 import { leadTime, totalLabel, windowLine } from "@/lib/enquiry/accepted-record-words";
+import {
+  agreedAmount,
+  agreedFacts,
+  agreedWindowLine,
+  commitmentLines,
+  isAcceptedProposal,
+  paymentLine,
+  proposalSummaryParts,
+  siteLines,
+} from "@/lib/enquiry/accepted-proposal-words";
 import { formatAED, formatDate, formatPhone } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { feeOnBasis, mobilisationWords, termWords } from "./proposal-words";
 
 /**
  * Board `7c` `B7` — the accepted quote as a PDF.
@@ -99,10 +108,14 @@ export function acceptedQuotePdf(record: AcceptedRecord, now: Date): RenderedQuo
 
   const supplier = record.supplier;
   const quote = record.quote;
+  const accepted = isAcceptedProposal(record) ? record : null;
 
   /* ── Head ────────────────────────────────────────────────────────────────── */
   text(t("site.name"), MARGIN.x, 15, "bold");
-  text(t("accepted.pdf.kind").toUpperCase(), A4.width - MARGIN.x, 8, "bold", { align: "right", grey: MUTED });
+  text((accepted ? t("accepted.pdf.kind_proposal") : t("accepted.pdf.kind")).toUpperCase(), A4.width - MARGIN.x, 8, "bold", {
+    align: "right",
+    grey: MUTED,
+  });
   y += 16;
   text(quote.ref, A4.width - MARGIN.x, 10.5, "mono", { align: "right" });
   y += 22;
@@ -111,11 +124,17 @@ export function acceptedQuotePdf(record: AcceptedRecord, now: Date): RenderedQuo
   const summary = [
     record.acceptedAt ? t("accepted.summary.accepted", { when: formatDate(record.acceptedAt) }) : null,
     t("accepted.summary.enquiry", { ref: record.ref }),
+    ...(accepted ? proposalSummaryParts(accepted) : []),
     record.buyerReference ? t("accepted.summary.reference", { reference: record.buyerReference }) : null,
   ]
     .filter(Boolean)
     .join("  ·  ");
-  text(summary, MARGIN.x, 9, "regular", { grey: MUTED });
+  // A proposal's summary carries the engagement, fee and term too, and wraps rather than run off the page.
+  const summaryLines = wrap(summary, A4.width - MARGIN.x * 2, 9, "regular");
+  summaryLines.forEach((part, index) => {
+    if (index > 0) y += 11;
+    text(part, MARGIN.x, 9, "regular", { grey: MUTED });
+  });
   y += 16;
   rule(y);
   y += 18;
@@ -143,7 +162,11 @@ export function acceptedQuotePdf(record: AcceptedRecord, now: Date): RenderedQuo
   ].filter((line): line is string => Boolean(line));
   if (contactLines.length === 1) contactLines.push(t("accepted.contact.no_phone"));
 
-  const whereLines = supplier.location
+  const whereLines = accepted
+    ? siteLines(accepted).length > 0
+      ? siteLines(accepted)
+      : [t("accepted_proposal.where.none")]
+    : supplier.location
     ? [
         supplier.location.addressLine,
         [supplier.location.areaName, t(`emirate.${supplier.location.emirate}` as "emirate.dubai")]
@@ -153,77 +176,112 @@ export function acceptedQuotePdf(record: AcceptedRecord, now: Date): RenderedQuo
     : [t("accepted.where.none")];
 
   const paymentLines = [
-    quote.paymentTerms ? t(`terms.${quote.paymentTerms}` as "terms.net_30") : t("accepted.not_stated"),
+    accepted
+      ? paymentLine(accepted).value
+      : quote.paymentTerms
+        ? t(`terms.${quote.paymentTerms}` as "terms.net_30")
+        : t("accepted.not_stated"),
     t("accepted.payment.invoiced_by_them"),
   ];
 
   const bottom = Math.max(
     column(MARGIN.x, t("accepted.contact.who"), contactLines),
-    column(MARGIN.x + 165, t("accepted.where.label"), whereLines),
+    column(MARGIN.x + 165, accepted ? t("accepted_proposal.where.label") : t("accepted.where.label"), whereLines),
     column(MARGIN.x + 330, t("accepted.payment.label"), paymentLines),
   );
   y = bottom + 14;
   rule(y);
   y += 18;
 
-  /* ── What was proposed — board `3j-s` ────────────────────────────────────── */
-  if (quote.proposal) {
-    const proposal = quote.proposal;
+  /* ── What was agreed — board `7c-s` ──────────────────────────────────────── */
+  if (accepted) {
+    const proposal = accepted.quote.proposal;
     const width = A4.width - MARGIN.x * 2;
-    text(t("accepted.proposal.title"), MARGIN.x, 10.5, "bold");
-    text(windowLine(record, now).toUpperCase(), A4.width - MARGIN.x, 7, "mono", { align: "right", grey: MUTED });
-    y += 18;
+    const LABEL_W = 140;
 
-    // The same seven terms the page prints, in the same order, from the same words.
-    const terms: [string, string][] = [
-      [t("accepted.proposal.fee"), feeOnBasis(proposal)],
-      [t("accepted.proposal.term"), termWords(proposal.termMonths)],
-      [t("accepted.proposal.mobilisation"), mobilisationWords(proposal.mobilisationAed)],
-      [t("accepted.proposal.service"), proposal.serviceName],
-      [t("accepted.proposal.turnaround"), proposal.turnaround ?? t("accepted.not_stated")],
-      [t("accepted.proposal.deliverable"), proposal.deliverable ?? t("accepted.not_stated")],
-      [t("accepted.proposal.delivered_where"), proposal.deliveredWhere ?? t("accepted.not_stated")],
-    ];
-    for (const [label, value] of terms) {
-      const parts = wrap(value, width - 140, 9, label === t("accepted.proposal.fee") ? "mono" : "regular");
-      if (y + parts.length * 11 + 6 > CONTENT_BOTTOM) newPage();
-      text(label.toUpperCase(), MARGIN.x, 7, "bold", { grey: MUTED, at: y });
-      parts.forEach((part, index) =>
-        text(part, MARGIN.x + 140, 9, label === t("accepted.proposal.fee") ? "mono" : "regular", { at: y + index * 11 }),
-      );
-      y += parts.length * 11 + 6;
-    }
-    for (const part of wrap(t("accepted.proposal.fee_note", { supplier: supplier.displayName }), width, 8, "regular")) {
-      text(part, MARGIN.x, 8, "regular", { grey: MUTED });
-      y += 11;
-    }
-
-    const block = (label: string, body: string, grey?: number) => {
-      if (y + 30 > CONTENT_BOTTOM) newPage();
-      y += 10;
-      rule(y, 0.9);
-      y += 16;
-      text(label.toUpperCase(), MARGIN.x, 7, "bold", { grey: MUTED });
-      for (const paragraph of body.split("\n")) {
-        for (const part of wrap(paragraph, width, 9, "regular")) {
-          y += 12;
-          if (y > CONTENT_BOTTOM) newPage();
-          text(part, MARGIN.x, 9, "regular", grey === undefined ? {} : { grey });
+    const paragraph = (body: string, size: number, font: PdfFont, options: { grey?: number; x?: number; w?: number } = {}) => {
+      for (const line of body.split("\n")) {
+        for (const part of wrap(line, options.w ?? width, size, font)) {
+          if (y + size + 3 > CONTENT_BOTTOM) newPage();
+          y += size + 3;
+          text(part, options.x ?? MARGIN.x, size, font, options.grey === undefined ? {} : { grey: options.grey });
         }
       }
     };
-    block(t("accepted.proposal.scope"), proposal.scope);
-    block(
-      t("accepted.proposal.excluded"),
-      proposal.exclusions ?? t("accepted.proposal.excluded_none", { supplier: supplier.displayName }),
-    );
-    y += 6;
-    for (const part of wrap(t("accepted.proposal.excluded_note"), width, 8, "regular")) {
+    const heading = (title: string, aside?: string) => {
+      if (y + 40 > CONTENT_BOTTOM) newPage();
+      text(title, MARGIN.x, 10.5, "bold");
+      if (aside) text(aside.toUpperCase(), A4.width - MARGIN.x, 7, "mono", { align: "right", grey: MUTED });
+      y += 8;
+    };
+    const term = (label: string, value: string, font: PdfFont = "regular") => {
+      const parts = wrap(value, width - LABEL_W, 9, font);
+      if (y + parts.length * 11 + 8 > CONTENT_BOTTOM) newPage();
       y += 11;
-      if (y > CONTENT_BOTTOM) newPage();
-      text(part, MARGIN.x, 8, "regular", { grey: MUTED });
+      text(label.toUpperCase(), MARGIN.x, 7, "bold", { grey: MUTED });
+      parts.forEach((part, index) => text(part, MARGIN.x + LABEL_W, 9, font, { at: y + index * 11 }));
+      y += (parts.length - 1) * 11 + 4;
+    };
+    const block = () => {
+      y += 12;
+      if (y + 30 > CONTENT_BOTTOM) newPage();
+      rule(y, 0.9);
+      y += 18;
+    };
+
+    // The same fields as the page, in the same order, from the same words (AC10).
+    heading(t("accepted_proposal.agreed.title"), agreedWindowLine(accepted));
+    term(t("accepted_proposal.basis.label"), `${proposal.feeBasisLabel} · ${t("accepted_proposal.basis.note")}`);
+    const amount = agreedAmount(accepted);
+    term(t("accepted.proposal.fee"), `${amount.currency} ${amount.figure} ${amount.basis}`, "mono");
+    for (const fact of agreedFacts(accepted)) term(fact.label, fact.value);
+    y += 6;
+    // No total, and the reason, as on the page (`B3`).
+    paragraph(`${t("accepted_proposal.no_total.lead")} ${t("accepted_proposal.no_total.body")}`, 8, "regular", { grey: MUTED });
+
+    block();
+    heading(t("accepted_proposal.scope.title"), t("accepted_proposal.scope.note"));
+    paragraph(proposal.scope, 9, "regular");
+    y += 4;
+    term(t("accepted_proposal.scope.service"), proposal.serviceName || t("accepted_proposal.not_stated"));
+    term(t("accepted.proposal.deliverable"), proposal.deliverable ?? t("accepted_proposal.not_stated"));
+    term(t("accepted.proposal.delivered_where"), proposal.deliveredWhere ?? t("accepted_proposal.not_stated"));
+
+    // The exclusions, verbatim, in a box of their own — the loudest thing on the page.
+    block();
+    heading(t("accepted_proposal.excluded.title"), t("accepted_proposal.excluded.aside"));
+    const excluded = proposal.exclusions ?? t("accepted.proposal.excluded_none", { supplier: supplier.displayName });
+    const boxLines = excluded.split("\n").flatMap((line) => wrap(line, width - 20, 9, "regular"));
+    if (y + 12 + boxLines.length * 12 > CONTENT_BOTTOM) newPage();
+    y += 6;
+    ops.push({ kind: "rect", x: MARGIN.x, y, w: width, h: boxLines.length * 12 + 12, fill: 0.97 });
+    const boxTop = y + 14;
+    boxLines.forEach((part, index) => text(part, MARGIN.x + 10, 9, "regular", { at: boxTop + index * 12 }));
+    y += boxLines.length * 12 + 12;
+    y += 4;
+    paragraph(t("accepted_proposal.excluded.note"), 8, "regular", { grey: MUTED });
+
+    block();
+    heading(t("accepted.commitments.title"));
+    const lines = commitmentLines(accepted);
+    if (lines.length === 0) {
+      paragraph(t("accepted_proposal.commitments.empty", { supplier: supplier.displayName }), 9, "regular", { grey: MUTED });
     }
-    y += 8;
+    // The words, then where they came from beneath them — the rail's order, and a source can be long.
+    for (const line of lines) {
+      const parts = wrap(line.text, width, 9, "regular");
+      if (y + parts.length * 11 + 22 > CONTENT_BOTTOM) newPage();
+      y += 6;
+      for (const part of parts) {
+        y += 11;
+        text(part, MARGIN.x, 9, "regular");
+      }
+      y += 10;
+      text(line.source.toUpperCase(), MARGIN.x, 6.5, "mono", { grey: MUTED });
+    }
+    y += 6;
+    paragraph(t("accepted_proposal.commitments.note"), 8, "regular", { grey: MUTED });
+    y += 4;
   } else {
     /* ── What was quoted ─────────────────────────────────────────────────────── */
     text(t("accepted.quoted.title"), MARGIN.x, 10.5, "bold");
@@ -279,7 +337,7 @@ export function acceptedQuotePdf(record: AcceptedRecord, now: Date): RenderedQuo
   }
 
   /* ── What this document is ───────────────────────────────────────────────── */
-  const stance = wrap(t("accepted.pdf.stance"), A4.width - MARGIN.x * 2, 8, "regular");
+  const stance = wrap(accepted ? t("accepted.pdf.stance_proposal") : t("accepted.pdf.stance"), A4.width - MARGIN.x * 2, 8, "regular");
   if (y + 18 + stance.length * 11 > CONTENT_BOTTOM) newPage();
   y += 18;
   for (const part of stance) {

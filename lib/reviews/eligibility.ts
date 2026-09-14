@@ -1,3 +1,5 @@
+import { dubaiDayStart } from "@/lib/format/date";
+
 /**
  * Who may write a review, and about whom.
  *
@@ -268,6 +270,13 @@ export interface EnquiryForReview {
   repliedBusinessIds: readonly string[];
   /** True when a review already exists for this enquiry. */
   alreadyReviewed: boolean;
+  /**
+   * Board `7c-s` `B10`: the calendar day a review of the accepted supplier opens
+   * — acceptance for a goods quote, a delivery cycle into an ongoing engagement.
+   * `reviewOpensOn` in `lib/enquiry/accepted-proposal.ts` decides it. Null where
+   * nothing was accepted, or where the row predates the stamp.
+   */
+  reviewOpensOn: Date | null;
 }
 
 export type EligibilityVerdict =
@@ -275,7 +284,9 @@ export type EligibilityVerdict =
   | {
       ok: false;
       reason: "not_your_enquiry" | "no_confirmed_enquiry" | "ambiguous_subject" | "already_reviewed";
-    };
+    }
+  /** The accepted engagement has not run a cycle yet. Said with the day it opens. */
+  | { ok: false; reason: "not_yet_open"; opensOn: Date };
 
 /**
  * May this buyer review this enquiry, and about which supplier?
@@ -301,6 +312,7 @@ export function canReview(
   enquiry: EnquiryForReview | null,
   /** The supplier being reviewed, where the buyer picked one. */
   businessId?: string,
+  now: Date = new Date(),
 ): EligibilityVerdict {
   // A missing enquiry and somebody else's are the same answer.
   if (!enquiry || enquiry.buyerId !== buyerId) return { ok: false, reason: "not_your_enquiry" };
@@ -308,9 +320,19 @@ export function canReview(
 
   const accepted = enquiry.contactReleasedToBusinessId;
   const replied = enquiry.repliedBusinessIds;
+  /*
+     Board `7c-s` `B10`: *there is nothing to review on day one* of a 24-month
+     engagement. The accepted supplier waits for its first cycle, and does not
+     fall through to the enquiry rung meanwhile — that would be the same review a
+     quarter early with a weaker badge.
+  */
+  const notYet =
+    accepted && enquiry.reviewOpensOn && dubaiDayStart(now).getTime() < enquiry.reviewOpensOn.getTime()
+      ? ({ ok: false, reason: "not_yet_open", opensOn: enquiry.reviewOpensOn } as const)
+      : null;
 
   if (businessId) {
-    if (accepted === businessId) return { ok: true, businessId, provenance: "accepted_quote" };
+    if (accepted === businessId) return notYet ?? { ok: true, businessId, provenance: "accepted_quote" };
     if (replied.includes(businessId)) {
       return { ok: true, businessId, provenance: "verified_enquiry" };
     }
@@ -318,7 +340,7 @@ export function canReview(
   }
 
   // Nobody named a supplier. An accepted quote answers it on its own.
-  if (accepted) return { ok: true, businessId: accepted, provenance: "accepted_quote" };
+  if (accepted) return notYet ?? { ok: true, businessId: accepted, provenance: "accepted_quote" };
   if (replied.length === 1) {
     return { ok: true, businessId: replied[0]!, provenance: "verified_enquiry" };
   }
@@ -354,6 +376,8 @@ export function isEditable(review: { editableUntil: Date; removedAt: Date | null
 export interface RequestEligibility {
   /** The accepted quote that earns the right to ask. */
   acceptedAt: Date | null;
+  /** Board `7c-s`: when the buyer may first write one. See `EnquiryForReview.reviewOpensOn`. */
+  reviewOpensOn: Date | null;
   /** True when this business has ever asked this buyer. */
   alreadyAsked: boolean;
   /** True when the buyer has already written one. */
@@ -362,7 +386,7 @@ export interface RequestEligibility {
 
 export type RequestVerdict =
   | { ok: true }
-  | { ok: false; reason: "no_accepted_quote" | "too_old" | "already_asked" | "already_reviewed" };
+  | { ok: false; reason: "no_accepted_quote" | "too_old" | "already_asked" | "already_reviewed" | "not_yet_open" };
 
 /**
  * May this seller ask this buyer for a review?
@@ -381,7 +405,15 @@ export function canRequestReview(
   if (eligibility.alreadyReviewed) return { ok: false, reason: "already_reviewed" };
   if (eligibility.alreadyAsked) return { ok: false, reason: "already_asked" };
 
-  const age = now.getTime() - eligibility.acceptedAt.getTime();
+  /*
+     Board `7c-s`: asking before the buyer can answer sends them to a form that
+     refuses them. And the window runs from the day reviews open rather than from
+     acceptance, or a quarter's wait would spend all ninety days of it.
+  */
+  const opens = eligibility.reviewOpensOn;
+  if (opens && dubaiDayStart(now).getTime() < opens.getTime()) return { ok: false, reason: "not_yet_open" };
+  const from = opens && opens.getTime() > eligibility.acceptedAt.getTime() ? opens : eligibility.acceptedAt;
+  const age = now.getTime() - from.getTime();
   if (age > REQUEST_WINDOW_DAYS * 86_400_000) return { ok: false, reason: "too_old" };
 
   return { ok: true };

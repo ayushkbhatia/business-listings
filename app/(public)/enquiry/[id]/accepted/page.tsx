@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { getAcceptedRecord } from "@/lib/db/queries/accepted-record";
 import { t } from "@/lib/i18n";
@@ -10,7 +11,13 @@ import { ReferenceForm } from "./ReferenceForm";
 import { ReportForm } from "./ReportForm";
 
 /**
- * Board `7c` — the accepted quote record, `/enquiry/:id/accepted`.
+ * Boards `7c` and `7c-s` — the accepted record, `/enquiry/:id/accepted`.
+ *
+ * One route for both shapes, chosen by what was accepted rather than by a
+ * second URL: a quote renders its lines and their total; a proposal renders what
+ * was agreed — a basis, a term with its dates, the exclusions — and no total.
+ * `_record.tsx` makes the choice from the record, so a link a buyer was sent
+ * before either board existed still opens the right page.
  *
  * The end of the enquiry flow, and the page that states what the platform is
  * not. A buyer sent one requirement to several suppliers, compared what came
@@ -32,29 +39,45 @@ import { ReportForm } from "./ReportForm";
  */
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: t("accepted.meta_title"),
-  // Private to one buyer, and every link out carries a bearer token.
-  robots: { index: false, follow: false },
-  referrer: "no-referrer",
-};
+type Params = Promise<{ id: string }>;
+type Search = Promise<Record<string, string | string[] | undefined>>;
+
+/**
+ * One read per request for the metadata and the page. Keyed on the id and the
+ * token as strings, so `cache` can match them.
+ */
+const loadRecord = cache(async (id: string, tokenParam: string | null) => {
+  const buyerId = await resolveBuyerId(tokenParam);
+  if (!buyerId) return null;
+  const record = await getAcceptedRecord(buyerId, id);
+  return record ? { buyerId, record } : null;
+});
+
+const tokenOf = (query: Record<string, string | string[] | undefined>) =>
+  typeof query["t"] === "string" ? query["t"] : null;
+
+export async function generateMetadata({ params, searchParams }: { params: Params; searchParams: Search }): Promise<Metadata> {
+  const loaded = await loadRecord((await params).id, tokenOf(await searchParams));
+  return {
+    // Board `7c-s`: the tab names what the buyer holds.
+    title: loaded?.record.quote.proposal ? t("accepted.meta_title_proposal") : t("accepted.meta_title"),
+    // Private to one buyer, and every link out carries a bearer token.
+    robots: { index: false, follow: false },
+    referrer: "no-referrer",
+  };
+}
 
 export default async function AcceptedPage({
   params,
   searchParams,
 }: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  params: Params;
+  searchParams: Search;
 }) {
   const { id } = await params;
-  const query = await searchParams;
-  const tokenParam = typeof query["t"] === "string" ? query["t"] : null;
-
-  const buyerId = await resolveBuyerId(tokenParam);
-  if (!buyerId) notFound();
-
-  const record = await getAcceptedRecord(buyerId, id);
-  if (!record) notFound();
+  const loaded = await loadRecord(id, tokenOf(await searchParams));
+  if (!loaded) notFound();
+  const { buyerId, record } = loaded;
 
   // Null once the buyer has an account; the session carries them then.
   const token = await trackingTokenFor(buyerId);
@@ -75,7 +98,11 @@ export default async function AcceptedPage({
               // A claim-token buyer has no inbox to go back to; a signed-in one does.
               ...(token ? [] : [{ label: t("accepted.crumb.enquiries"), href: "/account/enquiries" }]),
               { label: record.ref, href: withToken(base) },
-              { label: t("accepted.crumb.current", { ref: record.quote.ref }) },
+              {
+                label: record.quote.proposal
+                  ? t("accepted.crumb.current_proposal", { ref: record.quote.ref })
+                  : t("accepted.crumb.current", { ref: record.quote.ref }),
+              },
             ]}
           />
         }
@@ -83,6 +110,23 @@ export default async function AcceptedPage({
           pdf: withToken(`${base}/accepted/pdf`),
           thread: withToken(`${base}/thread/${record.supplier.slug}`),
           review: withToken(`/review/new?enq=${record.enquiryId}`),
+          /*
+             Board `7c-s` Q3: a renewal is a new brief, never an extension of this
+             record. To the same firm through `1h-s`'s pinned brief — its service
+             where still live — or to the trade. No token: `/rfq/new` is public,
+             and a brief is a new enquiry with its own.
+          */
+          rebrief: record.work
+            ? {
+                supplier: `/rfq/new?${new URLSearchParams({
+                  to: record.supplier.slug,
+                  ...(record.work.serviceSlug ? { service: record.work.serviceSlug } : {}),
+                })}`,
+                others: record.work.tradeSlug
+                  ? `/rfq/new?${new URLSearchParams({ category: record.work.tradeSlug, kind: "services" })}`
+                  : null,
+              }
+            : null,
         }}
         referenceForm={
           <ReferenceForm enquiryId={record.enquiryId} token={token} current={record.buyerReference} />

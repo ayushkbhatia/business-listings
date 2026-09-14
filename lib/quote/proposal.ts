@@ -72,6 +72,12 @@ export interface ProposalInput {
   mobilisation: string;
   termMonths: string;
   validityDays: number;
+  /**
+   * Board `7c-s`: how the buyer pays, from `PROPOSAL_PAYMENT_TERMS`; empty is
+   * *not stated*. Stored on the quote rather than the proposal, where the goods
+   * composer stores it, so `7c`'s *payment agreed* reads one column for both.
+   */
+  paymentTerms: string;
   scope: string;
   deliverable: string;
   deliveredWhere: string;

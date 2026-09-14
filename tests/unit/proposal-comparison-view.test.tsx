@@ -24,7 +24,7 @@ function column(id: string, name: string, proposal: Partial<ComparisonColumn["pr
     displayName: name,
     licenceVerified: true,
     credentials: [],
-    quote: { id: `q-${id}`, ref: `QT-${id}`, revision: 1, status: "sent", sentAt: SENT, expiresAt: new Date("2026-10-09T06:00:00Z") },
+    quote: { id: `q-${id}`, ref: `QT-${id}`, revision: 1, status: "sent", sentAt: SENT, expiresAt: new Date("2026-10-09T06:00:00Z"), paymentTerms: null },
     arrivedAt: SENT,
     repliedInMs: 41 * 60_000,
     state: "open",

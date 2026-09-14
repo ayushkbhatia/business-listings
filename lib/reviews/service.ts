@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { CONTRACT_FACTS_SELECT, reviewOpensOn, toContractFacts } from "@/lib/enquiry/accepted-proposal";
 import "@/lib/audit/prisma-writer";
 import { assertReason, staffMutation } from "@/lib/audit";
 import type { Prisma } from "@/lib/db/generated/client";
@@ -60,6 +61,7 @@ export type CreateReviewResult =
         | "no_confirmed_enquiry"
         | "ambiguous_subject"
         | "already_reviewed"
+        | "not_yet_open"
         | "invalid_ratings"
         | "empty_body";
     };
@@ -134,8 +136,7 @@ export async function enquiryForReview(enquiryId: string): Promise<EnquiryForRev
     select: {
       id: true,
       buyerId: true,
-      contactReleasedToBusinessId: true,
-      contactReleasedAt: true,
+      ...CONTRACT_FACTS_SELECT,
       review: { select: { id: true } },
       recipients: {
         where: { firstReplyAt: { not: null } },
@@ -146,6 +147,8 @@ export async function enquiryForReview(enquiryId: string): Promise<EnquiryForRev
   if (!enquiry) return null;
 
   return {
+    // Board `7c-s`: the same rule the record page prints the day from.
+    reviewOpensOn: reviewOpensOn(toContractFacts(enquiry)),
     id: enquiry.id,
     buyerId: enquiry.buyerId,
     contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
@@ -588,7 +591,7 @@ export type RequestReviewResult =
   | { ok: true; requestId: string; channel: RequestChannel }
   | {
       ok: false;
-      error: "no_accepted_quote" | "too_old" | "already_asked" | "already_reviewed" | "unreachable";
+      error: "no_accepted_quote" | "too_old" | "already_asked" | "already_reviewed" | "not_yet_open" | "unreachable";
     };
 
 /**
@@ -651,8 +654,7 @@ export async function requestReview(input: {
     where: { id: input.enquiryId },
     select: {
       buyerId: true,
-      contactReleasedToBusinessId: true,
-      contactReleasedAt: true,
+      ...CONTRACT_FACTS_SELECT,
       review: { select: { id: true } },
       buyer: { select: { phone: true, email: true } },
     },
@@ -669,6 +671,7 @@ export async function requestReview(input: {
   const verdict = canRequestReview(
     {
       acceptedAt: enquiry.contactReleasedAt,
+      reviewOpensOn: reviewOpensOn(toContractFacts(enquiry)),
       alreadyAsked: alreadyAsked !== null,
       alreadyReviewed: enquiry.review !== null,
     },

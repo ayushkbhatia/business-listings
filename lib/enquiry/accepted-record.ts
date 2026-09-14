@@ -1,3 +1,4 @@
+import type { EnquiryBrief } from "@/lib/db/queries/enquiry-brief";
 import type { Commitment } from "@/lib/quote/commitments";
 import type { ProposalRecord } from "@/lib/quote/proposal";
 import { filsToAed, lineTotalFils, quoteTotalFils } from "@/lib/quote/money";
@@ -66,6 +67,28 @@ export interface RecordLocation {
   emirate: string;
 }
 
+/**
+ * Board `7c-s` — the engagement an accepted proposal is the record of.
+ *
+ * Everything here is read from rows that cannot change once the enquiry is
+ * accepted: the brief (`service_brief_fixed_once_accepted`), the proposal
+ * (`quote_proposal_immutable`) and the category the brief was routed on. The
+ * two slugs are the exception, and they only build links out — to brief the
+ * same firm or the same trade again — never a fact on the record.
+ */
+export interface AcceptedWork {
+  /** The brief the proposal answered. Null for a service enquiry sent without one. */
+  brief: EnquiryBrief | null;
+  /** Where the work happens, from the enquiry — the brief's site, or the enquiry's own. */
+  site: { building: string | null; areaName: string | null; emirate: string | null };
+  /** How this trade's scope sheet words its turnaround — *Response time*. Empty when unknown. */
+  turnaroundLabel: string;
+  /** The trade, for *brief other firms*. Null when the enquiry named none. */
+  tradeSlug: string | null;
+  /** The proposal's service while it is still live, for *brief them again*. */
+  serviceSlug: string | null;
+}
+
 export interface AcceptedRecord {
   enquiryId: string;
   ref: string;
@@ -104,6 +127,8 @@ export interface AcceptedRecord {
      */
     proposal: ProposalRecord | null;
   };
+  /** Board `7c-s`: set exactly when `quote.proposal` is. */
+  work: AcceptedWork | null;
   supplier: {
     id: string;
     slug: string;

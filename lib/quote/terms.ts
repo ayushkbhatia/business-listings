@@ -25,6 +25,23 @@ export const PAYMENT_TERMS: readonly PaymentTermsValue[] = [
   PaymentTerms.lc,
 ];
 
+/**
+ * Board `7c-s` — the terms a services proposal offers, in the same reading order.
+ *
+ * A separate list rather than the goods one with two more: *cash on delivery*
+ * and *letter of credit* are terms for goods changing hands, and a facilities
+ * contract offered either would be a picklist inviting a wrong answer. *In
+ * arrears* and *on completion* are the reverse — no goods quote says them.
+ */
+export const PROPOSAL_PAYMENT_TERMS: readonly PaymentTermsValue[] = [
+  PaymentTerms.advance,
+  PaymentTerms.in_arrears,
+  PaymentTerms.on_completion,
+  PaymentTerms.net_15,
+  PaymentTerms.net_30,
+  PaymentTerms.net_60,
+];
+
 export const DELIVERY_TERMS: readonly DeliveryTermsValue[] = [
   DeliveryTerms.included,
   DeliveryTerms.charged_separately,
@@ -33,6 +50,13 @@ export const DELIVERY_TERMS: readonly DeliveryTermsValue[] = [
 
 export function parsePaymentTerms(value: unknown): PaymentTermsValue | null {
   return typeof value === "string" && (PAYMENT_TERMS as readonly string[]).includes(value)
+    ? (value as PaymentTermsValue)
+    : null;
+}
+
+/** The proposal's own list, with the same null-for-anything-else rule. */
+export function parseProposalPaymentTerms(value: unknown): PaymentTermsValue | null {
+  return typeof value === "string" && (PROPOSAL_PAYMENT_TERMS as readonly string[]).includes(value)
     ? (value as PaymentTermsValue)
     : null;
 }

@@ -36,9 +36,40 @@ function enquiry(over: Partial<EnquiryForReview> = {}): EnquiryForReview {
     contactReleasedAt: new Date("2026-08-20T10:00:00+04:00"),
     repliedBusinessIds: [BUSINESS],
     alreadyReviewed: false,
+    reviewOpensOn: new Date("2026-08-20T00:00:00Z"),
     ...over,
   };
 }
+
+describe("board 7c-s B10 — an engagement is reviewed after its first cycle", () => {
+  const contract = (opensOn: string) => enquiry({ reviewOpensOn: new Date(opensOn) });
+
+  it("refuses the accepted supplier before the day reviews open, and says the day", () => {
+    expect(canReview(BUYER, contract("2026-11-01T00:00:00Z"), undefined, NOW)).toEqual({
+      ok: false,
+      reason: "not_yet_open",
+      opensOn: new Date("2026-11-01T00:00:00Z"),
+    });
+    expect(canReview(BUYER, contract("2026-11-01T00:00:00Z"), BUSINESS, NOW)).toMatchObject({ reason: "not_yet_open" });
+  });
+
+  it("opens on the day itself, in Dubai", () => {
+    // 24 Aug 12:00 in Dubai is 24 Aug; a review opening that day is open.
+    expect(canReview(BUYER, contract("2026-08-24T00:00:00Z"), undefined, NOW)).toMatchObject({ ok: true });
+    // 00:30 on 24 Aug in Dubai is still 23 Aug in UTC — the Dubai day wins.
+    const earlyInDubai = new Date("2026-08-24T00:30:00+04:00");
+    expect(canReview(BUYER, contract("2026-08-24T00:00:00Z"), undefined, earlyInDubai)).toMatchObject({ ok: true });
+  });
+
+  it("does not let the waiting supplier be reviewed on the weaker rung instead", () => {
+    expect(canReview(BUYER, contract("2027-01-01T00:00:00Z"), BUSINESS, NOW)).toMatchObject({ ok: false });
+  });
+
+  it("leaves another supplier who replied to be reviewed on their own rung", () => {
+    const both = enquiry({ reviewOpensOn: new Date("2027-01-01T00:00:00Z"), repliedBusinessIds: [BUSINESS, REPLIED] });
+    expect(canReview(BUYER, both, REPLIED, NOW)).toEqual({ ok: true, businessId: REPLIED, provenance: "verified_enquiry" });
+  });
+});
 
 describe("board 1m criterion 3 — the gate, and the two rungs it admits", () => {
   it("lets a buyer review the supplier whose quote they accepted", () => {
@@ -234,6 +265,7 @@ describe("the four grounds a seller may cite", () => {
 describe("asking for a review", () => {
   const base = {
     acceptedAt: new Date("2026-08-01T10:00:00+04:00"),
+    reviewOpensOn: new Date("2026-08-01T00:00:00Z"),
     alreadyAsked: false,
     alreadyReviewed: false,
   };
@@ -249,9 +281,20 @@ describe("asking for a review", () => {
     });
   });
 
+  it("waits, with the buyer, for an engagement's first cycle — board 7c-s", () => {
+    expect(canRequestReview({ ...base, reviewOpensOn: new Date("2026-11-01T00:00:00Z") }, NOW)).toEqual({
+      ok: false,
+      reason: "not_yet_open",
+    });
+    // Ninety days from the day reviews opened, not from acceptance a quarter before.
+    const opened = new Date(NOW.getTime() - 60 * 86_400_000);
+    const acceptedLongBefore = new Date(opened.getTime() - 92 * 86_400_000);
+    expect(canRequestReview({ ...base, acceptedAt: acceptedLongBefore, reviewOpensOn: opened }, NOW)).toEqual({ ok: true });
+  });
+
   it("closes after ninety days", () => {
     const old = new Date(NOW.getTime() - (REQUEST_WINDOW_DAYS + 1) * 86_400_000);
-    expect(canRequestReview({ ...base, acceptedAt: old }, NOW)).toEqual({
+    expect(canRequestReview({ ...base, acceptedAt: old, reviewOpensOn: null }, NOW)).toEqual({
       ok: false,
       reason: "too_old",
     });

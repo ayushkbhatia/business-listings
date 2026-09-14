@@ -16,6 +16,7 @@ const typed: ProposalInput = {
   mobilisation: "AED 6,000",
   termMonths: "24 months",
   validityDays: 30,
+  paymentTerms: "",
   scope: "  Quarterly PPM across both towers.\r\n24/7 reactive line.  ",
   deliverable: "Monthly written report with photographs",
   deliveredWhere: "On site, both towers",

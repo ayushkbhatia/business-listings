@@ -11,6 +11,7 @@ import { recordEvent } from "@/lib/telemetry/record";
 import { aimDraft, claimDraftSlot, draftIn, draftRef, nextRevisionFor } from "./draft";
 import { quoteFence, type QuoteFenceReason } from "./fence";
 import { lockQuoteFence, readQuoteFence } from "./fence-server";
+import { parseProposalPaymentTerms } from "./terms";
 import { quoteFenceMessage } from "./fence-words";
 import {
   PROPOSAL_DEFAULT_VALIDITY_DAYS,
@@ -159,6 +160,7 @@ export async function findProposalDraft(enquiryId: string, businessId: string) {
       id: true,
       revision: true,
       validityDays: true,
+      paymentTerms: true,
       updatedAt: true,
       proposal: true,
     },
@@ -203,6 +205,9 @@ export async function saveProposalDraft(
 
   const values = draftProposal(input);
   const validityDays = validityOf(input.validityDays);
+  // A value outside the proposal's list is not stated rather than refused — the
+  // same rule the goods draft keeps, because a Select only posts its own options.
+  const paymentTerms = parseProposalPaymentTerms(input.paymentTerms);
   const proposal = {
     serviceId: service?.id ?? null,
     serviceName: service?.name ?? "",
@@ -239,7 +244,7 @@ export async function saveProposalDraft(
       });
       await tx.quote.update({
         where: { id: slot.id },
-        data: { validityDays, note: null, paymentTerms: null, delivery: null, updatedAt: now },
+        data: { validityDays, note: null, paymentTerms, delivery: null, updatedAt: now },
       });
     } else {
       await tx.quote.create({
@@ -249,6 +254,7 @@ export async function saveProposalDraft(
           businessId,
           revision: slot.revision,
           validityDays,
+          paymentTerms,
           status: "draft",
           proposal: { create: proposal },
         },
@@ -326,7 +332,7 @@ export async function sendProposal(
     sentAt: now,
     expiresAt,
     note: null,
-    paymentTerms: null,
+    paymentTerms: parseProposalPaymentTerms(input.paymentTerms),
     delivery: null,
   };
 
@@ -416,6 +422,7 @@ export async function sendProposal(
       validityDays,
       termStated: checked.value.termMonths !== null,
       mobilisationStated: checked.value.mobilisationAed !== null,
+      paymentTermsStated: quoteData.paymentTerms !== null,
       scopeEdited: checked.value.scope !== cleanText(service.scope ?? ""),
       exclusionsEdited: (checked.value.exclusions ?? "") !== cleanText(service.excluded ?? ""),
       // The first reply is what falls due. A revision is never late.

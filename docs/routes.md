@@ -37,8 +37,8 @@ and it is the one that argues back.
 /enquiry/:id                            Enquiry sent + tracking               [1i]  built h2s3
 /enquiry/:id/compare                    Compare quotes                        [1n]  built h2s3
                                         — an enquiry for work: proposals    [1n-s] built 14 Sep (not /account/rfq/:id)
-/enquiry/:id/accepted                   Accepted quote record                 [7c]  built h7c
-/enquiry/:id/accepted/pdf               Accepted quote as a PDF (route handler) [7c] built h7c
+/enquiry/:id/accepted                   Accepted quote record · accepted proposal [7c · 7c-s] built h7c, 7c-s
+/enquiry/:id/accepted/pdf               Accepted quote or proposal as a PDF (route handler) [7c · 7c-s] built h7c, 7c-s
 /enquiry/:id/thread/:seller             Negotiation thread                   [10h]  built h2s4
 /pricing                                Plans                                 [1l]  built h1s1l
 /guides                                 Guide index                          [10b]  built h5s3

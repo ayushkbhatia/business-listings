@@ -18,6 +18,7 @@ import { StaffRolesGallery } from "./_sections/StaffRoles";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
 import { ServiceBriefGallery } from "./_sections/ServiceBrief";
 import { AcceptedRecordGallery } from "./_sections/AcceptedRecord";
+import { AcceptedProposalGallery } from "./_sections/AcceptedProposal";
 import { ProposalReplyGallery } from "./_sections/ProposalReply";
 import { ProposalComparisonGallery } from "./_sections/ProposalComparison";
 import { BuilderSectionsGallery } from "./_sections/BuilderSections";
@@ -185,6 +186,8 @@ const UNLISTED = [
   "proposal-comparison",
   // Board `4b`: the approval queue's rows and its bounded bulk bar.
   "approval-queue",
+  // Board `7c-s`: the accepted proposal, the end of the services demand chain.
+  "accepted-proposal",
 ] as const;
 
 export default function Gallery() {
@@ -276,6 +279,7 @@ export default function Gallery() {
       <AcceptedRecordGallery />
       <ProposalReplyGallery />
       <ProposalComparisonGallery />
+      <AcceptedProposalGallery />
       <BuilderSectionsGallery />
       <Overlays />
       <Shells />

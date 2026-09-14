@@ -38,6 +38,7 @@ const TYPICAL_INPUT: ProposalInput = {
   mobilisation: "6,000",
   termMonths: "24",
   validityDays: 30,
+  paymentTerms: "in_arrears",
   scope: SCOPE,
   deliverable: SERVICE.seed.deliverable,
   deliveredWhere: SERVICE.seed.deliveredWhere,
@@ -76,6 +77,7 @@ const SENT_ROW = {
   fee: "AED 18,400 · Per month",
   term: "24 months",
   mobilisation: "AED 6,000 one-off",
+  payment: "In arrears, after each period of work",
   validUntil: "14 Oct 2026",
   status: "Sent",
 };
