@@ -68,7 +68,20 @@ function doc(record: MaintenanceRecord, now: Date, options: RenderOptions = {}):
   return renderMaintenanceDocument(viewAt(parsed.window, now), { openTabScript: false, ...options });
 }
 
-function Frame({ title, html, height = 680 }: { title: string; html: string; height?: number }) {
+function Frame({
+  title,
+  record,
+  now,
+  options,
+  height = 680,
+}: {
+  title: string;
+  record: MaintenanceRecord;
+  now: Date;
+  options?: RenderOptions;
+  height?: number;
+}) {
+  const html = doc(record, now, { ...options, specimenLabel: title });
   return (
     <iframe
       title={title}
@@ -83,29 +96,29 @@ export function MaintenanceGallery() {
   return (
     <Section id="maintenance" title="maintenance" note="13e · the document proxy.ts serves with a 503, and the unplanned error">
       <States label="as drawn" stack>
-        <Frame title="Maintenance page, as drawn: search index work, two of four down" html={doc(DRAWN, DURING)} />
+        <Frame title="Maintenance page, as drawn: search index work, two of four down" record={DRAWN} now={DURING} />
       </States>
       <States label="window overruns" stack>
-        <Frame title="Maintenance page, past its end time" html={doc(DRAWN, OVERRUN)} />
+        <Frame title="Maintenance page, past its end time" record={DRAWN} now={OVERRUN} />
       </States>
       <States label="open tab, end passed" stack>
-        <Frame title="Maintenance page, an open tab after the end time" html={doc(ENDED, ENDED_DURING, { openTabScript: true })} />
+        <Frame title="Maintenance page, an open tab after the end time" record={ENDED} now={ENDED_DURING} options={{ openTabScript: true }} />
       </States>
       <States label="everything down" stack>
-        <Frame title="Maintenance page, database work, every row down" html={doc(EVERYTHING_DOWN, DURING)} />
+        <Frame title="Maintenance page, database work, every row down" record={EVERYTHING_DOWN} now={DURING} />
       </States>
       <States label="notification job" stack>
-        <Frame title="Maintenance page, notification job work, two rows inverted" html={doc(NOTIFICATION_JOB, DURING)} />
+        <Frame title="Maintenance page, notification job work, two rows inverted" record={NOTIFICATION_JOB} now={DURING} />
       </States>
       <States label="no line staffed" stack>
-        <Frame title="Maintenance page with no WhatsApp line" html={doc(NO_LINE, DURING)} />
+        <Frame title="Maintenance page with no WhatsApp line" record={NO_LINE} now={DURING} />
       </States>
       <States label="mirrored" stack>
-        <Frame title="Maintenance page, right to left" html={doc(DRAWN, DURING, { direction: "rtl" })} />
+        <Frame title="Maintenance page, right to left" record={DRAWN} now={DURING} options={{ direction: "rtl" }} />
       </States>
       <States label="phone width" stack>
         <div className="w-[375px] max-w-full">
-          <Frame title="Maintenance page at phone width" html={doc(DRAWN, DURING)} height={900} />
+          <Frame title="Maintenance page at phone width" record={DRAWN} now={DURING} height={900} />
         </div>
       </States>
       <States label="error, server" stack>

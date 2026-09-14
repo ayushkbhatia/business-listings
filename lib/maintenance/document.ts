@@ -60,11 +60,17 @@ export interface RenderOptions {
   direction?: Direction;
   /** The open-tab swap. Off only for gallery specimens, which pin one state each. */
   openTabScript?: boolean;
+  /**
+   * Gallery only. Axe reads a page's frames as one landmark set, so eight
+   * specimens are eight unnamed `main`s beside the gallery's own and fail
+   * `landmark-unique`. Each specimen names its `main`; production leaves it bare.
+   */
+  specimenLabel?: string;
 }
 
 export function renderMaintenanceDocument(
   view: MaintenanceView,
-  { locale = DEFAULT_LOCALE, direction = dir(locale), openTabScript = true }: RenderOptions = {},
+  { locale = DEFAULT_LOCALE, direction = dir(locale), openTabScript = true, specimenLabel }: RenderOptions = {},
 ): string {
   const tr = (key: Parameters<typeof t>[0], params?: Parameters<typeof t>[1]) => escapeHtml(t(key, params, { locale }));
 
@@ -118,7 +124,7 @@ export function renderMaintenanceDocument(
     `<link rel="preload" href="/fonts/geist-latin.woff2" as="font" type="font/woff2" crossorigin>` +
     `<link rel="stylesheet" href="/maintenance/tokens.css"><link rel="stylesheet" href="/maintenance/maintenance.css">` +
     `</head><body>` +
-    `<main class="mw" data-phase="${view.phase}"${overrun ? "" : ` data-ends-at="${escapeHtml(view.endsAtIso)}"`}>` +
+    `<main class="mw"${specimenLabel ? ` aria-label="${escapeHtml(specimenLabel)}"` : ""} data-phase="${view.phase}"${overrun ? "" : ` data-ends-at="${escapeHtml(view.endsAtIso)}"`}>` +
     `<div class="mw-frame">` +
     `<p class="mw-wordmark">${tr("maintenance.wordmark.business")} <em>${tr("maintenance.wordmark.listings")}</em></p>` +
     `<div class="mw-columns"><div class="mw-copy">` +

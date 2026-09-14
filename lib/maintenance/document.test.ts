@@ -123,3 +123,10 @@ describe("maintenance.css", () => {
     expect(css).not.toMatch(/\b(margin|padding)-(left|right)\b|text-align:\s*(left|right)|\bleft:|\bright:/);
   });
 });
+
+describe("specimen label", () => {
+  it("names main only when the gallery asks, and production leaves it bare", () => {
+    expect(render(DRAWN, DURING).doc.querySelector("main")?.hasAttribute("aria-label")).toBe(false);
+    expect(render(DRAWN, DURING, { specimenLabel: "As drawn" }).doc.querySelector("main")?.getAttribute("aria-label")).toBe("As drawn");
+  });
+});
