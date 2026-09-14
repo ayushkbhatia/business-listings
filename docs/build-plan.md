@@ -339,6 +339,13 @@ is `7b`, and it is a tenancy question, not a screen.
   and delivery (new `Quote` columns), the buyer's reference, commitments selected from the
   supplier's own words, a quote PDF from the same value, and a supplier report with the thread
   attached. Migration `20261016090000_accepted_record_7c`.
+  **Held by the database as well, 14 Sep 2026 (Lane C).** `quote_not_sent_after_acceptance` refuses
+  a quote sent, promoted, revived, revised or extended onto an enquiry whose contact is released —
+  for the writer that skips the fence. Read receipts, acceptance and drafts pass. `extendQuote` was
+  the one writer checking outside the lock; it re-reads under `lockQuoteFence` now and answers
+  `decided` instead of writing a window onto the record. One seed fixture (ENQ-8846's revision 1)
+  and two test helpers wrote the release before the quotes, an order acceptance never produces.
+  Migration `20261026090000_quote_fence_7c`.
 - [ ] **3.5 `10f`** — the storefront computes eligibility for *this* business then links
   `/review/new?enq=` with no `&about=`. `?about=` has zero producers repo-wide.
 - [ ] **3.6 `13a`** — redraw against D4. The `card` layout, the only one that masks, has no

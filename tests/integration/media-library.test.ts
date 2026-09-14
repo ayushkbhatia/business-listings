@@ -229,7 +229,8 @@ describe("a file a buyer holds a quote for", () => {
        stopped holding.
     */
     const enquiry = await prisma.enquiry.findFirstOrThrow({
-      where: { recipients: { some: { businessId } }, quotes: { none: { businessId } } },
+      // Open, too: a sent quote on an accepted enquiry is refused by the database (board 7c).
+      where: { recipients: { some: { businessId } }, quotes: { none: { businessId } }, contactReleasedToBusinessId: null },
       orderBy: { id: "asc" },
       select: { id: true },
     });

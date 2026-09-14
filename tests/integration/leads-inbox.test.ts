@@ -101,9 +101,6 @@ async function lead(label: string, options: LeadOptions = {}): Promise<string> {
       requirement: `${PREFIX} ${label} — resilient seated gate valves for a riser.`,
       closesAt: new Date(Date.now() + 5 * 86_400_000),
       createdAt: at,
-      ...(options.acceptedByUs
-        ? { contactReleasedToBusinessId: businessId, contactReleasedAt: at }
-        : {}),
       lines: {
         create: [
           {
@@ -167,6 +164,15 @@ async function lead(label: string, options: LeadOptions = {}): Promise<string> {
         : {}),
     },
   });
+
+  // Released after the quote, as acceptance does: the database refuses a quote
+  // sent onto an enquiry that has already been accepted (board 7c).
+  if (options.acceptedByUs) {
+    await prisma.enquiry.update({
+      where: { id: enquiry.id },
+      data: { contactReleasedToBusinessId: businessId, contactReleasedAt: at },
+    });
+  }
 
   return enquiry.id;
 }
