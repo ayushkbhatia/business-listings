@@ -135,6 +135,9 @@ export async function saveDraftAction(input: {
   if (!seat) return { ok: false, error: t("lead.error.not_yours") };
 
   const result = await saveDraft(seat.actor, seat.businessId, input);
+  // A send took this revision while the save waited. Nothing was saved and
+  // there is nothing to say: that send has the lead's attention.
+  if (!result.ok && result.error === "superseded") return { ok: false };
   if (!result.ok) {
     return {
       ok: false,
@@ -184,6 +187,7 @@ export async function saveProposalDraftAction(
   if (!seat) return { ok: false, error: t("lead.error.not_yours") };
 
   const result = await saveProposalDraft(seat.actor, seat.businessId, input);
+  if (!result.ok && result.error === "superseded") return { ok: false };
   if (!result.ok) {
     return {
       ok: false,

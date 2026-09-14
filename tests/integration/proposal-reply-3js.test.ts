@@ -16,6 +16,7 @@ import { acceptedQuotePdf } from "@/lib/quote/record-pdf";
 import { sendQuoteForBusiness } from "@/lib/quote/send-quote";
 import { workEnquiryOf } from "@/lib/quote/work-enquiry";
 import { getPipeline } from "@/lib/quotes/pipeline";
+import { whileHoldingEnquiryLock } from "./hold-enquiry-lock";
 
 /**
  * Board `3j-s` against a real database.
@@ -465,5 +466,49 @@ describe("two sends with no draft between them", () => {
       await prisma.quote.findMany({ where: { enquiryId: e.id, businessId: efg.id }, select: { revision: true } })
     ).map((q) => q.revision);
     expect(revisions.sort()).toEqual([1, 2]);
+  });
+});
+
+describe("an autosave and a send", () => {
+  it("an autosave that waited on a send writes nothing over the proposal it sent", async () => {
+    const e = await brief("autosave-after-send");
+    await saveProposalDraft(efg.actor, efg.id, { enquiryId: e.id, ...proposal(efg) });
+    const draft = await findProposalDraft(e.id, efg.id);
+    if (!draft) throw new Error("no draft");
+
+    const late = await whileHoldingEnquiryLock(
+      e.id,
+      () => saveProposalDraft(efg.actor, efg.id, { enquiryId: e.id, ...proposal(efg, { fee: "1" }) }),
+      // What the send's promotion commits while the autosave waits for the lock.
+      (tx) => tx.quote.update({ where: { id: draft.id }, data: { status: "sent", sentAt: new Date() } }),
+    );
+
+    // Before the lock this was `quote_proposal_immutable` refusing the upsert, as a 500.
+    expect(late).toEqual({ ok: false, error: "superseded" });
+    const held = await prisma.quoteProposal.findUniqueOrThrow({ where: { quoteId: draft.id }, select: { feeAed: true } });
+    expect(String(held.feeAed)).toBe("18400");
+    expect(await prisma.quote.count({ where: { enquiryId: e.id, businessId: efg.id, status: "draft" } })).toBe(0);
+  });
+
+  it("a send that waited on an autosave promotes the draft it made rather than colliding with it", async () => {
+    const e = await brief("send-after-autosave");
+    const result = await whileHoldingEnquiryLock(
+      e.id,
+      () => sendProposal(efg.actor, efg.id, { enquiryId: e.id, ...proposal(efg) }),
+      // What an autosave's create commits while the send waits for the lock.
+      (tx) =>
+        tx.quote.create({
+          data: { ref: `DRAFT-race-${e.id}`, enquiryId: e.id, businessId: efg.id, revision: 1, status: "draft", validityDays: 30 },
+        }),
+    );
+
+    expect(result).toMatchObject({ ok: true, revision: 1 });
+    const quotes = await prisma.quote.findMany({
+      where: { enquiryId: e.id, businessId: efg.id },
+      select: { status: true, proposal: { select: { feeAed: true } } },
+    });
+    expect(quotes).toHaveLength(1);
+    expect(quotes[0]).toMatchObject({ status: "sent" });
+    expect(String(quotes[0]!.proposal?.feeAed)).toBe("18400");
   });
 });

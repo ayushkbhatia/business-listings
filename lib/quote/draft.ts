@@ -6,7 +6,7 @@ import type { Actor } from "@/lib/auth/roles";
 import { parseAedToFils } from "@/lib/quote/money";
 import { DEFAULT_VALIDITY_DAYS, VALIDITY_CHOICES } from "@/lib/quote/send-quote";
 import { quoteFence, type QuoteFenceReason } from "./fence";
-import { readQuoteFence } from "./fence-server";
+import { lockQuoteFence, readQuoteFence } from "./fence-server";
 import { parseDeliveryTerms, parsePaymentTerms } from "./terms";
 import { workEnquiryOf } from "./work-enquiry";
 
@@ -69,7 +69,13 @@ export type SaveDraftResult =
   /** Board `3j-s`: an enquiry for work is answered by a proposal, never by lines. */
   | { ok: false; error: "work_enquiry" }
   /** Board `7c`'s fence refused, for the same reason a send would have. */
-  | { ok: false; error: "fenced"; reason: QuoteFenceReason; closesAt: Date };
+  | { ok: false; error: "fenced"; reason: QuoteFenceReason; closesAt: Date }
+  /**
+   * Nothing written: a send took the revision this save was aiming at while it
+   * waited for the lock. See `claimDraftSlot`. Not an error to show — the send
+   * that won has already refreshed the lead, or refuses its own tab in words.
+   */
+  | { ok: false; error: "superseded" };
 
 /**
  * Where a draft's revision number comes from.
@@ -92,6 +98,70 @@ export async function nextRevisionFor(
     select: { revision: true },
   });
   return (previous?.revision ?? 0) + 1;
+}
+
+/**
+ * The draft row alone — which one and at what revision — through any client.
+ *
+ * Under the enquiry's lock there is at most one. Read before the lock, it is
+ * only what the caller saw, and `claimDraftSlot` holds it to that.
+ */
+export async function draftIn(db: Prisma.TransactionClient, enquiryId: string, businessId: string) {
+  return db.quote.findFirst({
+    where: { enquiryId, businessId, status: "draft" },
+    orderBy: [{ revision: "desc" }, { id: "asc" }],
+    select: { id: true, revision: true },
+  });
+}
+
+/** What an autosave saw before it took the lock: its draft, if any, and the revision it is writing. */
+export interface DraftAim {
+  draftId: string | null;
+  revision: number;
+}
+
+export async function aimDraft(enquiryId: string, businessId: string): Promise<DraftAim> {
+  const draft = await draftIn(prisma, enquiryId, businessId);
+  return { draftId: draft?.id ?? null, revision: draft?.revision ?? (await nextRevisionFor(enquiryId, businessId)) };
+}
+
+export type DraftSlot = { kind: "update"; id: string } | { kind: "create"; revision: number } | { kind: "superseded" };
+
+/**
+ * Where an autosave may write, decided under the enquiry's row lock.
+ *
+ * Autosave once wrote with no lock, which a send takes. Two races followed. A
+ * save creating the next revision's draft while a send created the same
+ * revision's quote died on the unique `(enquiry, business, revision)` — whichever
+ * committed second was a 500. And a save that had read the draft just before a
+ * send promoted it then deleted and rewrote the lines of a quote the buyer
+ * already held, because nothing on a goods quote refuses that.
+ *
+ * Under the lock a save and a send are serialised, and the save checks it is
+ * still writing what it set out to:
+ *
+ *  - a draft is there at the revision it aimed at: update it;
+ *  - no draft, it saw none, and the next revision is still the one it aimed at:
+ *    create it;
+ *  - anything else means a send took that revision meanwhile — or "Start again"
+ *    cleared the draft — and the typing it carries belongs to a quote that is
+ *    no longer a draft. Write nothing. A fresh draft at the revision after would
+ *    be a copy of what was just sent, restored on the next visit as if it were
+ *    working.
+ */
+export async function claimDraftSlot(
+  tx: Prisma.TransactionClient,
+  enquiryId: string,
+  businessId: string,
+  aim: DraftAim,
+): Promise<DraftSlot> {
+  const current = await draftIn(tx, enquiryId, businessId);
+  if (current) {
+    return current.revision === aim.revision ? { kind: "update", id: current.id } : { kind: "superseded" };
+  }
+  if (aim.draftId !== null) return { kind: "superseded" };
+  const revision = await nextRevisionFor(enquiryId, businessId, tx);
+  return revision === aim.revision ? { kind: "create", revision } : { kind: "superseded" };
 }
 
 /** The draft in progress, if there is one. */
@@ -146,12 +216,7 @@ export async function saveDraft(
      §7: the composer is read-only on a marked outcome, a suspended listing or a
      closed enquiry — and, since board `7c`, on an accepted one. Autosave must
      not be the way around a rule the buttons enforce, so it asks the same fence
-     a send does.
-
-     No row lock here, unlike the send. A draft is invisible to the buyer and
-     cannot become a quote except through `sendQuoteForBusiness`, which checks
-     again under the lock; a draft written in the instant an accept commits
-     changes nothing anyone reads.
+     a send does — here for the answer, and again under the lock below.
   */
   const fence = await readQuoteFence(prisma, input.enquiryId, businessId);
   if (!fence) return { ok: false, error: "not_your_enquiry" };
@@ -200,47 +265,45 @@ export async function saveDraft(
     }));
 
   const now = new Date();
-  const existing = await findDraft(input.enquiryId, businessId);
+  const aim = await aimDraft(input.enquiryId, businessId);
+  const draft = {
+    note: input.note || null,
+    validityDays,
+    paymentTerms,
+    delivery,
+    lines: { create: lines },
+  };
 
-  if (existing) {
-    await prisma.$transaction([
-      prisma.quoteLine.deleteMany({ where: { quoteId: existing.id } }),
-      prisma.quote.update({
-        where: { id: existing.id },
+  return prisma.$transaction(async (tx): Promise<SaveDraftResult> => {
+    // The lock a send takes, so the two cannot interleave. `claimDraftSlot` says why.
+    const locked = await lockQuoteFence(tx, input.enquiryId, businessId);
+    if (!locked) return { ok: false, error: "not_your_enquiry" };
+    const lockedRefusal = quoteFence(locked, now);
+    if (lockedRefusal) return { ok: false, error: "fenced", reason: lockedRefusal, closesAt: locked.closesAt };
+
+    const slot = await claimDraftSlot(tx, input.enquiryId, businessId, aim);
+    if (slot.kind === "superseded") return { ok: false, error: "superseded" };
+
+    if (slot.kind === "update") {
+      await tx.quoteLine.deleteMany({ where: { quoteId: slot.id } });
+      await tx.quote.update({ where: { id: slot.id }, data: { ...draft, updatedAt: now } });
+    } else {
+      await tx.quote.create({
         data: {
-          note: input.note || null,
-          validityDays,
-          paymentTerms,
-          delivery,
-          updatedAt: now,
-          lines: { create: lines },
+          // A draft has no reference yet. `ref` is unique and a buyer never sees
+          // this row, so it carries a private placeholder that `sendQuoteForBusiness`
+          // replaces with the real one at the moment it becomes a quote.
+          ref: draftRef(input.enquiryId, businessId, slot.revision),
+          enquiryId: input.enquiryId,
+          businessId,
+          revision: slot.revision,
+          status: "draft",
+          ...draft,
         },
-      }),
-    ]);
+      });
+    }
     return { ok: true, savedAt: now, lines: lines.length };
-  }
-
-  const revision = await nextRevisionFor(input.enquiryId, businessId);
-
-  await prisma.quote.create({
-    data: {
-      // A draft has no reference yet. `ref` is unique and a buyer never sees
-      // this row, so it carries a private placeholder that `sendQuoteForBusiness`
-      // replaces with the real one at the moment it becomes a quote.
-      ref: draftRef(input.enquiryId, businessId, revision),
-      enquiryId: input.enquiryId,
-      businessId,
-      revision,
-      validityDays,
-      note: input.note || null,
-      paymentTerms,
-      delivery,
-      status: "draft",
-      lines: { create: lines },
-    },
   });
-
-  return { ok: true, savedAt: now, lines: lines.length };
 }
 
 /** Throw the working away. The seller's own decision, never an automatic one. */

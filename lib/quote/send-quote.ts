@@ -7,7 +7,7 @@ import { parseAedToFils } from "@/lib/quote/money";
 import { t } from "@/lib/i18n";
 import { onQuoteSent } from "@/lib/notify/events";
 import { recordEvent } from "@/lib/telemetry/record";
-import { findDraft, nextRevisionFor } from "./draft";
+import { draftIn, nextRevisionFor } from "./draft";
 import { quoteFence } from "./fence";
 import { lockQuoteFence, readQuoteFence } from "./fence-server";
 import { quoteFenceMessage } from "./fence-words";
@@ -176,9 +176,10 @@ export async function sendQuoteForBusiness(
      (enquiryId, businessId, revision), so promoting it is the only shape that
      does not leave a hole in the sequence the buyer reads.
 
-     Which draft is read here; whether it is still one is asked under the lock.
+     Which draft this tab saw is read here; which one it may promote is decided
+     under the lock.
   */
-  const draft = await findDraft(input.enquiryId, businessId);
+  const draft = await draftIn(prisma, input.enquiryId, businessId);
 
   const expiresAt = new Date(now.getTime() + validityDays * 24 * 3_600_000);
 
@@ -210,25 +211,28 @@ export async function sendQuoteForBusiness(
        the unique `(enquiry, business, revision)` as a 500. Serialised by the
        lock, the second reads the first's commit and is the revision after it.
        Board `3j-s` closed the same race in `sendProposal`.
+
+       Which draft it promotes is decided here too. Two sends from two tabs both
+       found one draft: the first promoted it, and the second must not write its
+       lines over a quote the buyer already holds — nor send a draft cleared with
+       "Start again" in another tab. And an autosave that committed a draft while
+       this send waited is promoted rather than collided with.
     */
-    const revision = draft?.revision ?? (await nextRevisionFor(input.enquiryId, businessId, tx));
+    const current = await draftIn(tx, input.enquiryId, businessId);
+    if (draft && current?.id !== draft.id) {
+      return { ok: false as const, error: t("quote.error.already_sent") };
+    }
+    const revision = current?.revision ?? (await nextRevisionFor(input.enquiryId, businessId, tx));
     const ref = await nextQuoteRef(tx, input.enquiryId, businessId, revision);
 
-    if (draft) {
-      // Two sends from two tabs both found this draft. The first promoted it;
-      // the second must not write its lines over a quote the buyer already
-      // holds. A draft cleared with "Start again" in another tab is gone too.
-      const still = await tx.quote.findUnique({ where: { id: draft.id }, select: { status: true } });
-      if (still?.status !== "draft") {
-        return { ok: false as const, error: t("quote.error.already_sent") };
-      }
+    if (current) {
 
       // Promote. The draft's lines are replaced wholesale rather than merged:
       // what the seller is sending is what is on screen now, and a line they
       // removed must not survive in the quote a buyer receives.
-      await tx.quoteLine.deleteMany({ where: { quoteId: draft.id } });
+      await tx.quoteLine.deleteMany({ where: { quoteId: current.id } });
       const promoted = await tx.quote.update({
-        where: { id: draft.id },
+        where: { id: current.id },
         data: {
           ref,
           againstRevision: enquiry.revision,

@@ -4,6 +4,7 @@ import type { Actor } from "@/lib/auth/roles";
 import { PermissionError } from "@/lib/auth/errors";
 import { saveDraft } from "@/lib/quote/draft";
 import { sendQuoteForBusiness, type SendQuoteInput } from "@/lib/quote/send-quote";
+import { whileHoldingEnquiryLock } from "./hold-enquiry-lock";
 
 /**
  * The write side of the quote composer, against a real database.
@@ -366,6 +367,63 @@ describe("two sends with no draft between them", () => {
     expect(quotes.map((q) => q.revision).sort()).toEqual([1, 2]);
     // The reference is decided under the lock too, so it names its own revision.
     for (const quote of quotes) expect(quote.ref).toMatch(new RegExp(`R${quote.revision}$`));
+  });
+});
+
+describe("an autosave and a send", () => {
+  it("an autosave that waited on a send writes nothing over the quote it sent", async () => {
+    expect((await saveDraft(owner, businessId, input())).ok).toBe(true);
+    const draft = await prisma.quote.findFirstOrThrow({
+      where: { enquiryId, businessId, status: "draft" },
+      select: { id: true },
+    });
+
+    const late = await whileHoldingEnquiryLock(
+      enquiryId,
+      () =>
+        saveDraft(
+          owner,
+          businessId,
+          input({
+            note: "Typed a moment too late.",
+            lines: input().lines.map((line) => ({ ...line, unitPrice: "999.00" })),
+          }),
+        ),
+      // What the send's promotion commits while the autosave waits for the lock.
+      (tx) => tx.quote.update({ where: { id: draft.id }, data: { status: "sent", sentAt: new Date() } }),
+    );
+
+    expect(late).toEqual({ ok: false, error: "superseded" });
+    const quote = await prisma.quote.findUniqueOrThrow({
+      where: { id: draft.id },
+      select: { status: true, note: true, lines: { select: { unitPrice: true } } },
+    });
+    expect(quote.status).toBe("sent");
+    expect(quote.note).toBe(input().note);
+    expect(quote.lines.map((line) => Number(line.unitPrice))).toEqual([100, 100, 100]);
+    // Nor does the late typing wait as the next revision's draft.
+    expect(await prisma.quote.count({ where: { enquiryId, businessId, status: "draft" } })).toBe(0);
+  });
+
+  it("a send that waited on an autosave promotes the draft it made rather than colliding with it", async () => {
+    const result = await whileHoldingEnquiryLock(
+      enquiryId,
+      () => send(),
+      // What an autosave's create commits while the send waits for the lock.
+      (tx) =>
+        tx.quote.create({
+          data: { ref: `DRAFT-race-${enquiryId}`, enquiryId, businessId, revision: 1, status: "draft", validityDays: 14 },
+        }),
+    );
+
+    expect(result).toMatchObject({ ok: true, revision: 1 });
+    const quotes = await prisma.quote.findMany({
+      where: { enquiryId, businessId },
+      select: { status: true, lines: { select: { id: true } } },
+    });
+    expect(quotes).toHaveLength(1);
+    expect(quotes[0]).toMatchObject({ status: "sent" });
+    expect(quotes[0]!.lines).toHaveLength(3);
   });
 });
 
