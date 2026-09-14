@@ -3,6 +3,7 @@ import { Button, SearchField } from "@/components/primitives";
 import { Eyebrow } from "@/components/display";
 import { PublicNav } from "@/components/structure";
 import { t } from "@/lib/i18n";
+import { ReturnSignInLink } from "./_signin-link";
 
 /**
  * The nav and footer every public page shares.
@@ -97,12 +98,9 @@ export function DirectoryNav({
       ]}
       actions={
         <>
-          <Link
-            href="/signin"
-            className="hidden rounded-ctl px-2 py-1.5 text-body-sm text-body hover:text-ink focus-visible:outline-none focus-visible:shadow-focus sm:inline-flex"
-          >
+          <ReturnSignInLink className="hidden rounded-ctl px-2 py-1.5 text-body-sm text-body hover:text-ink focus-visible:outline-none focus-visible:shadow-focus sm:inline-flex">
             {t("chrome.sign_in")}
-          </Link>
+          </ReturnSignInLink>
           {/*
              A box, not `display: contents`.
 

@@ -25,7 +25,7 @@ export function EntryForm({
   params,
 }: {
   audience: EntryAudience;
-  params: { error?: string; retry?: string; since?: string; limit?: string; to?: string };
+  params: { error?: string; retry?: string; limit?: string; to?: string };
 }) {
   const here = entryPath(audience);
 
@@ -38,7 +38,6 @@ export function EntryForm({
         <AuthFailure
           error={params.error}
           retry={params.retry}
-          since={params.since}
           limit={params.limit}
           restartHref={here}
           onRequest
@@ -83,7 +82,7 @@ export function EntryForm({
             href={`/signup?as=${audience}`}
             className="rounded-tag text-moss underline underline-offset-2 focus-visible:shadow-focus focus-visible:outline-none"
           >
-            {t("auth.signup.title")}
+            {t("auth.signup.link")}
           </Link>
         </p>
         <p className="text-caption text-muted">{t(`entry.${audience}.form_hint` as never)}</p>

@@ -1,142 +1,202 @@
 import Link from "next/link";
-import { AuthNotice } from "./AuthNotice";
-import { formatDate, formatDuration } from "@/lib/format";
-import { t } from "@/lib/i18n";
+import { Alert } from "@/components/display/Alert";
+import { formatDuration } from "@/lib/format";
+import { t, type MessageKey } from "@/lib/i18n";
+import { passwordProblem } from "./password-copy";
 
 /**
- * The three failure states board 7a draws, rendered from a query string.
+ * The failure states board 7a draws, rendered from a query string.
  *
- * They are shared because all four screens can reach all three: a link expires
- * wherever it was sent from, a lockout follows the number rather than the page,
- * and a suspended account is suspended on every one of them.
+ * Shared because every auth screen can reach them: a link expires wherever it
+ * was sent from, a lockout follows the identifier rather than the page, and a
+ * suspended account is suspended on every one of them.
+ *
+ * The tones are the board's, not a severity ladder: an expired link is `bad`,
+ * a lockout is `warn` because it offers a way through, and a suspension is
+ * `neutral` — it is a decision a person made, and the screen's job is to point
+ * at the reason, not to alarm.
+ *
+ * Every notice carries its fix (design-system §05.1, component 65). Where the
+ * fix is a control that already sits on the form below — the code button under
+ * a password lockout — it is named in the sentence rather than drawn twice.
  */
-export type AuthErrorCode =
-  | "invalid_identifier"
-  | "code_incorrect"
-  | "delivery_failed"
-  | "identifier_taken"
-  | "unavailable"
-  | "link_expired"
-  | "too_many_attempts"
-  | "cooldown"
-  | "suspended"
-  | "name_required"
-  | "intent_required"
-  | "too_short";
 
 export interface FailureParams {
-  error?: string;
-  retry?: string;
-  since?: string;
-  length?: string;
+  error?: string | undefined;
+  retry?: string | undefined;
   /** "0" when the limit hit was the mail provider's, not ours. */
-  limit?: string;
-  /** Where "send a new link" should go back to. */
+  limit?: string | undefined;
+  /** Attempts left after a wrong code or password. */
+  left?: string | undefined;
+  /** A refused password: which rule, and how long it was. */
+  problem?: string | undefined;
+  length?: string | undefined;
+  /** Where "request another" goes back to. */
   restartHref: string;
   /** True for a lockout on asking for codes rather than on getting them wrong. */
   onRequest?: boolean;
 }
 
-/** Null for the codes that belong beside a field rather than above the form. */
+/** A labelled lead-in, the way the board sets it: bold phrase, then the sentence. */
+function Lead({ title, body }: { title: string; body: string }) {
+  return (
+    <>
+      <span className="font-medium">{title}</span> {body}
+    </>
+  );
+}
+
 export function AuthFailure(params: FailureParams): React.ReactElement | null {
   const { error } = params;
   if (!error) return null;
+  const left = Number(params.left);
 
   switch (error) {
     case "link_expired":
       return (
-        <AuthNotice
-          live
-          tone="warn"
-          title={t("auth.expired.title")}
-          body={t("auth.expired.body", { minutes: 60 })}
+        <Alert
+          tone="bad"
+          live="assertive"
           action={
             <Link
               href={params.restartHref}
-              className="rounded-tag underline underline-offset-2 focus-visible:shadow-focus focus-visible:outline-none"
+              className="rounded-tag text-body-sm font-medium text-bad-ink underline underline-offset-2 focus-visible:shadow-focus focus-visible:outline-none"
             >
               {t("auth.expired.action")}
             </Link>
           }
-        />
+        >
+          <Lead title={t("auth.expired.title")} body={t("auth.expired.body")} />
+        </Alert>
+      );
+
+    case "password_locked":
+      return (
+        <Alert tone="warn" live="assertive" fix={t("auth.locked.password_fix", { duration: waitFor(params.retry) })}>
+          <Lead title={t("auth.locked.title")} body={t("auth.locked.password_body")} />
+        </Alert>
       );
 
     case "too_many_attempts":
       return (
-        <AuthNotice
-          live
-          tone="bad"
-          title={t("auth.locked.title")}
-          body={
-            // limit=0 means the ceiling was the mail provider's rather than
-            // ours, so quoting "5 codes" would be quoting the wrong number.
-            params.limit === "0"
-              ? t("auth.locked.body_upstream", { duration: waitFor(params.retry) })
-              : params.onRequest
-                ? t("auth.locked.body_requests", { limit: 5, duration: waitFor(params.retry) })
-                : t("auth.locked.body", { duration: waitFor(params.retry) })
-          }
-        />
+        <Alert tone="warn" live="assertive" fix={t("auth.locked.fix", { duration: waitFor(params.retry) })}>
+          <Lead
+            title={t("auth.locked.title")}
+            body={
+              // limit=0 means the ceiling was the mail provider's rather than
+              // ours, so quoting "5 codes" would be quoting the wrong number.
+              params.limit === "0"
+                ? t("auth.locked.body_upstream")
+                : params.onRequest
+                  ? t("auth.locked.body_requests", { limit: 5 })
+                  : t("auth.locked.body")
+            }
+          />
+        </Alert>
       );
 
     case "cooldown":
       return (
-        <AuthNotice
-          live
-          tone="info"
-          title={t("auth.cooldown.title")}
-          body={t("auth.cooldown.body", { duration: waitFor(params.retry) })}
-        />
+        <Alert tone="info" live="polite">
+          <Lead title={t("auth.cooldown.title")} body={t("auth.cooldown.body", { duration: waitFor(params.retry) })} />
+        </Alert>
       );
 
     case "suspended":
+      /*
+         Board 7a `B7` and criterion 7: says a reason was emailed, and never
+         shows it. There is no date either — the date adds nothing the email
+         does not say, and it is one more fact about the account for whoever is
+         holding the phone.
+      */
       return (
-        <AuthNotice
-          live
-          tone="bad"
-          title={t("auth.suspended.title")}
-          body={t("auth.suspended.body", {
-            date: params.since ? formatDate(params.since) : formatDate(new Date()),
-          })}
+        <Alert
+          tone="neutral"
+          live="assertive"
           action={
             <a
-              href="mailto:review@businesslistings.ae"
-              className="rounded-tag underline underline-offset-2 focus-visible:shadow-focus focus-visible:outline-none"
+              href={`mailto:${t("auth.support_address")}`}
+              className="rounded-tag text-body-sm font-medium text-prose underline underline-offset-2 focus-visible:shadow-focus focus-visible:outline-none"
             >
               {t("auth.suspended.action")}
             </a>
           }
-        />
+        >
+          <Lead title={t("auth.suspended.title")} body={t("auth.suspended.body")} />
+        </Alert>
       );
 
     case "code_incorrect":
-      return <AuthNotice live title={t("auth.error.code_incorrect")} />;
-    case "invalid_identifier":
-      return <AuthNotice live title={t("auth.error.invalid_identifier")} />;
-    case "delivery_failed":
-      return <AuthNotice live title={t("auth.error.delivery_failed")} />;
-    case "name_required":
-      return <AuthNotice live title={t("auth.error.name_required")} />;
-    case "intent_required":
-      return <AuthNotice live title={t("auth.signup.intent_required")} />;
-    case "too_short":
       return (
-        <AuthNotice live title={t("auth.reset.too_short", { count: Number(params.length ?? 0) })} />
+        <Alert tone="bad" live="assertive" fix={t("auth.error.code_incorrect_fix")}>
+          {Number.isFinite(left) && params.left !== undefined
+            ? t("auth.error.code_incorrect_left", { count: left })
+            : t("auth.error.code_incorrect")}
+        </Alert>
       );
-    case "identifier_taken":
-      /*
-         Verified, and still no seat. The identifier belongs to a profile row
-         with a different id — every seeded staff seat and seller owner is one,
-         because the seed mints their ids itself. Says so plainly rather than
-         reaching the browser as a 500, which is what it used to do.
-      */
-      return <AuthNotice live title={t("auth.error.identifier_taken")} />;
-    case "unavailable":
-      return <AuthNotice live title={t("auth.error.unavailable")} />;
-    default:
-      return null;
+
+    case "password_incorrect":
+      return (
+        <Alert tone="bad" live="assertive" fix={t("auth.error.password_incorrect_fix")}>
+          {Number.isFinite(left) && params.left !== undefined
+            ? t("auth.error.password_incorrect_left", { count: left })
+            : t("auth.error.password_incorrect")}
+        </Alert>
+      );
+
+    case "password_rejected":
+      return (
+        <Alert tone="bad" live="assertive" fix={t("auth.password.fix")}>
+          {passwordProblem(params.problem, Number(params.length ?? 0))}
+        </Alert>
+      );
+
+    case "sms_unavailable":
+      return (
+        <Alert tone="warn" live="assertive" fix={t("auth.error.sms_unavailable_fix")}>
+          {t("auth.error.sms_unavailable")}
+        </Alert>
+      );
+
+    default: {
+      const plain = PLAIN[error as PlainError];
+      if (!plain) return null;
+      return (
+        <Alert tone="bad" live="assertive" fix={t(plain[1])}>
+          {t(plain[0])}
+        </Alert>
+      );
+    }
   }
 }
+
+/** Refusals that are one sentence and one fix, with nothing to interpolate. */
+type PlainError =
+  | "invalid_identifier"
+  | "invalid_phone"
+  | "invalid_email"
+  | "name_required"
+  | "terms_required"
+  | "password_required"
+  | "email_taken"
+  | "phone_taken"
+  | "delivery_failed"
+  | "identifier_taken"
+  | "unavailable";
+
+const PLAIN: Record<PlainError, readonly [MessageKey, MessageKey]> = {
+  invalid_identifier: ["auth.error.invalid_identifier", "auth.error.invalid_identifier_fix"],
+  invalid_phone: ["auth.error.invalid_phone", "auth.error.invalid_phone_fix"],
+  invalid_email: ["auth.error.invalid_email", "auth.error.invalid_email_fix"],
+  name_required: ["auth.error.name_required", "auth.error.name_required_fix"],
+  terms_required: ["auth.error.terms_required", "auth.error.terms_required_fix"],
+  password_required: ["auth.error.password_required", "auth.error.password_required_fix"],
+  email_taken: ["auth.error.email_taken", "auth.error.email_taken_fix"],
+  phone_taken: ["auth.error.phone_taken", "auth.error.phone_taken_fix"],
+  delivery_failed: ["auth.error.delivery_failed", "auth.error.delivery_failed_fix"],
+  identifier_taken: ["auth.error.identifier_taken", "auth.error.identifier_taken_fix"],
+  unavailable: ["auth.error.unavailable", "auth.error.unavailable_fix"],
+};
 
 /** "45 s" · "2 min". The same duration ladder the rest of the product uses. */
 function waitFor(retry: string | undefined): string {

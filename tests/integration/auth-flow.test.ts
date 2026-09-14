@@ -182,18 +182,27 @@ describe.skipIf(!live)("sign up, then verify", () => {
       { identifier: EMAIL, code: "000000" },
       { supabase: anonClient() },
     );
-    expect(outcome).toEqual({ ok: false, kind: "code_incorrect" });
+    // Board 7a: *attempt counted, remaining attempts stated*.
+    expect(outcome).toEqual({ ok: false, kind: "code_incorrect", attemptsLeft: 4 });
   });
 
-  it("locks the identifier out after five wrong codes", async () => {
+  it("locks the identifier out on the fifth wrong code, for fifteen minutes", async () => {
     await removeExisting(EMAIL);
     await issueCode(EMAIL, {});
     const client = anonClient();
+    const answers = [];
     for (let i = 0; i < 5; i += 1) {
-      await verifyCode({ identifier: EMAIL, code: "000000" }, { supabase: client });
+      answers.push(await verifyCode({ identifier: EMAIL, code: "000000" }, { supabase: client }));
     }
+    expect(answers.slice(0, 4).map((a) => ("attemptsLeft" in a ? a.attemptsLeft : null))).toEqual([4, 3, 2, 1]);
+    // The fifth wrong code is the lockout itself, not "0 attempts left" above a
+    // form that still takes one.
+    expect(answers[4]).toMatchObject({ ok: false, kind: "too_many_attempts" });
     const locked = await verifyCode({ identifier: EMAIL, code: "000000" }, { supabase: client });
     expect(locked).toMatchObject({ ok: false, kind: "too_many_attempts" });
+    if (locked.ok || !("retryAfterSeconds" in locked)) throw new Error("unreachable");
+    expect(locked.retryAfterSeconds).toBeGreaterThan(14 * 60);
+    expect(locked.retryAfterSeconds).toBeLessThanOrEqual(15 * 60);
   });
 });
 
@@ -217,6 +226,17 @@ describe("reading a Supabase error", () => {
       kind: "too_many_attempts",
       limit: 0,
     });
+  });
+
+  it("reads a per-address frequency limit as a cooldown with its own number", () => {
+    // The hourly ceiling and the "wait 37 seconds" limit share a code. Reading
+    // the second as the first told somebody to wait an hour for 37 seconds.
+    expect(
+      fromSupabaseError({
+        code: "over_email_send_rate_limit",
+        message: "For security purposes, you can only request this after 37 seconds.",
+      }),
+    ).toEqual({ ok: false, kind: "cooldown", retryAfterSeconds: 37 });
   });
 
   it("calls a disabled provider unavailable rather than blaming the address", () => {
@@ -266,9 +286,10 @@ describe("where a session lands", () => {
     expect(destinationFor(["staff_ops_lead"], null, true)).toBe("/admin");
   });
 
-  it("leaves a buyer with no listing intent on the directory", () => {
-    expect(destinationFor(["buyer"], null, false)).toBe("/");
-    expect(destinationFor(["buyer"], null)).toBe("/");
+  it("lands a buyer with no listing intent in the buyer account", () => {
+    // Board 7a: *sign up, buyer — lands in the buyer account*.
+    expect(destinationFor(["buyer"], null, false)).toBe("/account/enquiries");
+    expect(destinationFor(["buyer"], null)).toBe("/account/enquiries");
   });
 
   it("refuses a next that leaves the site", () => {
@@ -280,7 +301,7 @@ describe("where a session lands", () => {
       "http://evil.example",
     ]) {
       expect(isSafeNext(hostile), hostile).toBe(false);
-      expect(destinationFor(["buyer"], hostile)).toBe("/");
+      expect(destinationFor(["buyer"], hostile)).toBe("/account/enquiries");
       // And a listing intent does not turn a hostile next into a way out.
       expect(destinationFor(["buyer"], hostile, true)).toBe("/onboarding/claim");
     }

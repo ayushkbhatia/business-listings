@@ -515,6 +515,44 @@ first, and compared a stale claim by length — so a revoke whose claim write fa
 effect, and a moderator moved to finance stayed a moderator. The profile row decides now, and
 the claim is repaired to match.
 
+## Accounts and sign-in — board 7a
+
+One `User`, both roles (`B1`). Mobile is the primary identity; a password is optional.
+
+```prisma
+model User {
+  // …
+  suspendedAt   DateTime?   // written only by lib/account/suspension.ts; reason on the audit row
+  passwordSetAt DateTime?   // null for most accounts — nothing may assume a password exists (B3)
+}
+
+enum AuthAttemptKind { otp_request otp_verify reset_request password_verify }
+//                                                            ^ its own kind: a password lockout
+//                                                              must leave the code path open (B5)
+
+model PasswordReset {        // B6 — ours, because Supabase ties link expiry to code expiry
+  userId    String
+  channel   PasswordResetChannel   // email (a link) | sms (a verified code)
+  tokenHash String  @unique        // SHA-256; the token lives only in the email or a cookie
+  expiresAt DateTime               // CHECK: at most one hour after created_at
+  usedAt    DateTime?              // claimed by conditional update — single-use
+}
+
+model TermsAcceptance {      // B10 — a version and a timestamp, never a boolean
+  userId         String
+  termsVersion   String      // the document's effectiveFrom, YYYY-MM-DD (CHECK)
+  privacyVersion String
+  acceptedAt     DateTime    // when the box was ticked, not when the code was typed
+  source         String      // "signup"
+  @@unique([userId, termsVersion, privacyVersion])
+}
+```
+
+A suspension is `account.suspend` (ops lead), writes `account_suspended` / `account_reinstated`
+with the reason, ends every session and emails the reason. The sign-in screen says a reason was
+emailed and never shows it (`B7`). `getActor` returns no actor for a suspended profile on every
+request.
+
 ## Closing a business — board 11i
 
 Closure is a **status transition, not a delete**. Nothing about the business is removed at

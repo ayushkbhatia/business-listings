@@ -178,3 +178,27 @@ WhatsApp authentication messages are priced per delivered message by destination
 and UAE is a comparatively expensive market. Metering matters: a resend button with no
 cooldown is a direct cost leak. Supabase's own OTP rate limit is the first line, but put a
 per-number cooldown in the hook as well.
+
+## Board 7a — passwords, reset grants and the sign-up fallback (14 Sep 2026)
+
+**Password sign-in exists.** `lib/auth/password.ts` calls `signInWithPassword`, which appeared
+nowhere before. A password is optional (`User.passwordSetAt` is null for most accounts), a wrong
+password and no password are one answer, and wrong passwords count as `password_verify` — never
+`otp_verify` — so a password lockout leaves the code path open. A second, looser ceiling counts
+wrong passwords per address.
+
+**Reset links are ours, not Supabase's.** Supabase expires an emailed recovery link on the
+email-OTP expiry, and board 7a wants codes at ten minutes and reset links at an hour. So reset
+issues a `password_reset` grant (SHA-256 of a 32-byte token, an hour at most by CHECK, used once by
+conditional update) and emails a link to `/auth/reset?token=`, which moves the token into an
+httpOnly cookie. A mobile reset is a code verified with `purpose=reset`, which mints the same grant.
+Set the project's `MAILER_OTP_EXP` and `SMS_OTP_EXP` to 600.
+
+**Production has never delivered a code to a mobile.** Checked 14 Sep 2026: 398 auth users, 377
+holding a phone, none confirmed. Sign-up asks for mobile and work email, tries the mobile, and on
+`phone_provider_disabled`, `sms_send_failed` or `otp_disabled` sends the code to the email and says so
+on the verify screen. The mobile is written to the profile and attached, unconfirmed, to the Supabase
+user at first verification.
+
+**Resend lock is 24 seconds** (`THROTTLES.otp_request.cooldownMs`), and code and password lockouts
+now hold for their full fifteen minutes from the failure that closed them.

@@ -113,6 +113,12 @@ only to `STAFF_EMAIL_DOMAINS` (Q3 is open, so a contractor address is refused), 
 **Every ✓ in this table that changes state writes an `AuditEvent` with a non-null reason.**
 Ops lead has no exemption.
 
+"Suspend an account" is two capabilities since board 7a, because it is two different acts:
+`business.suspend` takes a listing out of the directory and leaves its team signed in;
+`account.suspend` stops a person signing in on every role they hold, ends their sessions and
+emails them the reason. Both are ops lead only. A staff seat is not suspended — board 4i
+deactivates it.
+
 ### Rows this document does not contain
 
 Nine capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no

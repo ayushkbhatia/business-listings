@@ -26,8 +26,10 @@ describe("normaliseIdentifier", () => {
 });
 
 describe("maskIdentifier", () => {
-  it("shows enough to recognise and not enough to confirm", () => {
-    expect(maskIdentifier({ kind: "phone", value: "+971506412288" })).toBe("+971 50 ••• ••88");
+  it("masks the way board 7a draws it", () => {
+    // Suresh Menon's number, as the corrected render prints it — not Rajesh
+    // Nair's, which the first draft masked.
+    expect(maskIdentifier({ kind: "phone", value: "+971506412288" })).toBe("+971 50 641 ••88");
   });
 
   it("keeps the domain, which is how somebody spots the wrong address", () => {

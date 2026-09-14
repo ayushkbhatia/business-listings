@@ -246,7 +246,10 @@ max_frequency = "1s"
 # Number of characters used in the email OTP.
 otp_length = 6
 # Number of seconds before the email OTP expires (defaults to 1 hour).
-otp_expiry = 3600
+# Board 7a B4: codes last ten minutes, and the verify screen says so. Reset links
+# are not Supabase's — they are `password_reset` grants that last an hour — so
+# this one setting no longer has to hold both numbers.
+otp_expiry = 600
 
 # Use a production-ready SMTP server
 # [auth.email.smtp]

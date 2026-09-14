@@ -33,6 +33,10 @@ import type { Actor } from "./roles";
 export const assertCanSuspendBusiness = (a: Actor) => assertCan(a, "business.suspend");
 export const maySuspendBusiness = (a: Actor) => can(a, "business.suspend");
 
+/** Board 7a `B7`. A person's account, every role they hold. */
+export const assertCanSuspendAccount = (a: Actor) => assertCan(a, "account.suspend");
+export const maySuspendAccount = (a: Actor) => can(a, "account.suspend");
+
 export const assertCanMergeBusinesses = (a: Actor) => assertCan(a, "business.merge");
 export const mayMergeBusinesses = (a: Actor) => can(a, "business.merge");
 

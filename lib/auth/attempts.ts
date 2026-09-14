@@ -1,6 +1,15 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { decide, THROTTLES, type AuthAttemptKind, type ThrottleDecision } from "./throttle";
+import {
+  attemptsLeft,
+  decide,
+  horizonMs,
+  PASSWORD_ADDRESS_CEILING,
+  THROTTLES,
+  type AuthAttemptKind,
+  type ThrottleDecision,
+  type ThrottlePolicy,
+} from "./throttle";
 
 /**
  * The database side of the throttle. The decision itself is in throttle.ts and
@@ -17,13 +26,60 @@ export async function checkThrottle(
     where: {
       identifier,
       kind,
-      createdAt: { gte: new Date(now.getTime() - THROTTLES[kind].windowMs) },
+      createdAt: { gte: new Date(now.getTime() - horizonMs(THROTTLES[kind])) },
     },
     select: { createdAt: true, succeeded: true },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 50,
   });
   return decide(kind, attempts, now);
+}
+
+/**
+ * How many more wrong answers before the door shuts. Board 7a: *attempt
+ * counted, remaining attempts stated*. Read after the failure is recorded.
+ */
+export async function remainingAttempts(
+  identifier: string,
+  kind: AuthAttemptKind,
+  now: Date = new Date(),
+): Promise<number> {
+  const attempts = await prisma.authAttempt.findMany({
+    where: { identifier, kind, createdAt: { gte: new Date(now.getTime() - THROTTLES[kind].windowMs) } },
+    select: { createdAt: true, succeeded: true },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 50,
+  });
+  return attemptsLeft(kind, attempts, now);
+}
+
+/**
+ * The per-address ceiling on wrong passwords — see `PASSWORD_ADDRESS_CEILING`.
+ *
+ * Only failures count, and only this kind. An address with no header to read
+ * is not throttled here: refusing every request that arrives without one would
+ * lock out whatever sits behind a proxy that strips it, and the per-identifier
+ * lockout still holds for those.
+ */
+export async function checkAddressThrottle(
+  ip: string | null | undefined,
+  kind: AuthAttemptKind,
+  now: Date = new Date(),
+  policy: ThrottlePolicy = PASSWORD_ADDRESS_CEILING,
+): Promise<ThrottleDecision> {
+  if (!ip) return { allowed: true };
+  const failures = await prisma.authAttempt.findMany({
+    where: {
+      ip,
+      kind,
+      succeeded: false,
+      createdAt: { gte: new Date(now.getTime() - horizonMs(policy)) },
+    },
+    select: { createdAt: true, succeeded: true },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: policy.limit * 2,
+  });
+  return decide(kind, failures, now, policy);
 }
 
 /**

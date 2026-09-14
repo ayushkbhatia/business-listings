@@ -23,7 +23,7 @@ test.describe("the audience entry surfaces", () => {
       await expect(page.getByRole("heading", { level: 1 })).toHaveText(door.heading);
       // One form, posting to the shared action. Two would be two sign-in paths.
       await expect(page.locator("form")).toHaveCount(1);
-      await expect(page.getByLabel("Mobile number or email")).toBeVisible();
+      await expect(page.getByLabel("Mobile or email")).toBeVisible();
     });
 
     test(`offers the directory rather than trapping the visitor: ${door.path}`, async ({ page }) => {
@@ -48,22 +48,22 @@ test.describe("the audience entry surfaces", () => {
     await page.getByRole("link", { name: "Create an account" }).click();
 
     await expect(page).toHaveURL(/\/signup\?as=supplier/);
-    await expect(page.getByLabel(/Listing/)).toBeChecked();
-    await expect(page.getByLabel(/Buying/)).not.toBeChecked();
+    await expect(page.getByRole("radio", { name: /I'm listing a business/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /I'm buying/ })).not.toBeChecked();
   });
 
-  test("the buyer door leaves the buying intent ticked", async ({ page }) => {
+  test("the buyer door leaves the buying intent selected", async ({ page }) => {
     await page.goto("/for-buyers");
     await page.getByRole("link", { name: "Create an account" }).click();
 
     await expect(page).toHaveURL(/\/signup\?as=buyer/);
-    await expect(page.getByLabel(/Buying/)).toBeChecked();
-    await expect(page.getByLabel(/Listing/)).not.toBeChecked();
+    await expect(page.getByRole("radio", { name: /I'm buying/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /I'm listing a business/ })).not.toBeChecked();
   });
 
   test("a refusal returns to the door it was refused at", async ({ page }) => {
     await page.goto("/list-your-business");
-    await page.getByLabel("Mobile number or email").fill("not-a-number");
+    await page.getByLabel("Mobile or email").fill("not-a-number");
     await page.getByRole("button", { name: "Send me a code" }).click();
 
     // Not /signin. Somebody reading the supplier page stays on it.
@@ -141,7 +141,10 @@ test.describe("the staff door", () => {
     };
 
     expect(await names("/staff")).toEqual(["from", "identifier", "next"]);
-    expect(await names("/signin")).toEqual(["identifier"]);
+    // Board 7a added the password to /signin. /staff still takes a code only:
+    // a staff seat is an email on a staff domain, and adding a password door to
+    // the console is a decision for board 4i, not a side effect of this one.
+    expect(await names("/signin")).toEqual(["identifier", "password"]);
   });
 
   test("carries next=/admin without granting anything", async ({ page }) => {

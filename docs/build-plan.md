@@ -289,9 +289,23 @@ wrong until somebody updates them — a data change, not a deploy.
 The conversion event and the terminal state. Seven of eight already render; the one genuine build
 is `7b`, and it is a tenancy question, not a screen.
 
-- [ ] **3.1 `7a`** — `signInWithPassword` appears zero times in the repo, yet /signin offers "Use
+- [x] **3.1 `7a`** — `signInWithPassword` appears zero times in the repo, yet /signin offers "Use
   a password instead" and `setPasswordAction` writes one. `/reset` is a magic link wearing a
   password label. `User.suspendedAt` has no writer outside a test fixture.
+  **Done with board `7a`'s handoff, 14 Sep 2026.** Sign-in is password-first as drawn with the code
+  one button below on the same form (Q1 left as drawn); a wrong password and no password are one
+  answer, and wrong passwords are their own attempt kind, so the lockout leaves the code open (`B5`).
+  Reset is ours: an hour-long, single-use `password_reset` grant from an emailed link or a code
+  verified for a reset (`B2`, `B6`). Sign-up asks which door, takes mobile and work email, records
+  terms versions with the tick time (`B10`), and sends the code to the email when mobiles cannot be
+  reached — production has never confirmed a phone. `lib/account/suspension.ts` is the writer that
+  keeps "the reason is in your email" true; `getActor` refuses a suspended profile on every request.
+  Sign-in lands a closing owner on the reversal (Q2). **Found on the way and fixed:** a wrong code on
+  `/verify` redirected to the door it came from, so "that code did not match" appeared above the
+  sign-up form; sign-up on a mobile an account already held quietly became a sign-in to a code that
+  could never arrive; a slowly reached lockout opened before the fifteen minutes it quoted; the
+  verify screen printed a masked number from the query string. Migration
+  `20261023140000_password_signin_7a`.
 - [ ] **3.2 `10e`** — `requireBuyerSeat` needs a session; the product's default buyer has no
   account. Their claim token opens one enquiry and never the list. No pagination, no test.
 - [ ] **3.3 `10h`** — `getThread` returns `automatic`; the buyer page drops it. The one party the
@@ -512,7 +526,7 @@ the only large piece and the only one selling something it does not deliver.
 | `4g` | Subscriptions & revenue | partial | small | Placement revenue is reported nowhere; a sold slot is neither billed nor counted. | 6.2 |
 | `11e` | Sponsored placement | scaffold ↓ | medium | A slot is created at 450 AED with no invoice, no charge, no ledger row — and no plan gate. | 6.3 |
 | `11i` | Close account | scaffold | large | Terms and privacy publish a closure promise and eight retention windows; nothing implements either. | 6.5 |
-| `7a` | Auth — four states | partial ↓ | export only | `signInWithPassword` appears zero times; a password can be set and never used. | 3.1 |
+| `7a` | Auth — four states | built | 14 Sep 2026 | Password sign-in, reset grants, sign-up fallback, suspension writer. | 3.1 |
 | `7b` | Buyer company account | scaffold | medium | A tenant table with no writer: `User.buyerCompanyId` is null for every non-seeded user. | 3.7 |
 | `10e` | Buyer enquiry inbox | partial | small | The product's default buyer has no account and so cannot open their own inbox. | 3.2 |
 | `10h` | Negotiation thread | partial | small | The AUTOMATIC badge exists for the buyer and renders only for the seller. | 3.3 |

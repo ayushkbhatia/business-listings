@@ -75,7 +75,6 @@ export default async function ListYourBusinessPage({ searchParams }: Props) {
           params={{
             ...(one("error") ? { error: one("error") } : {}),
             ...(one("retry") ? { retry: one("retry") } : {}),
-            ...(one("since") ? { since: one("since") } : {}),
             ...(one("limit") ? { limit: one("limit") } : {}),
             ...(one("to") ? { to: one("to") } : {}),
           }}

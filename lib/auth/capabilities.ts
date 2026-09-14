@@ -58,6 +58,12 @@ export const CAPABILITIES = {
     source: "stated",
     why: "§07 cross-surface and staff tables agree: superadmin only. Taking a paying supplier off the directory is the most severe reversible act on the platform.",
   },
+  "account.suspend": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "stated",
+    why: "§07 staff table, \"Suspend an account\": ops lead only. Board 7a B7 is the other half — a suspended sign-in says the reason is in the account holder's email, so the one writer (`lib/account/suspension.ts`) ends every session and emails the reason staff wrote. Distinct from business.suspend, which takes a listing out of the directory and leaves its team signed in; this stops a person signing in on every role they hold.",
+  },
   "business.close": {
     roles: OPS_LEAD_ONLY,
     audited: true,

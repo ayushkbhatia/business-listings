@@ -1,32 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button } from "@/components/primitives";
 import { t } from "@/lib/i18n";
 
 /**
- * Resend, behind a countdown.
+ * Resend, behind board 7a's 24-second lock.
  *
- * The cooldown is enforced server-side in lib/auth/throttle.ts — this is the
- * part that stops somebody pressing a button that is going to refuse them, and
- * that tells them how long. It is also the cost control's visible face: a
- * WhatsApp authentication message to the UAE is priced per delivery.
+ * The lock is enforced server-side in lib/auth/throttle.ts — this is the part
+ * that stops somebody pressing a button that is going to refuse them, and that
+ * tells them how long. It is also the cost control's visible face: a WhatsApp
+ * authentication message to the UAE is priced per delivery.
  *
  * The initial seconds come from the server, so a reload does not reset the
  * countdown to zero and invite another send.
  *
- * It resolves its own labels. One of them takes the remaining seconds, and a
- * function cannot cross from a server component to a client one — `t()` is
- * pure and runs the same on either side, so the label is built here rather
- * than handed over.
+ * The button itself arrives as `children`, built by the server page with its
+ * `formAction`. An element crosses the server-client boundary; a function
+ * handed over as a prop is the repo's most repeated bug. The countdown label
+ * takes the remaining time and is built here — `t()` is pure and runs the same
+ * on either side.
  */
-export function ResendButton({
-  initialSeconds,
-  pending = false,
-}: {
-  initialSeconds: number;
-  pending?: boolean;
-}) {
+export function ResendButton({ initialSeconds, children }: { initialSeconds: number; children: React.ReactNode }) {
   const [seconds, setSeconds] = useState(initialSeconds);
 
   useEffect(() => {
@@ -35,10 +29,15 @@ export function ResendButton({
     return () => clearTimeout(timer);
   }, [seconds]);
 
-  const waiting = seconds > 0;
-  return (
-    <Button type="submit" variant="ghost" size="sm" disabled={waiting || pending} loading={pending}>
-      {waiting ? t("auth.verify.resend_in", { seconds }) : t("auth.verify.resend")}
-    </Button>
-  );
+  if (seconds > 0) {
+    const clock = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+    return (
+      <p className="flex flex-col text-caption text-body" role="timer" aria-live="off">
+        <span>{t("auth.verify.resend_in")}</span>
+        <span className="font-mono tabular-nums">{clock}</span>
+      </p>
+    );
+  }
+
+  return <>{children}</>;
 }

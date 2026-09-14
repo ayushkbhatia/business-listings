@@ -52,7 +52,7 @@ export default async function StaffSignInPage({
     <AuthCard title={t("auth.staff.title")} lede={t("auth.staff.lede")}>
       <form action={signInAction} className="space-y-4">
         <AuthFailure
-          {...{ error: one("error"), retry: one("retry"), since: one("since"), limit: one("limit") }}
+          {...{ error: one("error"), retry: one("retry"), limit: one("limit") }}
           restartHref="/staff"
           onRequest
         />

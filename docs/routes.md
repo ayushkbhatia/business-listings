@@ -55,7 +55,8 @@ and it is the one that argues back.
 /cookies                                Cookie policy + 9-cookie register    [13h]  built h7s1
 /cookies/settings                       Consent toggles                       later
 /verification-policy · /review-policy                                        [10j]  built h5s5
-/signin · /signup · /verify · /reset                                          [7a]  built h2s2
+/signin · /signup · /verify · /reset                                          [7a]  built h2s2, rebuilt 7a
+/auth/reset?token=                      Reset link landing (reads, never consumes) [7a]
 /for-buyers                             Buyer entry surface                         built h5s7
 /list-your-business                     Supplier entry surface                      built h5s7
 /staff                                  Staff sign in — noindex, unlinked         built h5s7
