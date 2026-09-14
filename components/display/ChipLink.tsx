@@ -38,6 +38,13 @@ export interface ChipLinkProps
   selected?: boolean;
   /** A filter rather than a place. */
   dashed?: boolean;
+  /**
+   * `bad` for the one chip on a screen that names trouble — board 4b's
+   * Conflicts. Meaning, not decoration: a count that is red because it is
+   * failing, never because a colour would liven the row up. Ignored when
+   * selected, where the ink fill already says which chip is open.
+   */
+  tone?: "default" | "bad";
 }
 
 export function ChipLink({
@@ -47,6 +54,7 @@ export function ChipLink({
   size = "md",
   selected = false,
   dashed = false,
+  tone = "default",
   ...rest
 }: ChipLinkProps) {
   return (
@@ -61,10 +69,12 @@ export function ChipLink({
         size === "sm" ? "h-[26px] px-2.5 text-caption" : "h-8 px-3.5 text-body-sm",
         selected
           ? "border-ink-surface bg-ink-surface font-medium text-on-ink hover:border-ink-line"
-          : cn(
-              "bg-card text-body hover:border-line-strong hover:text-ink",
-              dashed ? "border-dashed border-line-strong" : "border-line",
-            ),
+          : tone === "bad"
+            ? "border-bad-line bg-bad-surface text-bad-ink hover:border-bad"
+            : cn(
+                "bg-card text-body hover:border-line-strong hover:text-ink",
+                dashed ? "border-dashed border-line-strong" : "border-line",
+              ),
       )}
     >
       {children}
@@ -72,7 +82,7 @@ export function ChipLink({
         <span
           className={cn(
             "font-mono text-eyebrow tabular-nums",
-            selected ? "text-on-ink-muted" : "text-muted",
+            selected ? "text-on-ink-muted" : tone === "bad" ? "text-bad-ink" : "text-muted",
           )}
         >
           {count}

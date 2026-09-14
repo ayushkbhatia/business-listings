@@ -474,6 +474,35 @@ export async function submitClaim(
   return { ok: true, submissionId: created.id, contested };
 }
 
+/**
+ * Take a claim back before anybody has decided it. Board 4b.
+ *
+ * *"Submission withdrawn by the seller: leaves the queue with a reason in the
+ * log."* The reason is the claimant's own, recorded on the submission, and the
+ * row leaves the queue because it is decided. The owner seat the claim attached
+ * stays: the usual reason to withdraw is to send the right document, and
+ * `submitClaim` takes a new claim straight away.
+ */
+export async function withdrawClaim(
+  actor: Actor,
+  businessId: string,
+  reason: string,
+  now = new Date(),
+): Promise<{ ok: true } | { ok: false; error: "nothing_to_withdraw" }> {
+  const { count } = await prisma.claimSubmission.updateMany({
+    // Not a claim inside an open conflict: that is settled on both sides at once.
+    where: {
+      businessId,
+      claimantId: actor.id,
+      decidedAt: null,
+      conflictsAsA: { none: { resolvedAt: null } },
+      conflictsAsB: { none: { resolvedAt: null } },
+    },
+    data: { outcome: "withdrawn", decidedAt: now, decisionReason: reason },
+  });
+  return count > 0 ? { ok: true } : { ok: false, error: "nothing_to_withdraw" };
+}
+
 /** What the claimant already has waiting on the listing, for the reassurance line. */
 export async function whatClaimingPreserves(businessId: string) {
   const [reviews, enquiries, products] = await Promise.all([

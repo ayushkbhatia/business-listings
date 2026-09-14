@@ -82,6 +82,8 @@ const STAFF: Record<Staff, Role> = {
 
 const STAFF_TABLE: [Capability, Staff[]][] = [
   ["queue.decide", ["ops", "moderator"]],
+  // Board 4b's rule tuning. Inferred; named in the inferred list below.
+  ["queue.rules", ["ops"]],
   ["claim.resolve", ["ops"]],
   ["business.verification_tier.write", ["ops"]],
   ["taxonomy.write", ["ops"]],
@@ -214,6 +216,10 @@ describe("every row cites the document", () => {
        pause, a closure revokes the team. `account.close`, the owner's own
        closure, is not in this list — the owner answered Q4 on 14 Sep 2026, so
        it cites a decision rather than inferring one.
+
+       `queue.rules` joined on board 4b, for "Tune auto-check rules". Moving a
+       threshold changes what bulk approve may act on across the whole queue,
+       so it sits a rung above `queue.decide`, at ops lead.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
@@ -223,6 +229,7 @@ describe("every row cites the document", () => {
       "business.merge",
       "business.verification_tier.write",
       "question.remove",
+      "queue.rules",
       "review.dispute",
       "review.hold",
       "staff.manage",

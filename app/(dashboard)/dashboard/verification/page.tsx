@@ -13,6 +13,8 @@ import {
   LICENCE_URGENT_DAYS,
   type LicenceStage,
 } from "@/lib/verification";
+import { documentRequestsFor } from "@/lib/moderation/seller";
+import { DocumentRequests } from "../_moderation";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 import { deleteDocument, recordDocument, setVisibility, signDocumentUpload } from "./actions";
 import { DocumentUpload } from "./DocumentUpload";
@@ -68,9 +70,11 @@ const ACHIEVABLE_RUNGS = TIERS.filter((spec) => spec.tier > 0).length;
 
 export default async function VerificationPage() {
   const seat = await requireSellerSeat();
-  const [view, badges] = await Promise.all([
+  const [view, badges, requests] = await Promise.all([
     getVerification(seat.businessId),
     getNavBadges(seat.businessId),
+    // Board 4b: a document our team asked for, answered by uploading one here.
+    documentRequestsFor(seat.businessId),
   ]);
   if (!view) return null;
 
@@ -128,6 +132,11 @@ export default async function VerificationPage() {
         </span>
       }
     >
+      {requests.length > 0 && (
+        <div className="mb-[var(--gutter)]">
+          <DocumentRequests requests={requests} uploadHref={null} />
+        </div>
+      )}
       <div className="flex flex-col gap-[var(--gutter)] xl:flex-row">
         <div className="flex min-w-0 flex-1 flex-col gap-5">
           {lapsed && (

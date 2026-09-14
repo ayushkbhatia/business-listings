@@ -1,6 +1,9 @@
 import "server-only";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
 import { prisma } from "@/lib/db/client";
+import { activityCovers } from "./activity";
+
+export { activityCovers };
 
 /**
  * The categories a listing sits in. Board 2c's highest-stakes field.
@@ -164,36 +167,6 @@ export async function removeExtraCategory(
     where: { businessId, categoryId },
   });
   return { ok: true, removed: count > 0 };
-}
-
-/**
- * Does the licence's stated activity cover this category?
- *
- * A word match against the category's own name, its parent's, and the synonyms
- * the taxonomy already carries for query routing — the same list that decides
- * whether a buyer's Arabic search reaches this trade, reused rather than a
- * second vocabulary to maintain.
- *
- * **An absent activity covers everything.** A listing imported from an export
- * that carried no activity column has told us nothing, and a flag raised on
- * silence would put every one of them in front of a reviewer to say so.
- */
-export function activityCovers(
-  activity: string | null,
-  category: { name: string; synonyms?: string[]; parent?: { name: string } | null },
-): boolean {
-  const text = (activity ?? "").toLowerCase();
-  if (!text.trim()) return true;
-
-  const terms = [
-    category.name,
-    category.parent?.name ?? "",
-    ...(category.synonyms ?? []),
-  ]
-    .flatMap((term) => term.toLowerCase().split(/[^\p{Letter}\p{Number}]+/u))
-    .filter((word) => word.length >= 4);
-
-  return terms.some((word) => text.includes(word));
 }
 
 /**

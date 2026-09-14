@@ -141,8 +141,13 @@ and it is the one that argues back.
 
 ```
 /admin                                  Platform overview                     [4a]  built h4s0
-/admin/queue                            Approval queue                        [4b]
+/admin/queue                            Approval queue                        [4b]  built board pass
+/admin/queue?kind=:kind&mine=1          The same queue, one kind, assigned    [4b]  built board pass
+/admin/queue/rules                      Auto-check rules (ops lead)           [4b]  built board pass
 /admin/queue/:id                        Review a submission                   [4c]
+/admin/queue/claim/:id                  Decide an uncontested claim           [4b]  built board pass
+/admin/queue/claim/:id/document         The claim's licence, signed, 2 min    [4b]  built board pass
+/admin/queue/location/:id               A branch outside the licence          [4b]  built board pass
 /admin/queue/conflict/:id               Resolve a conflicting claim           [4c]
 /admin/queue/document/:id               Decide a seller's credential          [3e]  built h3 wave 3
 /admin/ingest                           Licence importer                     [12a]  built h4s2, board pass

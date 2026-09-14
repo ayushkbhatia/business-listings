@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button, Label, Textarea } from "@/components/primitives";
 import { Alert } from "@/components/display";
 import { t } from "@/lib/i18n";
@@ -23,13 +24,21 @@ export interface DecisionFormProps {
   requestId: string;
   approve: (formData: FormData) => Promise<ActionResult>;
   reject: (formData: FormData) => Promise<ActionResult>;
+  /**
+   * Board 4b's third decision, where the submission has a document to ask for.
+   * Nothing is decided; the seller reads the reason as the request.
+   */
+  requestDocs?: (formData: FormData) => Promise<ActionResult>;
+  /** Sent with every decision — a queue reference, where the form acts by one. */
+  fields?: Record<string, string>;
   /** Shown under the approve button where approving moves the public address. */
   note?: string;
 }
 
 const MIN_REASON = 4;
 
-export function DecisionForm({ requestId, approve, reject, note }: DecisionFormProps) {
+export function DecisionForm({ requestId, approve, reject, requestDocs, fields, note }: DecisionFormProps) {
+  const router = useRouter();
   const fieldId = useId();
   const [reason, setReason] = useState("");
   const [result, setResult] = useState<ActionResult | null>(null);
@@ -40,11 +49,15 @@ export function DecisionForm({ requestId, approve, reject, note }: DecisionFormP
   function send(action: (formData: FormData) => Promise<ActionResult>) {
     const form = new FormData();
     form.set("requestId", requestId);
+    for (const [key, value] of Object.entries(fields ?? {})) form.set(key, value);
     form.set("reason", reason);
     startTransition(async () => {
       const outcome = await action(form);
       setResult(outcome);
-      if (outcome.ok) setReason("");
+      if (outcome.ok) {
+        setReason("");
+        router.refresh();
+      }
     });
   }
 
@@ -66,6 +79,11 @@ export function DecisionForm({ requestId, approve, reject, note }: DecisionFormP
         <Button disabled={!ready || pending} onClick={() => send(approve)}>
           {t("admin.review.approve")}
         </Button>
+        {requestDocs && (
+          <Button variant="secondary" disabled={!ready || pending} onClick={() => send(requestDocs)}>
+            {t("admin.review.request_docs")}
+          </Button>
+        )}
         <Button variant="secondary" disabled={!ready || pending} onClick={() => send(reject)}>
           {t("admin.review.reject")}
         </Button>

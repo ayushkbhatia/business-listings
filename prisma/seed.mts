@@ -49,6 +49,7 @@ import { auditCuratedLists, seedCurated } from "./seed-curated.mjs";
 import { seedCampaignLegal } from "./seed-campaign-legal.mjs";
 import { seedLicenceImports } from "./seed-licence-imports.mjs";
 import { seedDedupe } from "./seed-dedupe.mjs";
+import { seedQueue } from "./seed-queue.mjs";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL! }),
@@ -1059,6 +1060,9 @@ async function main() {
   // Board 12b: the dedupe queue's pairs, against listings the seed already has.
   // After the importer's runs, because one pair belongs to Run D.
   await seedDedupe(prisma, NOW);
+  // Board 4b: one queue row per argument the board makes, on new unpublished
+  // listings so no existing fixture becomes contested or counted.
+  await seedQueue(prisma, NOW);
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
   await backfillSeatChannels(prisma);

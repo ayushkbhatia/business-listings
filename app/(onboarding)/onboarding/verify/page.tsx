@@ -15,8 +15,11 @@ import {
 } from "@/lib/onboarding/verify";
 import { OnboardingHeader, OnboardingSplit } from "../_chrome";
 import { requireClaimant } from "../_shell";
+import { claimStandingFor, type ClaimStanding } from "@/lib/moderation/seller";
+import { Button } from "@/components/primitives";
 import {
   claimListing,
+  withdrawClaimToResend,
   loadVerifyDraft,
   recordLicence,
   saveAndExit,
@@ -102,7 +105,7 @@ export default async function VerifyPage({
 
   // The one figure with a cache, composed here rather than inside the service —
   // `unstable_cache` only runs inside a request.
-  const [reviewCount, draft, kindRow] = await Promise.all([
+  const [reviewCount, draft, kindRow, standing] = await Promise.all([
     countPublishedReviews(state.businessId),
     loadVerifyDraft(state.businessId),
     /*
@@ -117,6 +120,8 @@ export default async function VerifyPage({
       where: { id: state.businessId },
       select: { sellsKind: true },
     }),
+    // Board 4b: a document the reviewer asked for, or the last decision.
+    claimStandingFor(state.businessId, actor.id),
   ]);
   const sellsKind = kindRow?.sellsKind ?? "unset";
 
@@ -132,7 +137,7 @@ export default async function VerifyPage({
         <OnboardingSplit aside={<VerifySidebar reviewCount={reviewCount} contested={state.contested} />}>
           <Heading state={state} />
           <div className="mt-6">
-            <Submitted state={state} next={next} />
+            <Submitted state={state} next={next} standing={standing} />
           </div>
         </OnboardingSplit>
       </>
@@ -155,6 +160,14 @@ export default async function VerifyPage({
 
       <OnboardingSplit aside={<VerifySidebar reviewCount={reviewCount} contested={state.contested} />}>
         <Heading state={state} />
+
+        {standing.lastDecision?.outcome === "rejected" && (
+          <div className="mt-4">
+            <Alert tone="bad" title={t("verify.last_rejected_heading")} fix={t("verify.last_rejected_fix")}>
+              {standing.lastDecision.reason}
+            </Alert>
+          </div>
+        )}
 
         <div className="mt-6">
           <VerifyRoutes
@@ -225,7 +238,7 @@ function Heading({ state }: { state: VerifyState }) {
  * fills in their profile while the queue works, and a screen that made them wait
  * would turn four working hours into four hours of nothing happening.
  */
-function Submitted({ state, next }: { state: VerifyState; next: string }) {
+function Submitted({ state, next, standing }: { state: VerifyState; next: string; standing: ClaimStanding }) {
   const routeLabel =
     state.submittedRoute === "phone_callback"
       ? t("verify.submitted_route.phone_callback")
@@ -248,6 +261,27 @@ function Submitted({ state, next }: { state: VerifyState; next: string }) {
         </p>
         <p className="mt-2 font-mono text-eyebrow uppercase text-muted">{routeLabel}</p>
       </section>
+
+      {/*
+        Board 4b. The reviewer asked for a document, in words the claimant can
+        act on, and the way to answer is here rather than in an email.
+      */}
+      {standing.request && (
+        <Alert
+          tone="warn"
+          title={t("verify.document_requested_heading", { when: formatRelative(standing.request.requestedAt) })}
+          action={
+            <form action={withdrawClaimToResend}>
+              <input type="hidden" name="businessId" value={state.businessId} />
+              <Button type="submit" size="sm" variant="secondary">
+                {t("verify.document_requested_action")}
+              </Button>
+            </form>
+          }
+        >
+          {standing.request.reason}
+        </Alert>
+      )}
 
       {/*
         Where two claims collide the confirmation states the path explicitly

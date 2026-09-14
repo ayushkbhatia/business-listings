@@ -367,7 +367,30 @@ the screen is permanently empty above copy reading "Run the matcher after an imp
   directory; moved locations lost their licence numbers and visibility on the way back. **Not
   decided here:** Q4 (a resolution training the matcher beyond "never re-pair"), and whether a
   branch a merge adds counts against the plan's location cap — it does not today.
-- [ ] **4.3 `4b`** — settle the 62% (see §4), then build the bulk rules.
+- [x] **4.3 `4b`** — built. The 62% is settled as a **reading**: the share of waiting submissions
+  where every automated check passed, computed from the rules as they stand at the moment the queue
+  is read (B2) — never stored and never targeted (Q4 left to the owner). `/admin/queue` reads six
+  kinds from five tables — claims, profile edits, category changes, branches published outside the
+  licensed emirate, credentials and conflicts — and every chip, the over-SLA badge, the pass rate and
+  the rows are counted off one array (B4, B5). Each row carries its checks' own sentences in the
+  colour of their outcome (B3), and the per-row action follows them: approve, request a document,
+  reject, or review (B6). Bulk approve re-reads and re-checks every selected row on the server and
+  skips, naming why, any row whose checks no longer all pass (B1); request documents, reject and
+  reassign are unrestricted and skip what they cannot act on. SLA is per kind and the same figures
+  `/admin` measures against (B7); over-SLA sorts first, then oldest, and survives every filter (B9).
+  Every decision is a `staffMutation` with a written reason (B8). `/admin/queue/rules` (ops lead,
+  new `queue.rules`) switches checks off and moves three thresholds, previewing the pass rate and the
+  bulk set before anything applies; two checks cannot be switched off. **Found on the way and
+  fixed:** an uncontested claim had no decider anywhere — handoff 3 promised "handoff 4's queue" and
+  only conflicts got one, so every plain claim waited forever with its claimant holding an owner seat.
+  `/admin/queue/claim/:id` decides them, detaches the seat on rejection, and opens the uploaded
+  licence through a two-minute signed link. The document classifier's verdict was shown to the
+  claimant and thrown away; it is stored on the document now. The conflict resolver wrote `claimed`
+  onto the losing submission of an award; `claim_submission.outcome` says which way each went. Every
+  review screen names its position under the filter it came from (§Flagged 2). **Not built:** a *New
+  businesses* chip — no seller path creates a business, so the kind has no writer (§Flagged, B5
+  holds for every kind that exists); and a `CHECK` pairing `outcome` with `decided_at`, which follows
+  once the running resolver writes it.
 - [ ] **4.4 `4c`** — let the credential lane open the credential; filter conflict rows a moderator
   will 404 on.
 - [ ] **4.5 `4f`** — search, pagination, a detail route, and an appeal path the terms page already
@@ -475,7 +498,7 @@ the only large piece and the only one selling something it does not deliver.
 | `4d` | Category taxonomy | partial | large | `createCategory` does not exist; `parentId` is written by nothing outside the seed. | 5.1 |
 | `12a` | Licence-record importer | built | medium | Rows staged `needs_category` are terminal — nothing assigns them a category. Closed by 4.1. | 4.1 |
 | `12b` | Dedupe & merge | built | small | Pairs from the importer, three outcomes, bulk merge as a unit, tuning previewed, owner confirmation. Closed by 4.2. | 4.2 |
-| `4b` | Approval queue | partial | medium | The 62% auto-pass figure has no source in the tree and no denominator exists. | 4.3 |
+| `4b` | Approval queue | built | medium | Six kinds, checks computed from tunable rules, bounded bulk bar, claims decided. Closed by 4.3. | 4.3 |
 | `4c` | Review a submission | partial | small | The credential lane cannot open the credential; moderators get conflict rows that 404. | 4.4 |
 | `4f` | Businesses & health | partial | small | No search, pagination or detail route on the screen that owns suspension. | 4.5 |
 | `10g` | Unclaimed listing | partial | small | Both calls to action render `disabled`; the claim destination exists and only the href is absent. | 1.1 / 4.6 |
@@ -524,7 +547,8 @@ the only large piece and the only one selling something it does not deliver.
 so not yet an *every number is a query* violation — putting it on a screen would make it one. What
 exists instead is a static field split decided at edit time: four moderated fields against ten
 instant. That is 71%, and it is a count of field names, not a rate. Nothing counts instant edits,
-so there is no denominator to measure against today.
+so there is no denominator to measure against today. *Settled by 4.3:* a reading — waiting
+submissions whose every check passed, over all waiting submissions, computed at read time.
 
 **`12h`: one board or two?** **At least two**, and the title names a fourth thing that no longer
 exists. `/admin/areas` is a taxonomy editor owning emirates, areas, free-zone flags and the

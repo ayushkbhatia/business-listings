@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card, KeyValuePanel, Panel } from "@/components/structure";
 import { Alert, StatusBadge } from "@/components/display";
@@ -10,6 +9,9 @@ import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../../_shell";
 import { ResolutionForm } from "./ResolutionForm";
 import { resolve } from "../../actions";
+import { ChecksPanel } from "../../ChecksPanel";
+import { QueuePosition, type QueueParams } from "../../position";
+import { entryFor, refFor } from "@/lib/moderation/queue";
 
 /**
  * Board 4c, the conflicting-claim half — two licences, one premises.
@@ -34,12 +36,20 @@ import { resolve } from "../../actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function ConflictPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ConflictPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<QueueParams>;
+}) {
   const seat = await requireStaff();
   if (!can(seat.actor, "claim.resolve")) notFound();
 
-  const { id } = await params;
-  const [conflict, badges] = await Promise.all([conflictFor(id), getAdminNavBadges(seat)]);
+  const [{ id }, queueParams] = await Promise.all([params, searchParams]);
+  const now = new Date();
+  const queueRef = refFor("conflict", id);
+  const [conflict, entry, badges] = await Promise.all([conflictFor(id), entryFor(queueRef, now), getAdminNavBadges(seat)]);
   if (!conflict) notFound();
 
   const ageDays = conflict.ageDays;
@@ -88,14 +98,7 @@ export default async function ConflictPage({ params }: { params: Promise<{ id: s
       activeHref="/admin/queue"
       title={conflict.business.displayName}
       eyebrow={t("admin.conflict.title")}
-      breadcrumb={
-        <Link
-          href="/admin/queue"
-          className="rounded-tag text-caption text-muted underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
-        >
-          {t("admin.review.back")}
-        </Link>
-      }
+      breadcrumb={<QueuePosition actor={seat.actor} subject={queueRef} params={queueParams} />}
       meta={
         <span className="flex flex-wrap items-center gap-3 text-caption text-muted">
           <span className="font-mono text-eyebrow tabular-nums">
@@ -117,6 +120,8 @@ export default async function ConflictPage({ params }: { params: Promise<{ id: s
           both parties are asking, and the reason none of the four is as
           destructive as it looks.
         */}
+        <ChecksPanel entry={entry} now={now} />
+
         <Alert tone="info">
           {t("admin.conflict.preserved", {
             reviews: formatCount(conflict.preserved.reviews),
