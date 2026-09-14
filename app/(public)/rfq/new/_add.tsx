@@ -4,7 +4,7 @@ import { formatCount, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { isVerified } from "@/lib/verification";
 import { additionalSuppliersFor } from "@/lib/enquiry/add-recipients";
-import { DirectoryNav } from "@/app/(public)/_chrome";
+import { ViewerNav } from "@/app/(public)/_account-menu";
 import { resolveBuyerId, trackingTokenFor } from "@/app/(public)/enquiry/_buyer";
 import { AddSuppliersForm } from "../AddSuppliersForm";
 
@@ -32,7 +32,7 @@ export async function AddSuppliersPage({ refOrId, token }: { refOrId: string; to
     : `/enquiry/${refOrId}${link ? `?t=${link}` : ""}`;
 
   return (
-    <PublicShell nav={<DirectoryNav />}>
+    <PublicShell nav={<ViewerNav />}>
       <div className="mx-auto w-full max-w-3xl px-5 py-10">
         <p className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">{state.ok ? state.ref : refOrId}</p>
         <h1 className="mt-2 font-serif text-h1-serif text-ink">

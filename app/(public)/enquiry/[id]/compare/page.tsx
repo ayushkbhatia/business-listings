@@ -9,7 +9,8 @@ import { VerificationBadge, tierSpec } from "@/components/domain";
 import { getBuyerEnquiry, type BuyerQuote } from "@/lib/db/queries/enquiry";
 import { formatAED, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
+import { DirectoryFooter } from "@/app/(public)/_chrome";
+import { ViewerNav } from "@/app/(public)/_account-menu";
 import { markQuotesRead } from "@/lib/messaging/receipts";
 import { resolveBuyerId, trackingTokenFor } from "../../_buyer";
 import { acceptQuoteAction } from "../../actions";
@@ -60,7 +61,7 @@ export default async function ComparePage({
     const token = await trackingTokenFor(buyerId);
     if (comparison.columns.length > 0) after(() => markQuotesRead(comparison.enquiryId, buyerId));
     return (
-      <PublicShell nav={<DirectoryNav />} footer={<DirectoryFooter />}>
+      <PublicShell nav={<ViewerNav />} footer={<DirectoryFooter />}>
         <ProposalComparisonView
           comparison={comparison}
           now={new Date()}
@@ -106,7 +107,7 @@ export default async function ComparePage({
   }, quotes[0]!);
 
   return (
-    <PublicShell nav={<DirectoryNav />} footer={<DirectoryFooter />}>
+    <PublicShell nav={<ViewerNav />} footer={<DirectoryFooter />}>
       <div className="mx-auto w-full max-w-[64rem] px-[var(--section-pad)] py-8">
       <p className="font-mono text-eyebrow uppercase text-faint">{t("enquiry.ref", { ref: enquiry.ref })}</p>
       <h1 className="mt-2 font-serif text-h1-serif text-ink">{t("compare.quotes_title")}</h1>

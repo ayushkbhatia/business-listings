@@ -156,7 +156,7 @@ export const NUDGE_AFTER_MS = 24 * 60 * 60 * 1000;
  * `delivered` — a supplier who has opened the enquiry is already reading it, and
  * one who declined has answered.
  */
-export function canNudge(row: TrackedRecipient, now: Date): boolean {
+export function canNudge(row: Pick<TrackedRecipient, "state" | "buyerNudgedAt" | "deliveredAt">, now: Date): boolean {
   if (row.state !== "delivered") return false;
   if (row.buyerNudgedAt) return false;
   return now.getTime() - row.deliveredAt.getTime() >= NUDGE_AFTER_MS;

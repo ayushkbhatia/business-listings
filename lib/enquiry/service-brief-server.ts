@@ -1,4 +1,5 @@
 import "server-only";
+import { resendSourceIdFor } from "./resend";
 import type { Emirate, EngagementType } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import type { Attribution } from "@/lib/campaign/attribution";
@@ -343,6 +344,8 @@ export interface SendServiceBriefInput {
   /** Ignored for a signed-in buyer. */
   contactPhone: string;
   contactName: string;
+  /** Board 10e: the expired brief this re-sends, by reference. Re-checked here. */
+  resentFromRef?: string | null;
 }
 
 export type SendServiceBriefResult =
@@ -457,6 +460,7 @@ export async function sendServiceBrief(
       },
       ...(firm ? { pinnedBusinessIds: [firm.id] } : {}),
       fanoutTo: Math.max(1, selection.recipients.length),
+      resentFromId: await resendSourceIdFor(context.buyerId, input.resentFromRef, now),
     },
     now,
   );

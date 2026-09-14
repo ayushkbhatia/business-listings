@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { deliverQueued, flushDeferred } from "@/lib/notify/service";
 import { sweepAlerts } from "@/lib/alerts/service";
+import { sweepSavedSearches } from "@/lib/saved-search/service";
 import { sweepEscalations } from "@/lib/enquiry/escalation-job";
 import { sweepFollowUps } from "@/lib/messaging/follow-up";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
@@ -121,6 +122,13 @@ export async function GET(request: NextRequest) {
        not by the directory. With no register connected it returns at once.
     */
     registerReads: () => retryRegisterReads(),
+    /*
+       Board 10e — saved searches. Every hour, but each search is only looked at
+       when its own cadence says: daily ones once a day, weekly ones once a week,
+       and *when listed* ones every run, because that alert exists for the same
+       reason the product alert above does. Bounded per run, oldest first.
+    */
+    savedSearches: () => sweepSavedSearches(),
   });
 
   console.info("[jobs] sweep", outcome.steps);

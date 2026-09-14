@@ -9,7 +9,9 @@ import {
   previewBrief,
   type PinnedFirm,
 } from "@/lib/enquiry/service-brief-server";
-import { DirectoryNav } from "@/app/(public)/_chrome";
+import { ViewerNav } from "@/app/(public)/_account-menu";
+import type { ResendSource } from "@/lib/enquiry/resend";
+import { t } from "@/lib/i18n";
 import { BriefForm } from "../BriefForm";
 
 /**
@@ -34,6 +36,7 @@ export async function ServiceBriefPage({
   params,
   kind,
   signedIn,
+  resend = null,
 }: {
   category: { id: string; name: string; slug: string };
   firm: PinnedFirm | null;
@@ -41,6 +44,8 @@ export async function ServiceBriefPage({
   params: { emirate: string | null; area: string | null };
   kind: string | null;
   signedIn: boolean;
+  /** Board 10e: an expired brief being re-sent, whose answers seed this one. */
+  resend?: ResendSource | null;
 }) {
   const [trade, areas, firstReplyMs] = await Promise.all([
     prisma.category.findUnique({
@@ -59,11 +64,16 @@ export async function ServiceBriefPage({
      nothing — never a guess from free text; the resolver for typed places is
      the goods composer's, and here the buyer picks.
   */
-  const seededArea = params.area ? areas.find((area) => area.slug === params.area) : undefined;
+  const seededArea = resend?.brief?.areaId
+    ? areas.find((area) => area.id === resend.brief!.areaId)
+    : params.area
+      ? areas.find((area) => area.slug === params.area)
+      : undefined;
+  const seededEmirate = resend?.emirate ?? params.emirate;
   const site: BriefSite | null = seededArea
     ? { emirate: seededArea.emirate, areaId: seededArea.id }
-    : params.emirate && isEmirate(params.emirate)
-      ? { emirate: params.emirate, areaId: null }
+    : seededEmirate && isEmirate(seededEmirate)
+      ? { emirate: seededEmirate, areaId: null }
       : null;
 
   const initial: BriefValue = {
@@ -72,6 +82,20 @@ export async function ServiceBriefPage({
     // From a service page, the engagement that service is sold on — a default
     // the buyer can change, since it is their brief and not the firm's sheet.
     engagement: service?.engagementType ?? "",
+    /*
+       A re-send carries the old brief's answers across, except the start date:
+       the one it asked for has passed, so the buyer picks again.
+    */
+    ...(resend?.brief
+      ? {
+          description: resend.requirement,
+          engagement: resend.brief.engagementType,
+          cadence: resend.brief.cadence ?? "",
+          startMode: resend.brief.startMode === "from_date" ? "" : resend.brief.startMode,
+          building: resend.brief.building ?? "",
+          scale: resend.scale ?? "",
+        }
+      : {}),
   };
 
   const [initialPreview, pinnedDeliverable] = await Promise.all([
@@ -82,8 +106,16 @@ export async function ServiceBriefPage({
   ]);
 
   return (
-    <PublicShell nav={<DirectoryNav />}>
+    <PublicShell nav={<ViewerNav />}>
+      {resend ? (
+        <div className="mx-auto w-full max-w-7xl px-5 pt-6">
+          <p className="rounded-ctl border border-info-line bg-info-wash px-3.5 py-2.5 text-body-sm text-info-ink">
+            {t("rfq.resend_notice", { ref: resend.ref })}
+          </p>
+        </div>
+      ) : null}
       <BriefForm
+        resentFrom={resend?.ref ?? null}
         categoryId={category.id}
         kind={kind}
         subcategoryName={category.name}

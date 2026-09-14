@@ -5,6 +5,7 @@ import { getActor } from "@/lib/auth/session";
 import { readAttribution } from "@/lib/campaign/cookie";
 import { createEnquiry, findFanoutCandidates, descendantsOf } from "@/lib/enquiry/service";
 import { selectRecipients } from "@/lib/enquiry/fanout";
+import { resendSourceIdFor } from "@/lib/enquiry/resend";
 import { prisma } from "@/lib/db/client";
 import { formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -33,6 +34,8 @@ export interface SendEnquiryInput {
   pinnedBusinessIds?: string[];
   /** Board 1h's picker: exactly who the buyer ticked. */
   chosenBusinessIds?: string[];
+  /** Board 10e: the expired enquiry this re-sends, by reference. Re-checked here. */
+  resentFromRef?: string | null;
 }
 
 export type SendEnquiryResult = { ok: false; error: string };
@@ -56,6 +59,7 @@ export async function sendEnquiry(input: SendEnquiryInput): Promise<SendEnquiryR
     termsWanted: input.termsWanted,
     closesInDays: input.closesInDays,
     fanoutTo: input.fanoutTo,
+    resentFromId: await resendSourceIdFor(actor?.id ?? null, input.resentFromRef),
     ...(input.pinnedBusinessIds ? { pinnedBusinessIds: input.pinnedBusinessIds } : {}),
     ...(input.chosenBusinessIds ? { chosenBusinessIds: input.chosenBusinessIds } : {}),
   });

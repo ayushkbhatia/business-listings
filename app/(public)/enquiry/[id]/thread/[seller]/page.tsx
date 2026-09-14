@@ -3,7 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Panel, PublicShell } from "@/components/structure";
 import type { ThreadMessageView } from "@/components/domain";
-import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
+import { DirectoryFooter } from "@/app/(public)/_chrome";
+import { ViewerNav } from "@/app/(public)/_account-menu";
 import { prisma } from "@/lib/db/client";
 import { getThread } from "@/lib/messaging/service";
 import { toThreadQuotes } from "@/lib/messaging/thread-view";
@@ -120,7 +121,7 @@ export default async function BuyerThreadPage({
   });
 
   return (
-    <PublicShell nav={<DirectoryNav />} footer={<DirectoryFooter />}>
+    <PublicShell nav={<ViewerNav />} footer={<DirectoryFooter />}>
       <div className="mx-auto w-full max-w-[46rem] px-[var(--section-pad)] py-8">
         <p className="font-mono text-eyebrow uppercase text-faint">
           {t("enquiry.ref", { ref: enquiry.ref })}

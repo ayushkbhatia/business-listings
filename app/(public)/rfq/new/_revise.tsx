@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { PublicShell } from "@/components/structure";
 import { prisma } from "@/lib/db/client";
 import { t } from "@/lib/i18n";
-import { DirectoryNav } from "@/app/(public)/_chrome";
+import { ViewerNav } from "@/app/(public)/_account-menu";
 import { resolveBuyerId, trackingTokenFor } from "@/app/(public)/enquiry/_buyer";
 import { ReviseForm } from "../ReviseForm";
 
@@ -40,7 +40,7 @@ export async function RevisePage({ refOrId, token }: { refOrId: string; token: s
   const closed = enquiry.contactReleasedToBusinessId !== null || enquiry.closesAt.getTime() <= new Date().getTime();
 
   return (
-    <PublicShell nav={<DirectoryNav />}>
+    <PublicShell nav={<ViewerNav />}>
       <div className="mx-auto w-full max-w-3xl px-5 py-10">
         <p className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">{enquiry.ref}</p>
         <h1 className="mt-2 font-serif text-h1-serif text-ink">{t("revise.h1", { ref: enquiry.ref })}</h1>

@@ -614,6 +614,7 @@ model Category {
   /// Synonyms are matched exactly — an Arabic term either is or is not in the
   /// list — so a plain GIN over the array is the right shape.
   @@index([synonyms], type: Gin)
+  savedSearches SavedSearch[] @relation("SavedSearchCategory")
   @@map("category")
 }
 
@@ -3075,6 +3076,14 @@ model Enquiry {
   buyerReference              String?   @map("buyer_reference")
   createdAt                   DateTime  @default(now()) @map("created_at")
 
+  /// Board 10e `B3`. The expired enquiry this one re-sends.
+  ///
+  /// Expired is terminal: re-sending never revives the old row or extends its
+  /// close, it creates this one and points back. The match is run again rather
+  /// than copied (Q4) — the sellers who let the first one lapse are not the
+  /// default audience for the second.
+  resentFromId                String?   @map("resent_from_id")
+
   /// Criterion 9. Where this enquiry came from, if the buyer arrived through a
   /// campaign or a tagged link.
   ///
@@ -3107,8 +3116,13 @@ model Enquiry {
   /// and its presence is the whole of what makes an enquiry a brief.
   serviceBrief   ServiceBrief?
   area           Area?              @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  resentFrom     Enquiry?           @relation("EnquiryResent", fields: [resentFromId], references: [id], onDelete: SetNull)
+  resentAs       Enquiry[]          @relation("EnquiryResent")
 
   @@index([buyerId])
+  /// Board 10e. The inbox reads a buyer's enquiries newest first.
+  @@index([buyerId, createdAt])
+  @@index([resentFromId])
   @@index([closesAt])
   /// The console groups by campaign and by source. Both are reads over the
   /// whole table with a date range, which is exactly what this is for.
@@ -6618,19 +6632,64 @@ model AccountSegment {
   @@map("account_segment")
 }
 
+/// How often a saved search looks for new matches — board 10e.
+enum SavedSearchCadence {
+  /// A live requirement, watched.
+  daily
+  /// A supplier shortlist, maintained.
+  weekly
+  /// A search that returned nothing, held as a standing order until something
+  /// is listed. The demand record board 12d's recruitment list reads.
+  when_listed
+
+  @@map("saved_search_cadence")
+}
+
 /// A saved search plus its alert cadence. /account/saved.
 model SavedSearch {
   id        String   @id @default(cuid())
   userId    String   @map("user_id") @db.Uuid
   name      String
+  /// The results page's query string, replayed as it was.
   query     String
   filters   Json     @default("{}")
+  /// Superseded by `cadence`. Never read or written by anything; kept until a
+  /// later migration can drop it after the deploy that stopped reading it.
   alerts    Boolean  @default(false)
   createdAt DateTime @default(now()) @map("created_at")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// The category page it was saved on, when it was. The query string alone
+  /// loses that scope — a search saved on /c/valves replayed at /search is a
+  /// different search — and `12d` reads it to know which trade the demand is in.
+  categoryId String? @map("category_id")
+  /// `products` or `businesses`, as the page it was saved on showed.
+  tab        String  @default("businesses")
 
-  @@index([userId])
+  cadence    SavedSearchCadence @default(weekly)
+  /// Board 10e `B6`. The search returned nothing when it was saved. Written once,
+  /// at save, and never cleared when something is later listed: it records
+  /// demand the directory failed to meet, which is what `12d` recruits against.
+  zeroResult Boolean            @default(false) @map("zero_result")
+
+  /// Board 10e `B7`. When the buyer last opened it. `newCount` counts from here.
+  lastSeenAt   DateTime? @map("last_seen_at")
+  /// When the sweep last looked, whatever it found.
+  lastRunAt    DateTime? @map("last_run_at")
+  /// The newest match the sweep has seen.
+  lastMatchAt  DateTime? @map("last_match_at")
+  /// Matches listed since `lastSeenAt` (or since saving), as of `lastRunAt`.
+  /// Opening the search clears it; the alert email does not.
+  newCount     Int       @default(0) @map("new_count")
+  /// `newCount` when the last alert went out, so a daily run that finds the
+  /// same four matches does not email about them again.
+  alertedCount Int       @default(0) @map("alerted_count")
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category Category? @relation("SavedSearchCategory", fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([cadence, lastRunAt])
+  @@index([zeroResult, categoryId])
   @@map("saved_search")
 }
 

@@ -16,14 +16,26 @@ import { saveSearch } from "./save-actions";
  * they did not ask for. Losing the filters they just set to a redirect is a
  * worse trade than showing them where the button will work.
  */
-export function SaveSearch({ search, heading }: { search: string; heading: string }) {
-  const [state, setState] = useState<"idle" | "saved" | "anonymous">("idle");
+export function SaveSearch({
+  search,
+  heading,
+  categoryId = null,
+}: {
+  search: string;
+  heading: string;
+  /** The category page it is saved on — board 10e keeps that scope. */
+  categoryId?: string | null;
+}) {
+  const [state, setState] = useState<"idle" | "saved" | "saved_zero" | "anonymous">("idle");
   const [pending, startTransition] = useTransition();
 
-  if (state === "saved") {
+  if (state === "saved" || state === "saved_zero") {
     return (
-      <span className="inline-flex items-center px-3 text-body-sm text-muted">
+      <span role="status" className="inline-flex max-w-xs flex-col items-start px-3 text-body-sm text-body">
         {t("browse.saved")}
+        <span className="text-caption text-muted">
+          {state === "saved_zero" ? t("browse.saved_zero") : t("browse.saved_where")}
+        </span>
       </span>
     );
   }
@@ -36,8 +48,8 @@ export function SaveSearch({ search, heading }: { search: string; heading: strin
         loading={pending}
         onClick={() =>
           startTransition(async () => {
-            const result = await saveSearch({ search, name: heading });
-            setState(result.ok ? "saved" : "anonymous");
+            const result = await saveSearch({ search, name: heading, categoryId });
+            setState(result.ok ? (result.zeroResult ? "saved_zero" : "saved") : "anonymous");
           })
         }
       >

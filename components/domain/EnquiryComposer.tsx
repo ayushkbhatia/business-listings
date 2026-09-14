@@ -149,6 +149,9 @@ export interface EnquiryComposerProps {
   labels: EnquiryComposerLabels;
   initialLines?: readonly EnquiryLineDraft[];
   initialRequirement?: string;
+  /** Board 10e's re-send: where the expired enquiry was going. The buyer edits from there. */
+  initialEmirate?: string;
+  initialArea?: string;
   /** Shown in the wizard's third step. Recomputed by the caller as the count changes. */
   recipients?: readonly RecipientPreview[];
   /** Hidden entirely when the buyer is signed in. */
@@ -190,6 +193,8 @@ export function EnquiryComposer({
   labels,
   initialLines,
   initialRequirement = "",
+  initialEmirate = "",
+  initialArea = "",
   recipients = [],
   askForContact = true,
   maxFanout = 8,
@@ -206,8 +211,8 @@ export function EnquiryComposer({
   const [lines, setLines] = useState<EnquiryLineDraft[]>(() =>
     initialLines && initialLines.length > 0 ? [...initialLines] : [blankLine()],
   );
-  const [emirate, setEmirate] = useState("");
-  const [area, setArea] = useState("");
+  const [emirate, setEmirate] = useState(initialEmirate);
+  const [area, setArea] = useState(initialArea);
   const [neededBy, setNeededBy] = useState("");
   const [terms, setTerms] = useState("");
   const [closesInDays, setClosesInDays] = useState("7");

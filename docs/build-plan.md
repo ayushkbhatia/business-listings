@@ -306,8 +306,25 @@ is `7b`, and it is a tenancy question, not a screen.
   could never arrive; a slowly reached lockout opened before the fifteen minutes it quoted; the
   verify screen printed a masked number from the query string. Migration
   `20261023140000_password_signin_7a`.
-- [ ] **3.2 `10e`** — `requireBuyerSeat` needs a session; the product's default buyer has no
+- [x] **3.2 `10e`** — `requireBuyerSeat` needs a session; the product's default buyer has no
   account. Their claim token opens one enquiry and never the list. No pagination, no test.
+  **Done with board `10e`'s handoff, 14 Sep 2026.** One read (`lib/enquiry/inbox.ts`) gives the
+  rows, the chips, NEEDS YOU and the history card, so every row is in exactly one chip (`B1`) and
+  status is derived, never stored (`B2`, `lib/enquiry/inbox-status.ts`); twenty a page, and a phone
+  reads the rows as a list with the verb in reach. *Nudge N sellers* is one conditional update, one
+  per seller ever (`B5`), and the seller now sees it on the lead rail — before this the nudge
+  reached nobody. *Re-send* seeds the composer from an expired enquiry and the new one records
+  `resentFromId` (`B3`, Q4: matched again). Saved searches gained a cadence, a category, counters
+  and an hourly sweep that emails when the new-match count rises; opening clears it and email does
+  not (`B7`); a search that found nothing is kept as `zeroResult` and feeds the CRM call list
+  (`B6`). Q1 taken: dynamic public pages carry an account menu with sign-out, which production
+  had no way to do. **Found on the way and fixed:** any stored composer draft beat a seeded
+  arrival, so *Add to an RFQ* and re-send landed on a blank row after one earlier visit; the nudge
+  service's comment claimed a WhatsApp message it never sent. **Still owed:** the nudge reaches
+  the seller in-app only (WhatsApp/email need an event, the 7e matrix and a Meta template); a
+  buyer who sent without an account still cannot reach the list (7a/7b); *Company & team* and
+  *Saved requirements* are not drawn until 7b and `/account/requirements` exist; Q5 (per-person
+  inbox on a company account) is the owner's. Migration `20261025140000_buyer_inbox_10e`.
 - [ ] **3.3 `10h`** — `getThread` returns `automatic`; the buyer page drops it. The one party the
   tag exists for is the one party who cannot see it. No in-app navigation into the route at all.
 - [x] **3.4 `1n` + `7c`** — `lib/quote/send-quote.ts` fences only on `closesAt`, never on
@@ -536,7 +553,7 @@ the only large piece and the only one selling something it does not deliver.
 | `11i` | Close account | scaffold | large | Terms and privacy publish a closure promise and eight retention windows; nothing implements either. | 6.5 |
 | `7a` | Auth — four states | built | 14 Sep 2026 | Password sign-in, reset grants, sign-up fallback, suspension writer. | 3.1 |
 | `7b` | Buyer company account | scaffold | medium | A tenant table with no writer: `User.buyerCompanyId` is null for every non-seeded user. | 3.7 |
-| `10e` | Buyer enquiry inbox | partial | small | The product's default buyer has no account and so cannot open their own inbox. | 3.2 |
+| `10e` | Buyer enquiry inbox | built | 14 Sep 2026 | Derived chips and verbs, nudge-all, re-send, saved-search alerts, account menu with sign-out. | 3.2 |
 | `10h` | Negotiation thread | partial | small | The AUTOMATIC badge exists for the buyer and renders only for the seller. | 3.3 |
 | `1n` | Compare quotes | partial | small | The tracking page's own Compare button builds a reference the route cannot resolve. | 1.2 / 3.4 |
 | `7c` | Accepted quote record | **built** | small | Fenced, and rebuilt against its board-level handoff, 14 Sep 2026. Services variant owed (`7c-s`, see `docs/services-build-plan.md` §6). | 3.4 |

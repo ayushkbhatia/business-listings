@@ -174,6 +174,28 @@ export function isWithinRelativeWindow(
 }
 
 /**
+ * A countdown at the coarsest unit that still means something: `3 days`,
+ * `4 h`, `25 min` — board 10e's CLOSES column and its NEEDS YOU cards.
+ *
+ * Coarser than `formatCountdown` on purpose. A buyer scanning seven enquiries
+ * for the one closing soonest reads "in 3 days" against "in 4 h" at a glance;
+ * "3 d 22 h" makes them do arithmetic the column exists to spare them. Whole
+ * units, rounded down, so a close never reads later than it is. Beyond a week
+ * it is a date, the same threshold `formatRelative` uses.
+ */
+export function formatCloses(value: DateInput, options: RelativeOptions = {}): string {
+  const { now, timeZone = UAE_TIME_ZONE, absoluteAfterDays = RELATIVE_WINDOW_DAYS } = options;
+  const then = toDate(value);
+  const reference = now === undefined ? new Date() : toDate(now);
+  const ms = Math.max(0, then.getTime() - reference.getTime());
+  if (ms >= absoluteAfterDays * DAY) return formatDate(then, { timeZone });
+  if (ms < HOUR) return `${Math.max(1, Math.floor(ms / MINUTE))} min`;
+  if (ms < DAY) return `${Math.floor(ms / HOUR)} h`;
+  const days = Math.floor(ms / DAY);
+  return days === 1 ? "1 day" : `${days} days`;
+}
+
+/**
  * The countdown alone: `6 d 4 h`, with no `in` and no `ago`.
  *
  * For a caller writing its own sentence around it. Only meaningful when

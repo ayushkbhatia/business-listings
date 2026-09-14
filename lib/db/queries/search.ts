@@ -701,7 +701,7 @@ async function coverageTargetOf(query: SearchQuery): Promise<CoverageTarget | nu
 // Product filters
 // ─────────────────────────────────────────────────────────────────────────────
 
-function productWhere(query: SearchQuery, categoryIds?: string[]): Prisma.ProductWhereInput {
+export function productWhere(query: SearchQuery, categoryIds?: string[]): Prisma.ProductWhereInput {
   const and: Prisma.ProductWhereInput[] = [
     { status: { not: "draft" }, business: PUBLIC_BUSINESS },
   ];

@@ -24,6 +24,7 @@ import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { MapResults } from "@/app/(public)/_results/MapResults";
 import { RevealWhatsApp } from "@/app/(public)/_results/RevealWhatsApp";
 import { SearchFilterBar, SortStrip } from "@/app/(public)/_results/SearchFilterBar";
+import { SaveSearch } from "@/app/(public)/_results/SaveSearch";
 import { ZeroResult } from "@/app/(public)/_results/ZeroResult";
 import { AlertForm } from "@/app/(public)/_results/AlertForm";
 import { setAlert } from "@/app/(public)/_results/alert-actions";
@@ -160,6 +161,22 @@ export default async function SearchPage({ searchParams }: Props) {
         productTotal={productTotal}
         appliedLabels={applied}
       />
+
+      {/*
+         Board 10e — *Save current search*, which had no home on /search. The
+         query string is the whole state; the name is what the buyer searched and
+         the filters they set, the way the saved list prints it. A search that
+         found nothing is saved as a standing *when listed* alert — decided by the
+         service counting, not by this page.
+      */}
+      {query.q.trim() || applied.length > 0 ? (
+        <div className="mx-auto flex max-w-7xl justify-end px-4 pt-3">
+          <SaveSearch
+            search={toSearchParams(query, { page: 1, bounds: undefined })}
+            heading={[query.q.trim(), ...applied.map((facet) => facet.value)].filter(Boolean).join(" · ")}
+          />
+        </div>
+      ) : null}
 
       {/*
          Criterion 10's other half. Where the query lands cleanly on a published
