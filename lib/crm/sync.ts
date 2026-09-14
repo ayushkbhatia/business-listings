@@ -78,6 +78,19 @@ export async function syncCrmTasks(now: Date = new Date(), triggeredById: string
       renewalsPassed.push(task);
     } else if (signal.signal !== task.signal) {
       changed.push(task);
+    } else if (
+      task.signal === "held_page" &&
+      (task.signalFacts as { claimed?: boolean }).claimed === false &&
+      (signal.facts as { claimed?: boolean }).claimed === true
+    ) {
+      /*
+         Same signal, different business: an unclaimed listing in a held page
+         was claimed and is still unverified, so it still derives as a held-page
+         candidate. Refreshing the facts in place would overwrite `claimed` and
+         the claim would never count as the win it is. Asked as a change, it
+         closes won and the verify call follows after the quiet fortnight.
+      */
+      changed.push(task);
     }
   }
 

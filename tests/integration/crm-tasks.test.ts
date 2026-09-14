@@ -182,6 +182,27 @@ describe("B7 and the states table — a task leaves when its signal clears", () 
     expect(closed.calls).toHaveLength(0);
   }, 120_000);
 
+  it("closes a held-page call as won when the listing is claimed, though it still derives unverified", async () => {
+    await syncCrmTasks();
+    const task = await prisma.crmTask.findFirst({
+      where: { closedAt: null, signal: "held_page", business: { claimStatus: "unclaimed" } },
+      orderBy: [{ id: "asc" }],
+      select: { id: true, businessId: true },
+    });
+    expect(task, "the seed holds a page with an unclaimed listing in it").not.toBeNull();
+    if (!task) return;
+    try {
+      await prisma.business.update({ where: { id: task.businessId }, data: { claimStatus: "claimed" } });
+      await syncCrmTasks();
+      expect(await prisma.crmTask.findUniqueOrThrow({ where: { id: task.id } })).toMatchObject({ state: "won", closeReason: "claimed" });
+      // The verify call waits out the quiet fortnight rather than ringing tomorrow.
+      expect(await openTask(task.businessId)).toBeNull();
+    } finally {
+      await prisma.business.update({ where: { id: task.businessId }, data: { claimStatus: "unclaimed" } });
+      await prisma.crmTask.deleteMany({ where: { id: task.id } });
+    }
+  }, 120_000);
+
   it("clears a task whose demand went away, and says so, rather than deleting it", async () => {
     // Basic, so no other signal can pick the business up once the cap clears:
     // a Free seller in a thin trade would carry over as a zero-result call.

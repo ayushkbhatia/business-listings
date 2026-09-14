@@ -47,6 +47,15 @@ describe("the five statuses are mutually exclusive", () => {
     expect(pageState({ ...base, listings: 78, need: 60, monthlySearches: 400, verifiedShort: 16 }).status).toBe("held_supply");
   });
 
+  it("counts verifications as recruits whether or not listings are short too", () => {
+    // Same demand, one more listing's work: B must not outrank A.
+    const a = pageState({ ...base, listings: 60, need: 60, monthlySearches: 1_000, verifiedShort: 50 });
+    const b = pageState({ ...base, listings: 59, need: 60, monthlySearches: 1_000, verifiedShort: 50 });
+    expect(a.recruits).toBe(50);
+    expect(b.recruits).toBe(51);
+    expect(b.opportunity).toBeLessThan(a.opportunity);
+  });
+
   it("recruits only where the searches justify the calls", () => {
     expect(pageState({ ...base, listings: 39, monthlySearches: RECRUIT_SEARCHES }).status).toBe(
       "recruit",

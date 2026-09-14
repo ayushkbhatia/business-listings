@@ -571,8 +571,9 @@ or *Refresh signals* (refused inside five minutes of the last run).
 
 **6f's `recruit` status now includes a scope short only on verified share.** Before 12d, a
 scope past its listings need with too few verified listings read `queued_copy` and went to
-content ops, who cannot verify a licence. `verifiedShortfall` in `lib/publish-threshold.ts`
-feeds `pageState`, and the opportunity of such a scope is searches over verifications needed.
+content ops, who cannot verify a licence. `supplyGap` in `lib/publish-threshold.ts` feeds
+`pageState` the verifications needed, and opportunity divides searches by every recruit —
+listings to add plus listings to verify — the same count the CRM banner states.
 
 ## Staff — board 4i
 

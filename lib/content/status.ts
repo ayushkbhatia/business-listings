@@ -57,8 +57,9 @@ export interface StatusInput {
   /** Null where nobody has recorded a figure. Never read as nought. */
   monthlySearches: number | null;
   /**
-   * Listings already there that would have to be verified for the
-   * verified-share condition to pass. Nought or absent when it passes.
+   * Listings already there that would have to be verified, once the listings
+   * the scope lacks have arrived, for the supply gate to clear. Nought or absent
+   * when it clears — `supplyGap(...).toVerify`.
    *
    * Board 12d found the gap this closes: a scope past its listings need and
    * short on verified share read `queued_copy`, which sends a supply problem to
@@ -71,8 +72,11 @@ export interface PageState {
   status: PageStatus;
   /** Listings still needed. Nought once the page meets its need. */
   shortfall: number;
+  /** Listings to add plus listings already there to verify. */
+  recruits: number;
   /**
-   * Monthly searches ÷ listings still needed — board 6f §opportunity.
+   * Monthly searches ÷ suppliers still to recruit — board 6f §opportunity,
+   * where a recruit is a listing to add or, since board 12d, one to verify.
    *
    * Demand unlocked per supplier recruited, not raw demand and not raw
    * shortfall. It ranks Jumeirah — two short of 2,260 searches a month — above
@@ -92,15 +96,16 @@ export function pageState(input: StatusInput): PageState {
   const shortfall = Math.max(0, input.need - input.listings);
   const verifiedShort = input.verifiedShort ?? 0;
   /*
-     Per supplier recruited, as before. Where the listings are there and only
-     the verified share is short, the suppliers to recruit are the verifications,
-     and dividing by a shortfall of nought would score a scope with real work in
-     it at nought and sort it under everything.
+     Per supplier recruited: listings the scope lacks plus listings already
+     there that need verifying — the same recruits board 12d's banner counts.
+     Counting only the listings would score a scope with a verification gap
+     above one with the same demand and less work, and score a scope short only
+     on verification at nought.
   */
-  const recruits = shortfall > 0 ? shortfall : verifiedShort;
+  const recruits = shortfall + verifiedShort;
   const opportunity = recruits === 0 || input.monthlySearches === null ? 0 : input.monthlySearches / recruits;
 
-  return { status: statusOf(input, shortfall, verifiedShort), shortfall, opportunity };
+  return { status: statusOf(input, shortfall, verifiedShort), shortfall, recruits, opportunity };
 }
 
 function statusOf(input: StatusInput, shortfall: number, verifiedShort: number): PageStatus {

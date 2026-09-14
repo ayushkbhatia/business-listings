@@ -414,7 +414,7 @@ export default async function MatrixPage({ searchParams }: Props) {
                 ? t("matrix.opportunity_lead", {
                     path: areas.topOpportunity.path,
                     searches: formatCount(areas.topOpportunity.monthlySearches ?? 0),
-                    shortfall: formatCount(areas.topOpportunity.shortfall),
+                    recruits: formatCount(areas.topOpportunity.recruits),
                   })
                 : t("matrix.opportunity_none")}
             </p>

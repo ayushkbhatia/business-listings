@@ -335,7 +335,19 @@ async function renewalCheck(now: Date): Promise<{ fourF: number; onList: number;
   const [fourF, renewalPassed, onList] = await Promise.all([
     prisma.business.count({ where: stateWhere("churn_risk", now) }),
     prisma.business.count({ where: { AND: [stateWhere("churn_risk", now), { subscription: { is: { renewsAt: { lte: now } } } }] } }),
-    prisma.crmTask.count({ where: { ...OPEN, signal: "churn_risk" } }),
+    /*
+       Open save calls for accounts 4f counts at risk now, renewal still ahead —
+       so the three parts of the sentence are disjoint by construction. A task
+       whose renewal passed since the last run is in neither `onList` nor out of
+       `renewalPassed` twice; the next run closes it.
+    */
+    prisma.crmTask.count({
+      where: {
+        ...OPEN,
+        signal: "churn_risk",
+        business: { AND: [stateWhere("churn_risk", now), { subscription: { is: { renewsAt: { gt: now } } } }] },
+      },
+    }),
   ]);
   return { fourF, onList, renewalPassed };
 }

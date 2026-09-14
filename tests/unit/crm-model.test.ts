@@ -17,7 +17,7 @@ import {
   type SignalFacts,
 } from "@/lib/crm/model";
 import { scriptIdFor } from "@/lib/crm/scripts";
-import { ceilShare, verifiedShortfall } from "@/lib/publish-threshold";
+import { ceilShare } from "@/lib/publish-threshold";
 
 /**
  * Board 12d — the call list's rules, held without a database.
@@ -71,7 +71,6 @@ describe("§Corrected 1 — the banner's supply arithmetic derives", () => {
   it("does not ask for a nineteenth verified listing at 30% of 60", () => {
     // 0.3 × 60 is 18.000000000000004 as a double.
     expect(ceilShare(0.3, 60)).toBe(18);
-    expect(verifiedShortfall({ listings: 60, verified: 18 }, 0.3)).toBe(0);
     const gap = supplyGap({ listings: 60, verified: 18, need: 60, minVerifiedShare: 0.3, unverified: 42 });
     expect(gap.toVerify + gap.listingsToAdd).toBe(0);
   });

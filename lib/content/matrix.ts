@@ -5,7 +5,7 @@ import {
   evaluateHold,
   evaluatePublish,
   listingsNeeded,
-  verifiedShortfall,
+  supplyGap,
   type PublishFailure,
 } from "@/lib/publish-threshold";
 import { byOpportunity, pageState, type PageStatus } from "@/lib/content/status";
@@ -204,6 +204,8 @@ export interface AreaMatrixRow {
   need: number;
   needBasis: "absolute" | "demand";
   shortfall: number;
+  /** Listings to add plus listings to verify — what the opportunity divides by. */
+  recruits: number;
   opportunity: number;
   /** Null where nobody has recorded a figure. The column prints an em dash. */
   monthlySearches: number | null;
@@ -438,7 +440,13 @@ export async function areaMatrix(
         introWords,
         minIntroWords: rules.minIntroWords,
         monthlySearches: recorded?.monthlySearches ?? null,
-        verifiedShort: verifiedShortfall({ listings, verified }, thresholds.minVerifiedShare),
+        verifiedShort: supplyGap({
+          listings,
+          verified,
+          need,
+          minVerifiedShare: thresholds.minVerifiedShare,
+          unverified: listings - verified,
+        }).toVerify,
       });
 
       rows.push({
@@ -453,6 +461,7 @@ export async function areaMatrix(
         need,
         needBasis: basis,
         shortfall: state.shortfall,
+        recruits: state.recruits,
         opportunity: state.opportunity,
         monthlySearches: recorded?.monthlySearches ?? null,
         demandSource: recorded?.source ?? null,
