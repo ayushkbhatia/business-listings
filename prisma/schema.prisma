@@ -154,6 +154,7 @@ model User {
   mergeBatches             MergeBatch[]             @relation("MergeBatchActor")
   mergeBatchesReversed     MergeBatch[]             @relation("MergeBatchReverser")
   claimsDecided            ClaimSubmission[]        @relation("ClaimDecidedBy")
+  credentialsReviewed      Credential[]             @relation("CredentialReviewedBy")
   queueItemsAssigned       QueueItem[]              @relation("QueueItemAssignee")
   queueItemsAssignedBy     QueueItem[]              @relation("QueueItemAssigner")
   queueItemsDocsRequested  QueueItem[]              @relation("QueueItemDocsRequester")
@@ -2230,6 +2231,38 @@ enum TrustTier {
   @@map("trust_tier")
 }
 
+/// Where a register-checkable credential stands with the platform — board `4c-s`.
+///
+/// Null on every row a register cannot answer for, which is every kind but
+/// `fta_tax_agent` (`4c-s` B1, and a CHECK). A pending badge on an unverifiable
+/// kind is a bug, not a backlog, so the column cannot hold one.
+///
+/// The machine settles what it can: a lookup where all three fields match and
+/// the licence names the same entity is `auto_verified`, and never reaches a
+/// person. The queue holds `pending` and `more_info` — the register did not
+/// answer, a near-match on the name, a number that resolves to someone else.
+/// `verified` and `rejected` are a person's decision, and carry who.
+enum CredentialReview {
+  auto_verified
+  pending
+  more_info
+  verified
+  rejected
+
+  @@map("credential_review")
+}
+
+/// The four rejections a seller can act on — board `4c-s` B5. Fixed, because
+/// "rejected" with no cause generates a support ticket every time.
+enum CredentialRejectReason {
+  not_on_register
+  different_entity
+  lapsed
+  unreadable
+
+  @@map("credential_reject_reason")
+}
+
 /// One credential a firm shows — board `8b-s`.
 ///
 /// **Nothing on that screen is required**, and this model is shaped by it: every
@@ -2281,14 +2314,39 @@ model Credential {
   /// The register that answered, named. Null on a claim.
   verifiedBy String?   @map("verified_by")
 
+  /// Board `4c-s`. Null where no register can answer for the kind, or none was
+  /// configured when it was saved.
+  review         CredentialReview?       @map("review")
+  /// When it entered review. A request for a clearer document does not reset
+  /// it (`4c-s` B6); a resubmission after a rejection is new work and does.
+  reviewOpenedAt DateTime?               @map("review_opened_at")
+  /// A person's decision: verified, rejected or asked for more. Never set by
+  /// the machine — an automatic verification has a register, not a reviewer.
+  reviewedAt     DateTime?               @map("reviewed_at")
+  /// The staff member. Never a role.
+  reviewedById   String?                 @map("reviewed_by_id") @db.Uuid
+  /// What the reviewer wrote. The seller reads it beside the reason.
+  reviewNote     String?                 @map("review_note")
+  rejectReason   CredentialRejectReason? @map("reject_reason")
+  /// The seller answered a request or a rejection — a new number, a clearer file.
+  resubmittedAt  DateTime?               @map("resubmitted_at")
+
+  /// The last register read, whole: what was asked, what came back and when.
+  /// Point-in-time and kept (`4c-s` B2) — a verification that cannot be re-read
+  /// later is not auditable. The decision's audit row carries its own copy.
+  registerFetch     Json?     @map("register_fetch")
+  registerFetchedAt DateTime? @map("register_fetched_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  document Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  business   Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  document   Document? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  reviewedBy User?     @relation("CredentialReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
 
   @@index([businessId, trust])
   @@index([kind, trust])
+  @@index([review, reviewOpenedAt], map: "credential_review_open_idx")
   @@map("credential")
 }
 
@@ -8209,6 +8267,9 @@ enum QueueSubject {
   conflict
   credential
   location
+  /// Board `4c-s`. A `Credential` row checked against a register. `credential`
+  /// above is board 3e's `Document` asked to publish, which came first.
+  register_credential
 
   @@map("queue_subject")
 }

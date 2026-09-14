@@ -15,7 +15,13 @@ import {
   type KindOption,
   type SuggestionTile,
 } from "./CredentialsWorkspace";
-import { addCredentialAction, removeCredentialAction, signCredentialUpload } from "./actions";
+import {
+  addCredentialAction,
+  removeCredentialAction,
+  resubmitCredentialAction,
+  signCredentialUpload,
+} from "./actions";
+import type { CredentialRow } from "@/lib/credentials/service";
 
 /**
  * Board `8b-s` — setup task 1 for a seller of work, where photographs were.
@@ -84,7 +90,7 @@ export default async function SetupCredentialsPage() {
   */
   const segments: TaskSegment[] = hub.tasks.map((task) =>
     task.id === "credentials"
-      ? { id: task.id, filled: Math.min(1, state.held.length / CREDENTIAL_TARGET) }
+      ? { id: task.id, filled: Math.min(1, state.held.filter((row) => row.review !== "rejected").length / CREDENTIAL_TARGET) }
       : { id: task.id, filled: task.done ? 1 : 0 },
   );
 
@@ -99,7 +105,15 @@ export default async function SetupCredentialsPage() {
     verified: row.trust === "register_verified",
     verifiedBy: row.verifiedBy,
     verifiedOn: row.verifiedOn === null ? null : formatDate(row.verifiedOn),
+    standing: standingOf(row),
+    resubmit:
+      row.review === "more_info" || row.review === "rejected"
+        ? { identifier: row.identifier ?? "", expires: row.expiresOn ? row.expiresOn.toISOString().slice(0, 10) : "" }
+        : null,
   }));
+  // A credential a person rejected earns nothing — board 4c-s — so the task
+  // fills on the ones that stand, the same count the hub's lever reads.
+  const standing = state.held.filter((row) => row.review !== "rejected").length;
 
   const suggestions: SuggestionTile[] = state.suggestions.map((row) => ({
     kind: row.kind,
@@ -129,7 +143,7 @@ export default async function SetupCredentialsPage() {
       name={t("credentials.eyebrow")}
       segments={segments}
       openCount={hub.openCount}
-      done={state.held.length >= CREDENTIAL_TARGET}
+      done={standing >= CREDENTIAL_TARGET}
     >
       <PageEvent name="setup_task_started" props={{ task: "credentials" }} />
 
@@ -151,6 +165,7 @@ export default async function SetupCredentialsPage() {
             sign={signCredentialUpload}
             add={addCredentialAction}
             remove={removeCredentialAction}
+            resubmit={resubmitCredentialAction}
           />
 
           {/*
@@ -160,11 +175,11 @@ export default async function SetupCredentialsPage() {
              screens cannot disagree.
           */}
           <p className="text-caption text-muted">
-            {held.length === 0
+            {standing === 0
               ? t("credentials.earned_none")
               : t("credentials.earned", {
-                  count: held.length,
-                  formatted: formatCount(held.length),
+                  count: standing,
+                  formatted: formatCount(standing),
                   points: formatCount(earned),
                 })}
           </p>
@@ -303,4 +318,39 @@ function FourTasks({ hub }: { hub: SetupHubState }) {
       </p>
     </section>
   );
+}
+
+/* ── Where a credential stands with our team ─────────────────────────────── */
+
+/**
+ * Board `4c-s`, from the seller's side of the desk. Words on the server, so the
+ * workspace receives a sentence and not a formatter.
+ *
+ * Pending is information: nothing for the seller to do. A request and a
+ * rejection each carry what to do about them — the rejection's fix is chosen by
+ * the reason, because "renew with the FTA" and "upload a clearer scan" are
+ * different instructions and the seller can act on every one of the four.
+ */
+function standingOf(row: CredentialRow): CredentialTile["standing"] {
+  switch (row.review) {
+    case "pending":
+      return { tone: "info", body: t("credentials.review.pending") };
+    case "more_info":
+      return {
+        tone: "warn",
+        body: t("credentials.review.more_info", { note: row.reviewNote ?? "" }),
+        fix: t("credentials.review.more_info_fix"),
+      };
+    case "rejected":
+      return {
+        tone: "bad",
+        body: t("credentials.review.rejected", {
+          reason: t(`credentials.review.reason.${row.rejectReason ?? "unreadable"}` as never),
+          note: row.reviewNote ?? "",
+        }),
+        fix: `${t(`credentials.review.fix.${row.rejectReason ?? "unreadable"}` as never)} ${t("credentials.review.hidden")}`,
+      };
+    default:
+      return null;
+  }
 }

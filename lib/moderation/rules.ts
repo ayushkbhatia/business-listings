@@ -51,7 +51,12 @@ export type RuleId =
   | "credential_name"
   | "credential_validity"
   | "two_claims"
-  | "claim_evidence";
+  | "claim_evidence"
+  | "register_answered"
+  | "register_number"
+  | "register_name"
+  | "register_status"
+  | "register_entity";
 
 export interface RuleSpec {
   id: RuleId;
@@ -81,6 +86,18 @@ export const RULES: readonly RuleSpec[] = [
   { id: "credential_validity", kinds: ["credential"], switchable: true },
   { id: "two_claims", kinds: ["conflict"], switchable: false },
   { id: "claim_evidence", kinds: ["conflict"], switchable: true },
+  /*
+     Board 4c-s. A credential checked against the register that issued it, and
+     none of the five can be switched off: they are not a policy about what to
+     look at, they are what the register said. Switching "name matches" off
+     would let bulk approve verify a credential whose name does not — the
+     exact tick-through B3 exists to stop.
+  */
+  { id: "register_answered", kinds: ["credential"], switchable: false },
+  { id: "register_number", kinds: ["credential"], switchable: false },
+  { id: "register_name", kinds: ["credential"], switchable: false },
+  { id: "register_status", kinds: ["credential"], switchable: false },
+  { id: "register_entity", kinds: ["credential"], switchable: false },
 ];
 
 export const RULE_IDS: ReadonlySet<string> = new Set(RULES.map((rule) => rule.id));

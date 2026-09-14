@@ -2,6 +2,8 @@ import { phoneKey, nameSimilarity, licenceDigits } from "@/lib/dedupe/similarity
 import { AUTHORITY_EMIRATE } from "@/lib/ingest/sources";
 import { normaliseLicenceNumber, sameLicenceNumber } from "@/lib/verification/licence/number";
 import type { Authority, Emirate } from "@/lib/db/generated/enums";
+import { compareCredential, type Submitted } from "@/lib/credentials/compare";
+import type { RegisterFetch } from "@/lib/credentials/register-fetch";
 import { ruleEnabled, type CheckRules, type QueueKind, type RuleId } from "./rules";
 
 /**
@@ -104,6 +106,19 @@ export interface CredentialFacts {
   publishable: boolean;
 }
 
+/**
+ * Board 4c-s. A credential row against the register that issued it. Queued
+ * under the `credential` kind beside board 3e's documents, because to the
+ * person working the queue both are credentials — but decided by comparison,
+ * never by a view of the file.
+ */
+export interface RegisterCredentialFacts {
+  kind: "register_credential";
+  submitted: Submitted;
+  /** The last read, parsed. Null where none parses or none was taken. */
+  read: RegisterFetch | null;
+}
+
 export interface ConflictFacts {
   kind: "conflict";
   claims: readonly { route: "licence_upload" | "phone_callback" }[];
@@ -115,6 +130,7 @@ export type SubmissionFacts =
   | CategoryChangeFacts
   | LocationFacts
   | CredentialFacts
+  | RegisterCredentialFacts
   | ConflictFacts;
 
 /* ── Helpers ───────────────────────────────────────────────────────────────── */
@@ -407,6 +423,77 @@ function credentialChecks(facts: CredentialFacts, rules: CheckRules, now: Date):
   return checks;
 }
 
+/**
+ * Board 4c-s. What the comparison found, one sentence a field — the three
+ * fields and the entity join, never merged, and a stale read said first.
+ *
+ * `rules` is not consulted: none of these can be switched off.
+ */
+function registerCredentialChecks(facts: RegisterCredentialFacts, now: Date): Check[] {
+  const comparison = compareCredential(facts.submitted, facts.read, now);
+  switch (comparison.state) {
+    case "no_number":
+      return [fail("register_answered", "review", { key: "admin.queue.check.register_answered.no_number" })];
+    case "no_read":
+      return [warn("register_answered", "review", { key: "admin.queue.check.register_answered.not_read" })];
+    case "unavailable":
+      return [fail("register_answered", "review", { key: "admin.queue.check.register_answered.unavailable" })];
+    case "not_found":
+      return [
+        ...(comparison.fresh ? [] : [warn("register_answered", "review", { key: "admin.queue.check.register_answered.stale" })]),
+        fail("register_number", "reject", { key: "admin.queue.check.register_number.not_found" }),
+      ];
+    case "found": {
+      const record = comparison.fetch.record;
+      const checks: Check[] = comparison.fresh
+        ? []
+        : [warn("register_answered", "review", { key: "admin.queue.check.register_answered.stale" })];
+      checks.push(
+        comparison.number === "match"
+          ? pass("register_number", { key: "admin.queue.check.register_number.match" })
+          : fail("register_number", "reject", { key: "admin.queue.check.register_number.other", params: { number: record.taan } }),
+      );
+      checks.push(
+        comparison.name.verdict === "match"
+          ? pass("register_name", { key: "admin.queue.check.register_name.match" })
+          : comparison.name.verdict === "near"
+            ? warn("register_name", "review", { key: "admin.queue.check.register_name.near", params: { name: record.name } })
+            : fail("register_name", "reject", { key: "admin.queue.check.register_name.other", params: { name: record.name } }),
+      );
+      const status = comparison.status;
+      checks.push(
+        status.verdict === "match"
+          ? pass("register_status", status.registerDay
+              ? { key: "admin.queue.check.register_status.active_until", params: { date: status.registerDay } }
+              : { key: "admin.queue.check.register_status.active" })
+          : status.verdict === "lapsed"
+            ? fail(
+                "register_status",
+                "reject",
+                record.status === "active"
+                  ? { key: "admin.queue.check.register_status.ended", params: { date: status.registerDay ?? "" } }
+                  : { key: "admin.queue.check.register_status.inactive", labels: { status: `admin.credential_review.status.${record.status}` } },
+              )
+            : warn("register_status", "request_doc", {
+                key: "admin.queue.check.register_status.contradicts",
+                params: { certificate: status.certificateDay ?? "", register: status.registerDay ?? "" },
+              }),
+      );
+      checks.push(
+        comparison.entity === "same"
+          ? pass("register_entity", { key: "admin.queue.check.register_entity.same" })
+          : comparison.entity === "different"
+            ? fail("register_entity", "reject", {
+                key: "admin.queue.check.register_entity.different",
+                params: { licence: record.tradeLicence?.number ?? "" },
+              })
+            : warn("register_entity", "review", { key: "admin.queue.check.register_entity.unconfirmed" }),
+      );
+      return checks;
+    }
+  }
+}
+
 function conflictChecks(facts: ConflictFacts, rules: CheckRules): Check[] {
   const checks: Check[] = [
     // Never switched off and never passed: who owns a company is a person's call.
@@ -443,6 +530,8 @@ export function checksFor(facts: SubmissionFacts, rules: CheckRules, now: Date):
       return locationChecks(facts, rules);
     case "credential":
       return credentialChecks(facts, rules, now);
+    case "register_credential":
+      return registerCredentialChecks(facts, now);
     case "conflict":
       return conflictChecks(facts, rules);
   }

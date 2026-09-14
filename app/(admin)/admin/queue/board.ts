@@ -38,6 +38,12 @@ export interface BoardRow {
   href: string;
   /** Whether the row's own review screen is one this seat may open. */
   canOpen: boolean;
+  /**
+   * Board 4c-s. Decided only on its own screen, against a register read from
+   * the last hour and — for a rejection — one of four reasons, so the row's
+   * action opens that screen rather than a dialog that could offer neither.
+   */
+  decidesOnScreen: boolean;
 }
 
 export function sentenceText(sentence: CheckSentence): string {
@@ -73,6 +79,7 @@ export function boardRows(
       owner: entry.assignee?.name ?? null,
       href: `${entry.href}${options.query ?? ""}`,
       canOpen,
+      decidesOnScreen: entry.subject === "register_credential",
     };
   });
 }

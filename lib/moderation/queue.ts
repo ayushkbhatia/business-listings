@@ -8,6 +8,7 @@ import { activityCovers } from "@/lib/onboarding/activity";
 import { loadTradeKinds } from "@/lib/taxonomy/service";
 import { resolveTradeKind } from "@/lib/taxonomy/trade-kind";
 import { isPublishable } from "@/lib/verification/credentials";
+import { parseRegisterFetch } from "@/lib/credentials/register-fetch";
 import { normaliseLicenceNumber } from "@/lib/verification/licence/number";
 import {
   allPassed,
@@ -32,9 +33,11 @@ import { parseRules, QUEUE_KINDS, RULES_SETTING_KEY, type CheckRules, type Queue
  *
  * Pending means: a change request still `pending`; a claim not yet decided
  * and not part of an open conflict (the conflict is the row); a conflict not
- * resolved; a credential asked to publish and not looked at; and a branch
- * published outside the emirate its business's licence covers, carrying no
- * licence of its own, that nobody has decided for that emirate.
+ * resolved; a credential asked to publish and not looked at; a credential the
+ * register could not settle (board 4c-s — pending, or waiting on a clearer
+ * document); and a branch published outside the emirate its business's licence
+ * covers, carrying no licence of its own, that nobody has decided for that
+ * emirate.
  */
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -87,7 +90,9 @@ export function refFor(subject: QueueSubject, id: string): string {
 export function parseRef(ref: string): { subject: QueueSubject; id: string } | null {
   const [subject, id, extra] = ref.split(":");
   if (extra !== undefined || !id) return null;
-  if (!["change_request", "claim", "conflict", "credential", "location"].includes(subject ?? "")) return null;
+  if (!["change_request", "claim", "conflict", "credential", "location", "register_credential"].includes(subject ?? "")) {
+    return null;
+  }
   return { subject: subject as QueueSubject, id };
 }
 
@@ -127,6 +132,11 @@ interface Raw {
   submittedAt: Date;
   /** For a branch: the emirate a decision would be about. */
   version?: string;
+  /**
+   * Board 4c-s: a request for a clearer document lives on the credential, not
+   * on `queue_item`, because it is a review state the seller's screen reads.
+   */
+  waitingOnSeller?: { at: Date; reason: string } | null;
 }
 
 /**
@@ -137,7 +147,7 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
   const openConflict = { resolvedAt: null } as const;
   const byEmirate = authoritiesByEmirate();
 
-  const [changes, claims, conflicts, credentials, branches] = await Promise.all([
+  const [changes, claims, conflicts, credentials, branches, registerCredentials] = await Promise.all([
     db.listingChangeRequest.findMany({
       where: { status: "pending" },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
@@ -240,6 +250,34 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
         createdAt: true,
         area: { select: { name: true } },
         business: { select: { id: true, displayName: true, slug: true, licenceAuthority: true } },
+      },
+    }),
+    // Board 4c-s. What the register could not settle. A verified or rejected
+    // credential has left the queue; one nobody could check never entered it.
+    db.credential.findMany({
+      where: { kind: "fta_tax_agent", review: { in: ["pending", "more_info"] }, business: { mergedIntoId: null } },
+      orderBy: [{ reviewOpenedAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        identifier: true,
+        expiresOn: true,
+        review: true,
+        reviewOpenedAt: true,
+        reviewedAt: true,
+        reviewNote: true,
+        resubmittedAt: true,
+        registerFetch: true,
+        createdAt: true,
+        business: {
+          select: {
+            id: true,
+            displayName: true,
+            slug: true,
+            tradeName: true,
+            licenceNumber: true,
+            licenceAuthority: true,
+          },
+        },
       },
     }),
   ]);
@@ -424,6 +462,40 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
     });
   }
 
+  for (const credential of registerCredentials) {
+    const business = credential.business;
+    // Waiting on the seller. Their answer moves it back to `pending`, and ours.
+    const waiting =
+      credential.review === "more_info" && credential.reviewedAt && credential.reviewNote
+        ? { at: credential.reviewedAt, reason: credential.reviewNote }
+        : null;
+    raws.push({
+      subject: "register_credential",
+      id: credential.id,
+      kind: "credential",
+      businessId: business.id,
+      businessName: business.displayName,
+      businessSlug: business.slug,
+      submittedAt: credential.reviewOpenedAt ?? credential.createdAt,
+      waitingOnSeller: waiting,
+      summary: {
+        key: "admin.queue.summary.register_credential",
+        params: { number: credential.identifier ?? "" },
+      },
+      facts: {
+        kind: "register_credential",
+        submitted: {
+          identifier: credential.identifier,
+          name: business.tradeName,
+          expiresOn: credential.expiresOn,
+          licenceNumber: business.licenceNumber,
+          licenceAuthority: business.licenceAuthority,
+        },
+        read: parseRegisterFetch(credential.registerFetch),
+      },
+    });
+  }
+
   for (const branch of branches) {
     raws.push({
       subject: "location",
@@ -501,6 +573,8 @@ function hrefFor(subject: QueueSubject, id: string): string {
       return `/admin/queue/document/${id}`;
     case "location":
       return `/admin/queue/location/${id}`;
+    case "register_credential":
+      return `/admin/queue/credential/${id}`;
   }
 }
 
@@ -530,9 +604,11 @@ export function entriesFrom(
       const item = items.get(ref);
       const waitingMs = Math.max(0, now.getTime() - raw.submittedAt.getTime());
       const docsRequested =
-        item?.docsRequestedAt && item.docsRequestReason && !item.docsReceivedAt
-          ? { at: item.docsRequestedAt, reason: item.docsRequestReason }
-          : null;
+        raw.waitingOnSeller !== undefined
+          ? raw.waitingOnSeller
+          : item?.docsRequestedAt && item.docsRequestReason && !item.docsReceivedAt
+            ? { at: item.docsRequestedAt, reason: item.docsRequestReason }
+            : null;
       const slaMs = SLA_MS[raw.kind];
       return {
         ref,
@@ -675,6 +751,13 @@ export async function queueHealth(now = new Date(), db: Db = prisma): Promise<Qu
       SELECT q."decided_at", EXTRACT(EPOCH FROM q."decided_at" - COALESCE(l."published_at", l."created_at"))
         FROM "queue_item" q JOIN "location" l ON l."id" = q."subject_id"
        WHERE q."subject_type" = 'location' AND q."decided_at" >= ${since}
+      UNION ALL
+      -- Board 4c-s. A person's verification or rejection, from when it entered
+      -- review. Asking for a clearer document decides nothing, and a credential
+      -- the register settled was never a person's to decide.
+      SELECT "reviewed_at", EXTRACT(EPOCH FROM "reviewed_at" - "review_opened_at")
+        FROM "credential"
+       WHERE "reviewed_at" >= ${since} AND "review" IN ('verified', 'rejected')
     )
     SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY GREATEST(secs, 0))::float8 AS median,
            COUNT(*) AS decided,

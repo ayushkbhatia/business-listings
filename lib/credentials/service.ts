@@ -1,17 +1,25 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { assertCanEditListing } from "@/lib/auth/guards";
-import { checkTaxAgent } from "./fta";
+import { fetchTaxAgent, normaliseTaan, registerConfigured } from "./fta";
 import {
   CREDENTIAL_KINDS,
+  STANDING_CREDENTIAL,
   isCheckable,
   isCredentialKind,
   rateOf,
   worthSuggesting,
   type SuggestionRate,
 } from "./kinds";
+import { settleByRead, submittedOf } from "./review";
 import type { Actor } from "@/lib/auth/roles";
-import type { CredentialKind, TrustTier } from "@/lib/db/generated/enums";
+import type { Prisma } from "@/lib/db/generated/client";
+import type {
+  CredentialKind,
+  CredentialRejectReason,
+  CredentialReview,
+  TrustTier,
+} from "@/lib/db/generated/enums";
 
 /**
  * Credentials against a database — board `8b-s`.
@@ -40,6 +48,12 @@ export interface CredentialRow {
   verifiedOn: Date | null;
   verifiedBy: string | null;
   document: { id: string; filename: string } | null;
+  /** Board `4c-s`. Null on every kind a register cannot answer for. */
+  review: CredentialReview | null;
+  rejectReason: CredentialRejectReason | null;
+  /** What the reviewer wrote, for a request or a rejection. */
+  reviewNote: string | null;
+  reviewedAt: Date | null;
 }
 
 export interface LicenceOnFile {
@@ -89,6 +103,10 @@ export async function credentialsStateFor(businessId: string): Promise<Credentia
           verifiedOn: true,
           verifiedBy: true,
           document: { select: { id: true, filename: true } },
+          review: true,
+          rejectReason: true,
+          reviewNote: true,
+          reviewedAt: true,
         },
       },
     },
@@ -109,7 +127,7 @@ export async function credentialsStateFor(businessId: string): Promise<Credentia
       await suggestionRates(business.primaryCategoryId),
       business.credentials.map((row) => row.kind),
     ),
-    registerLive: Boolean(process.env.FTA_REGISTER_URL),
+    registerLive: registerConfigured(),
   };
 }
 
@@ -144,7 +162,7 @@ export async function suggestionRates(categoryId: string): Promise<SuggestionRat
 
   const holdings = await prisma.credential.groupBy({
     by: ["kind", "businessId"],
-    where: { businessId: { in: peers.map((row) => row.id) } },
+    where: { businessId: { in: peers.map((row) => row.id) }, ...STANDING_CREDENTIAL },
   });
 
   const holders = new Map<string, number>();
@@ -169,8 +187,15 @@ export interface CredentialInput {
   documentId?: string | null;
 }
 
-/** Why a register check did not verify. Surfaced inline, never swallowed — AC10. */
-export type RegisterNote = "not_found" | "bad_format" | "register_unavailable";
+/**
+ * Why a register check did not verify. Surfaced inline, never swallowed — AC10.
+ *
+ * `register_unavailable` is no register configured, or a save that could not
+ * enter review; `register_retry` is a configured register that did not answer,
+ * and the credential waits for it; `mismatch` is a register that answered and
+ * did not agree on everything, and a person will compare the two (`4c-s`).
+ */
+export type RegisterNote = "not_found" | "bad_format" | "register_unavailable" | "register_retry" | "mismatch";
 
 export type AddResult =
   | { ok: true; id: string; trust: TrustTier; registerNote: RegisterNote | null }
@@ -201,35 +226,66 @@ export async function addCredential(
   if (exists === 0) return { ok: false, reason: "not_found" };
 
   const identifier = clean(input.identifier);
-  let trust: TrustTier = "seller_claim";
-  let verifiedOn: Date | null = null;
-  let verifiedBy: string | null = null;
-  let registerNote: RegisterNote | null = null;
+  const document = await ownDocument(businessId, input.documentId);
+  const expiresOn = readDate(input.expiresOn);
 
+  /*
+     Board `4c-s`: a checkable number is read now, and the read settles the row
+     where it can. All three fields and the licence agree — verified, and no
+     person ever sees it. Anything else waits for one, with the read kept.
+  */
+  let review: CredentialReview | null = null;
+  let settlement: ReturnType<typeof settleByRead> | null = null;
+  let registerNote: RegisterNote | null = null;
   if (isCheckable(input.kind) && identifier !== null) {
-    const answer = await checkTaxAgent(identifier, now);
-    if (answer.ok) {
-      trust = "register_verified";
-      verifiedOn = answer.verifiedOn;
-      verifiedBy = answer.verifiedBy;
+    const asked = normaliseTaan(identifier);
+    if (asked === null) {
+      registerNote = "bad_format";
+    } else if (!registerConfigured()) {
+      registerNote = "register_unavailable";
     } else {
-      registerNote = answer.reason;
+      const business = await prisma.business.findUniqueOrThrow({
+        where: { id: businessId },
+        select: { tradeName: true, licenceNumber: true, licenceAuthority: true },
+      });
+      settlement = settleByRead(
+        submittedOf({ identifier, expiresOn, business }),
+        await fetchTaxAgent(asked, now),
+        now,
+      );
+      review = settlement.review;
+      const read = settlement.registerFetch;
+      registerNote =
+        settlement.review === "auto_verified"
+          ? null
+          : read.outcome === "not_found"
+            ? "not_found"
+            : read.outcome === "unavailable"
+              ? "register_retry"
+              : "mismatch";
     }
   }
 
-  const document = await ownDocument(businessId, input.documentId);
-
+  const trust: TrustTier = settlement?.trust ?? "seller_claim";
   const row = await prisma.credential.create({
     data: {
       businessId,
       kind: input.kind,
       identifier,
       issuer: clean(input.issuer),
-      expiresOn: readDate(input.expiresOn),
+      expiresOn,
       documentId: document,
       trust,
-      verifiedOn,
-      verifiedBy,
+      verifiedOn: settlement?.verifiedOn ?? null,
+      verifiedBy: settlement?.verifiedBy ?? null,
+      review,
+      reviewOpenedAt: review === null ? null : now,
+      ...(settlement
+        ? {
+            registerFetch: settlement.registerFetch as unknown as Prisma.InputJsonValue,
+            registerFetchedAt: now,
+          }
+        : {}),
     },
     select: { id: true },
   });
@@ -304,7 +360,14 @@ export interface PublicCredential {
  */
 export async function publicCredentialsFor(businessId: string): Promise<PublicCredential[]> {
   const rows = await prisma.credential.findMany({
-    where: { businessId },
+    /*
+       A credential a person checked against the register and rejected is not
+       shown to buyers — `4c-s`. It was the seller's claim until somebody looked
+       it up and found it untrue, and rendering it on as "their claim" would be
+       the platform repeating a statement it knows to be wrong. The seller still
+       sees it, with the reason, on their own screen.
+    */
+    where: { businessId, ...STANDING_CREDENTIAL },
     /*
        Verified first, then by kind, then oldest — `1d-s`'s data model, `trust
        desc, kind`. "Desc" on the board means *most trusted first*; the enum is

@@ -262,6 +262,19 @@ function RowButton({ row, onOpen }: { row: BoardRow; onOpen: (op: Op) => void })
       </Link>
     );
   }
+  if (row.decidesOnScreen && row.actionHref) {
+    const label =
+      row.action === "approve"
+        ? "admin.queue.action.approve"
+        : row.action === "reject"
+          ? "admin.queue.action.reject"
+          : "admin.queue.action.request_doc";
+    return (
+      <Link href={row.actionHref} className={buttonClassName({ size: "sm", variant: row.action === "approve" ? "primary" : "secondary" })}>
+        {t(label)}
+      </Link>
+    );
+  }
   if (row.action === "approve") {
     return (
       <Button size="sm" onClick={() => onOpen("approve")}>
