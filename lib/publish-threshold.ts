@@ -294,6 +294,31 @@ export function isSupply(failure: PublishFailure): boolean {
   return failure.reason === "listings" || failure.reason === "verified_share";
 }
 
+const SHARE_PRECISION = 10_000;
+
+/**
+ * The smallest whole number of listings that is at least `share` of `of`.
+ *
+ * Integer arithmetic, because `0.3 × 60` is `18.000000000000004` as a double and
+ * a ceiling over it asks for a nineteenth verified listing the rule never needed.
+ */
+export function ceilShare(share: number, of: number): number {
+  return Math.ceil((Math.round(share * SHARE_PRECISION) * of) / SHARE_PRECISION);
+}
+
+/**
+ * Listings already in the scope that would have to be verified before the
+ * verified-share condition passes. Nought when it passes.
+ *
+ * Board 12d's banner: "8 verified of 78" is past a 60-listing floor and still
+ * held, and the work is verifying 16 of the listings already there — a number a
+ * recruiter can act on, which the listings shortfall alone never showed.
+ */
+export function verifiedShortfall(input: { listings: number; verified: number }, share: number): number {
+  if (input.listings === 0) return 0;
+  return Math.max(0, ceilShare(share, input.listings) - input.verified);
+}
+
 export function countWords(text: string | null | undefined): number {
   if (!text) return 0;
   return text.trim().split(/\s+/).filter(Boolean).length;

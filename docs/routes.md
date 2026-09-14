@@ -172,7 +172,7 @@ and it is the one that argues back.
 /admin/businesses                       Businesses & health — search, filters [4f]  built 4f
 /admin/businesses/:id                   One account: health, signals, decisions [4f] built 4f
 /admin/businesses/export                The filtered list as CSV              [4f]  built 4f
-/admin/crm                              Recruitment & accounts               [12d]  built h4s4
+/admin/crm                              Recruitment & accounts — ?tab=upgrade|renewal [12d]  built 12d
 /admin/users                            Users                                later
 /admin/staff                            Staff, roles, invitations & matrix    [4i]  built 4i
 /admin/subscriptions                    Subscriptions                         [4g]  built h4s5

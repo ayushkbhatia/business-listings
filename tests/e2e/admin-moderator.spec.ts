@@ -155,6 +155,16 @@ test.describe("the audit log a moderator sees", () => {
 
 });
 
+test.describe("board 12d — the call list is a moderator's to work", () => {
+  test("opens the call list, which B11 gives to moderator and ops lead", async ({ page }) => {
+    const response = await page.goto("/admin/crm");
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Recruitment & accounts");
+    const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
+    await expect(sidebar.getByRole("link", { name: "Ops CRM" })).toBeVisible();
+  });
+});
+
 test.describe("the commercial screens a moderator cannot reach", () => {
   /*
    * §07 gives `revenue.read` to finance and ops lead. A moderator's job is the

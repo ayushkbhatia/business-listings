@@ -241,6 +241,13 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     key: "supply",
     labelKey: "nav.group.supply",
     items: [
+      /*
+         Board 12d Q1: above Businesses. The call list is the console's most
+         frequent daily screen and sat last in this group with no capability,
+         so a finance seat was offered a link into its own 404. `crm.work` is
+         ops lead and moderator (B11).
+      */
+      { key: "crm", labelKey: "nav.crm", href: "/admin/crm", capability: "crm.work" },
       { key: "businesses", labelKey: "nav.businesses", href: "/admin/businesses" },
       { key: "ingest", labelKey: "nav.ingest", href: "/admin/ingest", capability: "queue.decide" },
       { key: "dedupe", labelKey: "nav.dedupe", href: "/admin/ingest/dedupe", capability: "business.merge" },
@@ -261,7 +268,6 @@ export const ADMIN_NAV: readonly NavGroup[] = [
         href: "/admin/catalogue-imports",
         capability: "queue.decide",
       },
-      { key: "crm", labelKey: "nav.crm", href: "/admin/crm" },
     ],
   },
   {

@@ -132,6 +132,18 @@ test.describe("board 4g — revenue", () => {
   });
 });
 
+test.describe("board 12d — finance does not work the call list", () => {
+  test("gets the console's 404, and no nav item", async ({ page }) => {
+    // B11: ops lead and moderator. The list is a lead list, and it is the asset
+    // most likely to walk out.
+    const response = await page.goto("/admin/crm");
+    expect(response?.status()).toBe(404);
+    await page.goto("/admin/revenue");
+    const sidebar = page.getByRole("navigation", { name: "Staff navigation" });
+    await expect(sidebar.getByRole("link", { name: "Ops CRM" })).toHaveCount(0);
+  });
+});
+
 test.describe("board 12e — plans and entitlements", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/admin/plans");

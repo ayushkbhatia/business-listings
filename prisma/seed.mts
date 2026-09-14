@@ -53,6 +53,7 @@ import { seedQueue } from "./seed-queue.mjs";
 import { seedStaffRoster } from "./seed-staff-roster.mjs";
 import { seedAccountHealth } from "./seed-account-health.mjs";
 import { seedRevenue } from "./seed-revenue.mjs";
+import { seedCrmCalls } from "./seed-crm.mjs";
 import { monthlyValueFils } from "../lib/billing/period.js";
 
 const prisma = new PrismaClient({
@@ -1096,6 +1097,9 @@ async function main() {
   // Same slot and same reason as the line above — owners before the channel
   // backfill, enquiries before `recomputeDerived`.
   await seedRevenue(prisma, NOW);
+  // Board 12d: the call log a week leaves behind. No tasks — those are the
+  // derivation's alone, built by the nightly job or Refresh signals.
+  await seedCrmCalls(prisma, NOW);
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
   await backfillSeatChannels(prisma);

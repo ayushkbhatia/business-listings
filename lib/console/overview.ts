@@ -99,7 +99,6 @@ function cutoff(now: Date, days: number): Date {
 }
 
 export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
-  const { callList } = await import("@/lib/crm/call-list");
 
   const [
     queuePending,
@@ -208,12 +207,12 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
   ]);
 
   /*
-     `total`, not the length of a page. This asked for 500 and read the array
-     back, so at 500 prospects the console tile would have read exactly 500
-     forever — and the page beside it asked for 200 over a different candidate
-     pool. One count, taken before either limit.
+     Open tasks on the call list, every seat's. Board 12d made the list a table
+     a derivation run writes, so this is a count of rows rather than a second
+     derivation run inside a console tile — which is what calling the old
+     `callList` from here amounted to, on every console load.
   */
-  const callListSize = (await callList(0, now)).total;
+  const callListSize = await prisma.crmTask.count({ where: { closedAt: null } });
 
   const metric = (
     key: string,
@@ -266,8 +265,8 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
       labelKey: "console.job.accounts",
       metrics: [
         metric("free_accounts", "console.metric.free_accounts", "businesses", "/admin/businesses", freeAtCap),
-        // Real now: step 4 built the query. The list is derived from signals
-        // rather than typed, so this counts what those signals produced.
+        // Derived from signals rather than typed, so this counts what the last
+        // derivation run left open.
         metric("call_list", "console.metric.call_list", "crm", "/admin/crm", callListSize),
       ],
     },

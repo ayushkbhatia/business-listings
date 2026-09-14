@@ -101,8 +101,12 @@ const EXEMPT = new Map<string, string>([
     "Board 4i's \"Last active\": a timestamp `requireStaff()` writes after the response, at most every five minutes. It measures that somebody used the console; nobody decided the value, and `AuditEvent.actorId` is NOT NULL because the log holds decisions. The staff state changes themselves are in lib/staff/service.ts, which audits every one.",
   ],
   [
-    "lib/crm/call-list.ts",
-    "`logCall` records a phone call that happened outside the system. It changes nothing about the directory, and the CallOutcome row carries the staff id and the timestamp — it is the record, not a change needing one.",
+    "lib/crm/service.ts",
+    "Board 12d's call work: claiming a task, logging what a seller said on a call that happened outside the system, revealing a lead's number, taking a held page's calls. None changes the directory — no listing, plan or tier moves — and each is its own record with the staff id and the time: the task's lock, `call_outcome`, `crm_contact_reveal`. A *closed down* outcome closes the task and deliberately does not touch the listing. `AuditEvent` holds decisions about the directory, and these are not.",
+  ],
+  [
+    "lib/crm/sync.ts",
+    "Board 12d's derivation run: tasks opened and closed from signals the platform measured, written by the daily job or a refresh. Nobody decides a row, which is the board's whole claim, and `AuditEvent.actorId` is NOT NULL because the log holds decisions. Each run is recorded in `crm_sync_run`, naming who asked for a manual one.",
   ],
 ]);
 

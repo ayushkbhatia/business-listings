@@ -56,6 +56,15 @@ export interface StatusInput {
   minIntroWords: number;
   /** Null where nobody has recorded a figure. Never read as nought. */
   monthlySearches: number | null;
+  /**
+   * Listings already there that would have to be verified for the
+   * verified-share condition to pass. Nought or absent when it passes.
+   *
+   * Board 12d found the gap this closes: a scope past its listings need and
+   * short on verified share read `queued_copy`, which sends a supply problem to
+   * a writer who cannot fix it.
+   */
+  verifiedShort?: number;
 }
 
 export interface PageState {
@@ -81,13 +90,20 @@ export interface PageState {
 
 export function pageState(input: StatusInput): PageState {
   const shortfall = Math.max(0, input.need - input.listings);
-  const opportunity =
-    shortfall === 0 || input.monthlySearches === null ? 0 : input.monthlySearches / shortfall;
+  const verifiedShort = input.verifiedShort ?? 0;
+  /*
+     Per supplier recruited, as before. Where the listings are there and only
+     the verified share is short, the suppliers to recruit are the verifications,
+     and dividing by a shortfall of nought would score a scope with real work in
+     it at nought and sort it under everything.
+  */
+  const recruits = shortfall > 0 ? shortfall : verifiedShort;
+  const opportunity = recruits === 0 || input.monthlySearches === null ? 0 : input.monthlySearches / recruits;
 
-  return { status: statusOf(input, shortfall), shortfall, opportunity };
+  return { status: statusOf(input, shortfall, verifiedShort), shortfall, opportunity };
 }
 
-function statusOf(input: StatusInput, shortfall: number): PageStatus {
+function statusOf(input: StatusInput, shortfall: number, verifiedShort: number): PageStatus {
   // A person's decision outranks the arithmetic, because it was made knowing it.
   if (input.heldAt !== null) return "held_editorial";
 
@@ -100,7 +116,7 @@ function statusOf(input: StatusInput, shortfall: number): PageStatus {
      goes to content ops rather than into the recruitment queue — the mistake
      the board's single "Queued" badge made in both directions.
   */
-  if (shortfall === 0) return "queued_copy";
+  if (shortfall === 0 && verifiedShort === 0) return "queued_copy";
 
   /*
      Below need. Which queue depends on whether anybody would answer the call.

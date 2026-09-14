@@ -147,6 +147,9 @@ model User {
   apiKeys                  ApiKey[]                 @relation("ApiKeyCreator")
   viewAsSessions           ViewAsSession[]          @relation("ViewAsStaff")
   callsMade                CallOutcome[]            @relation("CallStaff")
+  crmTasksAssigned         CrmTask[]                @relation("CrmTaskAssignee")
+  crmReveals               CrmContactReveal[]       @relation("CrmRevealStaff")
+  crmSyncRuns              CrmSyncRun[]             @relation("CrmSyncTrigger")
   candidatesDismissed      MergeCandidate[]         @relation("CandidateDismissedBy")
   candidatesResolved       MergeCandidate[]         @relation("CandidateResolvedBy")
   candidatesReversed       MergeCandidate[]         @relation("CandidateReversedBy")
@@ -1212,6 +1215,8 @@ model Business {
   stagedDuplicates       StagedListing[]          @relation("StagedDuplicateOf")
   viewAsSessions         ViewAsSession[]
   callOutcomes           CallOutcome[]
+  crmTasks               CrmTask[]
+  crmReveals             CrmContactReveal[]
   claimConflicts         ClaimConflict[]          @relation("ConflictBusiness")
   onboardingDrafts       OnboardingDraft[]        @relation("OnboardingDraftBusiness")
   producedByConflicts    ClaimConflict[]          @relation("ConflictProduced")
@@ -1442,15 +1447,16 @@ model Location {
   /// report the wrong branch's work as this one's.
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  business            Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  area                Area              @relation(fields: [areaId], references: [id], onDelete: Restrict)
-  producedByConflicts ClaimConflict[]   @relation("ConflictProducedLocation")
+  business            Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  area                Area               @relation(fields: [areaId], references: [id], onDelete: Restrict)
+  producedByConflicts ClaimConflict[]    @relation("ConflictProducedLocation")
   contactReveals      ContactReveal[]
+  crmReveals          CrmContactReveal[]
   teamMembers         TeamMember[]
-  seats               User[]            @relation("SeatBranch")
-  teamInvites         TeamInvite[]      @relation("InviteBranch")
+  seats               User[]             @relation("SeatBranch")
+  teamInvites         TeamInvite[]       @relation("InviteBranch")
   closures            LocationClosure[]
-  addedByCandidate    MergeCandidate?   @relation("LocationAddedByCandidate", fields: [addedByCandidateId], references: [id], onDelete: SetNull)
+  addedByCandidate    MergeCandidate?    @relation("LocationAddedByCandidate", fields: [addedByCandidateId], references: [id], onDelete: SetNull)
 
   @@index([businessId])
   @@index([areaId])
@@ -4089,12 +4095,17 @@ model ViewAsSession {
 }
 
 enum CallOutcomeKind {
+  /// Written before board 12d, with `converted`. Nothing writes the two again.
   reached
   no_answer
   wrong_number
   not_interested
   call_back
   converted
+  /// Board 12d's log strip.
+  interested
+  closed_down
+  claim_link_sent
 
   @@map("call_outcome_kind")
 }
@@ -4114,13 +4125,152 @@ model CallOutcome {
   signal     String
   note       String?
   callBackAt DateTime?       @map("call_back_at")
+  /// The task this call worked. Board 12d. Null on calls logged before tasks
+  /// existed.
+  taskId     String?         @map("task_id")
+  /// Which script the caller had in front of them — board 12d Q3. The only way
+  /// "leading with missed demand converts better" becomes a figure rather than
+  /// a line somebody repeats in training.
+  scriptId   String?         @map("script_id")
   createdAt  DateTime        @default(now()) @map("created_at")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   staff    User     @relation("CallStaff", fields: [staffId], references: [id], onDelete: Restrict)
+  task     CrmTask? @relation(fields: [taskId], references: [id], onDelete: SetNull)
 
   @@index([businessId, createdAt(sort: Desc)], map: "call_outcome_business_idx")
+  @@index([taskId])
+  @@index([createdAt, id])
   @@map("call_outcome")
+}
+
+/// A call to make, and the demand signal that put it on the list. Board 12d.
+///
+/// **Nobody types one.** `lib/crm/sync.ts` is the only writer that creates or
+/// closes a row, from signals the platform already measures — a held area page,
+/// searches that found nobody, enquiries to an unclaimed listing, a plan cap, a
+/// reply rate under board 4f's threshold. `tests/unit/crm-writers.test.ts`
+/// holds that to the tree. There is no reason column: the WHY THEM cell renders
+/// from `signal`, `signalValue` and `signalFacts`, and `demandScore` is
+/// recomputed on every run, so there is nowhere a priority could be typed.
+///
+/// A task closes when its signal clears, whoever cleared it (B7): a business
+/// that claims its listing without a call leaves as `won` with no call attached.
+/// One open task per business, by partial unique index, and `assignedToId` on
+/// it is the lock — two ops leads cannot both be working one account.
+model CrmTask {
+  id           String           @id @default(cuid())
+  businessId   String           @map("business_id")
+  signal       CrmSignal
+  /// The scope, search category, cap or renewal the signal is about. A renewal
+  /// in the ref means a renewal passing closes the task rather than editing it.
+  signalRef    String           @map("signal_ref")
+  /// The number the call opens with, as measured when the row was derived.
+  signalValue  Int              @map("signal_value")
+  /// What the WHY THEM cell and the banner render from, snapshotted at the run
+  /// that derived this row so the banner and the rows under it always agree.
+  signalFacts  Json             @default("{}") @map("signal_facts")
+  /// Sort key. Recomputed every run from the signal; never a stored priority.
+  demandScore  Int              @map("demand_score")
+  state        CrmTaskState     @default(queued)
+  assignedToId String?          @map("assigned_to_id") @db.Uuid
+  assignedAt   DateTime?        @map("assigned_at")
+  /// Set with `callback`, by CHECK.
+  callBackAt   DateTime?        @map("call_back_at")
+  /// No answer is a touch: the row waits this long before it is due again.
+  coolingUntil DateTime?        @map("cooling_until")
+  lastTouchAt  DateTime?        @map("last_touch_at")
+  lastOutcome  CallOutcomeKind? @map("last_outcome")
+  closedAt     DateTime?        @map("closed_at")
+  /// Why it left: an outcome (`not_interested`, `wrong_number`, `closed_down`)
+  /// or what re-derivation found (`claimed`, `published`, `upgraded`,
+  /// `recovered`, `renewal_passed`, `signal_gone`). Set with `closedAt`.
+  closeReason  String?          @map("close_reason")
+  derivedAt    DateTime         @map("derived_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  business   Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  assignedTo User?              @relation("CrmTaskAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  calls      CallOutcome[]
+  reveals    CrmContactReveal[]
+
+  @@index([assignedToId, state, demandScore])
+  @@index([state, demandScore])
+  @@index([businessId, closedAt])
+  @@index([closedAt, id])
+  @@map("crm_task")
+}
+
+/// Why a business is on the call list. Board 12d, each with a producer in
+/// `lib/crm/derive.ts`.
+enum CrmSignal {
+  /// A listing in an area page held on its supply gate — board 6f.
+  held_page
+  /// Searches in their trade that found nobody.
+  zero_result
+  /// Enquiries sent to a listing nobody has claimed.
+  unclaimed_demand
+  /// Enquiries missed at the monthly cap, or a product or service cap refusal.
+  cap_reached
+  /// Paying, with a reply rate under board 4f's threshold, renewal still ahead.
+  churn_risk
+
+  @@map("crm_signal")
+}
+
+enum CrmTaskState {
+  queued
+  called
+  callback
+  unreachable
+  won
+  lost
+  parked
+  cleared
+
+  @@map("crm_task_state")
+}
+
+/// A lead's number shown to a staff member. Board 12d B9.
+///
+/// Not `ContactReveal`, which counts buyers revealing a seller's number and is
+/// the figure a seller is shown as delivered value.
+model CrmContactReveal {
+  id         String   @id @default(cuid())
+  taskId     String   @map("task_id")
+  businessId String   @map("business_id")
+  locationId String?  @map("location_id")
+  staffId    String   @map("staff_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  task     CrmTask   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  staff    User      @relation("CrmRevealStaff", fields: [staffId], references: [id], onDelete: Restrict)
+
+  @@index([staffId, createdAt])
+  @@index([taskId])
+  @@map("crm_contact_reveal")
+}
+
+/// One derivation run of the call list. Board 12d: the empty queue says when
+/// the list was built and when it builds next.
+model CrmSyncRun {
+  id            String   @id @default(cuid())
+  startedAt     DateTime @map("started_at")
+  finishedAt    DateTime @map("finished_at")
+  derived       Int
+  created       Int
+  updated       Int
+  won           Int
+  cleared       Int
+  triggeredById String?  @map("triggered_by_id") @db.Uuid
+
+  triggeredBy User? @relation("CrmSyncTrigger", fields: [triggeredById], references: [id], onDelete: SetNull)
+
+  @@index([finishedAt, id])
+  @@map("crm_sync_run")
 }
 
 model MissedEnquiry {

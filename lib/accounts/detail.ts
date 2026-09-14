@@ -1,7 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
-import { callHistory } from "@/lib/crm/call-list";
+import { callHistory } from "@/lib/crm/history";
 import { sessionsFor } from "@/lib/support/view-as";
 import { windowStart } from "@/lib/metrics/response-time";
 import { CAP_REFUSED_EVENTS, upgradeWindowStart } from "./health";

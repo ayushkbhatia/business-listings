@@ -424,7 +424,7 @@ test.describe("boards 4f, 12d and 12f — accounts", () => {
   test("the call list says nobody types it", async ({ page }) => {
     await page.goto("/admin/crm");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Recruitment");
-    await expect(page.getByText(/Nobody types this list/)).toBeVisible();
+    await expect(page.getByText(/Nobody types a prospect list by hand/)).toBeVisible();
     // No way to add somebody. That absence is criterion 7.
     await expect(page.getByRole("button", { name: /add/i })).toHaveCount(0);
   });

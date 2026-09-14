@@ -5,6 +5,7 @@ import {
   evaluateHold,
   evaluatePublish,
   listingsNeeded,
+  verifiedShortfall,
   type PublishFailure,
 } from "@/lib/publish-threshold";
 import { byOpportunity, pageState, type PageStatus } from "@/lib/content/status";
@@ -437,6 +438,7 @@ export async function areaMatrix(
         introWords,
         minIntroWords: rules.minIntroWords,
         monthlySearches: recorded?.monthlySearches ?? null,
+        verifiedShort: verifiedShortfall({ listings, verified }, thresholds.minVerifiedShare),
       });
 
       rows.push({

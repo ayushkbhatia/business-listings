@@ -18,6 +18,7 @@ import { CloseAccountGallery } from "./_sections/CloseAccount";
 import { StaffRolesGallery } from "./_sections/StaffRoles";
 import { AccountsGallery } from "./_sections/Accounts";
 import { RevenueGallery } from "./_sections/Revenue";
+import { CrmGallery } from "./_sections/Crm";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
 import { ServiceBriefGallery } from "./_sections/ServiceBrief";
 import { AcceptedRecordGallery } from "./_sections/AcceptedRecord";
@@ -297,6 +298,8 @@ export default function Gallery() {
          reads as every known pairing fixed.
       */}
       <RevenueGallery />
+      {/* After Revenue, for the same axe-grid reason the comment above gives. */}
+      <CrmGallery />
     </main>
   );
 }
