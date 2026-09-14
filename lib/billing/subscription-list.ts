@@ -16,8 +16,6 @@ export interface SubscriptionRow {
   id: string;
   businessId: string;
   businessName: string;
-  slug: string;
-  planId: string;
   planName: string;
   status: string;
   /**
@@ -56,7 +54,6 @@ export async function subscriptionList(limit = 500): Promise<SubscriptionRow[]> 
     select: {
       id: true,
       businessId: true,
-      planId: true,
       status: true,
       term: true,
       startedAt: true,
@@ -64,7 +61,7 @@ export async function subscriptionList(limit = 500): Promise<SubscriptionRow[]> 
       endsAt: true,
       dunningStage: true,
       entitlementSnapshot: true,
-      business: { select: { displayName: true, slug: true } },
+      business: { select: { displayName: true } },
       plan: {
         select: {
           id: true, name: true, monthlyPriceAed: true, enquiriesPerMonth: true,
@@ -91,8 +88,6 @@ export async function subscriptionList(limit = 500): Promise<SubscriptionRow[]> 
       id: subscription.id,
       businessId: subscription.businessId,
       businessName: subscription.business.displayName,
-      slug: subscription.business.slug,
-      planId: subscription.planId,
       planName: subscription.plan.name,
       status: subscription.status,
       monthlyFils: monthlyValueFils(

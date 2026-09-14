@@ -386,6 +386,7 @@ export async function changePlan(
       afterFils: monthlyValueFils(quote.toPlan, quote.term),
       occurredAt: now,
       note: `Plan change to ${quote.toPlan.name}`,
+      cause: "plan_change",
     });
 
     await tx.subscription.upsert({
@@ -690,6 +691,7 @@ export async function changeTerm(
       afterFils: monthlyValueFils(caps, quote.to),
       occurredAt: now,
       note: toTerm === "annual" ? "Moved to annual" : "Moved to monthly",
+      cause: "term_change",
     });
 
     await tx.subscription.update({
@@ -1037,6 +1039,10 @@ export async function applyEndedCancellations(now = new Date()) {
         afterFils: 0,
         occurredAt: now,
         note: "Cancellation reached its end date",
+        cause: "cancellation",
+        // The request that carries the reason. Null on a cancellation from
+        // before board 11h, which was never asked for one.
+        subscriptionChangeId: pending?.id ?? null,
       });
 
       await tx.business.update({

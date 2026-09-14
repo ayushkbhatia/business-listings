@@ -28,16 +28,55 @@ test.describe("board 4g — revenue", () => {
     await page.goto("/admin/revenue");
   });
 
-  test("opens on MRR, annualised, accounts and average", async ({ page }) => {
+  test("opens on last month's five figures", async ({ page }) => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Revenue");
-    for (const label of [
-      "Monthly recurring",
-      "Annualised",
-      "Paying accounts",
-      "Average per account",
-    ]) {
-      await expect(page.getByText(label, { exact: true })).toBeVisible();
+    await expect(page.getByText(/closed month/)).toBeVisible();
+    for (const label of ["Placement revenue", "ARPA", "Gross revenue churn", "Failed payments"]) {
+      await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
     }
+  });
+
+  test("prints the formula beside every ratio (B2)", async ({ page }) => {
+    // Net revenue retention states its sum, and the sum has no new business in it.
+    await expect(page.getByText(/Net revenue retention [\d.]+% = \(/)).toBeVisible();
+    await expect(page.getByText(/new subscriptions and accounts that came back are not in it/)).toBeVisible();
+    await expect(page.getByText(/cancelled or lapsed ÷ AED [\d,.]+ starting MRR/)).toBeVisible();
+    await expect(page.getByText(/÷ [\d,]+ paying accounts?$/)).toBeVisible();
+    await expect(page.getByText(/^Customer churn [\d.]+%: [\d,]+ of [\d,]+ accounts? paying at the start$/)).toBeVisible();
+  });
+
+  test("draws the waterfall with cancellations and lapses as their own lines", async ({ page }) => {
+    const figure = page.getByRole("figure", { name: /Starting MRR, each line of movement/ });
+    await expect(figure).toBeVisible();
+    for (const line of [
+      "Starting MRR",
+      "New subscriptions",
+      "Came back",
+      "Upgrades",
+      "Downgrades",
+      "Billing term changes",
+      "Cancellations",
+      "Lapsed after failed payments",
+      "Ending MRR",
+    ]) {
+      await expect(figure.getByText(line, { exact: true })).toBeVisible();
+    }
+  });
+
+  test("counts reasons that sum to the cancellations in the title (criterion 5)", async ({ page }) => {
+    const panel = page.getByRole("region", { name: /Why they cancelled/ });
+    const title = await panel.getByRole("heading", { level: 2 }).innerText();
+    const stated = Number(/— ([\d,]+)/.exec(title)![1]!.replace(/,/g, ""));
+    const counts = await panel.locator("ul").first().locator("li > div > span:last-child").allInnerTexts();
+    expect(counts.reduce((sum, count) => sum + Number(count.replace(/,/g, "")), 0)).toBe(stated);
+    // The seeded month has three "not enough enquiries" accounts, two of them not answering.
+    await expect(panel.getByText(/of the \d+ “not enough enquiries” accounts had a reply rate under 50%/)).toBeVisible();
+  });
+
+  test("splits ending MRR by licence emirate in a real table", async ({ page }) => {
+    const table = page.getByRole("table", { name: "Revenue by licence emirate" });
+    await expect(table.getByRole("rowheader", { name: "Dubai" })).toBeVisible();
+    await expect(table.getByRole("rowheader")).toHaveCount(7);
   });
 
   test("says what MRR counts rather than leaving it to be guessed", async ({ page }) => {
@@ -52,20 +91,39 @@ test.describe("board 4g — revenue", () => {
     await expect(page.getByText(/there is no take rate on them/)).toBeVisible();
   });
 
-  test("shows the movement waterfall with churn as its own bar", async ({ page }) => {
-    const figure = page.getByRole("figure").first();
-    await expect(figure).toBeVisible();
-    for (const step of ["Opening", "New", "Upgrades", "Churn", "Closing"]) {
-      await expect(figure.getByText(step, { exact: true })).toBeVisible();
-    }
-  });
-
   test("breaks MRR down by plan, in a real table", async ({ page }) => {
     const table = page.getByRole("table", { name: /By plan/ });
     await expect(table).toBeVisible();
     await expect(table.locator("thead th").first()).toBeVisible();
+    await expect(table.getByRole("columnheader", { name: "ARPA" })).toBeVisible();
     // Free is not revenue and does not get a row of zeros.
     await expect(table.getByRole("cell", { name: "Free", exact: true })).toHaveCount(0);
+  });
+
+  test("moves between months, and labels the one in progress", async ({ page }) => {
+    await page.locator("summary", { hasText: /Month/ }).click();
+    const months = page.getByRole("navigation", { name: "Month" });
+    const current = months.getByRole("link").first();
+    await expect(current).toContainText("So far");
+    await current.click();
+    await expect(page).toHaveURL(/period=\d{4}-\d{2}/);
+    await expect(page.getByText(/days so far/).first()).toBeVisible();
+    await expect(page.getByText(/not comparable with a whole one/)).toBeVisible();
+  });
+
+  test("exports the month for finance with its period, formulas and filter (criterion 10)", async ({ page }) => {
+    const link = page.getByRole("link", { name: "Export for finance" });
+    const href = await link.getAttribute("href");
+    expect(href).toMatch(/^\/admin\/revenue\/export\?period=\d{4}-\d{2}$/);
+
+    const response = await page.request.get(href!);
+    expect(response.status()).toBe(200);
+    expect(response.headers()["content-type"]).toContain("text/csv");
+    expect(response.headers()["content-disposition"]).toMatch(/revenue-\d{4}-\d{2}\.csv/);
+    const body = await response.text();
+    expect(body).toContain(`# filter,${href!.split("?")[1]}`);
+    expect(body).toContain("# formula,net_revenue_retention,");
+    expect(body).toContain("section,line,business_id,display_name,licence_emirate,occurred_at_utc,aed,accounts,ratio,detail");
   });
 
   test("is axe clean", async ({ page }) => {
@@ -209,5 +267,16 @@ test.describe("board 4g — subscriptions", () => {
     const table = page.getByRole("table", { name: /Every subscription/ });
     await expect(table).toBeVisible();
     await expect(table.getByRole("columnheader", { name: "On old numbers" })).toBeVisible();
+  });
+
+  test("opens the account from a row, and names a lapse rather than calling it active", async ({ page }) => {
+    await page.goto("/admin/subscriptions");
+    const table = page.getByRole("table", { name: /Every subscription/ });
+    // Seeded by board 4g: dropped to Free after fourteen days of failed payments.
+    const row = table.getByRole("row", { name: /Umm Al Quwain Boatyard/ });
+    await expect(row.getByText("Dropped to Free")).toBeVisible();
+    await row.getByRole("link", { name: "Umm Al Quwain Boatyard" }).click();
+    await expect(page).toHaveURL(/\/admin\/businesses\/[\w-]+$/);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Umm Al Quwain Boatyard");
   });
 });

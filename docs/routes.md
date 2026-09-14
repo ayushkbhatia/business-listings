@@ -180,7 +180,8 @@ and it is the one that argues back.
 /admin/plans                            Plans & entitlements                 [12e]  built h4s5
 /admin/dunning                          Failed payments                      [12e]  built h4s5
 /admin/tax                              VAT export                           [12e]  built h4s5
-/admin/revenue                          Revenue                               [4g]  built h4s5
+/admin/revenue                          Revenue — one Dubai month, ?period=   [4g]  built 4g
+/admin/revenue/export                   The month as CSV, formulas and filter [4g]  built 4g
 /admin/reports                          Supplier reports & flags              [4h]  built h4s3
 /admin/reports/:id                      Report evidence — the thread attached [7c]  built h7c
 /admin/support                          Support desk & view-as               [12f]  built h4s4

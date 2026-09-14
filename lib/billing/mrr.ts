@@ -36,6 +36,17 @@ import { FILS_PER_AED } from "./proration";
 
 export type MrrKind = "new_business" | "expansion" | "contraction" | "churn" | "reactivation";
 
+/**
+ * Why a movement happened, which `kind` cannot say. Board 4g.
+ *
+ * Required rather than inferred because only the caller knows: a churn is a
+ * cancellation reaching its date or a card that failed for fourteen days, and
+ * the revenue board reports those as two lines — a lapse after failed payments
+ * is not a decision to leave (B8). A new caller that does not know which it is
+ * has not decided what it is doing to the ledger.
+ */
+export type MrrCause = "plan_change" | "term_change" | "cancellation" | "dunning_drop";
+
 /** A client or a transaction. Movements are written inside the caller's. */
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -49,6 +60,13 @@ export interface MovementInput {
   afterFils: number;
   occurredAt: Date;
   note?: string;
+  cause: MrrCause;
+  /**
+   * The scheduled change this movement carries out, where there is one. The
+   * cancellation reason lives on that row and board 4g counts reasons through
+   * this pointer.
+   */
+  subscriptionChangeId?: string | null;
 }
 
 export function aedToFils(aed: number): number {
@@ -99,6 +117,8 @@ export async function recordMovement(db: Db, input: MovementInput) {
       mrrAfterFils: input.afterFils,
       occurredAt: input.occurredAt,
       note: input.note ?? null,
+      cause: input.cause,
+      subscriptionChangeId: input.subscriptionChangeId ?? null,
     },
   });
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { StatusBadge, Tag } from "@/components/display";
 import { DataTable, type Column } from "@/components/structure";
 import { t } from "@/lib/i18n";
@@ -15,10 +16,15 @@ import { t } from "@/lib/i18n";
 export interface SubscriptionRowView {
   id: string;
   businessName: string;
+  /** The account page, board 4f. */
+  href: string;
   planName: string;
   status: string;
+  /** "Ends 30 Sep 2026", or the dunning stage. Null when neither applies. */
+  statusNote: string | null;
   monthly: string;
   term: "monthly" | "annual";
+  since: string;
   renews: string;
   grandfathered: readonly string[];
 }
@@ -36,7 +42,14 @@ export function SubscriptionTable({ rows }: { rows: readonly SubscriptionRowView
     {
       key: "business",
       header: t("admin.subscriptions.col.business"),
-      render: (row) => row.businessName,
+      render: (row) => (
+        <Link
+          href={row.href}
+          className="rounded-tag text-ink underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+        >
+          {row.businessName}
+        </Link>
+      ),
     },
     {
       key: "plan",
@@ -47,11 +60,14 @@ export function SubscriptionTable({ rows }: { rows: readonly SubscriptionRowView
     {
       key: "status",
       header: t("admin.subscriptions.col.status"),
-      width: "8rem",
+      width: "10rem",
       render: (row) => (
-        <StatusBadge tone={TONE[row.status] ?? "neutral"}>
-          {t(`subscription.status.${row.status}` as never)}
-        </StatusBadge>
+        <span className="flex flex-col items-start gap-0.5">
+          <StatusBadge tone={TONE[row.status] ?? "neutral"}>
+            {t(`subscription.status.${row.status}` as never)}
+          </StatusBadge>
+          {row.statusNote ? <span className="text-caption text-muted">{row.statusNote}</span> : null}
+        </span>
       ),
     },
     {
@@ -75,6 +91,14 @@ export function SubscriptionTable({ rows }: { rows: readonly SubscriptionRowView
       width: "7rem",
       hideBelow: "md",
       render: (row) => t(`subscription.term.${row.term}` as never),
+    },
+    {
+      key: "since",
+      header: t("admin.subscriptions.col.since"),
+      mono: true,
+      width: "8rem",
+      hideBelow: "lg",
+      render: (row) => row.since,
     },
     {
       key: "renews",

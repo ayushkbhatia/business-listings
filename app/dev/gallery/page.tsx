@@ -17,6 +17,7 @@ import { AuthGallery } from "./_sections/Auth";
 import { CloseAccountGallery } from "./_sections/CloseAccount";
 import { StaffRolesGallery } from "./_sections/StaffRoles";
 import { AccountsGallery } from "./_sections/Accounts";
+import { RevenueGallery } from "./_sections/Revenue";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
 import { ServiceBriefGallery } from "./_sections/ServiceBrief";
 import { AcceptedRecordGallery } from "./_sections/AcceptedRecord";
@@ -288,6 +289,14 @@ export default function Gallery() {
       <Overlays />
       <Shells />
       <Tokens />
+      {/*
+         Last, and not beside Accounts where it belongs. Inserted above Shells,
+         its height moves that section's sidebar heading to where axe's
+         colour-contrast grid throws "Element midpoint exceeds the grid bounds"
+         and skips the rule for the whole page — which the contrast test then
+         reads as every known pairing fixed.
+      */}
+      <RevenueGallery />
     </main>
   );
 }
