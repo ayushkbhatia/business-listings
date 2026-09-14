@@ -379,7 +379,8 @@ is `7b`, and it is a tenancy question, not a screen.
   contact details, up to six photos shrunk in the browser and stripped of EXIF on the server
   (`lib/images/strip-metadata.ts`), the signing choice, and a live preview through 1m's own row
   mapping. Autosaved drafts live in `review_draft`, which no review reader can see (`B9`). The
-  window is 90 days from acceptance — the 11c request window, now one constant (`Q1`). Edits
+  window is 90 days from acceptance (from the term's end for an ongoing engagement) — the 11c
+  request window, now one constant (`Q1`). Edits
   keep what they replace in `review_revision`; `review_words_are_fixed` holds the fortnight and
   the freeze on a seller reply in the database. Posting lands on `/b/:slug/reviews#review-<id>`
   (`B10`). Signed out with no token redirects to sign in rather than 404ing the review-request
