@@ -10,6 +10,7 @@ import { Overlays } from "./_sections/Overlays";
 import { Position } from "./_sections/Position";
 import { Ranking } from "./_sections/Ranking";
 import { Ingest } from "./_sections/Ingest";
+import { Dedupe } from "./_sections/Dedupe";
 import { Reviews } from "./_sections/Reviews";
 import { CloseAccountGallery } from "./_sections/CloseAccount";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
@@ -172,6 +173,8 @@ const UNLISTED = [
   "service-brief-composer",
   // Board `7c`: the accepted quote record, a page view rendered from one value.
   "accepted-record",
+  // Board `12b`: the dedupe queue and the owner's side of a branch it added.
+  "dedupe",
 ] as const;
 
 export default function Gallery() {
@@ -251,6 +254,7 @@ export default function Gallery() {
       <Position />
       <Ranking />
       <Ingest />
+      <Dedupe />
       <Billing />
 
       <Reviews />

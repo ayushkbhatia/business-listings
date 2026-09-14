@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Alert } from "@/components/display";
 import { Button, buttonClassName } from "@/components/primitives";
 import { cn } from "@/lib/cn";
-import { formatCount } from "@/lib/format";
+import { formatCount, formatList } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { HeldReason, KeptBecause } from "@/lib/ingest/classify";
 import type { ActionResult } from "./actions";
@@ -54,7 +54,15 @@ export interface DecisionBarProps {
     withdrawn: number;
     kept: number;
   } | null;
-  preview: { withdraw: number; kept: number; keptBecause: Record<KeptBecause, number> } | null;
+  preview: {
+    withdraw: number;
+    kept: number;
+    keptBecause: Record<KeptBecause, number>;
+    /** Listings a merge from this run went into, put back first (12b B5). */
+    unwind: string[];
+    /** Listings whose owners confirmed a branch from this run: the rollback refuses. */
+    confirmed: string[];
+  } | null;
   reversibleDays: number;
   exportHref: string;
   queueHref: string;
@@ -285,11 +293,17 @@ export function DecisionBar(props: DecisionBarProps) {
           title={t("admin.run.rollback_title", { number: props.number })}
           confirmLabel={t("admin.run.rollback_confirm", n(props.preview.withdraw))}
           destructive
+          blocked={props.preview.confirmed.length > 0}
           fields={fields}
           action={props.rollbackAction}
           onDone={done}
         >
           <div className="flex flex-col gap-2 text-body-sm text-body">
+            {props.preview.confirmed.length > 0 && (
+              <Alert tone="bad" fix={t("admin.run.rollback_confirmed_fix")}>
+                {t("admin.run.rollback_confirmed", { names: formatList(props.preview.confirmed) })}
+              </Alert>
+            )}
             <p>{t("admin.run.rollback_withdraw", n(props.preview.withdraw))}</p>
             {props.preview.kept > 0 && (
               <>
@@ -302,6 +316,14 @@ export function DecisionBar(props: DecisionBarProps) {
                     ))}
                 </ul>
               </>
+            )}
+            {props.preview.unwind.length > 0 && (
+              <p>
+                {t("admin.run.rollback_unwind", {
+                  ...n(props.preview.unwind.length),
+                  names: formatList([...new Set(props.preview.unwind)]),
+                })}
+              </p>
             )}
           </div>
         </ReasonModal>

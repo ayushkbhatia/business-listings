@@ -343,8 +343,30 @@ the screen is permanently empty above copy reading "Run the matcher after an imp
   keyword matcher filed "Copper Wire Trading" under PPE and "Food Products" under HVAC; the run
   screen printed the uploader as the approver. Exact-licence duplicates are marked at staging and
   at publish and never published here (B9); Q2's renewed-licence case is left to `4.2`.
-- [ ] **4.2 `12b`** — the rescan control, a capability on it, `selectable` bulk merge, and a merge
-  rule that is not `a.id < b.id` (`lib/dedupe/service.ts:145`).
+- [x] **4.2 `12b`** — built. `/admin/ingest/dedupe` is the board's queue: one pair filling the
+  frame, record A always the side B1 keeps (claimed, then paying, then history — `chooseParent`,
+  never `a.id < b.id`), reviews, products and plan drawn beside the licence, address and phone, and
+  three outcomes decided from the keyboard — J/K, 1/2/3, Ctrl+Enter, S to skip, which leaves the pair
+  pending (B3, B7). A pair is now either a listing against a listing or a staged record against a
+  listing: the importer writes one for every duplicate it stages and every collision at publish, so
+  the queue has a production writer. *Add as a branch* creates a location carrying the record's own
+  licence number (B9); *keep separate* resolves the pair and returns the record to its run, and the
+  matcher never pairs that licence with that listing again (B2). Bulk merge takes every pending pair
+  at or above the certain line in one transaction, one `MergeBatch`, one audit row, reversible as a
+  unit (B4); two claimed listings are never merged by it (Q3). Every decision is a `staffMutation`,
+  the today rail reads the audit log (B6), and each is reversible for thirty days from a table on
+  the screen, restoring both records exactly (criterion 9). `Tune matching` stores the floor and the
+  certain line in `platform_setting`, previews the resulting queue with the real matcher and applies
+  only the lines previewed (B8); the certain line cannot go below 90%. Near misses under the floor are
+  counted per run and shown on the run's duplicates card and the queue's rail (B10, Q1). A run
+  rollback unwinds the merges made from its records first, or refuses and names the listings whose
+  owners confirmed a branch (B5). Q2 is built: a manual-band branch added to a claimed listing is held
+  unpublished until the owner confirms it on `/dashboard/locations`, and a bulk-merged one is live and
+  still rejectable there while the decision is reversible. **Found on the way and fixed:** a reversed
+  merge left the absorbed listing unpublished, so putting a merge back took a live company off the
+  directory; moved locations lost their licence numbers and visibility on the way back. **Not
+  decided here:** Q4 (a resolution training the matcher beyond "never re-pair"), and whether a
+  branch a merge adds counts against the plan's location cap — it does not today.
 - [ ] **4.3 `4b`** — settle the 62% (see §4), then build the bulk rules.
 - [ ] **4.4 `4c`** — let the credential lane open the credential; filter conflict rows a moderator
   will 404 on.
@@ -452,7 +474,7 @@ the only large piece and the only one selling something it does not deliver.
 | `12e` | Plans, dunning, VAT | partial | medium | Seven caps are staff-editable with an audit row. Price is editable by nobody. | 6.1 |
 | `4d` | Category taxonomy | partial | large | `createCategory` does not exist; `parentId` is written by nothing outside the seed. | 5.1 |
 | `12a` | Licence-record importer | built | medium | Rows staged `needs_category` are terminal — nothing assigns them a category. Closed by 4.1. | 4.1 |
-| `12b` | Dedupe & merge | scaffold ↓ | small | The candidate list has no production writer, so the screen is permanently empty. | 4.2 |
+| `12b` | Dedupe & merge | built | small | Pairs from the importer, three outcomes, bulk merge as a unit, tuning previewed, owner confirmation. Closed by 4.2. | 4.2 |
 | `4b` | Approval queue | partial | medium | The 62% auto-pass figure has no source in the tree and no denominator exists. | 4.3 |
 | `4c` | Review a submission | partial | small | The credential lane cannot open the credential; moderators get conflict rows that 404. | 4.4 |
 | `4f` | Businesses & health | partial | small | No search, pagination or detail route on the screen that owns suspension. | 4.5 |

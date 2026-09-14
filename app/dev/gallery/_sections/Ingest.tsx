@@ -85,6 +85,7 @@ const RUN: RunOverview = {
   truncatedCount: 0,
   newListings: 7312,
   duplicates: 636,
+  pairs: { pending: 412, merged: 188, separated: 29, discarded: 7, belowFloor: 23 },
   rejected: 464,
   categorised: 6104,
   queued: 1208,
@@ -150,7 +151,13 @@ export function Ingest() {
                 decisionReason: "Spot-checked twenty licences against the DED portal.",
                 reversible: true,
                 reversibleUntilLabel: "20 Sep 2026",
-                preview: { withdraw: 6090, kept: 14, keptBecause: kept({ claimed: 11, claim_in_progress: 3 }) },
+                preview: {
+                  withdraw: 6090,
+                  kept: 14,
+                  keptBecause: kept({ claimed: 11, claim_in_progress: 3 }),
+                  unwind: ["Gulf Cool Technical Services LLC", "Al Noor Electromechanical"],
+                  confirmed: [],
+                },
               })}
             />
           </div>

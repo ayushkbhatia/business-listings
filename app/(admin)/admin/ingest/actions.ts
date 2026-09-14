@@ -116,14 +116,20 @@ export async function rollback(formData: FormData): Promise<ActionResult> {
   const runId = field(formData, "runId");
   return guarded(async () => {
     const result = await rollbackRun({ actor: seat.actor, runId, reason: field(formData, "reason") });
-    if (!result.ok) return { ok: false, error: result.message };
+    if (!result.ok) {
+      if (result.error === "merges_need_merge_role") return { ok: false, error: t("admin.run.rollback_merge_role") };
+      return { ok: false, error: result.message };
+    }
     refresh(runId);
+    // A rollback that put merges back changed the dedupe queue as well.
+    if (result.unwound > 0) revalidatePath("/admin/ingest/dedupe");
+    const done = t("admin.run.rolled_back_done", {
+      withdrawn: formatCount(result.withdrawn),
+      kept: formatCount(result.kept),
+    });
     return {
       ok: true,
-      message: t("admin.run.rolled_back_done", {
-        withdrawn: formatCount(result.withdrawn),
-        kept: formatCount(result.kept),
-      }),
+      message: result.unwound > 0 ? `${done} ${t("admin.run.rolled_back_unwound", n(result.unwound))}` : done,
     };
   });
 }

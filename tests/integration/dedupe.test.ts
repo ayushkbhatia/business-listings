@@ -4,10 +4,10 @@ import {
   dismissCandidate,
   findCandidates,
   mergeBusinesses,
-  openCandidates,
   unmergeBusinesses,
   REVERSIBLE_DAYS,
 } from "@/lib/dedupe/service";
+import { PENDING } from "@/lib/dedupe/queue";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
 
@@ -384,10 +384,13 @@ describe("reversing a merge, within thirty days", () => {
 
     const restored = await prisma.business.findUniqueOrThrow({
       where: { id: absorb.id },
-      select: { mergedIntoId: true, mergedAt: true },
+      select: { mergedIntoId: true, mergedAt: true, publishedAt: true },
     });
     expect(restored.mergedIntoId).toBeNull();
     expect(restored.mergedAt).toBeNull();
+    // Criterion 9: live again. The first version left a reversed listing
+    // unpublished, which took a real company off the directory.
+    expect(restored.publishedAt).not.toBeNull();
   });
 
   it("takes the 301 down, so buyers stop being sent to the wrong company", async () => {
@@ -564,8 +567,11 @@ describe("the candidate list", () => {
 
     const scan = await findCandidates(1);
     expect(scan.considered).toBeGreaterThan(1);
-    expect(scan.dropped).toBe(scan.considered - 1);
-    expect(scan.created).toBeLessThanOrEqual(1);
+    // Dropped counts new pairs the cap left unwritten — not pairs already on
+    // the list, which were never going to be written and are not a loss.
+    expect(scan.created).toBe(1);
+    expect(scan.dropped).toBeGreaterThan(0);
+    expect(scan.created + scan.dropped).toBeLessThanOrEqual(scan.considered);
   }, 60_000);
 
   it("does not re-propose a pair somebody dismissed", async () => {
@@ -606,8 +612,15 @@ describe("the candidate list", () => {
     // Still one row, and it is the dismissed one.
     expect(count).toBe(1);
 
-    const open = await openCandidates();
+    const open = await prisma.mergeCandidate.findMany({ where: PENDING, select: { id: true } });
     expect(open.map((c) => c.id)).not.toContain(candidate.id);
+    // And it says what it is: separated, by whom, and why (B2).
+    expect(
+      await prisma.mergeCandidate.findUniqueOrThrow({
+        where: { id: candidate.id },
+        select: { state: true, resolvedById: true },
+      }),
+    ).toEqual({ state: "separated", resolvedById: opsLeadId });
   }, 60_000);
 
   /*

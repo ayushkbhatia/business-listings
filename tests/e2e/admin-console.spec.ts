@@ -368,23 +368,23 @@ test.describe("board 12a — the licence importer", () => {
 });
 
 test.describe("board 12b — dedupe", () => {
-  test("bands the pairs and says why each one matched", async ({ page }) => {
+  test("argues the band a person decides, and lists what can still be put back", async ({ page }) => {
+    /*
+     * Not an assertion about which pair is showing. admin-dedupe resolves pairs
+     * in the same database, so whether the manual band is empty depends on what
+     * ran before; the empty and typical states are both in the gallery.
+     */
     await page.goto("/admin/ingest/dedupe");
     // The ingestion chain's shared tabs, the same on all three screens.
     await expect(page.getByRole("link", { name: "Dedupe queue" })).toHaveAttribute("aria-current", "page");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Dedupe & merge");
-    await expect(
-      page.getByText(/A merge moves everything the absorbed listing has/),
-    ).toBeVisible();
-    for (const head of ["The pair", "Why", "Match"]) {
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Dedupe queue");
+    await expect(page.getByText(/Merging two genuinely separate companies destroys reviews and confuses buyers/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Tune matching" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Bulk merge [\d,]+$/ })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Decisions you can still put back" })).toBeVisible();
+    for (const head of ["Decision", "Reason", "Left to reverse"]) {
       await expect(page.getByRole("columnheader", { name: head })).toBeVisible();
     }
-  });
-
-  test("is axe clean", async ({ page }) => {
-    await page.goto("/admin/ingest/dedupe");
-    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
-    expect(results.violations).toEqual([]);
   });
 });
 

@@ -155,16 +155,28 @@ let serial = 0;
 const licence = () => `DED-9${TAG}${String((serial += 1)).padStart(3, "0")}`;
 const inYears = (years: number) => `${new Date().getUTCFullYear() + years}-06-30`;
 
+/**
+ * A name no other row shares a word with.
+ *
+ * Since board 12b a staged record is matched against every listing, including
+ * the ones earlier tests in this file published — and rows that shared a name,
+ * a phone and an area with them would pair as duplicates and never publish.
+ * Letters from the serial give each row its own identifying word.
+ */
+const word = (n: number) =>
+  `Q${[...String(n * 7919 + Number(TAG))].map((d) => "bcdfghjklm"[Number(d)]).join("")}`;
+
 function row(over: Row = {}): Row {
+  const licenceNumber = licence();
   return {
-    name: `Rigging Works ${TAG} ${serial} LLC`,
-    licence: licence(),
+    name: `Summit ${word(serial)} Trading LLC`,
+    licence: licenceNumber,
     authority: "",
     expiry: inYears(1),
     emirate: "Dubai",
     area: "Al Quoz Industrial 1",
     activity: "Trading in Valves & Pipe Fittings",
-    phone: "043470101",
+    phone: `04${String(3_000_000 + serial * 37 + (Number(TAG) % 1000)).slice(-7)}`,
     ...over,
   };
 }
@@ -377,12 +389,12 @@ describe("criteria 4 and 6 — what publishes, and what it carries", () => {
     lapsed.setUTCMonth(lapsed.getUTCMonth() - 3);
     const { runId } = await stage(
       [
-        row({ name: `Complete Valves ${TAG} LLC` }),
+        row({ name: `Complete ${word(9001)} Valves LLC` }),
         row({ activity: `Marine Rigging ${TAG}` }), // no category
         row({ expiry: "" }), // no expiry
         row({ licence: "" }), // no licence number
         row({ authority: "XFZ" }), // an authority with no code
-        row({ name: `Late Renewal ${TAG} LLC`, expiry: lapsed.toISOString().slice(0, 10) }),
+        row({ name: `Late ${word(9002)} Renewal LLC`, expiry: lapsed.toISOString().slice(0, 10) }),
       ],
       "publish",
     );
@@ -419,7 +431,7 @@ describe("criteria 4 and 6 — what publishes, and what it carries", () => {
     }
 
     // Criterion 6: the register's date, expired or not — never an invented one.
-    const late = listings.find((listing) => listing.displayName.startsWith("Late Renewal"))!;
+    const late = listings.find((listing) => listing.displayName.startsWith("Late "))!;
     expect(late.licenceExpiry.toISOString().slice(0, 10)).toBe(lapsed.toISOString().slice(0, 10));
     expect(late.licenceExpiry.getTime()).toBeLessThan(Date.now());
 
@@ -739,7 +751,7 @@ describe("criterion 5 — a rollback detaches, and never takes a claimed listing
     expect(await rollbackPreview(runId)).toMatchObject({ withdraw: 2, kept: 1, keptBecause: { claimed: 1 } });
 
     const result = await rollbackRun({ actor: opsLead, runId, reason: `The extract repeated August ${TAG}.` });
-    expect(result).toEqual({ ok: true, withdrawn: 2, kept: 1 });
+    expect(result).toEqual({ ok: true, withdrawn: 2, kept: 1, unwound: 0 });
 
     const kept = await prisma.business.findUniqueOrThrow({
       where: { id: claimed!.id },

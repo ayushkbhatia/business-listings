@@ -60,7 +60,20 @@ export type AuditAction =
   */
   | "closure_noticed"
   | "closure_withdrawn"
-  | "closure_reopened";
+  | "closure_reopened"
+  /*
+     Board 12b. The pair screen's three outcomes, a bulk merge, the reversals
+     and a re-tune — each its own name, because the screen's "today" rail reads
+     them back (B6) and "merged 64, kept separate 41, discarded 13" is three
+     questions a single `merge` label cannot answer.
+  */
+  | "pair_merged"
+  | "pair_separated"
+  | "pair_discarded"
+  | "pairs_bulk_merged"
+  | "pair_reversed"
+  | "batch_reversed"
+  | "matching_tuned";
 
 /**
  * Every audited capability maps to exactly one action, so a staff mutation
@@ -139,6 +152,16 @@ export const PAIRED_ACTIONS = {
   */
   "report.resolve": ["report_resolved", "review_dispute_resolved", "incentive_logged"],
   "business.close": ["closure_noticed", "closure_withdrawn", "closure_reopened"],
+  "business.merge": [
+    "merge",
+    "pair_merged",
+    "pair_separated",
+    "pair_discarded",
+    "pairs_bulk_merged",
+    "pair_reversed",
+    "batch_reversed",
+    "matching_tuned",
+  ],
   "taxonomy.write": [
     "taxonomy_changed",
     "rule_proposed",

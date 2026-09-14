@@ -2,10 +2,13 @@ import { prisma } from "@/lib/db/client";
 import { t } from "@/lib/i18n";
 import { mayEditListing } from "@/lib/auth/guards";
 import { getLocationsBoard } from "@/lib/db/queries/locations";
+import { ownerBranches } from "@/lib/dedupe/queue";
+import { formatDate } from "@/lib/format";
 import { LEAD_TIME_CHOICES, isLeadTimeChoice } from "@/lib/locations/coverage";
 import type { Emirate, LocationType } from "@/lib/db/generated/enums";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 import {
+  decideAddedBranch,
   deleteLocation,
   dropCoverage,
   previewHide,
@@ -14,6 +17,7 @@ import {
   savePin,
   setVisibility,
 } from "./actions";
+import { AddedBranches } from "./AddedBranches";
 import { LocationsWorkspace } from "./LocationsWorkspace";
 
 /**
@@ -62,7 +66,7 @@ const leadLabel = (hours: number) =>
 export default async function LocationsPage() {
   const seat = await requireSellerSeat();
 
-  const [board, areas, badges] = await Promise.all([
+  const [board, areas, badges, added] = await Promise.all([
     /*
        Every label is resolved here, on the server.
 
@@ -105,6 +109,8 @@ export default async function LocationsPage() {
       select: { id: true, name: true, emirate: true, isFreeZone: true, lat: true, lng: true },
     }),
     getNavBadges(seat.businessId),
+    // Board 12b Q2: branches a dedupe decision added, waiting on the owner.
+    ownerBranches(seat.businessId),
   ]);
 
   /*
@@ -173,6 +179,22 @@ export default async function LocationsPage() {
         shown: board.counts.shown,
       })}
     >
+      {/* Always mounted, so the sentence about the last decision outlives the list. */}
+      <div className="mb-[var(--gutter)] empty:hidden">
+        <AddedBranches
+          rows={added.map((branch) => ({
+            locationId: branch.locationId,
+            area: branch.areaName,
+            address: branch.addressLine,
+            licence: branch.licenceNumber,
+            source: branch.source,
+            confirmation: branch.confirmation,
+            untilLabel: branch.reversibleUntil ? formatDate(branch.reversibleUntil) : null,
+          }))}
+          readOnly={!mayEditListing(seat.actor)}
+          decide={decideAddedBranch}
+        />
+      </div>
       <LocationsWorkspace
         branches={board.branches}
         coverage={board.coverage}

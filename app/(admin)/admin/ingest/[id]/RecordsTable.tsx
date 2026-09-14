@@ -27,6 +27,8 @@ const OUTCOME_TONE: Record<string, "ok" | "warn" | "bad" | "neutral" | "info"> =
   needs_category: "warn",
   published: "ok",
   duplicate: "neutral",
+  merged: "ok",
+  discarded: "neutral",
   rejected: "bad",
 };
 
