@@ -19,6 +19,7 @@ export { FunnelBars, type FunnelBarsProps, type FunnelStage } from "./FunnelBars
 // one the other uses.
 export { Delta, type DeltaProps } from "./Delta";
 export { ShareBars, type ShareBarsProps, type ShareRow } from "./ShareBars";
+export { MovementBars, type MovementBarsProps, type MovementRow, type MovementTone } from "./MovementBars";
 export { Waterfall, type WaterfallProps, type WaterfallStep } from "./Waterfall";
 export { ImagePlaceholder, type ImagePlaceholderProps, type PlaceholderKind } from "./ImagePlaceholder";
 export { LogoTile, type LogoTileProps } from "./LogoTile";

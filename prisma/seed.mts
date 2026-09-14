@@ -52,6 +52,8 @@ import { seedDedupe } from "./seed-dedupe.mjs";
 import { seedQueue } from "./seed-queue.mjs";
 import { seedStaffRoster } from "./seed-staff-roster.mjs";
 import { seedAccountHealth } from "./seed-account-health.mjs";
+import { seedRevenue } from "./seed-revenue.mjs";
+import { monthlyValueFils } from "../lib/billing/period.js";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL! }),
@@ -1090,6 +1092,10 @@ async function main() {
   // enquiries. Before `recomputeDerived`, which measures them, and anchored to
   // `NOW` because that is the clock the measurement runs against.
   await seedAccountHealth(prisma, NOW);
+  // Board 4g: last month's movements, cancellations, a lapse and a failed card.
+  // Same slot and same reason as the line above — owners before the channel
+  // backfill, enquiries before `recomputeDerived`.
+  await seedRevenue(prisma, NOW);
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
   await backfillSeatChannels(prisma);
@@ -1109,6 +1115,62 @@ async function main() {
   await auditCuratedLists(prisma);
   // Last of all, because it reads the references every builder above it wrote.
   await advanceEnquiryRefSequence(prisma);
+  await assertLedgerReconciles(prisma);
+}
+
+/**
+ * The MRR ledger has to describe the subscription table, or the seed is wrong.
+ *
+ * Board 4g reads every figure from `mrr_movement`, and the revenue screen warns
+ * when the ledger and the live table disagree. For weeks the seed disagreed by
+ * three paying accounts nobody had written a signup for, and the only thing that
+ * noticed was a warning on a page no test asserted the absence of. So the seed
+ * refuses to finish instead: a fixture that pays with no movement behind it is
+ * a subscription no real writer could have produced.
+ *
+ * The same valuation `mrrNow` uses — active and past due, at `monthlyValueFils`.
+ */
+async function assertLedgerReconciles(db: Db) {
+  const [ledger, live] = await Promise.all([
+    db.mrrMovement.aggregate({ _sum: { deltaFils: true } }),
+    db.subscription.findMany({
+      where: { status: { in: ["active", "past_due"] } },
+      select: { term: true, plan: { select: { monthlyPriceAed: true, annualMonthsCharged: true } } },
+    }),
+  ]);
+  const liveFils = live.reduce(
+    (sum, row) =>
+      sum +
+      monthlyValueFils(
+        { monthlyPriceAed: Number(row.plan.monthlyPriceAed), annualMonthsCharged: row.plan.annualMonthsCharged },
+        row.term,
+      ),
+    0,
+  );
+  const ledgerFils = ledger._sum.deltaFils ?? 0;
+  if (ledgerFils !== liveFils) {
+    throw new Error(
+      `The MRR ledger (${ledgerFils} fils) does not reconcile with the subscription table (${liveFils} fils). A seeded subscription is missing its movement.`,
+    );
+  }
+
+  /*
+     Board 4g criterion 7: ARPA's account count is 4f's paying count. The board
+     counts accounts with ledger MRR; 4f counts subscriptions active or past due
+     on a priced plan. Asserted here, on a clean database, because the integration
+     suite runs files that move plans behind the ledger on purpose and a global
+     equality there would depend on file order.
+  */
+  const [ledgerPaying, livePaying] = await Promise.all([
+    db.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM (SELECT business_id FROM mrr_movement GROUP BY business_id HAVING sum(delta_fils) > 0) paying`,
+    db.subscription.count({ where: { status: { in: ["active", "past_due"] }, plan: { monthlyPriceAed: { gt: 0 } } } }),
+  ]);
+  if (Number(ledgerPaying[0]!.n) !== livePaying) {
+    throw new Error(
+      `The ledger has ${ledgerPaying[0]!.n} paying accounts and the subscription table ${livePaying}. Board 4g's ARPA and board 4f's header would disagree.`,
+    );
+  }
+  console.log(`   ledger reconciles with subscriptions at ${ledgerFils} fils a month, ${livePaying} paying accounts`);
 }
 
 /**
@@ -4758,6 +4820,7 @@ async function seedMrrLedger(db: Db, started: Map<string, { planId: string; at: 
         mrrAfterFils: signup.fils,
         occurredAt: signup.at,
         note: "Signed up",
+        cause: "plan_change",
       },
     });
   }
@@ -4789,6 +4852,7 @@ async function seedMrrLedger(db: Db, started: Map<string, { planId: string; at: 
         mrrAfterFils: fils,
         occurredAt: startedAt,
         note: "Signed up",
+        cause: "plan_change",
       },
     });
     await db.mrrMovement.create({
@@ -4801,6 +4865,9 @@ async function seedMrrLedger(db: Db, started: Map<string, { planId: string; at: 
         mrrAfterFils: 0,
         occurredAt: leftAt,
         note: index === 0 ? "Cancellation reached its end date" : "Dunning drop after 14 days past due",
+        // A cancellation from before board 11h asked for a reason, so no
+        // request row: board 4g reads it as "not recorded", which it was.
+        cause: index === 0 ? "cancellation" : "dunning_drop",
       },
     });
     churned += 1;
@@ -4828,6 +4895,7 @@ async function seedMrrLedger(db: Db, started: Map<string, { planId: string; at: 
         mrrAfterFils: signup.fils,
         occurredAt: days(-int(10, 50)),
         note: "Plan change to Pro",
+        cause: "plan_change",
       },
     });
     expanded += 1;

@@ -574,6 +574,21 @@ describe("changing term", () => {
     expect(quoted.quote.proration.vatFils).toBeGreaterThan(0);
   });
 
+  it("records the switch as a term change, which is neither an upgrade nor a downgrade", async () => {
+    // Board 4g: the waterfall draws billing-term changes on their own line.
+    // Found by the plan staying put rather than by date: other tests in this
+    // file run the clock forward and date their movements after this one.
+    const samePlan = { businessId, fromPlanId: "pro", toPlanId: "pro" };
+    const before = await prisma.mrrMovement.findMany({ where: samePlan, select: { id: true } });
+    const result = await toAnnual();
+    expect(result.ok).toBe(true);
+    const written = await prisma.mrrMovement.findMany({
+      where: { ...samePlan, id: { notIn: before.map((row) => row.id) } },
+      select: { kind: true, cause: true },
+    });
+    expect(written).toEqual([{ kind: "contraction", cause: "term_change" }]);
+  });
+
   it("raises the invoice through the one issuer, paid and referenced", async () => {
     const result = await toAnnual();
     expect(result.ok).toBe(true);

@@ -162,7 +162,7 @@ test.describe("the commercial screens a moderator cannot reach", () => {
    * rather than a 403 is the console's rule — a 403 confirms the screen exists
    * to somebody who should not know it does.
    */
-  for (const path of ["/admin/revenue", "/admin/dunning", "/admin/tax", "/admin/subscriptions"]) {
+  for (const path of ["/admin/revenue", "/admin/revenue/export?period=2026-08", "/admin/dunning", "/admin/tax", "/admin/subscriptions"]) {
     test(`cannot reach ${path}`, async ({ page }) => {
       const response = await page.goto(path);
       expect(response?.status()).toBe(404);

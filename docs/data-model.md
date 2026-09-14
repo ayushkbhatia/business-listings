@@ -480,6 +480,56 @@ pair revenue counts as MRR. A trial, a Free account and an unclaimed listing are
 `ProductEvent`, written where a plan cap refuses a seller, or a `MissedEnquiry` at the monthly
 cap, inside 30 days, on Basic.
 
+## Revenue — board 4g
+
+```prisma
+model MrrMovement {
+  kind                 MrrMovementKind    // which way: new, expansion, reactivation, contraction, churn
+  cause                MrrMovementCause?  // 4g — why: plan_change, term_change, cancellation, dunning_drop
+  subscriptionChangeId String?            // 4g — the scheduled change it carried out
+}
+```
+
+**Nothing on the board is stored as a metric.** `lib/billing/revenue-board.ts` reads one Dubai
+calendar month from `mrr_movement`, `subscription_change`, `payment_attempt` and
+`placement_slot`; `lib/billing/revenue-period.ts` does the arithmetic, and every ratio has one
+formula there:
+
+```
+ending        = starting + new + came back + upgrades + downgrades + term + cancellations + lapsed   (lines signed)
+nrr           = (starting + upgrades + downgrades + term + cancellations + lapsed) / starting   // B3: no new, no came back
+revenue churn = |cancellations + lapsed| / starting
+customer churn= accounts cancelled or lapsed / accounts paying at the start
+arpa          = ending / accounts paying at the end                                           // B7: 4f's paying count
+placement     = Σ slot monthly list price × time live in the month / month length             // B4: never in MRR or ARPA
+```
+
+**An account's state at an instant** is every movement before it, summed, with the plan of the
+latest. Starting and ending MRR, both paying counts, revenue by licence emirate (B9, through
+`AUTHORITY_EMIRATE`) and the plan mix are that one read grouped different ways, so they sum to
+each other by construction.
+
+**Cause is why, kind is which way.** A churn row is a cancellation or a D14 dunning drop — two
+lines, because a lapse gives no reason (B8). An expansion or contraction is a plan change or a
+billing-term switch — a term switch is neither an upgrade nor a downgrade. Every
+`recordMovement` caller passes a cause; the migration backfilled earlier rows from structure and
+the two churn writers' notes, and `causeOf` reads a null the same way.
+
+**Reasons count through the pointer** (B5, criterion 5): a cancellation's reason is on the
+`subscription_change` row the churn movement points at, so the reasons sum to the cancellations
+line. A cancellation from before board 11h has no row and reads as *not recorded*.
+
+**The reply-rate cross-reference** (B6) measures each *not enough enquiries* account with
+`measureReplies` over the 90 days before it asked to cancel, against 4f's 50% threshold. Too few
+enquiries to measure is its own count, never a zero.
+
+**Failed payments at an instant**: the last payment attempt before it failed, or the
+subscription is past due since before it with no attempt to say otherwise — and the account
+still has MRR. At risk, not lost; churn happens when the D14 drop writes its movement.
+
+**Closures** (11i) are counted apart from churn (Q2). A closure cannot happen while a subscription
+charges, so its money has already left through a cancellation.
+
 ## Staff — board 4i
 
 ```prisma

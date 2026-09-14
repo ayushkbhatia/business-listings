@@ -72,14 +72,14 @@ model User {
   /// Written by `requireStaff()` after the response, at most once every five
   /// minutes — never by a form. The "Last active" column reads it, and a staff
   /// seat nobody has used in months is a privilege nobody is watching.
-  staffLastActiveAt   DateTime? @map("staff_last_active_at")
+  staffLastActiveAt  DateTime? @map("staff_last_active_at")
   /// Board 4i. When their staff roles were last taken away as a whole.
   ///
   /// No reason column, for the reason `suspendedAt` has none: the written reason
   /// is on the `staff_deactivated` audit row. Cleared when an invitation to the
   /// same person is accepted. Their audit rows stay under their name either way —
   /// `AuditEvent.actorId` is `Restrict`.
-  staffDeactivatedAt  DateTime? @map("staff_deactivated_at")
+  staffDeactivatedAt DateTime? @map("staff_deactivated_at")
 
   /// Board 7a `B3`. When this account last set a password, or null for one
   /// that never has.
@@ -95,89 +95,89 @@ model User {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  business                Business?                @relation("BusinessTeam", fields: [businessId], references: [id], onDelete: SetNull)
-  branch                  Location?                @relation("SeatBranch", fields: [branchId], references: [id], onDelete: SetNull)
-  buyerCompanyId          String?                  @map("buyer_company_id")
-  buyerCompany            BuyerCompany?            @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
-  enquiries               Enquiry[]
-  reviews                 Review[]
-  disputesRaised          ReviewDispute[]          @relation("DisputeRaisedBy")
-  disputesDecided         ReviewDispute[]          @relation("DisputeDecidedBy")
-  auditEvents             AuditEvent[]
-  serviceRevisions        ServiceRevision[]
-  invoiceEvents           InvoiceEvent[]
-  cancellations           SubscriptionChange[]     @relation("ChangeRequestedBy")
-  reportsFiled            SupplierReport[]         @relation("ReportReporter")
-  messages                Message[]
-  contactReveals          ContactReveal[]
-  savedSearches           SavedSearch[]
-  shortlist               Shortlist[]              @relation("BuyerShortlist")
-  productEvents           ProductEvent[]           @relation("EventActor")
-  catalogueImports        CatalogueImportRequest[] @relation("CatalogueImportRequester")
-  productAlerts           ProductAlert[]
-  reviewRequests          ReviewRequest[]
-  importRuns              ImportRun[]
-  changeRequests          ListingChangeRequest[]   @relation("ChangeRequestActor")
-  listingRevisions        ListingRevision[]        @relation("ListingRevisionActor")
+  business                 Business?                @relation("BusinessTeam", fields: [businessId], references: [id], onDelete: SetNull)
+  branch                   Location?                @relation("SeatBranch", fields: [branchId], references: [id], onDelete: SetNull)
+  buyerCompanyId           String?                  @map("buyer_company_id")
+  buyerCompany             BuyerCompany?            @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
+  enquiries                Enquiry[]
+  reviews                  Review[]
+  disputesRaised           ReviewDispute[]          @relation("DisputeRaisedBy")
+  disputesDecided          ReviewDispute[]          @relation("DisputeDecidedBy")
+  auditEvents              AuditEvent[]
+  serviceRevisions         ServiceRevision[]
+  invoiceEvents            InvoiceEvent[]
+  cancellations            SubscriptionChange[]     @relation("ChangeRequestedBy")
+  reportsFiled             SupplierReport[]         @relation("ReportReporter")
+  messages                 Message[]
+  contactReveals           ContactReveal[]
+  savedSearches            SavedSearch[]
+  shortlist                Shortlist[]              @relation("BuyerShortlist")
+  productEvents            ProductEvent[]           @relation("EventActor")
+  catalogueImports         CatalogueImportRequest[] @relation("CatalogueImportRequester")
+  productAlerts            ProductAlert[]
+  reviewRequests           ReviewRequest[]
+  importRuns               ImportRun[]
+  changeRequests           ListingChangeRequest[]   @relation("ChangeRequestActor")
+  listingRevisions         ListingRevision[]        @relation("ListingRevisionActor")
   /// Board 6b: who last audited a curated list, and every audit they signed.
-  curatedListsEdited      CuratedList[]            @relation("CuratedListEditor")
-  curatedAudits           CuratedListAudit[]       @relation("CuratedListAuditor")
-  changesDecided          ListingChangeRequest[]   @relation("ChangeRequestDecider")
-  demandRecorded          ScopeDemand[]            @relation("ScopeDemandRecorder")
-  ruleChangesProposed     PublishRuleChange[]      @relation("RuleChangeProposer")
-  closuresRequested       BusinessClosure[]        @relation("ClosureRequestedBy")
-  closuresOwned           BusinessClosure[]        @relation("ClosureOwner")
-  closuresReversed        BusinessClosure[]        @relation("ClosureReversedBy")
-  ruleChangesDecided      PublishRuleChange[]      @relation("RuleChangeDecider")
-  areaPagesHeld           AreaPage[]               @relation("AreaPageHolder")
-  emiratePagesHeld        EmiratePage[]            @relation("EmiratePageHolder")
-  invitesSent             TeamInvite[]             @relation("InviteSender")
-  claimsMade              ClaimSubmission[]        @relation("ClaimClaimant")
-  onboardingDrafts        OnboardingDraft[]        @relation("OnboardingDraftUser")
-  categoryActivityCleared BusinessCategory[]       @relation("CategoryActivityClearedBy")
-  conflictsResolved       ClaimConflict[]          @relation("ConflictResolvedBy")
-  licenceImports          LicenceImportRun[]       @relation("IngestActor")
-  licenceImportsDecided   LicenceImportRun[]       @relation("IngestDecider")
-  licenceImportsRolledBack LicenceImportRun[]      @relation("IngestRollbackActor")
-  stagedCategorised       StagedListing[]          @relation("StagedCategorisedBy")
-  activityMappings        LicenceActivityMapping[] @relation("ActivityMappingActor")
-  merges                  BusinessMerge[]          @relation("MergeActor")
-  pdplSubjectOf           PdplRequest[]            @relation("PdplSubject")
-  pdplClosed              PdplRequest[]            @relation("PdplClosedBy")
-  apiKeys                 ApiKey[]                 @relation("ApiKeyCreator")
-  viewAsSessions          ViewAsSession[]          @relation("ViewAsStaff")
-  callsMade               CallOutcome[]            @relation("CallStaff")
-  candidatesDismissed     MergeCandidate[]         @relation("CandidateDismissedBy")
-  candidatesResolved      MergeCandidate[]         @relation("CandidateResolvedBy")
-  candidatesReversed      MergeCandidate[]         @relation("CandidateReversedBy")
-  candidatesOwnerDecided  MergeCandidate[]         @relation("CandidateOwnerDecidedBy")
-  mergeBatches            MergeBatch[]             @relation("MergeBatchActor")
-  mergeBatchesReversed    MergeBatch[]             @relation("MergeBatchReverser")
-  claimsDecided           ClaimSubmission[]        @relation("ClaimDecidedBy")
-  queueItemsAssigned      QueueItem[]              @relation("QueueItemAssignee")
-  queueItemsAssignedBy    QueueItem[]              @relation("QueueItemAssigner")
-  queueItemsDocsRequested QueueItem[]              @relation("QueueItemDocsRequester")
-  queueItemsDecided       QueueItem[]              @relation("QueueItemDecider")
-  templateVersions        TemplateVersion[]
-  specRevisions           SellerTemplateRevision[] @relation("TemplateRevisionAuthor")
-  boostsCreated           ListingBoost[]
-  rankingDrafts           RankingDraft[]           @relation("RankingDraftAuthor")
-  rankingPublishes        RankingPublish[]         @relation("RankingPublisher")
-  settingsWritten         PlatformSetting[]        @relation("SettingWriter")
-  askedQuestions          ProductQuestion[]
-  leadsAssigned           EnquiryRecipient[]       @relation("LeadAssignee")
-  leadsRouted             EnquiryRecipient[]       @relation("LeadAssigner")
-  leadOutcomes            EnquiryRecipient[]       @relation("LeadOutcomeAuthor")
+  curatedListsEdited       CuratedList[]            @relation("CuratedListEditor")
+  curatedAudits            CuratedListAudit[]       @relation("CuratedListAuditor")
+  changesDecided           ListingChangeRequest[]   @relation("ChangeRequestDecider")
+  demandRecorded           ScopeDemand[]            @relation("ScopeDemandRecorder")
+  ruleChangesProposed      PublishRuleChange[]      @relation("RuleChangeProposer")
+  closuresRequested        BusinessClosure[]        @relation("ClosureRequestedBy")
+  closuresOwned            BusinessClosure[]        @relation("ClosureOwner")
+  closuresReversed         BusinessClosure[]        @relation("ClosureReversedBy")
+  ruleChangesDecided       PublishRuleChange[]      @relation("RuleChangeDecider")
+  areaPagesHeld            AreaPage[]               @relation("AreaPageHolder")
+  emiratePagesHeld         EmiratePage[]            @relation("EmiratePageHolder")
+  invitesSent              TeamInvite[]             @relation("InviteSender")
+  claimsMade               ClaimSubmission[]        @relation("ClaimClaimant")
+  onboardingDrafts         OnboardingDraft[]        @relation("OnboardingDraftUser")
+  categoryActivityCleared  BusinessCategory[]       @relation("CategoryActivityClearedBy")
+  conflictsResolved        ClaimConflict[]          @relation("ConflictResolvedBy")
+  licenceImports           LicenceImportRun[]       @relation("IngestActor")
+  licenceImportsDecided    LicenceImportRun[]       @relation("IngestDecider")
+  licenceImportsRolledBack LicenceImportRun[]       @relation("IngestRollbackActor")
+  stagedCategorised        StagedListing[]          @relation("StagedCategorisedBy")
+  activityMappings         LicenceActivityMapping[] @relation("ActivityMappingActor")
+  merges                   BusinessMerge[]          @relation("MergeActor")
+  pdplSubjectOf            PdplRequest[]            @relation("PdplSubject")
+  pdplClosed               PdplRequest[]            @relation("PdplClosedBy")
+  apiKeys                  ApiKey[]                 @relation("ApiKeyCreator")
+  viewAsSessions           ViewAsSession[]          @relation("ViewAsStaff")
+  callsMade                CallOutcome[]            @relation("CallStaff")
+  candidatesDismissed      MergeCandidate[]         @relation("CandidateDismissedBy")
+  candidatesResolved       MergeCandidate[]         @relation("CandidateResolvedBy")
+  candidatesReversed       MergeCandidate[]         @relation("CandidateReversedBy")
+  candidatesOwnerDecided   MergeCandidate[]         @relation("CandidateOwnerDecidedBy")
+  mergeBatches             MergeBatch[]             @relation("MergeBatchActor")
+  mergeBatchesReversed     MergeBatch[]             @relation("MergeBatchReverser")
+  claimsDecided            ClaimSubmission[]        @relation("ClaimDecidedBy")
+  queueItemsAssigned       QueueItem[]              @relation("QueueItemAssignee")
+  queueItemsAssignedBy     QueueItem[]              @relation("QueueItemAssigner")
+  queueItemsDocsRequested  QueueItem[]              @relation("QueueItemDocsRequester")
+  queueItemsDecided        QueueItem[]              @relation("QueueItemDecider")
+  templateVersions         TemplateVersion[]
+  specRevisions            SellerTemplateRevision[] @relation("TemplateRevisionAuthor")
+  boostsCreated            ListingBoost[]
+  rankingDrafts            RankingDraft[]           @relation("RankingDraftAuthor")
+  rankingPublishes         RankingPublish[]         @relation("RankingPublisher")
+  settingsWritten          PlatformSetting[]        @relation("SettingWriter")
+  askedQuestions           ProductQuestion[]
+  leadsAssigned            EnquiryRecipient[]       @relation("LeadAssignee")
+  leadsRouted              EnquiryRecipient[]       @relation("LeadAssigner")
+  leadOutcomes             EnquiryRecipient[]       @relation("LeadOutcomeAuthor")
   /// Board `3j-s`: leads this seat declined on the firm's behalf.
-  leadDeclines            EnquiryRecipient[]       @relation("LeadDecliner")
-  quotesExtended          Quote[]                  @relation("QuoteExtender")
-  channels                SeatChannel[]
-  routingCursorFor        Business[]               @relation("RoutingCursor")
-  staffInvitesSent        StaffInvite[]            @relation("StaffInviteSender")
-  staffInvitesAccepted    StaffInvite[]            @relation("StaffInviteAcceptor")
-  accountSegments         AccountSegment[]         @relation("AccountSegmentAuthor")
-  passwordResets          PasswordReset[]
-  termsAcceptances        TermsAcceptance[]
+  leadDeclines             EnquiryRecipient[]       @relation("LeadDecliner")
+  quotesExtended           Quote[]                  @relation("QuoteExtender")
+  channels                 SeatChannel[]
+  routingCursorFor         Business[]               @relation("RoutingCursor")
+  staffInvitesSent         StaffInvite[]            @relation("StaffInviteSender")
+  staffInvitesAccepted     StaffInvite[]            @relation("StaffInviteAcceptor")
+  accountSegments          AccountSegment[]         @relation("AccountSegmentAuthor")
+  passwordResets           PasswordReset[]
+  termsAcceptances         TermsAcceptance[]
 
   @@index([businessId])
   /// Board 4i. "Who holds a staff role" is a containment test over every account
@@ -575,16 +575,16 @@ model Category {
   sortOrder           Int        @default(0) @map("sort_order")
   createdAt           DateTime   @default(now()) @map("created_at")
 
-  parent            Category?              @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
-  children          Category[]             @relation("CategoryTree")
-  defaultTemplate   SpecTemplate?          @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
-  scopeFamily       ScopeSheetFamily?      @relation(fields: [scopeFamilyId], references: [id], onDelete: SetNull)
+  parent            Category?                @relation("CategoryTree", fields: [parentId], references: [id], onDelete: Restrict)
+  children          Category[]               @relation("CategoryTree")
+  defaultTemplate   SpecTemplate?            @relation("CategoryDefaultTemplate", fields: [defaultTemplateId], references: [id], onDelete: SetNull)
+  scopeFamily       ScopeSheetFamily?        @relation(fields: [scopeFamilyId], references: [id], onDelete: SetNull)
   services          Service[]
   /// Board `1h-s`. The briefs written for work in this trade.
   serviceBriefs     ServiceBrief[]
   templates         SpecTemplateCategory[]
-  primaryFor        Business[]             @relation("BusinessPrimaryCategory")
-  sectorFor         Business[]             @relation("BusinessSector")
+  primaryFor        Business[]               @relation("BusinessPrimaryCategory")
+  sectorFor         Business[]               @relation("BusinessSector")
   businesses        BusinessCategory[]
   products          Product[]
   placements        PlacementSlot[]
@@ -594,16 +594,16 @@ model Category {
   placementWaitlist PlacementWaitlist[]
   stagedListings    StagedListing[]
   activityMappings  LicenceActivityMapping[]
-  guideCtas         Guide[]                @relation("GuideCtaCategory")
+  guideCtas         Guide[]                  @relation("GuideCtaCategory")
   areaPages         AreaPage[]
   emiratePages      EmiratePage[]
   scopeDemand       ScopeDemand[]
   ruleChanges       PublishRuleChange[]
   boosts            ListingBoost[]
-  campaignCtas      Campaign[]             @relation("CampaignCtaCategory")
+  campaignCtas      Campaign[]               @relation("CampaignCtaCategory")
   productAlerts     ProductAlert[]
   curatedLists      CuratedList[]
-  sectorTemplates   StorefrontTemplate[]   @relation("SectorTemplates")
+  sectorTemplates   StorefrontTemplate[]     @relation("SectorTemplates")
   sectorSuggestions SectorSuggestion[]
 
   @@index([parentId])
@@ -2926,11 +2926,11 @@ enum QuoteStatus {
 }
 
 model Enquiry {
-  id             String        @id @default(cuid())
+  id             String  @id @default(cuid())
   /// ENQ-8841
-  ref            String        @unique
-  buyerId        String        @map("buyer_id") @db.Uuid
-  buyerCompanyId String?       @map("buyer_company_id")
+  ref            String  @unique
+  buyerId        String  @map("buyer_id") @db.Uuid
+  buyerCompanyId String? @map("buyer_company_id")
   requirement    String
 
   /// The area the buyer typed, in their own words. Kept, never replaced.
@@ -2941,7 +2941,7 @@ model Enquiry {
   /// seller something real that no `Area` row holds, and overwriting it with a
   /// resolved id — or clearing it when nothing resolves — would throw away the
   /// only description of the site anyone has.
-  deliverToArea  String?       @map("deliver_to_area")
+  deliverToArea String? @map("deliver_to_area")
 
   /// The `Area` row that text resolves to, when it resolves to one at all.
   ///
@@ -2960,7 +2960,7 @@ model Enquiry {
   /// enquiry that named Al Quoz would silently become one that named nowhere,
   /// on a record a seller has already quoted against. Removing an area a buyer
   /// has used is a decision for staff to make explicitly.
-  areaId         String?       @map("area_id")
+  areaId      String?       @map("area_id")
   /// Where the goods are going, as the buyer picked it on the composer.
   ///
   /// Board `3l`'s fourth panel. The RFQ form has always collected this and
@@ -2974,10 +2974,10 @@ model Enquiry {
   /// offered for this panel was a country guessed from the buyer's IP, which is
   /// a claim rather than a measurement — and a directory whose only asset is
   /// that its numbers are true does not guess where a customer is.
-  emirate        Emirate?
-  neededBy       DateTime?     @map("needed_by")
-  termsWanted    PaymentTerms? @map("terms_wanted")
-  closesAt       DateTime      @map("closes_at")
+  emirate     Emirate?
+  neededBy    DateTime?     @map("needed_by")
+  termsWanted PaymentTerms? @map("terms_wanted")
+  closesAt    DateTime      @map("closes_at")
   /// How big the job is, in the buyer's own words — decision D7, 9 Sep 2026.
   ///
   /// One free-text field, never a controlled set per subcategory: *AED 20–50m
@@ -2985,7 +2985,7 @@ model Enquiry {
   /// structured version is a second dictionary for ops to own, and there is no
   /// service enquiry yet to learn its shape from. Null on every goods enquiry,
   /// where the lines carry the size.
-  scale          String?
+  scale       String?
 
   /// Board 1i: editing a requirement creates a revision, never a silent edit.
   ///
@@ -3042,6 +3042,7 @@ model Enquiry {
   /// Board `1h-s`. Present on an enquiry for work, absent on one for things —
   /// and its presence is the whole of what makes an enquiry a brief.
   serviceBrief   ServiceBrief?
+  area           Area?              @relation(fields: [areaId], references: [id], onDelete: Restrict)
 
   @@index([buyerId])
   @@index([closesAt])
@@ -3055,8 +3056,6 @@ model Enquiry {
   /// both of these columns together and ran as a sequential scan over every
   /// enquiry on the platform, on a page a seller opens to find two names.
   @@index([contactReleasedToBusinessId, contactReleasedAt])
-  area           Area?              @relation(fields: [areaId], references: [id], onDelete: Restrict)
-
   @@index([areaId])
   @@map("enquiry")
 }
@@ -3695,12 +3694,12 @@ model LicenceImportRun {
   belowFloorCount  Int             @default(0) @map("below_floor_count")
   createdAt        DateTime        @default(now()) @map("created_at")
 
-  actor        User            @relation("IngestActor", fields: [actorId], references: [id], onDelete: Restrict)
-  decidedBy    User?           @relation("IngestDecider", fields: [decidedById], references: [id], onDelete: Restrict)
-  rolledBackBy User?           @relation("IngestRollbackActor", fields: [rolledBackById], references: [id], onDelete: Restrict)
+  actor        User             @relation("IngestActor", fields: [actorId], references: [id], onDelete: Restrict)
+  decidedBy    User?            @relation("IngestDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  rolledBackBy User?            @relation("IngestRollbackActor", fields: [rolledBackById], references: [id], onDelete: Restrict)
   rows         StagedListing[]
-  pairs        MergeCandidate[]  @relation("CandidateRun")
-  merges       BusinessMerge[]   @relation("MergeRun")
+  pairs        MergeCandidate[] @relation("CandidateRun")
+  merges       BusinessMerge[]  @relation("MergeRun")
   businesses   Business[]
 
   @@index([status, createdAt(sort: Desc)], map: "licence_import_run_status_created_at_idx")
@@ -3804,7 +3803,7 @@ model StagedListing {
   business      Business?        @relation("StagedBusiness", fields: [businessId], references: [id], onDelete: SetNull)
   duplicateOf   Business?        @relation("StagedDuplicateOf", fields: [duplicateOfId], references: [id], onDelete: SetNull)
 
-  pairs          MergeCandidate[] @relation("CandidateRecord")
+  pairs MergeCandidate[] @relation("CandidateRecord")
 
   @@unique([runId, rowNumber], map: "staged_listing_run_row_key")
   @@index([runId, disposition], map: "staged_listing_run_disposition_idx")
@@ -3856,40 +3855,40 @@ enum MergeBand {
 /// existing listing; which side survives a merge is not stored here, because
 /// B1 decides it at the moment of resolution from who has claimed and paid.
 model MergeCandidate {
-  id                String                @id @default(cuid())
-  keepId            String                @map("keep_id")
-  absorbId          String?               @map("absorb_id")
+  id                String              @id @default(cuid())
+  keepId            String              @map("keep_id")
+  absorbId          String?             @map("absorb_id")
   /// Record B, where it came from an import run rather than being a listing.
-  stagedListingId   String?               @map("staged_listing_id")
+  stagedListingId   String?             @map("staged_listing_id")
   /// The run record B came from — the link a run rollback follows (B5).
-  sourceRunId       String?               @map("source_run_id")
+  sourceRunId       String?             @map("source_run_id")
   /// 0..1. Computed, never typed.
   score             Float
   band              MergeBand
   /// Which signals agreed, so the number can be argued with.
   signals           Json
-  state             MergeCandidateState   @default(pending)
-  resolvedAt        DateTime?             @map("resolved_at")
-  resolvedById      String?               @map("resolved_by_id") @db.Uuid
-  resolutionReason  String?               @map("resolution_reason")
+  state             MergeCandidateState @default(pending)
+  resolvedAt        DateTime?           @map("resolved_at")
+  resolvedById      String?             @map("resolved_by_id") @db.Uuid
+  resolutionReason  String?             @map("resolution_reason")
   /// `merged_elsewhere`, `run_rolled_back`, `run_discarded`, `below_floor`.
-  withdrawnReason   String?               @map("withdrawn_reason")
-  dismissedAt       DateTime?             @map("dismissed_at")
-  dismissedById     String?               @map("dismissed_by_id") @db.Uuid
-  dismissReason     String?               @map("dismiss_reason")
-  mergeId           String?               @map("merge_id")
-  batchId           String?               @map("batch_id")
+  withdrawnReason   String?             @map("withdrawn_reason")
+  dismissedAt       DateTime?           @map("dismissed_at")
+  dismissedById     String?             @map("dismissed_by_id") @db.Uuid
+  dismissReason     String?             @map("dismiss_reason")
+  mergeId           String?             @map("merge_id")
+  batchId           String?             @map("batch_id")
   /// What a resolution changed beyond `BusinessMerge`, for its reversal.
   manifest          Json?
-  reversibleUntil   DateTime?             @map("reversible_until")
-  reversedAt        DateTime?             @map("reversed_at")
-  reversedById      String?               @map("reversed_by_id") @db.Uuid
-  reverseReason     String?               @map("reverse_reason")
+  reversibleUntil   DateTime?           @map("reversible_until")
+  reversedAt        DateTime?           @map("reversed_at")
+  reversedById      String?             @map("reversed_by_id") @db.Uuid
+  reverseReason     String?             @map("reverse_reason")
   /// Q2: the owner's say over a branch added to a listing they have claimed.
-  ownerConfirmation OwnerConfirmation     @default(not_needed) @map("owner_confirmation")
-  ownerDecidedAt    DateTime?             @map("owner_decided_at")
-  ownerDecidedById  String?               @map("owner_decided_by_id") @db.Uuid
-  createdAt         DateTime              @default(now()) @map("created_at")
+  ownerConfirmation OwnerConfirmation   @default(not_needed) @map("owner_confirmation")
+  ownerDecidedAt    DateTime?           @map("owner_decided_at")
+  ownerDecidedById  String?             @map("owner_decided_by_id") @db.Uuid
+  createdAt         DateTime            @default(now()) @map("created_at")
 
   keep           Business          @relation("CandidateKeep", fields: [keepId], references: [id], onDelete: Cascade)
   absorb         Business?         @relation("CandidateAbsorb", fields: [absorbId], references: [id], onDelete: Cascade)
@@ -3984,9 +3983,9 @@ model BusinessMerge {
   sourceRunId     String?   @map("source_run_id")
   createdAt       DateTime  @default(now()) @map("created_at")
 
-  keep       Business         @relation("MergeKeep", fields: [keepId], references: [id], onDelete: Restrict)
-  absorb     Business         @relation("MergeAbsorb", fields: [absorbId], references: [id], onDelete: Restrict)
-  actor      User             @relation("MergeActor", fields: [actorId], references: [id], onDelete: Restrict)
+  keep       Business          @relation("MergeKeep", fields: [keepId], references: [id], onDelete: Restrict)
+  absorb     Business          @relation("MergeAbsorb", fields: [absorbId], references: [id], onDelete: Restrict)
+  actor      User              @relation("MergeActor", fields: [actorId], references: [id], onDelete: Restrict)
   candidates MergeCandidate[]
   batch      MergeBatch?       @relation(fields: [batchId], references: [id], onDelete: SetNull)
   sourceRun  LicenceImportRun? @relation("MergeRun", fields: [sourceRunId], references: [id], onDelete: SetNull)
@@ -4262,31 +4261,31 @@ model EnquiryRecipient {
 }
 
 model Quote {
-  id              String      @id @default(cuid())
+  id              String         @id @default(cuid())
   /// QT-8841-R2
-  ref             String      @unique
-  enquiryId       String      @map("enquiry_id")
-  businessId      String      @map("business_id")
-  revision        Int         @default(1)
-  validityDays    Int         @default(14) @map("validity_days")
+  ref             String         @unique
+  enquiryId       String         @map("enquiry_id")
+  businessId      String         @map("business_id")
+  revision        Int            @default(1)
+  validityDays    Int            @default(14) @map("validity_days")
   note            String?
-  status          QuoteStatus @default(draft)
-  lostReason      String?     @map("lost_reason")
-  sentAt          DateTime?   @map("sent_at")
-  readAt          DateTime?   @map("read_at")
-  acceptedAt      DateTime?   @map("accepted_at")
+  status          QuoteStatus    @default(draft)
+  lostReason      String?        @map("lost_reason")
+  sentAt          DateTime?      @map("sent_at")
+  readAt          DateTime?      @map("read_at")
+  acceptedAt      DateTime?      @map("accepted_at")
   /// sentAt + validityDays, materialised so the expiry job and the buyer's
   /// countdown read the same number.
-  expiresAt       DateTime?   @map("expires_at")
+  expiresAt       DateTime?      @map("expires_at")
   /// Set when the buyer revised the requirement after this quote was sent.
   ///
   /// Not a status, because the quote is still live and still acceptable — the
   /// buyer may prefer it to anything the revision brings back. It records that
   /// the thing quoted has changed since, which board 1i renders as
   /// `QUOTED R1 · REQUIREMENT CHANGED SINCE`.
-  supersededAt    DateTime?   @map("superseded_at")
+  supersededAt    DateTime?      @map("superseded_at")
   /// The enquiry revision this quote was priced against.
-  againstRevision Int         @default(1) @map("against_revision")
+  againstRevision Int            @default(1) @map("against_revision")
   /// The payment terms the supplier quoted on — board `7c`'s *payment agreed*.
   ///
   /// The seller's answer to `Enquiry.termsWanted`, which is the buyer's ask:
@@ -4294,14 +4293,14 @@ model Quote {
   /// accepted quote is agreement to what was quoted rather than to what was
   /// asked. Null is *Not stated on the quote*, never a default borrowed from
   /// the enquiry. Settled directly between the two parties — we invoice nobody.
-  paymentTerms    PaymentTerms? @map("payment_terms")
+  paymentTerms    PaymentTerms?  @map("payment_terms")
   /// How the goods reach the buyer, as quoted. See `DeliveryTerms`.
   delivery        DeliveryTerms?
-  createdAt       DateTime    @default(now()) @map("created_at")
+  createdAt       DateTime       @default(now()) @map("created_at")
   /// When the draft was last autosaved. A sent quote never moves it — a revision
   /// is a new row rather than an edit — so on everything but a draft it equals
   /// `createdAt`, which is why the backfill could set it to exactly that.
-  updatedAt       DateTime    @updatedAt @map("updated_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
 
   /// How many times the window has been pushed out. Board 3k §5.
   ///
@@ -4889,10 +4888,12 @@ model SubscriptionChange {
   appliedAt   DateTime? @map("applied_at")
   withdrawnAt DateTime? @map("withdrawn_at")
 
-  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  fromPlan    Plan     @relation("ChangeFromPlan", fields: [fromPlanId], references: [id], onDelete: Restrict)
-  toPlan      Plan     @relation("ChangeToPlan", fields: [toPlanId], references: [id], onDelete: Restrict)
-  requestedBy User?    @relation("ChangeRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  business    Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  fromPlan    Plan          @relation("ChangeFromPlan", fields: [fromPlanId], references: [id], onDelete: Restrict)
+  toPlan      Plan          @relation("ChangeToPlan", fields: [toPlanId], references: [id], onDelete: Restrict)
+  requestedBy User?         @relation("ChangeRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  /// The ledger rows this change wrote when it reached its date. Board 4g.
+  movements   MrrMovement[]
 
   @@index([effectiveAt, appliedAt])
   /// The churn read: cancellations by reason over a window, for `4g` and `12d`.
@@ -5170,27 +5171,64 @@ model Subscription {
 /// MRR at any date is the sum of `deltaFils` up to it, and that sum must equal
 /// the live subscription table. A test asserts the two agree.
 model MrrMovement {
-  id           String          @id @default(cuid())
-  businessId   String          @map("business_id")
-  kind         MrrMovementKind
-  fromPlanId   String?         @map("from_plan_id")
-  toPlanId     String?         @map("to_plan_id")
+  id                   String            @id @default(cuid())
+  businessId           String            @map("business_id")
+  kind                 MrrMovementKind
+  fromPlanId           String?           @map("from_plan_id")
+  toPlanId             String?           @map("to_plan_id")
   /// Signed monthly change, in fils. Negative for contraction and churn.
-  deltaFils    Int             @map("delta_fils")
+  deltaFils            Int               @map("delta_fils")
   /// What this account pays a month after the movement. Redundant with the
   /// running sum, and kept because reconciling a ledger against itself is the
   /// only way to find the row that is wrong.
-  mrrAfterFils Int             @map("mrr_after_fils")
-  occurredAt   DateTime        @map("occurred_at")
+  mrrAfterFils         Int               @map("mrr_after_fils")
+  occurredAt           DateTime          @map("occurred_at")
   /// What caused it, in words. "Dunning drop after 14 days", "Cancelled at
   /// period end". Not a reason field in the audit sense — nobody decided this.
-  note         String?
+  note                 String?
+  /// Why it moved, as a value board 4g can group by. Board 4g, and written by
+  /// every caller of `recordMovement`.
+  ///
+  /// `kind` is the direction and this is the cause, and the board needs both: a
+  /// churn row is either a cancellation reaching its date or fourteen days of
+  /// failed payments, which are two lines on the waterfall (B8), and an
+  /// expansion is either an upgrade or a switch back to monthly billing, which
+  /// is not a customer choosing more.
+  ///
+  /// Nullable only because the migration adding it applied before the writers
+  /// that fill it shipped; it backfilled every earlier row. `causeOf` in
+  /// lib/billing/revenue-period.ts reads a null the way that backfill did.
+  cause                MrrMovementCause? @map("cause")
+  /// The scheduled change this movement carried out: a cancellation reaching
+  /// its date, or a downgrade reaching its date.
+  ///
+  /// The cancellation reason lives on that row, so B5's reason counts join
+  /// through this and sum to the cancellations line by construction. Null on a
+  /// movement nobody scheduled, and on a cancellation from before board 11h,
+  /// which was never asked for a reason and reads as *not recorded*.
+  subscriptionChangeId String?           @map("subscription_change_id")
 
-  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business           Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  subscriptionChange SubscriptionChange? @relation(fields: [subscriptionChangeId], references: [id], onDelete: SetNull)
 
   @@index([occurredAt], map: "mrr_movement_occurred_idx")
   @@index([businessId, occurredAt], map: "mrr_movement_business_idx")
+  @@index([subscriptionChangeId], map: "mrr_movement_subscription_change_idx")
   @@map("mrr_movement")
+}
+
+/// Why an MRR movement happened. See `MrrMovement.cause`.
+enum MrrMovementCause {
+  /// A signup, an upgrade or a downgrade — immediate or scheduled.
+  plan_change
+  /// Monthly to annual or back, on the same plan.
+  term_change
+  /// A cancellation reaching the end of the period it was paid for.
+  cancellation
+  /// The D14 drop to Free after failed payments.
+  dunning_drop
+
+  @@map("mrr_movement_cause")
 }
 
 enum MrrMovementKind {
@@ -5251,13 +5289,13 @@ model RankingWeights {
   /// `Category.tradeKind` at query time — never from a business-level flag.
   kind             TradeKind @unique(map: "ranking_weights_kind_key") @default(goods)
   relevance        Int
-  verificationTier Int    @map("verification_tier")
-  responseTime     Int    @map("response_time")
-  specCompleteness Int    @map("spec_completeness")
+  verificationTier Int       @map("verification_tier")
+  responseTime     Int       @map("response_time")
+  specCompleteness Int       @map("spec_completeness")
   distance         Int
   /// Deliberately the smallest. A directory that sells its way to the top is a
   /// directory nobody comes back to.
-  planTier         Int    @map("plan_tier")
+  planTier         Int       @map("plan_tier")
 
   /// What `relevance` means on a page with no query — board 6a §Ranking.
   ///
@@ -5732,27 +5770,27 @@ enum InvoiceEventKind {
 /// Write it in the service layer. A mutation that can reach the database
 /// without an audit row is a bug, and the suite proves it cannot.
 model AuditEvent {
-  id        String   @id @default(cuid())
-  actorId   String   @map("actor_id") @db.Uuid
+  id          String   @id @default(cuid())
+  actorId     String   @map("actor_id") @db.Uuid
   /// tier_change | review_removed | credit_issued | suspend | merge | boost |
   /// view_as | report_resolved | queue_decided | visit_recorded |
   /// taxonomy_changed | staff_changed
-  action    String
+  action      String
   /// Entity type and id, e.g. `Business:clx123`.
-  subject   String
+  subject     String
   /// REQUIRED. Not nullable, by design, in the schema and in the service layer.
-  reason    String
-  before    Json?
-  after     Json?
+  reason      String
+  before      Json?
+  after       Json?
   /// Board 4i `B4`. How many things one decision touched, where it touched more
   /// than its subject — 8,412 products under a republished template, 64 pairs in
   /// a bulk merge. Null for a decision about one thing, never a zero.
-  blastRadius Int?    @map("blast_radius")
+  blastRadius Int?     @map("blast_radius")
   /// What `blastRadius` counts: `products`, `listings`, `pairs`… A number with no
   /// noun is a number nobody can argue with. Set exactly when `blastRadius` is,
   /// by CHECK constraint.
-  blastUnit   String? @map("blast_unit")
-  createdAt DateTime @default(now()) @map("created_at")
+  blastUnit   String?  @map("blast_unit")
+  createdAt   DateTime @default(now()) @map("created_at")
 
   actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)
 
@@ -6111,8 +6149,8 @@ model CategoryRankDay {
 /// milliseconds, a filled ratio — because *"rose from 4h to 31h"* is a sentence
 /// about the measurement and not about its normalised 0..1 form.
 model ListingFactorDay {
-  businessId  String   @map("business_id")
-  day         DateTime @map("day") @db.Date
+  businessId  String    @map("business_id")
+  day         DateTime  @map("day") @db.Date
   /// `{ relevance, verificationTier, responseTime, specCompleteness, distance,
   /// planTier }`, each 0..1 as `scoreRow` normalises them. Typed as
   /// `FactorVector` in `lib/analytics/factors.ts`.
@@ -6133,7 +6171,7 @@ model ListingFactorDay {
   vector      TradeKind @default(goods)
   /// Points from a live `ListingBoost`. Added after the weighted sum, so it is
   /// its own number here too — state 10 reads it to say a position was bought.
-  boostPoints Int      @default(0) @map("boost_points")
+  boostPoints Int       @default(0) @map("boost_points")
 
   business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
 
@@ -7662,39 +7700,39 @@ enum ClosureReversal {
 /// Only its SHA-256 is stored. The link in the email carries the token itself,
 /// and a database read must not be enough to reopen somebody's listing.
 model BusinessClosure {
-  id            String           @id @default(cuid())
-  businessId    String           @map("business_id")
-  initiator     ClosureInitiator
+  id                String           @id @default(cuid())
+  businessId        String           @map("business_id")
+  initiator         ClosureInitiator
   /// The acting user. The owner, or the ops lead who gave notice.
-  requestedById String           @map("requested_by_id") @db.Uuid
+  requestedById     String           @map("requested_by_id") @db.Uuid
   /// The owner at the time — who the email goes to and who may reverse from the
   /// dashboard. Null only where a platform closure found no owner seat at all.
-  ownerId       String?          @map("owner_id") @db.Uuid
-  requestedAt   DateTime         @default(now()) @map("requested_at")
+  ownerId           String?          @map("owner_id") @db.Uuid
+  requestedAt       DateTime         @default(now()) @map("requested_at")
   /// When the listing comes down. Equal to `requestedAt` for an owner closure;
   /// the end of the notice period for a platform one.
-  effectiveAt   DateTime         @map("effective_at")
+  effectiveAt       DateTime         @map("effective_at")
   /// When it actually came down. Null while a platform notice is still running.
-  appliedAt     DateTime?        @map("applied_at")
+  appliedAt         DateTime?        @map("applied_at")
   /// The last moment it can be reversed. `effectiveAt` plus the cooling-off
   /// window, fixed at request so the date the email promised cannot move.
-  finalAt       DateTime         @map("final_at")
-  reversedAt    DateTime?        @map("reversed_at")
-  reversedById  String?          @map("reversed_by_id") @db.Uuid
-  reversedVia   ClosureReversal? @map("reversed_via")
-  finalisedAt   DateTime?        @map("finalised_at")
+  finalAt           DateTime         @map("final_at")
+  reversedAt        DateTime?        @map("reversed_at")
+  reversedById      String?          @map("reversed_by_id") @db.Uuid
+  reversedVia       ClosureReversal? @map("reversed_via")
+  finalisedAt       DateTime?        @map("finalised_at")
   /// SHA-256 of the reversal token, hex.
-  tokenHash     String           @unique @map("token_hash")
+  tokenHash         String           @unique @map("token_hash")
   /// What a reversal restores. Typed as `ClosureSnapshot` in lib/closure.
-  snapshot      Json             @default("{}")
+  snapshot          Json             @default("{}")
   /// Set when the email carrying the reversal link was accepted by a carrier.
   /// Null is not "not sent yet" — it is what the confirmation screen reads to
   /// say plainly that it could not be sent and how else to reverse.
-  emailDeliveredAt DateTime?     @map("email_delivered_at")
+  emailDeliveredAt  DateTime?        @map("email_delivered_at")
   /// When the licence and verification documents were hard-deleted, twelve
   /// months after `finalisedAt` — Privacy §07, "12 months after expiry or
   /// removal". Build note `B5`.
-  documentsPurgedAt DateTime?    @map("documents_purged_at")
+  documentsPurgedAt DateTime?        @map("documents_purged_at")
 
   business    Business @relation(fields: [businessId], references: [id], onDelete: Restrict)
   requestedBy User     @relation("ClosureRequestedBy", fields: [requestedById], references: [id], onDelete: Restrict)

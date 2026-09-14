@@ -1,7 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { monthlyValueFils } from "./period";
-import type { MrrKind } from "./mrr";
 
 /**
  * Board 4g — revenue, read.
@@ -26,14 +25,6 @@ import type { MrrKind } from "./mrr";
  */
 
 const COUNTS_AS_MRR = ["active", "past_due"] as const;
-
-export const MRR_KINDS: MrrKind[] = [
-  "new_business",
-  "expansion",
-  "reactivation",
-  "contraction",
-  "churn",
-];
 
 export interface MrrNow {
   /** Monthly recurring revenue, in fils. */
@@ -110,71 +101,15 @@ export async function mrrNow(): Promise<MrrNow> {
   };
 }
 
-export interface Waterfall {
-  from: Date;
-  to: Date;
-  /** MRR at the start of the window, in fils. */
-  openingFils: number;
-  /** One signed total per kind, in fils. */
-  movement: Record<MrrKind, number>;
-  closingFils: number;
-  /** Accounts that went to zero in the window. */
-  churnedAccounts: number;
-  /**
-   * Churned MRR over opening MRR, as a fraction. Null when opening is zero —
-   * a percentage of nothing is not a percentage.
-   */
-  grossChurnRate: number | null;
-  /** Net of everything, over opening. Negative is a contracting month. */
-  netRevenueRetention: number | null;
-}
-
-/**
- * The waterfall for a window.
- *
- * Opening MRR is the running sum of every movement before `from`, which is why
- * the seed backfills: without a movement for each existing subscription the
- * opening balance would be zero and the first month would look like the whole
- * business arrived at once.
- */
-export async function waterfall(from: Date, to: Date): Promise<Waterfall> {
-  const [before, within] = await Promise.all([
-    prisma.mrrMovement.aggregate({
-      where: { occurredAt: { lt: from } },
-      _sum: { deltaFils: true },
-    }),
-    prisma.mrrMovement.groupBy({
-      by: ["kind"],
-      where: { occurredAt: { gte: from, lt: to } },
-      _sum: { deltaFils: true },
-      _count: { _all: true },
-    }),
-  ]);
-
-  const movement = Object.fromEntries(MRR_KINDS.map((kind) => [kind, 0])) as Record<
-    MrrKind,
-    number
-  >;
-  let churnedAccounts = 0;
-  for (const row of within) {
-    movement[row.kind as MrrKind] = row._sum.deltaFils ?? 0;
-    if (row.kind === "churn") churnedAccounts = row._count._all;
-  }
-
-  const openingFils = before._sum.deltaFils ?? 0;
-  const net = MRR_KINDS.reduce((sum, kind) => sum + movement[kind], 0);
-
-  return {
-    from,
-    to,
-    openingFils,
-    movement,
-    closingFils: openingFils + net,
-    churnedAccounts,
-    grossChurnRate: openingFils === 0 ? null : Math.abs(movement.churn) / openingFils,
-    netRevenueRetention: openingFils === 0 ? null : (openingFils + net) / openingFils,
-  };
-}
+/*
+   The twelve-month `waterfall()` that stood here is gone, and with it the one
+   place its ratios were computed. Its net revenue retention was closing over
+   opening — new business included — which is a growth rate wearing a retention
+   label, and exactly the defect board 4g's handoff corrected on the design
+   (104% where the lines made 98.6%). Board 4g reads one Dubai month at a time
+   through `./revenue-board.ts`, and every ratio has one formula, in
+   `./revenue-period.ts`.
+*/
 
 export interface Reconciliation {
   ledgerFils: number;

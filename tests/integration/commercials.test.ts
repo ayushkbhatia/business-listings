@@ -293,6 +293,14 @@ describe("dunning never takes anything away but the plan", () => {
     expect(subscription.dunningStage).toBe("dropped");
     expect(subscription.planId).toBe("free");
 
+    // Board 4g: churn, and labelled a lapse. Only a cancellation carries a
+    // reason, and the revenue board's reasons sum to its cancellations line.
+    const drop = await prisma.mrrMovement.findFirst({
+      where: { businessId, kind: "churn" },
+      select: { cause: true, subscriptionChangeId: true },
+    });
+    expect(drop).toEqual({ cause: "dunning_drop", subscriptionChangeId: null });
+
     const after = await census(businessId);
 
     // The plan moved. Nothing else did.

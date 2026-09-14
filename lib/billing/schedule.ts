@@ -415,6 +415,8 @@ export async function applyDueChanges(now = new Date()): Promise<AppliedChanges>
         afterFils: monthlyValueFils(toPlan, change.toTerm),
         occurredAt: now,
         note: `Scheduled change to ${toPlan.name} reached its date`,
+        cause: "plan_change",
+        subscriptionChangeId: change.id,
       });
 
       /*

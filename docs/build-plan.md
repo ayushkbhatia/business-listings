@@ -430,8 +430,12 @@ The pattern underneath all five: **a sale with no ledger row.**
 
 - [ ] **6.1 `12e`** — five Plan columns including `monthlyPriceAed` are editable by nobody; no
   plan creation; `VAT_RATE` is a module constant; `/admin/dunning` has no controls at all.
-- [ ] **6.2 `4g`** — `mrrNow` groups subscriptions only; a sold placement is neither billed nor
-  counted. The subscription list fetches six fields including the slug and maps none.
+- [x] **6.2 `4g`** — one Dubai month at a time: five figures that print their formulas, a
+  waterfall that reconciles with cancellations and lapses as separate lines, reasons that sum to
+  the cancellations line, the reply-rate cross-reference measured at the moment each seller
+  asked, revenue by licence emirate, and a finance export. `mrr_movement` gained a cause and a
+  pointer to the change it carried out. Placement is reported beside MRR at list price, pro rata,
+  never inside it. The subscription list's unmapped fields are untouched and still owed.
 - [ ] **6.3 `11e`** — build the sale D2 defines: plan gate, billing line, ender on cancel and
   downgrade, waitlist writer, the emirate dimension.
 - [ ] **6.4 `4h`** — the off-platform panel has no control and no outcome path. Four of seven
@@ -523,7 +527,7 @@ the only large piece and the only one selling something it does not deliver.
 | `10a` | Subcategory page | partial ↓ | export only | Two definitions of "suppliers in this trade" render on one page. | 5.2 |
 | `13c` | Report a listing | not started | medium | The admin queue is built; both live entry points go to the verification policy. | 9.1 |
 | `4h` | Reports, flags & disputes | partial | medium | The off-platform panel has no control and no outcome path. | 6.4 |
-| `4g` | Subscriptions & revenue | partial | small | Placement revenue is reported nowhere; a sold slot is neither billed nor counted. | 6.2 |
+| `4g` | Subscriptions & revenue | built | small | One Dubai month from the ledger; every ratio prints its formula, NRR excludes new business, placement stays out of MRR. | 6.2 |
 | `11e` | Sponsored placement | scaffold ↓ | medium | A slot is created at 450 AED with no invoice, no charge, no ledger row — and no plan gate. | 6.3 |
 | `11i` | Close account | scaffold | large | Terms and privacy publish a closure promise and eight retention windows; nothing implements either. | 6.5 |
 | `7a` | Auth — four states | built | 14 Sep 2026 | Password sign-in, reset grants, sign-up fallback, suspension writer. | 3.1 |

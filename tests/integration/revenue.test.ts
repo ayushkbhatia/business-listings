@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { applyEndedCancellations, changePlan } from "@/lib/billing/service";
 import { scheduleCancellation } from "@/lib/billing/cancellation";
 import type { Actor } from "@/lib/auth/roles";
-import { mrrByMonth, mrrNow, reconcile, waterfall, MRR_KINDS } from "@/lib/billing/revenue";
+import { mrrByMonth, mrrNow, reconcile } from "@/lib/billing/revenue";
 import { classify } from "@/lib/billing/mrr";
 import { monthlyValueFils } from "@/lib/billing/period";
 import { exportFilename, toCsv, vatReturn } from "@/lib/billing/vat";
@@ -92,6 +92,8 @@ describe("every writer records, and the four are the whole list", () => {
     expect(afterSignup).toHaveLength(1);
     expect(afterSignup[0]!.kind).toBe("new_business");
     expect(afterSignup[0]!.mrrAfterFils).toBe(34_900);
+    // Board 4g: every writer says why, not only which way.
+    expect(afterSignup[0]!.cause).toBe("plan_change");
 
     const upgrade = await changePlan(actor, businessId, "pro");
     expect(upgrade.ok).toBe(true);
@@ -127,6 +129,15 @@ describe("every writer records, and the four are the whole list", () => {
     expect(all).toHaveLength(3);
     expect(all[2]!.kind).toBe("churn");
     expect(all[2]!.mrrAfterFils).toBe(0);
+    // A cancellation, pointing at the request that carries the reason — which
+    // is how board 4g's reasons sum to its cancellations line.
+    expect(all[2]!.cause).toBe("cancellation");
+    expect(all[2]!.subscriptionChangeId).not.toBeNull();
+    const request = await prisma.subscriptionChange.findUniqueOrThrow({
+      where: { id: all[2]!.subscriptionChangeId! },
+      select: { kind: true, cancelReason: true },
+    });
+    expect(request).toEqual({ kind: "cancellation", cancelReason: "not_enough_enquiries" });
 
     // The account's ledger nets to nothing, and it pays nothing.
     expect(all.reduce((sum, row) => sum + row.deltaFils, 0)).toBe(0);
@@ -260,51 +271,13 @@ describe("MRR, from the ledger and from the table", () => {
   });
 });
 
-describe("the waterfall", () => {
-  it("closes where opening plus movement lands", async () => {
-    const to = new Date();
-    const from = new Date(to.getTime() - 365 * 86_400_000);
-    const result = await waterfall(from, to);
-
-    const net = MRR_KINDS.reduce((sum, kind) => sum + result.movement[kind], 0);
-    expect(result.closingFils).toBe(result.openingFils + net);
-  });
-
-  it("has churn as a negative and expansion as a positive", async () => {
-    const to = new Date();
-    const from = new Date(to.getTime() - 900 * 86_400_000);
-    const result = await waterfall(from, to);
-
-    expect(result.movement.churn).toBeLessThanOrEqual(0);
-    expect(result.movement.contraction).toBeLessThanOrEqual(0);
-    expect(result.movement.new_business).toBeGreaterThanOrEqual(0);
-    expect(result.movement.expansion).toBeGreaterThanOrEqual(0);
-  });
-
-  it("starts from nothing when the window covers everything", async () => {
-    const from = new Date("2000-01-01");
-    const to = new Date(Date.now() + 86_400_000);
-    const result = await waterfall(from, to);
-    // Bounded to the same window. Another file in this suite dates movements
-    // into the future on purpose — it runs the dunning clock forward fifteen
-    // days — and an unbounded sum would not be the same question.
-    const ledger = await prisma.mrrMovement.aggregate({
-      where: { occurredAt: { gte: from, lt: to } },
-      _sum: { deltaFils: true },
-    });
-    expect(result.openingFils).toBe(0);
-    expect(result.closingFils).toBe(ledger._sum.deltaFils ?? 0);
-  });
-
-  it("refuses to divide by an opening of nothing", async () => {
-    const from = new Date("2000-01-01");
-    const to = new Date("2000-04-01");
-    const result = await waterfall(from, to);
-    expect(result.openingFils).toBe(0);
-    expect(result.grossChurnRate).toBeNull();
-    expect(result.netRevenueRetention).toBeNull();
-  });
-
+/*
+   The twelve-month `waterfall()` and its tests are gone with board 4g. Its NRR
+   included new business, which is the defect the handoff corrected; the month
+   the board reads now, and its reconciliation, are held by
+   `tests/integration/revenue-board.test.ts` and `tests/unit/revenue-period.test.ts`.
+*/
+describe("MRR month by month", () => {
   it("walks the months without losing a fils", async () => {
     const points = await mrrByMonth(24);
     expect(points).toHaveLength(24);

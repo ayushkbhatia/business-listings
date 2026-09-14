@@ -138,6 +138,27 @@ export async function seedAccountHealth(db: Db, now: Date): Promise<void> {
         renewsAt: new Date(now.getTime() + 10 * DAY),
       },
     });
+    /*
+       The signup, in the revenue ledger. Board 4g found these three paying with
+       no movement behind them: the ledger read 3,588 dirhams a month short of
+       the subscription table on every seeded database, and the revenue screen's
+       reconciliation warning was the first page to say so. A paying account
+       that the ledger never saw start is a subscription `changePlan` did not
+       write, which no real one is.
+    */
+    const monthlyFils = fixture.planId === "pro" ? 89_900 : 34_900;
+    await db.mrrMovement.create({
+      data: {
+        businessId: business.id,
+        kind: "new_business",
+        cause: "plan_change",
+        toPlanId: fixture.planId,
+        deltaFils: monthlyFils,
+        mrrAfterFils: monthlyFils,
+        occurredAt: ago(110),
+        note: "Signed up",
+      },
+    });
 
     for (let j = 0; j < fixture.total; j += 1) {
       // Spread through the window, oldest first, every one closed before now.

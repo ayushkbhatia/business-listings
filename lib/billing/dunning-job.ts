@@ -229,6 +229,7 @@ export async function runDunning(now: Date = new Date()): Promise<DunningResult>
           afterFils: 0,
           occurredAt: now,
           note: `Dunning drop after ${SCHEDULE.final} days past due`,
+          cause: "dunning_drop",
         });
 
         /*
