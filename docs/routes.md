@@ -56,6 +56,8 @@ and it is the one that argues back.
 /privacy                                Privacy policy, 12 sections          [13g]  built h7s1
 /cookies                                Cookie policy + 9-cookie register    [13h]  built h7s1
 /cookies/settings                       Consent toggles                       later
+/maintenance                            Scheduled maintenance — 503, Retry-After [13e] built 13e
+                                        served by proxy.ts on every route a window takes down; 404 with no window
 /verification-policy · /review-policy                                        [10j]  built h5s5
 /signin · /signup · /verify · /reset                                          [7a]  built h2s2, rebuilt 7a
 /auth/reset?token=                      Reset link landing (reads, never consumes) [7a]

@@ -64,6 +64,10 @@ tmp/
 # Generated, never committed: a stale copy is a second version of the library.
 /public/maplibre/
 
+# The design tokens the maintenance page links, copied from docs/tokens.css
+# before dev and build for the same reason (board 13e).
+/public/maintenance/tokens.css
+
 # A local preview config: it names a throwaway database and a port, both of
 # which are one machine's business.
 .claude/launch.json

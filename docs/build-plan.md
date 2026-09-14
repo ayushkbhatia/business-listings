@@ -559,9 +559,12 @@ the only large piece and the only one selling something it does not deliver.
 ### Phase 9 · The four that do not exist, and the standing lane — 3 boards + hygiene
 
 - [ ] **9.1 `13c`** — report a listing, from the buyer's side.
-- [ ] **9.2 `13e`** — maintenance, and the 500 that has no board either. No `error.tsx` exists
+- [x] **9.2 `13e`** — maintenance, and the 500 that has no board either. No `error.tsx` exists
   anywhere; draw both in one board. A 503 needs `Retry-After` or a crawler deindexes 2,000 landing
-  pages.
+  pages. *Done 14 Sep 2026:* `proxy.ts` answers a recorded window with a whole document, 503 and
+  `Retry-After`, on exactly the routes of the systems the window marks down (`lib/maintenance`,
+  runbook in `docs/maintenance.md`); `app/error.tsx` and `app/global-error.tsx` carry the
+  unplanned error in the same grammar. Design drew only the maintenance half.
 - [ ] **9.3 `13b`** — reconcile a platform hand-off with a detector that reports sellers for
   off-platform steering before drawing it.
 - [ ] **9.4 Standing: three capabilities the product never consults.** `enquiry.create`,
@@ -628,7 +631,7 @@ the only large piece and the only one selling something it does not deliver.
 | `5f` | The published result | partial ↓ | small | Staff publish against a canvas showing two sections the storefront never renders. | 8.2 |
 | `12h` | Visits, areas, API | scaffold | large | At least two boards. None of the three routes exist. | 7.6 |
 | `10i` | Campaign landing | partial ↓ | export only | The model exists so content avoids a deploy; a second campaign costs one. | 7.4 |
-| `13e` | Scheduled maintenance | not started | medium | No error boundary exists anywhere either. | 9.2 |
+| `13e` | Scheduled maintenance | **built** | 14 Sep 2026 | A 503 the proxy serves per system, a window record in Global Config or the environment, and the unplanned error beside it. | 9.2 |
 | `13i` | Verification & review policy | scaffold ↓ | medium | The published policy names a fourth rung the DB CHECK forbids. | 1.5 |
 | `4a` | Platform overview | partial | small | Twelve of fourteen numbers are honest queries. One queries a tier the ladder cannot reach. | 7.7 |
 
