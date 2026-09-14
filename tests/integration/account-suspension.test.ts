@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { liftAccountSuspension, suspendAccount } from "@/lib/account/suspension";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import type { Actor } from "@/lib/auth/roles";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Board 7a `B7` — suspending a person's account, against a real database.
@@ -36,7 +37,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (madeUsers.length) {
-    await prisma.auditEvent.deleteMany({ where: { subject: { in: madeUsers.map((id) => `User:${id}`) } } });
+    // Append-only since board 4i; test cleanup is the one sanctioned deleter.
+    await purgeAuditRows({ subject: { in: madeUsers.map((id) => `User:${id}`) } });
     await prisma.user.deleteMany({ where: { id: { in: madeUsers } } });
   }
   await prisma.$disconnect();

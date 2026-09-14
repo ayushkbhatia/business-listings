@@ -23,6 +23,7 @@ export const MATRIX_GROUPS = [
       "business.verification_tier.write",
       "claim.resolve",
       "business.suspend",
+      "account.suspend",
       "business.close",
       "business.merge",
     ],
