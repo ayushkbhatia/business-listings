@@ -37,7 +37,7 @@ import {
 } from "../lib/catalogue-import/terms.js";
 import { buildProductSearchText, valueAliases } from "../lib/search/index-text.js";
 import { matchLine } from "../lib/quote/match.js";
-import { measureReplies, windowStart, type RateObservation } from "../lib/metrics/response-time.js";
+import { measureResponseTimesIn } from "../lib/metrics/measure-response-times.js";
 import { monthStart } from "../lib/enquiry/fanout.js";
 import { EXTRA_CATEGORIES } from "./seed-taxonomy.mjs";
 import { EXTRA_SUBCATEGORIES } from "./seed-taxonomy.mjs";
@@ -4024,39 +4024,23 @@ async function deriveProfileStrength(db: Db) {
   }
 }
 
-/** The job's own functions, so the seed and production cannot disagree. */
+/**
+ * The job itself, not a copy of it, so the seed and production cannot disagree.
+ *
+ * The copy that lived here only wrote businesses with rows in the window. A
+ * firm seeded with no enquiries kept whatever its fixture set, and two fixtures
+ * set one: a claimed reply time on a fresh database, and a response-time suite
+ * that passed in CI only because another file ran the real job first.
+ */
 async function deriveResponseTimes(db: Db) {
-  const since = windowStart(NOW);
-  const rows = await db.enquiryRecipient.findMany({
-    where: { createdAt: { gte: since }, business: { claimStatus: "claimed", suspendedAt: null } },
-    select: { businessId: true, createdAt: true, firstReplyAt: true, enquiry: { select: { closesAt: true } } },
-  });
-
-  const byBusiness = new Map<string, RateObservation[]>();
-  for (const row of rows) {
-    const list = byBusiness.get(row.businessId) ?? [];
-    list.push({ deliveredAt: row.createdAt, firstReplyAt: row.firstReplyAt, closesAt: row.enquiry.closesAt });
-    byBusiness.set(row.businessId, list);
-  }
-
-  // Board 4f: the reply rate beside the median, by the job's own function.
-  let measured = 0;
-  let rated = 0;
-  for (const [businessId, observations] of byBusiness) {
-    const next = measureReplies(observations, NOW);
-    await db.business.update({
-      where: { id: businessId },
-      data: {
-        responseTimeMedianMs: next.medianMs,
-        replyRate: next.rate,
-        replySample: next.sample,
-        derivedAt: NOW,
-      },
-    });
-    if (next.medianMs !== null) measured += 1;
-    if (next.rate !== null) rated += 1;
-  }
-  console.log(`   ${measured} of ${byBusiness.size} businesses have a measurable reply time, ${rated} a reply rate`);
+  const { updated, cleared } = await measureResponseTimesIn(db, NOW);
+  const [measured, rated] = await Promise.all([
+    db.business.count({ where: { responseTimeMedianMs: { not: null } } }),
+    db.business.count({ where: { replyRate: { not: null } } }),
+  ]);
+  console.log(
+    `   ${measured} businesses have a measurable reply time, ${rated} a reply rate (${updated} set, ${cleared} cleared)`,
+  );
 }
 
 /**
@@ -7790,7 +7774,11 @@ async function seedServicesFirm(db: Db) {
       languages: ["English", "Arabic"],
       establishedYear: 2009,
       teamSize: "b11_50",
-      responseTimeMedianMs: 3 * 60 * 60 * 1000,
+      /*
+         No reply time. It is measured from recipient rows, this firm has none
+         in the window, and `deriveResponseTimes` would clear a number set here
+         anyway — so the storefront renders its unmeasured state, truthfully.
+      */
     },
     select: { id: true },
   });
@@ -7965,7 +7953,6 @@ async function seedBriefMatchFirms(db: Db) {
     name: string;
     licence: string;
     tier: number;
-    replyHours: number | null;
     coverage: { emirate: "dubai" | "sharjah" | "abu_dhabi" | "ajman"; areaId: string | null }[];
     service: { name: string; slug: string; engagementType: "ongoing_contract" | "call_off" | "one_off_job" };
     primary: boolean;
@@ -7975,7 +7962,6 @@ async function seedBriefMatchFirms(db: Db) {
       name: "Emirates Facilities Group",
       licence: "DED-771204",
       tier: 2,
-      replyHours: 2,
       coverage: [
         { emirate: "dubai", areaId: null },
         { emirate: "sharjah", areaId: null },
@@ -7988,7 +7974,6 @@ async function seedBriefMatchFirms(db: Db) {
       name: "Al Shirawi Facilities",
       licence: "DED-771318",
       tier: 2,
-      replyHours: 5,
       coverage: [{ emirate: "dubai", areaId: null }],
       service: { name: "Chiller call-out", slug: "chiller-call-out", engagementType: "call_off" },
       primary: false,
@@ -7998,7 +7983,6 @@ async function seedBriefMatchFirms(db: Db) {
       name: "Khansaheb Facilities",
       licence: "DED-771455",
       tier: 2,
-      replyHours: null,
       coverage: [{ emirate: "dubai", areaId: area("al-quoz-industrial-1") }],
       service: { name: "Building maintenance", slug: "building-maintenance", engagementType: "ongoing_contract" },
       primary: true,
@@ -8008,7 +7992,6 @@ async function seedBriefMatchFirms(db: Db) {
       name: "Gulf Towers Maintenance",
       licence: "ADDED-330921",
       tier: 2,
-      replyHours: 8,
       coverage: [{ emirate: "abu_dhabi", areaId: null }],
       service: { name: "Tower MEP maintenance", slug: "tower-mep-maintenance", engagementType: "ongoing_contract" },
       primary: true,
@@ -8018,7 +8001,6 @@ async function seedBriefMatchFirms(db: Db) {
       name: "Northern Cooling Services",
       licence: "AJM-118734",
       tier: 2,
-      replyHours: null,
       coverage: [{ emirate: "ajman", areaId: area("ajman-new-industrial-area") }],
       service: { name: "Chiller and AHU servicing", slug: "chiller-and-ahu-servicing", engagementType: "one_off_job" },
       primary: true,
@@ -8028,7 +8010,6 @@ async function seedBriefMatchFirms(db: Db) {
       name: "Sand and Steel Services",
       licence: "DED-771902",
       tier: 0,
-      replyHours: null,
       coverage: [{ emirate: "dubai", areaId: null }],
       service: { name: "Reactive maintenance", slug: "reactive-maintenance", engagementType: "call_off" },
       primary: true,
@@ -8058,7 +8039,6 @@ async function seedBriefMatchFirms(db: Db) {
         planId: "basic",
         sellsKind: "services",
         deliveryModes: ["at_client_site"],
-        responseTimeMedianMs: firm.replyHours === null ? null : firm.replyHours * 3_600_000,
       },
       select: { id: true },
     });
