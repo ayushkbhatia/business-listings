@@ -3,6 +3,7 @@ import { t } from "@/lib/i18n";
 import { mayEditListing } from "@/lib/auth/guards";
 import { getLocationsBoard } from "@/lib/db/queries/locations";
 import { ownerBranches } from "@/lib/dedupe/queue";
+import { branchesTakenDown } from "@/lib/moderation/seller";
 import { formatDate } from "@/lib/format";
 import { LEAD_TIME_CHOICES, isLeadTimeChoice } from "@/lib/locations/coverage";
 import type { Emirate, LocationType } from "@/lib/db/generated/enums";
@@ -17,6 +18,7 @@ import {
   savePin,
   setVisibility,
 } from "./actions";
+import { BranchesTakenDown } from "../_moderation";
 import { AddedBranches } from "./AddedBranches";
 import { LocationsWorkspace } from "./LocationsWorkspace";
 
@@ -66,7 +68,7 @@ const leadLabel = (hours: number) =>
 export default async function LocationsPage() {
   const seat = await requireSellerSeat();
 
-  const [board, areas, badges, added] = await Promise.all([
+  const [board, areas, badges, added, takenDown] = await Promise.all([
     /*
        Every label is resolved here, on the server.
 
@@ -111,6 +113,8 @@ export default async function LocationsPage() {
     getNavBadges(seat.businessId),
     // Board 12b Q2: branches a dedupe decision added, waiting on the owner.
     ownerBranches(seat.businessId),
+    // Board 4b: a branch our team took down for sitting outside the licence.
+    branchesTakenDown(seat.businessId),
   ]);
 
   /*
@@ -179,6 +183,11 @@ export default async function LocationsPage() {
         shown: board.counts.shown,
       })}
     >
+      {takenDown.length > 0 && (
+        <div className="mb-[var(--gutter)]">
+          <BranchesTakenDown branches={takenDown} />
+        </div>
+      )}
       {/* Always mounted, so the sentence about the last decision outlives the list. */}
       <div className="mb-[var(--gutter)] empty:hidden">
         <AddedBranches

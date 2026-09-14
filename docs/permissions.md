@@ -97,9 +97,9 @@ Ops lead has no exemption.
 
 ### Rows this document does not contain
 
-Seven capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
+Eight capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
 row for them, or departs from the row it has. `tests/unit/permission-matrix.test.ts` names all
-seven, so adding an eighth is a deliberate edit rather than a quiet default. The four below are
+eight, so adding a ninth is a deliberate edit rather than a quiet default. The five below are
 the ones with no row at all; `business.verification_tier.write`, `review.dispute` and
 `staff.manage` are explained where the test names them.
 
@@ -108,6 +108,7 @@ the ones with no row at all; `business.verification_tier.write`, `review.dispute
 | `business.merge` | ops lead | A merge rewrites slugs and creates 301s, so it is not reversible the way a removal is. |
 | `question.remove` | ops lead | A product question carries a buyer's published words. Same decision as removing a review, so the same rung — erring **higher**. |
 | `review.hold` | ops lead · moderator | Board 1m's held state, and the only one that errs **lower**. A hold is reversible and a removal is not; putting the reversible pause out of a moderator's reach would push them towards the irreversible control. It writes `review_held` and `review_released` — two actions, because a release logged as a hold hides what happened. |
+| `queue.rules` | ops lead | Board 4b's *Tune auto-check rules*. Switching a check off or moving a threshold changes which submissions bulk approve may act on across the whole queue, so it sits a rung above deciding one — erring **higher**. It writes `queue_rules_tuned`. |
 | `business.close` | ops lead | Board 11i's platform-initiated closure (build note B8): notice for a lapsed licence, withdrawing an open closure, and reopening a final one for a named owner. Closure takes a business out of the directory and ends every seat's session, so it sits with suspension — erring **higher**. It writes `closure_noticed`, `closure_withdrawn` and `closure_reopened`. |
 
 If §07 gains a row for any of these, the row wins and the `source` becomes `stated`.

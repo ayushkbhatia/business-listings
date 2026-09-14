@@ -35,6 +35,15 @@ export type AuditAction =
   | "view_as"
   | "report_resolved"
   | "queue_decided"
+  /*
+     Board 4b. Asking a seller for a document and handing a submission to a
+     colleague are queue decisions too, and the log has to say which happened —
+     neither approves or rejects anything, so filing them under `queue_decided`
+     would read as a decision nobody made.
+  */
+  | "queue_docs_requested"
+  | "queue_reassigned"
+  | "queue_rules_tuned"
   | "taxonomy_changed"
   | "staff_changed"
   | "claim_resolved"
@@ -88,6 +97,7 @@ export const ACTION_FOR_CAPABILITY = {
   "question.remove": "question_removed",
   "report.resolve": "report_resolved",
   "queue.decide": "queue_decided",
+  "queue.rules": "queue_rules_tuned",
   "subscription.credit": "credit_issued",
   "placement.boost": "boost",
   "taxonomy.write": "taxonomy_changed",
@@ -152,6 +162,7 @@ export const PAIRED_ACTIONS = {
   */
   "report.resolve": ["report_resolved", "review_dispute_resolved", "incentive_logged"],
   "business.close": ["closure_noticed", "closure_withdrawn", "closure_reopened"],
+  "queue.decide": ["queue_decided", "queue_docs_requested", "queue_reassigned"],
   "business.merge": [
     "merge",
     "pair_merged",

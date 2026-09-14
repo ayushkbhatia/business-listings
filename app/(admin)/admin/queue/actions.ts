@@ -4,6 +4,18 @@ import { revalidatePath } from "next/cache";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import { requireStaff } from "@/lib/auth/staff";
 import { approveChange, rejectChange, type DecisionResult } from "@/lib/moderation/service";
+import {
+  approveRef,
+  bulkApprove,
+  bulkAssign,
+  bulkReject,
+  bulkRequestDocuments,
+  rejectRef,
+  requestDocumentsRef,
+  type BulkOutcome,
+  type DecisionError,
+} from "@/lib/moderation/decide";
+import { formatCount, formatList } from "@/lib/format";
 import { resolveConflict } from "@/lib/onboarding/conflict";
 import { approveDocument, rejectDocument } from "@/lib/verification/review";
 import type { ClaimResolution } from "@/lib/db/generated/client";
@@ -20,7 +32,7 @@ import { t } from "@/lib/i18n";
  * keyboard-clearing, and a default would walk straight past all three.
  */
 
-export type ActionResult = { ok: true; message?: string } | { ok: false; error: string };
+export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
 
 /** Turns the two ways a service refuses into something a person can act on. */
 function refused(error: unknown): ActionResult {
@@ -162,4 +174,123 @@ export async function rejectCredential(formData: FormData): Promise<ActionResult
   } catch (error) {
     return refused(error);
   }
+}
+
+/* ── Board 4b: the queue's own decisions ─────────────────────────────────── */
+
+function refreshQueue() {
+  revalidatePath("/admin/queue", "layout");
+  revalidatePath("/admin");
+}
+
+const field = (formData: FormData, name: string) => String(formData.get(name) ?? "");
+const n = (count: number) => ({ count, n: formatCount(count) });
+
+/** "3 skipped — a check did not pass, no longer waiting." Grouped by why. */
+function outcomeMessage(outcome: BulkOutcome): { ok: boolean; message: string } {
+  const parts: string[] = [];
+  if (outcome.done.length > 0) parts.push(t("admin.queue.result.done", n(outcome.done.length)));
+  if (outcome.skipped.length > 0) {
+    const reasons = new Map<DecisionError, number>();
+    for (const skip of outcome.skipped) reasons.set(skip.error, (reasons.get(skip.error) ?? 0) + 1);
+    parts.push(
+      t("admin.queue.result.skipped", {
+        ...n(outcome.skipped.length),
+        reasons: formatList(
+          [...reasons.entries()].map(([error, count]) =>
+            t("admin.queue.skip_count", { reason: t(`admin.queue.skip.${error}`), n: formatCount(count) }),
+          ),
+        ),
+      }),
+    );
+  }
+  return { ok: outcome.done.length > 0 || outcome.skipped.length === 0, message: parts.join(" ") };
+}
+
+/**
+ * One row's decision from the board: the per-row button (B6), with the reason
+ * the dialog asked for. Conflicts never arrive here — they open their own screen.
+ */
+export async function decideRef(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  const op = field(formData, "op");
+  const input = { actor: seat.actor, ref: field(formData, "ref"), reason: field(formData, "reason") };
+  try {
+    const result =
+      op === "approve"
+        ? await approveRef(input)
+        : op === "reject"
+          ? await rejectRef(input)
+          : op === "request_docs"
+            ? await requestDocumentsRef(input)
+            : ({ ok: false, error: "not_found" } as const);
+    if (!result.ok) return { ok: false, error: t(`admin.queue.error.${result.error}`) };
+    refreshQueue();
+    return {
+      ok: true,
+      message:
+        op === "approve"
+          ? t("admin.queue.result.approved")
+          : op === "reject"
+            ? t("admin.queue.rejected")
+            : t("admin.queue.result.docs_requested"),
+    };
+  } catch (error) {
+    return refused(error);
+  }
+}
+
+const BULK_OPS = new Set(["approve", "reject", "request_docs", "reassign"]);
+
+/**
+ * The bulk bar. Every op acts row by row on the server and reports what it did
+ * and what it skipped, grouped by why — B1 for approve, and the same honesty
+ * for the three unrestricted ops, which skip what they cannot act on (a
+ * conflict cannot be rejected in bulk; a branch has no document to ask for).
+ */
+export async function bulkDecide(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  const op = field(formData, "op");
+  if (!BULK_OPS.has(op)) return { ok: false, error: t("admin.queue.error.not_found") };
+  const refs = formData.getAll("ref").map(String).filter(Boolean);
+  const reason = field(formData, "reason");
+  try {
+    const outcome =
+      op === "approve"
+        ? await bulkApprove({ actor: seat.actor, refs, reason })
+        : op === "reject"
+          ? await bulkReject({ actor: seat.actor, refs, reason })
+          : op === "request_docs"
+            ? await bulkRequestDocuments({ actor: seat.actor, refs, reason })
+            : await bulkAssign({ actor: seat.actor, refs, assigneeId: field(formData, "assigneeId") || null, reason });
+    refreshQueue();
+    const { ok, message } = outcomeMessage(outcome);
+    return ok ? { ok: true, message } : { ok: false, error: message };
+  } catch (error) {
+    return refused(error);
+  }
+}
+
+/*
+   The three decisions a review screen offers, bound to their op so a form can
+   hand one to a button. Each reads `ref` and `reason` and goes through the same
+   path as the board's per-row action.
+*/
+function withOp(op: "approve" | "reject" | "request_docs") {
+  return async (formData: FormData): Promise<ActionResult> => {
+    formData.set("op", op);
+    return decideRef(formData);
+  };
+}
+
+export async function approveQueueRef(formData: FormData): Promise<ActionResult> {
+  return withOp("approve")(formData);
+}
+
+export async function rejectQueueRef(formData: FormData): Promise<ActionResult> {
+  return withOp("reject")(formData);
+}
+
+export async function requestDocsQueueRef(formData: FormData): Promise<ActionResult> {
+  return withOp("request_docs")(formData);
 }

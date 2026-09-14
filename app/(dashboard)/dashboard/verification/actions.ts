@@ -1,5 +1,6 @@
 "use server";
 
+import { markDocumentsReceived } from "@/lib/moderation/seller";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db/client";
 import { assertCanEditListing } from "@/lib/auth/guards";
@@ -120,7 +121,11 @@ export async function recordDocument(formData: FormData): Promise<RecordResult> 
     select: { id: true },
   });
 
+  // Board 4b: anything our team asked this seller for now has something to look at.
+  await markDocumentsReceived(seat.businessId);
+
   revalidatePath("/dashboard/verification");
+  revalidatePath("/admin/queue");
   return { ok: true, id: created.id };
 }
 

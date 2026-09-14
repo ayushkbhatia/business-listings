@@ -201,6 +201,12 @@ export interface LicenceScan {
   lowConfidence: boolean;
   /** Set where the upload looks like a different document. Criterion 8. */
   wrongDocument: OtherDocument | null;
+  /**
+   * What the classifier read the file as — `trade_licence`, the other document,
+   * or `unknown` where nothing could be read. Stored on the document (board 4b)
+   * so the reviewer sees the warning the claimant saw.
+   */
+  detectedKind: "trade_licence" | "unknown" | OtherDocument;
 }
 
 /**
@@ -222,6 +228,7 @@ export async function scanLicenceDocument(input: {
     confidence: 0,
     lowConfidence: true,
     wrongDocument: null,
+    detectedKind: "unknown",
   };
 
   try {
@@ -243,11 +250,28 @@ export async function scanLicenceDocument(input: {
       confidence: extraction.confidence,
       lowConfidence: extraction.confidence < LOW_CONFIDENCE,
       wrongDocument: verdict.kind === "other" ? verdict.document : null,
+      detectedKind: verdict.kind === "other" ? verdict.document : verdict.kind,
     };
   } catch (error) {
     console.warn("[verification] could not read an uploaded licence", error);
     return empty;
   }
+}
+
+/**
+ * Keep what the scan found on the document it read. Board 4b.
+ *
+ * The claimant was shown "this looks like a DHA licence" on upload and could
+ * submit anyway, which is right — a guess about somebody's document is not a
+ * refusal. The reviewer is the person the warning was for, and until now it was
+ * thrown away before they saw the claim. Written by the server that read the
+ * file, never taken from the form.
+ */
+export async function recordScan(documentId: string, scan: LicenceScan, now = new Date()): Promise<void> {
+  await prisma.document.updateMany({
+    where: { id: documentId },
+    data: { detectedKind: scan.detectedKind, scannedAt: now },
+  });
 }
 
 /**

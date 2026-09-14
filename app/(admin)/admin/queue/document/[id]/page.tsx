@@ -8,7 +8,10 @@ import { formatDate, formatMonth } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../../_shell";
 import { DecisionForm } from "../../DecisionForm";
-import { approveCredential, rejectCredential } from "../../actions";
+import { approveCredential, rejectCredential, requestDocsQueueRef } from "../../actions";
+import { ChecksPanel } from "../../ChecksPanel";
+import { QueuePosition, type QueueParams } from "../../position";
+import { entryFor, refFor } from "@/lib/moderation/queue";
 
 /**
  * One credential, waiting to go on a storefront.
@@ -27,14 +30,18 @@ export const dynamic = "force-dynamic";
 
 export default async function CredentialReviewPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<QueueParams>;
 }) {
   const seat = await requireStaff();
   if (!can(seat.actor, "queue.decide")) notFound();
 
-  const { id } = await params;
-  const [document, badges] = await Promise.all([
+  const [{ id }, queueParams] = await Promise.all([params, searchParams]);
+  const now = new Date();
+  const queueRef = refFor("credential", id);
+  const [document, entry, badges] = await Promise.all([
     prisma.document.findUnique({
       where: { id },
       select: {
@@ -50,6 +57,7 @@ export default async function CredentialReviewPage({
         business: { select: { displayName: true, slug: true, verificationTier: true } },
       },
     }),
+    entryFor(queueRef, now),
     getAdminNavBadges(seat),
   ]);
   if (!document?.business) notFound();
@@ -61,6 +69,7 @@ export default async function CredentialReviewPage({
       activeHref="/admin/queue"
       eyebrow={t("admin.queue.kind.document")}
       title={document.displayName ?? document.filename}
+      breadcrumb={<QueuePosition actor={seat.actor} subject={queueRef} params={queueParams} />}
       meta={
         <Link
           href={`/b/${document.business.slug}`}
@@ -71,6 +80,8 @@ export default async function CredentialReviewPage({
       }
     >
       <div className="flex flex-col gap-5">
+        <ChecksPanel entry={entry} now={now} />
+
         <Panel title={t("admin.queue.document.scope")}>
           <p className="max-w-prose text-body-sm text-body">
             {t("admin.queue.document.scope_body")}
@@ -118,8 +129,10 @@ export default async function CredentialReviewPage({
           <Panel title={t("admin.review.decision_heading")}>
             <DecisionForm
               requestId={document.id}
+              fields={{ ref: queueRef }}
               approve={approveCredential}
               reject={rejectCredential}
+              requestDocs={requestDocsQueueRef}
               note={t("admin.queue.document.note")}
             />
           </Panel>

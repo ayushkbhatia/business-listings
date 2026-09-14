@@ -11,6 +11,7 @@ import { Position } from "./_sections/Position";
 import { Ranking } from "./_sections/Ranking";
 import { Ingest } from "./_sections/Ingest";
 import { Dedupe } from "./_sections/Dedupe";
+import { ApprovalQueueGallery } from "./_sections/ApprovalQueue";
 import { Reviews } from "./_sections/Reviews";
 import { CloseAccountGallery } from "./_sections/CloseAccount";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
@@ -181,6 +182,8 @@ const UNLISTED = [
   "proposal-reply",
   // Board `1n-s`: proposals compared, nothing ranked.
   "proposal-comparison",
+  // Board `4b`: the approval queue's rows and its bounded bulk bar.
+  "approval-queue",
 ] as const;
 
 export default function Gallery() {
@@ -261,6 +264,7 @@ export default function Gallery() {
       <Ranking />
       <Ingest />
       <Dedupe />
+      <ApprovalQueueGallery />
       <Billing />
 
       <Reviews />

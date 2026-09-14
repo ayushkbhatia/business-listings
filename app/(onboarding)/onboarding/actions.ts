@@ -6,10 +6,10 @@ import { prisma } from "@/lib/db/client";
 import { createClient } from "@/lib/supabase/server";
 import { getActor } from "@/lib/auth/session";
 import { checkThrottle, recordAttempt } from "@/lib/auth/attempts";
-import { submitClaim, type ClaimantRole } from "@/lib/onboarding/claim";
+import { submitClaim, withdrawClaim, type ClaimantRole } from "@/lib/onboarding/claim";
 import { clearDraft, readDraft, saveDraft, type VerifyDraft } from "@/lib/onboarding/draft";
 import { goLive } from "@/lib/onboarding/service";
-import { isClaimantRole, scanLicenceDocument, type LicenceScan } from "@/lib/onboarding/verify";
+import { isClaimantRole, recordScan, scanLicenceDocument, type LicenceScan } from "@/lib/onboarding/verify";
 import { normaliseLicenceNumber } from "@/lib/verification/licence/number";
 import {
   checkDocument,
@@ -131,6 +131,20 @@ export async function claimListing(formData: FormData): Promise<ClaimActionResul
   return { ok: true, contested: result.contested };
 }
 
+/**
+ * Board 4b. The reviewer asked for a different document; the claimant takes the
+ * claim back and the form opens again for the right one. A form action, so it
+ * works before JavaScript does.
+ */
+export async function withdrawClaimToResend(formData: FormData): Promise<void> {
+  const actor = await getActor();
+  if (!actor) return;
+  const businessId = String(formData.get("businessId") ?? "");
+  if (!businessId) return;
+  await withdrawClaim(actor, businessId, t("verify.withdrawn_reason"));
+  revalidatePath("/onboarding/verify");
+}
+
 /** `dd/mm/yyyy` arrives from a date input as `yyyy-mm-dd`, or not at all. */
 function dateField(
   formData: FormData,
@@ -167,14 +181,14 @@ export async function scanLicence(formData: FormData): Promise<ScanResult> {
   });
   if (!document?.business) return { ok: false, error: t("verify.gone") };
 
-  return {
-    ok: true,
-    scan: await scanLicenceDocument({
-      storagePath: document.storagePath,
-      mimeType: document.mimeType,
-      authority: document.business.licenceAuthority,
-    }),
-  };
+  const scan = await scanLicenceDocument({
+    storagePath: document.storagePath,
+    mimeType: document.mimeType,
+    authority: document.business.licenceAuthority,
+  });
+  // Board 4b: the verdict travels with the file to the reviewer.
+  await recordScan(documentId, scan);
+  return { ok: true, scan };
 }
 
 export type SaveExitResult =

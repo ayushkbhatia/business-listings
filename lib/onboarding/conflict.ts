@@ -392,11 +392,31 @@ export async function resolveConflict(input: ResolveInput): Promise<ResolveResul
           }
         }
 
-        // Both submissions decided, always, whichever way it went.
+        /*
+           Both submissions decided, always, whichever way it went. `status`
+           keeps describing the listing; `outcome` (board 4b) says which way the
+           decision went for each claimant — the loser of an award was rejected,
+           and a split or a merge granted both.
+        */
+        const lost =
+          input.resolution === "award_to_a"
+            ? conflict.submissionBId
+            : input.resolution === "award_to_b"
+              ? conflict.submissionAId
+              : null;
         await tx.claimSubmission.updateMany({
           where: { id: { in: [conflict.submissionAId, conflict.submissionBId] } },
-          data: { status: "claimed", decidedAt: now, decisionReason: input.reason },
+          data: {
+            status: "claimed",
+            outcome: "approved",
+            decidedAt: now,
+            decisionReason: input.reason,
+            decidedById: input.actor.id,
+          },
         });
+        if (lost) {
+          await tx.claimSubmission.update({ where: { id: lost }, data: { outcome: "rejected" } });
+        }
 
         await tx.claimConflict.update({
           where: { id: conflict.id },

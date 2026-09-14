@@ -128,6 +128,11 @@ model User {
   candidatesOwnerDecided  MergeCandidate[]         @relation("CandidateOwnerDecidedBy")
   mergeBatches            MergeBatch[]             @relation("MergeBatchActor")
   mergeBatchesReversed    MergeBatch[]             @relation("MergeBatchReverser")
+  claimsDecided           ClaimSubmission[]        @relation("ClaimDecidedBy")
+  queueItemsAssigned      QueueItem[]              @relation("QueueItemAssignee")
+  queueItemsAssignedBy    QueueItem[]              @relation("QueueItemAssigner")
+  queueItemsDocsRequested QueueItem[]              @relation("QueueItemDocsRequester")
+  queueItemsDecided       QueueItem[]              @relation("QueueItemDecider")
   templateVersions        TemplateVersion[]
   specRevisions           SellerTemplateRevision[] @relation("TemplateRevisionAuthor")
   boostsCreated           ListingBoost[]
@@ -1071,6 +1076,7 @@ model Business {
   mergedInto             Business?                @relation("BusinessMergedInto", fields: [mergedIntoId], references: [id], onDelete: SetNull)
   absorbed               Business[]               @relation("BusinessMergedInto")
   mergeCandidatesKeep    MergeCandidate[]         @relation("CandidateKeep")
+  queueItems             QueueItem[]
   mergeCandidatesAbsorb  MergeCandidate[]         @relation("CandidateAbsorb")
   mergesKept             BusinessMerge[]          @relation("MergeKeep")
   mergesAbsorbed         BusinessMerge[]          @relation("MergeAbsorb")
@@ -2609,6 +2615,12 @@ model Document {
   /// Written by staff on a decision. Non-negotiable 3 — the audit row carries
   /// the same words, and this is the copy the seller reads on the row.
   reviewReason String?   @map("review_reason")
+  /// Board 4b. What the classifier read an uploaded licence as, stored by the
+  /// server that read it — `trade_licence`, `unknown`, or the other document it
+  /// looked like. The claimant was shown this on upload; the reviewer now sees
+  /// it too. Null where the file was never scanned.
+  detectedKind String?   @map("detected_kind")
+  scannedAt    DateTime? @map("scanned_at")
 
   businessId String? @map("business_id")
   enquiryId  String? @map("enquiry_id")
@@ -3321,8 +3333,14 @@ model ClaimSubmission {
   /// 0..1, from the extractor. Null where nothing was extracted.
   ocrConfidence    Float?    @map("ocr_confidence")
 
+  /// Board 4b. Which way the decision went. `status` describes the listing and
+  /// could not: an award wrote `claimed` onto the losing submission too.
+  outcome     ClaimOutcome? @map("outcome")
+  decidedById String?       @map("decided_by_id") @db.Uuid
+
   business     Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
   claimant     User            @relation("ClaimClaimant", fields: [claimantId], references: [id], onDelete: Cascade)
+  decidedBy    User?           @relation("ClaimDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
   document     Document?       @relation(fields: [documentId], references: [id], onDelete: Restrict)
   conflictsAsA ClaimConflict[] @relation("ConflictA")
   conflictsAsB ClaimConflict[] @relation("ConflictB")
@@ -3337,6 +3355,16 @@ enum ClaimRoute {
   phone_callback
 
   @@map("claim_route")
+}
+
+/// Board 4b. What a person decided about a claim.
+enum ClaimOutcome {
+  approved
+  rejected
+  /// The claimant took it back before anybody decided.
+  withdrawn
+
+  @@map("claim_outcome")
 }
 
 /// A half-finished onboarding step, so "Save & exit" is real.
@@ -7917,4 +7945,65 @@ model PlatformSetting {
   updatedBy User? @relation("SettingWriter", fields: [updatedById], references: [id], onDelete: SetNull)
 
   @@map("platform_setting")
+}
+
+/// Board 4b. The kind of submission a queue row is about, and the table it lives in.
+enum QueueSubject {
+  change_request
+  claim
+  conflict
+  credential
+  location
+
+  @@map("queue_subject")
+}
+
+/// Board 4b. The approval queue's own state about one submission.
+///
+/// The submissions themselves stay where they are — a change request, a claim,
+/// a conflict, a credential, a branch. What none of those tables could hold is
+/// who is working one, that a document was asked for and whether it came back,
+/// and a staff decision about a branch published outside the licensed emirate.
+/// Written only when there is something to say, so most submissions have no row.
+///
+/// `allPassed` is deliberately absent (B2): it is computed from the current
+/// rules every time the queue is read, so tuning a rule can never leave a stale
+/// eligibility flag behind for the bulk action to act on.
+model QueueItem {
+  id          String       @id @default(cuid())
+  subjectType QueueSubject @map("subject_type")
+  subjectId   String       @map("subject_id")
+  businessId  String       @map("business_id")
+
+  assigneeId   String?   @map("assignee_id") @db.Uuid
+  assignedAt   DateTime? @map("assigned_at")
+  assignedById String?   @map("assigned_by_id") @db.Uuid
+
+  docsRequestedAt   DateTime? @map("docs_requested_at")
+  docsRequestedById String?   @map("docs_requested_by_id") @db.Uuid
+  /// The words the seller reads. NOT NULL with the request, by CHECK.
+  docsRequestReason String?   @map("docs_request_reason")
+  docsReceivedAt    DateTime? @map("docs_received_at")
+
+  /// A branch review's decision. Every other kind is decided on its own table.
+  decidedAt      DateTime? @map("decided_at")
+  decidedById    String?   @map("decided_by_id") @db.Uuid
+  /// `approved` | `rejected`.
+  decision       String?
+  decisionReason String?   @map("decision_reason")
+  /// The emirate decided on. A branch moved again is a new question.
+  subjectVersion String?   @map("subject_version")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  business        Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  assignee        User?    @relation("QueueItemAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignedBy      User?    @relation("QueueItemAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  docsRequestedBy User?    @relation("QueueItemDocsRequester", fields: [docsRequestedById], references: [id], onDelete: SetNull)
+  decidedBy       User?    @relation("QueueItemDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+
+  @@unique([subjectType, subjectId], map: "queue_item_subject_key")
+  @@index([businessId], map: "queue_item_business_idx")
+  @@map("queue_item")
 }

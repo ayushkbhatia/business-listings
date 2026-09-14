@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { KeyValuePanel, Panel } from "@/components/structure";
 import { Alert, StatusBadge } from "@/components/display";
@@ -10,7 +9,10 @@ import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
 import { DecisionForm } from "../DecisionForm";
-import { approve, reject } from "../actions";
+import { approve, reject, requestDocsQueueRef } from "../actions";
+import { ChecksPanel } from "../ChecksPanel";
+import { QueuePosition, type QueueParams } from "../position";
+import { entryFor, refFor } from "@/lib/moderation/queue";
 
 /**
  * Board 4c — one submission, and the decision.
@@ -35,15 +37,20 @@ export const dynamic = "force-dynamic";
 
 export default async function ReviewSubmissionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<QueueParams>;
 }) {
   const seat = await requireStaff();
   if (!can(seat.actor, "queue.decide")) notFound();
 
-  const { id } = await params;
-  const [submission, badges] = await Promise.all([
+  const [{ id }, queueParams] = await Promise.all([params, searchParams]);
+  const now = new Date();
+  const queueRef = refFor("change_request", id);
+  const [submission, entry, badges] = await Promise.all([
     submissionFor(id),
+    entryFor(queueRef, now),
     getAdminNavBadges(seat),
   ]);
   if (!submission) notFound();
@@ -83,14 +90,7 @@ export default async function ReviewSubmissionPage({
       activeHref="/admin/queue"
       title={submission.business.displayName}
       eyebrow={t("admin.review.eyebrow")}
-      breadcrumb={
-        <Link
-          href="/admin/queue"
-          className="rounded-tag text-caption text-muted underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
-        >
-          {t("admin.review.back")}
-        </Link>
-      }
+      breadcrumb={<QueuePosition actor={seat.actor} subject={queueRef} params={queueParams} />}
       meta={
         <span className="flex flex-wrap items-center gap-3 text-caption text-muted">
           <span>
@@ -113,6 +113,10 @@ export default async function ReviewSubmissionPage({
         </span>
       }
     >
+      <div className="mb-[var(--gutter)]">
+        <ChecksPanel entry={entry} now={now} />
+      </div>
+
       <div className="grid gap-[var(--gutter)] lg:grid-cols-2">
         <Panel title={t("admin.review.change_heading")}>
           <KeyValuePanel
@@ -157,8 +161,10 @@ export default async function ReviewSubmissionPage({
           ) : (
             <DecisionForm
               requestId={submission.id}
+              fields={{ ref: queueRef }}
               approve={approve}
               reject={reject}
+              requestDocs={requestDocsQueueRef}
               {...(nextSlug && nextSlug !== submission.business.slug
                 ? { note: t("admin.review.slug_note", { slug: nextSlug }) }
                 : {})}

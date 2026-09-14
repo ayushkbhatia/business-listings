@@ -143,13 +143,14 @@ test.describe("the console is staff-only", () => {
 });
 
 test.describe("boards 4b, 4d and 4e", () => {
-  test("the queue bands late rows above the rest", async ({ page }) => {
+  test("the queue sorts over SLA first and says how late it is", async ({ page }) => {
     await page.goto("/admin/queue");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Approval queue");
-
-    // Age before volume. The band headings are the ordering.
-    const bands = await page.getByRole("columnheader").allTextContents();
-    expect(bands.join(" ")).toMatch(/service level/i);
+    // Board 4b B9: the order is stated beside the chips, and survives filtering.
+    await expect(page.getByText("Over SLA, then oldest first")).toBeVisible();
+    for (const head of ["Submission", "Type", "Auto-checks", "Waiting"]) {
+      await expect(page.getByRole("columnheader", { name: head, exact: true })).toBeVisible();
+    }
   });
 
   test("the taxonomy says which half of the floor a category failed", async ({ page }) => {

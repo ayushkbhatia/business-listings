@@ -8,6 +8,8 @@ import { getListing } from "@/lib/db/queries/listing";
 import { unpickedPhotos } from "@/lib/listing/photos";
 import { mayEditListing } from "@/lib/auth/guards";
 import { t } from "@/lib/i18n";
+import { documentRequestsFor } from "@/lib/moderation/seller";
+import { DocumentRequests } from "../_moderation";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
 import {
   findListingSectors,
@@ -99,6 +101,8 @@ export default async function ListingPage() {
      than letting somebody discover it by pressing Save.
   */
   const editable = mayEditListing(seat.actor);
+  // Board 4b: a document our team asked for about a pending edit.
+  const requests = await documentRequestsFor(seat.businessId);
 
   return (
     <SellerPage
@@ -108,6 +112,11 @@ export default async function ListingPage() {
       eyebrow={t("listing.eyebrow")}
       title={t("listing.title")}
     >
+      {requests.length > 0 && (
+        <div className="mb-[var(--gutter)]">
+          <DocumentRequests requests={requests} uploadHref="/dashboard/verification" />
+        </div>
+      )}
       <ListingWorkspace
         view={{
           ...view,

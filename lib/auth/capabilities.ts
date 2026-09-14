@@ -108,6 +108,12 @@ export const CAPABILITIES = {
     source: "stated",
     why: "§07 staff table, \"Approve listings & edits\" and \"Reject with reason\". This is the queue handoff 3's ListingChangeRequest fills.",
   },
+  "queue.rules": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "inferred",
+    why: "Board 4b's Tune auto-check rules. Switching a check off or moving a threshold changes which submissions bulk approve may act on across the whole queue, so it is held a rung above deciding one submission: a moderator works the queue, an ops lead sets what the machine is trusted with. Not a row in \u00a707 — flag it if \u00a707 gains one.",
+  },
   "support.view_as": {
     roles: ["staff_moderator", "staff_ops_lead"],
     audited: true,
