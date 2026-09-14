@@ -49,7 +49,7 @@ interface Seat {
   heading: string;
 }
 
-const SEATS: Record<"pro" | "free" | "services" | "opsLead" | "moderator" | "finance", Seat> = {
+const SEATS: Record<"pro" | "free" | "services" | "facilities" | "opsLead" | "moderator" | "finance", Seat> = {
   pro: {
     email: "bl.e2e.seller@gmail.com",
     slug: "al-marwan-industrial-supplies-llc",
@@ -83,6 +83,24 @@ const SEATS: Record<"pro" | "free" | "services" | "opsLead" | "moderator" | "fin
     name: "E2E Services Seller",
     roles: ["seller_owner"],
     state: "tests/e2e/.auth/seller-services.json",
+    landing: "**/dashboard/leads",
+    heading: "Leads",
+  },
+  /*
+   * Board `3j-s`'s seat — a facilities firm that receives briefs.
+   *
+   * Its own seat rather than the services one, for the reason
+   * `playwright-cross-file-races` records: the services seat's specs edit its
+   * scope sheets, and a proposal reads its fee basis from one. Two files on one
+   * seat race; one file per seat does not. `seedProposalReplies` fills in this
+   * firm's Hard FM sheet and sends it the briefs the spec answers.
+   */
+  facilities: {
+    email: "bl.e2e.facilities.seller@gmail.com",
+    slug: "emirates-facilities-group",
+    name: "E2E Facilities Seller",
+    roles: ["seller_owner"],
+    state: "tests/e2e/.auth/seller-facilities.json",
     landing: "**/dashboard/leads",
     heading: "Leads",
   },
@@ -277,6 +295,10 @@ setup("sign in as a seller on Pro", async ({ page }) => {
 
 setup("sign in as a seller who sells work", async ({ page }) => {
   await provision(page, SEATS.services);
+});
+
+setup("sign in as a facilities seller who answers briefs", async ({ page }) => {
+  await provision(page, SEATS.facilities);
 });
 
 setup("sign in as a seller on Free", async ({ page }) => {

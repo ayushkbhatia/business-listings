@@ -7,6 +7,7 @@ import { DEFAULT_VALIDITY_DAYS, VALIDITY_CHOICES } from "@/lib/quote/send-quote"
 import { quoteFence, type QuoteFenceReason } from "./fence";
 import { readQuoteFence } from "./fence-server";
 import { parseDeliveryTerms, parsePaymentTerms } from "./terms";
+import { workEnquiryOf } from "./work-enquiry";
 
 /**
  * Board 3j §5 — "line edits autosave as a draft. Send quote is the only commit."
@@ -64,6 +65,8 @@ export interface SaveDraftInput {
 export type SaveDraftResult =
   | { ok: true; savedAt: Date; lines: number }
   | { ok: false; error: "not_your_enquiry" }
+  /** Board `3j-s`: an enquiry for work is answered by a proposal, never by lines. */
+  | { ok: false; error: "work_enquiry" }
   /** Board `7c`'s fence refused, for the same reason a send would have. */
   | { ok: false; error: "fenced"; reason: QuoteFenceReason; closesAt: Date };
 
@@ -146,6 +149,7 @@ export async function saveDraft(
   if (!fence) return { ok: false, error: "not_your_enquiry" };
   const refusal = quoteFence(fence, new Date());
   if (refusal) return { ok: false, error: "fenced", reason: refusal, closesAt: fence.closesAt };
+  if (await workEnquiryOf(prisma, input.enquiryId)) return { ok: false, error: "work_enquiry" };
 
   const validityDays = VALIDITY_CHOICES.includes(input.validityDays as (typeof VALIDITY_CHOICES)[number])
     ? input.validityDays
@@ -259,6 +263,7 @@ function priceOf(typed: string): string | null {
   }
 }
 
-function draftRef(enquiryId: string, businessId: string, revision: number): string {
+/** Exported for board `3j-s`, whose drafts are the same row with a proposal beside it. */
+export function draftRef(enquiryId: string, businessId: string, revision: number): string {
   return `DRAFT-${enquiryId.slice(-8)}-${businessId.slice(-6)}-R${revision}`;
 }

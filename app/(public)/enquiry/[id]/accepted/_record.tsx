@@ -6,7 +6,9 @@ import type { AcceptedRecord } from "@/lib/enquiry/accepted-record";
 import { windowExpired } from "@/lib/enquiry/accepted-record";
 import { formatAED, formatDate, formatPhone } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { leadTime, totalLabel, windowLine } from "@/lib/enquiry/accepted-record-words";
+import { leadTime, recordSummaryParts, totalLabel, windowLine } from "@/lib/enquiry/accepted-record-words";
+import type { ProposalRecord } from "@/lib/quote/proposal";
+import { feeOnBasis, mobilisationWords, termWords } from "@/lib/quote/proposal-words";
 
 /**
  * Board `7c` — the accepted quote record, rendered.
@@ -62,8 +64,7 @@ export function AcceptedRecordView({
 
   const summary = [
     record.acceptedAt ? t("accepted.summary.accepted", { when: formatDate(record.acceptedAt) }) : null,
-    t("accepted.summary.lines", { count: quote.lines.length }),
-    t("accepted.summary.total", { total: formatAED(quote.totalAed) }),
+    ...recordSummaryParts(record),
   ].filter(Boolean);
 
   return (
@@ -149,7 +150,15 @@ export function AcceptedRecordView({
             </dl>
           </Card>
 
-          {/* ── What was quoted ───────────────────────────────────────────── */}
+          {/* ── What was proposed — board `3j-s` ─────────────────────────────── */}
+          {quote.proposal ? (
+            <ProposalRecordCard
+              proposal={quote.proposal}
+              supplier={supplier.displayName}
+              windowText={windowLine(record, now)}
+              expired={expired}
+            />
+          ) : (
           <Card padded={false}>
             <div className="flex flex-wrap items-baseline justify-between gap-2 px-[var(--card-pad)] pb-3 pt-[var(--card-pad)]">
               <h2 className="text-h3 text-ink">{t("accepted.quoted.title")}</h2>
@@ -169,7 +178,7 @@ export function AcceptedRecordView({
                 {t("accepted.expired_note")}
               </p>
             ) : null}
-            {record.isBrief ? (
+            {record.isBrief && !quote.proposal ? (
               <p className="mx-[var(--card-pad)] mb-3 max-w-[var(--measure-prose)] text-body-sm text-muted">
                 {t("accepted.brief_note")}
               </p>
@@ -276,6 +285,7 @@ export function AcceptedRecordView({
               </div>
             ) : null}
           </Card>
+          )}
 
           {/* ── Where our part ends ───────────────────────────────────────── */}
           <div className="flex flex-col gap-4 rounded-card border border-line bg-paper-sunk p-[var(--card-pad)] md:flex-row md:items-center md:justify-between">
@@ -304,6 +314,116 @@ export function AcceptedRecordView({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Board `3j-s` — the accepted proposal, term by term.
+ *
+ * A description list rather than the quote's table: there are no rows of the
+ * same kind to compare down a column, there is one fee and the terms around it.
+ * Every term renders, stated or not — *Not stated* in grey is information a
+ * buyer holding this record in month four needs. The exclusions sit last and
+ * apart, because they are the line that prevents the argument.
+ */
+function ProposalRecordCard({
+  proposal,
+  supplier,
+  windowText,
+  expired,
+}: {
+  proposal: ProposalRecord;
+  supplier: string;
+  windowText: string;
+  expired: boolean;
+}) {
+  const facts: { key: string; label: string; value: string; muted: boolean; mono?: boolean }[] = [
+    { key: "fee", label: t("accepted.proposal.fee"), value: feeOnBasis(proposal), muted: false, mono: true },
+    { key: "term", label: t("accepted.proposal.term"), value: termWords(proposal.termMonths), muted: proposal.termMonths === null },
+    {
+      key: "mobilisation",
+      label: t("accepted.proposal.mobilisation"),
+      value: mobilisationWords(proposal.mobilisationAed),
+      muted: proposal.mobilisationAed === null,
+    },
+    { key: "service", label: t("accepted.proposal.service"), value: proposal.serviceName, muted: false },
+    {
+      key: "deliverable",
+      label: t("accepted.proposal.deliverable"),
+      value: proposal.deliverable ?? t("accepted.not_stated"),
+      muted: proposal.deliverable === null,
+    },
+    {
+      key: "where",
+      label: t("accepted.proposal.delivered_where"),
+      value: proposal.deliveredWhere ?? t("accepted.not_stated"),
+      muted: proposal.deliveredWhere === null,
+    },
+  ];
+
+  return (
+    <Card padded={false}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2 px-[var(--card-pad)] pb-3 pt-[var(--card-pad)]">
+        <h2 className="text-h3 text-ink">{t("accepted.proposal.title")}</h2>
+        <p
+          className={
+            expired
+              ? "font-mono text-eyebrow uppercase tracking-eyebrow text-warn-ink"
+              : "font-mono text-eyebrow uppercase tracking-eyebrow text-faint"
+          }
+        >
+          {windowText}
+        </p>
+      </div>
+      {expired ? (
+        <p className="mx-[var(--card-pad)] mb-3 max-w-[var(--measure-prose)] text-body-sm text-muted">
+          {t("accepted.expired_note")}
+        </p>
+      ) : null}
+
+      <dl className="grid gap-x-6 gap-y-4 border-t border-line px-[var(--card-pad)] py-4 sm:grid-cols-3">
+        {facts.map((fact) => (
+          <div key={fact.key}>
+            <dt className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">{fact.label}</dt>
+            <dd
+              className={[
+                "mt-1",
+                fact.muted ? "text-body-sm text-muted" : "text-body text-ink",
+                fact.mono ? "font-mono tabular-nums" : "",
+              ].join(" ")}
+            >
+              {fact.value}
+            </dd>
+          </div>
+        ))}
+      </dl>
+      <p className="px-[var(--card-pad)] pb-4 text-caption text-muted">
+        {t("accepted.proposal.fee_note", { supplier })}
+      </p>
+
+      <div className="border-t border-line px-[var(--card-pad)] py-4">
+        <p className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">{t("accepted.proposal.scope")}</p>
+        <p className="mt-1 max-w-[var(--measure-prose)] whitespace-pre-line text-body-sm text-prose">{proposal.scope}</p>
+      </div>
+
+      <div className="rounded-b-card border-t border-warn-line bg-warn-surface px-[var(--card-pad)] py-4">
+        <p className="font-mono text-eyebrow uppercase tracking-eyebrow text-warn-ink">
+          {t("accepted.proposal.excluded")}
+        </p>
+        <p
+          className={
+            proposal.exclusions
+              ? "mt-1 max-w-[var(--measure-prose)] whitespace-pre-line text-body-sm text-warn-ink"
+              : "mt-1 text-body-sm text-warn-ink"
+          }
+        >
+          {proposal.exclusions ?? t("accepted.proposal.excluded_none", { supplier })}
+        </p>
+        <p className="mt-2 max-w-[var(--measure-prose)] text-caption text-warn-ink">
+          {t("accepted.proposal.excluded_note")}
+        </p>
+      </div>
+    </Card>
   );
 }
 

@@ -69,7 +69,12 @@ async function withRecipient(
 
   const recipient = await db.enquiryRecipient.findUnique({
     where: { enquiryId_businessId: { enquiryId, businessId } },
-    select: { state: true, outcome: true, business: { select: { suspendedAt: true } } },
+    select: {
+      state: true,
+      outcome: true,
+      declinedAt: true,
+      business: { select: { suspendedAt: true } },
+    },
   });
   if (!recipient) return null;
 
@@ -78,6 +83,7 @@ async function withRecipient(
     contactReleasedToBusinessId: enquiry.contact_released_to_business_id,
     recipientState: recipient.state,
     outcome: recipient.outcome,
+    declinedBySeller: recipient.declinedAt !== null,
     suspended: recipient.business.suspendedAt !== null,
     closesAt: enquiry.closes_at,
   };

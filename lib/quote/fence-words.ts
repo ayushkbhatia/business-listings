@@ -21,6 +21,8 @@ export function quoteFenceMessage(reason: QuoteFenceReason, closesAt: Date): str
       return t("quote.error.accepted_elsewhere");
     case "declined":
       return t("quote.error.declined");
+    case "declined_by_you":
+      return t("quote.error.declined_by_you");
     case "marked":
       return t("quote.error.marked");
     case "suspended":

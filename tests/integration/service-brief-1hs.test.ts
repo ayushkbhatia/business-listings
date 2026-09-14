@@ -497,6 +497,18 @@ describe("briefFirstReplyMedianMs — measured, or not said", () => {
   it("is null under the floor and the median of first replies above it", async () => {
     const firm = await makeFirm({ coverage: [{ emirate: "dubai", areaId: null }] });
     const baseline = await briefFirstReplyMedianMs();
+    // The samples already measured, read the way the median reads them.
+    const baselineSamples = (
+      await prisma.$queryRaw<{ ms: number }[]>`
+        SELECT EXTRACT(EPOCH FROM (MIN(r.first_reply_at) - e.created_at)) * 1000 AS ms
+        FROM service_brief b
+        JOIN enquiry e ON e.id = b.enquiry_id
+        JOIN enquiry_recipient r ON r.enquiry_id = b.enquiry_id
+        WHERE e.created_at >= now() - interval '90 days'
+        GROUP BY b.enquiry_id, e.created_at
+        HAVING MIN(r.first_reply_at) IS NOT NULL
+      `
+    ).map((row) => Number(row.ms));
     const hour = 3_600_000;
     for (const replyAfter of [hour, 2 * hour, 3 * hour, 4 * hour, 5 * hour]) {
       const created = new Date(Date.now() - 10 * hour);
@@ -514,9 +526,16 @@ describe("briefFirstReplyMedianMs — measured, or not said", () => {
     }
     const median = await briefFirstReplyMedianMs();
     expect(median).not.toBeNull();
-    // Five briefs a test added; the seed has none. With nothing else measured the
-    // median is exactly the third.
-    if (baseline === null) expect(median).toBe(3 * hour);
+    /*
+       Five briefs this test added, and whatever else is measured in the window.
+       The seed has briefs of its own since board `3j-s` answers them, so the
+       expected figure is the median of both sets rather than the third of five.
+    */
+    const others = baselineSamples.filter((ms) => ms >= 0);
+    const all = [...others, hour, 2 * hour, 3 * hour, 4 * hour, 5 * hour].sort((x, y) => x - y);
+    const mid = Math.floor(all.length / 2);
+    const expected = all.length % 2 === 1 ? all[mid]! : (all[mid - 1]! + all[mid]!) / 2;
+    if (baseline === null || others.length > 0) expect(median).toBe(Math.round(expected));
   });
 });
 

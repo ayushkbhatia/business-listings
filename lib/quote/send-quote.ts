@@ -11,6 +11,7 @@ import { quoteFence } from "./fence";
 import { lockQuoteFence, readQuoteFence } from "./fence-server";
 import { quoteFenceMessage } from "./fence-words";
 import { parseDeliveryTerms, parsePaymentTerms } from "./terms";
+import { workEnquiryOf } from "./work-enquiry";
 
 /**
  * Sending a quote — the service.
@@ -96,6 +97,16 @@ export async function sendQuoteForBusiness(
   if (!early) return { ok: false, error: t("quote.error.not_your_enquiry") };
   const earlyRefusal = quoteFence(early, now);
   if (earlyRefusal) return { ok: false, error: quoteFenceMessage(earlyRefusal, early.closesAt) };
+
+  /*
+     Board `3j-s`: an enquiry for work is answered with a proposal — one fee on
+     the scope sheet's basis — and never with priced lines. Until that board a
+     brief went through this composer at quantity one, which put a parts list on
+     work that has none (B2). `sendProposal` is its only writer now.
+  */
+  if (await workEnquiryOf(prisma, input.enquiryId)) {
+    return { ok: false, error: t("quote.error.work_enquiry") };
+  }
 
   if (input.lines.length === 0) {
     return { ok: false, error: t("quote.error.nothing_included") };
@@ -311,7 +322,7 @@ export async function sendQuoteForBusiness(
  * suffix is appended in the rare case two suppliers share a mark on the same
  * enquiry — the ref column is unique and a clash must not lose a quote.
  */
-async function nextQuoteRef(enquiryId: string, businessId: string, revision: number): Promise<string> {
+export async function nextQuoteRef(enquiryId: string, businessId: string, revision: number): Promise<string> {
   const [enquiry, business] = await Promise.all([
     prisma.enquiry.findUniqueOrThrow({ where: { id: enquiryId }, select: { ref: true } }),
     prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { slug: true } }),

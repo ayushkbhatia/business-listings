@@ -8,6 +8,7 @@ import {
   type RecordReview,
 } from "@/lib/enquiry/accepted-record";
 import { extractCommitments } from "@/lib/quote/commitments";
+import { PROPOSAL_RECORD_SELECT, toProposalRecord } from "@/lib/quote/proposal";
 
 /**
  * Board `7c` — read the accepted record for the buyer who accepted it.
@@ -72,10 +73,16 @@ export async function getAcceptedRecord(
             },
           },
           business: { select: { id: true, slug: true, displayName: true } },
+          proposal: { select: PROPOSAL_RECORD_SELECT },
         },
       },
       recipients: {
-        where: { state: "declined" },
+        /*
+           Declined *by this acceptance*. A supplier who declined the enquiry
+           themselves (board `3j-s`) was not declined for the buyer, and
+           *the other 3 were declined for you* would count them as if they were.
+        */
+        where: { state: "declined", declinedAt: null },
         select: { businessId: true },
       },
       review: { select: { createdAt: true, heldAt: true, removedAt: true } },
@@ -172,6 +179,7 @@ export async function getAcceptedRecord(
       expiresAt: quote.expiresAt,
       lines,
       totalAed,
+      proposal: toProposalRecord(quote.proposal),
     },
     supplier: {
       id: quote.business.id,

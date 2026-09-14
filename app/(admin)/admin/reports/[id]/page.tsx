@@ -6,6 +6,7 @@ import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
 import { recordLines } from "@/lib/enquiry/accepted-record";
 import { formatAED, formatDate, formatDateTime } from "@/lib/format";
+import { feeOnBasis, mobilisationWords, termWords } from "@/lib/quote/proposal-words";
 import { t } from "@/lib/i18n";
 import { reportEvidence } from "@/lib/reports/service";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
@@ -128,7 +129,36 @@ export default async function ReportEvidencePage({ params }: { params: Promise<{
               }
             : {})}
         >
-          {quote && priced ? (
+          {quote?.proposal ? (
+            /*
+               Board `3j-s`. A proposal has no lines to tabulate; the trust team
+               reads the fee, the terms, the scope and the exclusions — the list a
+               month-four argument is usually about.
+            */
+            <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+              {[
+                { key: "fee", label: t("accepted.proposal.fee"), value: feeOnBasis(quote.proposal) },
+                { key: "term", label: t("accepted.proposal.term"), value: termWords(quote.proposal.termMonths) },
+                {
+                  key: "mobilisation",
+                  label: t("accepted.proposal.mobilisation"),
+                  value: mobilisationWords(quote.proposal.mobilisationAed),
+                },
+                { key: "service", label: t("accepted.proposal.service"), value: quote.proposal.serviceName },
+                { key: "scope", label: t("accepted.proposal.scope"), value: quote.proposal.scope },
+                {
+                  key: "excluded",
+                  label: t("accepted.proposal.excluded"),
+                  value: quote.proposal.exclusions ?? t("accepted.proposal.excluded_none", { supplier }),
+                },
+              ].map((fact) => (
+                <div key={fact.key} className={fact.key === "scope" || fact.key === "excluded" ? "sm:col-span-2" : ""}>
+                  <dt className="text-caption text-muted">{fact.label}</dt>
+                  <dd className="mt-0.5 whitespace-pre-line text-body-sm text-ink">{fact.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : quote && priced ? (
             <div
               tabIndex={0}
               role="group"

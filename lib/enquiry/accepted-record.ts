@@ -1,4 +1,5 @@
 import type { Commitment } from "@/lib/quote/commitments";
+import type { ProposalRecord } from "@/lib/quote/proposal";
 import { filsToAed, lineTotalFils, quoteTotalFils } from "@/lib/quote/money";
 
 /**
@@ -72,7 +73,11 @@ export interface AcceptedRecord {
   buyerReference: string | null;
   /** Null only on rows written before either stamp existed; the page then omits the date. */
   acceptedAt: Date | null;
-  /** Board `1h-s`: a brief for work. The record renders, and says it is goods-shaped (Q4). */
+  /**
+   * Board `1h-s`: a brief for work. Since `3j-s` a brief is answered with a
+   * proposal and the record renders it; the goods-shaped note is left for a
+   * brief accepted on lines before that board, of which production holds none.
+   */
   isBrief: boolean;
   /** Suppliers declined by this acceptance. Zero on a single-supplier enquiry, and then unsaid. */
   declinedCount: number;
@@ -88,6 +93,16 @@ export interface AcceptedRecord {
     expiresAt: Date | null;
     lines: AcceptedRecordLine[];
     totalAed: string;
+    /**
+     * Board `3j-s`: what was proposed, when the accepted reply is a proposal.
+     *
+     * The handoff's promise, kept: *this travels into the accepted record, so it
+     * is what both sides agreed rather than something said once in a message.*
+     * The fee on its basis, the term, the mobilisation, the scope and the
+     * exclusions — as sent, from a row the database refuses to edit. `lines` is
+     * empty beside it and `totalAed` is `0.00`, and neither is rendered.
+     */
+    proposal: ProposalRecord | null;
   };
   supplier: {
     id: string;

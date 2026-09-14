@@ -2,6 +2,7 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { quoteTotalAed } from "@/lib/quote/money";
 import { ENQUIRY_BRIEF_SELECT, toEnquiryBrief, type EnquiryBrief } from "./enquiry-brief";
+import { PROPOSAL_RECORD_SELECT, toProposalRecord, type ProposalRecord } from "@/lib/quote/proposal";
 
 /**
  * Server-side reads for the buyer's side of an enquiry.
@@ -54,6 +55,11 @@ export interface BuyerQuote {
   totalAed: string;
   maxLeadTimeDays: number | null;
   lines: BuyerQuoteLine[];
+  /**
+   * Board `3j-s`: the proposal, when this reply is one. It has no lines, so
+   * `totalAed` is `0.00` and nothing may render it — every reader branches here.
+   */
+  proposal: ProposalRecord | null;
   business: { id: string; slug: string; displayName: string; verificationTier: number };
 }
 
@@ -150,6 +156,7 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
           businessId: true,
           business: { select: { id: true, slug: true, displayName: true, verificationTier: true } },
           lines: { orderBy: { sortOrder: "asc" } },
+          proposal: { select: PROPOSAL_RECORD_SELECT },
         },
       },
     },
@@ -216,6 +223,7 @@ export async function getBuyerEnquiry(buyerId: string, enquiryId: string): Promi
         unitPrice: l.unitPrice.toString(),
         leadTimeDays: l.leadTimeDays,
       })),
+      proposal: toProposalRecord(q.proposal),
       business: q.business,
     })),
   };

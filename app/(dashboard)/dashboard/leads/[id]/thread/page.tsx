@@ -21,6 +21,8 @@ import {
 import { t } from "@/lib/i18n";
 import { getThread } from "@/lib/messaging/service";
 import { toThreadQuotes } from "@/lib/messaging/thread-view";
+import { feeOnBasis } from "@/lib/quote/proposal-words";
+import { workEnquiryOf } from "@/lib/quote/work-enquiry";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../../../_shell";
 import { FollowUp } from "./FollowUp";
 import { SellerThread } from "./SellerThread";
@@ -46,7 +48,7 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const seat = await requireSellerSeat();
 
-  const [lead, badges, messages, recipient] = await Promise.all([
+  const [lead, badges, messages, recipient, work] = await Promise.all([
     getLeadDetail(seat.businessId, id),
     getNavBadges(seat.businessId),
     getThread(id, seat.businessId),
@@ -65,6 +67,8 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
         },
       },
     }),
+    // Board `3j-s`: work is answered with a proposal, and the way back says so.
+    workEnquiryOf(prisma, id),
   ]);
   if (!lead || !recipient) notFound();
 
@@ -86,6 +90,7 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
       ref: q.ref,
       revision: q.revision,
       lines: q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice })),
+      proposal: q.proposal,
     })),
     (aed) => formatAED(aed),
     {
@@ -93,6 +98,7 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
       up: (amount, percent) => t("thread.delta_up", { amount, percent }),
       same: t("thread.delta_same"),
     },
+    feeOnBasis,
   );
 
   /*
@@ -180,7 +186,13 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
           href={`/dashboard/leads/${lead.enquiryId}`}
           className={buttonClassName({ variant: "secondary", size: "sm" })}
         >
-          {latestQuote ? t("thread.revise_quote") : t("thread.send_quote")}
+          {work
+            ? latestQuote
+              ? t("thread.revise_proposal")
+              : t("thread.write_proposal")
+            : latestQuote
+              ? t("thread.revise_quote")
+              : t("thread.send_quote")}
         </Link>
       }
     >

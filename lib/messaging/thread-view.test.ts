@@ -65,3 +65,39 @@ describe("toThreadQuotes", () => {
     expect(buyer).toEqual(seller);
   });
 });
+
+describe("toThreadQuotes on proposals — board 3j-s", () => {
+  const fee = (p: { feeAed: string; feeBasisLabel: string }) => `AED ${Number(p.feeAed).toLocaleString("en-AE")} · ${p.feeBasisLabel}`;
+  const proposal = (id: string, revision: number, feeAed: string, feeBasis: string, feeBasisLabel: string): QuoteForThread => ({
+    id,
+    ref: `QT-8851-EMIR${revision}`,
+    revision,
+    lines: [],
+    proposal: { feeAed, feeBasis, feeBasisLabel },
+  });
+
+  it("labels a proposal by its fee on its basis, not by a sum of no lines", () => {
+    const views = toThreadQuotes([proposal("p1", 1, "18400.00", "per_month", "Per month")], format, labels, fee);
+    expect(views.get("p1")?.totalLabel).toBe("AED 18,400 · Per month");
+  });
+
+  it("names the change between two revisions on the same basis", () => {
+    const views = toThreadQuotes(
+      [proposal("p1", 1, "18400.00", "per_month", "Per month"), proposal("p2", 2, "17480.00", "per_month", "Per month")],
+      format,
+      labels,
+      fee,
+    );
+    expect(views.get("p2")).toMatchObject({ previousTotalLabel: "AED 18,400 · Per month", direction: "down" });
+  });
+
+  it("names no change across two bases, because there is no unit to subtract in", () => {
+    const views = toThreadQuotes(
+      [proposal("p1", 1, "18400.00", "per_month", "Per month"), proposal("p2", 2, "210000.00", "fixed_fee", "Fixed fee")],
+      format,
+      labels,
+      fee,
+    );
+    expect(views.get("p2")).toEqual({ ref: "QT-8851-EMIR2", revision: 2, totalLabel: "AED 210,000 · Fixed fee" });
+  });
+});

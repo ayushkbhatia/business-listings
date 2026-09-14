@@ -141,6 +141,21 @@ const RECORD_CLAIM_TOKEN = "seed-0000-4000-8000-provisional02";
 const RECORD_TYPICAL_ENQUIRY_ID = "seedenquiryrecord00000001";
 const RECORD_REPORTED_ENQUIRY_ID = "seedenquiryrecord00000002";
 const RECORD_REPORT_ID = "seedreport7cevidence00001";
+/*
+ * Board `3j-s`'s briefs, for a third account-less buyer — the facilities manager
+ * the board draws. Their own buyer again, so no spec counting another buyer's
+ * enquiries moves. Four enquiries, one state each:
+ *
+ *   - `…01` a brief waiting on a proposal from Emirates Facilities Group;
+ *   - `…02` two proposals in, on two different bases, not yet decided;
+ *   - `…03` a proposal accepted, with the other firm's own decline beside it;
+ *   - `…04` a brief the facilities seat declines in the acceptance shard.
+ */
+const PROPOSAL_CLAIM_TOKEN = "seed-0000-4000-8000-provisional03";
+const PROPOSAL_OPEN_ENQUIRY_ID = "seedenquiryproposal000001";
+const PROPOSAL_COMPARE_ENQUIRY_ID = "seedenquiryproposal000002";
+const PROPOSAL_ACCEPTED_ENQUIRY_ID = "seedenquiryproposal000003";
+const PROPOSAL_DECLINE_ENQUIRY_ID = "seedenquiryproposal000004";
 
 /** Deterministic v4-shaped uuids, so seeded users keep their ids between runs. */
 function uuid(n: number): string {
@@ -1032,6 +1047,8 @@ async function main() {
   // Board `1h-s`: the firms a brief is matched against. After the one above
   // and PRNG-free for the same reasons.
   await seedBriefMatchFirms(prisma);
+  // Board `3j-s`: briefs for those firms to answer. After them, and PRNG-free.
+  await seedProposalReplies(prisma);
   await seedSeatsAndChannels(prisma);
   // Board 12a: the importer's four run states. PRNG-free, and it links three
   // existing listings to a run rather than publishing new ones.
@@ -8023,6 +8040,315 @@ async function seedBriefMatchFirms(db: Db) {
   }
 
   console.log(`   ${firms.length} facilities firms, ${firms.filter((f) => f.tier >= 2).length} verified`);
+}
+
+/**
+ * Board `3j-s` — briefs answered with proposals, in every state the screen has.
+ *
+ * Emirates Facilities Group is the board's own firm and the acceptance shard's
+ * facilities seat, so its Hard FM scope sheet is filled in here: the fee basis,
+ * the scope, the deliverable and the exclusions the render carries. Al Shirawi's
+ * call-out sheet is filled on a different basis, so the buyer's comparison has
+ * two units that must not be added together.
+ *
+ * The site is Dubai with the building named, because the seeded area table has
+ * no Business Bay row — and a brief never invents one.
+ *
+ * Everything the buyer accepted is dated before this calendar month, for the
+ * reason `seedAcceptedRecords` gives: `onlyOneSellerAtCap` trims this month's
+ * rows from a capped seller.
+ */
+async function seedProposalReplies(db: Db) {
+  console.log("→ briefs answered with proposals, for board 3j-s");
+
+  const [trade, efg, shirawi] = await Promise.all([
+    db.category.findFirst({ where: { slug: "hard-fm" }, select: { id: true } }),
+    db.business.findUnique({
+      where: { slug: "emirates-facilities-group" },
+      select: { id: true, services: { select: { id: true, name: true } } },
+    }),
+    db.business.findUnique({
+      where: { slug: "al-shirawi-facilities" },
+      select: { id: true, services: { select: { id: true, name: true } } },
+    }),
+  ]);
+  if (!trade || !efg || !shirawi || !efg.services[0] || !shirawi.services[0]) {
+    throw new Error("Board 3j-s fixtures need seedBriefMatchFirms to have run.");
+  }
+  const efgService = efg.services[0];
+  const shirawiService = shirawi.services[0];
+
+  const SCOPE =
+    "Quarterly PPM visits to a written schedule across the building, covering chillers, AHUs, pumps, LV distribution and BMS. 24/7 reactive callout with 4-hour attendance. Named account engineer.";
+  const EXCLUDED =
+    "Major plant replacement, refrigerant gas beyond 5 kg per annum, civil and builder's work, asbestos handling, and works requiring a road closure permit. Spare parts above AED 500 quoted separately before proceeding.";
+
+  await db.service.update({
+    where: { id: efgService.id },
+    data: {
+      feeBasis: "per_month",
+      turnaround: "4-hour attendance on reactive calls",
+      deliverable: "Monthly written report with photographs",
+      scope: SCOPE,
+      excluded: EXCLUDED,
+    },
+  });
+  await db.service.update({
+    where: { id: shirawiService.id },
+    data: {
+      feeBasis: "per_visit",
+      turnaround: "Same day for a chiller down",
+      deliverable: "Visit report with readings before and after",
+      scope: "Call-out attendance to chillers and AHUs, fault finding and first-fix repair.",
+      excluded: "Parts, refrigerant and compressor replacement, quoted on the visit.",
+    },
+  });
+
+  const buyer = await db.user.create({
+    data: {
+      id: uuid(950),
+      phone: "+971503318824",
+      fullName: "Mohammed Rahman",
+      roles: [],
+      isProvisional: true,
+      claimToken: PROPOSAL_CLAIM_TOKEN,
+    },
+  });
+  // A seat of each firm's own, so thread messages are attributable to it.
+  const efgSeat = await db.user.create({
+    data: { id: uuid(951), phone: "+971502204417", fullName: "Hana Qasim", roles: ["seller_sales"], businessId: efg.id },
+    select: { id: true },
+  });
+
+  const monthStart = Date.UTC(NOW.getUTCFullYear(), NOW.getUTCMonth(), 1);
+  const pre = (n: number) => new Date(monthStart - (n + 1) * 86_400_000);
+
+  const brief = (startsInDays: number, building: string) => ({
+    create: {
+      categoryId: trade.id,
+      engagementType: "ongoing_contract" as const,
+      cadence: "quarterly" as const,
+      startMode: "from_date" as const,
+      startsOn: dayOnly(days(startsInDays)),
+      building,
+    },
+  });
+  const line = (description: string) => ({ create: [{ description, qty: null, sortOrder: 0 }] });
+
+  /* ── …01: waiting on a proposal ─────────────────────────────────────────── */
+  await db.enquiry.create({
+    data: {
+      id: PROPOSAL_OPEN_ENQUIRY_ID,
+      ref: "ENQ-8851",
+      buyerId: buyer.id,
+      requirement:
+        "Two commercial towers, 12 and 14 floors. Quarterly PPM on chillers, AHUs and pumps plus a 24/7 reactive line. Current contract ends 31 October.",
+      emirate: "dubai",
+      scale: "12 floors, 3 chillers, about 40,000 sq ft",
+      closesAt: days(9),
+      createdAt: hours(-1),
+      lines: line("Hard FM & MEP maintenance"),
+      serviceBrief: brief(48, "Bay Square, Business Bay"),
+      recipients: {
+        create: [
+          { businessId: efg.id, state: "delivered", createdAt: hours(-1) },
+          { businessId: shirawi.id, state: "delivered", createdAt: hours(-1) },
+        ],
+      },
+    },
+  });
+
+  /* ── …02: two proposals in, two bases ───────────────────────────────────── */
+  const compare = await db.enquiry.create({
+    data: {
+      id: PROPOSAL_COMPARE_ENQUIRY_ID,
+      ref: "ENQ-8852",
+      buyerId: buyer.id,
+      requirement:
+        "One office building, 9 floors. Chillers and AHUs need planned maintenance and somebody who answers at night.",
+      emirate: "dubai",
+      // Left empty on purpose: the comparison must not need it.
+      scale: null,
+      closesAt: days(11),
+      createdAt: days(-3),
+      lines: line("Hard FM & MEP maintenance"),
+      serviceBrief: brief(30, "Al Khail Gate"),
+      recipients: {
+        create: [
+          { businessId: efg.id, state: "quoted", openedAt: days(-3), firstReplyAt: days(-2), createdAt: days(-3) },
+          { businessId: shirawi.id, state: "quoted", openedAt: days(-3), firstReplyAt: days(-2), createdAt: days(-3) },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+  const proposalQuote = async (input: {
+    enquiryId: string;
+    businessId: string;
+    ref: string;
+    status: "sent" | "accepted";
+    sentAt: Date;
+    acceptedAt?: Date;
+    serviceId: string;
+    serviceName: string;
+    feeBasis: string;
+    feeBasisLabel: string;
+    feeAed: string;
+    mobilisationAed: string | null;
+    termMonths: number | null;
+    scope: string;
+    deliverable: string | null;
+    deliveredWhere: string | null;
+    exclusions: string | null;
+  }) =>
+    db.quote.create({
+      data: {
+        ref: input.ref,
+        enquiryId: input.enquiryId,
+        businessId: input.businessId,
+        revision: 1,
+        validityDays: 30,
+        status: input.status,
+        sentAt: input.sentAt,
+        createdAt: input.sentAt,
+        expiresAt: new Date(input.sentAt.getTime() + 30 * 86_400_000),
+        ...(input.acceptedAt ? { acceptedAt: input.acceptedAt, readAt: input.acceptedAt } : {}),
+        proposal: {
+          create: {
+            serviceId: input.serviceId,
+            serviceName: input.serviceName,
+            feeBasis: input.feeBasis,
+            feeBasisLabel: input.feeBasisLabel,
+            feeAed: input.feeAed,
+            mobilisationAed: input.mobilisationAed,
+            termMonths: input.termMonths,
+            scope: input.scope,
+            deliverable: input.deliverable,
+            deliveredWhere: input.deliveredWhere,
+            exclusions: input.exclusions,
+          },
+        },
+      },
+    });
+
+  await proposalQuote({
+    enquiryId: compare.id,
+    businessId: efg.id,
+    ref: "QT-8852-EMIR1",
+    status: "sent",
+    sentAt: days(-2),
+    serviceId: efgService.id,
+    serviceName: efgService.name,
+    feeBasis: "per_month",
+    feeBasisLabel: "Per month",
+    feeAed: "11200.00",
+    mobilisationAed: "4000.00",
+    termMonths: 24,
+    scope: SCOPE.replace("across the building", "across the nine floors"),
+    deliverable: "Monthly written report with photographs",
+    deliveredWhere: "On site",
+    exclusions: EXCLUDED,
+  });
+  await proposalQuote({
+    enquiryId: compare.id,
+    businessId: shirawi.id,
+    ref: "QT-8852-ALSR1",
+    status: "sent",
+    sentAt: days(-2),
+    serviceId: shirawiService.id,
+    serviceName: shirawiService.name,
+    feeBasis: "per_visit",
+    feeBasisLabel: "Per visit",
+    feeAed: "850.00",
+    // A stated nil, which the buyer reads as *No mobilisation charge* — not *Not stated*.
+    mobilisationAed: "0.00",
+    termMonths: null,
+    scope: "Call-out attendance to chillers and AHUs, fault finding and first-fix repair, day or night.",
+    deliverable: "Visit report with readings before and after",
+    deliveredWhere: "On site",
+    exclusions: null,
+  });
+
+  /* ── …03: accepted, and the other firm declined it themselves ───────────── */
+  const accepted = await db.enquiry.create({
+    data: {
+      id: PROPOSAL_ACCEPTED_ENQUIRY_ID,
+      ref: "ENQ-8853",
+      buyerId: buyer.id,
+      requirement: "A residential tower in JLT, 32 floors. Full hard FM from the handover date, monthly reporting to the owners' association.",
+      emirate: "dubai",
+      scale: "32 floors, 240 apartments, 2 chillers",
+      closesAt: pre(1),
+      createdAt: pre(12),
+      contactReleasedToBusinessId: efg.id,
+      contactReleasedAt: pre(2),
+      buyerReference: "JLT-FM-2026",
+      lines: line("Hard FM & MEP maintenance"),
+      serviceBrief: brief(20, "Cluster Y, JLT"),
+      recipients: {
+        create: [
+          { businessId: efg.id, state: "quoted", openedAt: pre(12), firstReplyAt: pre(10), createdAt: pre(12) },
+          {
+            businessId: shirawi.id,
+            state: "declined",
+            openedAt: pre(12),
+            firstReplyAt: pre(11),
+            createdAt: pre(12),
+            declinedAt: pre(11),
+            declineReason: "We take call-out work only, not planned maintenance contracts.",
+          },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+  await proposalQuote({
+    enquiryId: accepted.id,
+    businessId: efg.id,
+    ref: "QT-8853-EMIR1",
+    status: "accepted",
+    sentAt: pre(10),
+    acceptedAt: pre(2),
+    serviceId: efgService.id,
+    serviceName: efgService.name,
+    feeBasis: "per_month",
+    feeBasisLabel: "Per month",
+    feeAed: "18400.00",
+    mobilisationAed: "6000.00",
+    termMonths: 24,
+    scope: SCOPE.replace("across the building", "across the tower and its podium"),
+    deliverable: "Monthly written report with photographs, sent to the owners' association",
+    deliveredWhere: "On site, tower and podium",
+    exclusions: EXCLUDED,
+  });
+  await db.message.createMany({
+    data: [
+      { enquiryId: accepted.id, businessId: efg.id, senderId: buyer.id, body: "Does the monthly fee include the podium car park ventilation?", createdAt: pre(9) },
+      { enquiryId: accepted.id, businessId: efg.id, senderId: efgSeat.id, body: "Yes, the podium is in scope. It is written into the proposal now.", createdAt: pre(9) },
+      { enquiryId: accepted.id, businessId: efg.id, senderId: efgSeat.id, body: "Thank you. Our account engineer will be on site for the handover walk on " + formatSeedDay(new Date(pre(2).getTime() + 5 * 86_400_000)) + ".", createdAt: pre(1) },
+    ],
+  });
+
+  /* ── …04: a brief the facilities seat declines ──────────────────────────── */
+  await db.enquiry.create({
+    data: {
+      id: PROPOSAL_DECLINE_ENQUIRY_ID,
+      ref: "ENQ-8854",
+      buyerId: buyer.id,
+      requirement: "A warehouse in Jebel Ali needs its fire pumps serviced once, before an insurance inspection.",
+      emirate: "dubai",
+      scale: null,
+      closesAt: days(6),
+      createdAt: hours(-5),
+      lines: line("Hard FM & MEP maintenance"),
+      serviceBrief: {
+        create: { categoryId: trade.id, engagementType: "one_off_job", startMode: "asap", building: "Plot S30112, JAFZA South" },
+      },
+      recipients: { create: [{ businessId: efg.id, state: "delivered", createdAt: hours(-5) }] },
+    },
+  });
+
+  console.log("   4 briefs: one to answer, two proposals on two bases, one accepted, one to decline");
 }
 
 /**

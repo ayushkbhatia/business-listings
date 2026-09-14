@@ -1,4 +1,5 @@
-import { formatDate } from "@/lib/format";
+import { formatAED, formatDate } from "@/lib/format";
+import { feeOnBasis } from "@/lib/quote/proposal-words";
 import { t } from "@/lib/i18n";
 import { windowExpired, type AcceptedRecord } from "./accepted-record";
 
@@ -15,7 +16,15 @@ export function windowLine(record: AcceptedRecord, now: Date): string {
   const quote = record.quote;
   if (!quote.sentAt) return t("accepted.window.revision", { revision: quote.revision });
   const ended = windowExpired(quote.expiresAt, now) && quote.expiresAt !== null;
-  return t(ended ? "accepted.window.expired" : "accepted.window.held", {
+  // A proposal holds a fee and a scope, not a price on a line.
+  const key = quote.proposal
+    ? ended
+      ? "accepted.window.proposal_expired"
+      : "accepted.window.proposal_held"
+    : ended
+      ? "accepted.window.expired"
+      : "accepted.window.held";
+  return t(key, {
     revision: quote.revision,
     days: quote.validityDays,
     from: formatDate(quote.sentAt),
@@ -31,6 +40,17 @@ export function totalLabel(record: AcceptedRecord): string {
         delivery: t(`accepted.delivery.${delivery}` as "accepted.delivery.included"),
       })
     : t("accepted.total");
+}
+
+/** The summary under the name: a fee on its basis for a proposal, a line count and a total for a quote. */
+export function recordSummaryParts(record: AcceptedRecord): string[] {
+  const proposal = record.quote.proposal;
+  return proposal
+    ? [feeOnBasis(proposal)]
+    : [
+        t("accepted.summary.lines", { count: record.quote.lines.length }),
+        t("accepted.summary.total", { total: formatAED(record.quote.totalAed) }),
+      ];
 }
 
 /** The lead time as the supplier gave it. Zero days is ex-stock, which is how the trade says it. */

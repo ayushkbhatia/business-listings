@@ -65,6 +65,8 @@ export async function getTrackingByRef(
           openedAt: true,
           buyerNudgedAt: true,
           createdAt: true,
+          declineReason: true,
+          declinedAt: true,
           business: { select: { slug: true, displayName: true } },
         },
       },
@@ -85,6 +87,7 @@ export async function getTrackingByRef(
           status: true,
           lostReason: true,
           _count: { select: { lines: true } },
+          proposal: { select: { quoteId: true } },
         },
       },
     },
@@ -119,8 +122,17 @@ export async function getTrackingByRef(
       quotedAt: quote?.sentAt ?? null,
       quotedLines: quote?._count.lines ?? 0,
       totalLines,
-      /* The seller's own words. "Outside their range" beats silence. */
-      declineReason: quote?.lostReason ?? null,
+      proposed: quote?.proposal != null,
+      /*
+         The seller's own words. "Outside their range" beats silence.
+
+         From the recipient row since board `3j-s`, which gave a supplier a way
+         to decline. This read `quote.lostReason`, which holds a stable code for
+         a lost quote rather than anybody's words — and a supplier who declines
+         has, by the rule that lets them, sent no quote to lose.
+      */
+      declineReason: recipient.declineReason,
+      declinedBySupplier: recipient.declinedAt !== null,
       superseded: quote?.supersededAt != null,
       quotedAgainstRevision: quote?.againstRevision ?? enquiry.revision,
     };

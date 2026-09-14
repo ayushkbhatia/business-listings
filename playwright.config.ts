@@ -52,6 +52,11 @@ const FREE_SELLER_STATE = "tests/e2e/.auth/seller-free.json";
  */
 const SERVICES_SELLER_STATE = "tests/e2e/.auth/seller-services.json";
 /*
+ * Board `3j-s`: a facilities firm answering briefs with proposals. A seat of its
+ * own — the services seat's specs edit the scope sheets a proposal reads.
+ */
+const FACILITIES_SELLER_STATE = "tests/e2e/.auth/seller-facilities.json";
+/*
  * Two staff sessions. The moderator one exists to prove a negative — criterion
  * 9's claim that the console does not offer them the tier, credit or suspend
  * controls — and a negative asserted from an ops lead's session proves nothing.
@@ -80,12 +85,12 @@ export default defineConfig({
       // The dashboard needs a signed-in seller; the seller projects own it.
       // `pricing-seller` is a public page read with a session, which is the
       // same requirement for a different reason — board 1l criterion 10.
-      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller|services)[\w-]*\.spec\.ts/,
+      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller|services|lead-proposal)[\w-]*\.spec\.ts/,
     },
     {
       name: "mobile",
       use: { ...devices["Pixel 7"] },
-      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller|services)[\w-]*\.spec\.ts/,
+      testIgnore: /(dashboard|overview|catalogue|listing|account|onboarding|admin|pricing-seller|services|lead-proposal)[\w-]*\.spec\.ts/,
     },
     ...(canSignIn
       ? [
@@ -109,6 +114,12 @@ export default defineConfig({
             testMatch: /services[\w-]*\.spec\.ts/,
             dependencies: ["setup"],
             use: { ...devices["Desktop Chrome"], storageState: SERVICES_SELLER_STATE },
+          },
+          {
+            name: "seller-facilities",
+            testMatch: /lead-proposal[\w-]*\.spec\.ts/,
+            dependencies: ["setup"],
+            use: { ...devices["Desktop Chrome"], storageState: FACILITIES_SELLER_STATE },
           },
           {
             name: "staff",

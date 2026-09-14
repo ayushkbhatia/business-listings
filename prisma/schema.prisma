@@ -138,6 +138,8 @@ model User {
   leadsAssigned           EnquiryRecipient[]       @relation("LeadAssignee")
   leadsRouted             EnquiryRecipient[]       @relation("LeadAssigner")
   leadOutcomes            EnquiryRecipient[]       @relation("LeadOutcomeAuthor")
+  /// Board `3j-s`: leads this seat declined on the firm's behalf.
+  leadDeclines            EnquiryRecipient[]       @relation("LeadDecliner")
   quotesExtended          Quote[]                  @relation("QuoteExtender")
   channels                SeatChannel[]
   routingCursorFor        Business[]               @relation("RoutingCursor")
@@ -1928,6 +1930,8 @@ model Service {
   declinedOffers ScopeTemplateDecline[]
   /// Board `1d-s`. The enquiry lines that named this service as their subject.
   enquiryLines   EnquiryLine[]
+  /// Board `3j-s`. The proposals that answered from this scope sheet.
+  proposals      QuoteProposal[]
 
   /// This service's *own* coverage rows — empty for every service that
   /// inherits the business default, which is most of them. Never read on its
@@ -4010,6 +4014,20 @@ model EnquiryRecipient {
   /// is answered with a full stop.
   outcomeReason String?      @map("outcome_reason")
 
+  /// When the SELLER declined — board `3j-s`'s `Decline`.
+  ///
+  /// `state = declined` had exactly one writer, the buyer accepting somebody
+  /// else, and every reader took it to mean that. The buyer's tracking page had
+  /// a sentence waiting for a supplier's own decline — *DECLINED · {reason}* —
+  /// and nothing that could produce one. This column is what tells the two
+  /// apart: set, the supplier walked; null on a declined row, the buyer chose
+  /// another. It is written once and never cleared, because the buyer has
+  /// already been shown it.
+  declinedAt    DateTime? @map("declined_at")
+  declinedById  String?   @map("declined_by_id") @db.Uuid
+  /// The supplier's own words, optional, shown to the buyer as written.
+  declineReason String?   @map("decline_reason")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   enquiry    Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
@@ -4017,6 +4035,7 @@ model EnquiryRecipient {
   assignedTo User?    @relation("LeadAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
   assignedBy User?    @relation("LeadAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
   outcomeBy  User?    @relation("LeadOutcomeAuthor", fields: [outcomeById], references: [id], onDelete: SetNull)
+  declinedBy User?    @relation("LeadDecliner", fields: [declinedById], references: [id], onDelete: SetNull)
 
   @@id([enquiryId, businessId])
   @@index([businessId, state])
@@ -4088,6 +4107,10 @@ model Quote {
   messages    Message[]
   attachments QuoteAttachment[]
   extendedBy  User?             @relation("QuoteExtender", fields: [extendedById], references: [id], onDelete: SetNull)
+  /// Board `3j-s`. Present on a reply to an enquiry for work, absent on a quote
+  /// for things — and its presence is the whole of what makes a quote a
+  /// proposal. A quote with one has no lines, and a trigger refuses any.
+  proposal    QuoteProposal?
 
   @@unique([enquiryId, businessId, revision])
   @@index([businessId, status])
@@ -4125,7 +4148,8 @@ model QuoteLine {
   /// CHECK passes on NULL, so "greater than nought where there is one" needed
   /// no change to keep being true.
   qty           Int?
-  /// THE ONLY PRICE FIELD IN THE SCHEMA. Private to one buyer and one seller.
+  /// A price, private to one buyer and one seller. One of two in the schema:
+  /// `QuoteProposal.feeAed` is the other, under the same rule — board `3j-s`.
   unitPrice     Decimal @map("unit_price") @db.Decimal(12, 2)
   leadTimeDays  Int?    @map("lead_time_days")
   sortOrder     Int     @default(0) @map("sort_order")
@@ -4139,6 +4163,80 @@ model QuoteLine {
   @@index([quoteId])
   @@index([enquiryLineId], map: "quote_line_enquiry_line_idx")
   @@map("quote_line")
+}
+
+/// A proposal — board `3j-s`, the reply to an enquiry for work.
+///
+/// **A proposal is a quote.** It is the same `Quote` row — the same reference,
+/// revision, validity window, status, fence, acceptance, expiry sweep, extension,
+/// thread and first-reply stamp — with this row beside it in place of lines. A
+/// separate `Proposal` entity was the handoff's sketch, and it would have needed
+/// a second copy of every one of those, each of which took a board to get right
+/// once. Two paths to the terminal state is how the older one stops keeping its
+/// promises.
+///
+/// What it carries instead of a parts list: **one fee on a stated basis, a
+/// scope and an exclusions list** (`3j-s` B2). No quantity, no unit price, no
+/// line. The fee is a price, so the rule `QuoteLine.unitPrice` states holds here
+/// too: private to one buyer and one seller, never on a public surface.
+///
+/// ## What is copied, and why
+///
+/// The service is referenced **and** its name and fee basis are copied at
+/// send. B1 says the basis is read from the service, and it is — the composer
+/// never offers a choice. But a sent proposal is immutable (B10) and a service
+/// can move family, change basis or be deleted afterwards; the buyer's record of
+/// what was proposed must not change when it does. So the reference is `SET
+/// NULL` and the words the buyer read survive it.
+///
+/// Scope, deliverable, delivered-where and exclusions **seed** from the scope
+/// sheet and are edited for this buyer (B3). Nothing here writes back to
+/// `Service`.
+///
+/// ## Two rules the database holds rather than the form
+///
+///  - `quote_proposal_immutable`: a row whose quote has left `draft` cannot be
+///    updated. A revision is a new quote with a new row (B10).
+///  - `quote_line_not_on_proposal`: a quote carrying a proposal cannot gain a
+///    line (B2, acceptance criterion 1).
+model QuoteProposal {
+  quoteId String @id @map("quote_id")
+
+  /// The service whose scope sheet this answers. Null once that service is
+  /// deleted — the copied name and basis below are what the record keeps.
+  serviceId   String? @map("service_id")
+  serviceName String  @map("service_name")
+
+  /// The basis key and its words, copied from the service's family at send.
+  /// Null only on a draft whose service has no basis yet — a send refuses that
+  /// and routes the seller to `3g-s` (acceptance criterion 8).
+  feeBasis      String? @map("fee_basis")
+  feeBasisLabel String? @map("fee_basis_label")
+
+  /// The one amount, excluding VAT. Null only on a draft not yet priced.
+  feeAed          Decimal? @map("fee_aed") @db.Decimal(12, 2)
+  /// A one-off charge to start the work. Null is *not stated*; zero is a
+  /// stated nil, which `1n-s` must be able to tell apart (B6).
+  mobilisationAed Decimal? @map("mobilisation_aed") @db.Decimal(12, 2)
+  /// How long the commitment runs. Null is *not stated* — a one-off job has no
+  /// term, and a call-off may not.
+  termMonths      Int?     @map("term_months")
+
+  scope          String  @default("")
+  deliverable    String?
+  /// Free text for this buyer — *On site, both towers* — seeded from the
+  /// service's `DeliveredWhere`, which is one of three words.
+  deliveredWhere String? @map("delivered_where")
+  exclusions     String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  quote   Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@index([serviceId])
+  @@map("quote_proposal")
 }
 
 /// A document cited by a quote.

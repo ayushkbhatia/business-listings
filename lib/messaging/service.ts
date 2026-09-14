@@ -51,6 +51,7 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
     select: {
       firstReplyAt: true,
       business: { select: { closureRequestedAt: true } },
+      state: true,
       enquiry: {
         select: { id: true, buyerId: true, closesAt: true, contactReleasedToBusinessId: true },
       },
@@ -128,7 +129,17 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
     if (input.sender === "seller" && !input.automatic && recipient.firstReplyAt === null) {
       await tx.enquiryRecipient.update({
         where: { enquiryId_businessId: { enquiryId: input.enquiryId, businessId: input.businessId } },
-        data: { firstReplyAt: new Date(), state: "opened" },
+        /*
+           `opened` only from `delivered`. This wrote the state unconditionally,
+           so a supplier who wrote after the buyer had accepted someone else
+           turned a `declined` row back into `opened` on the buyer's tracking
+           page — and since board `3j-s` a supplier's own decline carries a
+           CHECK that refuses exactly that write.
+        */
+        data: {
+          firstReplyAt: new Date(),
+          ...(recipient.state === "delivered" ? { state: "opened" as const } : {}),
+        },
       });
     }
 

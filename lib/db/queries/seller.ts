@@ -4,6 +4,14 @@ import { buyerForSeller, buyerSelectFor, type SellerVisibleBuyer } from "./selle
 import { matchLines, type LineMatch, type MatchableProduct } from "@/lib/quote/match";
 import { quoteTotalAed } from "@/lib/quote/money";
 import { ENQUIRY_BRIEF_SELECT, toEnquiryBrief, type EnquiryBrief } from "./enquiry-brief";
+import {
+  PROPOSAL_FIGURE_SELECT,
+  PROPOSAL_RECORD_SELECT,
+  toProposalFigure,
+  toProposalRecord,
+  type ProposalFigure,
+  type ProposalRecord,
+} from "@/lib/quote/proposal";
 
 /**
  * Server-side reads for the seller dashboard.
@@ -35,7 +43,14 @@ export interface LeadRow {
   sellerNudgedAt: Date | null;
   buyer: SellerVisibleBuyer;
   /** The seller's latest quote on this enquiry, if any. */
-  latestQuote: { ref: string; revision: number; status: string; totalAed: string } | null;
+  latestQuote: {
+    ref: string;
+    revision: number;
+    status: string;
+    totalAed: string;
+    /** Board `3j-s`: set when the reply was a proposal, whose lines total nothing. */
+    proposal: ProposalFigure | null;
+  } | null;
 }
 
 export async function getLeadsForBusiness(businessId: string): Promise<LeadRow[]> {
@@ -71,6 +86,7 @@ export async function getLeadsForBusiness(businessId: string): Promise<LeadRow[]
               revision: true,
               status: true,
               lines: { select: { qty: true, unitPrice: true } },
+              proposal: { select: PROPOSAL_FIGURE_SELECT },
             },
           },
         },
@@ -109,6 +125,7 @@ export async function getLeadsForBusiness(businessId: string): Promise<LeadRow[]
             totalAed: quoteTotalAed(
               quote.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() })),
             ),
+            proposal: toProposalFigure(quote.proposal),
           }
         : null,
     };
@@ -186,6 +203,8 @@ export interface LeadDetail {
     /** First name of the seat that moved it. Null once that seat is removed. */
     extendedByName: string | null;
     totalAed: string;
+    /** Board `3j-s`: the proposal this quote is, in full. Null on a goods quote. */
+    proposal: ProposalRecord | null;
     lines: {
       id: string;
       /**
@@ -265,6 +284,7 @@ export async function getLeadDetail(
         include: {
           lines: { orderBy: { sortOrder: "asc" } },
           extendedBy: { select: { fullName: true } },
+          proposal: { select: PROPOSAL_RECORD_SELECT },
         },
       },
       contactReleasedAt: true,
@@ -330,6 +350,7 @@ export async function getLeadDetail(
       // conversation rather than a directory.
       extendedByName: (q.extendedBy?.fullName ?? "").trim().split(/\s+/)[0] || null,
       totalAed: quoteTotalAed(q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
+      proposal: toProposalRecord(q.proposal),
       lines: q.lines.map((l) => ({
         id: l.id,
         enquiryLineId: l.enquiryLineId,
@@ -417,6 +438,8 @@ export interface QuoteRow {
   /** How many lines were priced by hand rather than from the catalogue. */
   manualLineCount: number;
   totalAed: string;
+  /** Board `3j-s`: set when the quote is a proposal. */
+  proposal: ProposalFigure | null;
   buyer: SellerVisibleBuyer;
   lostReason: string | null;
 }
@@ -451,6 +474,7 @@ export async function getQuotesForBusiness(businessId: string): Promise<QuoteRow
         },
       },
       lines: { select: { qty: true, unitPrice: true, productId: true } },
+      proposal: { select: PROPOSAL_FIGURE_SELECT },
     },
   });
 
@@ -475,6 +499,7 @@ export async function getQuotesForBusiness(businessId: string): Promise<QuoteRow
     lineCount: q.lines.length,
     manualLineCount: q.lines.filter((l) => l.productId === null).length,
     totalAed: quoteTotalAed(q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
+    proposal: toProposalFigure(q.proposal),
     buyer: buyerForSeller(q.enquiry.buyer, q.enquiry.contactReleasedToBusinessId, businessId),
     lostReason: q.lostReason,
   }));

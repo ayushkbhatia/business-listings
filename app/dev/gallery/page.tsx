@@ -16,6 +16,7 @@ import { CloseAccountGallery } from "./_sections/CloseAccount";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
 import { ServiceBriefGallery } from "./_sections/ServiceBrief";
 import { AcceptedRecordGallery } from "./_sections/AcceptedRecord";
+import { ProposalReplyGallery } from "./_sections/ProposalReply";
 import { BuilderSectionsGallery } from "./_sections/BuilderSections";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
@@ -175,6 +176,8 @@ const UNLISTED = [
   "accepted-record",
   // Board `12b`: the dedupe queue and the owner's side of a branch it added.
   "dedupe",
+  // Board `3j-s`: replying to a brief with a proposal.
+  "proposal-reply",
 ] as const;
 
 export default function Gallery() {
@@ -262,6 +265,7 @@ export default function Gallery() {
       <ServicesStorefrontGallery />
       <ServiceBriefGallery />
       <AcceptedRecordGallery />
+      <ProposalReplyGallery />
       <BuilderSectionsGallery />
       <Overlays />
       <Shells />

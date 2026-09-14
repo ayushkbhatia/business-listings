@@ -58,9 +58,16 @@ export function LeadActions({
   canAssign,
   canMark,
   labels,
+  showMessage = true,
 }: {
   enquiryId: string;
   threadHref: string;
+  /**
+   * Board `3j-s` draws its own way into the thread — *Ask a question first* —
+   * in the header strip, and a second green button to the same page beside it
+   * would be two names for one door.
+   */
+  showMessage?: boolean;
   seats: readonly SeatChoice[];
   assignedToId: string | null;
   outcome: "won" | "lost" | null;
@@ -109,9 +116,11 @@ export function LeadActions({
           back. A seller who decides an RFQ needs a question answered first must
           not be stuck in a composer.
         */}
-        <Link href={threadHref} className={buttonClassName({ size: "sm" })}>
-          {labels.messageBuyer}
-        </Link>
+        {showMessage ? (
+          <Link href={threadHref} className={buttonClassName({ size: "sm" })}>
+            {labels.messageBuyer}
+          </Link>
+        ) : null}
 
         {canMark && outcome === null ? (
           <>
