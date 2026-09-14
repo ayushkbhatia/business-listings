@@ -1,6 +1,12 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { CONTRACT_FACTS_SELECT, reviewOpensOn, toContractFacts } from "@/lib/enquiry/accepted-proposal";
+import {
+  CONTRACT_FACTS_SELECT,
+  isOngoing,
+  reviewOpensOn,
+  termDates,
+  toContractFacts,
+} from "@/lib/enquiry/accepted-proposal";
 import "@/lib/audit/prisma-writer";
 import { assertReason, staffMutation } from "@/lib/audit";
 import { Prisma } from "@/lib/db/generated/client";
@@ -273,9 +279,11 @@ export const ENQUIRY_FOR_REVIEW_SELECT = {
 export function toEnquiryForReview(
   enquiry: Prisma.EnquiryGetPayload<{ select: typeof ENQUIRY_FOR_REVIEW_SELECT }>,
 ): EnquiryForReview {
+  const facts = toContractFacts(enquiry);
   return {
     // Board `7c-s`: the same rule the record page prints the day from.
-    reviewOpensOn: reviewOpensOn(toContractFacts(enquiry)),
+    reviewOpensOn: reviewOpensOn(facts),
+    engagement: { ongoing: isOngoing(facts), termEndsOn: termDates(facts)?.end ?? null },
     id: enquiry.id,
     buyerId: enquiry.buyerId,
     contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
@@ -921,8 +929,29 @@ export interface ModerationReview {
   replyRemovalReason: string | null;
 }
 
-export async function reviewsForModeration(limit = 200): Promise<ModerationReview[]> {
+export async function reviewsForModeration(
+  limit = 200,
+  /**
+   * A supplier's display name or slug, in part. The list is the two hundred
+   * most recent, and without a way to narrow it a review older than that was as
+   * unreachable as it was before this screen existed.
+   */
+  supplier?: string | null,
+): Promise<ModerationReview[]> {
+  const needle = supplier?.trim();
   const rows = await prisma.review.findMany({
+    ...(needle
+      ? {
+          where: {
+            business: {
+              OR: [
+                { displayName: { contains: needle, mode: "insensitive" as const } },
+                { slug: { contains: needle.toLowerCase() } },
+              ],
+            },
+          },
+        }
+      : {}),
     orderBy: [{ removedAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }, { id: "desc" }],
     take: limit,
     select: {

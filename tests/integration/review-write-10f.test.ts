@@ -409,3 +409,15 @@ describe("B1 — the page's state comes from the enquiry, never from the query s
     expect(page.others.rows.length).toBeLessThanOrEqual(5);
   });
 });
+
+describe("the moderation list reaches past its two hundred newest", () => {
+  it("narrows to one supplier by name or slug", async () => {
+    const { reviewsForModeration } = await import("@/lib/reviews/service");
+    const business = await prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { displayName: true, slug: true } });
+    const byName = await reviewsForModeration(200, business.displayName.slice(0, 6).toUpperCase());
+    expect(byName.length).toBeGreaterThan(0);
+    expect(byName.every((row) => row.businessName.toLowerCase().includes(business.displayName.slice(0, 6).toLowerCase()))).toBe(true);
+    const bySlug = await reviewsForModeration(200, business.slug);
+    expect(bySlug.every((row) => row.businessSlug.includes(business.slug))).toBe(true);
+  });
+});

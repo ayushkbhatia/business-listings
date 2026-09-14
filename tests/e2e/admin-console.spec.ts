@@ -517,7 +517,9 @@ test.describe("criterion 9 — removing a review", () => {
     */
     const reason = `Names the buyer's own staff. Removed on request. ${Date.now()}`;
 
-    await page.goto("/admin/reviews");
+    // Narrowed to the host: the list is the two hundred newest, and a seed that
+    // adds a recent review (10f's did) pushes this host's older rows off it.
+    await page.goto(`/admin/reviews?supplier=${encodeURIComponent(EXPENDABLE)}`);
     const row = page
       .getByRole("main")
       .getByRole("listitem")

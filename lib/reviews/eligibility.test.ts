@@ -521,3 +521,28 @@ describe("board 10f B3/B4 — skippable dimensions, required overall", () => {
     expect(isEditable({ ...open, heldAt: NOW }, NOW)).toBe(false);
   });
 });
+
+describe("board 10f Q1 × 7c-s — an ongoing engagement stays reviewable while it runs", () => {
+  const engagement = (termEndsOn: Date | null) =>
+    enquiry({
+      contactReleasedAt: new Date("2025-01-10T10:00:00+04:00"),
+      reviewOpensOn: new Date("2025-03-01T00:00:00Z"),
+      engagement: { ongoing: true, termEndsOn },
+    });
+
+  it("is open twenty months in, and closes ninety days after the term ends", () => {
+    const gate = engagement(new Date("2026-12-31T00:00:00Z"));
+    expect(canReview(BUYER, gate, undefined, NOW)).toMatchObject({ ok: true });
+    const window = reviewWindowFor(gate, BUSINESS)!;
+    expect(window.anchor).toBe("term");
+    expect(window.closesOn.toISOString().slice(0, 10)).toBe("2027-03-31");
+    expect(canReview(BUYER, gate, undefined, new Date("2027-04-01T09:00:00+04:00"))).toMatchObject({
+      ok: false,
+      reason: "window_closed",
+    });
+  });
+
+  it("does not close an engagement with no dated term", () => {
+    expect(reviewWindowFor(engagement(null), BUSINESS)).toBeNull();
+  });
+});

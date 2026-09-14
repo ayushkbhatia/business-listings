@@ -239,7 +239,10 @@ export function reviewTiming(record: ProposalRecordValue, now: Date): ReviewTimi
     return { open: false, eyebrow, body: t("accepted_proposal.review.opens", { when: formatDate(opens) }) };
   }
   // Board 10f: and until it closes — the form is absent after, so the button is too.
-  const window = acceptedWindow(facts.acceptedAt, opens);
+  const window = acceptedWindow(facts.acceptedAt, opens, {
+    ongoing: isOngoing(facts),
+    termEndsOn: termDates(facts)?.end ?? null,
+  });
   if (window && !windowOpen(window, now)) {
     return {
       open: false,

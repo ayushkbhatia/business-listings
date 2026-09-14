@@ -1669,6 +1669,9 @@ export const en = {
   "admin.reviews.eyebrow": "Trust",
   "admin.reviews.meta": "{count} published, {removed} removed · showing the {shown} most recent",
   "admin.reviews.kind": "Review",
+  "admin.reviews.filter_label": "Find reviews by supplier",
+  "admin.reviews.filter.supplier": "Supplier",
+  "admin.reviews.filter.apply": "Show their reviews",
   "admin.reviews.remove": "Remove",
   "admin.reviews.removed": "Removed. The rating average is recalculated without it.",
   "admin.reviews.removed_on": "Removed {date}",
@@ -4732,6 +4735,7 @@ export const en = {
 
   "reviewwrite.band.accepted": "Open until {date} — {days} days after acceptance",
   "reviewwrite.band.opened": "Open until {date} — {days} days after reviews opened",
+  "reviewwrite.band.term": "Open until {date} — {days} days after the term ends",
   "reviewwrite.band.replied": "Open until {date} — {days} days after {supplier} replied",
   "reviewwrite.band.opens": "Opens on {date}",
   "reviewwrite.band.closed": "Closed on {date}",
@@ -4892,6 +4896,7 @@ export const en = {
   "reviewwrite.closed.title": "Reviews closed on {date}",
   "reviewwrite.closed.body.accepted": "A review stays open for {days} days after the quote is accepted. This one was accepted on {from} and closed on {date}, so the form is not offered.",
   "reviewwrite.closed.body.opened": "A review stays open for {days} days after reviews of an engagement open. These opened on {from} and closed on {date}, so the form is not offered.",
+  "reviewwrite.closed.body.term": "A review of an ongoing engagement stays open for {days} days after its term ends. This term ended on {from} and reviews closed on {date}, so the form is not offered.",
   "reviewwrite.closed.body.replied": "A review stays open for {days} days after the supplier replies. {supplier} replied on {from}, and it closed on {date}, so the form is not offered.",
 
   "reviewwrite.reviewed.copy_heading": "What you wrote",

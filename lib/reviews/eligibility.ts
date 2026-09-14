@@ -267,10 +267,23 @@ export const REQUEST_WINDOW_DAYS = REVIEW_WINDOW_DAYS;
  * What the window runs from, which the band states in words.
  *
  *   `accepted`  the day the quote was accepted
- *   `opened`    the day an engagement's reviews opened (board `7c-s` `B10`)
+ *   `opened`    the day a one-off job's reviews opened (a later start date)
+ *   `term`      the last day of an ongoing engagement's term
  *   `replied`   the day this supplier first replied, on the enquiry rung
+ *
+ * An ongoing engagement is reviewable while it runs — board `7c-s` opens it
+ * after the first cycle precisely so the work can be judged — and closes ninety
+ * days after the term ends. Ninety days from the first cycle would shut the
+ * review of a 24-month AMC in its fourth month.
  */
-export type WindowAnchor = "accepted" | "opened" | "replied";
+export type WindowAnchor = "accepted" | "opened" | "term" | "replied";
+
+/** An engagement's shape, as far as the window needs it. */
+export interface EngagementFacts {
+  ongoing: boolean;
+  /** The term's last day. Null on an engagement with no dated term. */
+  termEndsOn: Date | null;
+}
 
 export interface ReviewWindow {
   anchor: WindowAnchor;
@@ -290,11 +303,14 @@ const DAY_MS = 86_400_000;
  * invented for it would close a review on a guess.
  */
 export function reviewWindowFor(
-  enquiry: Pick<EnquiryForReview, "contactReleasedToBusinessId" | "contactReleasedAt" | "reviewOpensOn" | "repliedAt">,
+  enquiry: Pick<
+    EnquiryForReview,
+    "contactReleasedToBusinessId" | "contactReleasedAt" | "reviewOpensOn" | "repliedAt" | "engagement"
+  >,
   businessId: string,
 ): ReviewWindow | null {
   if (enquiry.contactReleasedToBusinessId === businessId) {
-    return acceptedWindow(enquiry.contactReleasedAt, enquiry.reviewOpensOn);
+    return acceptedWindow(enquiry.contactReleasedAt, enquiry.reviewOpensOn, enquiry.engagement);
   }
   const replied = enquiry.repliedAt?.[businessId];
   if (!replied) return null;
@@ -302,9 +318,22 @@ export function reviewWindowFor(
   return { anchor: "replied", from, closesOn: new Date(from.getTime() + REVIEW_WINDOW_DAYS * DAY_MS) };
 }
 
-/** An accepted quote's window: from acceptance, or from the day reviews opened where that is later. */
-export function acceptedWindow(acceptedAt: Date | null, reviewOpensOn: Date | null): ReviewWindow | null {
+/**
+ * An accepted quote's window: from acceptance, or from the day reviews opened
+ * where that is later — or, for an ongoing engagement, from the end of its term.
+ */
+export function acceptedWindow(
+  acceptedAt: Date | null,
+  reviewOpensOn: Date | null,
+  engagement?: EngagementFacts | null,
+): ReviewWindow | null {
   if (!acceptedAt) return null;
+  if (engagement?.ongoing) {
+    // Undated, it cannot be said to have ended, so nothing closes it.
+    if (!engagement.termEndsOn) return null;
+    const from = dubaiDayStart(engagement.termEndsOn);
+    return { anchor: "term", from, closesOn: new Date(from.getTime() + REVIEW_WINDOW_DAYS * DAY_MS) };
+  }
   const accepted = dubaiDayStart(acceptedAt);
   const opened = reviewOpensOn && reviewOpensOn.getTime() > accepted.getTime() ? reviewOpensOn : null;
   const from = opened ?? accepted;
@@ -344,6 +373,8 @@ export interface EnquiryForReview {
    * need not invent one; a missing entry is a window nobody can close.
    */
   repliedAt?: Readonly<Record<string, Date>>;
+  /** Board `7c-s`: an ongoing engagement's window runs to the end of its term. Absent for goods. */
+  engagement?: EngagementFacts | null;
   /** True when a review already exists for this enquiry. */
   alreadyReviewed: boolean;
   /**
