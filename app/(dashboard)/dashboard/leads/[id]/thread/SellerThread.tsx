@@ -2,9 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Thread, type ThreadLabels, type ThreadMessageView } from "@/components/domain";
+import { Thread, type ThreadMessageView } from "@/components/domain";
 import { t } from "@/lib/i18n";
-import { sendSellerMessage } from "./actions";
+import { threadLabels } from "@/lib/messaging/negotiation-words";
+import { MAX_THREAD_ATTACHMENTS, THREAD_ATTACHMENT_TYPES } from "@/lib/messaging/attachments";
+import { sendSellerMessage, signSellerAttachmentAction } from "./actions";
 
 /**
  * Board 11b — the seller's side of one thread.
@@ -44,23 +46,11 @@ export function SellerThread({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | undefined>(undefined);
 
-  const labels: ThreadLabels = {
-    heading: t("thread.heading"),
-    formLabel: t("thread.composer_form"),
-    logLabel: t("thread.log_buyer", { buyer: buyerFirstName }),
-    empty: t("thread.empty"),
-    composerLabel: t("thread.composer"),
-    placeholder: t("thread.placeholder"),
-    send: t("thread.send"),
-    sending: t("thread.sending"),
-    quickRepliesLabel: t("thread.quick_replies"),
-    flagged: t("thread.flagged"),
-    flaggedExplain: t("thread.flagged_explain"),
-    automatic: t("thread.automatic"),
-    automaticExplain: t("thread.automatic_explain"),
-    revisionOf: (revision) => t("thread.revision_of", { revision }),
-    wasLabel: t("thread.was"),
-  };
+  const labels = threadLabels(
+    { logLabel: t("thread.log_buyer", { buyer: buyerFirstName }), formLabel: t("thread.composer_form") },
+    "seller",
+  );
+
 
   return (
     <Thread
@@ -83,13 +73,38 @@ export function SellerThread({
       }
       busy={pending}
       {...(error ? { error } : {})}
-      onSend={(body) => {
+      upload={{
+        label: t("negotiation.attach.button"),
+        hint: t("negotiation.attach.hint_seller"),
+        accept: THREAD_ATTACHMENT_TYPES.join(","),
+        maxFiles: MAX_THREAD_ATTACHMENTS,
+        uploadingLabel: t("negotiation.attach.uploading"),
+        removeLabel: (name) => t("negotiation.attach.remove", { name }),
+        tooManyLabel: t("negotiation.attach.too_many"),
+        upload: async (file) => {
+          const signed = await signSellerAttachmentAction({ enquiryId, filename: file.name, type: file.type, bytes: file.size });
+          if (!signed.ok) return signed;
+          try {
+            const response = await fetch(signed.url, { method: "PUT", headers: { "content-type": file.type }, body: file });
+            return response.ok ? { ok: true, path: signed.path } : { ok: false, error: t("negotiation.attach.error_unavailable") };
+          } catch {
+            return { ok: false, error: t("negotiation.attach.error_unavailable") };
+          }
+        },
+      }}
+      onSend={async (body, attachments) => {
         setError(undefined);
-        startTransition(async () => {
-          const result = await sendSellerMessage({ enquiryId, body });
-          if (result.ok) router.refresh();
-          else setError(result.error);
+        const result = await new Promise<Awaited<ReturnType<typeof sendSellerMessage>>>((resolve) => {
+          startTransition(async () => {
+            resolve(await sendSellerMessage({ enquiryId, body, attachments }));
+          });
         });
+        if (!result.ok) {
+          setError(result.error);
+          return false;
+        }
+        router.refresh();
+        return true;
       }}
     />
   );

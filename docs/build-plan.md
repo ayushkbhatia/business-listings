@@ -325,8 +325,32 @@ is `7b`, and it is a tenancy question, not a screen.
   buyer who sent without an account still cannot reach the list (7a/7b); *Company & team* and
   *Saved requirements* are not drawn until 7b and `/account/requirements` exist; Q5 (per-person
   inbox on a company account) is the owner's. Migration `20261025140000_buyer_inbox_10e`.
-- [ ] **3.3 `10h`** — `getThread` returns `automatic`; the buyer page drops it. The one party the
+- [x] **3.3 `10h`** — `getThread` returns `automatic`; the buyer page drops it. The one party the
   tag exists for is the one party who cannot see it. No in-app navigation into the route at all.
+  **Done with board `10h`'s handoff, 14 Sep 2026.** `/enquiry/:id/thread/:seller` (reference or id)
+  is the board: a rail of every supplier the enquiry reached in the four states a fan-out produces —
+  revised, partly quoted, quoted, and *no reply yet*, kept as a row (`B9`) — each previewed by the
+  last message's own opening clause (`B4`); a header naming the supplier by `displayName` with the
+  shared badge, the last seat that typed and the measured reply time; and the thread, shared with
+  11b so both sides render one revision one way. A revision arrives as a table of every line it
+  prices with the previous figure struck through, its requirement lines left unpriced grey and
+  totalling nothing (`B3`), every total summed from lines at render (`B1`) and every comparison
+  made between whole revisions (`B2`) — `lib/messaging/negotiation.ts`, unit-tested on the board's
+  corrected 14,880 → 14,600 and −AED 280. A superseded revision is a document card with its lines
+  in place and a PDF generated from the same figures; every revision states its window (`B8`, Q2
+  answered by the model: `validityDays` is per revision). Accepting is `acceptQuoteAction` with a
+  return path (`B6`), stated in a dialog that names the suppliers it declines. Tracking rows and
+  the comparison columns link in. Q5 answered: files attach both ways, reach only the two sides of
+  one thread (`MessageAttachment`, document kind `thread_attachment` with no enquiry or business),
+  and are type- and size-checked from storage — not scanned, and the composer does not claim so.
+  `Message.readAt` gives the board's `READ`, symmetric and set once. **Found on the way and
+  fixed:** every reader derived a message's side from the sender's seat today, so removing a seat
+  moved its replies to the buyer's side on both threads, the report evidence page, the follow-up
+  guard, the inbox counts and the accepted record's commitments — `Message.authorSide` (`B5`);
+  nothing held the thread immutable — trigger `message_is_the_record` refuses edits and direct
+  deletes (`B10`); a thread whose enquiry was accepted elsewhere still took messages from both
+  sides; `acceptQuote` accepted on an enquiry `10e` already calls expired, and the comparison
+  offered it. Migration `20261028090000_negotiation_thread_10h`.
 - [x] **3.4 `1n` + `7c`** — `lib/quote/send-quote.ts` fences only on `closesAt`, never on
   acceptance, while the dashboard's read-only comment claims it enforces "the same three
   conditions the service refuses on" — false for two. The accepted record's contact panel has no
@@ -578,7 +602,7 @@ the only large piece and the only one selling something it does not deliver.
 | `7a` | Auth — four states | built | 14 Sep 2026 | Password sign-in, reset grants, sign-up fallback, suspension writer. | 3.1 |
 | `7b` | Buyer company account | scaffold | medium | A tenant table with no writer: `User.buyerCompanyId` is null for every non-seeded user. | 3.7 |
 | `10e` | Buyer enquiry inbox | built | 14 Sep 2026 | Derived chips and verbs, nudge-all, re-send, saved-search alerts, account menu with sign-out. | 3.2 |
-| `10h` | Negotiation thread | partial | small | The AUTOMATIC badge exists for the buyer and renders only for the seller. | 3.3 |
+| `10h` | Negotiation thread | built | — | Built with board `10h`'s handoff (3.3). | 3.3 |
 | `1n` | Compare quotes | partial | small | The tracking page's own Compare button builds a reference the route cannot resolve. | 1.2 / 3.4 |
 | `7c` | Accepted quote record | **built** | small | Fenced, and rebuilt against its board-level handoff, 14 Sep 2026. Services variant owed (`7c-s`, see `docs/services-build-plan.md` §6). | 3.4 |
 | `10f` | Write a review — gated | partial | small | The live review-request email links a URL the e2e suite asserts returns 404. | 3.5 |

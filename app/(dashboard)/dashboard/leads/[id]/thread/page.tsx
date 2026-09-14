@@ -9,19 +9,18 @@ import { prisma } from "@/lib/db/client";
 import { markLeadOpened } from "@/lib/db/mutations/lead";
 import { getLeadDetail } from "@/lib/db/queries/seller";
 import {
-  formatAED,
   formatCount,
   formatCountdown,
   formatDate,
-  formatDateTime,
   formatMonth,
   formatRelative,
   isWithinRelativeWindow,
 } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { getThread } from "@/lib/messaging/service";
-import { toThreadQuotes } from "@/lib/messaging/thread-view";
-import { feeOnBasis } from "@/lib/quote/proposal-words";
+import { markThreadRead } from "@/lib/messaging/service";
+import { canWrite, timeline } from "@/lib/messaging/negotiation";
+import { threadMessageViews } from "@/lib/messaging/negotiation-words";
+import { loadThreadRecord } from "@/lib/messaging/negotiation-server";
 import { workEnquiryOf } from "@/lib/quote/work-enquiry";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../../../_shell";
 import { FollowUp } from "./FollowUp";
@@ -48,10 +47,12 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
   const { id } = await params;
   const seat = await requireSellerSeat();
 
-  const [lead, badges, messages, recipient, work] = await Promise.all([
+  const [lead, badges, record, recipient, work] = await Promise.all([
     getLeadDetail(seat.businessId, id),
     getNavBadges(seat.businessId),
-    getThread(id, seat.businessId),
+    // The same record the buyer's thread is drawn from (board `10h`), so the two
+    // sides render one set of revisions rather than two readings of them.
+    loadThreadRecord(id, seat.businessId),
     prisma.enquiryRecipient.findUnique({
       where: { enquiryId_businessId: { enquiryId: id, businessId: seat.businessId } },
       select: {
@@ -70,36 +71,24 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
     // Board `3j-s`: work is answered with a proposal, and the way back says so.
     workEnquiryOf(prisma, id),
   ]);
-  if (!lead || !recipient) notFound();
+  if (!lead || !recipient || !record) notFound();
+  const messages = record.messages;
 
   // A read should not block on a write. `openedAt` feeds the buyer's tracking
-  // page and is not part of what this page renders.
-  after(() => markLeadOpened(id, seat.businessId));
+  // page and is not part of what this page renders — and the buyer's messages
+  // are read now, which is the `Read` the buyer sees under their own words.
+  after(async () => {
+    await markLeadOpened(id, seat.businessId);
+    await markThreadRead(id, seat.businessId, { side: "seller" });
+  });
 
   // Read once, at the top, so every relative label measures from one instant.
   const now = new Date();
 
   const [buyerHistory, seatNames] = await Promise.all([
     buyerPanelFor(seat.businessId, id),
-    sendersFor(messages ?? []),
+    sendersFor(messages),
   ]);
-
-  const quoteViews = toThreadQuotes(
-    lead.quotes.map((q) => ({
-      id: q.id,
-      ref: q.ref,
-      revision: q.revision,
-      lines: q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice })),
-      proposal: q.proposal,
-    })),
-    (aed) => formatAED(aed),
-    {
-      down: (amount, percent) => t("thread.delta_down", { amount, percent }),
-      up: (amount, percent) => t("thread.delta_up", { amount, percent }),
-      same: t("thread.delta_same"),
-    },
-    feeOnBasis,
-  );
 
   /*
      Read-only exactly where `postMessage` refuses.
@@ -110,8 +99,14 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
      "closed" back on submit. One rule, in one place, and the screen follows it.
   */
   const closed = lead.closesAt.getTime() < now.getTime();
-  const isAcceptedPair = recipient.enquiry.contactReleasedToBusinessId === seat.businessId;
-  const readOnly = closed && !isAcceptedPair;
+  const readOnly = !canWrite({
+    businessId: seat.businessId,
+    releasedTo: recipient.enquiry.contactReleasedToBusinessId,
+    closesAt: lead.closesAt,
+    // A closing business has no seat left to be on this page.
+    supplierClosed: false,
+    now,
+  });
 
   const latestQuote = lead.quotes[0];
   const competing = recipient.enquiry._count.recipients;
@@ -122,10 +117,10 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
      number for its badge, and two queries for one fact is how the badge and the
      screen come to disagree.
   */
-  const lastSellerAt = (messages ?? [])
+  const lastSellerAt = messages
     .filter((m) => m.fromSeller)
     .reduce<number>((latest, m) => Math.max(latest, m.createdAt.getTime()), 0);
-  const unreadCount = (messages ?? []).filter(
+  const unreadCount = messages.filter(
     (m) => !m.fromSeller && m.createdAt.getTime() > lastSellerAt,
   ).length;
 
@@ -205,7 +200,7 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
         name="thread_viewed"
         props={{
           state: recipient.outcome ?? recipient.state,
-          messages: (messages ?? []).length,
+          messages: messages.length,
           unread: unreadCount,
         }}
       />
@@ -218,28 +213,27 @@ export default async function LeadThreadPage({ params }: { params: Promise<{ id:
               buyerFirstName={lead.buyer.firstName}
               readOnly={readOnly}
               notes={systemNotesFor(latestQuote, now)}
-              messages={(messages ?? []).map((message) => {
-                const quote = message.quoteRevisionId
-                  ? quoteViews.get(message.quoteRevisionId)
-                  : undefined;
-                return {
-                  id: message.id,
-                  body: message.body,
-                  fromMe: message.fromSeller,
-                  /*
-                     Which seat sent it, not the company name. Board 11b: a
-                     shared inbox with anonymous replies makes a two-person
-                     business unmanageable, and the previous version labelled
-                     every seller message with the business.
-                  */
-                  senderLabel: message.fromSeller
-                    ? (seatNames.get(message.senderId) ?? seat.businessName)
+              messages={threadMessageViews({
+                entries: timeline(messages, record.quotes),
+                viewer: "seller",
+                quotes: record.quotes,
+                requirement: record.requirement,
+                now,
+                emphasisQuoteId: record.quotes[record.quotes.length - 1]?.id ?? null,
+                /*
+                   Which seat sent it, not the company name. Board 11b: a shared
+                   inbox with anonymous replies makes a two-person business
+                   unmanageable, and the previous version labelled every seller
+                   message with the business. A revision sent from the lead
+                   screen names no seat, so it carries the business.
+                */
+                senderLabel: (entry) =>
+                  entry.fromSeller
+                    ? entry.message
+                      ? (seatNames.get(entry.message.senderId) ?? seat.businessName)
+                      : seat.businessName
                     : lead.buyer.firstName,
-                  at: formatDateTime(message.createdAt),
-                  flagged: message.flagged,
-                  automatic: message.automatic,
-                  ...(quote ? { quote } : {}),
-                };
+                fileHref: (documentId) => `/dashboard/leads/${lead.enquiryId}/thread/files/${documentId}`,
               })}
             />
           </Card>

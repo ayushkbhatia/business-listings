@@ -498,9 +498,9 @@ async function countTabs(
  * Buyer messages since the seller last wrote, per lead.
  *
  * Two queries rather than one per row: the seller's last message on each thread,
- * then a count of buyer messages after it. `Message` has no read state and is
- * not gaining one — board 11b's receipts are quote-level and symmetric, and a
- * per-message read flag would be a one-way receipt on the buyer's own words.
+ * then a count of buyer messages after it. Not `Message.readAt`, which board
+ * `10h` added: a message the seller opened and did not answer still waits on
+ * them, and this badge counts what needs a reply, not what went unseen.
  */
 async function unreadCounts(
   businessId: string,
@@ -510,7 +510,7 @@ async function unreadCounts(
 
   const lastSeller = await prisma.message.groupBy({
     by: ["enquiryId"],
-    where: { businessId, enquiryId: { in: [...enquiryIds] }, sender: { businessId } },
+    where: { businessId, enquiryId: { in: [...enquiryIds] }, authorSide: "seller" },
     _max: { createdAt: true },
   });
   const lastByEnquiry = new Map(
@@ -518,9 +518,9 @@ async function unreadCounts(
   );
 
   const buyerMessages = await prisma.message.findMany({
-    // Not this business's seats — the same test `getThread` uses to decide which
-    // side of the thread a message sits on, so the two cannot disagree.
-    where: { businessId, enquiryId: { in: [...enquiryIds] }, NOT: { sender: { businessId } } },
+    // The buyer's side, by the column `getThread` reads, so the two cannot
+    // disagree — and a reply from a seat since removed stays the seller's.
+    where: { businessId, enquiryId: { in: [...enquiryIds] }, authorSide: "buyer" },
     select: { enquiryId: true, createdAt: true },
   });
 

@@ -154,7 +154,12 @@ export async function getAcceptedRecord(
         businessId: releasedTo,
         automatic: false,
         flaggedAt: null,
-        sender: { businessId: releasedTo },
+        /*
+           The supplier's side of the thread, stated when it was written. A seat
+           filter dropped every commitment made by somebody who has since left
+           the supplier's team — the dated words a buyer holds them to.
+        */
+        authorSide: "seller",
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 60,

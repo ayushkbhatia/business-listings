@@ -53,6 +53,7 @@ import { seedDedupe } from "./seed-dedupe.mjs";
 import { seedQueue } from "./seed-queue.mjs";
 import { seedCredentialReview } from "./seed-credential-review.mjs";
 import { seedStaffRoster } from "./seed-staff-roster.mjs";
+import { seedNegotiationThreads } from "./seed-negotiation.mjs";
 import { seedAccountHealth } from "./seed-account-health.mjs";
 import { seedRevenue } from "./seed-revenue.mjs";
 import { seedCrmCalls } from "./seed-crm.mjs";
@@ -1108,6 +1109,10 @@ async function main() {
   // Board 12d: the call log a week leaves behind. No tasks — those are the
   // derivation's alone, built by the nightly job or Refresh signals.
   await seedCrmCalls(prisma, NOW);
+  // Board 10h: a negotiation mid-flight and one to accept from. The wall clock,
+  // for the reason `seedStaffRoster` takes it — the board's revision is minutes
+  // old. Before `recomputeDerived`, which measures the replies it adds.
+  await seedNegotiationThreads(prisma, new Date());
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
   await backfillSeatChannels(prisma);
@@ -2928,8 +2933,8 @@ async function seedEnquiries(db: Db, businesses: Biz[], buyerId: string, buyerTw
 
   await db.message.createMany({
     data: [
-      { enquiryId: e1.id, businessId: first.id, senderId: buyerId, body: "Can you bring the DN150 lead time inside two weeks?", createdAt: hours(-24) },
-      { enquiryId: e1.id, businessId: first.id, senderId: buyerId, body: "Also confirm WRAS certification on the DN100.", createdAt: hours(-23) },
+      { enquiryId: e1.id, businessId: first.id, senderId: buyerId, authorSide: "buyer", body: "Can you bring the DN150 lead time inside two weeks?", createdAt: hours(-24) },
+      { enquiryId: e1.id, businessId: first.id, senderId: buyerId, authorSide: "buyer", body: "Also confirm WRAS certification on the DN100.", createdAt: hours(-23) },
     ],
   });
 
@@ -3458,11 +3463,11 @@ async function seedAcceptedRecords(db: Db, claimed: Biz[], taken: Biz[]) {
 
   await db.message.createMany({
     data: [
-      { enquiryId: typical.id, businessId: winner!.id, senderId: buyer.id, body: "Can you get the valve price nearer 190 if we take all three lines from you?", createdAt: pre(5) },
-      { enquiryId: typical.id, businessId: winner!.id, senderId: winnerSeat.id, body: "Yes, 191.00 on the valves and 46.00 on the couplings. Revision 2 is on the enquiry.", createdAt: pre(4) },
-      { enquiryId: typical.id, businessId: winner!.id, senderId: buyer.id, body: "Accepted. When can we collect?", createdAt: pre(2) },
-      { enquiryId: typical.id, businessId: winner!.id, senderId: winnerSeat.id, body: "Thank you. One drop, 40 valves and 120 couplings, ready on " + formatSeedDay(new Date(pre(2).getTime() + 7 * 86_400_000)) + ". Gaskets to follow within 2 days of the drop.", createdAt: pre(2) },
-      { enquiryId: typical.id, businessId: winner!.id, senderId: winnerSeat.id, body: "Datasheets and the civil defence certificate are coming by email today.", createdAt: pre(1) },
+      { enquiryId: typical.id, businessId: winner!.id, senderId: buyer.id, authorSide: "buyer", body: "Can you get the valve price nearer 190 if we take all three lines from you?", createdAt: pre(5) },
+      { enquiryId: typical.id, businessId: winner!.id, senderId: winnerSeat.id, authorSide: "seller", body: "Yes, 191.00 on the valves and 46.00 on the couplings. Revision 2 is on the enquiry.", createdAt: pre(4) },
+      { enquiryId: typical.id, businessId: winner!.id, senderId: buyer.id, authorSide: "buyer", body: "Accepted. When can we collect?", createdAt: pre(2) },
+      { enquiryId: typical.id, businessId: winner!.id, senderId: winnerSeat.id, authorSide: "seller", body: "Thank you. One drop, 40 valves and 120 couplings, ready on " + formatSeedDay(new Date(pre(2).getTime() + 7 * 86_400_000)) + ". Gaskets to follow within 2 days of the drop.", createdAt: pre(2) },
+      { enquiryId: typical.id, businessId: winner!.id, senderId: winnerSeat.id, authorSide: "seller", body: "Datasheets and the civil defence certificate are coming by email today.", createdAt: pre(1) },
     ],
   });
 
@@ -3705,7 +3710,7 @@ async function seedReplyHistory(db: Db, businesses: Biz[], buyerId: string) {
           data: {
             enquiryId: enquiry.id,
             businessId: business.id,
-            senderId: sender,
+            senderId: sender, authorSide: "seller",
             body: "Thanks for the enquiry — sending our quote across now.",
             createdAt: repliedAt,
           },
@@ -8183,9 +8188,9 @@ async function seedProposalReplies(db: Db) {
   });
   await db.message.createMany({
     data: [
-      { enquiryId: accepted.id, businessId: efg.id, senderId: buyer.id, body: "Does the monthly fee include the podium car park ventilation?", createdAt: pre(9) },
-      { enquiryId: accepted.id, businessId: efg.id, senderId: efgSeat.id, body: "Yes, the podium is in scope. It is written into the proposal now.", createdAt: pre(9) },
-      { enquiryId: accepted.id, businessId: efg.id, senderId: efgSeat.id, body: "Thank you. Our account engineer will be on site for the handover walk on " + formatSeedDay(new Date(pre(2).getTime() + 5 * 86_400_000)) + ".", createdAt: pre(1) },
+      { enquiryId: accepted.id, businessId: efg.id, senderId: buyer.id, authorSide: "buyer", body: "Does the monthly fee include the podium car park ventilation?", createdAt: pre(9) },
+      { enquiryId: accepted.id, businessId: efg.id, senderId: efgSeat.id, authorSide: "seller", body: "Yes, the podium is in scope. It is written into the proposal now.", createdAt: pre(9) },
+      { enquiryId: accepted.id, businessId: efg.id, senderId: efgSeat.id, authorSide: "seller", body: "Thank you. Our account engineer will be on site for the handover walk on " + formatSeedDay(new Date(pre(2).getTime() + 5 * 86_400_000)) + ".", createdAt: pre(1) },
     ],
   });
 

@@ -12,11 +12,14 @@ export { ModerationRow, type ModerationRowProps } from "./ModerationRow";
 export { AuditRow, type AuditRowProps } from "./AuditRow";
 export {
   Thread,
+  type ThreadAttachmentView,
   type ThreadChip,
   type ThreadLabels,
   type ThreadMessageView,
   type ThreadProps,
+  type ThreadQuoteLineView,
   type ThreadQuoteView,
+  type ThreadUploadConfig,
 } from "./Thread";
 export {
   EnquiryComposer,

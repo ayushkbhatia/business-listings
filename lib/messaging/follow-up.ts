@@ -202,6 +202,7 @@ export async function sendFollowUp(input: {
         enquiryId: input.enquiryId,
         businessId: input.businessId,
         senderId: input.senderId,
+        authorSide: "seller",
         body,
         // Board 11b tags it on screen. A buyer replying to a person deserves to
         // know when they did not get one.
@@ -260,14 +261,15 @@ export async function sendFollowUp(input: {
 async function buyerHasRepliedSince(enquiryId: string, businessId: string): Promise<boolean> {
   const [lastSeller, lastBuyer] = await Promise.all([
     prisma.message.findFirst({
-      where: { enquiryId, businessId, sender: { businessId } },
+      where: { enquiryId, businessId, authorSide: "seller" },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
     }),
     prisma.message.findFirst({
-      // Not this business's seats — the same test `getThread` uses to decide
-      // which side of the thread a message sits on.
-      where: { enquiryId, businessId, NOT: { sender: { businessId } } },
+      // The buyer's side — the column `getThread` reads to decide which side of
+      // the thread a message sits on. Not "not this business's seats": a seat
+      // removed from the team is not the buyer (board `10h` B5).
+      where: { enquiryId, businessId, authorSide: "buyer" },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
     }),

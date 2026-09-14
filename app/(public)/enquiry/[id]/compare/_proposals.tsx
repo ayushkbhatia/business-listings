@@ -496,6 +496,7 @@ function ComparisonTable({
                   token={token}
                   carry={carry}
                   now={now}
+                  closesAt={comparison.closesAt}
                   acceptAction={acceptAction}
                 />
               </td>
@@ -633,6 +634,7 @@ function DecisionCell({
   token,
   carry,
   now,
+  closesAt,
   acceptAction,
 }: {
   column: ComparisonColumn;
@@ -641,6 +643,7 @@ function DecisionCell({
   token: string | null;
   carry: string;
   now: Date;
+  closesAt: Date;
   acceptAction: ((formData: FormData) => Promise<void>) | undefined;
 }) {
   const ask = (
@@ -676,6 +679,20 @@ function DecisionCell({
             ? t("compare_proposals.expired_on", { when: formatDate(column.quote.expiresAt) })
             : t("compare_proposals.state.expired")}
         </p>
+        {ask}
+      </div>
+    );
+  }
+
+  /*
+     Board `10e` `B3` and `10h`'s states: closed with nothing accepted is
+     terminal, and `acceptQuote` refuses it — so the button is not offered to
+     meet the refusal after it is pressed.
+  */
+  if (closesAt.getTime() <= now.getTime()) {
+    return (
+      <div className="text-center">
+        <p className="text-body-sm text-muted">{t("compare_proposals.closed_on", { when: formatDate(closesAt) })}</p>
         {ask}
       </div>
     );

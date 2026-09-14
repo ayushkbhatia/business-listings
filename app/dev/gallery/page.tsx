@@ -30,6 +30,7 @@ import { BuilderSectionsGallery } from "./_sections/BuilderSections";
 import { BuyerInboxGallery } from "./_sections/BuyerInbox";
 import { NotificationTemplatesGallery } from "./_sections/NotificationTemplates";
 import { HomeCurationGallery } from "./_sections/HomeCuration";
+import { NegotiationThreadGallery } from "./_sections/NegotiationThread";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
 import { Tokens } from "./_sections/Tokens";
@@ -316,6 +317,8 @@ export default function Gallery() {
       {/* After CRM, for the same reason: nothing new above Shells. */}
       <BuyerInboxGallery />
       <NotificationTemplatesGallery />
+      {/* Last, for the axe-grid reason above: nothing new above Shells. */}
+      <NegotiationThreadGallery />
       <HomeCurationGallery />
     </main>
   );

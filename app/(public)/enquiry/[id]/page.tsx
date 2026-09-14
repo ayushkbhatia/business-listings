@@ -252,6 +252,7 @@ export default async function EnquiryPage({
                   acceptedBusinessId={enquiry.contactReleasedToBusinessId}
                   isFirstQuoted={row.businessId === firstQuotedId}
                   quoteHref={withToken(`/enquiry/${tracking.ref}/compare`)}
+                  threadHref={withToken(`/enquiry/${tracking.ref}/thread/${row.slug}`)}
                   enquiryRef={tracking.ref}
                   token={token}
                 />
