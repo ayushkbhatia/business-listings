@@ -1768,7 +1768,7 @@ kind badges, not for the stated reason.
 ---
 
 ### Stage 8 · Ranking and ops
-`12c` defects → `12c-s` → `4c-s` → `12g-s` + `6g-s`
+`12c` defects → `12c-s` → `4c-s` → `12g-s` ~~+ `6g-s`~~
 
 **`12c-s` shipped 13 Sep — see §4q.** Two of §2's three ranking defects went in #173 — the shape vector totals
 100 on every query shape now, and the affected-seller counter is a real count. The third,
@@ -1776,8 +1776,8 @@ kind badges, not for the stated reason.
 a kind key is a drop-and-re-key on the live ranking table, which is this board's own opening move
 rather than something owed to it. Budget for it in the handoff.
 
-`4c-s` narrows under D10 to the two kinds a register can answer. `12g-s` and `6g-s` are one piece of
-work and there is currently no instrument in the tree that can charge D9's accepted drift.
+`4c-s` narrows under D10 to the two kinds a register can answer. `6g-s` was cut on 14 Sep 2026, unbuilt,
+so `12g-s` stands alone and nothing in the tree will report on D9's accepted drift.
 
 ---
 
@@ -2400,7 +2400,7 @@ edit**.
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **All four shipped 13 Sep** (§4m–§4o, §4s) — the public storefront set is complete, and the builder's library is filtered by kind |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p), **`3j-s` and `1n-s` 14 Sep** (§4t, §4u) — the demand-side trio is complete |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
-| **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. **`4c-s` shipped 14 Sep** (§4w). `12g-s` and `6g-s` remain. `1c-s` is unblocked on Q1, which `rankBlended` answers |
+| **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · ~~`6g-s`~~ | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. **`4c-s` shipped 14 Sep** (§4w). `12g-s` remains; `6g-s` was cut 14 Sep. `1c-s` is unblocked on Q1, which `rankBlended` answers |
 | — | **Q1 said families** | `4e-s` · `3h-s` | — | Both **shipped 13 Sep** — `3h-s` closed wave 2 (§4k) and `4e-s` authored the five families (§4l) |
 
 **What needs no handoff at all:**
