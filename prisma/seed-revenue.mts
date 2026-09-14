@@ -196,7 +196,7 @@ export async function seedRevenue(db: Db, now: Date): Promise<void> {
       });
       if (repliedAt) {
         await db.message.create({
-          data: { enquiryId: enquiry.id, businessId, senderId: ownerId, body: "Thanks — our quote follows.", createdAt: repliedAt },
+          data: { enquiryId: enquiry.id, businessId, senderId: ownerId, authorSide: "seller", body: "Thanks — our quote follows.", createdAt: repliedAt },
         });
       }
     }

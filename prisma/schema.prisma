@@ -2744,6 +2744,8 @@ enum DocumentKind {
   catalogue
   certificate
   enquiry_attachment
+  /// Sent in one thread, to one side. See `MessageAttachment`.
+  thread_attachment
 
   @@map("document_kind")
 }
@@ -2834,6 +2836,7 @@ model Document {
   credentials      Credential[]
   catalogueImports CatalogueImportRequest[]
   quoteAttachments QuoteAttachment[]
+  messageAttachments MessageAttachment[]
 
   @@index([businessId])
   @@index([enquiryId])
@@ -4697,14 +4700,50 @@ model QuoteAttachment {
   @@map("quote_attachment")
 }
 
+/// Which organisation wrote a message. Board `10h` `B5`.
+enum MessageAuthorSide {
+  buyer
+  seller
+
+  @@map("message_author_side")
+}
+
 /// Belongs to an Enquiry + Business pair. Off-platform payment detection runs on
 /// the body — IBAN patterns, "transfer to" — and raises a SupplierReport with
 /// kind `off_platform_payment`, which skips the moderation queue.
+///
+/// Board `10h` `B10`: the thread is the dispute record, and nothing in it is
+/// editable or deletable by either side once sent. Trigger
+/// `message_is_the_record` holds that in the database — every column is fixed
+/// at insert except `read_at` (set once) and `quote_revision_id` (cleared only
+/// by its foreign key), and a row goes only when its enquiry, business or sender
+/// does.
 model Message {
   id              String    @id @default(cuid())
   enquiryId       String    @map("enquiry_id")
   businessId      String    @map("business_id")
   senderId        String    @map("sender_id") @db.Uuid
+  /// The side of the thread, stated at write — never derived from the sender.
+  ///
+  /// Board `10h` `B5`: the thread is between two organisations and the record
+  /// should read that way years later. Every reader used to derive the side
+  /// from `sender.businessId === message.businessId`, which is a fact about the
+  /// sender *now*: a sales seat removed from the team has `businessId` cleared
+  /// (lib/team/invite.ts), and every message they had written moved to the
+  /// buyer's side of the thread — in the buyer's view, the seller's, and the
+  /// evidence page staff read a supplier report against.
+  ///
+  /// `senderId` stays, for which seat wrote it. This column is whose words they
+  /// are.
+  authorSide      MessageAuthorSide @map("author_side")
+  /// When the other side first opened the thread with this message in it.
+  ///
+  /// Board `10h` draws `17:41 · READ` under the buyer's own message. Symmetric,
+  /// which is board 11b §6's condition on any receipt: the buyer opening the
+  /// thread stamps the seller's messages, the seller opening it stamps the
+  /// buyer's, and each side sees `Read` under its own words and nowhere else.
+  /// Set once — the first opening, not the latest — like `Quote.readAt`.
+  readAt          DateTime? @map("read_at")
   body            String
   /// Written by the follow-up schedule rather than typed.
   ///
@@ -4721,9 +4760,35 @@ model Message {
   business      Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
   sender        User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
   quoteRevision Quote?   @relation(fields: [quoteRevisionId], references: [id], onDelete: SetNull)
+  attachments   MessageAttachment[]
 
   @@index([enquiryId, businessId, createdAt])
   @@map("message")
+}
+
+/// A file sent in a thread. Board `10h` Q5.
+///
+/// A join to a `Document` of kind `thread_attachment`, and that document has
+/// neither `enquiryId` nor `businessId`: an `enquiryId` would put a drawing the
+/// buyer sent one supplier into the attachment set every recipient of the
+/// enquiry can open (`/dashboard/leads/:id/attachments/:document`), and a
+/// `businessId` would list a buyer's BOQ among the supplier's own verification
+/// documents. Reachable only through its message, so only by the two sides of
+/// that one thread.
+///
+/// Insert-only, like the message it hangs off.
+model MessageAttachment {
+  messageId  String   @map("message_id")
+  documentId String   @map("document_id")
+  sortOrder  Int      @default(0) @map("sort_order")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  message  Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([messageId, documentId])
+  @@index([documentId], map: "message_attachment_document_idx")
+  @@map("message_attachment")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -203,27 +203,27 @@ export async function getOverview(businessId: string, now = new Date()): Promise
 /**
  * Threads where the last word was the buyer's.
  *
- * There is no read receipt on Message and this does not invent one — "unread"
- * is not a fact this schema holds. Whose message is most recent is, and it is
- * the better question anyway: the board asks what needs a reply, and a message
- * a seller opened and did not answer still needs one.
+ * Not "unread". `Message.readAt` exists since board `10h`, but a message a
+ * seller opened and did not answer still needs a reply, and this card asks what
+ * needs a reply. Whose message is most recent is that question.
  *
- * A message is the seller's when its sender belongs to this business, the same
- * derivation lib/messaging/service.ts uses for `fromSeller`. DISTINCT ON takes
- * the latest row per thread in one pass rather than one query per enquiry.
+ * A message is the buyer's by `author_side`, the column lib/messaging/service.ts
+ * reads for `fromSeller`. It used to join the sender's seat, which made every
+ * reply from somebody since removed from the team read as the buyer waiting.
+ * DISTINCT ON takes the latest row per thread in one pass rather than one query
+ * per enquiry; the id settles two messages written in the same instant.
  */
 async function threadsAwaitingReplyFor(businessId: string): Promise<number> {
   const [row] = await prisma.$queryRaw<{ n: bigint }[]>`
     SELECT count(*) AS n FROM (
       SELECT DISTINCT ON (m.enquiry_id)
              m.enquiry_id,
-             u.business_id AS sender_business
+             m.author_side
         FROM message m
-        JOIN "user" u ON u.id = m.sender_id
        WHERE m.business_id = ${businessId}
-       ORDER BY m.enquiry_id, m.created_at DESC
+       ORDER BY m.enquiry_id, m.created_at DESC, m.id DESC
     ) latest
-    WHERE latest.sender_business IS DISTINCT FROM ${businessId}
+    WHERE latest.author_side = 'buyer'
   `;
   return Number(row?.n ?? 0);
 }

@@ -21,6 +21,8 @@ export function acceptErrorMessage(code: string | undefined): string | null {
       return t("compare.error_revised");
     case "supplier_closed":
       return t("compare.error_supplier_closed");
+    case "enquiry_closed":
+      return t("compare.error_enquiry_closed");
     default:
       return null;
   }

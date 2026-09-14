@@ -197,7 +197,7 @@ export async function seedAccountHealth(db: Db, now: Date): Promise<void> {
           data: {
             enquiryId: enquiry.id,
             businessId: business.id,
-            senderId: owner.id,
+            senderId: owner.id, authorSide: "seller",
             body: "Thanks for the enquiry. Our quote follows.",
             createdAt: repliedAt,
           },

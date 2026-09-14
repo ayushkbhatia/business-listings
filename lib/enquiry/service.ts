@@ -802,7 +802,14 @@ export type AcceptQuoteResult =
         /** The supplier has sent a later revision; accept that one. */
         | "revised"
         /** Board 11i. The supplier closed their account. */
-        | "supplier_closed";
+        | "supplier_closed"
+        /**
+         * The enquiry closed before anybody accepted. Board `10e` `B3`: expired
+         * is terminal with one action, re-send — and board `10h`'s states make
+         * the thread read-only at the same moment. Accepting past it would
+         * release a buyer's contact on an enquiry every other screen calls dead.
+         */
+        | "enquiry_closed";
     };
 
 /**
@@ -821,7 +828,7 @@ export type AcceptQuoteResult =
  */
 /** A refusal found under the lock, thrown so the claim rolls back with it. */
 class AcceptRefused extends Error {
-  constructor(readonly code: "not_open" | "revised") {
+  constructor(readonly code: "not_open" | "revised" | "enquiry_closed") {
     super(code);
   }
 }
@@ -841,7 +848,7 @@ export async function acceptQuote(
       status: true,
       expiresAt: true,
       business: { select: { closureRequestedAt: true } },
-      enquiry: { select: { id: true, buyerId: true, contactReleasedToBusinessId: true } },
+      enquiry: { select: { id: true, buyerId: true, contactReleasedToBusinessId: true, closesAt: true } },
     },
   });
   if (!quote) return { ok: false, error: "not_found" };
@@ -850,6 +857,7 @@ export async function acceptQuote(
   // A draft is invisible to the buyer, so an id for one is a guessed id.
   if (quote.status === "draft") return { ok: false, error: "not_found" };
   if (quote.enquiry.contactReleasedToBusinessId) return { ok: false, error: "already_accepted" };
+  if (quote.enquiry.closesAt.getTime() <= now.getTime()) return { ok: false, error: "enquiry_closed" };
   if (quote.expiresAt && quote.expiresAt.getTime() < now.getTime()) {
     return { ok: false, error: "quote_expired" };
   }
@@ -894,11 +902,13 @@ export async function acceptQuote(
     */
     const current = await tx.quote.findUniqueOrThrow({
       where: { id: quote.id },
-      select: { status: true },
+      select: { status: true, enquiry: { select: { closesAt: true } } },
     });
     if (current.status !== "sent" && current.status !== "read") {
       throw new AcceptRefused("not_open");
     }
+    // A revision of the requirement can move the close; read it where the claim holds.
+    if (current.enquiry.closesAt.getTime() <= now.getTime()) throw new AcceptRefused("enquiry_closed");
     const later = await tx.quote.count({
       where: {
         enquiryId: quote.enquiry.id,

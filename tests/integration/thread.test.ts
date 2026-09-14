@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { getThread, postMessage } from "@/lib/messaging/service";
 import { cancelFollowUp, scheduleFollowUp, sendFollowUp } from "@/lib/messaging/follow-up";
+import { purgeThreadMessages } from "./thread-cleanup";
 import { sendQuoteForBusiness } from "@/lib/quote/send-quote";
 import { getBuyerEnquiry } from "@/lib/db/queries/enquiry";
 import { delta, parseAedToFils } from "@/lib/quote/money";
@@ -48,7 +49,7 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  await prisma.message.deleteMany({ where: { id: { in: createdMessageIds.splice(0) } } });
+  await purgeThreadMessages({ id: { in: createdMessageIds.splice(0) } });
   await prisma.supplierReport.deleteMany({ where: { id: { in: createdReportIds.splice(0) } } });
   await prisma.quote.deleteMany({ where: { id: { in: createdQuoteIds.splice(0) } } });
   await prisma.enquiryRecipient.update({
@@ -372,6 +373,6 @@ describe("the one follow-up", () => {
       where: { enquiryId: ENQUIRY_ID, businessId },
       data: { sellerNudgedAt: null, buyerNudgedAt: null },
     });
-    await prisma.message.deleteMany({ where: { enquiryId: ENQUIRY_ID, businessId, automatic: true } });
+    await purgeThreadMessages({ enquiryId: ENQUIRY_ID, businessId, automatic: true });
   });
 });

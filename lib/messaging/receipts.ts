@@ -23,9 +23,10 @@ import { prisma } from "@/lib/db/client";
  * board 1i — *"opened {when}"* on their own tracking page — so the seller seeing
  * when a quote was opened restores a balance rather than tipping one.
  *
- * It deliberately does not extend to messages. A per-message read flag would be
- * a receipt on the buyer's own words with no equivalent going the other way, and
- * §6's rule is both ways or not at all.
+ * Messages have their own receipt since board `10h` — `Message.readAt`, written by
+ * `markThreadRead` in lib/messaging/service.ts — and it keeps §6's rule the same
+ * way: both sides stamp the other's words on opening, each sees `Read` under its
+ * own, and neither gets a receipt the other does not.
  *
  * ## Once
  *

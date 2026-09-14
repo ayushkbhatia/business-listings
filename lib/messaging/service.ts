@@ -3,6 +3,21 @@ import { prisma } from "@/lib/db/client";
 import { assertCan } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import { recordEvent } from "@/lib/telemetry/record";
+import {
+  DOCUMENT_BUCKET,
+  removeObject,
+  signUpload,
+  statDocument,
+  type SignedUpload,
+} from "@/lib/storage";
+import { displayFilename } from "@/lib/enquiry/service-enquiry";
+import {
+  MAX_THREAD_ATTACHMENTS,
+  checkThreadAttachment,
+  isThreadAttachmentPath,
+  threadAttachmentPath,
+  type ThreadAttachmentRefusal,
+} from "./attachments";
 import { cancelFollowUp } from "./follow-up";
 import { describeVerdict, detectOffPlatform, type Verdict } from "./off-platform";
 
@@ -34,18 +49,57 @@ export interface PostMessageInput {
   automatic?: boolean;
   /** Set when a seller posts a revised quote inline. */
   quoteRevisionId?: string | null;
+  /**
+   * Files this side uploaded through `signThreadAttachment`, in the order the
+   * composer listed them. Board `10h` Q5: they belong to this message and to
+   * this thread only.
+   */
+  attachments?: readonly ThreadUpload[];
 }
+
+/** A file already in storage, named by the path its signed upload wrote. */
+export interface ThreadUpload {
+  path: string;
+  /** The sender's own filename, shown to the other side. */
+  filename: string;
+}
+
+export type PostMessageError =
+  | "not_a_participant"
+  | "empty"
+  | "closed"
+  | "supplier_closed"
+  /** The buyer accepted another supplier on this enquiry. */
+  | "not_chosen"
+  /** A path this side of this thread was never signed for, or already sent. */
+  | "attachment_missing"
+  | ThreadAttachmentRefusal;
 
 export type PostMessageResult =
   | { ok: true; messageId: string; flagged: boolean; reportId: string | null }
-  | { ok: false; error: "not_a_participant" | "empty" | "closed" | "supplier_closed" };
+  | { ok: false; error: PostMessageError };
 
 const MAX_BODY = 4000;
 
-export async function postMessage(input: PostMessageInput): Promise<PostMessageResult> {
-  const body = input.body.trim();
-  if (!body) return { ok: false, error: "empty" };
+/** Storage, behind the three calls the thread makes — so a test can stand one in. */
+export interface ThreadStorage {
+  sign: (bucket: string, path: string) => Promise<SignedUpload>;
+  stat: typeof statDocument;
+  remove: (bucket: string, path: string) => Promise<void>;
+}
 
+export const threadStorage: ThreadStorage = { sign: signUpload, stat: statDocument, remove: removeObject };
+
+/**
+ * May this side write on this thread at all.
+ *
+ * One answer for a message and for the upload before it, so a file is never
+ * signed onto a thread its message would then be refused on.
+ */
+async function writeAccess(
+  input: Pick<PostMessageInput, "enquiryId" | "businessId" | "senderId" | "sender">,
+  now: Date,
+) {
   const recipient = await prisma.enquiryRecipient.findUnique({
     where: { enquiryId_businessId: { enquiryId: input.enquiryId, businessId: input.businessId } },
     select: {
@@ -58,7 +112,7 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
     },
   });
   // Not a thread that exists, and not one you are on, are the same answer.
-  if (!recipient) return { ok: false, error: "not_a_participant" };
+  if (!recipient) return { ok: false as const, error: "not_a_participant" as const };
 
   /*
      Board 11i build note B4. The thread stays readable to the buyer — it is
@@ -66,11 +120,11 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
      closing business is revoked. Saying so beats accepting a message that
      waits for a reply that cannot come.
   */
-  if (recipient.business.closureRequestedAt) return { ok: false, error: "supplier_closed" };
+  if (recipient.business.closureRequestedAt) return { ok: false as const, error: "supplier_closed" as const };
 
   const enquiry = recipient.enquiry;
   if (input.sender === "buyer" && enquiry.buyerId !== input.senderId) {
-    return { ok: false, error: "not_a_participant" };
+    return { ok: false as const, error: "not_a_participant" as const };
   }
 
   /*
@@ -79,9 +133,67 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
    * would push exactly the conversation this platform wants on the record
    * onto WhatsApp. Everybody else is done talking.
    */
-  const closed = enquiry.closesAt.getTime() < Date.now();
+  const closed = enquiry.closesAt.getTime() < now.getTime();
   const isAcceptedPair = enquiry.contactReleasedToBusinessId === input.businessId;
-  if (closed && !isAcceptedPair) return { ok: false, error: "closed" };
+  /*
+     Board `10h`'s states: *enquiry accepted elsewhere — this thread becomes
+     read-only*, and `7c` is that nothing more is sent on an accepted enquiry.
+     The window being open does not reopen a thread the buyer has decided: a
+     losing supplier writing on after `7c`'s auto-decline, or the buyer writing
+     to them, is a conversation about a deal that went to somebody else.
+  */
+  if (enquiry.contactReleasedToBusinessId !== null && !isAcceptedPair) {
+    return { ok: false as const, error: "not_chosen" as const };
+  }
+  if (closed && !isAcceptedPair) return { ok: false as const, error: "closed" as const };
+
+  return { ok: true as const, recipient, enquiry };
+}
+
+export async function postMessage(
+  input: PostMessageInput,
+  storage: ThreadStorage = threadStorage,
+): Promise<PostMessageResult> {
+  const body = input.body.trim();
+  const uploads = input.attachments ?? [];
+  // A file on its own is a message: "drawing attached" adds nothing the file does not say.
+  if (!body && uploads.length === 0) return { ok: false, error: "empty" };
+  if (uploads.length > MAX_THREAD_ATTACHMENTS) return { ok: false, error: "count" };
+
+  const access = await writeAccess(input, new Date());
+  if (!access.ok) return { ok: false, error: access.error };
+  const { recipient, enquiry } = access;
+
+  /*
+     Board `10h` Q5. Every file is read back from storage under a path only this
+     side of this thread could have been signed for, and is what the bucket
+     allows — never what the browser said about it. One refused file refuses the
+     message: a message that arrives without the drawing it says is attached is
+     worse than one that does not arrive.
+  */
+  const side = input.sender;
+  const files: { path: string; filename: string; bytes: number; mimeType: string | null }[] = [];
+  for (const upload of uploads) {
+    if (!isThreadAttachmentPath(input.enquiryId, input.businessId, side, upload.path)) {
+      return { ok: false, error: "attachment_missing" };
+    }
+    if (files.some((file) => file.path === upload.path)) return { ok: false, error: "attachment_missing" };
+    const stored = await storage.stat(upload.path);
+    if (!stored) return { ok: false, error: "attachment_missing" };
+    const refusal = checkThreadAttachment(stored.mimeType ?? "", stored.bytes);
+    if (refusal) {
+      await storage.remove(DOCUMENT_BUCKET, upload.path);
+      return { ok: false, error: refusal };
+    }
+    files.push({ path: upload.path, filename: upload.filename, bytes: stored.bytes, mimeType: stored.mimeType });
+  }
+  if (files.length > 0) {
+    // A path already sent is on the record with its first message; it does not go twice.
+    const sent = await prisma.document.count({
+      where: { kind: "thread_attachment", storagePath: { in: files.map((file) => file.path) } },
+    });
+    if (sent > 0) return { ok: false, error: "attachment_missing" };
+  }
 
   const verdict = detectOffPlatform(body, {
     contactReleased: enquiry.contactReleasedToBusinessId === input.businessId,
@@ -93,6 +205,9 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
         enquiryId: input.enquiryId,
         businessId: input.businessId,
         senderId: input.senderId,
+        // Board `10h` B5: whose words these are, stated now rather than
+        // worked out later from who the sender happens to work for.
+        authorSide: input.sender,
         body: body.slice(0, MAX_BODY),
         quoteRevisionId: input.quoteRevisionId ?? null,
         automatic: input.automatic ?? false,
@@ -101,6 +216,24 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
       },
       select: { id: true },
     });
+
+    for (const [index, file] of files.entries()) {
+      const document = await tx.document.create({
+        data: {
+          kind: "thread_attachment",
+          storagePath: file.path,
+          filename: displayFilename(file.filename),
+          bytes: file.bytes,
+          mimeType: file.mimeType,
+          // Said out loud: a buyer's drawing is never a public document.
+          isPublic: false,
+        },
+        select: { id: true },
+      });
+      await tx.messageAttachment.create({
+        data: { messageId: message.id, documentId: document.id, sortOrder: index },
+      });
+    }
 
     /*
      * Response time is measured from the seller's first reply, whatever form
@@ -208,7 +341,12 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
 export async function postSellerMessage(
   actor: Actor,
   businessId: string,
-  input: { enquiryId: string; body: string; quoteRevisionId?: string | null },
+  input: {
+    enquiryId: string;
+    body: string;
+    quoteRevisionId?: string | null;
+    attachments?: readonly ThreadUpload[];
+  },
 ): Promise<PostMessageResult> {
   assertCan(actor, "enquiry.respond");
 
@@ -219,15 +357,114 @@ export async function postSellerMessage(
     sender: "seller",
     body: input.body,
     quoteRevisionId: input.quoteRevisionId ?? null,
+    attachments: input.attachments ?? [],
   });
+}
+
+export type SignThreadAttachmentResult =
+  | { ok: true; url: string; path: string }
+  | { ok: false; error: Exclude<PostMessageError, "empty" | "attachment_missing"> | "unavailable" };
+
+/**
+ * A signed upload for one file, on one side of one thread.
+ *
+ * Board `10h` Q5. The same four refusals as the message it will ride on — not
+ * on the thread, supplier closed, enquiry closed to this pair — plus the
+ * bucket's own type and size, checked here against what the browser declares
+ * and again against what storage holds when the message is sent. The signature
+ * is per object and short-lived; there is no bucket-wide write to get wrong.
+ *
+ * The seller's capability is the caller's to assert, as `postSellerMessage`
+ * does: this takes a resolved sender.
+ */
+export async function signThreadAttachment(
+  input: {
+    enquiryId: string;
+    businessId: string;
+    senderId: string;
+    sender: Sender;
+    filename: string;
+    type: string;
+    bytes: number;
+  },
+  storage: ThreadStorage = threadStorage,
+  now: Date = new Date(),
+): Promise<SignThreadAttachmentResult> {
+  const access = await writeAccess(input, now);
+  if (!access.ok) return { ok: false, error: access.error };
+
+  const refusal = checkThreadAttachment(input.type, input.bytes);
+  if (refusal) return { ok: false, error: refusal };
+
+  try {
+    const signed = await storage.sign(
+      DOCUMENT_BUCKET,
+      threadAttachmentPath(input.enquiryId, input.businessId, input.sender, input.filename),
+    );
+    return { ok: true, url: signed.url, path: signed.path };
+  } catch {
+    return { ok: false, error: "unavailable" };
+  }
+}
+
+/** The seller's half of `signThreadAttachment`, with the reply capability. */
+export async function signSellerThreadAttachment(
+  actor: Actor,
+  businessId: string,
+  input: { enquiryId: string; filename: string; type: string; bytes: number },
+): Promise<SignThreadAttachmentResult> {
+  assertCan(actor, "enquiry.respond");
+  return signThreadAttachment({ ...input, businessId, senderId: actor.id, sender: "seller" });
+}
+
+/**
+ * The other side's messages on this thread, stamped read by the side opening it.
+ *
+ * Board `10h`: `17:41 · READ` under the buyer's own message. Symmetric, which is
+ * board 11b §6's condition — the buyer opening the thread stamps the seller's
+ * messages and the seller opening it stamps the buyer's — and first opening only,
+ * which the `message_is_the_record` trigger holds as well as the `readAt: null`
+ * below.
+ *
+ * The reader must already be proven: a buyer by the enquiry they resolved to, a
+ * seller by a seat on `businessId`. A buyer is re-proven here through the
+ * enquiry's `buyerId`, so a caller that passed the wrong id stamps nothing.
+ */
+export async function markThreadRead(
+  enquiryId: string,
+  businessId: string,
+  reader: { side: "buyer"; buyerId: string } | { side: "seller" },
+  now: Date = new Date(),
+): Promise<{ marked: number }> {
+  const { count } = await prisma.message.updateMany({
+    where: {
+      enquiryId,
+      businessId,
+      readAt: null,
+      authorSide: reader.side === "buyer" ? "seller" : "buyer",
+      ...(reader.side === "buyer" ? { enquiry: { buyerId: reader.buyerId } } : {}),
+    },
+    data: { readAt: now },
+  });
+  return { marked: count };
+}
+
+export interface ThreadAttachmentRow {
+  documentId: string;
+  filename: string;
+  bytes: number | null;
+  mimeType: string | null;
 }
 
 export interface ThreadMessage {
   id: string;
   body: string;
   senderId: string;
-  /** True when the sender is the business on this thread. */
+  /** Written by the business on this thread. From `authorSide`, never from the sender's seat today. */
   fromSeller: boolean;
+  /** When the other side first opened the thread with this in it. */
+  readAt: Date | null;
+  attachments: ThreadAttachmentRow[];
   flagged: boolean;
   /** Written by the follow-up schedule rather than typed. Tagged on screen. */
   automatic: boolean;
@@ -253,7 +490,8 @@ export async function getThread(
 
   const messages = await prisma.message.findMany({
     where: { enquiryId, businessId },
-    orderBy: { createdAt: "asc" },
+    // `createMany` gives a batch one timestamp; the id breaks the tie the same way every time.
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     select: {
       id: true,
       body: true,
@@ -262,7 +500,12 @@ export async function getThread(
       automatic: true,
       quoteRevisionId: true,
       createdAt: true,
-      sender: { select: { businessId: true } },
+      authorSide: true,
+      readAt: true,
+      attachments: {
+        orderBy: { sortOrder: "asc" },
+        select: { document: { select: { id: true, filename: true, bytes: true, mimeType: true } } },
+      },
     },
   });
 
@@ -270,7 +513,14 @@ export async function getThread(
     id: m.id,
     body: m.body,
     senderId: m.senderId,
-    fromSeller: m.sender.businessId === businessId,
+    fromSeller: m.authorSide === "seller",
+    readAt: m.readAt,
+    attachments: m.attachments.map((a) => ({
+      documentId: a.document.id,
+      filename: a.document.filename,
+      bytes: a.document.bytes,
+      mimeType: a.document.mimeType,
+    })),
     flagged: m.flaggedAt !== null,
     automatic: m.automatic,
     quoteRevisionId: m.quoteRevisionId,
@@ -279,3 +529,48 @@ export async function getThread(
 }
 
 export type { Verdict };
+
+/**
+ * Where a thread attachment lives, for the buyer on that thread — or null.
+ *
+ * Board `10h` Q5: the document hangs off a message on this enquiry *and this
+ * supplier*, and is a thread attachment. A file sent to another supplier on the
+ * same enquiry, a trade licence under a guessed id, and somebody else's enquiry
+ * are all null, which the route turns into one 404.
+ */
+export async function buyerThreadAttachment(
+  buyerId: string,
+  enquiryRefOrId: string,
+  supplierSlug: string,
+  documentId: string,
+): Promise<string | null> {
+  const row = await prisma.messageAttachment.findFirst({
+    where: {
+      documentId,
+      document: { kind: "thread_attachment" },
+      message: {
+        enquiry: { OR: [{ ref: enquiryRefOrId }, { id: enquiryRefOrId }], buyerId },
+        business: { slug: supplierSlug },
+      },
+    },
+    select: { document: { select: { storagePath: true } } },
+  });
+  return row?.document.storagePath ?? null;
+}
+
+/** The same, for a seat on the supplier: this business's thread on this enquiry only. */
+export async function sellerThreadAttachment(
+  businessId: string,
+  enquiryId: string,
+  documentId: string,
+): Promise<string | null> {
+  const row = await prisma.messageAttachment.findFirst({
+    where: {
+      documentId,
+      document: { kind: "thread_attachment" },
+      message: { enquiryId, businessId },
+    },
+    select: { document: { select: { storagePath: true } } },
+  });
+  return row?.document.storagePath ?? null;
+}

@@ -3,6 +3,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import { acceptInvite, expireInvites, readInvite, removeSeat, resendInvite } from "@/lib/team/invite";
 import { inviteSeat, pendingInvites } from "@/lib/team/service";
+import { getThread } from "@/lib/messaging/service";
+import { purgeThreadMessages } from "./thread-cleanup";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
 
@@ -127,7 +129,7 @@ function actorFor(id: string, roles: Role[], businessId?: string): Actor {
 }
 
 async function removeFixtures() {
-  await prisma.message.deleteMany({ where: { body: { startsWith: PREFIX } } });
+  await purgeThreadMessages({ body: { startsWith: PREFIX } });
   await prisma.enquiry.deleteMany({ where: { ref: { startsWith: PREFIX } } });
   // By business, not by address: a WhatsApp invitation has no email to match on,
   // and a leftover row holds the unique `(businessId, phone)` against the next run.
@@ -419,6 +421,8 @@ describe("taking a seat back", () => {
         buyerId: buyer.id,
         requirement: "Resilient seated gate valves, flanged PN16.",
         closesAt: new Date(Date.now() + 7 * 86_400_000),
+        // A thread exists only between an enquiry and a business it reached.
+        recipients: { create: [{ businessId: alphaId }] },
       },
       select: { id: true },
     });
@@ -426,7 +430,7 @@ describe("taking a seat back", () => {
       data: {
         enquiryId: enquiry.id,
         businessId: alphaId,
-        senderId: leaver.id,
+        senderId: leaver.id, authorSide: "seller",
         body: `${PREFIX} Twelve in stock, the rest is made to order.`,
       },
       select: { id: true },
@@ -455,6 +459,15 @@ describe("taking a seat back", () => {
       select: { senderId: true, businessId: true },
     });
     expect(kept).toEqual({ senderId: leaver.id, businessId: alphaId });
+
+    /*
+       And still on the supplier's side of it. Board `10h` B5: every reader used
+       to decide the side from the sender's seat today, so the moment this seat
+       was cleared the message moved to the buyer's side — on both screens and
+       on the evidence page a supplier report is judged against.
+    */
+    const thread = await getThread(enquiry.id, alphaId);
+    expect(thread?.find((row) => row.id === message.id)?.fromSeller).toBe(true);
   });
 
   it("refuses the owner's seat and refuses your own", async () => {
