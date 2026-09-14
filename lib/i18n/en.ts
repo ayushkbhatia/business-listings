@@ -2371,6 +2371,7 @@ export const en = {
   "quote.error.accepted_elsewhere": "The buyer accepted another supplier's quote on this enquiry. It no longer takes quotes.",
   "quote.error.declined": "The buyer declined this enquiry for your business, so a quote can no longer be sent.",
   "quote.error.declined_by_you": "You declined this enquiry, and the buyer has been shown that. Nothing further can be sent on it.",
+  "quote.error.already_sent": "This quote was sent from another tab a moment ago, or its draft was cleared there. Reload the lead to see where it stands.",
   "quote.error.work_enquiry": "This enquiry is for work, so it is answered with a proposal: one fee on your scope sheet's basis, a scope and what is excluded. Open the lead to write one.",
   "quote.error.marked": "This lead has an outcome. Clear it first to send a quote.",
   "quote.error.suspended": "Your listing is suspended, so quotes cannot be sent until it is reinstated.",

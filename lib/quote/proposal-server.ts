@@ -1,6 +1,5 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import type { Prisma } from "@/lib/db/generated/client";
 import { assertCan } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import { descendantsOf } from "@/lib/enquiry/service";
@@ -9,7 +8,7 @@ import { onQuoteSent } from "@/lib/notify/events";
 import { replyDueAt } from "@/lib/leads/inbox";
 import { familyFor } from "@/lib/services/service";
 import { recordEvent } from "@/lib/telemetry/record";
-import { draftRef, nextRevisionFor } from "./draft";
+import { aimDraft, claimDraftSlot, draftIn, draftRef, nextRevisionFor } from "./draft";
 import { quoteFence, type QuoteFenceReason } from "./fence";
 import { lockQuoteFence, readQuoteFence } from "./fence-server";
 import { quoteFenceMessage } from "./fence-words";
@@ -164,7 +163,9 @@ export async function findProposalDraft(enquiryId: string, businessId: string) {
 export type SaveProposalResult =
   | { ok: true; savedAt: Date }
   | { ok: false; error: "not_your_enquiry" | "not_work" | "not_your_service" }
-  | { ok: false; error: "fenced"; reason: QuoteFenceReason; closesAt: Date };
+  | { ok: false; error: "fenced"; reason: QuoteFenceReason; closesAt: Date }
+  /** A send took the revision this save aimed at while it waited. See `claimDraftSlot`. */
+  | { ok: false; error: "superseded" };
 
 /**
  * Save what is typed so far.
@@ -206,39 +207,48 @@ export async function saveProposalDraft(
   };
 
   const now = new Date();
-  const existing = await findProposalDraft(input.enquiryId, businessId);
+  const aim = await aimDraft(input.enquiryId, businessId);
 
-  if (existing) {
-    await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx): Promise<SaveProposalResult> => {
+    // The lock a send takes, as the goods autosave does. `claimDraftSlot` says why.
+    const locked = await lockQuoteFence(tx, input.enquiryId, businessId);
+    if (!locked) return { ok: false, error: "not_your_enquiry" };
+    const lockedRefusal = quoteFence(locked, now);
+    if (lockedRefusal) return { ok: false, error: "fenced", reason: lockedRefusal, closesAt: locked.closesAt };
+
+    const slot = await claimDraftSlot(tx, input.enquiryId, businessId, aim);
+    // Without this, a save that read the draft before a send promoted it went
+    // on to upsert the proposal, and `quote_proposal_immutable` made it a 500.
+    if (slot.kind === "superseded") return { ok: false, error: "superseded" };
+
+    if (slot.kind === "update") {
       // A draft started by the goods composer before this board has lines; a
       // proposal has none, and the trigger refuses the two together.
-      await tx.quoteLine.deleteMany({ where: { quoteId: existing.id } });
+      await tx.quoteLine.deleteMany({ where: { quoteId: slot.id } });
       await tx.quoteProposal.upsert({
-        where: { quoteId: existing.id },
-        create: { quoteId: existing.id, ...proposal },
+        where: { quoteId: slot.id },
+        create: { quoteId: slot.id, ...proposal },
         update: proposal,
       });
       await tx.quote.update({
-        where: { id: existing.id },
+        where: { id: slot.id },
         data: { validityDays, note: null, paymentTerms: null, delivery: null, updatedAt: now },
       });
-    });
+    } else {
+      await tx.quote.create({
+        data: {
+          ref: draftRef(input.enquiryId, businessId, slot.revision),
+          enquiryId: input.enquiryId,
+          businessId,
+          revision: slot.revision,
+          validityDays,
+          status: "draft",
+          proposal: { create: proposal },
+        },
+      });
+    }
     return { ok: true, savedAt: now };
-  }
-
-  const revision = await nextRevisionFor(input.enquiryId, businessId);
-  await prisma.quote.create({
-    data: {
-      ref: draftRef(input.enquiryId, businessId, revision),
-      enquiryId: input.enquiryId,
-      businessId,
-      revision,
-      validityDays,
-      status: "draft",
-      proposal: { create: proposal },
-    },
   });
-  return { ok: true, savedAt: now };
 }
 
 /* ── Sending ─────────────────────────────────────────────────────────────── */
@@ -325,32 +335,35 @@ export async function sendProposal(
        otherwise both read revision 1 and the second would die on the unique
        `(enquiry, business, revision)` as a 500. Serialised by the lock, the
        second reads the first's commit and is revision 2.
+
+       Which draft it promotes is decided here too. Two sends from two tabs both
+       found one draft: the first promoted it, and the second must not write over
+       a proposal the buyer already holds. And an autosave that committed a draft
+       while this send waited is promoted rather than collided with.
     */
-    const revision = draft?.revision ?? (await nextRevisionIn(tx, input.enquiryId, businessId));
-    const ref = await nextQuoteRef(input.enquiryId, businessId, revision);
+    const current = await draftIn(tx, input.enquiryId, businessId);
+    if (draft && current?.id !== draft.id) {
+      return { ok: false as const, error: t("proposal.error.already_sent") };
+    }
+    const revision = current?.revision ?? (await nextRevisionFor(input.enquiryId, businessId, tx));
+    const ref = await nextQuoteRef(tx, input.enquiryId, businessId, revision);
 
     let row: { id: string; ref: string; revision: number };
-    if (draft) {
-      // Two sends from two tabs both found this draft. The first promoted it;
-      // the second must not write over a proposal the buyer already holds.
-      const still = await tx.quote.findUnique({ where: { id: draft.id }, select: { status: true } });
-      if (still?.status !== "draft") {
-        return { ok: false as const, error: t("proposal.error.already_sent") };
-      }
+    if (current) {
       /*
          Promote. The proposal is written **before** the status moves, in this
          order on purpose: `quote_proposal_immutable` refuses any update to a
          proposal whose quote has left `draft`, and that includes this one a
          statement later.
       */
-      await tx.quoteLine.deleteMany({ where: { quoteId: draft.id } });
+      await tx.quoteLine.deleteMany({ where: { quoteId: current.id } });
       await tx.quoteProposal.upsert({
-        where: { quoteId: draft.id },
-        create: { quoteId: draft.id, ...proposal },
+        where: { quoteId: current.id },
+        create: { quoteId: current.id, ...proposal },
         update: proposal,
       });
       row = await tx.quote.update({
-        where: { id: draft.id },
+        where: { id: current.id },
         data: { ...quoteData, ref },
         select: { id: true, ref: true, revision: true },
       });
@@ -404,16 +417,6 @@ export async function sendProposal(
   });
 
   return sent;
-}
-
-/** `nextRevisionFor`, read inside the transaction that holds the enquiry's lock. */
-async function nextRevisionIn(tx: Prisma.TransactionClient, enquiryId: string, businessId: string): Promise<number> {
-  const previous = await tx.quote.findFirst({
-    where: { enquiryId, businessId, status: { not: "draft" } },
-    orderBy: { revision: "desc" },
-    select: { revision: true },
-  });
-  return (previous?.revision ?? 0) + 1;
 }
 
 /** The window, from the composer's own list; anything else is the proposal default. */
