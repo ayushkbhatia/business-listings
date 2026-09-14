@@ -89,7 +89,7 @@ describe("criteria 1 and 4 — one definition, read two ways", () => {
     };
     const technopump = await bySlug("technopump-trading-llc");
     expect(technopump.state).toBe("churn_risk");
-    expect(technopump.replyRate).toBeCloseTo(4 / 12, 5);
+    expect(technopump.replyRate).toBe(0.333333);
     expect(technopump.replySample).toBe(12);
 
     expect((await bySlug("dana-printing-signage")).state).toBe("slow_replies");

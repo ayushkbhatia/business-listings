@@ -41,7 +41,7 @@ describe("B5 — reply rate, measured beside the median", () => {
 
   it("counts an answer the moment it is given, open window or not", () => {
     const rows = [obs(100, false, -10), obs(90, false, -10), obs(2, true, 24)];
-    expect(replyRate(rows, NOW)).toEqual({ rate: 1 / 3, sample: 3 });
+    expect(replyRate(rows, NOW)).toEqual({ rate: 0.333333, sample: 3 });
   });
 
   it("is null below the same floor the median uses", () => {

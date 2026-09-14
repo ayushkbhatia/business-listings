@@ -146,7 +146,14 @@ export function replyRate(
     }
   }
   if (counted < minSample) return null;
-  return { rate: replied / counted, sample: counted };
+  /*
+     Six decimal places, which is more than any screen shows and exactly what a
+     double survives the database with. Unrounded, 4/12 goes in as
+     0.3333333333333333 and comes back shorter, the job's "has it changed?"
+     check never matched, and every run rewrote the same rows — the idempotency
+     `tests/integration/response-time.test.ts` exists to hold.
+  */
+  return { rate: Math.round((replied / counted) * 1e6) / 1e6, sample: counted };
 }
 
 export interface MeasuredReplies {
