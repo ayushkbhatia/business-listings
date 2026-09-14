@@ -29,6 +29,7 @@ import { ProposalComparisonGallery } from "./_sections/ProposalComparison";
 import { BuilderSectionsGallery } from "./_sections/BuilderSections";
 import { BuyerInboxGallery } from "./_sections/BuyerInbox";
 import { NotificationTemplatesGallery } from "./_sections/NotificationTemplates";
+import { HomeCurationGallery } from "./_sections/HomeCuration";
 import { NegotiationThreadGallery } from "./_sections/NegotiationThread";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
@@ -202,6 +203,8 @@ const UNLISTED = [
   "buyer-inbox",
   // Board `12g`: the notification templates list, the rail, and Meta's queue.
   "notification-templates",
+  // Board `6h`: the four homepage slots, the chips and the rails map.
+  "home-curation",
 ] as const;
 
 export default function Gallery() {
@@ -316,6 +319,7 @@ export default function Gallery() {
       <NotificationTemplatesGallery />
       {/* Last, for the axe-grid reason above: nothing new above Shells. */}
       <NegotiationThreadGallery />
+      <HomeCurationGallery />
     </main>
   );
 }

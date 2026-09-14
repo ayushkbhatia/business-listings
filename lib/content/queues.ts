@@ -2,6 +2,9 @@ import "server-only";
 import { areaMatrix } from "@/lib/content/matrix";
 import { driftQueue, reauditQueue } from "@/lib/seo/curated/queues";
 import { overdueGuides } from "@/lib/guides/service";
+import { homepageSlots } from "@/lib/content/homepage";
+import { formatDate } from "@/lib/format";
+import { t, type MessageKey } from "@/lib/i18n";
 
 /**
  * Board 6f §7 — the five obligations, in one place.
@@ -21,7 +24,8 @@ export type QueueKey =
   | "thin_copy"
   | "list_reaudit"
   | "list_drift"
-  | "guide_overdue";
+  | "guide_overdue"
+  | "home_slot_vacated";
 
 /**
  * Who works each queue.
@@ -36,6 +40,7 @@ export const QUEUE_OWNER: Record<QueueKey, "content_ops" | "editorial"> = {
   list_reaudit: "editorial",
   list_drift: "editorial",
   guide_overdue: "editorial",
+  home_slot_vacated: "content_ops",
 };
 
 export interface QueueRow {
@@ -57,14 +62,17 @@ export interface Queue {
 const PREVIEW = 5;
 
 export async function contentQueues(now = new Date()): Promise<Queue[]> {
-  const [matrix, reaudit, drift, guides] = await Promise.all([
+  const [matrix, reaudit, drift, guides, slots] = await Promise.all([
     // The whole filtered set, because these are counts of the world rather
     // than of one page of it.
     areaMatrix({ perPage: Number.MAX_SAFE_INTEGER }, now),
     reauditQueue(now),
     driftQueue(),
     overdueGuides(now),
+    homepageSlots(now),
   ]);
+  // Board 6h: a slot held by a business that lost Tier 2 — empty on the home page until somebody acts.
+  const vacated = slots.filter((slot) => slot.business?.block);
 
   const awaitingCopy = matrix.rows.filter((row) => row.status === "queued_copy");
   const thinCopy = matrix.rows.filter((row) => row.status === "live_thin_copy");
@@ -120,6 +128,15 @@ export async function contentQueues(now = new Date()): Promise<Queue[]> {
           ? `Last checked ${row.checkedAt.toISOString().slice(0, 10)}`
           : "Never checked",
         href: `/admin/content/guides`,
+      })),
+    },
+    {
+      key: "home_slot_vacated",
+      count: vacated.length,
+      rows: vacated.slice(0, PREVIEW).map((slot) => ({
+        label: t("queues.home_slot_row", { position: String(slot.position), business: slot.business!.displayName }),
+        detail: t(`curation.block.${slot.business!.block!}` as MessageKey, { date: formatDate(slot.business!.licenceExpiry) }),
+        href: "/admin/content/home",
       })),
     },
   ];

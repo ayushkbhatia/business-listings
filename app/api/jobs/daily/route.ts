@@ -1,3 +1,6 @@
+import { revalidateTag } from "next/cache";
+import { HOME_CACHE_TAG } from "@/lib/db/queries/home";
+import { holdsHomepageSlot } from "@/lib/content/homepage";
 import { NextResponse, type NextRequest } from "next/server";
 import { expireTrials } from "@/lib/billing/trial";
 import { runRenewals } from "@/lib/billing/renewal-job";
@@ -224,7 +227,20 @@ export async function GET(request: NextRequest) {
        Also before the two measurements is not required and would not help:
        neither reads the tier.
     */
-    expiredLicences: () => sweepExpiredLicences(),
+    /*
+       Board 6h: a lapsed licence empties its "Verified this week" card. The rail
+       reads the tier live, but through a five-minute data cache, so a night that
+       dropped a featured business clears it rather than waiting. Only then:
+       clearing the home page's cache for a lapse nobody sees there would start
+       the most-linked page on the site cold for nothing.
+    */
+    expiredLicences: async () => {
+      const result = await sweepExpiredLicences();
+      if (await holdsHomepageSlot(result.dropped.map((business) => business.slug))) {
+        revalidateTag(HOME_CACHE_TAG, { expire: 0 });
+      }
+      return result;
+    },
     /*
        Board 11i. After the licence sweep, and that is load-bearing: a platform
        closure notice is withdrawn when the licence has been renewed, and the

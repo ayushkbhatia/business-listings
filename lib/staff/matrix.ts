@@ -51,6 +51,7 @@ export const MATRIX_GROUPS = [
       "placement.boost",
       "notification.template.write",
       "notification.read",
+      "homepage.curate",
     ],
   },
   {

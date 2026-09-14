@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/client";
 import { PLAN_CACHE_TAG } from "./pricing";
 import { VERIFIED_TIER } from "@/lib/verification";
 import { detectIdentityLeak } from "@/lib/enquiry/redaction";
+import { chipHref, featureBlock } from "@/lib/content/homepage-rules";
 import type { Emirate } from "@/lib/db/generated/client";
 
 /**
@@ -47,7 +48,9 @@ const ago = (days: number) => new Date(Date.now() - days * DAY);
  *
  * `revalidatePath("/")` cannot clear these — it clears the route cache, and a
  * dynamic route has none — so `/admin/content/home` revalidates this tag
- * instead. That is what makes putting a trade on the home page visible.
+ * instead (board 6h `B7`). So do the three decisions that empty a featured
+ * card — a suspension, a tier change and the nightly licence sweep — because a
+ * stale card is a stale claim about verification.
  *
  * TODO: `unstable_cache` is deprecated in Next 16 in favour of `use cache`,
  * which needs `cacheComponents: true` in next.config.ts — a project-wide switch
@@ -85,60 +88,28 @@ export async function readHomeStats() {
 }
 
 /**
- * The five "Popular:" chips — the most-searched terms of the last thirty days
- * that returned something.
+ * The popular-search chips under the hero — board 6h.
  *
- * `resultCount > 0` is the load-bearing half. A chip is a promise that there is
- * something behind it, and the most-searched term on a young directory is
- * frequently one nobody can supply; sending a buyer from the home page to an
- * empty results page is worse than showing them one chip fewer.
+ * Typed by staff at `/admin/content/home`, not mined from search volume. They
+ * were mined until 6h, and the board's argument against it is the one that
+ * holds: the top real queries on a young directory are often a brand it does
+ * not stock, and this row is a promise about coverage rather than a report on
+ * demand. Each chip is a label plus the query it runs (`B8`), so it can read
+ * "HVAC maintenance AMC" and carry facets.
  *
- * Grouped on the normalised form and rendered as the most recent raw spelling,
- * so "DN100 gate valve" and "dn100 gate valve" are one chip and it reads the
- * way somebody actually typed it.
+ * No fallback. The six the page used to fall back to were carried into the
+ * table by migration, and an empty table renders no row — the "Popular:" label
+ * with nothing after it would be a promise with nothing behind it.
  *
- * Returns an empty array when there is no history. The caller falls back to the
- * seeded five — a fresh install has no search log and the row should still have
- * something in it.
- *
- * Buyer tabs only. `SearchQueryLog` also carries board 2a's claim searches,
- * which are suppliers typing their own trade name to find their licence record;
- * they belong in the log — that is the volume record — and they are not things
- * buyers search for. Without the filter, "Al Marwan Industrial Supplies" would
- * become a chip on the directory home the first week suppliers started
- * arriving, which is both a wrong recommendation and a small leak of who has
- * been looking for themselves.
+ * A chip whose search returns nothing stays: the results page's zero state
+ * handles it, and a promise about coverage is allowed to be aspirational once.
  */
-const BUYER_TABS = ["businesses", "products"] as const;
-
-export async function readPopularQueries(take = 5): Promise<string[]> {
-  const grouped = await prisma.searchQueryLog.groupBy({
-    by: ["normalised"],
-    where: {
-      createdAt: { gte: ago(30) },
-      resultCount: { gt: 0 },
-      tab: { in: [...BUYER_TABS] },
-    },
-    _count: { normalised: true },
-    orderBy: [{ _count: { normalised: "desc" } }, { normalised: "asc" }],
-    take,
+export async function readCuratedQueries(): Promise<{ label: string; href: string }[]> {
+  const rows = await prisma.curatedQuery.findMany({
+    orderBy: { position: "asc" },
+    select: { label: true, query: true },
   });
-  if (grouped.length === 0) return [];
-
-  // One more read to recover the spelling. Grouping on the raw text instead
-  // would split a term across its capitalisations and none of them would rank.
-  const spellings = await prisma.searchQueryLog.findMany({
-    where: {
-      normalised: { in: grouped.map((row) => row.normalised) },
-      tab: { in: [...BUYER_TABS] },
-    },
-    distinct: ["normalised"],
-    orderBy: { createdAt: "desc" },
-    select: { normalised: true, query: true },
-  });
-  const bySpelling = new Map(spellings.map((row) => [row.normalised, row.query]));
-
-  return grouped.map((row) => bySpelling.get(row.normalised) ?? row.normalised);
+  return rows.map((row) => ({ label: row.label, href: chipHref(row.query) }));
 }
 
 /**
@@ -221,7 +192,10 @@ export interface RfqTeaser {
  * four and dropping two would leave two rows when a fifth was available and
  * clean.
  */
-export async function readOpenRfqTeasers(take = 4): Promise<RfqTeaser[]> {
+/** The hero panel holds four requirements. */
+export const HOME_RFQ_LIMIT = 4;
+
+export async function readOpenRfqTeasers(take = HOME_RFQ_LIMIT): Promise<RfqTeaser[]> {
   const now = new Date();
   const rows = await prisma.enquiry.findMany({
     where: {
@@ -338,29 +312,33 @@ export interface HomeSector {
   topSubcategories: string[];
 }
 
+/** The rail's own length. Twelve cards is the grid the board draws; a thirteenth sector waits its turn. */
+export const HOME_SECTOR_LIMIT = 12;
+
 /**
  * The sector grid.
  *
- * Two rules from the board, both of which look like ordering and are not:
+ * A rail that computes (board 6h's map): every sector with at least one public
+ * listing, by listing count, twelve at most. It used to be gated on
+ * `Category.showOnHome`, a flag set by hand on the screen 6h replaced — and a
+ * rail chosen by hand can be wrong by hand, which is the whole argument for
+ * curating only two of the nine.
+ *
+ * Two rules from board 1a, both of which look like ordering and are not:
  *
  *   - **Ordered by listing count descending**, so the grid reflects what the
  *     directory actually has rather than the order somebody typed the taxonomy
  *     in. A sector that recruits well climbs without anyone editing anything.
  *   - **Each card teases its four largest subcategories**, not the first four
- *     alphabetically. "Cement · Steel · Aggregates · Formwork" tells a buyer
- *     what this trade is here; four subcategories with two listings between
- *     them tells them nothing and is what alphabetical order would give.
+ *     alphabetically.
  *
- * `showOnHome` is the gate, and it is the ops lead's. `lib/content/homepage.ts`
- * refuses to set it while a sector's own landing page is too thin to publish,
- * because the home page is the most-linked page on the site and a link from it
- * to a thin page is the most expensive kind. That refusal is the reason this
- * query does not simply list all twelve sectors: six of them have no listings,
- * and six cards reading zero would be both honest and useless.
+ * A sector with no listings is left out rather than drawn at zero: twelve cards
+ * with six reading nothing would be honest and useless, and the category index
+ * one link away lists every sector anyway.
  */
 export async function readHomeSectors(): Promise<HomeSector[]> {
   const sectors = await prisma.category.findMany({
-    where: { showOnHome: true, parentId: null },
+    where: { parentId: null },
     select: {
       id: true,
       slug: true,
@@ -397,7 +375,9 @@ export async function readHomeSectors(): Promise<HomeSector[]> {
         .slice(0, 4)
         .map((child) => child.name),
     }))
-    .sort((a, b) => b.listings - a.listings || a.name.localeCompare(b.name));
+    .filter((sector) => sector.listings > 0)
+    .sort((a, b) => b.listings - a.listings || a.name.localeCompare(b.name))
+    .slice(0, HOME_SECTOR_LIMIT);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -460,71 +440,37 @@ export async function readEmirateChips(): Promise<{ chips: EmirateChip[]; freeZo
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Businesses whose verification tier *rose* inside the window.
+ * The four "Verified this week" cards — board 6h.
  *
- * Read from the audit log, not from `verifiedAt`. A date says when somebody
- * looked; it does not say the tier went up, and a re-check that confirmed an
- * existing tier would put a supplier in a section headed "Verified this week"
- * having earned nothing that week. `AuditEvent` is the only record of the
- * change itself, which is one more thing non-negotiable 3 pays for.
+ * Chosen by a person at `/admin/content/home`, in the order they chose: slot 1
+ * is the first card a buyer sees. Eligibility is read here, live, through the
+ * same `featureBlock` the console reads (`B1`), so a licence the nightly sweep
+ * dropped overnight, or a business suspended this morning, is simply not
+ * rendered — nobody has to write to the slot.
  *
- * The window widens 7 → 14 → 30 and then gives up. The section is dropped
- * rather than filled from general listings: "a card here must be genuinely
- * newly verified or the section is a lie."
- *
- * Ordered by tier descending then by recency, so a site visit outranks a
- * licence check on the same day.
+ * **Never padded.** An empty or ineligible slot renders nothing, and the rail
+ * shows three cards rather than reaching for a fourth (`B2`). With no eligible
+ * slot at all the array is empty and the page drops the section, which is the
+ * cold-start state: four empty cards on the home page would say the directory
+ * has nothing verified.
  */
-export async function readRecentlyVerified(take = 4) {
-  for (const window of [7, 14, 30]) {
-    const events = await prisma.auditEvent.findMany({
-      where: { action: "tier_change", createdAt: { gte: ago(window) } },
-      orderBy: { createdAt: "desc" },
-      select: { subject: true, before: true, after: true, createdAt: true },
-    });
-
-    /*
-       `before` and `after` are Json. Filtering on a JSON path in Postgres is
-       possible and would move this into the database, but the table is the
-       audit log — small, append-only, and read here at most once every five
-       minutes behind a cache. Comparing in JS keeps the rule legible, and the
-       rule is the point: the tier has to have gone *up*.
-    */
-    const rose = new Map<string, Date>();
-    for (const event of events) {
-      const before = (event.before as { verificationTier?: number } | null)?.verificationTier;
-      const after = (event.after as { verificationTier?: number } | null)?.verificationTier;
-      if (typeof before !== "number" || typeof after !== "number" || after <= before) continue;
-
-      const id = event.subject.startsWith("Business:") ? event.subject.slice("Business:".length) : null;
-      if (!id || rose.has(id)) continue;
-      rose.set(id, event.createdAt);
-    }
-    if (rose.size === 0) continue;
-
-    const businesses = await prisma.business.findMany({
-      where: { id: { in: [...rose.keys()] }, ...PUBLIC_BUSINESS },
-      include: {
-        primaryCategory: { select: { name: true, code: true } },
-        locations: { where: { published: true }, include: { area: true }, take: 1 },
-        _count: { select: { products: { where: { status: { not: "draft" } } } } },
+export async function readVerifiedSlots(now: Date = new Date()) {
+  const slots = await prisma.homepageSlot.findMany({
+    orderBy: { position: "asc" },
+    select: {
+      business: {
+        include: {
+          primaryCategory: { select: { name: true, code: true } },
+          locations: { where: { published: true }, include: { area: true }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: 1 },
+          _count: { select: { products: { where: { status: { not: "draft" } } } } },
+        },
       },
-    });
-
-    if (businesses.length === 0) continue;
-
-    return businesses
-      .sort((a, b) => {
-        if (b.verificationTier !== a.verificationTier) return b.verificationTier - a.verificationTier;
-        return (rose.get(b.id)?.getTime() ?? 0) - (rose.get(a.id)?.getTime() ?? 0);
-      })
-      .slice(0, take);
-  }
-
-  return [];
+    },
+  });
+  return slots.map((slot) => slot.business).filter((business) => featureBlock(business, now) === null);
 }
 
-export type RecentlyVerified = Awaited<ReturnType<typeof getRecentlyVerified>>[number];
+export type VerifiedSlotBusiness = Awaited<ReturnType<typeof getVerifiedSlots>>[number];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 6 · New in supplier catalogues
@@ -544,7 +490,10 @@ export type RecentlyVerified = Awaited<ReturnType<typeof getRecentlyVerified>>[n
  * No price is selected here, because there is no price column to select. The
  * card renders availability and an enquiry action where a price would sit.
  */
-export async function readNewCatalogueProducts(take = 5) {
+/** One row of five. */
+export const HOME_CATALOGUE_LIMIT = 5;
+
+export async function readNewCatalogueProducts(take = HOME_CATALOGUE_LIMIT) {
   const candidates = await prisma.product.findMany({
     where: {
       status: { not: "draft" },
@@ -643,7 +592,7 @@ export const getHomeStats = unstable_cache(readHomeStats, ["home-stats"], {
   tags: [HOME_CACHE_TAG],
 });
 
-export const getPopularQueries = unstable_cache(readPopularQueries, ["home-popular"], {
+export const getCuratedQueries = unstable_cache(readCuratedQueries, ["home-curated-queries"], {
   revalidate: HOUR_S,
   tags: [HOME_CACHE_TAG],
 });
@@ -663,7 +612,7 @@ export const getEmirateChips = unstable_cache(readEmirateChips, ["home-emirates"
   tags: [HOME_CACHE_TAG],
 });
 
-export const getRecentlyVerified = unstable_cache(readRecentlyVerified, ["home-verified"], {
+export const getVerifiedSlots = unstable_cache(readVerifiedSlots, ["home-verified-slots"], {
   revalidate: FIVE_MIN_S,
   tags: [HOME_CACHE_TAG],
 });

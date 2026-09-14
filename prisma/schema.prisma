@@ -525,6 +525,9 @@ model Category {
   /// `general` family. That fallback is what lets a service be created in a
   /// trade nobody has classified yet — which today is all 440 of them.
   scopeFamilyId       String?    @map("scope_family_id")
+  /// The trade `/rfq/new` opens on when nothing else names one. It was also the
+  /// home page's sector gate until board 6h, which made "Browse by category" a
+  /// rail that computes — by listing count — rather than one chosen by hand.
   showOnHome          Boolean    @default(false) @map("show_on_home")
   acceptsRfq          Boolean    @default(true) @map("accepts_rfq")
   requiresExtraCheck  Boolean    @default(false) @map("requires_extra_check")
@@ -1234,6 +1237,7 @@ model Business {
   invoices               Invoice[]
   mrrMovements           MrrMovement[]
   placements             PlacementSlot[]
+  homepageSlot           HomepageSlot?
   contactReveals         ContactReveal[]
   redirectsFrom          Redirect[]
   notificationPreference NotificationPreference?
@@ -7546,6 +7550,77 @@ model Testimonial {
 
   @@index([audience, publishedAt, sortOrder])
   @@map("testimonial")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Homepage curation — board 6h
+//
+// The home page has nine rails and two of them a person chooses: the four
+// "Verified this week" cards and the popular-search chips under the hero. The
+// other seven compute, and `lib/content/home-rails.ts` says which is which.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// One of the four "Verified this week" cards on the directory home.
+///
+/// **No `eligible` column.** Eligibility is the business's tier, suspension and
+/// publication, read live by `featureBlock` in `lib/content/homepage-rules.ts`
+/// every time the rail renders. A cached flag is how a featured business keeps
+/// its card for a week after its licence lapses (`B1`). So the licence sweep
+/// never writes here either: the row stays, the card stops rendering, and the
+/// admin screen shows the slot as held by a business that can no longer be
+/// featured — the empty slot is the notification (`B2`).
+///
+/// **No `featuredUntil`.** The rail is edited when it is edited. If scheduling
+/// arrives it is a second model, not a nullable date on this one (`Q4`).
+///
+/// Nothing about a plan or a payment is here or anywhere near here (`B4`).
+/// Paid visibility is `PlacementSlot`, in search results, labelled.
+model HomepageSlot {
+  id String @id @default(cuid())
+
+  /// 1–4, unique, and the order is the decision: slot 1 is the first card a
+  /// buyer sees (`B6`). A CHECK in the migration holds the range.
+  position Int
+
+  /// One slot per business. A business in two slots is the rail repeating itself.
+  businessId String @unique @map("business_id")
+
+  /// The staff member who put it here. Every change is also an audit row.
+  addedById String   @map("added_by_id") @db.Uuid
+  addedAt   DateTime @default(now()) @map("added_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([position])
+  @@map("homepage_slot")
+}
+
+/// One popular-search chip under the hero on the directory home.
+///
+/// Typed, not mined from search volume: the top real queries are often a brand
+/// the directory does not stock, and the row is a promise about coverage rather
+/// than a report on demand. A label plus the search it runs (`B8`), so a chip
+/// can read "HVAC maintenance AMC" and run a query with facets.
+model CuratedQuery {
+  id String @id @default(cuid())
+
+  /// What the chip reads. 2–40 characters, held by a CHECK.
+  label String
+
+  /// The query string it runs against `/search`, normalised by
+  /// `normaliseChipQuery` — never a free-text link.
+  query String
+
+  /// 1–6, unique. Six is the cap (`Q2`): the hero row does not take a seventh.
+  position Int
+
+  /// Null only for the six the migration carried over from the page's old
+  /// fallback list, which no person added.
+  addedById String?  @map("added_by_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([position])
+  @@map("curated_query")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

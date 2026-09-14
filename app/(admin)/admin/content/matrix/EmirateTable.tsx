@@ -103,7 +103,7 @@ export function EmirateTable({
 
   const columns: Column<EmirateRowView>[] = [
     { key: "emirate", header: t("matrix.col.emirate"), render: (row) => row.emirateName },
-    { key: "trade", header: t("home.col.trade"), render: (row) => row.categoryName },
+    { key: "trade", header: t("matrix.filter.category"), render: (row) => row.categoryName },
     { key: "path", header: t("matrix.col.path"), mono: true, render: (row) => row.path },
     { key: "listings", header: t("matrix.col.listings"), numeric: true, render: (row) => row.listings },
     { key: "verified", header: t("matrix.col.verified"), numeric: true, render: (row) => row.verifiedShare },

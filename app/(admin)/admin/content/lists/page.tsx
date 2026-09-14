@@ -6,6 +6,7 @@ import { formatCount, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
 import { ListTable, type ListRowView } from "./ListTable";
+import { ContentTabs } from "../_tabs";
 
 /**
  * Board 6f §7 — where a curated-list queue row opens.
@@ -55,6 +56,7 @@ export default async function CuratedListsAdminPage() {
         </span>
       }
     >
+      <ContentTabs active="lists" />
       <ListTable rows={rows} />
 
       <p className="mt-[var(--gutter)] max-w-prose text-caption text-muted">

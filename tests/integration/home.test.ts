@@ -16,11 +16,10 @@ import {
   readHomeStats as getHomeStats,
   readNewCatalogueProducts as getNewCatalogueProducts,
   readOpenRfqTeasers as getOpenRfqTeasers,
-  readPopularQueries as getPopularQueries,
-  readRecentlyVerified as getRecentlyVerified,
+  readCuratedQueries as getCuratedQueries,
+  readVerifiedSlots as getVerifiedSlots,
 } from "@/lib/db/queries/home";
 import { VERIFIED_TIER } from "@/lib/verification";
-import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Board 1a's acceptance criteria, against a real database.
@@ -186,54 +185,26 @@ describe("criteria 2 and 3 — the open-requests panel", () => {
   });
 });
 
+/*
+   Criterion 4 was "only businesses whose tier actually rose". Board 6h made the
+   section four slots an ops lead chooses, eligible while they hold Tier 2; its
+   selection rules are in `homepage-curation.test.ts`. What stays here is the
+   half of the criterion that did not change.
+*/
 describe("criterion 4 — verified this week", () => {
-  it("contains only businesses whose tier actually rose", async () => {
-    const rows = await getRecentlyVerified();
-
-    for (const business of rows) {
-      const events = await prisma.auditEvent.findMany({
-        where: { action: "tier_change", subject: `Business:${business.id}` },
-      });
-      const rose = events.some((event) => {
-        const before = (event.before as { verificationTier?: number } | null)?.verificationTier;
-        const after = (event.after as { verificationTier?: number } | null)?.verificationTier;
-        return typeof before === "number" && typeof after === "number" && after > before;
-      });
-      expect(rose, business.displayName).toBe(true);
+  it("renders only Tier 2, and nothing rather than a card from general listings", async () => {
+    for (const business of await getVerifiedSlots()) {
+      expect(business.verificationTier, business.displayName).toBeGreaterThanOrEqual(VERIFIED_TIER);
+      expect(business.suspendedAt).toBeNull();
     }
-  });
 
-  it("is ordered by tier descending — a site visit outranks a licence check", async () => {
-    const tiers = (await getRecentlyVerified()).map((row) => row.verificationTier);
-    expect([...tiers].sort((a, b) => b - a)).toEqual(tiers);
-  });
-
-  it("returns nothing rather than reaching into general listings", async () => {
-    /*
-       The failure this guards against is the tempting one: fill the row from
-       `getFeaturedBusinesses` when the window is thin. With every tier_change
-       row gone there is no candidate, and the correct answer is an empty array
-       — the page drops the whole section.
-    */
-    const saved = await prisma.auditEvent.findMany({ where: { action: "tier_change" } });
-    await purgeAuditRows({ action: "tier_change" });
+    const saved = await prisma.homepageSlot.findMany();
+    await prisma.homepageSlot.deleteMany({});
     try {
-      expect(await getRecentlyVerified()).toEqual([]);
+      // Cold start: no slot filled, no section — however many Tier 2 businesses exist.
+      expect(await getVerifiedSlots()).toEqual([]);
     } finally {
-      for (const event of saved) {
-        await prisma.auditEvent.create({
-          data: {
-            id: event.id,
-            actorId: event.actorId,
-            action: event.action,
-            subject: event.subject,
-            reason: event.reason,
-            before: event.before ?? undefined,
-            after: event.after ?? undefined,
-            createdAt: event.createdAt,
-          },
-        });
-      }
+      await prisma.homepageSlot.createMany({ data: saved });
     }
   });
 });
@@ -361,51 +332,22 @@ describe("the emirate row", () => {
 });
 
 describe("the popular-search chips", () => {
-  it("offers only terms that returned something", async () => {
-    await prisma.searchQueryLog.createMany({
-      data: Array.from({ length: 200 }, () => ({
-        query: `${PREFIX}dead term`,
-        normalised: `${PREFIX}dead term`,
-        resultCount: 0,
-        tab: "businesses",
-      })),
-    });
-    try {
-      // Two hundred rows is more than any real term in the seed, so if the
-      // filter were off this would be the first chip on the home page.
-      expect(await getPopularQueries()).not.toContain(`${PREFIX}dead term`);
-    } finally {
-      await prisma.searchQueryLog.deleteMany({ where: { query: { startsWith: PREFIX } } });
-    }
-  });
+  it("are the typed chips, in their order, and nothing when there are none", async () => {
+    const rows = await prisma.curatedQuery.findMany({ orderBy: { position: "asc" } });
+    expect((await getCuratedQueries()).map((chip) => chip.label)).toEqual(rows.map((row) => row.label));
 
-  it("groups spellings together and renders one of them", async () => {
+    // Two hundred searches for a term make it no chip: the row is typed, not mined.
     await prisma.searchQueryLog.createMany({
-      data: Array.from({ length: 300 }, (_, i) => ({
-        query: i % 2 === 0 ? `${PREFIX}Gate Valve` : `${PREFIX}gate valve`,
-        normalised: `${PREFIX}gate valve`,
-        resultCount: 5,
-        tab: "businesses",
-      })),
+      data: Array.from({ length: 200 }, () => ({ query: `${PREFIX}mined term`, normalised: `${PREFIX}mined term`, resultCount: 5, tab: "businesses" })),
     });
-    try {
-      const chips = await getPopularQueries();
-      const matching = chips.filter((chip) => chip.toLowerCase() === `${PREFIX}gate valve`);
-      // One chip, not two. Grouping on the raw text would split the term
-      // across its capitalisations and neither half would rank.
-      expect(matching).toHaveLength(1);
-    } finally {
-      await prisma.searchQueryLog.deleteMany({ where: { query: { startsWith: PREFIX } } });
-    }
-  });
+    expect((await getCuratedQueries()).map((chip) => chip.label)).not.toContain(`${PREFIX}mined term`);
 
-  it("returns nothing on a fresh install, so the page can fall back", async () => {
-    const saved = await prisma.searchQueryLog.findMany();
-    await prisma.searchQueryLog.deleteMany();
+    const saved = rows;
+    await prisma.curatedQuery.deleteMany({});
     try {
-      expect(await getPopularQueries()).toEqual([]);
+      expect(await getCuratedQueries()).toEqual([]);
     } finally {
-      if (saved.length > 0) await prisma.searchQueryLog.createMany({ data: saved });
+      await prisma.curatedQuery.createMany({ data: saved });
     }
   });
 });

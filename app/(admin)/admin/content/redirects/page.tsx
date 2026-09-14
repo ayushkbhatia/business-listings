@@ -7,6 +7,7 @@ import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../../_shell";
 import { create, remove } from "./actions";
 import { RedirectManager, type RedirectRowView } from "./RedirectManager";
+import { ContentTabs } from "../_tabs";
 
 /** Board 12g — redirects. `Redirect` is read on every 404 that might be one. */
 
@@ -52,6 +53,7 @@ export default async function RedirectsPage() {
         </span>
       }
     >
+      <ContentTabs active="redirects" />
       <RedirectManager rows={rows} create={create} remove={remove} />
 
       <p className="mt-[var(--gutter)] max-w-prose text-caption text-muted">

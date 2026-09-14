@@ -118,6 +118,17 @@ export const AUDIT_ACTIONS = [
   "notification_meta_approved",
   "notification_meta_rejected",
   "notification_template_published",
+  /*
+     Board 6h. Five acts under `homepage.curate`: a business into a slot, out of
+     one, the four reordered, and a chip added or taken off. Separate names,
+     because "who took Dana off the home page, and why" is the question the log
+     is asked, and a reorder that looked like a removal would answer it wrongly.
+  */
+  "homepage_slot_featured",
+  "homepage_slot_removed",
+  "homepage_slots_reordered",
+  "homepage_query_added",
+  "homepage_query_removed",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -174,6 +185,7 @@ export const ACTION_FOR_CAPABILITY = {
   "enquiry.read_other_business": "cross_business_read",
   "business.close": "closure_noticed",
   "notification.template.write": "notification_template_saved",
+  "homepage.curate": "homepage_slot_featured",
 } as const satisfies Partial<Record<Capability, AuditAction>>;
 
 export type AuditedCapability = keyof typeof ACTION_FOR_CAPABILITY;
@@ -241,6 +253,13 @@ export const PAIRED_ACTIONS = {
     "notification_meta_approved",
     "notification_meta_rejected",
     "notification_template_published",
+  ],
+  "homepage.curate": [
+    "homepage_slot_featured",
+    "homepage_slot_removed",
+    "homepage_slots_reordered",
+    "homepage_query_added",
+    "homepage_query_removed",
   ],
   "taxonomy.write": [
     "taxonomy_changed",

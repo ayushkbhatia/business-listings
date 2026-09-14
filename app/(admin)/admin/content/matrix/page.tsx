@@ -46,6 +46,7 @@ import { MatrixTable, type MatrixRowView } from "./MatrixTable";
 import { MetricRow } from "./MetricRow";
 import { Queues } from "./Queues";
 import { RulesPanel, type PendingChange, type RuleValues } from "./RulesPanel";
+import { ContentTabs } from "../_tabs";
 
 /**
  * Board 6f — the page matrix and content operations.
@@ -263,6 +264,7 @@ export default async function MatrixPage({ searchParams }: Props) {
         </span>
       }
     >
+      <ContentTabs active="matrix" />
       {/*
          Board 6f §2. The middle tabs carry counts of items needing attention,
          because three shipped specs depend on queues that were invisible here.

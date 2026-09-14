@@ -19,11 +19,12 @@ import { prisma } from "@/lib/db/client";
  *     is: they came to us, and we did not hold them.
  *
  * `tab` marks both as `claim` so neither is mistaken for a buyer's search. That
- * matters on the first of them: the home page's "Popular:" chips group
- * `SearchQueryLog` by normalised query, and without the marker a supplier's own
- * trade name would surface on the directory home as something buyers search
- * for. `readPopularQueries` filters to the buyer tabs, and this is the half of
- * that pair that makes the filter meaningful.
+ * matters on the first of them: `/admin/content/home` ranks `SearchQueryLog` by
+ * normalised query as the reference a curator types chips against, and without
+ * the marker a supplier's own trade name would rank there as buyer demand.
+ * `searchedTerms` filters to the buyer tabs, and this is the half of that pair
+ * that makes the filter meaningful. (The home page's chips themselves are typed
+ * since board 6h and read no log at all.)
  */
 
 /** What `tab` says on both rows. Read by the home page's exclusion. */

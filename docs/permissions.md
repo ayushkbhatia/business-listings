@@ -124,11 +124,12 @@ deactivates it.
 
 ### Rows this document does not contain
 
-Nine capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
+Twelve capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
 row for them, or departs from the row it has. `tests/unit/permission-matrix.test.ts` names all
-nine, so adding a tenth is a deliberate edit rather than a quiet default. The five below are
-the ones with no row at all; `business.verification_tier.write`, `review.dispute`,
-`staff.manage` and `staff.read` are explained where the test names them.
+twelve, so adding a thirteenth is a deliberate edit rather than a quiet default. The six below
+are the ones with no row at all; `business.verification_tier.write`, `review.dispute`,
+`staff.manage`, `staff.read` and board 12g's two notification rows (in the staff table above)
+are explained where the test names them.
 
 | Capability | Held at | Why, and which way it errs |
 |---|---|---|
@@ -137,6 +138,7 @@ the ones with no row at all; `business.verification_tier.write`, `review.dispute
 | `review.hold` | ops lead · moderator | Board 1m's held state, and the only one that errs **lower**. A hold is reversible and a removal is not; putting the reversible pause out of a moderator's reach would push them towards the irreversible control. It writes `review_held` and `review_released` — two actions, because a release logged as a hold hides what happened. |
 | `queue.rules` | ops lead | Board 4b's *Tune auto-check rules*. Switching a check off or moving a threshold changes which submissions bulk approve may act on across the whole queue, so it sits a rung above deciding one — erring **higher**. It writes `queue_rules_tuned`. |
 | `business.close` | ops lead | Board 11i's platform-initiated closure (build note B8): notice for a lapsed licence, withdrawing an open closure, and reopening a final one for a named owner. Closure takes a business out of the directory and ends every seat's session, so it sits with suspension — erring **higher**. It writes `closure_noticed`, `closure_withdrawn` and `closure_reopened`. |
+| `homepage.curate` | ops lead | Board 6h and its Q5, which names the gap: the four "Verified this week" slots and the popular-search chips had no row and borrowed `taxonomy.write`. Four slots against every business in the directory is the highest-leverage placement on the platform, and the cards assert the tier an ops lead owns — erring **higher**. It writes `homepage_slot_featured`, `homepage_slot_removed`, `homepage_slots_reordered`, `homepage_query_added` and `homepage_query_removed`. |
 
 If §07 gains a row for any of these, the row wins and the `source` becomes `stated`.
 

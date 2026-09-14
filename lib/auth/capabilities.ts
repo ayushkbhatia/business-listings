@@ -192,6 +192,17 @@ export const CAPABILITIES = {
     source: "inferred",
     why: "Not a row in §07. Board 12g: saving a template changes what every recipient of that event is sent, on email, SMS and in-app the moment it is saved, and on WhatsApp it submits wording to Meta in the platform's name. The nearest §07 row is \"Edit taxonomy & spec templates\" — ops lead only — and the grant follows it. Recording Meta's approval or rejection sits here too: approving puts a version live. `Send test to me` is held at the same rung because on WhatsApp it is a real, billed template send.",
   },
+  /*
+     Board 6h, and its Q5: permissions.md had no row for homepage curation, and
+     the screen borrowed `taxonomy.write` — whose reason, a renamed category
+     breaking a 301, has nothing to do with it.
+  */
+  "homepage.curate": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "inferred",
+    why: "Not a row in §07. Board 6h Q5: four \"Verified this week\" cards against every business in the directory, and six search chips under the hero, are the highest-leverage placement on the platform and the most-cached surface on the site. Held at ops lead — the rung that owns the tier those cards assert — rather than at every content role. Every feature, removal, reorder and chip change writes an audit row with a reason (B3).",
+  },
   "notification.read": {
     roles: ["staff_ops_lead", "staff_moderator"],
     audited: false,
