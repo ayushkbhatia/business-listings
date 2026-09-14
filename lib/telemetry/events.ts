@@ -88,6 +88,8 @@ export const EVENT_NAMES = [
   "catalogue_exported",
   "catalogue_imported",
   "supplier_report_filed",
+  "product_cap_refused",
+  "service_cap_refused",
 ] as const;
 
 export type EventName = (typeof EVENT_NAMES)[number];
@@ -471,6 +473,27 @@ export const EVENT_SPECS = {
     emitter: "server",
     session: "never",
     props: { kind: "string", chars: "number" },
+  },
+  /*
+     Board 4f `B6`. A seller reached for more than their plan lists and was
+     refused — the "felt the ceiling" event an upgrade call refers to. Dated by
+     the row, and written where the refusal is decided, never estimated from a
+     count after the fact: a seller sitting exactly at their cap who never tried
+     to add anything has not felt anything.
+
+     `attempted` is how many they tried to add in that one act; `surface` says
+     which door, because a bulk publish refused 40 rows and a single row refused
+     at the onboarding sheet are different conversations.
+  */
+  product_cap_refused: {
+    emitter: "server",
+    session: "never",
+    props: { plan: "string", cap: "number", attempted: "number", surface: "string" },
+  },
+  service_cap_refused: {
+    emitter: "server",
+    session: "never",
+    props: { plan: "string", cap: "number", attempted: "number", surface: "string" },
   },
   quote_extended: {
     emitter: "server",

@@ -168,7 +168,9 @@ and it is the one that argues back.
 /admin/spec-library/:id                 One template's fields                 [4e]  built h4e
 /admin/catalogue-imports                Concierge catalogue queue            [12i]  built h8s1
 /admin/attributes                       Attribute dictionary                  later
-/admin/businesses                       Businesses & health                   [4f]  built h4s4
+/admin/businesses                       Businesses & health — search, filters [4f]  built 4f
+/admin/businesses/:id                   One account: health, signals, decisions [4f] built 4f
+/admin/businesses/export                The filtered list as CSV              [4f]  built 4f
 /admin/crm                              Recruitment & accounts               [12d]  built h4s4
 /admin/users                            Users                                later
 /admin/staff                            Staff, roles, invitations & matrix    [4i]  built 4i

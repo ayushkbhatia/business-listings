@@ -447,6 +447,39 @@ no path could make one.
 `createMany().count`, or the length of the list the same transaction wrote. A publish that
 changes what products *read* without writing them (a spec template version) has no radius.
 
+## Account health — board 4f
+
+```prisma
+model Business {
+  responseTimeMedianMs Int?     // measured, existing
+  replyRate            Float?   // 4f — answered / counted, 0..1, same recipients and window
+  replySample          Int?     // 4f — how many enquiries replyRate counted; set with it, by CHECK
+}
+
+model AccountSegment {          // 4f B8 — a saved query, never a saved list
+  name        String @unique
+  query       String            // canonical query string from lib/accounts/filter.ts
+  createdById String
+}
+```
+
+**Health is never stored** (B1). `lib/accounts/health.ts` holds the thresholds and a classifier;
+`lib/accounts/health-where.ts` writes the same rules as a `where` for counting and filtering; an
+integration test holds the two to the same answer for every seeded business, and the states
+partition the directory.
+
+**Reply rate shares the median's definition** (B5): `EnquiryRecipient` rows in the last
+`WINDOW_DAYS`, measured by `measureReplies` in the daily metrics job. A reply is anything that
+stamps `firstReplyAt`. An unanswered enquiry counts against the rate only once its window has
+closed — the rule `effectiveState` uses before it says `no_response`. Null below `MIN_SAMPLE`.
+
+**Paying** is a subscription in `active` or `past_due` on a plan with a price (B2) — the same
+pair revenue counts as MRR. A trial, a Free account and an unclaimed listing are not paying.
+
+**Upgrade candidacy is a dated event** (B6): a `product_cap_refused` or `service_cap_refused`
+`ProductEvent`, written where a plan cap refuses a seller, or a `MissedEnquiry` at the monthly
+cap, inside 30 days, on Basic.
+
 ## Staff — board 4i
 
 ```prisma

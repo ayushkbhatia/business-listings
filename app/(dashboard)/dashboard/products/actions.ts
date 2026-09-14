@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { recordCapRefused } from "@/lib/accounts/cap-events";
 import { prisma } from "@/lib/db/client";
 import type { Prisma } from "@/lib/db/generated/client";
 import { assertCanEditProduct } from "@/lib/auth/guards";
@@ -142,7 +143,7 @@ export async function bulkUpdateProducts(formData: FormData): Promise<BulkResult
     // so it stays in their surface either way.
     if (changed > 0) await reindexBusiness(seat.businessId);
   } else if (action === "publish") {
-    const refusal = await refuseOverCap(seat.businessId, where);
+    const refusal = await refuseOverCap(seat.businessId, where, seat.actor.id);
     if (refusal) return refusal;
     ({ count: changed } = await prisma.product.updateMany({
       where,
@@ -170,6 +171,7 @@ export async function bulkUpdateProducts(formData: FormData): Promise<BulkResult
 async function refuseOverCap(
   businessId: string,
   where: { id: { in: string[] }; businessId: string },
+  actorId: string,
 ): Promise<{ ok: false; error: string; atCap: true; room: number } | null> {
   const caps = await effectiveFor(businessId);
   if (!caps) return null;
@@ -184,6 +186,16 @@ async function refuseOverCap(
   if (!refusesPublish(room)) return null;
 
   const left = roomLeft(room) ?? 0;
+  // Board 4f B6: the dated event an upgrade call refers to.
+  await recordCapRefused({
+    kind: "products",
+    businessId,
+    actorId,
+    plan: caps.name,
+    cap: cap ?? 0,
+    attempted: adding,
+    surface: "bulk_publish",
+  });
   return {
     ok: false,
     error: t("catalogue.cap.refused", {

@@ -22,11 +22,12 @@ import {
   withdrawClosure,
 } from "@/lib/closure/service";
 import { revalidateClosure } from "@/lib/closure/revalidate";
+import { deleteSegment, saveSegment } from "@/lib/accounts/segments";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
 /**
- * Board 4f — the three account decisions that had no button.
+ * Board 4f — the account decisions, and the saved segments.
  *
  * All three services were written, audited and tested, and called by nothing
  * outside their own test file. The logic is theirs; this is the wire.
@@ -47,8 +48,10 @@ function refused(error: unknown): ActionResult {
   throw error;
 }
 
-function done(): void {
+function done(businessId: string): void {
   revalidatePath("/admin/businesses");
+  // The account's own page, where every decision below is now made (4f B10).
+  revalidatePath(`/admin/businesses/${businessId}`);
   // The overview counts suspended accounts and unverified listings.
   revalidatePath("/admin");
 }
@@ -116,7 +119,7 @@ export async function setTier(formData: FormData): Promise<ActionResult> {
       reason: String(formData.get("reason") ?? ""),
     });
     if (!result.ok) return { ok: false, error: tierRefusal(result) };
-    done();
+    done(String(formData.get("businessId") ?? ""));
     return { ok: true, message: t("admin.businesses.tier_set", { tier: String(result.tier) }) };
   } catch (error) {
     return refused(error);
@@ -132,7 +135,7 @@ export async function suspend(formData: FormData): Promise<ActionResult> {
       reason: String(formData.get("reason") ?? ""),
     });
     if (!result.ok) return { ok: false, error: suspendRefusal(result) };
-    done();
+    done(String(formData.get("businessId") ?? ""));
     return { ok: true, message: t("admin.businesses.suspended") };
   } catch (error) {
     return refused(error);
@@ -148,7 +151,7 @@ export async function lift(formData: FormData): Promise<ActionResult> {
       reason: String(formData.get("reason") ?? ""),
     });
     if (!result.ok) return { ok: false, error: liftRefusal(result) };
-    done();
+    done(String(formData.get("businessId") ?? ""));
     return { ok: true, message: t("admin.businesses.lifted") };
   } catch (error) {
     return refused(error);
@@ -173,7 +176,7 @@ export async function giveNotice(formData: FormData): Promise<ActionResult> {
         error: t(`admin.businesses.closure.error.${result.error}` as "admin.businesses.closure.error.not_found"),
       };
     }
-    done();
+    done(String(formData.get("businessId") ?? ""));
     return {
       ok: true,
       message: result.emailDelivered
@@ -201,7 +204,7 @@ export async function withdraw(formData: FormData): Promise<ActionResult> {
       };
     }
     if (result.restored) revalidateClosure(result.slug);
-    done();
+    done(String(formData.get("businessId") ?? ""));
     return { ok: true, message: t("admin.businesses.closure.withdrawn") };
   } catch (error) {
     return refused(error);
@@ -224,9 +227,42 @@ export async function reopen(formData: FormData): Promise<ActionResult> {
         error: t(`admin.businesses.closure.error.${result.error}` as "admin.businesses.closure.error.not_found"),
       };
     }
-    done();
+    done(String(formData.get("businessId") ?? ""));
     return { ok: true, message: t("admin.businesses.closure.reopened") };
   } catch (error) {
     return refused(error);
   }
+}
+
+// ── Saved segments (B8) ───────────────────────────────────────────────────────
+
+export type SegmentActionResult = { ok: true; message: string; query: string } | { ok: false; error: string };
+
+const SEGMENT_ERRORS = {
+  not_staff: "admin.businesses.segments.error.not_staff",
+  empty_name: "admin.businesses.segments.error.empty_name",
+  empty_filter: "admin.businesses.segments.error.empty_filter",
+  name_taken: "admin.businesses.segments.error.name_taken",
+  too_many: "admin.businesses.segments.error.too_many",
+  not_found: "admin.businesses.segments.error.not_found",
+  not_yours: "admin.businesses.segments.error.not_yours",
+} as const;
+
+export async function saveSegmentAction(formData: FormData): Promise<SegmentActionResult> {
+  const seat = await requireStaff();
+  const result = await saveSegment(seat.actor, {
+    name: String(formData.get("name") ?? ""),
+    query: String(formData.get("query") ?? ""),
+  });
+  if (!result.ok) return { ok: false, error: t(SEGMENT_ERRORS[result.error]) };
+  revalidatePath("/admin/businesses");
+  return { ok: true, message: t("admin.businesses.segments.saved"), query: result.query };
+}
+
+export async function deleteSegmentAction(formData: FormData): Promise<SegmentActionResult> {
+  const seat = await requireStaff();
+  const result = await deleteSegment(seat.actor, String(formData.get("id") ?? ""));
+  if (!result.ok) return { ok: false, error: t(SEGMENT_ERRORS[result.error]) };
+  revalidatePath("/admin/businesses");
+  return { ok: true, message: t("admin.businesses.segments.deleted"), query: result.query };
 }

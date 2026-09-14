@@ -101,6 +101,18 @@ test.describe("removing a review is not a moderator's row", () => {
   });
 });
 
+test.describe("board 4f — an account, read by a moderator", () => {
+  test("opens the account and offers no decision on it", async ({ page }) => {
+    await page.goto("/admin/businesses?q=Technopump");
+    await page.getByRole("link", { name: "Open Technopump Trading LLC" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Technopump Trading LLC");
+    await expect(page.getByText(/Decisions on an account are an ops lead's/)).toBeVisible();
+    for (const name of ["Set tier", "Suspend", "Lift suspension", "Give notice to close"]) {
+      await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
+    }
+  });
+});
+
 test.describe("board 4i — the staff screen, read-only", () => {
   test("shows who holds which role and offers nothing to change it", async ({ page }) => {
     await page.goto("/admin/staff");

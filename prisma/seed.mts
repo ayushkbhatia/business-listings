@@ -37,7 +37,7 @@ import {
 } from "../lib/catalogue-import/terms.js";
 import { buildProductSearchText, valueAliases } from "../lib/search/index-text.js";
 import { matchLine } from "../lib/quote/match.js";
-import { medianResponseMs, windowStart } from "../lib/metrics/response-time.js";
+import { measureReplies, windowStart, type RateObservation } from "../lib/metrics/response-time.js";
 import { monthStart } from "../lib/enquiry/fanout.js";
 import { EXTRA_CATEGORIES } from "./seed-taxonomy.mjs";
 import { EXTRA_SUBCATEGORIES } from "./seed-taxonomy.mjs";
@@ -51,6 +51,7 @@ import { seedLicenceImports } from "./seed-licence-imports.mjs";
 import { seedDedupe } from "./seed-dedupe.mjs";
 import { seedQueue } from "./seed-queue.mjs";
 import { seedStaffRoster } from "./seed-staff-roster.mjs";
+import { seedAccountHealth } from "./seed-account-health.mjs";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL! }),
@@ -1085,6 +1086,10 @@ async function main() {
   // ago", a 15-minute resend window, a 72-hour link. Anchored to noon, a morning
   // seed renders last activity in the future and a resend blocked for hours.
   await seedStaffRoster(prisma, new Date());
+  // Board 4f: three accounts in the warning states, measured from their own
+  // enquiries. Before `recomputeDerived`, which measures them, and anchored to
+  // `NOW` because that is the clock the measurement runs against.
+  await seedAccountHealth(prisma, NOW);
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
   await backfillSeatChannels(prisma);
@@ -4024,26 +4029,34 @@ async function deriveResponseTimes(db: Db) {
   const since = windowStart(NOW);
   const rows = await db.enquiryRecipient.findMany({
     where: { createdAt: { gte: since }, business: { claimStatus: "claimed", suspendedAt: null } },
-    select: { businessId: true, createdAt: true, firstReplyAt: true },
+    select: { businessId: true, createdAt: true, firstReplyAt: true, enquiry: { select: { closesAt: true } } },
   });
 
-  const byBusiness = new Map<string, { deliveredAt: Date; firstReplyAt: Date | null }[]>();
+  const byBusiness = new Map<string, RateObservation[]>();
   for (const row of rows) {
     const list = byBusiness.get(row.businessId) ?? [];
-    list.push({ deliveredAt: row.createdAt, firstReplyAt: row.firstReplyAt });
+    list.push({ deliveredAt: row.createdAt, firstReplyAt: row.firstReplyAt, closesAt: row.enquiry.closesAt });
     byBusiness.set(row.businessId, list);
   }
 
+  // Board 4f: the reply rate beside the median, by the job's own function.
   let measured = 0;
+  let rated = 0;
   for (const [businessId, observations] of byBusiness) {
-    const median = medianResponseMs(observations);
+    const next = measureReplies(observations, NOW);
     await db.business.update({
       where: { id: businessId },
-      data: { responseTimeMedianMs: median, derivedAt: NOW },
+      data: {
+        responseTimeMedianMs: next.medianMs,
+        replyRate: next.rate,
+        replySample: next.sample,
+        derivedAt: NOW,
+      },
     });
-    if (median !== null) measured += 1;
+    if (next.medianMs !== null) measured += 1;
+    if (next.rate !== null) rated += 1;
   }
-  console.log(`   ${measured} of ${byBusiness.size} businesses have a measurable reply time`);
+  console.log(`   ${measured} of ${byBusiness.size} businesses have a measurable reply time, ${rated} a reply rate`);
 }
 
 /**

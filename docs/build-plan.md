@@ -393,8 +393,11 @@ the screen is permanently empty above copy reading "Run the matcher after an imp
   once the running resolver writes it.
 - [ ] **4.4 `4c`** — let the credential lane open the credential; filter conflict rows a moderator
   will 404 on.
-- [ ] **4.5 `4f`** — search, pagination, a detail route, and an appeal path the terms page already
-  promises.
+- [x] **4.5 `4f`** — search by name, licence number and TRN; filters, pages and saved segments;
+  health derived from a measured reply rate; an export that records its filter; and a detail route
+  where the account decisions now live. **Not built:** the appeal path the terms page promises
+  (§11, "You may appeal once, to a person") — it needs a seller-side request and a queue, and is
+  its own board.
 - [ ] **4.6 `10g`** — the composition is keyed on a caller-supplied `context` string rather than
   claim status, and two of three call sites never pass it.
 
@@ -501,7 +504,7 @@ the only large piece and the only one selling something it does not deliver.
 | `12b` | Dedupe & merge | built | small | Pairs from the importer, three outcomes, bulk merge as a unit, tuning previewed, owner confirmation. Closed by 4.2. | 4.2 |
 | `4b` | Approval queue | built | medium | Six kinds, checks computed from tunable rules, bounded bulk bar, claims decided. Closed by 4.3. | 4.3 |
 | `4c` | Review a submission | partial | small | The credential lane cannot open the credential; moderators get conflict rows that 404. | 4.4 |
-| `4f` | Businesses & health | partial | small | No search, pagination or detail route on the screen that owns suspension. | 4.5 |
+| `4f` | Businesses & health | built | small | Health derived from measured reply rate, search, filters, segments, export, detail route. The suspension appeal path is not built. | 4.5 |
 | `10g` | Unclaimed listing | partial | small | Both calls to action render `disabled`; the claim destination exists and only the href is absent. | 1.1 / 4.6 |
 | `10a` | Subcategory page | partial ↓ | export only | Two definitions of "suppliers in this trade" render on one page. | 5.2 |
 | `13c` | Report a listing | not started | medium | The admin queue is built; both live entry points go to the verification policy. | 9.1 |

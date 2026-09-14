@@ -1,4 +1,5 @@
 import "server-only";
+import { recordCapRefused } from "@/lib/accounts/cap-events";
 import { prisma } from "@/lib/db/client";
 import { assertCanEditProduct } from "@/lib/auth/guards";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
@@ -388,7 +389,18 @@ export async function seedFromCommonServices(
       continue;
     }
     if (plan && allowance(plan, "services", existing.length + created).atCap) {
-      skipped += common.length - created - skipped;
+      const refused = common.length - created - skipped;
+      skipped += refused;
+      // Board 4f B6: the rows the ceiling refused, not the duplicates above.
+      await recordCapRefused({
+        kind: "services",
+        businessId,
+        actorId: actor.id,
+        plan: plan.name,
+        cap: allowance(plan, "services", existing.length + created).cap ?? 0,
+        attempted: refused,
+        surface: "common_services",
+      });
       break;
     }
 
