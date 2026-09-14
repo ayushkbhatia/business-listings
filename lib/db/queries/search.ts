@@ -2,6 +2,7 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { cache } from "react";
 import type { Prisma } from "@/lib/db/generated/client";
+import type { Emirate } from "@/lib/db/generated/enums";
 import { prisma } from "@/lib/db/client";
 import { isCode, matchNeedle } from "@/lib/search/index-text";
 import { nearestKm } from "@/lib/geo/distance";
@@ -36,6 +37,8 @@ import { resolveTradeKind, type TradeKindRow } from "@/lib/taxonomy/trade-kind";
 import {
   appliedKeys,
   countable,
+  hasServiceFacets,
+  serviceFacetsOf,
   withoutFacet,
   type SearchQuery,
   type SearchSort,
@@ -64,7 +67,7 @@ export const PUBLIC_BUSINESS = { suspendedAt: null, publishedAt: { not: null } }
 
 export const PAGE_SIZE = 20;
 
-function tokens(q: string): string[] {
+export function tokens(q: string): string[] {
   return q
     .trim()
     .toLowerCase()
@@ -85,7 +88,24 @@ function tokens(q: string): string[] {
  * respect the other active filters are the classic mistake here, and the only
  * durable fix is that there is one function.
  */
-export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prisma.BusinessWhereInput {
+export function businessWhere(
+  query: SearchQuery,
+  categoryIds?: string[],
+  /**
+   * Board `1c-s` — answer a place filter by where a firm works as well as where
+   * its branches are. Only the blended page asks. See `placeWhere` for why every
+   * other caller keeps the branch rule for now.
+   */
+  place?: {
+    coverage: true;
+    /**
+     * The emirate the `area` filter sits in. Coverage reads a place as a pair —
+     * an emirate-wide row reaches every area inside it — and a `where` cannot
+     * look the pair up.
+     */
+    areaEmirate?: Emirate;
+  },
+): Prisma.BusinessWhereInput {
   const and: Prisma.BusinessWhereInput[] = [PUBLIC_BUSINESS];
 
   if (categoryIds?.length) {
@@ -132,6 +152,22 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
       );
     }
 
+    /*
+       Board `1c-s`: a firm that sells work is found by the work.
+
+       `searchText` is built from the name, the description, the categories
+       and the catalogue, and a services firm has no catalogue — so until this
+       branch *vat return filing* found a practice only if its name or its
+       description happened to say so, and never because it listed the service.
+       The live services are the firm's catalogue.
+
+       For codes too, and deliberately: `ISO 9001` and `EN 81` are words in a
+       scope sentence, not sizes in a spec table, and `serviceWhere` finds the
+       service row by the same text. A firm and its service must not disagree
+       about whether the words found them.
+    */
+    branches.push({ services: { some: { status: "live", OR: serviceTextBranches(token) } } });
+
     and.push({ OR: branches });
   }
 
@@ -143,6 +179,68 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
     and.push({ responseTimeMedianMs: { lte: query.replyWithinHours * 3_600_000 } });
   }
 
+  const where = placeWhere(query, place);
+  if (where) and.push(where);
+
+  if (query.availability?.length) {
+    and.push({ products: { some: { availability: { in: query.availability as never[] }, status: { not: "draft" } } } });
+  }
+
+  and.push(...specWhere(query));
+
+  return { AND: and };
+}
+
+/**
+ * The live service text a word can match — the name, the scope, the deliverable,
+ * and the two optional rows that name who the work is for and who regulates it.
+ *
+ * Not the trade's name. A firm is already found by its categories above, and a
+ * service filed under a trade is not *about* every word of the trade's name: the
+ * seed's audit fixture sits under *Valves & fittings*, and matching on the
+ * category would have made every valve search a services search.
+ *
+ * Not `excluded`. A service whose exclusions line reads *VAT filing* is the one
+ * service that certainly does not do it, and matching it would put the firm in
+ * front of the buyer for the exact thing it says it will not take.
+ */
+function serviceTextBranches(token: string): Prisma.ServiceWhereInput[] {
+  return [
+    { name: { contains: token, mode: "insensitive" } },
+    { scope: { contains: token, mode: "insensitive" } },
+    { deliverable: { contains: token, mode: "insensitive" } },
+    { values: { some: { fieldKey: { in: ["sectors", "regulator"] }, value: { contains: token, mode: "insensitive" } } } },
+  ];
+}
+
+/**
+ * Where a firm is, for a place filter — its branches, or where it works.
+ *
+ * A goods supplier is in Dubai when it has a branch there. A firm that sells
+ * work is in Dubai when its coverage reaches Dubai: a tax practice in Sharjah
+ * that files for Dubai clients is a Dubai result, and a branch-only reading
+ * leaves it absent from every emirate but its office's (`12c-s`'s *still owed*).
+ * With `place.coverage` a place filter is answered by either — and the coverage
+ * half resolves per service, the way `1h-s` routes a brief.
+ *
+ * **Only the blended page asks, for now.** The nightly position snapshot
+ * (`lib/search/directory.ts`) ranks emirate scopes by branch membership *because*
+ * the landing pages filter by this function, so a seller is never told a rank on
+ * a page that does not list them. Moving the landing pages without the snapshot
+ * would break that promise from the other side; `6a-s` and `10c-s` move the two
+ * together.
+ *
+ * A map viewport is branch-only either way. It asks *who is here*, in
+ * coordinates, and coverage has none.
+ *
+ * A free zone is a registration for a firm that sells work (`2d-s` B4) and a
+ * branch address for one that sells goods; with coverage on, either answers
+ * the toggle.
+ */
+function placeWhere(
+  query: SearchQuery,
+  place: { coverage: true; areaEmirate?: Emirate } | undefined,
+): Prisma.BusinessWhereInput | null {
   const locationFilters: Prisma.LocationWhereInput = { published: true };
   /*
      The map viewport, when the buyer pressed "Search this area".
@@ -166,17 +264,87 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
   }
   if (query.emirate) locationFilters.emirate = query.emirate as never;
   if (query.area) locationFilters.area = { slug: query.area };
-  // A free zone is a cross-cutting toggle, not a place in the area hierarchy.
   // A free zone is a cross-cutting toggle, not a place in the area hierarchy —
   // it narrows whatever area filter is already set rather than replacing it.
   if (query.freeZone) {
     locationFilters.area = { ...(locationFilters.area as object | undefined), isFreeZone: true };
   }
-  if (Object.keys(locationFilters).length > 1) and.push({ locations: { some: locationFilters } });
+  if (Object.keys(locationFilters).length <= 1) return null;
+  const branch: Prisma.BusinessWhereInput = { locations: { some: locationFilters } };
+  if (query.bounds || !place?.coverage) return branch;
 
-  if (query.availability?.length) {
-    and.push({ products: { some: { availability: { in: query.availability as never[] }, status: { not: "draft" } } } });
+  const coverage = coverageWhere(query, place.areaEmirate);
+  const registered: Prisma.BusinessWhereInput | null = query.freeZone
+    ? {
+        freeZoneRegistrations: {
+          some: {
+            area: {
+              isFreeZone: true,
+              ...(query.emirate ? { emirate: query.emirate as Emirate } : {}),
+              ...(query.area ? { slug: query.area } : {}),
+            },
+          },
+        },
+      }
+    : null;
+
+  const works: Prisma.BusinessWhereInput[] = [];
+  if (coverage) {
+    /*
+       Per service, not the union — `12c-s` B4, `3c-s` B8. A firm whose only
+       VAT service is narrowed to Sharjah does not work in Dubai because its
+       default still says Dubai: the default is what an un-narrowed service
+       inherits, and this firm has none. A firm with no live service yet is read
+       by its default, because nothing it offers disagrees with it.
+    */
+    works.push({
+      OR: [
+        { services: { some: { status: "live", ...effectiveCoverageWhere(coverage) } } },
+        { services: { none: { status: "live" } }, serviceCoverage: { some: { AND: [{ serviceId: null }, coverage] } } },
+      ],
+    });
   }
+  if (registered) works.push(registered);
+  return works.length > 0 ? { OR: [branch, { AND: works }] } : branch;
+}
+
+/**
+ * `effectiveCoverage`, as a `where` on a service: its own rows where it has
+ * narrowed itself, the firm's default where it has not.
+ */
+function effectiveCoverageWhere(coverage: Prisma.ServiceCoverageWhereInput): Prisma.ServiceWhereInput {
+  return {
+    OR: [
+      { coverage: { some: coverage } },
+      { coverage: { none: {} }, business: { serviceCoverage: { some: { AND: [{ serviceId: null }, coverage] } } } },
+    ],
+  };
+}
+
+/**
+ * The coverage rows that reach the place a query names — `coversTarget`, as a
+ * `where`. An emirate is reached by any row in it; an area by its own row or a
+ * row covering its whole emirate. Null where the query names no place.
+ */
+export function coverageWhere(
+  query: Pick<SearchQuery, "emirate" | "area">,
+  areaEmirate?: Emirate,
+): Prisma.ServiceCoverageWhereInput | null {
+  if (query.area) {
+    const emirate = areaEmirate ?? (query.emirate as Emirate | undefined);
+    return {
+      OR: [
+        { area: { slug: query.area } },
+        ...(emirate ? [{ areaId: null, emirate }] : []),
+      ],
+    };
+  }
+  if (query.emirate) return { emirate: query.emirate as Emirate };
+  return null;
+}
+
+function specWhere(query: SearchQuery): Prisma.BusinessWhereInput[] {
+  const and: Prisma.BusinessWhereInput[] = [];
 
   /*
      Spec facets, on the tab that is every category page's default.
@@ -214,6 +382,61 @@ export function businessWhere(query: SearchQuery, categoryIds?: string[]): Prism
 
   if (specConstraints.length > 0) {
     and.push({ products: { some: { status: { not: "draft" }, AND: specConstraints } } });
+  }
+
+  return and;
+}
+
+/**
+ * Board `1c-s` — the live services a query finds, as a `where`.
+ *
+ * The same filters `businessWhere` applies to the firm, applied through the
+ * service to its firm — tier, reply time, years trading — and the place read
+ * the way `12c-s` B4 and `1h-s` B5 read it: **per service**. A service reaches
+ * a place through its own coverage rows where it has narrowed itself, and
+ * through the firm's default where it has not. That is `effectiveCoverage`,
+ * written as the two branches it has, so a service narrowed to Sharjah is not
+ * a Dubai result because its firm's default says Dubai.
+ *
+ * The words match the firm's name as well as the service's own text, so
+ * *meridian vat* finds Meridian's VAT service; a service with no word of the
+ * query in it and a firm with no word of it in its name is not a result.
+ *
+ * Service facets are not here. They are applied to documents in
+ * `lib/search/blended.ts`, where the same predicate also counts them.
+ */
+export function serviceWhere(query: SearchQuery, areaEmirate?: Emirate): Prisma.ServiceWhereInput {
+  const firm: Prisma.BusinessWhereInput = { ...PUBLIC_BUSINESS };
+  const and: Prisma.ServiceWhereInput[] = [{ status: "live", business: firm }];
+
+  for (const token of tokens(query.q)) {
+    and.push({
+      OR: [
+        ...serviceTextBranches(token),
+        { business: { displayName: { contains: token, mode: "insensitive" } } },
+      ],
+    });
+  }
+
+  if (query.tier) and.push({ business: { verificationTier: { gte: query.tier } } });
+  if (query.yearsTrading) {
+    and.push({ business: { establishedYear: { lte: new Date().getFullYear() - query.yearsTrading } } });
+  }
+  if (query.replyWithinHours) {
+    and.push({ business: { responseTimeMedianMs: { lte: query.replyWithinHours * 3_600_000 } } });
+  }
+
+  const coverage = coverageWhere(query, areaEmirate);
+  if (coverage) and.push(effectiveCoverageWhere(coverage));
+  if (query.freeZone) {
+    and.push({
+      business: {
+        OR: [
+          { freeZoneRegistrations: { some: { area: { isFreeZone: true } } } },
+          { locations: { some: { published: true, area: { isFreeZone: true } } } },
+        ],
+      },
+    });
   }
 
   return { AND: and };
@@ -278,7 +501,7 @@ const BUSINESS_INCLUDE = {
 } as const;
 
 /** How well a row matches the words the buyer typed. 0..1. */
-function relevanceOf(name: string, q: string): number {
+export function relevanceOf(name: string, q: string): number {
   if (!q) return 0.5;
   const haystack = name.toLowerCase();
   const words = tokens(q);
@@ -602,7 +825,7 @@ async function readVectors(options: {
  * one kind, which is every subcategory page and nearly every sector page; only a
  * mixed scope with a sixth-category match falls back to the primary.
  */
-function listingKind(
+export function listingKind(
   kinds: ReadonlyMap<string, TradeKindRow>,
   categoryIds: readonly string[] | undefined,
 ): (business: { primaryCategoryId: string; categories: { categoryId: string }[] }) => RankingKind {
@@ -1279,6 +1502,8 @@ export async function suggestFilterToDrop(
 export async function recordZeroResult(
   query: SearchQuery,
   categoryId: string | null,
+  /** Board `1c-s` records its misses as `all` — a blended result set has no goods tab. */
+  tab: string = query.tab,
 ): Promise<void> {
   if (!query.q && appliedKeys(query).length === 0) return;
   try {
@@ -1295,8 +1520,9 @@ export async function recordZeroResult(
           replyWithinHours: query.replyWithinHours ?? null,
           yearsTrading: query.yearsTrading ?? null,
           spec: query.spec,
+          ...(hasServiceFacets(query) ? { services: serviceFacetsOf(query) } : {}),
         },
-        tab: query.tab,
+        tab,
       },
     });
   } catch (error) {

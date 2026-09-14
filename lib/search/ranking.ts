@@ -724,6 +724,56 @@ export function rankBlended<T>(
 }
 
 /**
+ * Board `1c-s` — services, businesses and products in one ordered list.
+ *
+ * **This is the single documented sort B10 asks for, and it is `12c-s` Q1's
+ * answer carried one level up.** `rankBlended` refuses to compare a goods score
+ * with a services score; this refuses to compare a service with a business or a
+ * product, for the same reason and a second one:
+ *
+ *   · the three kinds are not scored on the same things — a service's coverage
+ *     is its own, a firm's is the union of its services, a product's is a
+ *     warehouse's distance — so their numbers are no more comparable than two
+ *     vectors' are;
+ *   · and ordering by kind — services above firms above products — would turn
+ *     the tabs into a partition, which the board names as the one thing this
+ *     screen exists not to do.
+ *
+ * So each kind is ranked in its own group — a service on the services vector,
+ * a product on the goods vector, and a business through `rankBlended`, because
+ * a firm's vector is its matched category's — and the three orders are merged
+ * by relevance band and, inside a band, in proportion to how many of each
+ * there are. Within a kind the order is exactly that kind's ranking, asserted.
+ *
+ * The drawn order of the board's four rows is not this and is not meant to be:
+ * the handoff says not to read the algorithm off them. When Q1 is decided
+ * differently, this function and `rankBlended` are what change.
+ */
+export function rankResultSet<T>(
+  rows: readonly T[],
+  groupOf: (row: T) => "service" | "business" | "product",
+  signalsOf: (row: T) => RankSignals,
+  vectorOf: (row: T) => RankingKind,
+  vectors: VectorSet,
+): T[] {
+  const byGroup = { service: [] as T[], business: [] as T[], product: [] as T[] };
+  for (const row of rows) byGroup[groupOf(row)].push(row);
+
+  const servicesLive = vectors.services !== null;
+  const ranked = (["service", "business", "product"] as const)
+    .filter((group) => byGroup[group].length > 0)
+    .map((group) => {
+      if (group === "business") return rankBlended(byGroup.business, signalsOf, vectorOf, vectors);
+      const vector = group === "service" ? appliedVector("services", servicesLive) : "goods";
+      const weights = vector === "services" ? vectors.services! : vectors.goods;
+      return rank(byGroup[group], signalsOf, weights, vector);
+    });
+
+  if (ranked.length <= 1) return ranked[0] ?? [];
+  return mergeByBand(ranked, (row) => relevanceBand(signalsOf(row).relevance));
+}
+
+/**
  * Merge already-ordered groups without reordering any of them.
  *
  * At each step the head with the better relevance band goes first. Between heads

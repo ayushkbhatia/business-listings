@@ -1759,6 +1759,8 @@ a control to set it — and "how often", which has no field at all.
 ### Stage 7 · Discovery
 `1c-s` → `10c-s` → `6a-s`
 
+**`1c-s` shipped 14 Sep — see §4x.**
+
 **The epic's urgency for `1c-s` is not real.** It warns a Products default makes a services-only
 firm invisible; `lib/search/query.ts:182` defaults the tab to `businesses`. Worth building for the
 kind badges, not for the stated reason.
@@ -2222,6 +2224,103 @@ holds only what the machine could not settle.*
   **Q5** — the SLA is `4b`'s credential clock.
 - **An FTA register client.** Configuration once one exists; until then the queue path is dormant on
   production.
+
+## 4x · Handoff `1c-s` — blended search: one set, three shapes, and every count the same query
+
+*The board the service track points at. `/search?q=` now blends services, businesses and products
+into one result set when the words find work sold by the job; goods search (`1c`) renders otherwise.*
+
+### What shipped
+
+- **Two compositions on one route, chosen by one rule.** `compositionFor` in `lib/search/blended.ts`:
+  a goods-only question (availability, a spec value, a map viewport) is goods search; a blended one
+  (a tab or a service facet in the URL) stays blended; otherwise words that find a live service get
+  the blended page. **No words is goods search** — `/search?emirate=dubai` is the directory on a map,
+  not every service in Dubai. The board's *goods-only query* state is therefore goods search itself:
+  businesses and products, and no Services tab.
+- **One predicate decides every number.** `matches` over per-request documents; the header and the
+  four tabs are `tabCounts` of the filtered set (B1), a tab is `narrow` of the ranked set and never a
+  second query (B3), and each rail option's count is the same predicate with that group changed (B2) —
+  `tests/integration/blended-search-1cs.test.ts` requests every option and checks the page it opens
+  shows that count. Credentials are all required (*held as well*), every other group is alternatives,
+  and **one service of a firm must answer every service facet at once**, the rule spec facets already
+  follow on goods.
+- **Three shapes** in `components/domain/BlendedResultRows.tsx`: a service carries turnaround, fee
+  basis, delivered and sectors and reads *Fee on enquiry* (B8); a business names its matched services
+  first, *+ N more*, and *Matched on a service they offer* (B5); a product keeps *In stock* and *Price
+  on enquiry* and stays in the blend with a line under the list saying so (B4).
+- **The rail is the scope sheet turned outward.** Groups are the rows a family marks
+  `ScopeSheetRow.filterable` (the single source `1g-s` B5 names) plus checked credentials. **No price
+  or stock group exists** (B6) — there is no key for either in `SERVICE_FACET_KEYS`.
+- **B7 is `CHECKED_CREDENTIAL`** — standing and `register_verified`. A claim or a rejection filters
+  nobody in and wears no tick; on production, with no register connected, the group is absent.
+- **B9 — the RFQ prompt** sends a brief to `1h-s` in the trade most matched services sit in, and its
+  second sentence is a count (*14 of the 21 firms here with a measured reply time answer within a
+  day*), not *most reply within a day*; with nothing measured it says nothing about speed.
+- **B10 — the one documented sort is `rankResultSet`**: each kind ranked on its own (a service on the
+  services vector, a product on goods, a business through `rankBlended`), merged by relevance band and
+  proportionally inside a band. It is `12c-s` Q1's answer carried up a level; never a partition, and
+  never a comparison of scores across kinds. *Sort: Most relevant* is a statement, not a control.
+- **Zero after filtering** keeps the rail with each option's count and names the one group to clear;
+  zero at all is `1c`'s zero-result page with the brief prompt and the alert. Misses are recorded
+  with `tab = all` and the service facets in `filters`, so `10e` and `12d` read them.
+- **Saved searches** from the blended page save `kind=all` and are counted by the blended loader, so
+  an alert's *new matches* are rows the page will show (services by `publishedAt`).
+- **Seed** `prisma/seed-blended-search.mts`: four VAT practices under *VAT & tax advisory* and a
+  software seller, each proving one rule (per-service coverage, checked vs claimed credential, the
+  product in the blend).
+
+### Found on the way, and fixed
+
+- **Services were not in the match surface at all.** `businessWhere` matched name, categories and the
+  catalogue; a practice listing *VAT return filing* was found only if its name or description said so.
+  It now matches live service text (name, scope, deliverable, sectors, regulator) — never `excluded`,
+  and never the service's trade name, which would have made every valve search a services search
+  through Meridian's fixture category.
+- **A place filter was branch membership only** (`12c-s`'s *still owed*): a Sharjah practice covering
+  Dubai was absent from every Dubai search. On the blended page `placeWhere` now answers an emirate or
+  area by a branch or by coverage **resolved per service** — a firm whose only service is narrowed to
+  Sharjah is not a Dubai result because its default says Dubai. `serviceWhere` writes
+  `effectiveCoverage` as its two branches. **Every other caller keeps the branch rule** (an opt-in
+  argument), because the nightly position snapshot ranks emirate scopes by branches precisely so the
+  landing pages it describes agree with it; `6a-s`/`10c-s` should move the two together.
+- **`familyFor` read two tables per call.** `familyResolver` reads them once; search resolves a family
+  for every matched service through it.
+- **The goods rail's option link** is now one component, `FacetOptionLink`, shared with the blended
+  rail, so the two checkboxes cannot drift.
+
+### Decisions taken against the handoff
+
+- **No `SearchDocument` table.** The facets travel on a document built per request from the matched
+  rows. A stored index needs a writer on every scope-sheet save, credential decision, coverage edit,
+  publish, suspension and licence sweep, and a stale row is a count that is not the query. Production
+  holds 122 listings and no live service; each kind reads up to 1,000 ids and the page says so if a
+  query exceeds that rather than counting a sample.
+- **Tabs are links, not a client-side filter.** B3's point — narrow one set, never re-query — holds by
+  construction (`narrow` over the ranked set, counts computed before it and asserted identical on every
+  tab); links keep the tab shareable, back-buttonable and working before JavaScript.
+- **Turnaround is a facet only where a family marks it filterable, by its own words.** The render's
+  *within 5 working days / within 2 weeks / longer* buckets need a field no scope sheet has — `3g-s`
+  keeps turnaround free text, and bucketing it by parsing would invent an answer. Three families
+  (inspection, logistics, project advisory) flag it; their values facet as written, commonest first.
+- **The regulator row is not a rail group** although families flag it: it is self-declared, and B7
+  puts the checked credential in its place.
+- **Group labels are the platform's neutral words**, not a family's (*Sectors most audited* is right on
+  an audit sheet and wrong on a search that crosses families).
+- **Q2 (duplication) — both rows present, as drawn**, with the B5 sentence doing the work. **Q3 —
+  *Accepting new clients* is neither shown nor filterable**: D11 closed as no and the field does not
+  exist. **Q4 — sectors have counts**, like every other group. **Q5 — the Products tab** is drawn when
+  products match and not otherwise.
+- **No *Add to compare* on a service row.** No service comparison exists (`1n-s` compares proposals a
+  buyer received, not listings); the row's second action is *Full scope*. The rail's yellow *no price
+  filter* note is a note to the build and is not rendered.
+
+### Still owed, and the owner's
+
+- **`12c-s` Q1 itself.** The sort is documented and replaceable in one function; the order is still
+  the owner's decision.
+- **`10c-s` kind-scoped facets** — the rail's per-kind behaviour beyond what this board draws.
+- **Family data.** Row labels and filterable flags are ops' on `4e-s`; the rail follows them.
 
 ## 4b · What the re-sequence opens up
 

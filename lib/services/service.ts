@@ -90,6 +90,17 @@ export async function familyFor(
   categoryId: string,
   chosen?: string | null,
 ): Promise<ScopeFamily> {
+  return (await familyResolver())(categoryId, chosen);
+}
+
+/**
+ * `familyFor`, for many services at once — the same two queries, then a lookup.
+ *
+ * Board `1c-s` resolves a family for every service a search found, and one
+ * `familyFor` per service would be two queries per result. The rule is the one
+ * above, not a copy of it: `familyFor` is this resolver asked once.
+ */
+export async function familyResolver(): Promise<(categoryId: string, chosen?: string | null) => ScopeFamily> {
   const [categories, families] = await Promise.all([
     prisma.category.findMany({ select: { id: true, parentId: true, scopeFamilyId: true } }),
     prisma.scopeSheetFamily.findMany({
@@ -107,32 +118,35 @@ export async function familyFor(
   ]);
 
   const rows = new Map<string, ScopeFamilyRow>(categories.map((row) => [row.id, row]));
-  const wanted =
-    (chosen && families.some((row) => row.id === chosen) ? chosen : null) ??
-    resolveScopeFamily(rows, categoryId);
 
-  /*
-     The seeded default, and a hard failure if it is missing.
+  return (categoryId, chosen) => {
+    const wanted =
+      (chosen && families.some((row) => row.id === chosen) ? chosen : null) ??
+      resolveScopeFamily(rows, categoryId);
 
-     Falling back to an empty family would render a fee-basis control with no
-     options and a scope table with no rows, which reads as a broken screen
-     rather than as a missing seed — and the partial unique index means there is
-     never more than one to choose between.
-  */
-  const family =
-    (wanted ? families.find((row) => row.id === wanted) : undefined) ??
-    families.find((row) => row.isDefault);
-  if (!family) {
-    throw new Error(
-      "No default scope-sheet family. Migration 20261004090000_service_scope_sheet seeds one.",
-    );
-  }
+    /*
+       The seeded default, and a hard failure if it is missing.
 
-  return {
-    id: family.id,
-    name: family.name,
-    feeBases: family.feeBases.map((row) => ({ key: row.key, label: row.label })),
-    rows: family.rows,
+       Falling back to an empty family would render a fee-basis control with no
+       options and a scope table with no rows, which reads as a broken screen
+       rather than as a missing seed — and the partial unique index means there is
+       never more than one to choose between.
+    */
+    const family =
+      (wanted ? families.find((row) => row.id === wanted) : undefined) ??
+      families.find((row) => row.isDefault);
+    if (!family) {
+      throw new Error(
+        "No default scope-sheet family. Migration 20261004090000_service_scope_sheet seeds one.",
+      );
+    }
+
+    return {
+      id: family.id,
+      name: family.name,
+      feeBases: family.feeBases.map((row) => ({ key: row.key, label: row.label })),
+      rows: family.rows,
+    };
   };
 }
 
