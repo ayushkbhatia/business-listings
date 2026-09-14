@@ -194,6 +194,27 @@ describe("one signal per business, and a score nobody typed", () => {
     ).toBe(0);
   });
 
+  it("counts saved searches waiting for a listing into a zero-result trade's demand (board 10e B6)", () => {
+    const zero: Extract<SignalFacts, { kind: "zero_result" }> = {
+      kind: "zero_result",
+      categoryId: "cat-valves",
+      categoryName: "Valves",
+      searches30d: 6,
+      searchesWeek: 2,
+      alertsWaiting: 3,
+    };
+    expect(demandScoreOf(zero)).toBe(9);
+    // The number the call opens with stays the searches: an alert is not a search this month.
+    expect(signalValueOf(zero)).toBe(6);
+    // A task written before the field existed scores as it did.
+    expect(demandScoreOf({ ...zero, alertsWaiting: undefined })).toBe(6);
+
+    expect(scriptIdFor(zero, "claimed")).toBe("zero_result.v1");
+    expect(scriptIdFor({ ...zero, searchesWeek: 0 }, "claimed")).toBe("zero_result.no_number.v1");
+    expect(scriptIdFor({ ...zero, searches30d: 0, searchesWeek: 0 }, "claimed")).toBe("zero_result.alerts.v1");
+    expect(scriptIdFor({ ...zero, searches30d: 0, searchesWeek: 0, alertsWaiting: 0 }, "claimed")).toBe("zero_result.no_number.v1");
+  });
+
   it("picks the script with a number only when the number is not nought", () => {
     expect(scriptIdFor(held, "unclaimed")).toBe("held_page.claim.v1");
     expect(scriptIdFor({ ...held, tradeSearchesWeek: 0 }, "unclaimed")).toBe("held_page.claim_no_number.v1");

@@ -24,6 +24,7 @@ export type ScriptId =
   | "held_page.verify.v1"
   | "zero_result.v1"
   | "zero_result.no_number.v1"
+  | "zero_result.alerts.v1"
   | "unclaimed_demand.v1"
   | "cap_reached.enquiry.v1"
   | "cap_reached.product.v1"
@@ -36,6 +37,7 @@ export const SCRIPT_IDS: readonly ScriptId[] = [
   "held_page.verify.v1",
   "zero_result.v1",
   "zero_result.no_number.v1",
+  "zero_result.alerts.v1",
   "unclaimed_demand.v1",
   "cap_reached.enquiry.v1",
   "cap_reached.product.v1",
@@ -49,7 +51,10 @@ export function scriptIdFor(facts: SignalFacts, claimStatus: string): ScriptId {
       if (claimStatus === "claimed") return "held_page.verify.v1";
       return facts.tradeSearchesWeek > 0 ? "held_page.claim.v1" : "held_page.claim_no_number.v1";
     case "zero_result":
-      return facts.searchesWeek > 0 ? "zero_result.v1" : "zero_result.no_number.v1";
+      if (facts.searchesWeek > 0) return "zero_result.v1";
+      // Board 10e B6: on the list for buyers' waiting alerts, not for this month's searches.
+      if (facts.searches30d === 0 && (facts.alertsWaiting ?? 0) > 0) return "zero_result.alerts.v1";
+      return "zero_result.no_number.v1";
     case "unclaimed_demand":
       return "unclaimed_demand.v1";
     case "cap_reached":

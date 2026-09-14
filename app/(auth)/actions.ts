@@ -2,6 +2,7 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 import {
   isSafeNext,
   startSignIn,
@@ -320,4 +321,18 @@ function asPurpose(value: FormDataEntryValue | null): CodePurpose {
 
 function asString(value: FormDataEntryValue | null): string | null {
   return typeof value === "string" && value ? value : null;
+}
+
+/**
+ * Sign out — board 10e's account menu.
+ *
+ * A POST from a form, never a link: a link that ends a session is one a
+ * prefetch, a mail scanner or a crawler can follow. Supabase's `signOut` ends
+ * this session and clears its cookies; other devices stay signed in, which is
+ * what "sign out" means everywhere else.
+ */
+export async function signOutAction(): Promise<void> {
+  const supabase = await createClient();
+  await supabase.auth.signOut({ scope: "local" });
+  redirect("/");
 }

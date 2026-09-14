@@ -288,7 +288,7 @@ async function heldPages(now: Date, week: Date): Promise<DerivedSignal[]> {
  * buyers failing to find them.
  */
 async function zeroResult(since: Date, week: Date): Promise<DerivedSignal[]> {
-  const [month, lastWeek] = await Promise.all([
+  const [top, lastWeek, waiting] = await Promise.all([
     prisma.zeroResultQuery.groupBy({
       by: ["categoryId"],
       where: { createdAt: { gte: since }, categoryId: { not: null } },
@@ -302,11 +302,26 @@ async function zeroResult(since: Date, week: Date): Promise<DerivedSignal[]> {
       _count: { _all: true },
       orderBy: [{ categoryId: "asc" }],
     }),
+    /*
+       Board 10e `B6`: a saved search that found nothing is the same demand held
+       as a standing order — a buyer who asked to be told when this exists. It
+       stands until something is listed (`lastMatchAt`), so it is not windowed,
+       and a trade with alerts waiting is in the list even in a month with no
+       fresh empty searches.
+    */
+    prisma.savedSearch.groupBy({
+      by: ["categoryId"],
+      where: { zeroResult: true, lastMatchAt: null, categoryId: { not: null } },
+      _count: { _all: true },
+      orderBy: [{ categoryId: "asc" }],
+    }),
   ]);
-  const categoryIds = month.map((row) => row.categoryId).filter((id): id is string => id !== null);
+  const categoryIds = [
+    ...new Set([...top, ...waiting].map((row) => row.categoryId).filter((id): id is string => id !== null)),
+  ];
   if (categoryIds.length === 0) return [];
 
-  const [businesses, categories] = await Promise.all([
+  const [businesses, categories, monthAll] = await Promise.all([
     prisma.business.findMany({
       where: { primaryCategoryId: { in: categoryIds }, claimStatus: "claimed", planId: "free", ...ALIVE },
       select: { id: true, primaryCategoryId: true },
@@ -314,9 +329,23 @@ async function zeroResult(since: Date, week: Date): Promise<DerivedSignal[]> {
       take: SIGNAL_SCAN,
     }),
     prisma.category.findMany({ where: { id: { in: categoryIds } }, select: { id: true, name: true } }),
+    /*
+       The month's count for every trade on the list, not only the twenty that
+       chose it. A trade that is here for its waiting alerts can still have empty
+       searches below the top twenty, and reading nought for it while
+       `searchesWeek` reads the week's real number is two figures on one row that
+       disagree.
+    */
+    prisma.zeroResultQuery.groupBy({
+      by: ["categoryId"],
+      where: { createdAt: { gte: since }, categoryId: { in: categoryIds } },
+      _count: { _all: true },
+      orderBy: [{ categoryId: "asc" }],
+    }),
   ]);
-  const monthBy = new Map(month.map((row) => [row.categoryId!, row._count._all]));
+  const monthBy = new Map(monthAll.map((row) => [row.categoryId!, row._count._all]));
   const weekBy = new Map(lastWeek.map((row) => [row.categoryId!, row._count._all]));
+  const waitingBy = new Map(waiting.map((row) => [row.categoryId!, row._count._all]));
   const nameOf = new Map(categories.map((row) => [row.id, row.name]));
 
   return businesses.map((business) =>
@@ -326,6 +355,7 @@ async function zeroResult(since: Date, week: Date): Promise<DerivedSignal[]> {
       categoryName: nameOf.get(business.primaryCategoryId) ?? "",
       searches30d: monthBy.get(business.primaryCategoryId) ?? 0,
       searchesWeek: weekBy.get(business.primaryCategoryId) ?? 0,
+      alertsWaiting: waitingBy.get(business.primaryCategoryId) ?? 0,
     }),
   );
 }

@@ -365,6 +365,12 @@ export interface CreateEnquiryInput {
   scale?: string | null;
   /** How long sellers have. Board 1h's third step. */
   closesInDays?: number;
+  /**
+   * Board 10e `B3`: the expired enquiry this one re-sends. Written as given —
+   * callers pass it through `resendSourceIdFor`, which checks it belongs to this
+   * buyer, has closed unaccepted, and has not been re-sent already.
+   */
+  resentFromId?: string | null;
 
   /** The storefront the buyer came from. Always a recipient if it can answer. */
   pinnedBusinessIds?: readonly string[];
@@ -596,6 +602,7 @@ export async function createEnquiry(
         termsWanted: (input.termsWanted as never) ?? null,
         scale: input.scale?.trim() ? input.scale.trim() : null,
         closesAt,
+        resentFromId: input.resentFromId ?? null,
         /*
            Criterion 9. Whatever the buyer arrived tagged with, carried here by
            the cookie `lib/campaign/cookie.ts` set when they entered.

@@ -27,6 +27,7 @@ import { AcceptedProposalGallery } from "./_sections/AcceptedProposal";
 import { ProposalReplyGallery } from "./_sections/ProposalReply";
 import { ProposalComparisonGallery } from "./_sections/ProposalComparison";
 import { BuilderSectionsGallery } from "./_sections/BuilderSections";
+import { BuyerInboxGallery } from "./_sections/BuyerInbox";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
 import { Tokens } from "./_sections/Tokens";
@@ -195,6 +196,8 @@ const UNLISTED = [
   "credential-review",
   // Board `7c-s`: the accepted proposal, the end of the services demand chain.
   "accepted-proposal",
+  // Board `10e`: the buyer's inbox, its rail and the saved searches panel.
+  "buyer-inbox",
 ] as const;
 
 export default function Gallery() {
@@ -304,6 +307,8 @@ export default function Gallery() {
       <RevenueGallery />
       {/* After Revenue, for the same axe-grid reason the comment above gives. */}
       <CrmGallery />
+      {/* After CRM, for the same reason: nothing new above Shells. */}
+      <BuyerInboxGallery />
     </main>
   );
 }

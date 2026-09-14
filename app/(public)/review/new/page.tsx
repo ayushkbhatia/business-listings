@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card, Panel, PublicShell } from "@/components/structure";
-import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
+import { DirectoryFooter } from "@/app/(public)/_chrome";
+import { ViewerNav } from "@/app/(public)/_account-menu";
 import { prisma } from "@/lib/db/client";
 import { canReview, EDITABLE_DAYS } from "@/lib/reviews/eligibility";
 import { enquiryForReview } from "@/lib/reviews/service";
@@ -72,7 +73,7 @@ export default async function WriteReviewPage({
   const backHref = token ? `/enquiry/${enquiryId}?t=${token}` : `/enquiry/${enquiryId}`;
 
   return (
-    <PublicShell nav={<DirectoryNav />} footer={<DirectoryFooter />}>
+    <PublicShell nav={<ViewerNav />} footer={<DirectoryFooter />}>
       <div className="mx-auto w-full max-w-[42rem] px-[var(--section-pad)] py-8">
         <p className="font-mono text-eyebrow uppercase text-faint">
           {t("enquiry.ref", { ref: enquiry?.ref ?? "" })}

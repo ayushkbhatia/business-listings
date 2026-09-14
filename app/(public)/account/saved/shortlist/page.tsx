@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Breadcrumb, Card, PublicShell } from "@/components/structure";
+import { Card, PublicShell } from "@/components/structure";
 import { Eyebrow } from "@/components/display";
 import { VerificationBadge, tierSpec } from "@/components/domain";
 import { requireBuyerSeat } from "@/lib/auth/buyer";
+import { getViewer } from "@/lib/auth/viewer";
+import { accountCounts } from "@/lib/account/overview";
+import { AccountTabs } from "../../_tabs";
 import { formatCount, formatDate, formatRelative } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { shortlistFor } from "@/lib/shortlist/service";
@@ -36,21 +39,22 @@ export const metadata: Metadata = {
 export default async function SavedSuppliersPage() {
   const { actor } = await requireBuyerSeat("/account/saved/shortlist");
 
-  const suppliers = await shortlistFor(actor.id);
+  const [suppliers, counts, viewer] = await Promise.all([
+    shortlistFor(actor.id),
+    accountCounts(actor.id),
+    getViewer(),
+  ]);
   const now = new Date();
 
-  const crumbs = [
-    { label: t("chrome.directory"), href: "/" },
-    { label: t("saved.title"), href: "/account/saved" },
-    { label: t("shortlist.title") },
-  ];
-
+  /*
+     Board 10e's tab row replaces the breadcrumb that stood here. The tabs are
+     the way between the three account lists now, and a breadcrumb that named
+     saved searches as this page's parent described a hierarchy the tabs do not.
+  */
   return (
-    <PublicShell
-      nav={<DirectoryNav />}
-      breadcrumb={<Breadcrumb label={t("gallery.breadcrumb_label")} items={crumbs} />}
-      footer={<DirectoryFooter />}
-    >
+    <PublicShell bleed nav={<DirectoryNav viewer={viewer} />} footer={<DirectoryFooter />}>
+      <AccountTabs active="suppliers" counts={counts} />
+      <div className="mx-auto w-full max-w-7xl px-5 py-8">
       <header className="border-b border-line pb-4">
         <h1 className="font-serif text-h1-serif text-ink">{t("shortlist.title")}</h1>
         <p className="mt-2 max-w-[var(--measure-prose)] text-body-sm text-muted">
@@ -173,6 +177,7 @@ export default async function SavedSuppliersPage() {
           </ul>
         </>
       )}
+      </div>
     </PublicShell>
   );
 }

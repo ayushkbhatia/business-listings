@@ -4,7 +4,8 @@ import { cache } from "react";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { getAcceptedRecord } from "@/lib/db/queries/accepted-record";
 import { t } from "@/lib/i18n";
-import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
+import { DirectoryFooter } from "@/app/(public)/_chrome";
+import { ViewerNav } from "@/app/(public)/_account-menu";
 import { resolveBuyerId, trackingTokenFor } from "../../_buyer";
 import { AcceptedRecordView } from "./_record";
 import { ReferenceForm } from "./ReferenceForm";
@@ -87,7 +88,7 @@ export default async function AcceptedPage({
   const base = `/enquiry/${record.enquiryId}`;
 
   return (
-    <PublicShell nav={<DirectoryNav />} footer={<DirectoryFooter />}>
+    <PublicShell nav={<ViewerNav />} footer={<DirectoryFooter />}>
       <AcceptedRecordView
         record={record}
         now={new Date()}

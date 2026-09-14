@@ -4,6 +4,8 @@ import { Eyebrow } from "@/components/display";
 import { PublicNav } from "@/components/structure";
 import { t } from "@/lib/i18n";
 import { ReturnSignInLink } from "./_signin-link";
+import { AccountMenu } from "./_account-menu";
+import type { Viewer } from "@/lib/auth/viewer";
 
 /**
  * The nav and footer every public page shares.
@@ -37,7 +39,17 @@ export interface DirectoryNavScope {
 export function DirectoryNav({
   active,
   scope,
-}: { active?: string; scope?: DirectoryNavScope } = {}) {
+  viewer = null,
+}: {
+  active?: string;
+  scope?: DirectoryNavScope;
+  /**
+   * Board 10e Q1: the signed-in variant. Passed by pages that are dynamic
+   * already — see lib/auth/viewer.ts. An account menu replaces *Sign in*, and a
+   * buyer is not offered *List your business* on their own account page.
+   */
+  viewer?: Viewer | null;
+} = {}) {
   return (
     <PublicNav
       label={t("nav.label.public")}
@@ -97,6 +109,9 @@ export function DirectoryNav({
         { key: "pricing", label: t("chrome.pricing"), href: "/pricing" },
       ]}
       actions={
+        viewer ? (
+          <AccountMenu viewer={viewer} />
+        ) : (
         <>
           <ReturnSignInLink className="hidden rounded-ctl px-2 py-1.5 text-body-sm text-body hover:text-ink focus-visible:outline-none focus-visible:shadow-focus sm:inline-flex">
             {t("chrome.sign_in")}
@@ -124,6 +139,7 @@ export function DirectoryNav({
             </Button>
           </Link>
         </>
+        )
       }
     />
   );

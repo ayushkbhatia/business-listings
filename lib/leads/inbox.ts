@@ -102,6 +102,15 @@ export interface LeadRailRow {
   outcomeObserved: boolean;
   /** Unread buyer messages since the seller last wrote. */
   unread: number;
+  /**
+   * When the buyer pressed *Nudge* on this supplier, while it is still
+   * unanswered — boards 1i and 10e. Null once answered: a nudge asks for a
+   * reply, and a reply is its answer.
+   *
+   * Only this supplier's own nudge. The buyer nudges each supplier separately,
+   * and whether anybody else was nudged is not this seller's business (`B10`).
+   */
+  nudgedAt: Date | null;
 }
 
 export interface InboxCounts {
@@ -347,6 +356,7 @@ export async function getInbox(input: {
         state: true,
         createdAt: true,
         firstReplyAt: true,
+        buyerNudgedAt: true,
         outcome: true,
         assignedTo: { select: { id: true, fullName: true } },
         enquiry: {
@@ -430,6 +440,7 @@ export async function getInbox(input: {
       lineCount: e.lines.length,
       buyerBudgetAed: budgetOf(e.lines),
       competing: e._count.recipients,
+      nudgedAt: r.firstReplyAt ? null : r.buyerNudgedAt,
       latestQuote: quote
         ? {
             ref: quote.ref,

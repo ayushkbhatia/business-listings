@@ -161,6 +161,7 @@ export default async function CategoryPage({ params, searchParams }: Props) {
         basePath={`/c/${category.slug}`}
         enquireHref={enquireHref}
         search={search}
+        categoryId={category.id}
       />
 
       {category.intro && (

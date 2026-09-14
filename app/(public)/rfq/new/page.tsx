@@ -1,9 +1,12 @@
-import { notFound } from "next/navigation";
+import Link from "next/link";
+import { notFound, redirect } from "next/navigation";
 import { PublicShell } from "@/components/structure";
 import { prisma } from "@/lib/db/client";
 import { getActor } from "@/lib/auth/session";
+import { signInHref } from "@/lib/auth/next-path";
+import { resendSource, type ResendRefusal } from "@/lib/enquiry/resend";
 import { t } from "@/lib/i18n";
-import { DirectoryNav } from "@/app/(public)/_chrome";
+import { ViewerNav } from "@/app/(public)/_account-menu";
 import { briefWanted, pinnedFirm } from "@/lib/enquiry/service-brief-server";
 import { previewRecipients } from "../actions";
 import { RfqComposer } from "../RfqComposer";
@@ -81,6 +84,20 @@ export default async function RfqNewPage({
   if (from) return <AddSuppliersPage refOrId={from} token={one("t") ?? null} />;
 
   /*
+     Board 10e's *Re-send*, for an enquiry that expired. The old requirement
+     seeds a composer; sending creates a new enquiry pointing back (`B3`), and
+     the match runs again rather than reusing the list that let it lapse (Q4).
+     Signed in only — see lib/enquiry/resend.ts.
+  */
+  const resendRef = one("resend");
+  const resend = resendRef
+    ? actor
+      ? await resendSource(actor.id, resendRef)
+      : redirect(signInHref(`/rfq/new?resend=${encodeURIComponent(resendRef)}`))
+    : null;
+  if (resend && !resend.ok) return <ResendRefused refusal={resend} />;
+
+  /*
      `?to=slug` from a storefront, `?to=a,b,c` from the comparison tray.
 
      Resolved before the category, because it decides what the category is when
@@ -120,7 +137,11 @@ export default async function RfqNewPage({
      supplier is a recipient regardless of which category this resolves to.
   */
   const categorySlug = one("category");
-  const category = categorySlug
+  const resendCategory =
+    resend?.ok && resend.categoryId
+      ? await prisma.category.findUnique({ where: { id: resend.categoryId }, select: { id: true, name: true, slug: true } })
+      : null;
+  const category = resendCategory ?? (categorySlug
     ? await prisma.category.findFirst({ where: { slug: categorySlug }, select: { id: true, name: true, slug: true } })
     : ((pinnedBusinesses[0]?.primaryCategoryId
         ? await prisma.category.findUnique({
@@ -132,7 +153,7 @@ export default async function RfqNewPage({
         where: { showOnHome: true },
         orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
         select: { id: true, name: true, slug: true },
-      })));
+      }))));
   if (!category) notFound();
 
   /*
@@ -156,11 +177,13 @@ export default async function RfqNewPage({
       : null;
   const trade = service?.category ?? category;
   if (
-    await briefWanted({
-      categoryId: trade.id,
-      kindParam: one("kind") ?? null,
-      pinnedSellsKind: firm?.sellsKind ?? null,
-    })
+    (resend?.ok && resend.brief) ||
+    (!resend &&
+      (await briefWanted({
+        categoryId: trade.id,
+        kindParam: one("kind") ?? null,
+        pinnedSellsKind: firm?.sellsKind ?? null,
+      })))
   ) {
     return (
       <ServiceBriefPage
@@ -170,6 +193,7 @@ export default async function RfqNewPage({
         params={{ emirate: one("emirate") ?? null, area: one("area") ?? null }}
         kind={one("kind") ?? null}
         signedIn={Boolean(actor)}
+        resend={resend?.ok ? resend : null}
       />
     );
   }
@@ -216,11 +240,28 @@ export default async function RfqNewPage({
       })
     : [];
 
-  const seededQuery = (one("q") ?? "").trim().slice(0, 200);
+  const seededQuery = resend?.ok ? "" : (one("q") ?? "").trim().slice(0, 200);
 
   const initialLines: RfqLine[] = [
-    ...seededProducts.map((product, i) => ({
-      key: `seed-${i}`,
+    // Free text, never the products they were matched to — see resend.ts.
+    ...(resend?.ok
+      ? (resend.lines.length > 0
+          ? resend.lines
+          : // An enquiry sent as a requirement alone still needs one line to match
+            // against — the same free-text line a zero-result `?q=` arrives with.
+            [{ description: resend.requirement.trim().slice(0, 200), qty: 1 }]
+        ).map((line, i) => ({
+          key: `resend-${resend.ref}-${i}`,
+          description: line.description,
+          qty: line.qty,
+          targetUnitPriceAed: "",
+          productId: null,
+          sku: null,
+          sellerName: null,
+        }))
+      : []),
+    ...seededProducts.map((product) => ({
+      key: `seed-${product.id}`,
       description: product.name,
       qty: product.minOrderQty ?? 1,
       targetUnitPriceAed: "",
@@ -233,7 +274,7 @@ export default async function RfqNewPage({
     ...(seededQuery && seededProducts.length === 0
       ? [
           {
-            key: "seed-q",
+            key: `seed-q-${seedKey(seededQuery)}`,
             description: seededQuery,
             qty: 1,
             targetUnitPriceAed: "",
@@ -266,7 +307,7 @@ export default async function RfqNewPage({
   });
 
   return (
-    <PublicShell nav={<DirectoryNav />}>
+    <PublicShell nav={<ViewerNav />}>
       {/*
          No footer. A composer is a task surface, and the site footer would
          offer twelve ways to abandon it — the spec says so in as many words.
@@ -276,12 +317,58 @@ export default async function RfqNewPage({
         categoryId={category.id}
         emirates={EMIRATES}
         initialLines={initialLines}
-        {...(seededQuery ? { initialRequirement: seededQuery } : {})}
+        {...(resend?.ok ? { initialRequirement: resend.requirement } : seededQuery ? { initialRequirement: seededQuery } : {})}
+        {...(resend?.ok && resend.emirate && EMIRATES.some((e) => e.value === resend.emirate) ? { initialEmirate: resend.emirate } : {})}
+        {...(resend?.ok && resend.deliverToArea ? { initialArea: resend.deliverToArea } : {})}
         initialRecipients={recipients}
         {...(pinned.length ? { pinnedBusinessIds: pinned } : {})}
         askForContact={!actor}
-        seeded={Boolean(seededQuery)}
+        seeded={Boolean(seededQuery) || Boolean(resend?.ok)}
+        resentFrom={resend?.ok ? resend.ref : null}
       />
     </PublicShell>
   );
+}
+
+/**
+ * A re-send link that cannot re-send: the enquiry is still open, was accepted,
+ * was already re-sent, or is not this buyer's. Each says so and points at the
+ * one place worth going instead, rather than opening a blank composer.
+ */
+function ResendRefused({ refusal }: { refusal: ResendRefusal }) {
+  if (refusal.reason === "not_found") notFound();
+  const { href, label, body } =
+    refusal.reason === "resent"
+      ? {
+          href: `/enquiry/${refusal.resentAsRef}`,
+          label: t("rfq.resend.resent_link", { ref: refusal.resentAsRef }),
+          body: t("rfq.resend.resent", { ref: refusal.ref, resentAs: refusal.resentAsRef }),
+        }
+      : refusal.reason === "accepted"
+        ? { href: `/enquiry/${refusal.ref}/accepted`, label: t("rfq.resend.accepted_link"), body: t("rfq.resend.accepted", { ref: refusal.ref }) }
+        : { href: `/enquiry/${refusal.ref}`, label: t("rfq.resend.open_link"), body: t("rfq.resend.open", { ref: refusal.ref }) };
+
+  return (
+    <PublicShell nav={<ViewerNav />}>
+      <div className="mx-auto w-full max-w-3xl px-5 py-10">
+        <h1 className="font-serif text-h1-serif text-ink">{t("rfq.resend.h1")}</h1>
+        <p className="mt-4 max-w-[var(--measure-prose)] text-body text-body">{body}</p>
+        <p className="mt-4">
+          <Link
+            href={href}
+            className="rounded-tag font-medium text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+          >
+            {label}
+          </Link>
+        </p>
+      </div>
+    </PublicShell>
+  );
+}
+
+/** A short stable tag for a seeded query, so the composer can tell one arrival from another. */
+function seedKey(value: string): string {
+  let hash = 5381;
+  for (let i = 0; i < value.length; i += 1) hash = ((hash << 5) + hash + value.charCodeAt(i)) | 0;
+  return (hash >>> 0).toString(36);
 }

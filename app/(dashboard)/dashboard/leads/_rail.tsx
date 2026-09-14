@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { StatusBadge, type StatusTone } from "@/components/display/StatusBadge";
 import { cn } from "@/lib/cn";
-import { formatAED, formatCount, formatDuration } from "@/lib/format";
+import { formatAED, formatCount, formatDuration, formatRelative } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { InboxPage, LeadRailRow, LeadScope, LeadTab, WaitBand } from "@/lib/leads/inbox";
 import { LEAD_TABS } from "@/lib/leads/inbox";
@@ -266,6 +266,11 @@ function RailRow({
                 count: row.competing - 1,
                 formatted: formatCount(row.competing - 1),
               })}
+            </StatusBadge>
+          ) : null}
+          {row.nudgedAt ? (
+            <StatusBadge tone="warn" size="sm" shape="chip">
+              {t("leads.nudged", { when: formatRelative(row.nudgedAt) })}
             </StatusBadge>
           ) : null}
           {row.unread > 0 ? (

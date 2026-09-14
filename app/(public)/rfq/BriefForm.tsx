@@ -43,6 +43,7 @@ export function BriefForm({
   firstReply,
   askForContact,
   unpinHref,
+  resentFrom = null,
 }: {
   categoryId: string;
   kind: string | null;
@@ -60,6 +61,8 @@ export function BriefForm({
   firstReply: string | null;
   askForContact: boolean;
   unpinHref: string | null;
+  /** Board 10e: the expired brief being re-sent, by reference. */
+  resentFrom?: string | null;
 }) {
   const router = useRouter();
   const scope = briefDraftScope(categoryId, pinned?.slug ?? null);
@@ -162,6 +165,7 @@ export function BriefForm({
         attachments: files.map((file) => ({ filename: file.name, type: file.type, bytes: file.size })),
         contactPhone: value.contactPhone,
         contactName: value.contactName,
+        resentFromRef: resentFrom,
       });
 
       if (!sent.ok) {

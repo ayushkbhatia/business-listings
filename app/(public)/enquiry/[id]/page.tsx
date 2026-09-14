@@ -18,7 +18,7 @@ import { spell, spellCapitalised } from "@/lib/enquiry/spell";
 import { formatCountdown, formatDate, formatDateTime } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/cn";
-import { DirectoryNav } from "@/app/(public)/_chrome";
+import { ViewerNav } from "@/app/(public)/_account-menu";
 import { resolveBuyerId, trackingTokenFor } from "../_buyer";
 import { LiveStatus } from "./LiveStatus";
 import { HeaderBadge, RecipientRow } from "./_rows";
@@ -109,7 +109,7 @@ export default async function EnquiryPage({
   });
 
   return (
-    <PublicShell nav={<DirectoryNav />}>
+    <PublicShell nav={<ViewerNav />}>
       <div className="mx-auto w-full max-w-7xl px-5 pb-24 md:pb-10">
         {/* ── Header ──────────────────────────────────────────────────────── */}
         <header className="pt-10">

@@ -39,6 +39,8 @@ export interface BrowseHeaderProps {
   enquireHref?: string;
   /** The whole query string, so a saved search reproduces this exact view. */
   search: string;
+  /** The page's category, so a saved search replays on it rather than on /search. */
+  categoryId?: string;
 }
 
 /** Chips beyond this fold into a "+ N more" disclosure. */
@@ -51,6 +53,7 @@ export function BrowseHeader({
   basePath,
   activeChild,
   search,
+  categoryId,
 }: BrowseHeaderProps) {
   const shown = chips.slice(0, CHIPS_SHOWN);
   const overflow = chips.slice(CHIPS_SHOWN);
@@ -92,7 +95,7 @@ export function BrowseHeader({
              already covers.
           */}
           <div className="flex shrink-0 flex-wrap gap-2">
-            <SaveSearch search={search} heading={heading} />
+            <SaveSearch search={search} heading={heading} categoryId={categoryId ?? null} />
           </div>
         </div>
 

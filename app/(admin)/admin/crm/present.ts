@@ -82,8 +82,17 @@ function whyOf(row: CrmRow): { text: string; tone: Tone } {
         }),
         tone: "neutral",
       };
-    case "zero_result":
-      return { text: t("admin.crm.why.zero_result", { count: f.searches30d, n: formatCount(f.searches30d), category: f.categoryName }), tone: "neutral" };
+    case "zero_result": {
+      // Board 10e B6: saved searches waiting on an alert in this trade, said beside the searches.
+      const waiting = f.alertsWaiting ?? 0;
+      const searches = t("admin.crm.why.zero_result", { count: f.searches30d, n: formatCount(f.searches30d), category: f.categoryName });
+      if (waiting === 0) return { text: searches, tone: "neutral" };
+      const alerts = t("admin.crm.why.zero_result_alerts", { count: waiting, n: formatCount(waiting), category: f.categoryName });
+      return {
+        text: f.searches30d === 0 ? alerts : t("admin.crm.why.zero_result_and_alerts", { searches, alerts: t("admin.crm.why.alerts_waiting", { count: waiting, n: formatCount(waiting) }) }),
+        tone: "neutral",
+      };
+    }
     case "unclaimed_demand":
       return { text: t("admin.crm.why.unclaimed_demand", { count: f.enquiries30d, n: formatCount(f.enquiries30d) }), tone: "neutral" };
     case "cap_reached":
@@ -148,8 +157,10 @@ export function scriptText(row: CrmRow): string {
         category: f.categoryName,
         area: f.areaName,
       });
-    case "zero_result":
-      return t(`admin.crm.script.${id}` as MessageKey, { count: f.searchesWeek, n: formatCount(f.searchesWeek), category: f.categoryName });
+    case "zero_result": {
+      const count = id === "zero_result.alerts.v1" ? (f.alertsWaiting ?? 0) : f.searchesWeek;
+      return t(`admin.crm.script.${id}` as MessageKey, { count, n: formatCount(count), category: f.categoryName });
+    }
     case "unclaimed_demand":
       return t(`admin.crm.script.${id}` as MessageKey, { count: f.enquiries30d, n: formatCount(f.enquiries30d), days: String(SIGNAL_WINDOW_DAYS) });
     case "cap_reached":

@@ -1,5 +1,7 @@
 "use client";
 
+import { t } from "@/lib/i18n";
+
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { StepHeader } from "@/components/structure";
 import { Button, Checkbox, IconButton, Input } from "@/components/primitives";
@@ -104,10 +106,13 @@ export function RfqComposer({
   emirates,
   initialLines,
   initialRequirement = "",
+  initialEmirate = "",
+  initialArea = "",
   initialRecipients,
   pinnedBusinessIds = [],
   askForContact,
   seeded = false,
+  resentFrom = null,
 }: {
   /**
    * Built here, not passed in.
@@ -122,12 +127,16 @@ export function RfqComposer({
   emirates: readonly { value: string; label: string }[];
   initialLines?: readonly RfqLine[];
   initialRequirement?: string;
+  initialEmirate?: string;
+  initialArea?: string;
   /** Up to 8. The first five are ticked; the rest sit behind "Add all". */
   initialRecipients: readonly RecipientPreview[];
   pinnedBusinessIds?: readonly string[];
   askForContact: boolean;
   /** Query-seeded from 1c, which gets a notice above the items card. */
   seeded?: boolean;
+  /** Board 10e: the expired enquiry being re-sent, by reference. */
+  resentFrom?: string | null;
 }) {
   const labels = useMemo(() => rfqLabels({ emirateName }), [emirateName]);
   /*
@@ -275,8 +284,22 @@ export function RfqComposer({
      one `updateLine` will later find by key.
   */
   useEffect(() => {
-    if (draftSnapshot().length > 0) return;
-    saveDraft(seededLines ?? [blankLine()]);
+    const current = draftSnapshot();
+    if (seededLines) {
+      /*
+         Seed keys name their arrival (`seed-<product id>`, `resend-<ref>-0`),
+         so a draft already holding every one of them is this arrival coming
+         back, edits and all. Anything else is an older draft, and the thing
+         the buyer just clicked replaces it — which the old `length > 0` check
+         never did: a blank row left by an earlier visit beat every seed.
+      */
+      const held = new Set(current.map((l) => l.key));
+      if (seededLines.every((l) => held.has(l.key))) return;
+      saveDraft(seededLines);
+      return;
+    }
+    if (current.length > 0) return;
+    saveDraft([blankLine()]);
   }, [seededLines]);
 
   const updateLine = useCallback(
@@ -331,6 +354,7 @@ export function RfqComposer({
         contactPhone: value.contactPhone,
         contactName: value.contactName,
         chosenBusinessIds: picked,
+        resentFromRef: resentFrom,
       });
       if (!result.ok) {
         setError(result.error);
@@ -368,11 +392,16 @@ export function RfqComposer({
       <div className="grid gap-[var(--gutter)] py-6 lg:grid-cols-[minmax(0,1fr)_21.25rem] xl:grid-cols-[minmax(0,1fr)_24.25rem]">
         {/* ── Left column ───────────────────────────────────────────────── */}
         <div className="min-w-0 space-y-5">
-          {seeded && (
+          {seeded && !resentFrom && (
             <p className="rounded-ctl border border-info-line bg-info-wash px-3.5 py-2.5 text-body-sm text-info-ink">
               {labels.seededNotice}
             </p>
           )}
+          {resentFrom ? (
+            <p className="rounded-ctl border border-info-line bg-info-wash px-3.5 py-2.5 text-body-sm text-info-ink">
+              {t("rfq.resend_notice", { ref: resentFrom })}
+            </p>
+          ) : null}
 
           <section className="rounded-card border border-line bg-card p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -509,6 +538,8 @@ export function RfqComposer({
                 shape="panel"
                 labels={enquiryLabels({ emirates })}
                 initialRequirement={initialRequirement}
+                initialEmirate={initialEmirate}
+                initialArea={initialArea}
                 askForContact={askForContact}
                 disabled={!linesExist}
                 onChange={setValue}

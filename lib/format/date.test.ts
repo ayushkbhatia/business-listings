@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dubaiDayStart, formatCountdown, formatDate, formatDateRange, formatDateShort, formatDateTime, formatDuration, formatMonth, formatRelative, isWithinRelativeWindow } from "./date";
+import { dubaiDayStart, formatCloses, formatCountdown, formatDate, formatDateRange, formatDateShort, formatDateTime, formatDuration, formatMonth, formatRelative, isWithinRelativeWindow } from "./date";
 
 const AUG_14 = new Date("2026-08-14T09:30:00+04:00");
 
@@ -246,5 +246,27 @@ describe("dubaiDayStart", () => {
     // The read side hands it values that already came out of a date column.
     const day = dubaiDayStart(new Date("2026-09-08T06:00:00.000Z"));
     expect(dubaiDayStart(day).toISOString()).toBe(day.toISOString());
+  });
+});
+
+describe("formatCloses", () => {
+  const now = new Date("2026-09-14T08:00:00Z");
+  const inMs = (ms: number) => formatCloses(new Date(now.getTime() + ms), { now });
+  const HOUR = 3_600_000;
+
+  it("reads at the coarsest unit that still means something, as board 10e's column does", () => {
+    expect(inMs(3 * 24 * HOUR + 22 * HOUR)).toBe("3 days");
+    expect(inMs(24 * HOUR + HOUR)).toBe("1 day");
+    expect(inMs(4 * HOUR + 30 * 60_000)).toBe("4 h");
+    expect(inMs(25 * 60_000)).toBe("25 min");
+    expect(inMs(10_000)).toBe("1 min");
+  });
+
+  it("rounds down, so a close never reads later than it is", () => {
+    expect(inMs(2 * 24 * HOUR - 1)).toBe("1 day");
+  });
+
+  it("is a date beyond a week", () => {
+    expect(inMs(9 * 24 * HOUR)).toBe("23 Sep 2026");
   });
 });

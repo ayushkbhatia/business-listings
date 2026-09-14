@@ -648,6 +648,48 @@ with the reason, ends every session and emails the reason. The sign-in screen sa
 emailed and never shows it (`B7`). `getActor` returns no actor for a suspended profile on every
 request.
 
+## The buyer's inbox and saved searches — board 10e
+
+Nothing on the inbox is stored as a status. Bucket, verb, tone and the close cell are derived
+from the rows (`lib/enquiry/inbox-status.ts`), so a chip cannot drift from the table (`B2`).
+
+```prisma
+model Enquiry {
+  // …
+  resentFromId String?   // B3 — the expired enquiry this one re-sends. SET NULL on delete;
+                         // CHECK resent_from_id <> id. The old row is never edited.
+}
+
+model EnquiryRecipient {
+  buyerNudgedAt DateTime? // "nudged_at" — B5, one per seller per enquiry, ever. Written by
+                          // nudge() and nudgeUnanswered() with a conditional update.
+}
+
+enum SavedSearchCadence { daily weekly when_listed }
+
+model SavedSearch {
+  query        String              // the results page's query string, verbatim
+  categoryId   String?             // the /c/:category page it was saved on; SET NULL on delete
+  tab          String              // businesses | products (CHECK)
+  cadence      SavedSearchCadence  // when_listed by default for a search that found nothing
+  zeroResult   Boolean             // B6 — decided by counting at save, never taken from the page
+  lastSeenAt   DateTime?           // B7 — opening sets it; the new-match count counts from here
+  lastRunAt    DateTime?           // the sweep's own clock, per cadence
+  lastMatchAt  DateTime?           // newest listing that matched; null keeps a zero-result search demand
+  newCount     Int                 // matches listed since lastSeenAt, as of lastRunAt
+  alertedCount Int                 // what the last email said; the next email waits for newCount to pass it
+}
+```
+
+A new match is a business whose `publishedAt`, or a product whose `createdAt`, is after
+`lastSeenAt` (or the save), counted with the results page's own `businessWhere` / `productWhere`.
+The legacy `alerts` boolean is unread and can be dropped in a later migration.
+
+Board 12d's `zero_result` signal (`lib/crm/derive.ts`) carries saved searches with `zeroResult` and
+no `lastMatchAt` as `alertsWaiting` per trade: counted into the demand score, said in the WHY cell,
+and enough on its own to put a trade on the list in a month with no fresh empty searches. The inbox's history card is the buyer's alone (`B9`,
+`B10`): nothing on a seller surface reads it.
+
 ## Closing a business — board 11i
 
 Closure is a **status transition, not a delete**. Nothing about the business is removed at
