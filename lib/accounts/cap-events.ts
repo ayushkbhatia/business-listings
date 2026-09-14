@@ -35,6 +35,3 @@ export async function recordCapRefused(input: {
     },
   });
 }
-
-/** The event names the upgrade-candidate query reads. */
-export const CAP_REFUSED_EVENTS = ["product_cap_refused", "service_cap_refused"] as const;
