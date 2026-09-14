@@ -56,17 +56,17 @@ export default async function ChannelsPage() {
     >
       <NotificationTabs active="channels" />
 
-      <div className="overflow-x-auto rounded-panel border border-line bg-card">
+      <div tabIndex={0} className="overflow-x-auto rounded-panel border border-line bg-card focus-visible:shadow-focus focus-visible:outline-none">
         <table className="w-full min-w-[52rem] border-collapse text-body-sm">
           <caption className="sr-only">{t("notifications.channels.caption", { days: formatCount(REPORT_WINDOW_DAYS) })}</caption>
-          <thead className="bg-fill">
+          <thead className="bg-paper-sunk">
             <tr>
               {(["channel", "carrier", "sent", "held", "failed", "skipped", "last_failure"] as const).map((col) => (
                 <th
                   key={col}
                   scope="col"
                   className={cn(
-                    "px-3 py-2.5 font-mono text-eyebrow font-normal uppercase text-faint first:pl-4",
+                    "px-3 py-2.5 font-mono text-colhead font-medium uppercase text-muted first:pl-4",
                     col === "sent" || col === "held" || col === "failed" || col === "skipped" ? "text-right" : "text-left",
                   )}
                 >

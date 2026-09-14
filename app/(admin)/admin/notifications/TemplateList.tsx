@@ -55,27 +55,27 @@ export function TemplateList({ view, filters, landmark = true }: { view: BoardVi
         <SortSelect options={view.sortOptions} filters={filters} />
       </div>
 
-      <div className="overflow-x-auto rounded-panel border border-line bg-card">
+      <div tabIndex={0} className="overflow-x-auto rounded-panel border border-line bg-card focus-visible:shadow-focus focus-visible:outline-none">
         <table className="w-full min-w-[42rem] border-collapse text-body-sm">
           <caption className="sr-only">{t("notifications.caption")}</caption>
-          <thead className="bg-fill">
+          <thead className="bg-paper-sunk">
             <tr>
-              <th scope="col" className="px-4 py-2.5 text-left font-mono text-eyebrow font-normal uppercase text-faint">
+              <th scope="col" className="px-4 py-2.5 text-left font-mono text-colhead font-medium uppercase text-muted">
                 {t("notifications.col.key")}
               </th>
-              <th scope="col" className="px-3 py-2.5 text-left font-mono text-eyebrow font-normal uppercase text-faint">
+              <th scope="col" className="px-3 py-2.5 text-left font-mono text-colhead font-medium uppercase text-muted">
                 {t("notifications.col.channel")}
               </th>
-              <th scope="col" className="px-3 py-2.5 text-left font-mono text-eyebrow font-normal uppercase text-faint">
+              <th scope="col" className="px-3 py-2.5 text-left font-mono text-colhead font-medium uppercase text-muted">
                 {t("notifications.col.fired_by")}
               </th>
-              <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-eyebrow font-normal uppercase text-faint">
+              <th scope="col" className="whitespace-nowrap px-3 py-2.5 text-right font-mono text-colhead font-medium uppercase text-muted">
                 {t("notifications.col.sent")}
               </th>
-              <th scope="col" className="px-3 py-2.5 text-left font-mono text-eyebrow font-normal uppercase text-faint">
+              <th scope="col" className="px-3 py-2.5 text-left font-mono text-colhead font-medium uppercase text-muted">
                 {t("notifications.col.twin")}
               </th>
-              <th scope="col" className="px-4 py-2.5 text-left font-mono text-eyebrow font-normal uppercase text-faint">
+              <th scope="col" className="px-4 py-2.5 text-left font-mono text-colhead font-medium uppercase text-muted">
                 {t("notifications.col.state")}
               </th>
             </tr>

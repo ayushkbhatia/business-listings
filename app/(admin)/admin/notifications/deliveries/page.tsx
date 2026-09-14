@@ -123,13 +123,13 @@ export default async function DeliveriesPage({ searchParams }: { searchParams: P
         </nav>
       </div>
 
-      <div className="overflow-x-auto rounded-panel border border-line bg-card">
+      <div tabIndex={0} className="overflow-x-auto rounded-panel border border-line bg-card focus-visible:shadow-focus focus-visible:outline-none">
         <table className="w-full min-w-[56rem] border-collapse text-body-sm">
           <caption className="sr-only">{t("notifications.log.caption")}</caption>
-          <thead className="bg-fill">
+          <thead className="bg-paper-sunk">
             <tr>
               {(["when", "event", "channel", "status", "reason", "recipient", "version"] as const).map((col) => (
-                <th key={col} scope="col" className="px-3 py-2.5 text-left font-mono text-eyebrow font-normal uppercase text-faint first:pl-4">
+                <th key={col} scope="col" className="px-3 py-2.5 text-left font-mono text-colhead font-medium uppercase text-muted first:pl-4">
                   {t(`notifications.log.col.${col}` as MessageKey)}
                 </th>
               ))}

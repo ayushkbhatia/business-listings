@@ -115,14 +115,14 @@ export function TemplateRail({
       <RailPanel panel={view.optOut} />
 
       <div className="rounded-panel border border-line bg-card">
-        <h3 className="border-b border-line px-4 py-3 font-mono text-eyebrow font-normal uppercase text-faint">
+        <h3 className="border-b border-line px-4 py-3 font-mono text-colhead font-medium uppercase text-muted">
           {t("notifications.history.title")}
         </h3>
-        <div className="overflow-x-auto">
+        <div tabIndex={0} className="overflow-x-auto focus-visible:shadow-focus focus-visible:outline-none">
           <table className="w-full border-collapse text-caption">
             <caption className="sr-only">{t("notifications.history.caption", { event: view.event, channel: view.channelLabel })}</caption>
             <thead>
-              <tr className="text-left text-faint">
+              <tr className="bg-paper-sunk text-left font-mono text-colhead uppercase text-muted">
                 <th scope="col" className="px-4 py-2 font-normal">{t("notifications.history.col.version")}</th>
                 <th scope="col" className="px-2 py-2 font-normal">{t("notifications.history.col.body")}</th>
                 <th scope="col" className="px-2 py-2 font-normal">{t("notifications.history.col.status")}</th>

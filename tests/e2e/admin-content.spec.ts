@@ -179,10 +179,11 @@ test.describe("board 12g — notification templates", () => {
     await page.getByRole("link", { name: "Open enquiry_received on In-app" }).click();
     await expect(page.getByRole("heading", { name: "enquiry_received on In-app" })).toBeVisible();
 
-    const body = page.getByLabel("Body");
+    // By role: "Body" as a label substring also names the "Which body" nav and the neutral-body checkbox.
+    const body = page.getByRole("textbox", { name: /^Body/ });
     await body.fill("New enquiry {ref} worth {quotedValue}");
     await expect(page.getByText(/\{quotedValue\} — this event does not supply that/)).toBeVisible();
-    await page.getByLabel("Why").fill("Trying a placeholder the event does not supply.");
+    await page.getByRole("textbox", { name: /^Why/ }).fill("Trying a placeholder the event does not supply.");
     await expect(page.getByRole("button", { name: /^Save as v\d+$/ })).toBeDisabled();
 
     // B3: a name that could only carry contact details is refused by name.
@@ -199,7 +200,7 @@ test.describe("board 12g — notification templates", () => {
   });
 
   test("offers the services version where a goods body has none", async ({ page }) => {
-    await page.getByRole("link", { name: "Open enquiry_received on In-app" }).click();
+    await page.getByRole("link", { name: "Open quote_received on In-app" }).click();
     await page.getByRole("link", { name: "Write the services version" }).click();
     await expect(page.getByRole("link", { name: "Services twin" })).toHaveAttribute("aria-current", "page");
     await expect(page.getByText(/The goods body it replaces/)).toBeVisible();
@@ -213,8 +214,8 @@ test.describe("board 12g — notification templates", () => {
      * as unchanged.
      */
     await page.goto("/admin/notifications?t=quote_expiring.in_app&line=services");
-    await page.getByLabel("Body").fill(`Proposal {quoteRef} runs out {expiresAt}. Extend the terms or let it lapse. ${Date.now()}`);
-    await page.getByLabel("Why").fill("Service firms send proposals, not quotes.");
+    await page.getByRole("textbox", { name: /^Body/ }).fill(`Proposal {quoteRef} runs out {expiresAt}. Extend the terms or let it lapse. ${Date.now()}`);
+    await page.getByRole("textbox", { name: /^Why/ }).fill("Service firms send proposals, not quotes.");
     await page.getByRole("button", { name: /^Save as v\d+$/ }).click();
     await expect(page.getByText(/Version \d+ is live/)).toBeVisible();
   });

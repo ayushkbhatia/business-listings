@@ -62,7 +62,7 @@ export default async function QuietHoursPage() {
 
       <div className="grid items-start gap-[var(--gutter)] lg:grid-cols-2">
         <section aria-labelledby="quiet-sellers" className="rounded-panel border border-line bg-card p-4">
-          <h2 id="quiet-sellers" className="font-mono text-eyebrow font-normal uppercase text-faint">
+          <h2 id="quiet-sellers" className="font-mono text-colhead font-medium uppercase text-muted">
             {t("notifications.quiet.sellers_title")}
           </h2>
           <p className="mt-2 max-w-prose text-body-sm text-body">{t("notifications.quiet.sellers_body")}</p>
@@ -79,7 +79,7 @@ export default async function QuietHoursPage() {
 
         <div className="flex flex-col gap-[var(--gutter)]">
           <section aria-labelledby="quiet-buyers" className="rounded-panel border border-line bg-card p-4">
-            <h2 id="quiet-buyers" className="font-mono text-eyebrow font-normal uppercase text-faint">
+            <h2 id="quiet-buyers" className="font-mono text-colhead font-medium uppercase text-muted">
               {t("notifications.quiet.buyers_title")}
             </h2>
             <p className="mt-2 max-w-prose text-body-sm text-body">
@@ -92,8 +92,8 @@ export default async function QuietHoursPage() {
               <caption className="sr-only">{t("notifications.quiet.buyers_caption")}</caption>
               <thead>
                 <tr className="text-left">
-                  <th scope="col" className="py-2 font-mono text-eyebrow font-normal uppercase text-faint">{t("notifications.quiet.col.event")}</th>
-                  <th scope="col" className="py-2 font-mono text-eyebrow font-normal uppercase text-faint">{t("notifications.quiet.col.channels")}</th>
+                  <th scope="col" className="py-2 font-mono text-colhead font-medium uppercase text-muted">{t("notifications.quiet.col.event")}</th>
+                  <th scope="col" className="py-2 font-mono text-colhead font-medium uppercase text-muted">{t("notifications.quiet.col.channels")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -108,7 +108,7 @@ export default async function QuietHoursPage() {
           </section>
 
           <section aria-labelledby="quiet-floor" className="rounded-panel border border-line bg-card p-4">
-            <h2 id="quiet-floor" className="font-mono text-eyebrow font-normal uppercase text-faint">
+            <h2 id="quiet-floor" className="font-mono text-colhead font-medium uppercase text-muted">
               {t("notifications.quiet.floor_title")}
             </h2>
             <ul className="mt-2 flex flex-col gap-1.5">
@@ -125,7 +125,7 @@ export default async function QuietHoursPage() {
           </section>
 
           <section aria-labelledby="quiet-held" className="rounded-panel border border-line bg-card p-4">
-            <h2 id="quiet-held" className="font-mono text-eyebrow font-normal uppercase text-faint">
+            <h2 id="quiet-held" className="font-mono text-colhead font-medium uppercase text-muted">
               {t("notifications.quiet.held_title")}
             </h2>
             <p className="mt-2 text-body-sm text-body">

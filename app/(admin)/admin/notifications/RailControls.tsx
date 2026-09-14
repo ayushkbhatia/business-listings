@@ -300,8 +300,14 @@ export function MetaDecisionForm({ templateId }: { templateId: string }) {
   }
 
   return (
-    <div className="mt-3 flex flex-col gap-2 border-t border-warn-line pt-3">
-      <p className="text-caption text-warn-ink">{t("notifications.meta_panel.record_hint")}</p>
+    /*
+       On a card, not on the warn wash. The labels, their required tags and the
+       hint carry the form grammar's muted ink, which fails the §09.2 floor on a
+       warn surface — the panel says what is pending, and the form beneath it is
+       an ordinary form.
+    */
+    <div className="mt-3 flex flex-col gap-2 rounded-control border border-warn-line bg-card p-3">
+      <p className="text-caption text-body">{t("notifications.meta_panel.record_hint")}</p>
       <div className="flex flex-col gap-1">
         <Label htmlFor={ids.note} hint={t("notifications.meta_panel.note_hint")}>
           {t("notifications.meta_panel.note")}
