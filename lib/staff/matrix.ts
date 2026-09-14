@@ -31,6 +31,7 @@ export const MATRIX_GROUPS = [
     key: "moderation",
     capabilities: [
       "queue.decide",
+      "queue.rules",
       "report.resolve",
       "review.hold",
       "review.remove",
