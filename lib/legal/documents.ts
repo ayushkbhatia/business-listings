@@ -527,3 +527,18 @@ export const LEGAL_DOCUMENTS = {
 } as const;
 
 export type LegalDocumentSlug = keyof typeof LEGAL_DOCUMENTS;
+
+/**
+ * Board 7a `B10` — the versions a sign-up accepts, as `YYYY-MM-DD`.
+ *
+ * Read from the documents themselves rather than from the two date constants,
+ * so the version recorded is by construction the date the page prints under its
+ * heading on the day the box was ticked. When the 11i amendment takes effect the
+ * answer moves with it and nobody has to remember to bump a string.
+ */
+export function currentLegalVersions(now: Date = new Date()): { terms: string; privacy: string } {
+  return {
+    terms: termsDocument(now).effectiveFrom.toISOString().slice(0, 10),
+    privacy: privacyDocument(now).effectiveFrom.toISOString().slice(0, 10),
+  };
+}

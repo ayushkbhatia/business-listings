@@ -1,7 +1,7 @@
 import { afterAll, afterEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
-import { checkThrottle, recordAttempt } from "@/lib/auth/attempts";
-import { THROTTLES } from "@/lib/auth/throttle";
+import { checkAddressThrottle, checkThrottle, recordAttempt, remainingAttempts } from "@/lib/auth/attempts";
+import { PASSWORD_ADDRESS_CEILING, THROTTLES } from "@/lib/auth/throttle";
 
 /**
  * The throttle against a real table.
@@ -17,6 +17,7 @@ const IDENTIFIER = "+971500000001";
 
 afterEach(async () => {
   await prisma.authAttempt.deleteMany({ where: { identifier: { startsWith: "+9715000000" } } });
+  await prisma.authAttempt.deleteMany({ where: { ip: "203.0.113.77" } });
 });
 
 afterAll(async () => {
@@ -80,6 +81,63 @@ describe("checkThrottle", () => {
     await recordAttempt({ identifier: IDENTIFIER, kind: "otp_verify", succeeded: true });
     await recordAttempt({ identifier: IDENTIFIER, kind: "otp_verify", succeeded: false });
     expect(await checkThrottle(IDENTIFIER, "otp_verify")).toEqual({ allowed: true });
+  });
+});
+
+describe("board 7a: a wrong password", () => {
+  it("locks the password and leaves the code path open", async () => {
+    for (let i = 0; i < THROTTLES.password_verify.limit; i += 1) {
+      await recordAttempt({ identifier: IDENTIFIER, kind: "password_verify", succeeded: false });
+    }
+    expect(await checkThrottle(IDENTIFIER, "password_verify")).toMatchObject({
+      allowed: false,
+      reason: "too_many_attempts",
+    });
+    // B5: the lockout copy offers a code, so both code kinds must still be open.
+    expect(await checkThrottle(IDENTIFIER, "otp_verify")).toEqual({ allowed: true });
+    expect(await checkThrottle(IDENTIFIER, "otp_request")).toEqual({ allowed: true });
+  });
+
+  it("holds a lock reached slowly for its full fifteen minutes", async () => {
+    // Failures fourteen minutes apart end to end: the first has left the
+    // fifteen-minute window, and the lock the screen quoted has not run out.
+    const now = Date.now();
+    const minutesAgo = [16, 12, 8, 4, 2];
+    await prisma.authAttempt.createMany({
+      data: minutesAgo.map((m) => ({
+        identifier: IDENTIFIER,
+        kind: "password_verify" as const,
+        succeeded: false,
+        createdAt: new Date(now - m * 60_000),
+      })),
+    });
+    const decision = await checkThrottle(IDENTIFIER, "password_verify");
+    expect(decision).toMatchObject({ allowed: false, reason: "too_many_attempts" });
+    if (decision.allowed) throw new Error("unreachable");
+    expect(Math.round(decision.retryAfterMs / 60_000)).toBe(13);
+  });
+
+  it("counts what is left", async () => {
+    await recordAttempt({ identifier: IDENTIFIER, kind: "password_verify", succeeded: false });
+    await recordAttempt({ identifier: IDENTIFIER, kind: "password_verify", succeeded: false });
+    expect(await remainingAttempts(IDENTIFIER, "password_verify")).toBe(3);
+  });
+
+  it("stops one address walking a list of accounts", async () => {
+    await prisma.authAttempt.createMany({
+      data: Array.from({ length: PASSWORD_ADDRESS_CEILING.limit }, (_, i) => ({
+        identifier: `+97150000${String(1000 + i)}`,
+        kind: "password_verify" as const,
+        succeeded: false,
+        ip: "203.0.113.77",
+      })),
+    });
+    expect(await checkAddressThrottle("203.0.113.77", "password_verify")).toMatchObject({
+      allowed: false,
+      limit: PASSWORD_ADDRESS_CEILING.limit,
+    });
+    expect(await checkAddressThrottle("203.0.113.78", "password_verify")).toEqual({ allowed: true });
+    expect(await checkAddressThrottle(null, "password_verify")).toEqual({ allowed: true });
   });
 });
 

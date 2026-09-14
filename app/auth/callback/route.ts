@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { isSafeNext } from "@/lib/auth/flow";
+import { isSafeNext } from "@/lib/auth/next-path";
+import { prisma } from "@/lib/db/client";
 
 /**
  * Where an emailed link lands.
@@ -45,9 +46,33 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL(`${destination}?error=link_expired`, url.origin));
   }
 
+  /*
+     A suspended account is turned back out here too — board 7a `B7`. This route
+     exchanges an emailed link for a session without passing through
+     `settleSession`, so it was the one door a suspended account could still
+     walk through.
+  */
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (user) {
+    const profile = await prisma.user.findUnique({ where: { id: user.id }, select: { suspendedAt: true } });
+    if (profile?.suspendedAt) {
+      await supabase.auth.signOut();
+      return NextResponse.redirect(new URL("/signin?error=suspended", url.origin));
+    }
+  }
+
+  /*
+     `flow=reset` is a Supabase recovery link, and reset no longer sends those —
+     board 7a's reset links are ours (`lib/auth/reset.ts`, landing on
+     `/auth/reset`). One still in somebody's inbox from before the change has
+     already been exchanged for a session above; it is not a grant, so the session
+     is ended and it lands on the request form, which sends a link that is.
+  */
   if (flow === "reset") {
-    // Straight to the form, inside the recovery session.
-    return NextResponse.redirect(new URL("/reset?stage=set", url.origin));
+    await supabase.auth.signOut();
+    return NextResponse.redirect(new URL("/reset?error=link_expired", url.origin));
   }
 
   const destination = next && isSafeNext(next) ? next : "/account/enquiries";

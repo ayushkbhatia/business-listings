@@ -68,8 +68,20 @@ export async function getActor(): Promise<Actor | null> {
        that can point at a company the record no longer agrees with, bought for
        nothing.
     */
-    select: { roles: true, businessId: true, branchId: true, buyerCompanyId: true },
+    select: { roles: true, businessId: true, branchId: true, buyerCompanyId: true, suspendedAt: true },
   });
+
+  /*
+     A suspended account has no actor — board 7a `B7`, on every request.
+
+     Every sign-in path already turned a suspended account straight back out,
+     and that was the only place the column was read. A session minted the day
+     before a suspension kept working until its refresh token died, which for a
+     rotating refresh token is never. `suspendAccount` ends the sessions as well;
+     this is the half that does not depend on that delete having reached every
+     row, and it costs nothing — the profile is read on this request regardless.
+  */
+  if (profile?.suspendedAt) return null;
 
   /*
      Roles come from the record, the same as `businessId` — board 4i.

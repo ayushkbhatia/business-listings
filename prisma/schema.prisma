@@ -81,6 +81,17 @@ model User {
   /// `AuditEvent.actorId` is `Restrict`.
   staffDeactivatedAt  DateTime? @map("staff_deactivated_at")
 
+  /// Board 7a `B3`. When this account last set a password, or null for one
+  /// that never has.
+  ///
+  /// Null is the ordinary case, not a gap. Mobile is the primary identity and a
+  /// code needs no password, so most accounts never set one — and nothing may
+  /// assume one exists. Supabase keeps the hash and does not say whether a real
+  /// one is behind it (`encrypted_password` is non-empty for accounts that were
+  /// only ever given a random one), so this column is how the product knows.
+  /// Written by `setPasswordFromGrant` and nothing else.
+  passwordSetAt DateTime? @map("password_set_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -165,6 +176,8 @@ model User {
   staffInvitesSent        StaffInvite[]            @relation("StaffInviteSender")
   staffInvitesAccepted    StaffInvite[]            @relation("StaffInviteAcceptor")
   accountSegments         AccountSegment[]         @relation("AccountSegmentAuthor")
+  passwordResets          PasswordReset[]
+  termsAcceptances        TermsAcceptance[]
 
   @@index([businessId])
   /// Board 4i. "Who holds a staff role" is a containment test over every account
@@ -186,6 +199,10 @@ enum AuthAttemptKind {
   otp_verify
   /// Asking for a password reset link.
   reset_request
+  /// Board 7a `B5`. Submitting a password. Its own kind, never `otp_verify`:
+  /// a password lockout must leave the code path open, because the lockout
+  /// screen offers the code as the way through.
+  password_verify
 
   @@map("auth_attempt_kind")
 }
@@ -208,8 +225,87 @@ model AuthAttempt {
   createdAt  DateTime        @default(now()) @map("created_at")
 
   @@index([identifier, kind, createdAt])
+  /// Board 7a. The per-address ceiling on wrong passwords. A per-identifier
+  /// lockout does nothing against one address trying one password across a
+  /// thousand accounts, which is what credential stuffing is.
+  @@index([ip, kind, createdAt])
   @@index([createdAt])
   @@map("auth_attempt")
+}
+
+/// How a reset grant was earned.
+enum PasswordResetChannel {
+  /// A link to the account's email. Lasts an hour.
+  email
+  /// A code to the account's mobile, verified. Board 7a `B2`: recovery works
+  /// from the mobile alone, with no email on the account at all.
+  sms
+
+  @@map("password_reset_channel")
+}
+
+/// Board 7a `B6`. Permission to set a password, once, for a short time.
+///
+/// Ours rather than Supabase's recovery link, for one reason that decides it:
+/// Supabase expires an emailed link on the project's email-OTP expiry, which the
+/// board sets at ten minutes for codes, while the same board promises reset
+/// links last one hour. One setting cannot hold both numbers. Owning the grant
+/// also makes "single-use" a conditional update this table can prove, rather
+/// than a property of a token somebody else stores.
+///
+///   - **The token is stored hashed.** SHA-256 of 32 random bytes that exist only
+///     in the email or in an httpOnly cookie. A row read out of a backup cannot
+///     be redeemed.
+///   - **Used is a timestamp, claimed conditionally.** `used_at IS NULL AND
+///     expires_at > now()` in the `UPDATE` itself, so two tabs submitting the
+///     same link cannot both set a password.
+///   - **Expired and used are the same answer to the person holding it** —
+///     "request another" — and different facts in this table.
+model PasswordReset {
+  id        String               @id @default(cuid())
+  userId    String               @map("user_id") @db.Uuid
+  channel   PasswordResetChannel
+  tokenHash String               @unique @map("token_hash")
+  expiresAt DateTime             @map("expires_at")
+  usedAt    DateTime?            @map("used_at")
+  /// Best-effort, from the proxy header. The audit trail for "I did not ask for this".
+  ip        String?
+  createdAt DateTime             @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("password_reset")
+}
+
+/// Board 7a `B10`. Which terms somebody accepted, and when — never a boolean.
+///
+/// A boolean says somebody once ticked a box. It cannot say which wording was on
+/// the page, and the terms already have a second version dated 29 Sep 2026
+/// (board 11i's amendment), so "accepted the terms" stopped being one fact the
+/// day that was published. One row per acceptance: accepting a later version is
+/// a new row, and the earlier one stays as the record of what was agreed then.
+///
+/// The versions are the documents' `effectiveFrom` dates, as `YYYY-MM-DD` —
+/// the same date each page prints under its heading.
+model TermsAcceptance {
+  id             String   @id @default(cuid())
+  userId         String   @map("user_id") @db.Uuid
+  termsVersion   String   @map("terms_version")
+  privacyVersion String   @map("privacy_version")
+  /// When the box was ticked and the form was sent — not when the code was
+  /// verified, which can be minutes later and is a different act.
+  acceptedAt     DateTime @map("accepted_at")
+  /// Which form. `signup` is the only one today.
+  source         String   @default("signup")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, termsVersion, privacyVersion])
+  @@index([userId, acceptedAt])
+  @@map("terms_acceptance")
 }
 
 enum Role {

@@ -34,6 +34,13 @@ export const AUDIT_ACTIONS = [
   "question_removed",
   "credit_issued",
   "suspend",
+  /*
+     Board 7a `B7`. A person's account, not a business — the subject is
+     `User:…`, and the log has to say which way it went, so two names under one
+     capability rather than `suspend` twice.
+  */
+  "account_suspended",
+  "account_reinstated",
   "merge",
   "boost",
   "view_as",
@@ -124,6 +131,7 @@ export function isAuditAction(value: string): value is AuditAction {
 export const ACTION_FOR_CAPABILITY = {
   "business.verification_tier.write": "tier_change",
   "business.suspend": "suspend",
+  "account.suspend": "account_suspended",
   "business.merge": "merge",
   "review.remove": "review_removed",
   "review.hold": "review_held",
@@ -195,6 +203,7 @@ export const PAIRED_ACTIONS = {
   */
   "report.resolve": ["report_resolved", "review_dispute_resolved", "incentive_logged"],
   "business.close": ["closure_noticed", "closure_withdrawn", "closure_reopened"],
+  "account.suspend": ["account_suspended", "account_reinstated"],
   "queue.decide": ["queue_decided", "queue_docs_requested", "queue_reassigned"],
   "business.merge": [
     "merge",

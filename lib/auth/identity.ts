@@ -33,22 +33,28 @@ export function normaliseIdentifier(raw: string): Identifier | null {
 }
 
 /**
- * What to show on the verify screen: enough to recognise, not enough to
- * confirm. `+971 50 ••• ••88` tells the right person they typed their own
- * number and tells anybody else nothing. Uses the same mask character as every
- * other masked value in the product — see lib/format/locale.
+ * What to show on the verify screen: enough for the right person to recognise
+ * the number they typed, and to spot the one they mistyped.
+ *
+ * Board 7a draws `+971 50 641 ••88` — operator, the next three digits, the last
+ * two — and corrected its own render to exactly that, because the first draft
+ * masked a colleague's number. Two digits hidden is enough on a screen that only
+ * ever shows the number this browser just typed: it is not a lookup, and it
+ * reveals nothing the typist did not already hold. Uses the same mask character
+ * as every other masked value in the product — see lib/format/locale.
  */
 export function maskIdentifier(identifier: Identifier): string {
   if (identifier.kind === "email") {
     const [user = "", domain = ""] = identifier.value.split("@");
     const head = user.slice(0, 2);
-    return `${head}${MASK_CHAR.repeat(Math.max(1, user.length - 2))}@${domain}`;
+    // Capped at six, so the mask does not print the length of the address.
+    return `${head}${MASK_CHAR.repeat(Math.min(6, Math.max(1, user.length - 2)))}@${domain}`;
   }
 
   const digits = identifier.value.replace(/^\+/, "");
   const cc = digits.slice(0, 3);
   const operator = digits.slice(3, 5);
+  const middle = digits.slice(5, 8);
   const last = digits.slice(-2);
-  const dot = MASK_CHAR;
-  return `+${cc} ${operator} ${dot.repeat(3)} ${dot.repeat(2)}${last}`;
+  return `+${cc} ${operator} ${middle} ${MASK_CHAR.repeat(2)}${last}`;
 }

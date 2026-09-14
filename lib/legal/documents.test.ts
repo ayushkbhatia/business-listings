@@ -200,3 +200,17 @@ describe("board 11i's amendment", () => {
     expect(days).toBeGreaterThanOrEqual(14);
   });
 });
+
+describe("the versions a sign-up records (board 7a B10)", () => {
+  it("is each document's effective date, and moves with the amendment", async () => {
+    const { currentLegalVersions } = await import("./documents");
+    expect(currentLegalVersions(new Date("2026-09-14T10:00:00Z"))).toEqual({
+      terms: "2026-09-04",
+      privacy: "2026-09-04",
+    });
+    expect(currentLegalVersions(new Date("2026-09-29T00:00:00Z"))).toEqual({
+      terms: "2026-09-29",
+      privacy: "2026-09-29",
+    });
+  });
+});

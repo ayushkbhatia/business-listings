@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { acceptQuote } from "@/lib/enquiry/service";
+import { signInHref } from "@/lib/auth/next-path";
 import { resolveBuyerId } from "./_buyer";
 
 /**
@@ -17,7 +18,9 @@ export async function acceptQuoteAction(formData: FormData): Promise<void> {
   const token = formData.get("token");
 
   const buyerId = await resolveBuyerId(typeof token === "string" ? token : null);
-  if (!buyerId) redirect("/signin");
+  // Back to the quotes being compared, not the buyer account's front page —
+  // board 7a `B9`, a sign-in round trip returns to what was in progress.
+  if (!buyerId) redirect(signInHref(`/enquiry/${encodeURIComponent(enquiryId)}/compare`));
 
   const result = await acceptQuote(buyerId, quoteId);
   const carry = typeof token === "string" && token ? `?t=${token}` : "";

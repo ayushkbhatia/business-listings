@@ -13,6 +13,7 @@ import { Ingest } from "./_sections/Ingest";
 import { Dedupe } from "./_sections/Dedupe";
 import { ApprovalQueueGallery } from "./_sections/ApprovalQueue";
 import { Reviews } from "./_sections/Reviews";
+import { AuthGallery } from "./_sections/Auth";
 import { CloseAccountGallery } from "./_sections/CloseAccount";
 import { StaffRolesGallery } from "./_sections/StaffRoles";
 import { AccountsGallery } from "./_sections/Accounts";
@@ -273,6 +274,7 @@ export default function Gallery() {
       <Billing />
 
       <Reviews />
+      <AuthGallery />
       <CloseAccountGallery />
       <StaffRolesGallery />
       <AccountsGallery />

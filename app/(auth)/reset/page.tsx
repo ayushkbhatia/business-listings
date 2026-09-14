@@ -1,22 +1,33 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { Alert } from "@/components/display/Alert";
 import { Button, Input } from "@/components/primitives";
+import { readResetGrant, RESET_COOKIE } from "@/lib/auth/reset";
 import { t } from "@/lib/i18n";
 import { AuthCard } from "../_components/AuthCard";
-import { AuthNotice } from "../_components/AuthNotice";
 import { AuthFailure } from "../_components/failures";
+import { NewPasswordField } from "../_components/NewPasswordField";
 import { requestResetAction, setPasswordAction } from "../actions";
 
 /**
- * Board 7a, state four, in three stages.
+ * Board 7a, state four — reset, and the failure states it carries.
  *
- * Ask for a link · the link arrived and this is the new password · done. The
- * expired-link failure lands here too, because that is where the link was
- * going, and it is the state the step 2 checkpoint asks to see.
+ * Two stages on one route:
  *
- * A password is the second way in, not the first. Signing in with a code needs
- * none at all, and the copy says so rather than implying everyone needs one.
+ *   - **Ask.** Mobile or email. A mobile gets a code (`B2`: recovery works from
+ *     the mobile alone), an email gets a link that lasts an hour and works once
+ *     (`B6`). Neutral either way about whether an account exists.
+ *   - **Set a new password.** Reached only with a grant in this browser's
+ *     cookie, set by the emailed link or by a verified code. No grant, no field:
+ *     the page says the link expired and offers another, rather than drawing a
+ *     password field that is going to refuse.
+ *
+ * The three failures the board draws land here as well as on sign-in — link
+ * expired, too many attempts, suspended — because this is where the link was
+ * going, and a locked-out or suspended person is likeliest to try here next.
  */
 export const metadata = { title: t("auth.reset.title") };
+export const dynamic = "force-dynamic";
 
 export default async function ResetPage({
   searchParams,
@@ -25,47 +36,33 @@ export default async function ResetPage({
 }) {
   const params = await searchParams;
   const one = (key: string) => (typeof params[key] === "string" ? params[key] : undefined);
-
-  if (one("done")) {
-    return (
-      <AuthCard title={t("auth.reset.done_title")} lede={t("auth.reset.done_body")}>
-        <Link
-          href="/signin"
-          className="rounded-tag text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
-        >
-          {t("auth.reset.back")}
-        </Link>
-      </AuthCard>
-    );
-  }
+  const error = one("error");
 
   if (one("stage") === "set") {
+    const grant = await readResetGrant((await cookies()).get(RESET_COOKIE)?.value);
+
+    if (!grant) {
+      return (
+        <AuthCard eyebrow={t("auth.reset.eyebrow")} title={t("auth.reset.title")}>
+          <AuthFailure error="link_expired" restartHref="/reset" />
+        </AuthCard>
+      );
+    }
+
     return (
-      <AuthCard title={t("auth.reset.title")}>
+      <AuthCard
+        eyebrow={t("auth.reset.eyebrow")}
+        title={t("auth.reset.set_title")}
+        {...(grant.masked ? { lede: t("auth.reset.set_for", { masked: grant.masked }) } : {})}
+      >
         <form action={setPasswordAction} className="space-y-4">
           <AuthFailure
-            {...{ error: one("error"), length: one("length") }}
+            error={error}
+            problem={one("problem")}
+            length={one("length")}
             restartHref="/reset"
           />
-          <div>
-            <label htmlFor="password" className="mb-1.5 block text-body-sm text-ink">
-              {t("auth.reset.new_password")}
-            </label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              minLength={12}
-              required
-              autoFocus
-              aria-describedby="password-hint"
-              invalid={one("error") === "too_short"}
-            />
-            <p id="password-hint" className="mt-1.5 text-caption text-muted">
-              {t("auth.reset.new_password_hint")}
-            </p>
-          </div>
+          <NewPasswordField identifiers={grant.identifiers} invalid={error === "password_rejected"} autoFocus />
           <Button type="submit" block>
             {t("auth.reset.save")}
           </Button>
@@ -75,15 +72,17 @@ export default async function ResetPage({
   }
 
   const sent = one("sent");
+  const wantsEmail = one("use") === "email";
 
   return (
     <AuthCard
+      eyebrow={t("auth.reset.eyebrow")}
       title={t("auth.reset.title")}
       lede={t("auth.reset.lede")}
       footer={
         <Link
           href="/signin"
-          className="rounded-tag text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+          className="rounded-tag font-medium text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
         >
           {t("auth.reset.back")}
         </Link>
@@ -91,34 +90,39 @@ export default async function ResetPage({
     >
       <div className="space-y-4">
         <AuthFailure
-          {...{ error: one("error"), retry: one("retry"), limit: one("limit") }}
+          error={error}
+          retry={one("retry")}
+          limit={one("limit")}
           restartHref="/reset"
           onRequest
         />
 
         {sent ? (
-          <AuthNotice
-            live
-            tone="info"
-            title={t("auth.reset.sent_title")}
-            body={t("auth.reset.sent_body", { masked: sent })}
-          />
+          <Alert tone="info" live="polite" title={t("auth.reset.sent_title")}>
+            {t("auth.reset.sent_body", { masked: sent })}
+          </Alert>
         ) : null}
 
         <form action={requestResetAction} className="space-y-4">
           <div>
             <label htmlFor="identifier" className="mb-1.5 block text-body-sm text-ink">
-              {t("auth.reset.email")}
+              {t("auth.reset.identifier")}
             </label>
             <Input
               id="identifier"
               name="identifier"
-              type="email"
-              autoComplete="email"
+              type="text"
+              inputMode={wantsEmail ? "email" : "text"}
+              autoComplete="username"
               required
               autoFocus
-              invalid={one("error") === "invalid_identifier"}
+              defaultValue={wantsEmail ? "" : (one("to") ?? "")}
+              aria-describedby="reset-identifier-hint"
+              invalid={error === "invalid_identifier"}
             />
+            <p id="reset-identifier-hint" className="mt-1.5 text-caption text-body">
+              {wantsEmail ? t("auth.reset.identifier_hint_email") : t("auth.reset.identifier_hint")}
+            </p>
           </div>
           <Button type="submit" block>
             {t("auth.reset.submit")}
