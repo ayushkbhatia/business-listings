@@ -45,7 +45,9 @@ export const MATRIX_GROUPS = [
   {
     key: "catalogue",
     capabilities: [
+      "taxonomy.read",
       "taxonomy.write",
+      "taxonomy.merge",
       "storefront.template.write",
       "search.ranking.write",
       "placement.boost",

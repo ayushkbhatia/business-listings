@@ -1,0 +1,21 @@
+-- Board `4d` — category taxonomy: one switch per public surface.
+--
+-- `category.show_in_index`. A category appears on two public surfaces — the
+-- grid on the directory home and the full index at `/categories` — and only the
+-- first ever had a control. The board's first export drew the missing one as a
+-- second copy of the RFQ fan-out toggle; the correction is this column, and
+-- `B3` is why it is not folded into `show_on_home`: they are different pages
+-- with different rules, and one boolean for two pages is how the duplicate
+-- toggle happened.
+--
+-- Default true, and no backfill. Every category is in the index today, so true
+-- is what `/categories` already renders. A sector with no public listings stays
+-- out of the index whatever this says — that rule is computed from the listing
+-- count in `lib/seo/taxonomy.ts`, never stored, because a stored copy of a count
+-- is a count that goes wrong.
+--
+-- **Additive, and applies before the merge** (`docs/deployments.md` § Ordering).
+-- The code on `main` does not read the column. Idempotent: applied through the
+-- Supabase MCP and then recorded, a second run is a no-op.
+
+ALTER TABLE "category" ADD COLUMN IF NOT EXISTS "show_in_index" BOOLEAN NOT NULL DEFAULT true;

@@ -5,7 +5,7 @@ import { PublicShell } from "@/components/structure";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { emirateMatrix, emiratePagePath, MATRIX_EMIRATES } from "@/lib/seo/emirate";
-import { categoryIndex } from "@/lib/seo/taxonomy";
+import { categoryIndex, listedInIndex } from "@/lib/seo/taxonomy";
 import { absoluteUrl } from "@/lib/site";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
@@ -41,11 +41,11 @@ import { JsonLd } from "@/app/(public)/_json-ld";
 export const revalidate = 3600;
 
 export async function generateMetadata(): Promise<Metadata> {
-  const [sectors, matrix] = await Promise.all([categoryIndex(), emirateMatrix()]);
+  const sectors = listedInIndex(await categoryIndex());
   // The same set the page lists, so the title cannot claim a number the body
   // does not show.
   const subcategories = sectors.reduce((total, sector) => total + sector.children.length, 0);
-  const listings = matrix.reduce((total, row) => total + row.listings, 0);
+  const listings = sectors.reduce((total, sector) => total + sector.listings, 0);
 
   return {
     title: t("categories.seo_title", {
@@ -62,7 +62,24 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function CategoriesPage() {
-  const [sectors, matrix] = await Promise.all([categoryIndex(), emirateMatrix()]);
+  const [all, fullMatrix] = await Promise.all([categoryIndex(), emirateMatrix()]);
+  /*
+     Board 4d. What the index lists is its own decision now: a sector held out by
+     its switch, or with no listings at all, has no block, and a subcategory
+     held out is not linked from its sector's block. `listedInIndex` is the one
+     place that rule lives, and every figure below is counted off its result —
+     a lede reading "13 sectors" over twelve blocks is the defect this board was
+     written about.
+  */
+  const sectors = listedInIndex(all);
+  const listedIds = new Set(sectors.map((sector) => sector.id));
+  /*
+     The emirate table keeps a held-out sector's row only while one of its
+     cells is a live page. The comment on the table says why rows are never
+     truncated — a hidden row is an orphaned page — and a sector with nothing
+     live in any emirate has no page to orphan.
+  */
+  const matrix = fullMatrix.filter((row) => listedIds.has(row.id) || row.cells.some((cell) => cell.live));
 
   /*
      Every subcategory is listed, including the ones below the publish floors.
@@ -99,16 +116,18 @@ export default async function CategoriesPage() {
     0,
   );
 
-  const listings = matrix.reduce((total, row) => total + row.listings, 0);
+  const listings = sectors.reduce((total, sector) => total + sector.listings, 0);
   const livePages = matrix.reduce(
     (total, row) => total + row.cells.filter((cell) => cell.live).length,
     0,
   );
   // Sectors in the order the matrix put them: by size, biggest first.
-  const ordered = matrix.map((row) => ({
-    row,
-    sector: sectors.find((sector) => sector.id === row.id),
-  }));
+  const ordered = matrix
+    .filter((row) => listedIds.has(row.id))
+    .map((row) => ({
+      row,
+      sector: sectors.find((sector) => sector.id === row.id),
+    }));
 
   return (
     <PublicShell bleed nav={<DirectoryNav active="categories" />} footer={<DirectoryFooter />}>
@@ -133,7 +152,7 @@ export default async function CategoriesPage() {
           "@type": "CollectionPage",
           name: t("categories.title"),
           url: absoluteUrl("/categories"),
-          hasPart: matrix.map((row) => ({
+          hasPart: ordered.map(({ row }) => ({
             "@type": "CollectionPage",
             name: row.name,
             url: absoluteUrl(`/c/${row.slug}`),

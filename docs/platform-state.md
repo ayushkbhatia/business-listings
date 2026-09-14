@@ -117,7 +117,7 @@ My recommendation: **stop building features.** The next unit of work is closing 
 | `/admin/reviews` | Wired | Removal with a ground and a written reason, ops lead only. Removed reviews stay listed and marked. Board 11c added two more decisions on the same rung: taking down a supplier's reply (`B4` — the text stays as the record, and there is no second reply) and logging an incentivised-review finding against the account (`B6`, which is what makes the prohibition on the request panel enforceable). |
 | `/admin/audit` | Wired | Every audited mutation appears here. `reason` is `NOT NULL` and enforced in Postgres. |
 | `/admin/content/matrix`, `/guides` + `[id]`, `/home`, `/redirects`, `/attribution` | Wired | Handoff 5's CMS. Content added here costs no deploy — use it. |
-| `/admin/categories` | Wired | Rename moves every affected URL and repoints existing redirects to avoid chains. |
+| `/admin/categories` | Wired | Board 4d: tree with a total that is the sum of its rows, editor, add, merge and address change — each writing its redirects, which the category routes now serve. |
 | `/admin/storefront-templates` + `[id]`, `/theme`, `/pages`, `/specimens` | Wired | Theme editor with contrast specimens. |
 | `/admin/plans`, `/crm`, `/support`, `/search`, `/notifications`, `/spec-library` | Wired | `product_alert_matched` is deliberately declared with no params, so it never emits. A test pins that. |
 | `/admin/strings` | By design | Read-only. The locale catalogue is a source file; this is a viewer, not an editor. Correct. |

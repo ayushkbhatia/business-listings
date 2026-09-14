@@ -338,7 +338,14 @@ export const HOME_SECTOR_LIMIT = 12;
  */
 export async function readHomeSectors(): Promise<HomeSector[]> {
   const sectors = await prisma.category.findMany({
-    where: { parentId: null },
+    /*
+       Board 4d: a sector held out of the category index is off this rail too.
+       The rail's counts and population are `6c`'s (`6h` B5), and a trade staff
+       took out of the full index reappearing on the most-linked page on the
+       site would be the index switch not doing its job. The reverse does not
+       hold — this rail is a shortlist of the index, not the other way round.
+    */
+    where: { parentId: null, showInIndex: true },
     select: {
       id: true,
       slug: true,
@@ -348,6 +355,7 @@ export async function readHomeSectors(): Promise<HomeSector[]> {
       children: {
         select: {
           name: true,
+          showInIndex: true,
           _count: { select: { primaryFor: { where: PUBLIC_BUSINESS } } },
         },
       },
@@ -370,7 +378,8 @@ export async function readHomeSectors(): Promise<HomeSector[]> {
         sector._count.primaryFor +
         sector.children.reduce((total, child) => total + child._count.primaryFor, 0),
       topSubcategories: sector.children
-        .filter((child) => child._count.primaryFor > 0)
+        // A subcategory held out of the index is not teased here either.
+        .filter((child) => child.showInIndex && child._count.primaryFor > 0)
         .sort((a, b) => b._count.primaryFor - a._count.primaryFor || a.name.localeCompare(b.name))
         .slice(0, 4)
         .map((child) => child.name),

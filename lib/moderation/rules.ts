@@ -56,7 +56,8 @@ export type RuleId =
   | "register_number"
   | "register_name"
   | "register_status"
-  | "register_entity";
+  | "register_entity"
+  | "licence_extra_check";
 
 export interface RuleSpec {
   id: RuleId;
@@ -67,6 +68,13 @@ export interface RuleSpec {
 
 export const RULES: readonly RuleSpec[] = [
   { id: "business_closing", kinds: ["claim"], switchable: false },
+  /*
+     Board 4d. "Requires extra licence check" on the category a claim or a
+     category change lands in. It is not a queue policy to tune away: the ops
+     lead who set it on the taxonomy made the decision, and a switch here that
+     overrode it would be a second place to make the opposite one.
+  */
+  { id: "licence_extra_check", kinds: ["claim", "category_change"], switchable: false },
   { id: "licence_current", kinds: ["claim"], switchable: true },
   { id: "document_type", kinds: ["claim"], switchable: true },
   { id: "licence_number", kinds: ["claim"], switchable: true },

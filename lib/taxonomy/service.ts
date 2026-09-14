@@ -190,6 +190,12 @@ export type TaxonomyResult =
   | {
       ok: false;
       error: "not_found" | "out_of_range" | "slug_taken" | "would_orphan";
+      /**
+       * Which way it was refused, for the screen to say in the catalogue's
+       * words — `message` is the service's own English, kept for logs and the
+       * tests that read it, and never rendered.
+       */
+      detail?: { reason: string; count?: number };
       message: string;
     };
 

@@ -9,6 +9,7 @@ import {
 import { countResults } from "@/lib/db/queries";
 import { LandingPage, RESULTS_PER_PAGE } from "@/app/(public)/_landing/LandingPage";
 import { parseSearchQuery } from "@/lib/search/query";
+import { redirectIfMoved } from "@/lib/listing/redirect";
 
 /**
  * `/:emirate/:category` — one trade across one emirate, board 6a's second page
@@ -84,7 +85,12 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 
 export default async function EmirateCategoryPage({ params, searchParams }: Props) {
   const sp = await searchParams;
-  const loaded = await load(await params, sp);
-  if (!loaded) notFound();
+  const p = await params;
+  const loaded = await load(p, sp);
+  if (!loaded) {
+    // Board 4d `B7`: the emirate page of a category renamed or merged away.
+    await redirectIfMoved(`/${p.emirate}/${p.area}`);
+    notFound();
+  }
   return <LandingPage state={loaded.state} searchParams={sp} pageCount={loaded.pageCount} />;
 }

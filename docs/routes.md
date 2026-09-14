@@ -166,8 +166,9 @@ and it is the one that argues back.
 /admin/ingest/dedupe?run=:id            The same queue, one run              [12b]  built board pass
 /admin/search                           Ranking, boosts, weight history      [12c]  built h4s8
 /admin/search?vector=services           The services vector, same board      [12c-s] built s19
-/admin/categories                       Taxonomy                              [4d]  rename h5s6
-/admin/categories?tab=kind              Taxonomy — trade kind                [4d-s] built h4ds
+/admin/categories                       Categories — tree and editor          [4d]  built board pass
+/admin/categories?c=:id                 The same, one category open           [4d]  built board pass
+/admin/categories?tab=kind              Categories — trade kind              [4d-s] built h4ds
 /admin/spec-library                     Spec library                          [4e]  built h4e
 /admin/spec-library?view=scope          Scope-sheet families                [4e-s] built h4es
 /admin/spec-library/:id                 One template's fields                 [4e]  built h4e

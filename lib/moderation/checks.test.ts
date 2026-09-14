@@ -40,6 +40,7 @@ const claim = (over: Partial<ClaimFacts> = {}): ClaimFacts => ({
   phone: null,
   recordPhones: [],
   closing: false,
+  extraCheckTrade: null,
   ...over,
 });
 
@@ -144,13 +145,43 @@ describe("a profile edit", () => {
 describe("the other kinds", () => {
   it("a category the licence activity does not cover is a rejection", () => {
     const checks = checksFor(
-      { kind: "category_change", field: "primary_category", categoryName: "Healthcare clinics", fitsLicence: false, tradeKindBefore: "goods", tradeKindAfter: "services" },
+      { kind: "category_change", field: "primary_category", categoryName: "Healthcare clinics", fitsLicence: false, tradeKindBefore: "goods", tradeKindAfter: "services", extraCheckTrade: null },
       DEFAULT_RULES,
       NOW,
     );
     expect(sentence(checks[0]!)).toBe("Licence activity doesn't cover Healthcare clinics");
     expect(rowAction("category_change", checks)).toBe("reject");
     expect(checks.some((check) => check.rule === "trade_kind")).toBe(true);
+  });
+
+  /*
+     Board 4d's "Requires extra licence check". Present only where the taxonomy
+     says so, never a pass, and it takes the row out of bulk approve — a clean
+     claim into such a trade is no longer "every check passed".
+  */
+  it("a trade that requires an extra licence check sends a clean submission to a person", () => {
+    const clean = checksFor(claim(), DEFAULT_RULES, NOW);
+    expect(allPassed(clean)).toBe(true);
+    expect(clean.some((check) => check.rule === "licence_extra_check")).toBe(false);
+
+    const flagged = checksFor(claim({ extraCheckTrade: "Explosives & blasting" }), DEFAULT_RULES, NOW);
+    const extra = flagged.find((check) => check.rule === "licence_extra_check");
+    expect(extra?.outcome).toBe("warn");
+    expect(sentence(extra!)).toBe("Explosives & blasting requires an extra licence check");
+    expect(allPassed(flagged)).toBe(false);
+    expect(rowAction("claim", flagged)).toBe("review");
+
+    const moved = checksFor(
+      { kind: "category_change", field: "additional_category", categoryName: "Explosives & blasting", fitsLicence: true, tradeKindBefore: null, tradeKindAfter: null, extraCheckTrade: "Explosives & blasting" },
+      DEFAULT_RULES,
+      NOW,
+    );
+    expect(allPassed(moved)).toBe(false);
+    expect(rowAction("category_change", moved)).toBe("review");
+  });
+
+  it("the extra licence check cannot be tuned away", () => {
+    expect(RULES.find((rule) => rule.id === "licence_extra_check")?.switchable).toBe(false);
   });
 
   it("a branch outside the licensed emirate names both", () => {

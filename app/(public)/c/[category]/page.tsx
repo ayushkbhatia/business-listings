@@ -15,6 +15,7 @@ import { canonicalFor, robotsForFilteredView } from "@/lib/seo/canonical";
 import { parseSearchQuery, trayParams } from "@/lib/search/query";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
+import { redirectIfMoved } from "@/lib/listing/redirect";
 import { Results } from "@/app/(public)/_results/Results";
 import { BrowseHeader } from "@/app/(public)/_results/BrowseHeader";
 
@@ -70,7 +71,16 @@ export async function generateMetadata({ params, searchParams }: Props): Promise
 export default async function CategoryPage({ params, searchParams }: Props) {
   const { category: slug } = await params;
   const category = await getCategoryBySlug(slug);
-  if (!category || category.parentId) notFound();
+  if (!category || category.parentId) {
+    /*
+       Board 4d `B7`. A renamed or merged sector's old address is a row in
+       `Redirect`, and until this nothing on the category routes read it — the
+       301 was written and the visitor got a 404. One query, on the path that
+       was already about to fail.
+    */
+    await redirectIfMoved(`/c/${slug}`);
+    notFound();
+  }
 
   const sp = await searchParams;
   const query = parseSearchQuery(sp);

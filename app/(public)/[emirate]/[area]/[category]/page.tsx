@@ -10,6 +10,7 @@ import {
 import { countResults } from "@/lib/db/queries";
 import { LandingPage, RESULTS_PER_PAGE } from "@/app/(public)/_landing/LandingPage";
 import { parseSearchQuery } from "@/lib/search/query";
+import { redirectIfMoved } from "@/lib/listing/redirect";
 
 /**
  * Board 6a — `/:emirate/:area/:category`, the workhorse template.
@@ -152,6 +153,8 @@ export default async function AreaLandingPage({ params, searchParams }: Props) {
     const to = await withdrawnTarget(p);
     // `permanentRedirect` throws, so nothing below it runs.
     if (to) permanentRedirect(to);
+    // Board 4d `B7`: an area page whose category was renamed or merged away.
+    await redirectIfMoved(`/${p.emirate}/${p.area}/${p.category}`);
     notFound();
   }
   return <LandingPage state={loaded.state} searchParams={sp} pageCount={loaded.pageCount} />;
