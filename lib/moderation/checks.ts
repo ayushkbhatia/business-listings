@@ -65,6 +65,11 @@ export interface ClaimFacts {
   phone: string | null;
   recordPhones: readonly string[];
   closing: boolean;
+  /**
+   * The listing's category, where it or its sector requires an extra licence
+   * check (board 4d). Null where neither does.
+   */
+  extraCheckTrade: string | null;
 }
 
 export interface ProfileEditFacts {
@@ -89,6 +94,8 @@ export interface CategoryChangeFacts {
   /** Primary only: the trade kind before and after, where it moves. */
   tradeKindBefore: "goods" | "services" | null;
   tradeKindAfter: "goods" | "services" | null;
+  /** The category moved into, where it or its sector requires an extra licence check. */
+  extraCheckTrade: string | null;
 }
 
 export interface LocationFacts {
@@ -177,6 +184,8 @@ function claimChecks(facts: ClaimFacts, rules: CheckRules, now: Date): Check[] {
   if (facts.closing) {
     checks.push(fail("business_closing", "reject", { key: "admin.queue.check.business_closing.closing" }));
   }
+  const extra = extraLicenceCheck(facts.extraCheckTrade);
+  if (extra) checks.push(extra);
 
   if (on("licence_current")) {
     const days = daysUntil(facts.registerExpiry, now);
@@ -323,8 +332,27 @@ function profileEditChecks(facts: ProfileEditFacts, rules: CheckRules): Check[] 
   return checks;
 }
 
+/**
+ * Board 4d — a trade the taxonomy marks as needing an extra licence check.
+ *
+ * Never a pass and never a rejection. It says a person has to read the licence
+ * against the trade, which is exactly what bulk approve cannot do, so the row
+ * leaves the bulk set (B2) and opens for review. Only present where the flag is
+ * on: a check that passed on every other category would make "every check
+ * passed" mean less everywhere.
+ */
+function extraLicenceCheck(trade: string | null): Check | null {
+  if (!trade) return null;
+  return warn("licence_extra_check", "review", {
+    key: "admin.queue.check.licence_extra_check.required",
+    params: { trade },
+  });
+}
+
 function categoryChecks(facts: CategoryChangeFacts, rules: CheckRules): Check[] {
   const checks: Check[] = [];
+  const extra = extraLicenceCheck(facts.extraCheckTrade);
+  if (extra) checks.push(extra);
   if (ruleEnabled(rules, "category_fits")) {
     checks.push(
       facts.fitsLicence

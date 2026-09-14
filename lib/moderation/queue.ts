@@ -199,6 +199,9 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
             licenceExpiry: true,
             closureRequestedAt: true,
             locations: { where: { phone: { not: null } }, select: { phone: true } },
+            primaryCategory: {
+              select: { name: true, requiresExtraCheck: true, parent: { select: { requiresExtraCheck: true } } },
+            },
           },
         },
       },
@@ -307,7 +310,13 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
     categoryIds.size > 0
       ? db.category.findMany({
           where: { id: { in: [...categoryIds] } },
-          select: { id: true, name: true, synonyms: true, parent: { select: { name: true } } },
+          select: {
+            id: true,
+            name: true,
+            synonyms: true,
+            requiresExtraCheck: true,
+            parent: { select: { name: true, requiresExtraCheck: true } },
+          },
         })
       : Promise.resolve([]),
     changes.some((change) => change.field === "primary_category") ? loadTradeKinds(db) : Promise.resolve(new Map()),
@@ -384,6 +393,7 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
         tradeKindBefore:
           change.field === "primary_category" && change.beforeValue ? resolveTradeKind(tradeKinds, change.beforeValue) : null,
         tradeKindAfter: change.field === "primary_category" ? resolveTradeKind(tradeKinds, change.afterValue) : null,
+        extraCheckTrade: after && (after.requiresExtraCheck || after.parent?.requiresExtraCheck) ? after.name : null,
       },
     });
   }
@@ -417,6 +427,10 @@ export async function loadPending(db: Db = prisma): Promise<Raw[]> {
         phone: claim.phone,
         recordPhones: business.locations.map((location) => location.phone!).filter(Boolean),
         closing: business.closureRequestedAt !== null,
+        extraCheckTrade:
+          business.primaryCategory.requiresExtraCheck || business.primaryCategory.parent?.requiresExtraCheck
+            ? business.primaryCategory.name
+            : null,
       },
     });
   }

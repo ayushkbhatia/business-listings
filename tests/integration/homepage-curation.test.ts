@@ -313,7 +313,8 @@ describe("the sector grid computes (6h rails map)", () => {
     expect(sectors.every((sector) => sector.listings > 0)).toBe(true);
 
     const hidden = await prisma.category.findMany({
-      where: { parentId: null, showOnHome: false },
+      // Board 4d: a sector held out of the category index is off this rail by design.
+      where: { parentId: null, showOnHome: false, showInIndex: true },
       select: { id: true, _count: { select: { primaryFor: { where: { publishedAt: { not: null }, suspendedAt: null } } } }, children: { select: { _count: { select: { primaryFor: { where: { publishedAt: { not: null }, suspendedAt: null } } } } } } },
     });
     const withListings = hidden.filter((sector) => sector._count.primaryFor + sector.children.reduce((n, child) => n + child._count.primaryFor, 0) > 0);

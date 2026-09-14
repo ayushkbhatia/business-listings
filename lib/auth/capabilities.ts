@@ -180,6 +180,29 @@ export const CAPABILITIES = {
     why: "§07 staff table, \"Edit taxonomy & spec templates\". Renaming a category creates a 301 and breaks cross-seller comparison.",
   },
   /*
+     Board 4d. Reading the tree is not editing it, and `/admin/categories` was
+     gated on the write — so the one person who most often needs to answer "why
+     is this seller filed there, and what does that category ask of them", the
+     moderator deciding a category change in the queue, got a 404.
+  */
+  "taxonomy.read": {
+    roles: ["staff_ops_lead", "staff_moderator"],
+    audited: false,
+    source: "inferred",
+    why: "Not a row in §07. Board 4d-s's states table: a non-ops-lead admin sees the taxonomy read-only, because it is how other staff answer \"why does this seller see that screen\". The moderator decides category changes in the approval queue against this tree. Finance has no row: nothing on it is about money. Reading changes nothing, so it is not audited.",
+  },
+  /*
+     Board 4d Q4, "who may merge", which permissions.md is silent on. Split from
+     `taxonomy.write` so the answer is one line to change rather than a search
+     through every caller of the editor's capability.
+  */
+  "taxonomy.merge": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "inferred",
+    why: "Not a row in §07. Board 4d Q4: a merge moves every listing, product and service filed under one category into another, writes a redirect for every address the absorbed one owned, and changes what ranks — it cannot be undone by editing a field. Held at the rung that holds \"Edit taxonomy & spec templates\" and no lower, as its own capability so a decision to narrow or widen it touches one row.",
+  },
+  /*
      Board 12g. Split out of `taxonomy.write`, which gated this screen because it
      was the nearest ops-lead row — and whose reason, a renamed category breaking
      a 301, says nothing about what this does. A template is the words every

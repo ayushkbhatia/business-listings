@@ -788,78 +788,11 @@ test.describe("boards 10b and 6d — guides", () => {
   });
 });
 
-test.describe("criterion 7 — renaming a trade on the taxonomy screen", () => {
-  test("says how many addresses a rename would move before anybody commits", async ({ page }) => {
-    /*
-       One rename of a sector moves its own page, every subcategory under it —
-       the address carries the parent's slug — and every area page for it.
-       Somebody about to move forty addresses should know before, not after.
-    */
-    await page.goto("/admin/categories");
-    await expect(page.getByRole("heading", { name: "Move a trade's address" })).toBeVisible();
-
-    /*
-       Scoped to the rename panel. Board 4d-s put a second "How a trade is sold"
-       panel on this screen whose own picker is also labelled "Trade", so an
-       unscoped combobox now matches two — the same reason the Reason field
-       below was already scoped.
-    */
-    const rename = page.getByRole("region", { name: "Move a trade's address" });
-    await rename.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
-    await page.getByLabel("New address", { exact: true }).fill("hvac-and-cooling");
-
-    await expect(page.getByText(/\d+ addresses? move/)).toBeVisible();
-  });
-
-  test("will not rename or remove without a reason", async ({ page }) => {
-    await page.goto("/admin/categories");
-    /*
-       Scoped to the rename panel. Board 4d-s put a second "How a trade is sold"
-       panel on this screen whose own picker is also labelled "Trade", so an
-       unscoped combobox now matches two — the same reason the Reason field
-       below was already scoped.
-    */
-    const rename = page.getByRole("region", { name: "Move a trade's address" });
-    await rename.getByRole("combobox", { name: "Trade" }).selectOption({ label: "HVAC & ventilation" });
-    await page.getByLabel("New address", { exact: true }).fill("hvac-and-cooling");
-
-    await expect(page.getByRole("button", { name: "Rename and write the redirects" })).toBeDisabled();
-    await expect(page.getByRole("button", { name: "Remove the trade" })).toBeDisabled();
-  });
-
-  test("refuses to remove a trade something depends on, and says what", async ({ page }) => {
-    /*
-       Children first, because listings cannot be judged until the subcategories
-       are gone — and the count decides the verb, which is why the message is
-       built rather than templated.
-    */
-    await page.goto("/admin/categories");
-    /*
-       Scoped to the rename panel. Board 4d-s put a second "How a trade is sold"
-       panel on this screen whose own picker is also labelled "Trade", so an
-       unscoped combobox now matches two — the same reason the Reason field
-       below was already scoped.
-    */
-    await page
-      .getByRole("region", { name: "Move a trade's address" })
-      .getByRole("combobox", { name: "Trade" })
-      .selectOption({ label: "HVAC & ventilation" });
-    /*
-       Scoped to the region that owns the button this test then clicks. Every
-       staff action on this screen writes its own audit reason, so "Reason"
-       names a field in each of them — unscoped it matches two.
-    */
-    await page
-      .getByRole("region", { name: "Move a trade's address" })
-      .getByRole("textbox", { name: "Reason" })
-      .fill("Checking what the refusal says.");
-    await page.getByRole("button", { name: "Remove the trade" }).click();
-
-    await expect(
-      page.getByText(/(subcategory sits|subcategories sit|listing is|listings are) .*under it/),
-    ).toBeVisible();
-  });
-});
+/*
+   Criterion 7's rename panel was folded into board 4d's editor: the address is
+   changed from the category itself, with the redirect count in the dialog, and
+   the old address is followed. tests/e2e/admin-taxonomy.spec.ts carries it.
+*/
 
 test.describe("entry page quotes", () => {
   /*

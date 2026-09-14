@@ -274,7 +274,7 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     key: "taxonomy",
     labelKey: "nav.group.taxonomy",
     items: [
-      { key: "categories", labelKey: "nav.categories", href: "/admin/categories", capability: "taxonomy.write" },
+      { key: "categories", labelKey: "nav.categories", href: "/admin/categories", capability: "taxonomy.read" },
       { key: "spec-library", labelKey: "nav.spec_library", href: "/admin/spec-library", capability: "taxonomy.write" },
       { key: "areas", labelKey: "nav.areas", href: "/admin/areas", capability: "taxonomy.write", later: true },
       { key: "attributes", labelKey: "nav.attributes", href: "/admin/attributes", capability: "taxonomy.write", later: true },

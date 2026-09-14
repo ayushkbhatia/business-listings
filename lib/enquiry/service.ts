@@ -106,6 +106,29 @@ const FANOUT_SELECT = (since: Date) =>
     },
   }) as const;
 
+/**
+ * The requested categories an RFQ may fan out to — board 4d's "Allow RFQ
+ * fan-outs".
+ *
+ * A category with the switch off, or under a sector with it off, drops out of
+ * category matching. It had one reader before this, the service brief, which
+ * refused the brief outright; a goods RFQ into the same trade fanned out as if
+ * the switch did not exist.
+ *
+ * Only the fan-out. A supplier the buyer named is still a recipient, because
+ * sending an enquiry to a firm you chose is not a fan-out and nothing on the
+ * switch says otherwise.
+ */
+export async function rfqOpenCategoryIds(categoryIds: readonly string[]): Promise<string[]> {
+  if (categoryIds.length === 0) return [];
+  const rows = await prisma.category.findMany({
+    where: { id: { in: [...new Set(categoryIds)] } },
+    select: { id: true, acceptsRfq: true, parent: { select: { acceptsRfq: true } } },
+    orderBy: [{ id: "asc" }],
+  });
+  return rows.filter((row) => row.acceptsRfq && (row.parent?.acceptsRfq ?? true)).map((row) => row.id);
+}
+
 export async function findFanoutCandidates(
   request: FanoutRequest & { excludeBusinessIds?: readonly string[] },
   now: Date = new Date(),
@@ -113,6 +136,7 @@ export async function findFanoutCandidates(
   const since = monthStart(now);
 
   const pinned = [...(request.pinned ?? [])];
+  const open = await rfqOpenCategoryIds(request.categoryIds);
 
   const businesses = await prisma.business.findMany({
     where: {
@@ -122,7 +146,7 @@ export async function findFanoutCandidates(
         ? { id: { notIn: [...request.excludeBusinessIds] } }
         : {}),
       OR: [
-        { primaryCategoryId: { in: [...request.categoryIds] } },
+        { primaryCategoryId: { in: open } },
         /*
            An extra category only counts while its activity flag is clear.
 
@@ -141,7 +165,7 @@ export async function findFanoutCandidates(
         {
           categories: {
             some: {
-              categoryId: { in: [...request.categoryIds] },
+              categoryId: { in: open },
               unverifiedActivityAt: null,
             },
           },

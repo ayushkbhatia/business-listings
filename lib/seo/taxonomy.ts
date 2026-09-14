@@ -29,6 +29,8 @@ export interface TradeNode {
   verified: number;
   /** Whether this page clears the board 6f floors. */
   publishable: boolean;
+  /** Board 4d's switch for `/categories`. Read by `listedInIndex`, and by nothing that builds the sitemap. */
+  showInIndex: boolean;
 }
 
 export interface SectorNode extends TradeNode {
@@ -70,6 +72,7 @@ type Row = CategoryRules & {
   name: string;
   parentId: string | null;
   intro: string | null;
+  showInIndex: boolean;
 };
 
 function node(row: Row, counted: Counted): TradeNode {
@@ -81,6 +84,7 @@ function node(row: Row, counted: Counted): TradeNode {
     name: row.name,
     listings,
     verified,
+    showInIndex: row.showInIndex,
     publishable: evaluatePublish(
       { listings, verified, introWords: countWords(row.intro) },
       thresholdsFor(row),
@@ -106,6 +110,7 @@ export async function categoryIndex(): Promise<SectorNode[]> {
         name: true,
         parentId: true,
         intro: true,
+        showInIndex: true,
         ...CATEGORY_RULES_SELECT,
       },
     }),
@@ -126,6 +131,33 @@ export async function categoryIndex(): Promise<SectorNode[]> {
 }
 
 /**
+ * What `/categories` lists — board 4d.
+ *
+ * The index is one of two public surfaces a category appears on, and since
+ * board 4d it has its own switch (`B3`). This is the only reader of it. The
+ * sitemap keeps reading `categoryIndex` whole: holding a trade out of the index
+ * is a decision about what a buyer is shown, not about whether its page may be
+ * crawled, and one boolean doing both jobs is the defect the board corrected.
+ *
+ * Two rules, from the board's states table:
+ *
+ *   - **A sector at zero listings is out**, whatever its switch says: *"stays
+ *     in the tree, off the home grid and out of the index. A sector is a
+ *     taxonomy decision, not a supply one."* Computed from the count, never
+ *     stored.
+ *   - **A subcategory is out when its own switch is off.** Its sector being out
+ *     takes it out too, because it has no block to be listed in.
+ *
+ * A subcategory at zero listings stays. The index has listed thin
+ * subcategories deliberately since board 6c — see the page's own comment.
+ */
+export function listedInIndex(sectors: readonly SectorNode[]): SectorNode[] {
+  return sectors
+    .filter((sector) => sector.showInIndex && sector.listings > 0)
+    .map((sector) => ({ ...sector, children: sector.children.filter((child) => child.showInIndex) }));
+}
+
+/**
  * Whether one category's page clears the floors.
  *
  * Read by the subcategory route to decide `robots`. A thin page is not a 404 —
@@ -142,6 +174,7 @@ export async function isCategoryPublishable(categoryId: string): Promise<boolean
       name: true,
       parentId: true,
       intro: true,
+      showInIndex: true,
       ...CATEGORY_RULES_SELECT,
     },
   });

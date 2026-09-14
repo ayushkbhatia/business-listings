@@ -465,8 +465,10 @@ the screen is permanently empty above copy reading "Run the matcher after an imp
 
 ### Phase 5 · Taxonomy, facets and comparison — 4 boards
 
-- [ ] **5.1 `4d`** — `createCategory` does not exist; `parentId` is written by nothing outside the
-  seed; `slugCollision` has no production caller.
+- [x] **5.1 `4d`** — built. Tree and editor on `/admin/categories`: `createCategory`, the details
+  save, three switches, an address change and a merge, each audited with a reason. The header total
+  is the sum of the tree and is held equal to `1a`'s hero count. Category redirects are now served
+  on all four category routes — they had been written and never read.
 - [ ] **5.2 `10a`** — export-only. Two definitions of "suppliers in this trade" on one page.
 - [ ] **5.3 `10c`** — no facet rail of any kind on `/search`. Not a D3 problem.
 - [ ] **5.4 `10d`** — decide what `/compare` compares. The spec machinery exists in
@@ -586,7 +588,7 @@ the only large piece and the only one selling something it does not deliver.
 |---|---|---|---|---|---|
 | `4i` | Staff, roles & audit | built | medium | Staff screen, invitations, role changes and deactivation under one lock; the log filtered, paged, exported and append-only. | 7.1 |
 | `12e` | Plans, dunning, VAT | partial | medium | Seven caps are staff-editable with an audit row. Price is editable by nobody. | 6.1 |
-| `4d` | Category taxonomy | partial | large | `createCategory` does not exist; `parentId` is written by nothing outside the seed. | 5.1 |
+| `4d` | Category taxonomy | built | large | Tree, editor, add, merge with redirects, and one switch per public surface. Q1, Q4 and Q5 answered in code; the home-grid switch read-only per `6h`. | 5.1 |
 | `12a` | Licence-record importer | built | medium | Rows staged `needs_category` are terminal — nothing assigns them a category. Closed by 4.1. | 4.1 |
 | `12b` | Dedupe & merge | built | small | Pairs from the importer, three outcomes, bulk merge as a unit, tuning previewed, owner confirmation. Closed by 4.2. | 4.2 |
 | `4b` | Approval queue | built | medium | Six kinds, checks computed from tunable rules, bounded bulk bar, claims decided. Closed by 4.3. | 4.3 |

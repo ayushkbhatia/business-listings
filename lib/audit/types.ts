@@ -129,6 +129,14 @@ export const AUDIT_ACTIONS = [
   "homepage_slots_reordered",
   "homepage_query_added",
   "homepage_query_removed",
+  /*
+     Board 4d. A category brought into the tree and two folded into one. Their
+     own names rather than `taxonomy_changed`, because the log is asked "where
+     did this category come from" and "where did that one go", and an edit to a
+     display name answers neither.
+  */
+  "category_created",
+  "category_merged",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -186,6 +194,7 @@ export const ACTION_FOR_CAPABILITY = {
   "business.close": "closure_noticed",
   "notification.template.write": "notification_template_saved",
   "homepage.curate": "homepage_slot_featured",
+  "taxonomy.merge": "category_merged",
 } as const satisfies Partial<Record<Capability, AuditAction>>;
 
 export type AuditedCapability = keyof typeof ACTION_FOR_CAPABILITY;
@@ -263,6 +272,7 @@ export const PAIRED_ACTIONS = {
   ],
   "taxonomy.write": [
     "taxonomy_changed",
+    "category_created",
     "rule_proposed",
     "rule_approved",
     "rule_rejected",

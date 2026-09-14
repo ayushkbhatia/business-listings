@@ -11,6 +11,7 @@ import { faqJsonLd, landingFaq } from "@/lib/seo/faq";
 import { isCategoryPublishable } from "@/lib/seo/taxonomy";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { JsonLd } from "@/app/(public)/_json-ld";
+import { redirectIfMoved } from "@/lib/listing/redirect";
 import { Results } from "@/app/(public)/_results/Results";
 import { EmirateBreakdown, Faq, RelatedTrades, SpecChips } from "@/app/(public)/_landing/Blocks";
 
@@ -91,7 +92,11 @@ export default async function SubcategoryPage({ params, searchParams }: Props) {
   ]);
   // The subcategory has to actually belong to the parent in the URL, or two
   // routes address the same page and the canonical is a guess.
-  if (!parent || !category || category.parentId !== parent.id) notFound();
+  if (!parent || !category || category.parentId !== parent.id) {
+    // Board 4d `B7`: a renamed sector, a renamed subcategory, or a merge.
+    await redirectIfMoved(`/c/${parentSlug}/${sub}`);
+    notFound();
+  }
 
   const sp = await searchParams;
   const query = parseSearchQuery(sp);

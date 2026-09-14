@@ -61,7 +61,7 @@ test.describe("board 4a — the console overview", () => {
     // Built in steps 0 and 1.
     await expect(sidebar.getByRole("link", { name: "Platform overview" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Approval queue" })).toBeVisible();
-    await expect(sidebar.getByRole("link", { name: "Taxonomy" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Categories" })).toBeVisible();
     /*
      * Not yet. Named, not linked — the rule handoff 1 arrived at after the
      * seller sidebar shipped a dozen dead links.
@@ -153,55 +153,13 @@ test.describe("boards 4b, 4d and 4e", () => {
     }
   });
 
-  test("the taxonomy says which half of the floor a category failed", async ({ page }) => {
-    await page.goto("/admin/categories");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Taxonomy");
-
-    // The seed has 40 businesses against a floor of 60, so something is held.
-    await expect(page.getByText("Held back").first()).toBeVisible();
-    // And it says what is missing rather than only that something is.
-    await expect(page.getByText(/of 60/).first()).toBeVisible();
-  });
-
-  test("the taxonomy says how each trade is sold, and where that answer came from", async ({
-    page,
-  }) => {
-    /*
-       Board 4d-s. Three states, not two: a trade somebody decided about, one
-       following its sector, and one nobody has opened. The third is the reason
-       the column has no database default — a default would write "by the item"
-       into all 440 rows and make "decided" and "never looked at" the same fact.
-    */
-    await page.goto("/admin/categories");
-
-    /*
-       Matched on the row's OWN name cell, not on the row's accessible name.
-
-       A role name matches as a substring and a row's name is every cell in it,
-       so `getByRole("row", { name: /Legal, audit & business setup/ })` also
-       matched all 35 children — each of whose SOLD cell reads "From Legal,
-       audit & business setup". Thirty-six rows, and the first draft of this
-       test asserted against all of them.
-    */
-    const rowFor = (name: string) =>
-      page.locator("tbody tr").filter({ has: page.locator("td:first-child", { hasText: name }) });
-
-    // Set on its own row. The seed decides six; Legal is the clean sector.
-    const legal = rowFor("Legal, audit & business setup");
-    await expect(legal).toHaveCount(1);
-    await expect(legal.getByText("By the job")).toBeVisible();
-    await expect(legal.getByText("Set here")).toBeVisible();
-
-    // Inherited, and it names the sector it came from — which is what makes a
-    // row safe to skip when there are 440 of them to triage.
-    const inherited = rowFor("PRO services");
-    await expect(inherited).toHaveCount(1);
-    await expect(inherited.getByText(/From Legal, audit & business setup/)).toBeVisible();
-
-    // And the tally underneath is a query over the rows, never a constant.
-    await expect(page.getByText(/\d+ of \d+ trades are sold by the job/)).toBeVisible();
-  });
-
+  /*
+     The taxonomy tab's table — the publish floor per category, and how each
+     trade is sold — was replaced by board 4d's tree and editor. Both are
+     asserted in tests/e2e/admin-taxonomy.spec.ts: the floor lives on the page
+     matrix now, and the trade kind is drawn on the editor with where it came
+     from.
+  */
   test("the trade kind tab sorts the undecided to the top and says how many", async ({
     page,
   }) => {
@@ -295,13 +253,6 @@ test.describe("boards 4b, 4d and 4e", () => {
     await expect(dialog.getByRole("button", { name: "Change them" })).toBeDisabled();
   });
 
-  test("the taxonomy does not claim to measure intro words", async ({ page }) => {
-    // The copy belongs to the landing page, which is handoff 5. Counting it
-    // here would fail every category on a threshold this screen cannot see.
-    await page.goto("/admin/categories");
-    await expect(page.getByText(/Intro word count is not measurable here/)).toBeVisible();
-  });
-
   test("the spec library shows the version and who has cloned it", async ({ page }) => {
     await page.goto("/admin/spec-library");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Spec library");
@@ -332,16 +283,20 @@ test.describe("boards 4b, 4d and 4e", () => {
 });
 
 test.describe("what taxonomy.write gates", () => {
-  test("a moderator cannot reach the taxonomy or the spec library", async ({ browser }) => {
+  test("a moderator cannot reach the spec library, and reads the taxonomy without writing it", async ({ browser }) => {
     // §07 gives "edit taxonomy & spec templates" to ops lead alone.
     const context = await browser.newContext({
       storageState: "tests/e2e/.auth/staff-moderator.json",
     });
     const page = await context.newPage();
-    for (const path of ["/admin/categories", "/admin/spec-library"]) {
-      const response = await page.goto(path);
-      expect(response?.status(), path).toBe(404);
-    }
+    expect((await page.goto("/admin/spec-library"))?.status()).toBe(404);
+    /*
+       Board 4d split reading the tree from writing it (`taxonomy.read`): the
+       moderator deciding a category change needs the tree it is deciding
+       against. What they are not offered is asserted in admin-moderator.spec.ts.
+    */
+    expect((await page.goto("/admin/categories"))?.status()).toBe(200);
+    await expect(page.getByRole("button", { name: "Add category" })).toHaveCount(0);
     await context.close();
   });
 });

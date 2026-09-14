@@ -86,6 +86,9 @@ const STAFF_TABLE: [Capability, Staff[]][] = [
   ["claim.resolve", ["ops"]],
   ["business.verification_tier.write", ["ops"]],
   ["taxonomy.write", ["ops"]],
+  // Board 4d. Inferred; named in the inferred list below.
+  ["taxonomy.read", ["ops", "moderator"]],
+  ["taxonomy.merge", ["ops"]],
   ["storefront.template.write", ["ops"]],
   ["review.remove", ["ops"]],
   // Board 1m's reversible pause, one rung below the removal above it.
@@ -129,7 +132,8 @@ describe("staff roles match board 4i", () => {
   it("audits every staff row that changes state, ops lead included", () => {
     // §07: "Every ✓ in this table that changes state writes an AuditEvent with
     // a non-null reason. Ops lead has no exemption."
-    const readOnly = new Set<Capability>(["revenue.read", "audit.read"]);
+    // Board 4d's `taxonomy.read` reads the tree and changes nothing.
+    const readOnly = new Set<Capability>(["revenue.read", "audit.read", "taxonomy.read"]);
     for (const [capability] of STAFF_TABLE) {
       if (readOnly.has(capability)) continue;
       expect(CAPABILITIES[capability].audited, capability).toBe(true);
@@ -243,6 +247,11 @@ describe("every row cites the document", () => {
        `homepage.curate` joined on board 6h, whose Q5 names the gap: the screen
        borrowed `taxonomy.write`. Ops lead alone, the rung that owns the tier the
        four cards assert.
+
+       `taxonomy.read` and `taxonomy.merge` joined on board 4d. The page had been
+       gated on the write, so the moderator deciding a category change could not
+       see the tree it was deciding against. The merge is split out of the write
+       for Q4, "who may merge", so the answer is one row.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
@@ -260,6 +269,8 @@ describe("every row cites the document", () => {
       "review.hold",
       "staff.manage",
       "staff.read",
+      "taxonomy.merge",
+      "taxonomy.read",
     ]);
   });
 });

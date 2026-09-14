@@ -529,7 +529,29 @@ model Category {
   /// home page's sector gate until board 6h, which made "Browse by category" a
   /// rail that computes — by listing count — rather than one chosen by hand.
   showOnHome          Boolean    @default(false) @map("show_on_home")
+  /// Whether `/categories` lists this category — board `4d`.
+  ///
+  /// The second public surface's own switch (`B3`). A category appears on the
+  /// directory home and on the full index, and those are different pages with
+  /// different rules; one boolean for both is what drew the duplicate toggle on
+  /// the board's first export. The home rail reads the index's query, so a
+  /// category held out of the index is off the home grid too — the reverse is
+  /// not true.
+  ///
+  /// A sector with no public listings stays out of the index whatever this
+  /// says. That half is computed from the count, not stored.
+  showInIndex         Boolean    @default(true) @map("show_in_index")
+  /// Whether a buyer's RFQ fans out to the listings filed here — board `4d`.
+  ///
+  /// Read by `findFanoutCandidates`. Off takes the category out of category
+  /// matching; an enquiry to a supplier the buyer named still reaches them,
+  /// because that is not a fan-out.
   acceptsRfq          Boolean    @default(true) @map("accepts_rfq")
+  /// Whether a claim or a category change here needs a person — board `4d`.
+  ///
+  /// Read by the approval queue as the `licence_extra_check` check, which never
+  /// passes while this is on (own or the sector's), so bulk approve cannot act
+  /// on it. It had no reader at all before this board.
   requiresExtraCheck  Boolean    @default(false) @map("requires_extra_check")
   /// The landing page's own copy.
   ///

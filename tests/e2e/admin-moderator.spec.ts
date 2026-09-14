@@ -204,3 +204,26 @@ test.describe("board 12a — the importer is a moderator's, dedupe is not", () =
     expect(response?.status()).toBe(404);
   });
 });
+
+test.describe("board 4d — the taxonomy, read-only", () => {
+  /*
+     `taxonomy.read` is the moderator's: the tree is how they answer "why is
+     this seller filed there" while deciding a category change. `taxonomy.write`
+     and `taxonomy.merge` are not, so every control is drawn disabled with a
+     line saying whose decision it is, and the two header actions are absent.
+  */
+  test("opens the tree and the editor, and offers no change", async ({ page }) => {
+    const response = await page.goto("/admin/categories");
+    expect(response?.status()).toBe(200);
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Categories");
+
+    await expect(page.getByRole("button", { name: "Merge tool" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Add category" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Remove category" })).toHaveCount(0);
+    await expect(page.getByText("You can read this category. Changing it is an ops lead decision.")).toBeVisible();
+
+    const switches = page.getByRole("region", { name: "Visibility" }).getByRole("switch");
+    await expect(switches).toHaveCount(3);
+    for (const control of await switches.all()) await expect(control).toBeDisabled();
+  });
+});

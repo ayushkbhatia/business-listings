@@ -371,9 +371,13 @@ export async function sendServiceBrief(
 ): Promise<SendServiceBriefResult> {
   const category = await prisma.category.findUnique({
     where: { id: input.categoryId },
-    select: { id: true, name: true, acceptsRfq: true },
+    select: { id: true, name: true, acceptsRfq: true, parent: { select: { acceptsRfq: true } } },
   });
-  if (!category || !category.acceptsRfq) return { ok: false, error: "not_found" };
+  // The sector's switch as well as the trade's, the rule `rfqOpenCategoryIds`
+  // applies to the goods fan-out (board 4d).
+  if (!category || !category.acceptsRfq || category.parent?.acceptsRfq === false) {
+    return { ok: false, error: "not_found" };
+  }
 
   const firm = input.pinned ? await pinnedFirm(input.pinned) : null;
   if (input.pinned && !firm) return { ok: false, error: "not_found" };
