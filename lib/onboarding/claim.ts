@@ -1,5 +1,6 @@
 import "server-only";
 import type { Prisma } from "@/lib/db/generated/client";
+import { t } from "@/lib/i18n";
 import { prisma } from "@/lib/db/client";
 import type { Actor } from "@/lib/auth/roles";
 import { sameLicenceNumber } from "@/lib/verification/licence/number";
@@ -258,6 +259,13 @@ async function rankByName(
     SELECT b."id"
     FROM "business" b
     WHERE b."merged_into_id" IS NULL
+      /*
+         Board 11i. A closed business is not offered to somebody searching by
+         name. Its slug is reserved and its history belongs to buyers, so the
+         only way back to it is the licence it was closed under (Q2) — the
+         licence-number branch above still finds it, and says it is closed.
+      */
+      AND b."closure_requested_at" IS NULL
       AND (
         b."trade_name" % ${text}
         OR b."display_name" % ${text}
@@ -405,9 +413,19 @@ export async function submitClaim(
 ): Promise<ClaimResult> {
   const business = await prisma.business.findUnique({
     where: { id: input.businessId },
-    select: { id: true, claimStatus: true },
+    select: { id: true, claimStatus: true, closureRequestedAt: true },
   });
   if (!business) return { ok: false, error: "That listing cannot be found." };
+
+  /*
+     Board 11i. A claim attaches a seat the moment it is submitted, before staff
+     look at it — which is right for an unclaimed licence record and wrong for a
+     closed business, whose enquiry threads and reviews belong to buyers. A
+     closed business goes back to its licence holder only through an ops lead
+     who has checked that licence against the record (Q2), so it is refused
+     here, server-side, rather than only hidden from the search.
+  */
+  if (business.closureRequestedAt) return { ok: false, error: t("claim.closed_business") };
 
   if (input.route === "licence_upload" && !input.documentId) {
     return { ok: false, error: "Upload the trade licence before submitting." };

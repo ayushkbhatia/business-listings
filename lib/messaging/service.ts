@@ -38,7 +38,7 @@ export interface PostMessageInput {
 
 export type PostMessageResult =
   | { ok: true; messageId: string; flagged: boolean; reportId: string | null }
-  | { ok: false; error: "not_a_participant" | "empty" | "closed" };
+  | { ok: false; error: "not_a_participant" | "empty" | "closed" | "supplier_closed" };
 
 const MAX_BODY = 4000;
 
@@ -50,6 +50,7 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
     where: { enquiryId_businessId: { enquiryId: input.enquiryId, businessId: input.businessId } },
     select: {
       firstReplyAt: true,
+      business: { select: { closureRequestedAt: true } },
       enquiry: {
         select: { id: true, buyerId: true, closesAt: true, contactReleasedToBusinessId: true },
       },
@@ -57,6 +58,14 @@ export async function postMessage(input: PostMessageInput): Promise<PostMessageR
   });
   // Not a thread that exists, and not one you are on, are the same answer.
   if (!recipient) return { ok: false, error: "not_a_participant" };
+
+  /*
+     Board 11i build note B4. The thread stays readable to the buyer — it is
+     their record — but a message into it would reach nobody: every seat on a
+     closing business is revoked. Saying so beats accepting a message that
+     waits for a reply that cannot come.
+  */
+  if (recipient.business.closureRequestedAt) return { ok: false, error: "supplier_closed" };
 
   const enquiry = recipient.enquiry;
   if (input.sender === "buyer" && enquiry.buyerId !== input.senderId) {

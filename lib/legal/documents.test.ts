@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatDate } from "@/lib/format";
-import { cookiesDocument, privacyDocument, termsDocument } from "./documents";
+import { CLOSURE_AMENDMENT_FROM, cookiesDocument, privacyDocument, termsDocument } from "./documents";
 import type { LegalDocument } from "./documents";
 import { COOKIE_REGISTER } from "./cookie-register";
 import { LEGAL_PAGES } from "./pages";
@@ -156,5 +156,47 @@ describe("cookies", () => {
       .map((row) => row.cells[0]);
 
     expect(printed).toEqual(COOKIE_REGISTER.map((cookie) => cookie.name));
+  });
+});
+
+describe("board 11i's amendment", () => {
+  /*
+     Terms §14: a material change is announced on the site before it takes
+     effect, and the earlier wording stays on the page with its dates. The
+     amendment overturns a promise the Terms made about closure, so both halves
+     of that rule are asserted rather than trusted to a rail somebody reads.
+  */
+  const before = new Date(CLOSURE_AMENDMENT_FROM.getTime() - 1);
+  const after = CLOSURE_AMENDMENT_FROM;
+
+  it("announces the change and keeps today's wording until the date", () => {
+    const doc = termsDocument(before);
+    const clause = doc.sections.find((section) => section.number === "11")!;
+    expect(JSON.stringify(clause.blocks)).toContain("stays published, unclaimed");
+    expect(doc.pendingChange?.effectiveFrom).toEqual(CLOSURE_AMENDMENT_FROM);
+    expect(doc.previousChange).toBeNull();
+  });
+
+  it("applies the new wording on the date and keeps the old one as the previous version", () => {
+    const doc = termsDocument(after);
+    const clause = doc.sections.find((section) => section.number === "11")!;
+    expect(JSON.stringify(clause.blocks)).not.toContain("stays published, unclaimed");
+    expect(JSON.stringify(clause.blocks)).toContain("never given to another business");
+    expect(doc.effectiveFrom).toEqual(CLOSURE_AMENDMENT_FROM);
+    expect(doc.previousChange?.items[0]?.before).toContain("stays published, unclaimed");
+    expect(doc.pendingChange).toBeNull();
+  });
+
+  it("dates the meta line from the wording in force, not from a literal", () => {
+    expect(termsDocument(before).metaLine).toContain(formatDate(new Date(Date.UTC(2026, 8, 4))));
+    expect(termsDocument(after).metaLine).toContain(formatDate(CLOSURE_AMENDMENT_FROM));
+    expect(privacyDocument(after).metaLine).toContain(formatDate(CLOSURE_AMENDMENT_FROM));
+  });
+
+  it("gives the announcement at least the fourteen days §14 promises from 15 September", () => {
+    // If the account-holder message goes out later than this, the date moves.
+    const announced = new Date(Date.UTC(2026, 8, 15));
+    const days = (CLOSURE_AMENDMENT_FROM.getTime() - announced.getTime()) / 86_400_000;
+    expect(days).toBeGreaterThanOrEqual(14);
   });
 });

@@ -329,12 +329,44 @@ describe("criterion 5 — weights reorder live results", () => {
   }, 60_000);
 });
 
+/**
+ * A published business nothing is boosting, chosen the same way every run.
+ *
+ * The budget is per business and counts category boosts it falls under, so a
+ * test that asserts "20 then 10 is refused" or "an 8-point boost is written"
+ * silently depends on the pick starting at zero. It did not: the seed boosts
+ * one business by 8 and its category by 15, and an unordered `findFirst`
+ * returned exactly that business whenever the heap happened to put it first —
+ * 23 of 25 points spent before the test began. Excluding every live target, and
+ * every category holding one, makes the precondition true rather than likely.
+ */
+async function unboostedBusiness() {
+  const live = await prisma.listingBoost.findMany({
+    where: { expiresAt: { gt: new Date() } },
+    select: { businessId: true, categoryId: true },
+  });
+  const businesses = live.flatMap((boost) => (boost.businessId ? [boost.businessId] : []));
+  const categories = new Set(live.flatMap((boost) => (boost.categoryId ? [boost.categoryId] : [])));
+  for (const member of await prisma.business.findMany({
+    where: { id: { in: businesses } },
+    select: { primaryCategoryId: true },
+  })) {
+    categories.add(member.primaryCategoryId);
+  }
+  return prisma.business.findFirstOrThrow({
+    where: {
+      publishedAt: { not: null },
+      id: { notIn: businesses },
+      primaryCategoryId: { notIn: [...categories] },
+    },
+    orderBy: { id: "asc" },
+    select: { id: true, primaryCategoryId: true },
+  });
+}
+
 describe("criterion 5 — a boost needs a reason and an expiry", () => {
   it("writes one, and the reason is on the row rather than only in the audit log", async () => {
-    const business = await prisma.business.findFirstOrThrow({
-      where: { publishedAt: { not: null } },
-      select: { id: true },
-    });
+    const business = await unboostedBusiness();
 
     const result = await boostListing({
       actor: actor(opsLeadId, "staff_ops_lead"),

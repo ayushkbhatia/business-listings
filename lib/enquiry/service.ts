@@ -793,7 +793,9 @@ export type AcceptQuoteResult =
         /** Lost, expired by the sweep, or a draft — not a quote a buyer holds. */
         | "not_open"
         /** The supplier has sent a later revision; accept that one. */
-        | "revised";
+        | "revised"
+        /** Board 11i. The supplier closed their account. */
+        | "supplier_closed";
     };
 
 /**
@@ -831,6 +833,7 @@ export async function acceptQuote(
       revision: true,
       status: true,
       expiresAt: true,
+      business: { select: { closureRequestedAt: true } },
       enquiry: { select: { id: true, buyerId: true, contactReleasedToBusinessId: true } },
     },
   });
@@ -843,6 +846,13 @@ export async function acceptQuote(
   if (quote.expiresAt && quote.expiresAt.getTime() < now.getTime()) {
     return { ok: false, error: "quote_expired" };
   }
+  /*
+     Board 11i. Accepting releases the buyer's contact details to a supplier and
+     tells every other supplier the enquiry is closed — to a business with no
+     team left to receive them. An owner cannot close with a quote outstanding
+     (B1), but a platform closure can take effect over one.
+  */
+  if (quote.business.closureRequestedAt) return { ok: false, error: "supplier_closed" };
 
   const accepted = await prisma.$transaction(async (tx) => {
     /*

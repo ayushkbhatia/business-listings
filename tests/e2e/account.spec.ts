@@ -247,11 +247,11 @@ test.describe("board 11h — cancel, step 1", () => {
     await expect(page.locator("main")).toContainText(/the oldest stay live/);
   });
 
-  test("names the fork without linking to a route that does not exist", async ({ page }) => {
-    // Build note B5. `11i` is not drawn and is blocked; a live link to it is
-    // the defect corrected on `11d` and `11g`.
+  test("names the fork and links to the close-account board", async ({ page }) => {
+    // Build note B5. This pinned the absence of a link while `11i` was unbuilt;
+    // board 11i built the route, so the fork now leads somewhere real.
     await expect(page.locator("main")).toContainText(/Closing the account removes it altogether/);
-    await expect(page.locator('main a[href*="/account/close"]')).toHaveCount(0);
+    await expect(page.locator('main a[href="/dashboard/account/close"]')).toHaveCount(1);
   });
 
   test("makes no retention offer", async ({ page }) => {
@@ -311,11 +311,16 @@ test.describe("board 11j — reason and confirm", () => {
   });
 
   test("turns the closing reason into a fork that cancels nothing", async ({ page }) => {
-    // Criterion 7. The confirm button is replaced rather than relabelled, and
-    // it is inert because `11i` does not exist.
+    // Criterion 7. The confirm button is replaced rather than relabelled. It was
+    // inert while `11i` did not exist; it is a link to that board now, and
+    // still never a submit — nothing is cancelled from this screen.
     await page.getByRole("radio", { name: /The business is closing/ }).check();
     await expect(page.getByRole("button", { name: /Cancel from / })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Continue to close account" })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Continue to close account" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Continue to close account" })).toHaveAttribute(
+      "href",
+      "/dashboard/account/close",
+    );
   });
 
   test("restates step 1 under the date, with one back label", async ({ page }) => {
@@ -477,6 +482,57 @@ test.describe("board 3l — analytics", () => {
     */
     const text = (await page.locator("main").textContent()) ?? "";
     expect(text).not.toMatch(/you stock/i);
+  });
+
+  test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+test.describe("board 11i — close account", () => {
+  /*
+     Read-only, and deliberately. The seat is `al-marwan-industrial-supplies-llc`
+     on Pro, which the rest of this file depends on — a test that pressed the
+     button would revoke that seat for every spec after it. The request, the
+     reversal and the sweep are covered against a real database in
+     tests/integration/close-account.test.ts; this covers what a seller sees.
+  */
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/dashboard/account/close");
+  });
+
+  test("puts cancelling beside closing, before anything else", async ({ page }) => {
+    await expect(page.getByRole("heading", { level: 1, name: "Close account" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Cancel the plan" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Cancel the plan instead" })).toHaveAttribute(
+      "href",
+      "/dashboard/billing/cancel",
+    );
+  });
+
+  test("blocks on the Pro subscription and says why, with the route out", async ({ page }) => {
+    // Criterion 1's visible half. The server half is in the integration suite.
+    await expect(page.getByText(/Pro subscription is active until/)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Go to cancel" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Request closure/ })).toBeDisabled();
+  });
+
+  test("renders the consequences as a real table, one row per area", async ({ page }) => {
+    const table = page.getByRole("table", { name: "What happens when you close" });
+    await expect(table).toBeVisible();
+    await expect(table.getByRole("columnheader")).toHaveCount(3);
+    // Eight areas: three that leave, five that are kept. Counted, not trusted.
+    await expect(table.getByRole("rowheader")).toHaveCount(8);
+    // Exact: a row's body opens "Reserved, not released.", and a substring
+    // match counts the sentence as well as the badge.
+    await expect(table.getByText("Retained", { exact: true })).toHaveCount(4);
+    await expect(table.getByText("Reserved", { exact: true })).toHaveCount(1);
+  });
+
+  test("sends a blocked seller back from the confirmation step", async ({ page }) => {
+    await page.goto("/dashboard/account/close/confirm");
+    await expect(page).toHaveURL(/\/dashboard\/account\/close$/);
   });
 
   test("is axe clean", async ({ page }) => {

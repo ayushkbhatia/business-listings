@@ -3,7 +3,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { CredentialTable } from "@/components/domain/CredentialTable";
 import { getBusinessBySlug } from "@/lib/db/queries";
-import { absorbedInto, redirectIfMoved } from "@/lib/listing/redirect";
+import { absorbedInto, redirectIfClosed, redirectIfMoved } from "@/lib/listing/redirect";
 import { navPages } from "@/lib/storefront/pages";
 import { storefrontCredentials } from "@/lib/storefront/services";
 import { storefrontTabs } from "@/lib/storefront/tabs";
@@ -52,6 +52,8 @@ export default async function StorefrontCredentialsPage({ params }: Params) {
   const business = await getBusinessBySlug(slug);
   if (!business) {
     await redirectIfMoved(`/b/${slug}/credentials`);
+    // Board 11i: a closed business's subpages go to its notice.
+    await redirectIfClosed(slug);
     notFound();
   }
   const movedTo = await absorbedInto(slug);

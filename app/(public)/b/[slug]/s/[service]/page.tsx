@@ -16,6 +16,7 @@ import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { PageEvent } from "@/components/telemetry";
 import { composerOptions } from "../../_services";
 import { ServiceEnquireDrawer } from "../../ServiceEnquireDrawer";
+import { redirectIfClosed } from "@/lib/listing/redirect";
 
 /**
  * Board `1g-s` — service detail, and the scope table where the spec table was.
@@ -97,6 +98,8 @@ export default async function ServiceDetailPage({ params }: Params) {
     */
     const business = await getBusinessBySlug(slug);
     if (business) permanentRedirect(`/b/${slug}`);
+    // Board 11i: a closed business's product and service pages go to its notice.
+    await redirectIfClosed(slug);
     notFound();
   }
 

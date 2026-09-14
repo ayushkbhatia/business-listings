@@ -374,7 +374,9 @@ The pattern underneath all five: **a sale with no ledger row.**
   downgrade, waitlist writer, the emirate dimension.
 - [ ] **6.4 `4h`** — the off-platform panel has no control and no outcome path. Four of seven
   report kinds have no producer.
-- [ ] **6.5 `11i`** — the closure and retention promises the legal pages already publish.
+- [x] **6.5 `11i`** — the closure and retention promises the legal pages already publish.
+  Closure is a reversible status transition with a 14-day window; the platform half (B8) runs
+  nightly. Two retention halves are not built — see `docs/platform-state.md`.
 
 ### Phase 7 · The console learns to run itself — 7 boards
 

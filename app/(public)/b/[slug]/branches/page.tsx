@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound, permanentRedirect } from "next/navigation";
-import { redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
+import { redirectIfClosed, redirectIfMoved, absorbedInto } from "@/lib/listing/redirect";
 import { Breadcrumb, PublicShell } from "@/components/structure";
 import { StatusBadge } from "@/components/display";
 import { getBusinessBySlug } from "@/lib/db/queries";
@@ -90,6 +90,8 @@ export default async function BranchesPage({ params }: Params) {
      * handoff 4 step 2.
      */
     await redirectIfMoved(`/b/${slug}`);
+    // Board 11i: a closed business's subpages go to its notice.
+    await redirectIfClosed(slug);
     notFound();
   }
 

@@ -16,6 +16,12 @@ import {
   type SuspendResult,
 } from "@/lib/business/service";
 import { EXPIRED_LICENCE_TIER } from "@/lib/verification";
+import {
+  giveLicenceLapseNotice,
+  reopenClosedBusiness,
+  withdrawClosure,
+} from "@/lib/closure/service";
+import { revalidateClosure } from "@/lib/closure/revalidate";
 import { formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 
@@ -144,6 +150,82 @@ export async function lift(formData: FormData): Promise<ActionResult> {
     if (!result.ok) return { ok: false, error: liftRefusal(result) };
     done();
     return { ok: true, message: t("admin.businesses.lifted") };
+  } catch (error) {
+    return refused(error);
+  }
+}
+
+/**
+ * Board 11i build note B8 — notice that a listing will close because its
+ * licence lapsed. Nothing comes down today; the seller is told first.
+ */
+export async function giveNotice(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const result = await giveLicenceLapseNotice({
+      actor: seat.actor,
+      businessId: String(formData.get("businessId") ?? ""),
+      reason: String(formData.get("reason") ?? ""),
+    });
+    if (!result.ok) {
+      return {
+        ok: false,
+        error: t(`admin.businesses.closure.error.${result.error}` as "admin.businesses.closure.error.not_found"),
+      };
+    }
+    done();
+    return {
+      ok: true,
+      message: result.emailDelivered
+        ? t("admin.businesses.closure.noticed", { date: formatDate(result.effectiveAt) })
+        : t("admin.businesses.closure.noticed_unsent", { date: formatDate(result.effectiveAt) }),
+    };
+  } catch (error) {
+    return refused(error);
+  }
+}
+
+/** Withdraw an open notice or closure, restoring the listing if it came down. */
+export async function withdraw(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const result = await withdrawClosure({
+      actor: seat.actor,
+      businessId: String(formData.get("businessId") ?? ""),
+      reason: String(formData.get("reason") ?? ""),
+    });
+    if (!result.ok) {
+      return {
+        ok: false,
+        error: t(`admin.businesses.closure.error.${result.error}` as "admin.businesses.closure.error.not_found"),
+      };
+    }
+    if (result.restored) revalidateClosure(result.slug);
+    done();
+    return { ok: true, message: t("admin.businesses.closure.withdrawn") };
+  } catch (error) {
+    return refused(error);
+  }
+}
+
+/** Q2 — reopen a closed business for the same licence holder, by their email. */
+export async function reopen(formData: FormData): Promise<ActionResult> {
+  const seat = await requireStaff();
+  try {
+    const result = await reopenClosedBusiness({
+      actor: seat.actor,
+      businessId: String(formData.get("businessId") ?? ""),
+      ownerEmail: String(formData.get("ownerEmail") ?? ""),
+      reason: String(formData.get("reason") ?? ""),
+    });
+    if (!result.ok) {
+      return {
+        ok: false,
+        error: t(`admin.businesses.closure.error.${result.error}` as "admin.businesses.closure.error.not_found"),
+      };
+    }
+    done();
+    return { ok: true, message: t("admin.businesses.closure.reopened") };
   } catch (error) {
     return refused(error);
   }

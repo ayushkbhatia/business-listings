@@ -51,7 +51,16 @@ export type AuditAction =
   | "rule_proposed"
   | "rule_approved"
   | "rule_rejected"
-  | "rule_withdrawn";
+  | "rule_withdrawn"
+  /*
+     Board 11i build note B8 and Q2. Three rows under one capability, because
+     the log has to say which happened: a notice given is a business told it
+     will close, a withdrawal undoes a notice or a closure inside its window,
+     and a reopening restores a business whose closure was already final.
+  */
+  | "closure_noticed"
+  | "closure_withdrawn"
+  | "closure_reopened";
 
 /**
  * Every audited capability maps to exactly one action, so a staff mutation
@@ -88,6 +97,7 @@ export const ACTION_FOR_CAPABILITY = {
   "search.ranking.write": "ranking_changed",
   "storefront.template.write": "storefront_template_changed",
   "enquiry.read_other_business": "cross_business_read",
+  "business.close": "closure_noticed",
 } as const satisfies Partial<Record<Capability, AuditAction>>;
 
 export type AuditedCapability = keyof typeof ACTION_FOR_CAPABILITY;
@@ -128,6 +138,7 @@ export const PAIRED_ACTIONS = {
      opposite of what occurred.
   */
   "report.resolve": ["report_resolved", "review_dispute_resolved", "incentive_logged"],
+  "business.close": ["closure_noticed", "closure_withdrawn", "closure_reopened"],
   "taxonomy.write": [
     "taxonomy_changed",
     "rule_proposed",

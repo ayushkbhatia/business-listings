@@ -11,6 +11,7 @@ import { Position } from "./_sections/Position";
 import { Ranking } from "./_sections/Ranking";
 import { Ingest } from "./_sections/Ingest";
 import { Reviews } from "./_sections/Reviews";
+import { CloseAccountGallery } from "./_sections/CloseAccount";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
 import { ServiceBriefGallery } from "./_sections/ServiceBrief";
 import { AcceptedRecordGallery } from "./_sections/AcceptedRecord";
@@ -253,6 +254,7 @@ export default function Gallery() {
       <Billing />
 
       <Reviews />
+      <CloseAccountGallery />
       <ServicesStorefrontGallery />
       <ServiceBriefGallery />
       <AcceptedRecordGallery />

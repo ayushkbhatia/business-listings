@@ -136,6 +136,9 @@ export const assertCanManageTeam = (a: Actor) => assertCan(a, "team.manage");
 export const mayManageTeam = (a: Actor) => can(a, "team.manage");
 
 export const assertCanChangePlan = (a: Actor) => assertCan(a, "plan.change");
+/** Board 11i. Owner only — Q4. */
+export const assertCanCloseAccount = (a: Actor) => assertCan(a, "account.close");
+export const mayCloseAccount = (a: Actor) => can(a, "account.close");
 export const mayChangePlan = (a: Actor) => can(a, "plan.change");
 
 export const assertCanBuyPlacement = (a: Actor) => assertCan(a, "placement.purchase");

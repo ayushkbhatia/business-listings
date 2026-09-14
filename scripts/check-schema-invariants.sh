@@ -211,4 +211,45 @@ if grep -qE '^[[:space:]]*model[[:space:]]+ListingBoost[[:space:]]*\{' <<<"$CODE
   fi
 fi
 
+# Board 11i. A closure is a status transition with a history row, and four of
+# its invariants are ones Prisma has no syntax for.
+#
+#   - One open closure per business, by a partial unique index. A plain unique
+#     index on business_id would forbid closing a business that was reopened.
+#   - A closure ends one way: reversed or final, never both.
+#   - A business under closure is unpublished. `published_at` is what 118 public
+#     reads check, so a closure that left it set is a listing buyers still find.
+#   - A final closure was requested first.
+if grep -qE '^[[:space:]]*model[[:space:]]+BusinessClosure[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE 'CREATE UNIQUE INDEX[^;]*"business_closure_one_open"' prisma/migrations; then
+    echo "   pass — one open closure per business, by partial unique index"
+  else
+    echo "   FAIL — business_closure has lost its one-open index."
+    echo "          Two tabs could each open a closure with its own final date and token."
+    fail=1
+  fi
+
+  if grep -rqE '"business_closure_ends_once"' prisma/migrations; then
+    echo "   pass — a closure is reversed or final, never both"
+  else
+    echo "   FAIL — business_closure has lost its ends-once check."
+    fail=1
+  fi
+
+  if grep -rqE '"business_closure_unpublishes"' prisma/migrations; then
+    echo "   pass — a business under closure cannot also be published"
+  else
+    echo "   FAIL — business has lost its closure-unpublishes check."
+    echo "          A closure that left published_at set keeps the listing in search."
+    fail=1
+  fi
+
+  if grep -rqE '"business_closed_after_requested"' prisma/migrations; then
+    echo "   pass — a closed business was requested closed first"
+  else
+    echo "   FAIL — business has lost its closed-after-requested check."
+    fail=1
+  fi
+fi
+
 exit $fail

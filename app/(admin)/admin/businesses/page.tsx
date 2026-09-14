@@ -1,11 +1,11 @@
 import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
 import { prisma } from "@/lib/db/client";
-import { formatCount } from "@/lib/format";
+import { formatCount, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { BusinessTable, type BusinessRow } from "./BusinessTable";
-import { lift, setTier, suspend } from "./actions";
+import { giveNotice, lift, reopen, setTier, suspend, withdraw } from "./actions";
 
 /**
  * Board 4f — businesses and account health.
@@ -55,6 +55,15 @@ export default async function BusinessesPage() {
         claimStatus: true,
         suspendedAt: true,
         mergedIntoId: true,
+        licenceExpiry: true,
+        closureRequestedAt: true,
+        closedAt: true,
+        // Board 11i. At most one open closure per business, by index.
+        closures: {
+          where: { reversedAt: null, finalisedAt: null },
+          select: { initiator: true, appliedAt: true, effectiveAt: true, finalAt: true },
+          take: 1,
+        },
       },
     }),
     getAdminNavBadges(seat),
@@ -75,6 +84,8 @@ export default async function BusinessesPage() {
   */
   const mayTier = can(seat.actor, "business.verification_tier.write");
   const maySuspend = can(seat.actor, "business.suspend");
+  const mayClose = can(seat.actor, "business.close");
+  const now = new Date();
 
   const rows: BusinessRow[] = businesses.map((business) => ({
     id: business.id,
@@ -83,15 +94,28 @@ export default async function BusinessesPage() {
     tier: business.verificationTier,
     replyMs: business.responseTimeMedianMs,
     strength: business.profileStrength,
+    /*
+       Closure sits under suspension and merge in the precedence, and above
+       claim status: a closed business is out of the directory whatever its
+       claim says, and reading it as `live` on the one screen that can reopen it
+       would hide the only row an ops lead came here to find.
+    */
     state: business.suspendedAt
       ? "suspended"
       : business.mergedIntoId
         ? "merged"
-        : business.claimStatus === "unclaimed"
-          ? "unclaimed"
-          : "live",
+        : business.closedAt
+          ? "closed"
+          : business.closureRequestedAt
+            ? "closing"
+            : business.claimStatus === "unclaimed"
+              ? "unclaimed"
+              : "live",
     mayTier,
     maySuspend,
+    mayClose,
+    closure: closureOf(business.closures[0] ?? null),
+    licenceLapsed: business.licenceExpiry.getTime() <= now.getTime(),
   }));
 
   return (
@@ -116,7 +140,25 @@ export default async function BusinessesPage() {
         </span>
       }
     >
-      <BusinessTable rows={rows} setTier={setTier} suspend={suspend} lift={lift} />
+      <BusinessTable
+        rows={rows}
+        setTier={setTier}
+        suspend={suspend}
+        lift={lift}
+        giveNotice={giveNotice}
+        withdraw={withdraw}
+        reopen={reopen}
+      />
     </AdminPage>
   );
+}
+
+/** Board 11i. What the decision strip needs to know about an open closure. */
+function closureOf(
+  closure: { initiator: "owner" | "platform"; appliedAt: Date | null; effectiveAt: Date; finalAt: Date } | null,
+): BusinessRow["closure"] {
+  if (!closure) return null;
+  return closure.appliedAt
+    ? { kind: "closing", date: formatDate(closure.finalAt) }
+    : { kind: "notice", date: formatDate(closure.effectiveAt) };
 }

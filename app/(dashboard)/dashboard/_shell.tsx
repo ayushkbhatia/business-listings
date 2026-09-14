@@ -1,12 +1,13 @@
 import "server-only";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { AppSidebar, DashboardShell, PageHeader, resolveNav } from "@/components/structure";
 import { dashboardNavFor } from "@/components/structure/nav-config";
 import type { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { actorFromDevSeller, devSellerRequest } from "@/lib/auth/dev-seller";
 import { getActor } from "@/lib/auth/session";
+import { openClosureOwnedBy } from "@/lib/closure/service";
 import { currentSession, minutesLeft } from "@/lib/support/view-as";
 import { isStaff, type Actor } from "@/lib/auth/roles";
 import { setupChrome, type SetupChrome } from "@/lib/setup/service";
@@ -193,7 +194,18 @@ export async function getSellerSeat(): Promise<SellerSeat | null> {
 /** The seat, or a 404. Every dashboard page starts here. */
 export async function requireSellerSeat(): Promise<SellerSeat> {
   const seat = await getSellerSeat();
-  if (!seat) notFound();
+  if (!seat) {
+    /*
+       Board 11i. Closing an account revokes the owner's seat along with
+       everybody else's, so an owner who signs in again during the cooling-off
+       window arrives here with no business — and the one screen they need is
+       the reversal screen, not a 404. Checked only on the no-seat path, so a
+       seated request pays nothing for it.
+    */
+    const actor = await getActor();
+    if (actor && (await openClosureOwnedBy(actor.id))) redirect("/dashboard/account/close");
+    notFound();
+  }
   return seat;
 }
 

@@ -46,6 +46,7 @@ from the pre-pivot board is **deleted**, not renamed — there is no order entit
 | See invoices & billing | ✓ | — | — | ✓ |
 | Buy sponsored placement | ✓ | — | — | ✓ |
 | Change plan or cancel | ✓ | — | — | — |
+| Close the account | ✓ | — | — | — |
 | Invite or remove team members | ✓ | ✓ | — | — |
 | Set lead routing rules | ✓ | ✓ | — | — |
 
@@ -96,15 +97,18 @@ Ops lead has no exemption.
 
 ### Rows this document does not contain
 
-Three capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
-row for them. `tests/unit/permission-matrix.test.ts` names all of them, so adding a fourth is
-a deliberate edit rather than a quiet default.
+Seven capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
+row for them, or departs from the row it has. `tests/unit/permission-matrix.test.ts` names all
+seven, so adding an eighth is a deliberate edit rather than a quiet default. The four below are
+the ones with no row at all; `business.verification_tier.write`, `review.dispute` and
+`staff.manage` are explained where the test names them.
 
 | Capability | Held at | Why, and which way it errs |
 |---|---|---|
 | `business.merge` | ops lead | A merge rewrites slugs and creates 301s, so it is not reversible the way a removal is. |
 | `question.remove` | ops lead | A product question carries a buyer's published words. Same decision as removing a review, so the same rung — erring **higher**. |
 | `review.hold` | ops lead · moderator | Board 1m's held state, and the only one that errs **lower**. A hold is reversible and a removal is not; putting the reversible pause out of a moderator's reach would push them towards the irreversible control. It writes `review_held` and `review_released` — two actions, because a release logged as a hold hides what happened. |
+| `business.close` | ops lead | Board 11i's platform-initiated closure (build note B8): notice for a lapsed licence, withdrawing an open closure, and reopening a final one for a named owner. Closure takes a business out of the directory and ends every seat's session, so it sits with suspension — erring **higher**. It writes `closure_noticed`, `closure_withdrawn` and `closure_reopened`. |
 
 If §07 gains a row for any of these, the row wins and the `source` becomes `stated`.
 

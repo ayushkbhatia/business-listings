@@ -23,6 +23,7 @@ import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
 import { EnquiryCard, SpecRequestButton } from "./_enquiry-card";
 import { ProductEnquiryProvider } from "./_enquiry-context";
+import { redirectIfClosed } from "@/lib/listing/redirect";
 
 /**
  * Board 1g — product detail & spec table.
@@ -131,6 +132,8 @@ export default async function ProductPage({ params }: Params) {
     */
     const business = await getBusinessBySlug(slug);
     if (business) permanentRedirect(`/b/${slug}`);
+    // Board 11i: a closed business's product and service pages go to its notice.
+    await redirectIfClosed(slug);
     notFound();
   }
 
