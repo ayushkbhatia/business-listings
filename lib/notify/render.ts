@@ -17,6 +17,8 @@
  * Pure. No database, no network.
  */
 
+import { isForbiddenParam } from "./params";
+
 export interface RenderInput {
   body: string;
   subject?: string | null;
@@ -56,6 +58,23 @@ export class MissingParamError extends Error {
         "A notification with a hole in it is worse than one that did not send.",
     );
     this.name = "MissingParamError";
+  }
+}
+
+/**
+ * A placeholder whose **name** can only carry contact details or a buyer's
+ * quote count. Board 12g `B3`: enforced where the template is filled, not by a
+ * reviewer remembering — a template saved before the editor refused the name,
+ * or written straight to the table, still cannot send one.
+ */
+export class ForbiddenPlaceholderError extends Error {
+  readonly code = "notification_forbidden_placeholder";
+  constructor(readonly placeholder: string) {
+    super(
+      `Refusing to render a notification: {${placeholder}} names a buyer's contact details or quote count. ` +
+        "Board 7c releases contact details on acceptance and nowhere before.",
+    );
+    this.name = "ForbiddenPlaceholderError";
   }
 }
 
@@ -120,7 +139,11 @@ export function placeholdersIn(input: RenderInput): string[] {
  * carrying a phone number breaks the promise the whole product rests on.
  */
 export function render(input: RenderInput, params: RenderParams): Rendered {
+  for (const name of placeholdersIn(input)) {
+    if (isForbiddenParam(name)) throw new ForbiddenPlaceholderError(name);
+  }
   for (const [key, raw] of Object.entries(params)) {
+    if (isForbiddenParam(key)) throw new ForbiddenPlaceholderError(key);
     const value = String(raw);
     const kind = contactShape(value);
     if (kind) throw new NotificationLeakError(key, kind);

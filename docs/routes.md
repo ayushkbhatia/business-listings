@@ -188,7 +188,10 @@ and it is the one that argues back.
 /admin/reports                          Supplier reports & flags              [4h]  built h4s3
 /admin/reports/:id                      Report evidence — the thread attached [7c]  built h7c
 /admin/support                          Support desk & view-as               [12f]  built h4s4
-/admin/notifications                    Notification templates              [12g]  built h4s7
+/admin/notifications                    Notification templates              [12g]  built 12g
+/admin/notifications/channels           Carrier per channel, 30-day health   [12g]  built 12g
+/admin/notifications/deliveries         Delivery log, keyset-paged           [12g]  built 12g
+/admin/notifications/quiet-hours        Quiet hours as applied, read-only    [12g]  built 12g
 /admin/strings                          Localisation                         [12g]  built h4s7
 /admin/content/matrix                   Page matrix & content ops             [6f]  built h5s2
 /admin/content/lists                    Curated lists index               [6b, 6f]  built h5s2

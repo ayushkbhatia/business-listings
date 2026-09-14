@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  EVENT_AUDIENCE,
   EVENT_PARAMS,
+  EVENT_SOURCES,
   isEmitted,
+  isForbiddenParam,
+  sampleParams,
   paramsFor,
   placeholdersIn,
   unknownPlaceholders,
@@ -170,5 +174,38 @@ describe("catching the hole before it sends", () => {
 
   it("passes a template with no placeholders at all", () => {
     expect(unknownPlaceholders("weekly_digest", "Your weekly digest is ready.")).toEqual([]);
+  });
+});
+
+describe("board 12g — who sends each event, and what it may never carry", () => {
+  it("names a sender for every event that declares params, and none for one that does not (B6)", () => {
+    for (const event of Object.keys(EVENT_PARAMS) as (keyof typeof EVENT_PARAMS)[]) {
+      expect(EVENT_SOURCES[event].length > 0, event).toBe(isEmitted(event));
+    }
+  });
+
+  it("gives every event an audience", () => {
+    expect(Object.keys(EVENT_AUDIENCE).sort()).toEqual(Object.keys(EVENT_PARAMS).sort());
+  });
+
+  it("declares no param whose name could carry contact details or a buyer's quote count (B3)", () => {
+    for (const names of Object.values(EVENT_PARAMS)) {
+      for (const name of names) expect(isForbiddenParam(name), name).toBe(false);
+    }
+  });
+
+  it("refuses the names a careless template reaches for", () => {
+    for (const name of ["buyerPhone", "buyerEmail", "buyerCompany", "mobile", "whatsappNumber", "contact", "deliveryAddress", "buyerQuoteCount", "quotesReceived"]) {
+      expect(isForbiddenParam(name), name).toBe(true);
+    }
+    // A seller's own count of quotes sent is theirs to know.
+    expect(isForbiddenParam("quoteCount")).toBe(false);
+  });
+
+  it("has a sample for every param an event declares", () => {
+    for (const event of Object.keys(EVENT_PARAMS) as (keyof typeof EVENT_PARAMS)[]) {
+      const sample = sampleParams(event, "https://businesslistings.me");
+      for (const name of EVENT_PARAMS[event]) expect(sample[name as keyof typeof sample], `${event}.${name}`).toBeDefined();
+    }
   });
 });

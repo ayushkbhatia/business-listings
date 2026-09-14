@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  PLATFORM_FLOOR,
   inQuietHours,
   localParts,
   overridesQuietHours,
@@ -183,5 +184,28 @@ describe("quietLiftsAt", () => {
   it("returns now when nothing is quiet", () => {
     const off = { ...PREFERENCE.quiet, enabled: false };
     expect(quietLiftsAt(off, MONDAY_2200).getTime()).toBeGreaterThanOrEqual(MONDAY_2200.getTime());
+  });
+});
+
+describe("board 12g B7 — what a seller cannot switch off", () => {
+  it("sends licence expiry by email and in-app even with both unticked", () => {
+    const off: RoutingPreference = { ...PREFERENCE, matrix: { document_expiring: [] } };
+    expect(actions(route(off, { event: "document_expiring", now: MONDAY_1000 }))).toEqual({ email: "send", in_app: "send" });
+  });
+
+  it("keeps what the seller added on top, and does not send a channel twice", () => {
+    const chosen: RoutingPreference = { ...PREFERENCE, matrix: { document_expiring: ["whatsapp", "email"] } };
+    const decisions = route(chosen, { event: "document_expiring", now: MONDAY_1000 });
+    expect(decisions.map((d) => d.channel)).toEqual(["whatsapp", "email", "in_app"]);
+  });
+
+  it("routes Ramadan date changes that no matrix has ever listed", () => {
+    expect(actions(route(PREFERENCE, { event: "ramadan_dates_moved", now: MONDAY_2200 }))).toEqual({ email: "send", in_app: "send" });
+  });
+
+  it("lists only channels that do not interrupt, so quiet hours still mean what they say", () => {
+    for (const channels of Object.values(PLATFORM_FLOOR)) {
+      for (const channel of channels ?? []) expect(["email", "in_app"]).toContain(channel);
+    }
   });
 });

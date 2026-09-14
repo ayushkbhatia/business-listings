@@ -179,6 +179,25 @@ export const CAPABILITIES = {
     source: "stated",
     why: "§07 staff table, \"Edit taxonomy & spec templates\". Renaming a category creates a 301 and breaks cross-seller comparison.",
   },
+  /*
+     Board 12g. Split out of `taxonomy.write`, which gated this screen because it
+     was the nearest ops-lead row — and whose reason, a renamed category breaking
+     a 301, says nothing about what this does. A template is the words every
+     seller or buyer receives on their phone, and a WhatsApp version is a
+     submission to Meta in the platform's name.
+  */
+  "notification.template.write": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "inferred",
+    why: "Not a row in §07. Board 12g: saving a template changes what every recipient of that event is sent, on email, SMS and in-app the moment it is saved, and on WhatsApp it submits wording to Meta in the platform's name. The nearest §07 row is \"Edit taxonomy & spec templates\" — ops lead only — and the grant follows it. Recording Meta's approval or rejection sits here too: approving puts a version live. `Send test to me` is held at the same rung because on WhatsApp it is a real, billed template send.",
+  },
+  "notification.read": {
+    roles: ["staff_ops_lead", "staff_moderator"],
+    audited: false,
+    source: "inferred",
+    why: "Not a row in §07. Board 12g's delivery log is how anybody answers a seller asking why they were not told about an enquiry, which is a moderator's support conversation as often as an ops lead's; it shows the event, channel, status and reason and never an address. Finance has no row: nothing on it is about money. Reading changes nothing, so it is not audited.",
+  },
   "storefront.template.write": {
     roles: OPS_LEAD_ONLY,
     audited: true,

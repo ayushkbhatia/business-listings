@@ -14,7 +14,7 @@ import { recordEvent } from "@/lib/telemetry/record";
 import { t } from "@/lib/i18n";
 import { changeSellsKind, isSellsChoice } from "@/lib/onboarding/kind";
 import { getSellerSeat } from "../_shell";
-import { ALWAYS_IN_APP, CHANNELS, ESCALATION_CHOICES, EVENTS, NUDGE_CHOICES } from "./matrix";
+import { ALWAYS_IN_APP, CHANNELS, ESCALATION_CHOICES, EVENTS, NUDGE_CHOICES, floorLocked } from "./matrix";
 
 /**
  * Saving the alert matrix, the acknowledgement, and a seat's own channels.
@@ -57,6 +57,8 @@ export async function saveAlerts(formData: FormData): Promise<SaveAlertsResult> 
        exact opposite of the rule.
     */
     if (ALWAYS_IN_APP.includes(event) && !on.includes("in_app")) on.push("in_app");
+    // Board 12g `B7`. The same disabled-posts-nothing trap, for the platform floor.
+    for (const channel of CHANNELS) if (floorLocked(event, channel) && !on.includes(channel)) on.push(channel);
     if (on.length > 0) routing[event] = on;
   }
 

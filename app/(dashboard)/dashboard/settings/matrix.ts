@@ -1,3 +1,5 @@
+import { PLATFORM_FLOOR } from "@/lib/notify/routing";
+
 /**
  * What the alert matrix may contain, and who each row reaches.
  *
@@ -95,4 +97,16 @@ export const ALWAYS_IN_APP: readonly AlertEvent[] = [
 
 export function inAppLocked(event: AlertEvent): boolean {
   return ALWAYS_IN_APP.includes(event);
+}
+
+/**
+ * Board 12g `B7`: channels the platform sends whatever this matrix says.
+ *
+ * Rendered ticked and locked for the same reason as `ALWAYS_IN_APP` — a box a
+ * seller can untick and nothing honours is a control that lies — and read from
+ * `PLATFORM_FLOOR` rather than listed again, so the form, `route()` and the
+ * console cannot name different exceptions.
+ */
+export function floorLocked(event: AlertEvent, channel: AlertChannel): boolean {
+  return (PLATFORM_FLOOR[event] ?? []).includes(channel);
 }

@@ -107,6 +107,17 @@ export const AUDIT_ACTIONS = [
   "staff_invite_revoked",
   "staff_role_changed",
   "staff_deactivated",
+  /*
+     Board 12g. Five outcomes of one capability, because the log is asked "what
+     happened to that template" and the answers are different acts: a save that
+     went live, a save that went to Meta, Meta's approval and its refusal
+     recorded by a person, and a draft put live.
+  */
+  "notification_template_saved",
+  "notification_template_submitted",
+  "notification_meta_approved",
+  "notification_meta_rejected",
+  "notification_template_published",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -162,6 +173,7 @@ export const ACTION_FOR_CAPABILITY = {
   "storefront.template.write": "storefront_template_changed",
   "enquiry.read_other_business": "cross_business_read",
   "business.close": "closure_noticed",
+  "notification.template.write": "notification_template_saved",
 } as const satisfies Partial<Record<Capability, AuditAction>>;
 
 export type AuditedCapability = keyof typeof ACTION_FOR_CAPABILITY;
@@ -222,6 +234,13 @@ export const PAIRED_ACTIONS = {
     "staff_invite_revoked",
     "staff_role_changed",
     "staff_deactivated",
+  ],
+  "notification.template.write": [
+    "notification_template_saved",
+    "notification_template_submitted",
+    "notification_meta_approved",
+    "notification_meta_rejected",
+    "notification_template_published",
   ],
   "taxonomy.write": [
     "taxonomy_changed",

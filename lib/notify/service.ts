@@ -12,6 +12,8 @@ import { resolveNotificationSenders } from "./senders";
 import { openNow } from "@/lib/trade/open-now";
 import type { RamadanHours, WeekHours } from "@/lib/trade/hours";
 import { readRamadanCalendar } from "@/lib/trade/ramadan-calendar";
+import { pickLive, type TemplateKind } from "./template-lines";
+import { EVENT_AUDIENCE } from "./params";
 
 /**
  * Sending a notification.
@@ -40,6 +42,13 @@ export interface NotifyInput {
   enquiryId?: string | null;
   /** For the high-value quiet-hours override. */
   valueAed?: number | null;
+  /**
+   * The trade the message is about: a services brief or a goods enquiry. Board
+   * 12g `B5` — a services brief takes the services twin where one is live, and
+   * the goods body otherwise, and the delivery row records which. Null for an
+   * event about neither.
+   */
+  tradeKind?: "goods" | "services" | null;
   params: RenderParams;
   now?: Date;
 }
@@ -121,7 +130,7 @@ export async function notify(input: NotifyInput): Promise<NotifyOutcome[]> {
   const senders = resolveNotificationSenders();
   // One query for every channel, not one per channel. A fan-out to eight
   // suppliers across four channels was thirty-two identical round trips.
-  const templates = await liveTemplates(input.event);
+  const templates = await resolveLiveTemplates(input.event, input.tradeKind ?? null);
   const outcomes: NotifyOutcome[] = [];
 
   for (const decision of decisions) {
@@ -235,17 +244,6 @@ export async function notify(input: NotifyInput): Promise<NotifyOutcome[]> {
   return outcomes;
 }
 
-/**
- * Every live template for an event, by channel.
- *
- * Highest version wins, and only `live` counts. A `pending_meta` WhatsApp
- * template is one Meta has not approved: sending against it is rejected at the
- * carrier, so it is not a template as far as this layer is concerned.
- *
- * Fetched in one query for all four channels. Per-channel it was thirty-two
- * identical round trips for a fan-out to eight suppliers, which is the kind of
- * cost that only shows up once the thing is actually wired to something.
- */
 export type LiveTemplate = {
   id: string;
   body: string;
@@ -253,17 +251,31 @@ export type LiveTemplate = {
   actionLabel: string | null;
   actionPath: string | null;
   metaTemplateName: string | null;
+  kind: TemplateKind;
 };
 
-async function liveTemplates(
+/**
+ * The live body per channel for one event, for one trade. Board 12g `B5`.
+ *
+ * Both lines are read — the primary body and its services twin — and
+ * `pickLive` decides, so the console's `SERVICES TWIN` column and the carrier
+ * answer from the same rule. Exported because the buyer-side emitters in
+ * `events.ts` read templates without `notify`, and each of them used to repeat
+ * a `findFirst` per channel that knew nothing about twins.
+ */
+export async function resolveLiveTemplates(
   event: NotificationEvent,
+  tradeKind: "goods" | "services" | null,
 ): Promise<Map<NotificationChannel, LiveTemplate>> {
   const rows = await prisma.notificationTemplate.findMany({
     where: { event, status: "live", locale: "en" },
-    orderBy: { version: "asc" },
+    orderBy: [{ channel: "asc" }, { kind: "asc" }, { version: "desc" }, { id: "asc" }],
     select: {
       channel: true,
       id: true,
+      kind: true,
+      version: true,
+      status: true,
       body: true,
       subject: true,
       actionLabel: true,
@@ -272,10 +284,29 @@ async function liveTemplates(
     },
   });
 
-  // Ascending, so the last write per channel is the highest version.
-  const byChannel = new Map<NotificationChannel, LiveTemplate>();
-  for (const { channel, ...template } of rows) byChannel.set(channel, template);
-  return byChannel;
+  const byChannel = new Map<NotificationChannel, typeof rows>();
+  for (const row of rows) {
+    const list = byChannel.get(row.channel) ?? [];
+    list.push(row);
+    byChannel.set(row.channel, list);
+  }
+
+  const chosen = new Map<NotificationChannel, LiveTemplate>();
+  for (const [channel, list] of byChannel) {
+    const pick = pickLive(list, tradeKind);
+    if (!pick) continue;
+    const { row } = pick;
+    chosen.set(channel, {
+      id: row.id,
+      body: row.body,
+      subject: row.subject,
+      actionLabel: row.actionLabel,
+      actionPath: row.actionPath,
+      metaTemplateName: row.metaTemplateName,
+      kind: row.kind,
+    });
+  }
+  return chosen;
 }
 
 /**
@@ -295,6 +326,20 @@ function addressFor(
 ): string | null {
   if (channel === "in_app") return recipientId;
   return channels.find((row) => row.kind === channel)?.address ?? null;
+}
+
+/**
+ * Where a buyer is reached. Buyers hold no `SeatChannel` — that table is a
+ * seller seat's proven channels — so a buyer is addressed from the account
+ * itself, which is what the buyer-side emitters in `events.ts` have always done.
+ * One function for the live send and the held one, so the two cannot disagree.
+ */
+export function buyerAddress(
+  channel: NotificationChannel,
+  buyer: { id: string; phone: string | null; email: string | null },
+): string | null {
+  if (channel === "in_app") return buyer.id;
+  return channel === "email" ? buyer.email : buyer.phone;
 }
 
 /**
@@ -394,6 +439,7 @@ async function record(
         recipientUserId: input.recipientUserId,
         businessId: input.businessId,
         enquiryId: input.enquiryId ?? null,
+        tradeKind: input.tradeKind ?? null,
         reason: reason ?? null,
         scheduledFor: scheduledFor ?? null,
         payload: (payload ?? null) as never,
@@ -480,6 +526,7 @@ export async function deliverQueued(limit = 200): Promise<DeliverQueuedResult> {
     take: limit,
     select: {
       id: true,
+      event: true,
       channel: true,
       payload: true,
       recipientUserId: true,
@@ -513,6 +560,28 @@ export async function deliverQueued(limit = 200): Promise<DeliverQueuedResult> {
     channelsByUser.set(row.userId, list);
   }
 
+  /*
+     Buyers, addressed from the account. Board 12g: a buyer's held message was
+     looked up in `SeatChannel`, where no buyer has a row, so it failed as
+     unaddressable at dawn even once it carried a payload.
+  */
+  const buyerIds = [
+    ...new Set(
+      due
+        .filter((row) => EVENT_AUDIENCE[row.event] === "buyer" && row.recipientUserId)
+        .map((row) => row.recipientUserId as string),
+    ),
+  ];
+  const buyers = new Map(
+    (buyerIds.length === 0
+      ? []
+      : await prisma.user.findMany({
+          where: { id: { in: buyerIds } },
+          select: { id: true, phone: true, email: true },
+        })
+    ).map((user) => [user.id, user]),
+  );
+
   const senders = resolveNotificationSenders();
   let sent = 0;
   let failed = 0;
@@ -521,9 +590,14 @@ export async function deliverQueued(limit = 200): Promise<DeliverQueuedResult> {
   for (const row of due) {
     const payload = readHeldPayload(row.payload);
     const sender = senders[row.channel];
-    const to = row.recipientUserId
-      ? addressFor(row.channel, row.recipientUserId, channelsByUser.get(row.recipientUserId) ?? [])
-      : null;
+    const buyer = row.recipientUserId ? buyers.get(row.recipientUserId) : undefined;
+    const to = !row.recipientUserId
+      ? null
+      : EVENT_AUDIENCE[row.event] === "buyer"
+        ? buyer
+          ? buyerAddress(row.channel, buyer)
+          : null
+        : addressFor(row.channel, row.recipientUserId, channelsByUser.get(row.recipientUserId) ?? []);
 
     /*
        No payload, no carrier, or no address. Marked failed with the reason

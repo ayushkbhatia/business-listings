@@ -486,8 +486,15 @@ reader and three levels of tests. **The staff half has nothing at all.**
   the verified-share gap it had been routing to content ops.
 - [ ] **7.3 `12f`** — export it; view-as is genuinely sound and is the best-guarded thing in the
   console.
-- [ ] **7.4 `12g` + `7f` + `10i`** — record that `/admin/strings` is a report by design, then fix
-  the template create path. `ramadan_dates_moved` fires nightly against no template.
+- [x] **7.4 `12g`** — shipped against its board-level handoff (14 Sep 2026). `/admin/notifications`
+  is one row per event and channel with 30-day volume queried from the delivery log, `FIRED BY`
+  read from `EVENT_SOURCES`, and a services twin column that tells *no trade-kind language* from
+  *not written*; the carrier picks the twin for a services brief and records when it fell back. A
+  save is a version: live on email, SMS and in-app, `pending_meta` on WhatsApp with Meta's
+  answer recorded against it. Production held 15 of the seed's 27 templates — migration
+  `20261027091000_notification_template_backfill` wrote the rest — and `ramadan_dates_moved` had
+  no template **and** no routing row; it is on the platform floor with licence expiry now.
+  `/admin/strings` stays a report and belongs to `12g-s`. `7f` and `10i` are still owed.
 - [ ] **7.5 `6g`** — stays here, not Phase 1: what it must read is prose held in the database,
   half of it template copy `12g` owns.
 - [ ] **7.6 `12h`** — split into two boards (see §4), then build the areas half.
@@ -567,7 +574,7 @@ the only large piece and the only one selling something it does not deliver.
 | `10f` | Write a review — gated | partial | small | The live review-request email links a URL the e2e suite asserts returns 404. | 3.5 |
 | `13a` | Contact reveal | partial | medium | The only layout that actually masks has no caller. | 3.6 |
 | `13b` | WhatsApp hand-off | not started | medium | Must be reconciled with a detector that reports sellers for off-platform steering. | 9.3 |
-| `12g` | Notifications, strings | partial | small | Templates have no create path, so a nightly event fires against nothing. | 7.4 |
+| `12g` | Notification templates | built | 14 Sep 2026 | Versions per line, a services twin the carrier picks, Meta's queue recorded, volume queried, a delivery log. Strings moved to `12g-s`. | 7.4 |
 | `7f` | Notification specimens | partial ↓ | export only | All four channels render; SMS has no carrier and records a skip with a reason. | 7.4 |
 | `6g` | Admin copy audit | not started | medium | The CI scan reads exactly one file; every word held in the database is invisible to it. | 7.5 |
 | `10c` | Search — products tab | scaffold ↓ | medium | No facet rail of any kind on `/search`. | 5.3 |

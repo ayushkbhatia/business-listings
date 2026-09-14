@@ -56,6 +56,8 @@ import { seedAccountHealth } from "./seed-account-health.mjs";
 import { seedRevenue } from "./seed-revenue.mjs";
 import { seedCrmCalls } from "./seed-crm.mjs";
 import { monthlyValueFils } from "../lib/billing/period.js";
+import { TEMPLATES } from "./seed-notification-templates.mjs";
+import { seedNotificationDeliveries } from "./seed-notification-deliveries.mjs";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL! }),
@@ -1002,6 +1004,7 @@ async function main() {
   console.log(`→ ${businesses.length} businesses`);
   await seedSellerAccounts(prisma, businesses);
   await seedNotificationTemplates(prisma);
+  await seedNotificationDeliveries(prisma);
   await seedProducts(prisma, businesses, catBySlug, fieldId, template.id);
   await seedEnquiries(prisma, businesses, buyer.id, buyerTwo.id, buyerCompany.id);
   await seedReplyHistory(prisma, businesses, buyerTwo.id);
@@ -6610,368 +6613,31 @@ async function seedSellerAccounts(db: Db, businesses: Biz[]) {
   console.log(`   ${claimed.length} owners, ${Math.ceil(claimed.length / 3)} sales seats`);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Notification templates
-//
-// Database records rather than code: handoff 4 gives admin an editor, and a
-// WhatsApp template cannot change version without Meta approving it first.
-//
-// Not one of these may name a buyer's phone, email or company. Rule 1 applies
-// to notifications, and this is the easiest place in the product to leak it.
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface TemplateSeed {
-  event: string;
-  channel: string;
-  subject?: string;
-  body: string;
-  actionLabel?: string;
-  actionPath?: string;
-  metaTemplateName?: string;
-  status?: string;
-}
-
-const TEMPLATES: TemplateSeed[] = [
-  /*
-     The renewal receipt.
-
-     Email and in-app, and deliberately no WhatsApp: a receipt is a record
-     somebody keeps for their accountant, and `INTERRUPTING_CHANNELS` exists to
-     stop us buzzing a phone with something nobody has to act on. It is also the
-     only template here sent by a cron rather than by a request.
-
-     The amount is the period's, not the month's — an annual seller reads what
-     they were actually charged.
-  */
-  {
-    event: "subscription_renewed",
-    channel: "email",
-    body:
-      "Your {planName} plan has been charged {amount}. The next payment is due {renewsAt}. " +
-      "Your invoice is on the billing page.",
-    actionLabel: "See the invoice",
-    actionPath: "/dashboard/billing",
-    status: "live",
-  },
-  {
-    event: "subscription_renewed",
-    channel: "in_app",
-    body: "{planName} charged {amount}. Next payment {renewsAt}.",
-    actionLabel: "See the invoice",
-    actionPath: "/dashboard/billing",
-    status: "live",
-  },
-  /*
-     Board 11b's follow-up, and the only message-shaped notification in the
-     product. Everything else here is about a quote, because a message was
-     assumed to be read where it was written — the follow-up breaks that, since
-     it is aimed at a buyer who has gone quiet and is not looking at the thread.
-
-     In-app only. The seller gets exactly one follow-up because a second loses
-     more deals than it wins; putting that one on WhatsApp would make the cap a
-     formality, since the interruption is the part that costs the deal. A buyer
-     weighing four quotes reads it where they are already comparing them.
-
-     `preview` is the supplier's own words, truncated. We do not summarise them:
-     the rule on that screen is suggest the act and never the number, and a body
-     written on this side would be the platform speaking in a supplier's voice.
-  */
-  {
-    event: "message_received",
-    channel: "in_app",
-    body: "{businessName} followed up on your enquiry: \"{preview}\"",
-    actionLabel: "Open the conversation",
-    actionPath: "/enquiry/{enquiryId}",
-    status: "live",
-  },
-  {
-    event: "enquiry_received",
-    channel: "whatsapp",
-    // Two taps from notification to a quote in progress. That deep link is the
-    // mechanic behind the reply-speed number, so it carries the enquiry ref
-    // and lands on the composer, not on a list.
-    body: "New enquiry {ref} for {summary}. Needed by {neededBy} in {area}. {lineCount} lines. Quote before {closesAt}.",
-    actionLabel: "Open and quote",
-    actionPath: "/dashboard/leads/{enquiryId}",
-    metaTemplateName: "bl_enquiry_received_v1",
-    status: "pending_meta",
-  },
-  {
-    event: "enquiry_received",
-    channel: "in_app",
-    body: "New enquiry {ref} — {lineCount} lines for {area}, needed by {neededBy}.",
-    actionLabel: "Open and quote",
-    actionPath: "/dashboard/leads/{enquiryId}",
-    status: "live",
-  },
-  {
-    event: "enquiry_unanswered",
-    channel: "whatsapp",
-    body: "Enquiry {ref} is still unanswered after {hours} hours. It closes {closesAt}.",
-    actionLabel: "Quote now",
-    actionPath: "/dashboard/leads/{enquiryId}",
-    metaTemplateName: "bl_enquiry_unanswered_v1",
-    status: "pending_meta",
-  },
-  {
-    event: "enquiry_escalated",
-    channel: "email",
-    subject: "Enquiry {ref} has gone unanswered",
-    body: "Enquiry {ref} reached your team {hours} hours ago and has no reply. It closes {closesAt}. Median reply time is part of how suppliers rank in search.",
-    actionLabel: "Open the enquiry",
-    actionPath: "/dashboard/leads/{enquiryId}",
-    status: "live",
-  },
-  {
-    // SMS is the fallback when WhatsApp does not deliver. Deliberately terse:
-    // it is one segment, and a two-segment SMS to eight sellers a day is a
-    // cost line nobody budgeted for.
-    event: "enquiry_received",
-    channel: "sms",
-    body: "New enquiry {ref}, {lineCount} lines for {area}. Closes {closesAt}. Quote: {shortLink}",
-    actionPath: "/dashboard/leads/{enquiryId}",
-    status: "live",
-  },
-  {
-    event: "quote_accepted",
-    channel: "sms",
-    body: "Quote {quoteRef} accepted, {amount}. Contact details are on the enquiry: {shortLink}",
-    actionPath: "/dashboard/leads/{enquiryId}",
-    status: "live",
-  },
-  {
-    event: "quote_received",
-    channel: "in_app",
-    body: "{businessName} sent a quote on {ref}, revision {revision}.",
-    actionLabel: "Compare quotes",
-    actionPath: "/enquiry/{enquiryId}/compare",
-    status: "live",
-  },
-  {
-    event: "quote_revised",
-    channel: "in_app",
-    body: "{businessName} revised their quote on {ref} to revision {revision}.",
-    actionLabel: "See what changed",
-    actionPath: "/enquiry/{enquiryId}/thread/{businessSlug}",
-    status: "live",
-  },
-  {
-    event: "quote_accepted",
-    channel: "whatsapp",
-    // What happened, what it is worth, one action.
-    body: "Your quote {quoteRef} was accepted, {amount}. The buyer's contact details are now on the enquiry.",
-    actionLabel: "Open the accepted quote",
-    actionPath: "/dashboard/leads/{enquiryId}",
-    metaTemplateName: "bl_quote_accepted_v1",
-    status: "pending_meta",
-  },
-  {
-    event: "quote_accepted",
-    channel: "email",
-    subject: "Quote {quoteRef} accepted — {amount}",
-    body: "Your quote {quoteRef} for enquiry {ref} was accepted at {amount}. Contact details are on the enquiry page. Payment and delivery are between you and the buyer.",
-    actionLabel: "Open the accepted quote",
-    actionPath: "/dashboard/leads/{enquiryId}",
-    status: "live",
-  },
-  {
-    event: "quote_expiring",
-    channel: "in_app",
-    body: "Quote {quoteRef} expires {expiresAt}. Extend the validity or let it lapse.",
-    actionLabel: "Open the quote",
-    actionPath: "/dashboard/quotes",
-    status: "live",
-  },
-  /*
-     Board 11c. The seller has twenty-eight days to answer, measured from the
-     review — so the copy names the window rather than leaving a deadline to be
-     discovered on the page after it has passed, which is the defect the board's
-     own expired countdown had.
-
-     The rating and not the words. A notification carrying a two-star review's
-     text puts the complaint in front of a supplier before the box they can
-     answer it in, and there is no reply box in an email.
-  */
-  {
-    event: "review_posted",
-    channel: "email",
-    subject: "A review was posted on your listing",
-    body: "A buyer left a {rating} out of 5 review after enquiry {ref}. You have 28 days to reply. One reply, public, and it cannot be edited afterwards.",
-    actionLabel: "Read and reply",
-    actionPath: "/dashboard/reviews",
-    status: "live",
-  },
-  {
-    event: "review_posted",
-    channel: "in_app",
-    body: "A {rating} out of 5 review landed after enquiry {ref}. 28 days to reply.",
-    actionLabel: "Read and reply",
-    actionPath: "/dashboard/reviews",
-    status: "live",
-  },
-  /*
-     Board 11c `B2` — the request channel, and the fallback that has to be real.
-
-     The panel says "WhatsApp where we have a number, email otherwise", and that
-     is a per-buyer decision made in `lib/reviews/channel.ts` rather than a
-     matrix. Both templates exist so both halves of the sentence can happen.
-
-     WhatsApp is `pending_meta` like every other WhatsApp template here — Meta
-     approves them, we do not — which is exactly why `requestChannelFor` asks
-     the template table what is live before it picks. Until approval every
-     request goes by email, and it goes rather than silently not going.
-
-     This was seeded `in_app` and live, which is the one channel a review
-     request must not use: it goes to somebody who finished a deal weeks ago and
-     has no reason to open the site, so an in-app notification for them is a
-     message filed where nobody is standing.
-  */
-  {
-    event: "review_requested",
-    channel: "email",
-    subject: "{businessName} would like your review",
-    body: "You accepted a quote from {businessName} on enquiry {ref}. If you have a minute, other buyers would find it useful to know how it went. One request only — we will not ask again.",
-    actionLabel: "Write a review",
-    actionPath: "/review/new?enq={enquiryId}",
-    status: "live",
-  },
-  /*
-     Board 11c `B5`. The decision leaving the platform.
-
-     The outcome and the ground, and not the moderator's prose: `render()`
-     refuses a value that looks like contact details, and a reason explaining
-     that a review published somebody's mobile number would throw rather than
-     send. The reason is on the review card, which the action opens.
-  */
-  {
-    event: "review_dispute_decided",
-    channel: "email",
-    subject: "Your review dispute was decided",
-    body: "We have decided your dispute on the ground of {ground}. Outcome: {outcome}. The reason is recorded on the review.",
-    actionLabel: "Open the review",
-    actionPath: "/dashboard/reviews",
-    status: "live",
-  },
-  {
-    event: "review_dispute_decided",
-    channel: "in_app",
-    body: "Review dispute decided — {ground}. Outcome: {outcome}.",
-    actionLabel: "Open the review",
-    actionPath: "/dashboard/reviews",
-    status: "live",
-  },
-  {
-    event: "review_requested",
-    channel: "whatsapp",
-    body: "{businessName} has asked for a review of enquiry {ref}. One request only.",
-    actionLabel: "Write a review",
-    actionPath: "/review/new?enq={enquiryId}",
-    metaTemplateName: "bl_review_requested_v1",
-    status: "pending_meta",
-  },
-  /*
-     Board 3e §5. The copy said "drops to tier 2", which was the schema's own
-     wording before the site-visit cut and was wrong in the dangerous direction:
-     tier 2 *is* licence verification, so a listing left there keeps the badge
-     the expiry is supposed to withdraw. It drops to tier 1, claimed.
-
-     The consequence rather than the number, because "tier 1" means nothing to a
-     supplier reading their email. The badge and the filter are what they lose,
-     and the last sentence is the one the screen also carries: nothing is
-     deleted, and a renewal puts it back.
-  */
-  {
-    event: "document_expiring",
-    channel: "email",
-    subject: "Your trade licence expires {expiresAt} — {days} days",
-    body: "The trade licence on your listing expires {expiresAt}, in {days} days. On the day it lapses your listing stops showing the licence-verified badge and stops matching the licence-verified filter, with no grace period. Your listing, products and enquiries are not affected, and the badge returns as soon as we have checked a renewal.",
-    actionLabel: "Upload the renewal",
-    actionPath: "/dashboard/verification",
-    status: "live",
-  },
-  /*
-     Board 8a's one nudge, and the only template here whose recipient did not
-     ask for it.
-
-     WhatsApp because that is what the hub promises out loud — "one WhatsApp
-     three days after you went live if anything is still open, then nothing" —
-     and in-app because the delivery log should carry a real row rather than a
-     skip when Meta has not approved the words yet. **Deliberately no email.**
-     An email fallback is a second message, and the promise is one.
-
-     `pending_meta` like every other WhatsApp template: Meta approves the words
-     before they can be sent, and seeding one live would have the send layer
-     believe in a template that does not exist on the Bird side.
-  */
-  {
-    event: "setup_nudge",
-    channel: "whatsapp",
-    // One string rather than two concatenated: the criterion-8 scan in
-    // tests/unit/notification-templates.test.ts matches `body: "…"` and reads
-    // only the first chunk, so a split body hides half of itself from the check
-    // that exists to stop a template carrying contact details.
-    body: "Your listing is live and some setup is still open: {taskList}. About {minutes} minutes of work. This is the only reminder we send.",
-    actionLabel: "Finish setting up",
-    actionPath: "/dashboard/setup",
-    metaTemplateName: "bl_setup_nudge_v1",
-    status: "pending_meta",
-  },
-  {
-    event: "setup_nudge",
-    channel: "in_app",
-    body: "Still open on your listing: {taskList}. About {minutes} minutes of work.",
-    actionLabel: "Finish setting up",
-    actionPath: "/dashboard/setup",
-    status: "live",
-  },
-  /*
-     Board 8d §8 gave this event its first emitter, and the routing matrix has
-     always listed `in_app` for it with no template to satisfy — so an
-     escalation would have recorded `skipped / no_live_template` on the one
-     channel a seller sees without leaving the product.
-
-     Same placeholders as the email above, because `withParams` type-checks one
-     set per event and two templates wanting different ones is how `render`
-     starts throwing MissingParamError in a cron.
-  */
-  {
-    event: "enquiry_escalated",
-    channel: "in_app",
-    body: "Enquiry {ref} reached your team {hours} hours ago and has no reply. It closes {closesAt}.",
-    actionLabel: "Open the enquiry",
-    actionPath: "/dashboard/leads/{enquiryId}",
-    status: "live",
-  },
-  {
-    event: "weekly_digest",
-    channel: "email",
-    subject: "Your week: {enquiryCount} enquiries, {quoteCount} quotes",
-    body: "{enquiryCount} enquiries reached you this week and you quoted {quoteCount}. Median reply time {medianReply}.",
-    actionLabel: "Open the dashboard",
-    actionPath: "/dashboard",
-    status: "live",
-  },
-];
-
 async function seedNotificationTemplates(db: Db) {
   console.log("→ notification templates");
-  for (const template of TEMPLATES) {
-    await db.notificationTemplate.create({
-      data: {
-        event: template.event as never,
-        channel: template.channel as never,
-        locale: "en",
-        version: 1,
-        status: (template.status ?? "live") as never,
-        subject: template.subject ?? null,
-        body: template.body,
-        actionLabel: template.actionLabel ?? null,
-        actionPath: template.actionPath ?? null,
-        metaTemplateName: template.metaTemplateName ?? null,
-      },
-    });
-  }
-  console.log(`   ${TEMPLATES.length} templates`);
+  /*
+     The same catalogue `20261027091000_notification_template_backfill` writes.
+     On a fresh database the migration writes it first and the truncate at the
+     top of `main` clears it, so this is the copy the seeded world runs on — and
+     `tests/unit/notification-templates.test.ts` holds the two lists equal, so
+     local, CI and production start from the same words.
+  */
+  const written = await db.notificationTemplate.createMany({
+    data: TEMPLATES.map((template) => ({
+      event: template.event as never,
+      channel: template.channel as never,
+      locale: "en",
+      kind: template.kind as never,
+      version: 1,
+      status: (template.status ?? "live") as never,
+      subject: template.subject ?? null,
+      body: template.body,
+      actionLabel: template.actionLabel ?? null,
+      actionPath: template.actionPath ?? null,
+      metaTemplateName: template.metaTemplateName ?? null,
+    })),
+  });
+  console.log(`   ${written.count} templates`);
 }
 
 

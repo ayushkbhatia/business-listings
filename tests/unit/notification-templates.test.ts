@@ -1,95 +1,129 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
+import { TEMPLATES } from "../../prisma/seed-notification-templates.mjs";
+import { draftProblems } from "@/lib/notify/draft";
+import { EVENT_PARAMS, forbiddenPlaceholders, sampleParams } from "@/lib/notify/params";
+import { render } from "@/lib/notify/render";
+import type { NotificationChannel, NotificationEvent } from "@/lib/db/generated/enums";
 
 /**
- * Acceptance criterion 8: no notification of any kind contains buyer contact
- * details.
+ * The template catalogue: what the seed writes, and what the board 12g
+ * backfill migration wrote to production.
  *
- * Rule 1 says contact is released only on acceptance, and a notification is
- * the easiest place in the product to leak it — a template is written once,
- * reviewed once, and then sends ten thousand times. This reads the seeded
- * template bodies directly so a new template cannot be added without passing.
+ * Acceptance criterion 8 first — no notification of any kind contains buyer
+ * contact details. A template is written once, reviewed once, and then sends
+ * ten thousand times, so the catalogue is read directly rather than trusted.
  *
- * The database is the source of truth for templates; this asserts on the seed
- * that populates it, which is what CI can run without a network call.
+ * This used to parse `seed.mts` with a regular expression that read only the
+ * first chunk of a concatenated body. The list is a module now, so the test
+ * imports it and sees every character.
  */
-const seed = readFileSync("prisma/seed.mts", "utf8");
 
-/** Everything between the TEMPLATES array's brackets. */
-function templateBlock(): string {
-  const start = seed.indexOf("const TEMPLATES: TemplateSeed[] = [");
-  const end = seed.indexOf("\n];", start);
-  expect(start, "TEMPLATES array not found in the seed").toBeGreaterThan(-1);
-  return seed.slice(start, end);
-}
-
-function fields(name: "body" | "subject"): string[] {
-  return [...templateBlock().matchAll(new RegExp(`${name}:\\s*"([^"]*)"`, "g"))].map((m) => m[1]!);
-}
+const ORIGIN = "https://businesslistings.me";
+const all = TEMPLATES.flatMap((template) => [template.body, template.subject ?? ""]).filter(Boolean);
 
 describe("acceptance criterion 8 — no template leaks buyer contact details", () => {
-  const all = [...fields("body"), ...fields("subject")];
-
   it("has templates to check", () => {
-    expect(all.length).toBeGreaterThan(10);
+    expect(TEMPLATES.length).toBeGreaterThan(10);
   });
 
-  it("names no buyer placeholder that could carry a phone, email or company", () => {
-    // The placeholders a careless template would reach for. A seller learns
-    // the buyer's name only on acceptance, and even then from the enquiry
-    // page rather than from a push notification.
-    const forbidden = [
-      "buyerPhone", "buyerEmail", "buyerName", "buyerCompany", "buyerMobile",
-      "phone", "email", "mobile", "whatsappNumber", "contact", "companyName",
-    ];
-    for (const template of all) {
-      const placeholders = [...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!);
-      for (const placeholder of placeholders) {
-        expect(
-          forbidden.some((f) => f.toLowerCase() === placeholder.toLowerCase()),
-          `template placeholder {${placeholder}} could carry buyer contact details:\n  ${template}`,
-        ).toBe(false);
-      }
+  it("names no placeholder that could carry contact details or a quote count (board 12g B3)", () => {
+    for (const template of TEMPLATES) {
+      expect(
+        forbiddenPlaceholders(template.body, template.subject, template.actionLabel, template.actionPath),
+        template.body,
+      ).toEqual([]);
     }
   });
 
   it("contains no literal phone number, email address or IBAN", () => {
-    for (const template of all) {
-      expect(template, template).not.toMatch(/\+?\d[\d\s-]{7,}/);
-      expect(template, template).not.toMatch(/[\w.-]+@[\w.-]+\.\w+/);
-      expect(template, template).not.toMatch(/\b[A-Z]{2}\d{2}[A-Z0-9]{10,}\b/);
+    for (const text of all) {
+      expect(text, text).not.toMatch(/\+?\d[\d\s-]{7,}/);
+      expect(text, text).not.toMatch(/[\w.-]+@[\w.-]+\.\w+/);
+      expect(text, text).not.toMatch(/\b[A-Z]{2}\d{2}[A-Z0-9]{10,}\b/);
+    }
+  });
+});
+
+describe("the catalogue is sendable", () => {
+  it("passes the checks the editor and the save run — every placeholder supplied, every limit kept", () => {
+    for (const template of TEMPLATES) {
+      const problems = draftProblems(
+        {
+          event: template.event as NotificationEvent,
+          channel: template.channel as NotificationChannel,
+          subject: template.subject ?? null,
+          body: template.body,
+          actionLabel: template.actionLabel ?? null,
+          actionPath: template.actionPath ?? null,
+          metaTemplateName: template.metaTemplateName ?? null,
+        },
+        ORIGIN,
+      );
+      // `weekly_digest` is declared, seeded and sent by nothing, so its event supplies no params.
+      const expected = EVENT_PARAMS[template.event as NotificationEvent].length === 0 ? ["unknown_placeholder"] : [];
+      expect(problems.map((p) => p.error), `${template.event} on ${template.channel}`).toEqual(expected);
     }
   });
 
-  it("says what happened, what it is worth, and one action", () => {
-    const block = templateBlock();
-    const entries = block.split(/\n  \{/).slice(1);
-    for (const entry of entries) {
-      const inApp = /channel:\s*"in_app"/.test(entry);
-      const hasAction = /actionPath:/.test(entry);
-      // Every template routes somewhere. A notification with no action is a
-      // notification that trains people to ignore the channel.
-      expect(hasAction, entry.slice(0, 120)).toBe(true);
-      if (!inApp) expect(/body:/.test(entry)).toBe(true);
+  it("renders every emitted template with sample values, and never throws", () => {
+    for (const template of TEMPLATES) {
+      const event = template.event as NotificationEvent;
+      if (EVENT_PARAMS[event].length === 0) continue;
+      expect(() => render(template, sampleParams(event, ORIGIN)), `${event} on ${template.channel}`).not.toThrow();
     }
+  });
+
+  it("says what happened and gives one action", () => {
+    // A notification with no action trains people to ignore the channel.
+    for (const template of TEMPLATES) expect(template.actionPath, template.body).toBeTruthy();
   });
 
   it("covers all four channels", () => {
-    const channels = new Set(
-      [...templateBlock().matchAll(/channel:\s*"(\w+)"/g)].map((m) => m[1]!),
-    );
-    expect(channels).toEqual(new Set(["whatsapp", "sms", "email", "in_app"]));
+    expect(new Set(TEMPLATES.map((t) => t.channel))).toEqual(new Set(["whatsapp", "sms", "email", "in_app"]));
   });
 
   it("marks every WhatsApp template as awaiting Meta rather than live", () => {
-    // A WhatsApp template cannot send until Meta approves it. Seeding one as
-    // live would make the send layer believe it can use a template that does
-    // not exist on the Bird side.
-    const entries = templateBlock().split(/\n  \{/).slice(1);
-    for (const entry of entries) {
-      if (!/channel:\s*"whatsapp"/.test(entry)) continue;
-      expect(entry, entry.slice(0, 140)).toMatch(/status:\s*"pending_meta"/);
-      expect(entry, entry.slice(0, 140)).toMatch(/metaTemplateName:/);
+    // A WhatsApp template cannot send until Meta approves it. Writing one live
+    // would have the send layer believe in a template the carrier does not have.
+    for (const template of TEMPLATES.filter((t) => t.channel === "whatsapp")) {
+      expect(template.status, template.body).toBe("pending_meta");
+      expect(template.metaTemplateName, template.body).toMatch(/^[a-z0-9_]+$/);
     }
+  });
+
+  it("holds one version 1 per event, channel and kind — the unique key the backfill and the seed share", () => {
+    const keys = TEMPLATES.map((t) => `${t.event}.${t.channel}.${t.kind}`);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+});
+
+describe("the backfill migration mirrors the catalogue", () => {
+  /*
+     Production never ran the seed, which is how it came to hold 15 templates
+     against 27. `20261027091000_notification_template_backfill` wrote the
+     catalogue there; this holds the two in step, so a template added to the
+     catalogue without its row in SQL fails here rather than drifting again.
+
+     The migration is frozen once applied — Prisma checksums it — so a template
+     added after it needs a new migration, and this test is where that is
+     noticed. It compares every field the SQL writes.
+  */
+  const sql = readFileSync("prisma/migrations/20261027091000_notification_template_backfill/migration.sql", "utf8");
+  const quote = (value: string | undefined) => (value === undefined ? "NULL" : `'${value.replace(/'/g, "''")}'`);
+
+  for (const template of TEMPLATES) {
+    it(`carries ${template.event} on ${template.channel}`, () => {
+      const row =
+        `(${quote(template.event)}, ${quote(template.channel)}, ${quote(template.kind)}, ${quote(template.status ?? "live")}, ${quote(template.subject)},\n` +
+        `   ${quote(template.body)},\n` +
+        `   ${quote(template.actionLabel)}, ${quote(template.actionPath)}, ${quote(template.metaTemplateName)})`;
+      expect(sql.includes(row), `the backfill has no row matching:\n${row}`).toBe(true);
+    });
+  }
+
+  it("carries nothing the catalogue does not", () => {
+    const rows = sql.match(/^\s+\('[a-z_]+', '(whatsapp|email|sms|in_app)',/gm) ?? [];
+    expect(rows.length).toBe(TEMPLATES.length);
   });
 });

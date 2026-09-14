@@ -339,7 +339,6 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     key: "content",
     labelKey: "nav.group.content",
     items: [
-      { key: "notifications", labelKey: "nav.notifications", href: "/admin/notifications", capability: "taxonomy.write" },
       { key: "strings", labelKey: "nav.strings", href: "/admin/strings", capability: "taxonomy.write" },
       { key: "content-attribution", labelKey: "nav.content_attribution", href: "/admin/content/attribution", capability: "taxonomy.write" },
       { key: "content-home", labelKey: "nav.content_home", href: "/admin/content/home", capability: "taxonomy.write" },
@@ -352,6 +351,15 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     items: [
       // Board 4i. Every staff seat reads the roster and the matrix; `staff.manage` is checked on each control.
       { key: "staff", labelKey: "nav.staff", href: "/admin/staff", capability: "staff.read" },
+      /*
+         Board 12g: *"`BLSide` gained a Notifications item under SYSTEM."* It sat
+         under EDITORIAL beside the string catalogue, gated on `taxonomy.write`.
+         What it holds now is a delivery system as much as copy — a Meta queue, a
+         delivery log a moderator reads to answer a seller — so it moves beside
+         the audit log, and the row follows the read so a moderator is not handed
+         a link into a 404.
+      */
+      { key: "notifications", labelKey: "nav.notifications", href: "/admin/notifications", capability: "notification.read" },
       { key: "audit", labelKey: "nav.audit", href: "/admin/audit", capability: "audit.read" },
       { key: "support", labelKey: "nav.support", href: "/admin/support", capability: "support.view_as" },
       { key: "users", labelKey: "nav.users", href: "/admin/users", capability: "staff.manage", later: true },

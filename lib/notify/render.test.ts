@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  ForbiddenPlaceholderError,
   MissingParamError,
   NotificationLeakError,
   contactShape,
@@ -161,5 +162,15 @@ describe("placeholdersIn", () => {
       "ref",
       "summary",
     ]);
+  });
+});
+
+describe("board 12g B3 — a name that can only carry contact details", () => {
+  it("refuses the placeholder in the template, before any value is read", () => {
+    expect(() => render({ body: "Call {buyerPhone}" }, { buyerPhone: "ask the seller" })).toThrow(ForbiddenPlaceholderError);
+  });
+
+  it("refuses the param even when the template does not use it", () => {
+    expect(() => render(TEMPLATE, { ...PARAMS, buyerEmail: "n/a" })).toThrow(ForbiddenPlaceholderError);
   });
 });

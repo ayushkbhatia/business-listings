@@ -28,6 +28,7 @@ import { ProposalReplyGallery } from "./_sections/ProposalReply";
 import { ProposalComparisonGallery } from "./_sections/ProposalComparison";
 import { BuilderSectionsGallery } from "./_sections/BuilderSections";
 import { BuyerInboxGallery } from "./_sections/BuyerInbox";
+import { NotificationTemplatesGallery } from "./_sections/NotificationTemplates";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
 import { Tokens } from "./_sections/Tokens";
@@ -198,6 +199,8 @@ const UNLISTED = [
   "accepted-proposal",
   // Board `10e`: the buyer's inbox, its rail and the saved searches panel.
   "buyer-inbox",
+  // Board `12g`: the notification templates list, the rail, and Meta's queue.
+  "notification-templates",
 ] as const;
 
 export default function Gallery() {
@@ -309,6 +312,7 @@ export default function Gallery() {
       <CrmGallery />
       {/* After CRM, for the same reason: nothing new above Shells. */}
       <BuyerInboxGallery />
+      <NotificationTemplatesGallery />
     </main>
   );
 }
