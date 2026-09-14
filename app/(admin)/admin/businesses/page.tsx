@@ -1,122 +1,85 @@
+import Link from "next/link";
+import { Button, Input, Select, buttonClassName } from "@/components/primitives";
+import { TableToolbar } from "@/components/structure";
 import { requireStaff } from "@/lib/auth/staff";
-import { can } from "@/lib/auth/can";
 import { prisma } from "@/lib/db/client";
-import { formatCount, formatDate } from "@/lib/format";
-import { t } from "@/lib/i18n";
+import { formatCount, formatPercent } from "@/lib/format";
+import { t, type MessageKey } from "@/lib/i18n";
+import {
+  EMIRATES,
+  KINDS,
+  PAGE_SIZE,
+  hasAnyFilter,
+  normaliseAccountFilter,
+  pageFrom,
+  toQueryString,
+  type AccountFilter,
+} from "@/lib/accounts/filter";
+import { ACCOUNT_STATES, CHURN_RISK_BELOW, UPGRADE_WINDOW_DAYS } from "@/lib/accounts/health";
+import { accountSummary, readAccountPage } from "@/lib/accounts/list";
+import { listSegments } from "@/lib/accounts/segments";
+import { cn } from "@/lib/cn";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
-import { BusinessTable, type BusinessRow } from "./BusinessTable";
-import { giveNotice, lift, reopen, setTier, suspend, withdraw } from "./actions";
+import { AccountsTable } from "./AccountsTable";
+import { SegmentsMenu } from "./SegmentsMenu";
+import { deleteSegmentAction, saveSegmentAction } from "./actions";
+import { stateLabel, toTableRow } from "./present";
 
 /**
- * Board 4f — businesses and account health.
+ * Board 4f — `/admin/businesses`. A CRM that leads with reply rate.
  *
- * Every figure here is measured. `responseTimeMedianMs` comes from
- * enquiry-to-first-reply timestamps and `profileStrength` and
- * `specCompleteness` from pure functions the hourly job calls — all three were
- * invented in the seed at some point in this project's life, and all three were
- * caught. A dash means not enough to say, which is not the same as zero.
+ * The job is to find the few hundred accounts that need a phone call this week
+ * among 41,000 listings, so the page is a filter, a count and a reason:
+ *
+ *   - **Every number is its own query.** The header's total, claimed and paying;
+ *     the chip; both panels; the range line. None is a page length.
+ *   - **One threshold, one query** (`B4`). The chip, the at-risk panel and the
+ *     list under `health=churn_risk` all read `stateWhere("churn_risk")`.
+ *   - **Health is derived as the page renders** (`B1`) from the measured reply
+ *     rate the daily job writes, the plan, the subscription and the lifecycle.
+ *   - **Read-only** (`B10`). A row opens the account; decisions live there.
+ *
+ * Everything in the filter is in the URL, so a view can be saved, exported,
+ * bookmarked and sent to a colleague, and all four run the same query.
  */
 
 export const dynamic = "force-dynamic";
 
-export default async function BusinessesPage() {
-  // `requireStaff()` 404s a non-staff visitor by itself. The `if (!seat)` that
-  // used to sit here was dead code that read like a gate, which is worse than
-  // no gate — the screen had none, and every seat saw every business. The real
-  // gating is per row and per action, below.
+type Params = Promise<Record<string, string | string[] | undefined>>;
+
+export default async function BusinessesPage({ searchParams }: { searchParams: Params }) {
   const seat = await requireStaff();
-
-  /*
-     The two figures in the header are queries, not slices of this page.
-
-     They were `rows.length` and `rows.filter(state === "live").length` over a
-     `take: 300`, printed into "{count} listings, {claimed} claimed" — so the
-     screen that owns suspension across a directory its own copy calls 41,000
-     listings reported "300 listings" and would have kept saying it. Every
-     number is a query; a page cap wearing a total is the version of that rule
-     this project keeps breaking.
-
-     `claimed` also counted the wrong set. `state` is a precedence chain where
-     `suspendedAt` wins, then `mergedIntoId`, so a claimed business that had
-     been suspended stopped being claimed as far as the header was concerned.
-     Claim status is its own column and is what the word means.
-  */
-  const [businesses, badges, listingCount, claimedCount] = await Promise.all([
-    prisma.business.findMany({
-      orderBy: [{ suspendedAt: { sort: "desc", nulls: "last" } }, { displayName: "asc" }, { id: "asc" }],
-      take: 300,
-      select: {
-        id: true,
-        displayName: true,
-        planId: true,
-        verificationTier: true,
-        responseTimeMedianMs: true,
-        profileStrength: true,
-        claimStatus: true,
-        suspendedAt: true,
-        mergedIntoId: true,
-        licenceExpiry: true,
-        closureRequestedAt: true,
-        closedAt: true,
-        // Board 11i. At most one open closure per business, by index.
-        closures: {
-          where: { reversedAt: null, finalisedAt: null },
-          select: { initiator: true, appliedAt: true, effectiveAt: true, finalAt: true },
-          take: 1,
-        },
-      },
-    }),
-    getAdminNavBadges(seat),
-    prisma.business.count(),
-    prisma.business.count({ where: { claimStatus: "claimed" } }),
-  ]);
-
-  /*
-     What this seat may do, worked out here so the table can offer only what
-     the service will accept.
-
-     Tier used to be the subtle one. `business.verification_tier.write` was
-     held by an ops lead and by a field verifier, and a field verifier could
-     only tier a business they had been to — a subject check reading
-     `visitedByStaffId`. Site visits were withdrawn and that column went with
-     them, so the capability is ops-lead only and this is a plain role test
-     again. Narrowed rather than widened: see lib/auth/capabilities.ts.
-  */
-  const mayTier = can(seat.actor, "business.verification_tier.write");
-  const maySuspend = can(seat.actor, "business.suspend");
-  const mayClose = can(seat.actor, "business.close");
+  const params = await searchParams;
   const now = new Date();
 
-  const rows: BusinessRow[] = businesses.map((business) => ({
-    id: business.id,
-    displayName: business.displayName,
-    plan: business.planId ?? "—",
-    tier: business.verificationTier,
-    replyMs: business.responseTimeMedianMs,
-    strength: business.profileStrength,
-    /*
-       Closure sits under suspension and merge in the precedence, and above
-       claim status: a closed business is out of the directory whatever its
-       claim says, and reading it as `live` on the one screen that can reopen it
-       would hide the only row an ops lead came here to find.
-    */
-    state: business.suspendedAt
-      ? "suspended"
-      : business.mergedIntoId
-        ? "merged"
-        : business.closedAt
-          ? "closed"
-          : business.closureRequestedAt
-            ? "closing"
-            : business.claimStatus === "unclaimed"
-              ? "unclaimed"
-              : "live",
-    mayTier,
-    maySuspend,
-    mayClose,
-    closure: closureOf(business.closures[0] ?? null),
-    licenceLapsed: business.licenceExpiry.getTime() <= now.getTime(),
-  }));
+  const filter = normaliseAccountFilter(params);
+  const page = pageFrom(params);
+
+  const [summary, result, badges, plans, sectors, segments] = await Promise.all([
+    accountSummary(now),
+    readAccountPage(filter, page, now),
+    getAdminNavBadges(seat),
+    prisma.plan.findMany({ orderBy: [{ sortOrder: "asc" }, { id: "asc" }], select: { id: true, name: true } }),
+    prisma.category.findMany({
+      where: { parentId: null },
+      orderBy: [{ name: "asc" }, { id: "asc" }],
+      select: { id: true, name: true },
+    }),
+    listSegments(seat.actor, now),
+  ]);
+
+  const filtered = hasAnyFilter(filter);
+  const currentQuery = toQueryString(filter);
+  const from = result.total === 0 ? 0 : (result.page - 1) * result.pageSize + 1;
+  const to = Math.min(result.total, result.page * result.pageSize);
+  const lastPage = Math.max(1, Math.ceil(result.total / PAGE_SIZE));
+
+  const atRiskActive = filter.health === "churn_risk";
+  const atRiskHref = `/admin/businesses?${toQueryString(
+    atRiskActive ? { ...filter, health: undefined } : { ...filter, health: "churn_risk", sort: "reply_rate" },
+  )}`;
+  const exportHref = `/admin/businesses/export${currentQuery ? `?${currentQuery}` : ""}`;
+  const threshold = formatPercent(CHURN_RISK_BELOW);
 
   return (
     <AdminPage
@@ -126,39 +89,256 @@ export default async function BusinessesPage() {
       title={t("admin.businesses.title")}
       eyebrow={t("admin.businesses.eyebrow")}
       meta={
-        <span className="text-caption text-muted">
-          {t("admin.businesses.meta", {
-            count: formatCount(listingCount),
-            claimed: formatCount(claimedCount),
+        <span className="text-caption text-body">
+          {t("admin.businesses.meta_counts", {
+            total: formatCount(summary.listings),
+            claimed: formatCount(summary.claimed),
+            paying: formatCount(summary.paying),
           })}
-          {listingCount > rows.length && (
-            <>
-              {" · "}
-              {t("admin.businesses.showing", { count: formatCount(rows.length) })}
-            </>
-          )}
+        </span>
+      }
+      actions={
+        <span className="flex items-center gap-2">
+          <SegmentsMenu
+            segments={segments.map((segment) => ({ ...segment }))}
+            currentQuery={currentQuery}
+            canSave={filtered}
+            save={saveSegmentAction}
+            remove={deleteSegmentAction}
+          />
+          <a href={exportHref} download className={buttonClassName({ variant: "secondary" })}>
+            {filtered ? t("admin.businesses.export_filtered") : t("admin.businesses.export")}
+          </a>
         </span>
       }
     >
-      <BusinessTable
-        rows={rows}
-        setTier={setTier}
-        suspend={suspend}
-        lift={lift}
-        giveNotice={giveNotice}
-        withdraw={withdraw}
-        reopen={reopen}
-      />
+      <div className="flex flex-col gap-[var(--gutter)]">
+        <div>
+          <TableToolbar>
+            <form
+              method="get"
+              action="/admin/businesses"
+              role="search"
+              aria-label={t("admin.businesses.filter_label")}
+              className="flex w-full flex-wrap items-end gap-2 py-1"
+            >
+              <label className="flex min-w-60 flex-1 flex-col gap-1">
+                <span className="text-caption font-medium text-body">{t("admin.businesses.filter.q")}</span>
+                <Input
+                  name="q"
+                  type="search"
+                  defaultValue={filter.q ?? ""}
+                  placeholder={t("admin.businesses.filter.q_placeholder")}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </label>
+              <FilterSelect
+                name="plan"
+                label={t("admin.businesses.filter.plan")}
+                value={filter.plan}
+                any={t("admin.businesses.filter.any_plan")}
+                options={[
+                  ...plans.map((plan) => ({ value: plan.id, label: plan.name })),
+                  { value: "none", label: t("admin.businesses.filter.no_plan") },
+                ]}
+              />
+              <FilterSelect
+                name="emirate"
+                label={t("admin.businesses.filter.emirate")}
+                value={filter.emirate}
+                any={t("admin.businesses.filter.any_emirate")}
+                options={EMIRATES.map((emirate) => ({ value: emirate, label: t(`emirate.${emirate}` as MessageKey) }))}
+              />
+              <FilterSelect
+                name="sector"
+                label={t("admin.businesses.filter.sector")}
+                value={filter.sector}
+                any={t("admin.businesses.filter.any_sector")}
+                options={sectors.map((sector) => ({ value: sector.id, label: sector.name }))}
+              />
+              <FilterSelect
+                name="tier"
+                label={t("admin.businesses.filter.tier")}
+                value={filter.tier === undefined ? undefined : String(filter.tier)}
+                any={t("admin.businesses.filter.any_tier")}
+                options={[0, 1, 2].map((tier) => ({
+                  value: String(tier),
+                  label: t("admin.businesses.tier_option", { tier: String(tier) }),
+                }))}
+              />
+              <FilterSelect
+                name="health"
+                label={t("admin.businesses.filter.health")}
+                value={filter.health}
+                any={t("admin.businesses.filter.any_health")}
+                options={ACCOUNT_STATES.map((state) => ({ value: state, label: stateLabel(state) }))}
+              />
+              <FilterSelect
+                name="kind"
+                label={t("admin.businesses.filter.kind")}
+                value={filter.kind}
+                any={t("admin.businesses.filter.any_kind")}
+                options={KINDS.map((kind) => ({ value: kind, label: t(`admin.businesses.kind.${kind}` as MessageKey) }))}
+              />
+              <FilterSelect
+                name="sort"
+                label={t("admin.businesses.filter.sort")}
+                value={filter.sort ?? "name"}
+                options={[
+                  { value: "name", label: t("admin.businesses.sort.name") },
+                  { value: "reply_rate", label: t("admin.businesses.sort.reply_rate") },
+                ]}
+              />
+              <div className="flex items-center gap-2">
+                <Button type="submit" variant="secondary">
+                  {t("admin.businesses.filter.apply")}
+                </Button>
+                {filtered ? (
+                  <Link href="/admin/businesses" className={buttonClassName({ variant: "ghost" })}>
+                    {t("admin.businesses.filter.clear")}
+                  </Link>
+                ) : null}
+              </div>
+            </form>
+          </TableToolbar>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-x border-line bg-card px-3 py-2">
+            {/* B4: the same count as the panel below, from the same query. */}
+            <Link
+              href={atRiskHref}
+              aria-current={atRiskActive ? "true" : undefined}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-ctl border px-3 py-1.5 text-body-sm focus-visible:shadow-focus focus-visible:outline-none",
+                atRiskActive ? "border-bad-line bg-bad-surface text-bad-ink" : "border-bad-line bg-bad-wash text-bad-ink",
+              )}
+            >
+              {t("admin.businesses.chip_at_risk", { n: formatCount(summary.churnRisk) })}
+            </Link>
+            <p className="text-caption text-body" aria-live="polite">
+              {result.total === 0
+                ? t("admin.businesses.range_none")
+                : t("admin.businesses.range", {
+                    from: formatCount(from),
+                    to: formatCount(to),
+                    total: formatCount(result.total),
+                  })}
+            </p>
+          </div>
+          <AccountsTable
+            rows={result.rows.map(toTableRow)}
+            caption={filtered ? t("admin.businesses.caption_filtered") : t("admin.businesses.caption")}
+            filtered={filtered}
+          />
+        </div>
+
+        {lastPage > 1 ? (
+          <nav aria-label={t("admin.businesses.pages_label")} className="flex flex-wrap items-center justify-end gap-2">
+            {result.page > 1 ? (
+              <Link
+                href={`/admin/businesses?${toQueryString(filter, { page: result.page - 1 })}`}
+                className={buttonClassName({ variant: "secondary", size: "sm" })}
+              >
+                {t("admin.businesses.previous")}
+              </Link>
+            ) : null}
+            <span className="text-caption text-body">
+              {t("admin.businesses.page_of", { page: formatCount(result.page), pages: formatCount(lastPage) })}
+            </span>
+            {result.page < lastPage ? (
+              <Link
+                href={`/admin/businesses?${toQueryString(filter, { page: result.page + 1 })}`}
+                className={buttonClassName({ variant: "secondary", size: "sm" })}
+              >
+                {t("admin.businesses.next")}
+              </Link>
+            ) : null}
+          </nav>
+        ) : null}
+
+        <div className="grid gap-[var(--gutter)] lg:grid-cols-2">
+          <section
+            aria-labelledby="panel-at-risk"
+            className={cn(
+              "flex flex-col items-start gap-3 rounded-panel border p-5",
+              summary.churnRisk > 0 ? "border-bad-line bg-bad-surface" : "border-line bg-card",
+            )}
+          >
+            <h2
+              id="panel-at-risk"
+              className={cn(
+                "font-mono text-eyebrow uppercase",
+                summary.churnRisk > 0 ? "text-bad-ink" : "text-body",
+              )}
+            >
+              {t("admin.businesses.panel.at_risk_title", { count: summary.churnRisk, n: formatCount(summary.churnRisk) })}
+            </h2>
+            <p className={cn("max-w-prose text-body", summary.churnRisk > 0 ? "text-bad-ink" : "text-prose")}>
+              {summary.churnRisk > 0
+                ? t("admin.businesses.panel.at_risk_body", { count: summary.churnRisk, threshold })
+                : t("admin.businesses.panel.at_risk_clear", { threshold })}
+            </p>
+            {summary.churnRisk > 0 ? (
+              <Link
+                href={`/admin/businesses?${toQueryString({ health: "churn_risk", sort: "reply_rate" } satisfies AccountFilter)}`}
+                className={buttonClassName({ variant: "danger" })}
+              >
+                {t("admin.businesses.panel.open_list")}
+              </Link>
+            ) : null}
+          </section>
+
+          <section
+            aria-labelledby="panel-upgrade"
+            className="flex flex-col items-start gap-3 rounded-panel border border-line bg-card p-5"
+          >
+            <h2 id="panel-upgrade" className="font-mono text-eyebrow uppercase text-body">
+              {t("admin.businesses.panel.upgrade_title", {
+                count: summary.upgradeCandidates,
+                n: formatCount(summary.upgradeCandidates),
+              })}
+            </h2>
+            <p className="max-w-prose text-body text-prose">
+              {summary.upgradeCandidates > 0
+                ? t("admin.businesses.panel.upgrade_body", { days: UPGRADE_WINDOW_DAYS })
+                : t("admin.businesses.panel.upgrade_clear", { days: UPGRADE_WINDOW_DAYS })}
+            </p>
+            {summary.upgradeCandidates > 0 ? (
+              <Link
+                href={`/admin/businesses?${toQueryString({ health: "upgrade_candidate" } satisfies AccountFilter)}`}
+                className={buttonClassName({ variant: "secondary" })}
+              >
+                {t("admin.businesses.panel.open_list")}
+              </Link>
+            ) : null}
+          </section>
+        </div>
+      </div>
     </AdminPage>
   );
 }
 
-/** Board 11i. What the decision strip needs to know about an open closure. */
-function closureOf(
-  closure: { initiator: "owner" | "platform"; appliedAt: Date | null; effectiveAt: Date; finalAt: Date } | null,
-): BusinessRow["closure"] {
-  if (!closure) return null;
-  return closure.appliedAt
-    ? { kind: "closing", date: formatDate(closure.finalAt) }
-    : { kind: "notice", date: formatDate(closure.effectiveAt) };
+function FilterSelect({
+  name,
+  label,
+  value,
+  any,
+  options,
+}: {
+  name: string;
+  label: string;
+  value: string | undefined;
+  /** The "no filter" option. Omitted for a control that always has a value. */
+  any?: string;
+  options: readonly { value: string; label: string }[];
+}) {
+  return (
+    <label className="flex min-w-36 flex-col gap-1">
+      <span className="text-caption font-medium text-body">{label}</span>
+      <Select
+        name={name}
+        defaultValue={value ?? ""}
+        options={any ? [{ value: "", label: any }, ...options] : options}
+      />
+    </label>
+  );
 }

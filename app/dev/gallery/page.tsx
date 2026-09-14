@@ -15,6 +15,7 @@ import { ApprovalQueueGallery } from "./_sections/ApprovalQueue";
 import { Reviews } from "./_sections/Reviews";
 import { CloseAccountGallery } from "./_sections/CloseAccount";
 import { StaffRolesGallery } from "./_sections/StaffRoles";
+import { AccountsGallery } from "./_sections/Accounts";
 import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
 import { ServiceBriefGallery } from "./_sections/ServiceBrief";
 import { AcceptedRecordGallery } from "./_sections/AcceptedRecord";
@@ -274,6 +275,7 @@ export default function Gallery() {
       <Reviews />
       <CloseAccountGallery />
       <StaffRolesGallery />
+      <AccountsGallery />
       <ServicesStorefrontGallery />
       <ServiceBriefGallery />
       <AcceptedRecordGallery />

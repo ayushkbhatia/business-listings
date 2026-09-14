@@ -1,4 +1,5 @@
 import "server-only";
+import { recordCapRefused } from "@/lib/accounts/cap-events";
 import { prisma } from "@/lib/db/client";
 import { assertCanEditProduct } from "@/lib/auth/guards";
 import { allowance, cheapestPlanUnlocking, type PlanCaps } from "@/lib/plan/entitlements";
@@ -620,6 +621,16 @@ export async function createService(
   if (plan) {
     const room = allowance(plan, "services", existing.length);
     if (room.atCap) {
+      // Board 4f B6: refused at the ceiling, dated, for the upgrade list.
+      await recordCapRefused({
+        kind: "services",
+        businessId,
+        actorId: actor.id,
+        plan: plan.name,
+        cap: room.cap ?? 0,
+        attempted: 1,
+        surface: "new_service",
+      });
       return { ok: false, reason: "at_cap", cap: room.cap ?? 0, planName: plan.name };
     }
   }

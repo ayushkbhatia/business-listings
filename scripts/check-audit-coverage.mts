@@ -93,6 +93,10 @@ const EXEMPT = new Map<string, string>([
     "The sign-in flow: creating a profile at first sign-in and mirroring roles into the JWT claim. It is reached from the console only through `repairClaims`, which board 11i's reopen and withdraw call after their own `staffMutation` has written the audit row for the decision — the claim mirror is a cache of that decision, not a second one.",
   ],
   [
+    "lib/accounts/segments.ts",
+    "Board 4f's saved segments: a name and a canonical query string, shared by the console. Saving or deleting one changes nothing about any account — the next open runs the query again — so it is a bookmark several people can use, the call `SavedSearch` makes for a buyer. `AuditEvent` holds decisions about the directory, and this is not one.",
+  ],
+  [
     "lib/staff/activity.ts",
     "Board 4i's \"Last active\": a timestamp `requireStaff()` writes after the response, at most every five minutes. It measures that somebody used the console; nobody decided the value, and `AuditEvent.actorId` is NOT NULL because the log holds decisions. The staff state changes themselves are in lib/staff/service.ts, which audits every one.",
   ],

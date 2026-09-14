@@ -1,4 +1,5 @@
 import "server-only";
+import { recordCapRefused } from "@/lib/accounts/cap-events";
 import { prisma } from "@/lib/db/client";
 import { Prisma } from "@/lib/db/generated/client";
 import { assertCanEditProduct } from "@/lib/auth/guards";
@@ -502,7 +503,19 @@ export async function saveRow(
 
   // The cap applies to creating a row, never to correcting one. A seller at the
   // limit must still be able to fix what they have — see the screen's own copy.
-  if (board.atCap) return { ok: false, error: "at_cap" };
+  if (board.atCap) {
+    // Board 4f B6: refused at the ceiling, dated, for the upgrade list.
+    await recordCapRefused({
+      kind: "products",
+      businessId,
+      actorId: actor.id,
+      plan: board.planName ?? "",
+      cap: board.cap ?? 0,
+      attempted: 1,
+      surface: "onboarding_sheet",
+    });
+    return { ok: false, error: "at_cap" };
+  }
 
   const created = await createWithUniqueSlug(businessId, business.primaryCategoryId, {
     name,

@@ -96,6 +96,79 @@ export function band(medianMs: number | null): Band {
   return "slow";
 }
 
+/**
+ * One enquiry as the reply rate sees it: the median's observation, plus when
+ * the enquiry closed.
+ */
+export interface RateObservation extends ReplyObservation {
+  /** When the buyer's window for replies closed. */
+  closesAt: Date;
+}
+
+export interface ReplyRate {
+  /** Replied over counted, 0..1. */
+  rate: number;
+  /** How many enquiries were counted. */
+  sample: number;
+}
+
+/**
+ * The share of enquiries a supplier answered. Board 4f `B5`.
+ *
+ * Measured over the same recipients, window and sample floor as the median, so
+ * the two numbers an ops lead reads side by side — "62% · 3 h 20" — cannot be
+ * about different enquiries. A reply is whatever stamps `firstReplyAt`: a
+ * message, a quote, a proposal, or a decline, which is an answer.
+ *
+ * **An unanswered enquiry counts only once its window has closed.** The same
+ * rule `effectiveState` applies before it calls a recipient `no_response`: a
+ * supplier with twelve hours left has not failed to reply, they have not
+ * replied *yet*, and counting them as a miss would put a busy supplier on the
+ * churn list for enquiries they are about to answer. An answered enquiry counts
+ * the moment it is answered, whether or not its window is still open.
+ *
+ * Null below the floor. One reply in two enquiries is not "50%"; it is not
+ * enough to say, and the health state reads that as unmeasured, not at risk.
+ */
+export function replyRate(
+  observations: readonly RateObservation[],
+  now: Date,
+  minSample = MIN_SAMPLE,
+): ReplyRate | null {
+  let counted = 0;
+  let replied = 0;
+  for (const observation of observations) {
+    if (observation.firstReplyAt) {
+      counted += 1;
+      replied += 1;
+    } else if (observation.closesAt.getTime() <= now.getTime()) {
+      counted += 1;
+    }
+  }
+  if (counted < minSample) return null;
+  return { rate: replied / counted, sample: counted };
+}
+
+export interface MeasuredReplies {
+  medianMs: number | null;
+  rate: number | null;
+  sample: number | null;
+}
+
+/**
+ * Both measures for one business, from one set of recipients. The job and the
+ * seed both call this, so a seeded supplier is measured the way a live one is —
+ * a seed that measures differently from production is a seed that claims.
+ */
+export function measureReplies(observations: readonly RateObservation[], now: Date): MeasuredReplies {
+  const rate = replyRate(observations, now);
+  return {
+    medianMs: medianResponseMs(observations),
+    rate: rate?.rate ?? null,
+    sample: rate?.sample ?? null,
+  };
+}
+
 /** The oldest delivery a window includes. */
 export function windowStart(now: Date, days = WINDOW_DAYS): Date {
   return new Date(now.getTime() - days * 86_400_000);

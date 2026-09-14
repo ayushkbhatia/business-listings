@@ -164,6 +164,7 @@ model User {
   routingCursorFor        Business[]               @relation("RoutingCursor")
   staffInvitesSent        StaffInvite[]            @relation("StaffInviteSender")
   staffInvitesAccepted    StaffInvite[]            @relation("StaffInviteAcceptor")
+  accountSegments         AccountSegment[]         @relation("AccountSegmentAuthor")
 
   @@index([businessId])
   /// Board 4i. "Who holds a staff role" is a containment test over every account
@@ -1040,6 +1041,14 @@ model Business {
   // ── Derived. Computed by jobs, read-only everywhere else. No seller input;
   //    that is what makes them worth showing. See data-model.md.
   responseTimeMedianMs Int?      @map("response_time_median_ms")
+  /// Board 4f. The share of enquiries this supplier answered, 0..1, measured
+  /// over the same recipients and window as `responseTimeMedianMs` (B5) by the
+  /// same job. An unanswered enquiry counts against it only once its window has
+  /// closed — the rule `effectiveState` uses before it calls anybody
+  /// `no_response`. Null below the sample floor, which is not the same as zero.
+  replyRate            Float?    @map("reply_rate")
+  /// How many enquiries `replyRate` was measured over. The screen says it.
+  replySample          Int?      @map("reply_sample")
   profileStrength      Int?      @map("profile_strength")
   specCompleteness     Float?    @map("spec_completeness")
   quotedValueAed       Decimal?  @map("quoted_value_aed") @db.Decimal(14, 2)
@@ -1141,6 +1150,11 @@ model Business {
   @@index([publishedAt])
   @@index([licenceExpiry])
   @@index([licenceAuthority, licenceNumber], map: "business_licence_authority_number_idx")
+  /// Board 4f `B7`. A caller reads out a licence number without its authority,
+  /// and the composite above leads with the authority, so it cannot serve that.
+  @@index([licenceNumber])
+  @@index([trn])
+  @@index([planId])
   @@index([displayName(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([tradeName(ops: raw("gin_trgm_ops"))], type: Gin)
   @@index([searchText(ops: raw("gin_trgm_ops"))], type: Gin)
@@ -6236,6 +6250,30 @@ model RateLimitHit {
   /// The prune.
   @@index([createdAt])
   @@map("rate_limit_hit")
+}
+
+/// Board 4f `B8`. A named filter on `/admin/businesses`, shared by the console.
+///
+/// A saved *query*, never a saved list: `query` is the canonical query string
+/// `lib/accounts/filter.ts` writes, and opening a segment runs it again. A list
+/// frozen at creation is the staleness `B1` exists to prevent — the account that
+/// was at risk last Tuesday and answered every enquiry since would still be on it.
+///
+/// Not audited. A segment changes nothing about any account; it is a bookmark
+/// several people can use, the same call `SavedSearch` makes for a buyer.
+model AccountSegment {
+  id          String   @id @default(cuid())
+  /// Unique, so two people cannot save "At risk, Dubai" meaning different things.
+  name        String   @unique
+  query       String
+  createdById String   @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  createdBy User @relation("AccountSegmentAuthor", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([createdAt, id])
+  @@map("account_segment")
 }
 
 /// A saved search plus its alert cadence. /account/saved.

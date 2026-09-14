@@ -1,13 +1,14 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { medianResponseMs, windowStart, type ReplyObservation } from "./response-time";
+import { measureReplies, windowStart, type RateObservation } from "./response-time";
 
 /**
- * The response-time measurement job.
+ * The response-time measurement job — the median, and since board 4f the
+ * reply rate beside it.
  *
  * Reads `EnquiryRecipient.createdAt` and `firstReplyAt` — both stamped by the
  * services that do the work, never by a form — and writes
- * `Business.responseTimeMedianMs`. That column is the only place the number
+ * `Business.responseTimeMedianMs`, `replyRate` and `replySample`. Those columns are the only place the numbers
  * lives, no API path writes it, and no seller-facing form has a field for it.
  * Criterion 5 asks for exactly that, and the asking is the point: a claimed
  * reply time is worth nothing, which is why every other directory's is.
@@ -18,9 +19,9 @@ import { medianResponseMs, windowStart, type ReplyObservation } from "./response
 
 export interface MeasurementResult {
   businessesConsidered: number;
-  /** How many now have a median they did not have, or a different one. */
+  /** How many now have a median or a reply rate they did not have, or a different one. */
   updated: number;
-  /** How many fell below the sample floor and were cleared to unmeasured. */
+  /** How many fell below the sample floor on both measures and were cleared to unmeasured. */
   cleared: number;
   ranAt: Date;
 }
@@ -38,22 +39,28 @@ export async function measureResponseTimes(now: Date = new Date()): Promise<Meas
       createdAt: { gte: since },
       business: { claimStatus: "claimed", suspendedAt: null },
     },
-    select: { businessId: true, createdAt: true, firstReplyAt: true },
+    select: {
+      businessId: true,
+      createdAt: true,
+      firstReplyAt: true,
+      enquiry: { select: { closesAt: true } },
+    },
   });
 
-  const byBusiness = new Map<string, ReplyObservation[]>();
+  const byBusiness = new Map<string, RateObservation[]>();
   for (const row of rows) {
     const list = byBusiness.get(row.businessId) ?? [];
-    list.push({ deliveredAt: row.createdAt, firstReplyAt: row.firstReplyAt });
+    list.push({ deliveredAt: row.createdAt, firstReplyAt: row.firstReplyAt, closesAt: row.enquiry.closesAt });
     byBusiness.set(row.businessId, list);
   }
 
-  // Businesses that had a median and now have no enquiries in the window at
-  // all. Without this a supplier who stopped trading keeps their old number.
+  // Businesses that had a measure and now have no enquiries in the window at
+  // all. Without this a supplier who stopped trading keeps their old numbers.
   const previouslyMeasured = await prisma.business.findMany({
-    where: { responseTimeMedianMs: { not: null } },
-    select: { id: true, responseTimeMedianMs: true },
+    where: { OR: [{ responseTimeMedianMs: { not: null } }, { replyRate: { not: null } }] },
+    select: { id: true, responseTimeMedianMs: true, replyRate: true, replySample: true },
   });
+  const previous = new Map(previouslyMeasured.map((business) => [business.id, business]));
   for (const business of previouslyMeasured) {
     if (!byBusiness.has(business.id)) byBusiness.set(business.id, []);
   }
@@ -62,15 +69,26 @@ export async function measureResponseTimes(now: Date = new Date()): Promise<Meas
   let cleared = 0;
 
   for (const [businessId, observations] of byBusiness) {
-    const median = medianResponseMs(observations);
-    const current = previouslyMeasured.find((b) => b.id === businessId)?.responseTimeMedianMs ?? null;
-    if (median === current) continue;
+    const next = measureReplies(observations, now);
+    const current = previous.get(businessId);
+    if (
+      next.medianMs === (current?.responseTimeMedianMs ?? null) &&
+      next.rate === (current?.replyRate ?? null) &&
+      next.sample === (current?.replySample ?? null)
+    ) {
+      continue;
+    }
 
     await prisma.business.update({
       where: { id: businessId },
-      data: { responseTimeMedianMs: median, derivedAt: now },
+      data: {
+        responseTimeMedianMs: next.medianMs,
+        replyRate: next.rate,
+        replySample: next.sample,
+        derivedAt: now,
+      },
     });
-    if (median === null) cleared += 1;
+    if (next.medianMs === null && next.rate === null) cleared += 1;
     else updated += 1;
   }
 
