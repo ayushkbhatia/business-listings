@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { bandsProblem, parseBands } from "./bands";
 import {
   bandFor,
   compare,
+  isNearMiss,
+  licenceParts,
+  sameDistrict,
   licenceDigits,
   nameSimilarity,
   nameTokens,
@@ -197,5 +201,99 @@ describe("two unrelated listings", () => {
     expect(result.score).toBe(0);
     expect(result.band).toBe("unlikely");
     expect(result.signals).toEqual([]);
+  });
+});
+
+/* ── Board 12b ───────────────────────────────────────────────────────────── */
+
+describe("a branch licence", () => {
+  it("reads the root and the suffix", () => {
+    expect(licenceParts("DED-441908-01")).toEqual({ root: "441908", suffix: "01" });
+    expect(licenceParts("DED-441908")).toEqual({ root: "441908", suffix: null });
+    expect(licenceParts("SAIF 40119/2")).toEqual({ root: "40119", suffix: "2" });
+  });
+
+  it("does not guess a suffix inside a run of digits", () => {
+    expect(licenceParts("DED-44190801")).toEqual({ root: "44190801", suffix: null });
+  });
+
+  it("puts a branch of a claimed company in the manual band, never the bulk one", () => {
+    // Board 12b's pair: licence root, phone, most of the name, the next area
+    // along, the same activity — and still a person's decision.
+    const result = compare(
+      listing({
+        tradeName: "Gulf Cool Technical Services LLC",
+        licenceNumber: "DED-441908",
+        areaId: "quoz3",
+        areaName: "Al Quoz Industrial 3",
+        phones: ["043406688"],
+        activityKey: "air conditioning equipment trading",
+      }),
+      listing({
+        id: "b",
+        tradeName: "Gulf Cool Technical Services (Branch)",
+        licenceNumber: "DED-441908-01",
+        areaId: "quoz4",
+        areaName: "Al Quoz Industrial 4",
+        phones: ["04 340 6688"],
+        activityKey: "air conditioning equipment trading",
+      }),
+    );
+    expect(result.band).toBe("probable");
+    expect(result.signals.map((s) => s.key)).toEqual(
+      expect.arrayContaining(["licence_root", "phone", "trade_name", "nearby_area", "activity"]),
+    );
+    expect(result.signals.map((s) => s.key)).not.toContain("licence_number");
+  });
+
+  it("is not a match on the root alone", () => {
+    const result = compare(
+      listing({ licenceNumber: "DED-441908" }),
+      listing({
+        id: "b",
+        tradeName: "Unrelated Name FZE",
+        licenceNumber: "DED-441908-02",
+        phones: [],
+        addressLine: null,
+        areaId: null,
+      }),
+    );
+    expect(result.band).toBe("unlikely");
+    // But it identifies something, so it is counted under the floor (B10).
+    expect(isNearMiss(result)).toBe(true);
+  });
+});
+
+describe("the district", () => {
+  it("is one district when only the number differs", () => {
+    expect(sameDistrict("Al Quoz Industrial 3", "Al Quoz Industrial 4")).toBe(true);
+  });
+
+  it("is not a district shared by the word Industrial", () => {
+    expect(sameDistrict("Al Quoz Industrial 3", "Ras Al Khor Industrial 2")).toBe(false);
+    expect(sameDistrict("Deira", "Deira")).toBe(false); // that is the same area, not a nearby one
+  });
+});
+
+describe("the bands a tuning may set", () => {
+  it("scores against the tuned lines", () => {
+    const result = compare(listing(), listing({ id: "b", licenceNumber: "DED-771203" }), {
+      floor: 0.4,
+      certain: 0.95,
+    });
+    expect(result.band).toBe("probable");
+  });
+
+  it("refuses a certain line that would let circumstance bulk-merge", () => {
+    expect(bandsProblem({ floor: 0.6, certain: 0.85 })).toBe("certain_too_low");
+    expect(bandsProblem({ floor: 0.3, certain: 0.9 })).toBe("floor_too_low");
+    expect(bandsProblem({ floor: 0.88, certain: 0.9 })).toBe("band_too_narrow");
+    expect(bandsProblem({ floor: 0.55, certain: 0.95 })).toBeNull();
+  });
+
+  it("reads a malformed setting as the default rather than as whatever it says", () => {
+    expect(parseBands({ floor: "x", certain: 0.9 })).toEqual({ floor: 0.6, certain: 0.9 });
+    expect(parseBands({ floor: 0.5, certain: 0.8 })).toEqual({ floor: 0.6, certain: 0.9 });
+    expect(parseBands({ floor: 0.5, certain: 0.92 })).toEqual({ floor: 0.5, certain: 0.92 });
   });
 });

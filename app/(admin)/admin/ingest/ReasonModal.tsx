@@ -31,6 +31,10 @@ export interface ReasonModalProps {
   children?: React.ReactNode;
   confirmLabel: string;
   destructive?: boolean;
+  /** The line under the reason field. Defaults to the run's wording. */
+  reasonHint?: string;
+  /** The decision cannot be made at all; the children say why. */
+  blocked?: boolean;
   /** Hidden fields sent with the reason. */
   fields: Record<string, string>;
   action: (formData: FormData) => Promise<ActionResult>;
@@ -45,6 +49,8 @@ export function ReasonModal({
   children,
   confirmLabel,
   destructive = false,
+  blocked = false,
+  reasonHint = t("admin.ingest.reason_hint"),
   fields,
   action,
   onDone,
@@ -93,7 +99,7 @@ export function ReasonModal({
           <Button
             variant={destructive ? "danger" : "primary"}
             loading={pending}
-            disabled={reason.trim().length < MIN_REASON || pending}
+            disabled={blocked || reason.trim().length < MIN_REASON || pending}
             onClick={confirm}
           >
             {confirmLabel}
@@ -108,7 +114,7 @@ export function ReasonModal({
             htmlFor={fieldId}
             requirement="required"
             requirementLabel={t("field.required")}
-            hint={t("admin.ingest.reason_hint")}
+            hint={reasonHint}
           >
             {t("admin.review.reason_label")}
           </Label>
@@ -120,7 +126,7 @@ export function ReasonModal({
           />
         </div>
         {error && (
-          <Alert tone="bad" live="assertive" fix={t("admin.ingest.reason_hint")}>
+          <Alert tone="bad" live="assertive" fix={reasonHint}>
             {error}
           </Alert>
         )}

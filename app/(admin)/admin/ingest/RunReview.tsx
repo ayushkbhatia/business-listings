@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ProgressBar, StatusBadge } from "@/components/display";
 import { cn } from "@/lib/cn";
-import { formatCount, formatDate, formatDateTime } from "@/lib/format";
+import { MIDDLE_DOT, formatCount, formatDate, formatDateTime } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { RunOverview } from "@/lib/ingest/read";
 import type { ActionResult } from "./actions";
@@ -122,7 +122,7 @@ export function RunReview({
           label={t("admin.run.card.duplicates")}
           value={run.duplicates}
           tone="warn"
-          caption={t("admin.run.card.duplicates_caption")}
+          caption={duplicatesCaption(run.pairs)}
         />
         <OutcomeCard
           label={t("admin.run.card.rejected")}
@@ -281,4 +281,25 @@ export function RunReview({
       />
     </div>
   );
+}
+
+/**
+ * Board 12b: where this run's possible duplicates stand in the dedupe queue,
+ * and — Q1 — how many records came near a listing and scored under the floor,
+ * so a floor set too high shows up on the run it hid duplicates from.
+ */
+function duplicatesCaption(pairs: RunOverview["pairs"]): string {
+  const decided = pairs.merged + pairs.separated + pairs.discarded;
+  const standing =
+    pairs.pending > 0
+      ? t("admin.run.card.duplicates_pending", {
+          pending: formatCount(pairs.pending),
+          decided: formatCount(decided),
+        })
+      : decided > 0
+        ? t("admin.run.card.duplicates_decided")
+        : t("admin.run.card.duplicates_caption");
+  return pairs.belowFloor > 0
+    ? [standing, t("admin.run.card.below_floor", n(pairs.belowFloor))].join(` ${MIDDLE_DOT} `)
+    : standing;
 }

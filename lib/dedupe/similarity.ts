@@ -21,14 +21,25 @@ export interface Listing {
   areaId: string | null;
   addressLine: string | null;
   phones: readonly string[];
+  /**
+   * The area's name, for the nearby-area signal. Board `12b` draws "Same area ·
+   * Adjacent" for Al Quoz Ind. 3 against Al Quoz Ind. 4; without a name the
+   * signal can only say same or not.
+   */
+  areaName?: string | null;
+  /** `activityKey` of the licence activity, where the record carries one. */
+  activityKey?: string | null;
 }
 
 export type SignalKey =
   | "licence_number"
+  | "licence_root"
   | "trade_name"
   | "phone"
   | "address"
-  | "same_area";
+  | "same_area"
+  | "nearby_area"
+  | "activity";
 
 export interface Signal {
   key: SignalKey;
@@ -65,12 +76,31 @@ export interface Similarity {
  * got wrong was the dangerous one, because a linear sum lets enough weak
  * signals add up to a bulk merge. Two paths, and a cap, say the thing directly.
  */
-const CIRCUMSTANTIAL: Record<Exclude<SignalKey, "licence_number">, number> = {
+const CIRCUMSTANTIAL: Record<Exclude<SignalKey, "licence_number" | "licence_root">, number> = {
   trade_name: 0.55,
   phone: 0.2,
   address: 0.15,
   same_area: 0.1,
+  // Half of a shared area, and never both: an area is one or the other.
+  nearby_area: 0.05,
+  // Two companies licensed for the same activity is most of a trade. Weighted
+  // low for exactly that reason, and it is what separates a branch from a
+  // tenant who shares the building and sells something else.
+  activity: 0.05,
 };
+
+/**
+ * A licence root with a different suffix: `DED-441908` and `DED-441908-01`.
+ *
+ * Board `12b`'s domain hint — *a suffix on the licence usually means a branch,
+ * not a separate company* — is a relationship, not an identity. A branch holds
+ * its own registry number (B9), so a root match is where a person starts to
+ * look and never a bulk merge on its own: it opens at this floor, the
+ * circumstance lifts it, and the same ceiling as every other non-identifier
+ * path holds it under the certain band.
+ */
+const ROOT_FLOOR = 0.35;
+const ROOT_LIFT = 0.55;
 
 /**
  * The ceiling for a pair with no licence number agreeing.
@@ -80,20 +110,51 @@ const CIRCUMSTANTIAL: Record<Exclude<SignalKey, "licence_number">, number> = {
  */
 const WITHOUT_LICENCE_CEILING = 0.89;
 
-/** Above this, bulk-merging is safe. */
+/** Above this, bulk-merging is safe. The default; `Bands` carries the tuned value. */
 export const CERTAIN = 0.9;
-/** Below this, not a match. */
+/** Below this, not a match. The default; `Bands` carries the tuned value. */
 export const PROBABLE = 0.6;
 
-export function bandFor(score: number): Band {
-  if (score >= CERTAIN) return "certain";
-  if (score >= PROBABLE) return "probable";
+/**
+ * Where the two lines sit. Board `12b` B8: the band is configurable, and its
+ * boundaries are shown — see `lib/dedupe/bands.ts` for what a tuning may set.
+ */
+export interface Bands {
+  /** At or above: a person decides. Below: not a match, and counted (B10). */
+  floor: number;
+  /** At or above: safe to bulk merge. */
+  certain: number;
+}
+
+export const DEFAULT_BANDS: Bands = { floor: PROBABLE, certain: CERTAIN };
+
+export function bandFor(score: number, bands: Bands = DEFAULT_BANDS): Band {
+  if (score >= bands.certain) return "certain";
+  if (score >= bands.floor) return "probable";
   return "unlikely";
 }
 
 /** Digits only. `DED-123456` and `123456` are the same licence. */
 export function licenceDigits(value: string): string {
   return value.replace(/\D/g, "");
+}
+
+/**
+ * A licence number's root and branch suffix.
+ *
+ * `DED-441908-01` is root `441908`, suffix `01`: the first run of digits is the
+ * licence, and a short run after a separator is the branch. `DED-44190801`,
+ * written without the separator, is read as one root — guessing where a suffix
+ * starts inside a run of digits would invent a relationship.
+ */
+export function licenceParts(value: string): { root: string; suffix: string | null } {
+  const runs = value.match(/\d+/g) ?? [];
+  if (runs.length === 0) return { root: "", suffix: null };
+  const last = runs[runs.length - 1]!;
+  if (runs.length >= 2 && last.length <= 3) {
+    return { root: runs.slice(0, -1).join(""), suffix: last };
+  }
+  return { root: runs.join(""), suffix: null };
 }
 
 /**
@@ -118,6 +179,9 @@ const NOISE = new Set([
   "traders",
   "the",
   "and",
+  // A registry marks a branch in the name as often as in the licence. It says
+  // how two records relate, and nothing about who either of them is.
+  "branch",
 ]);
 
 export function nameTokens(value: string): string[] {
@@ -166,11 +230,32 @@ function addressSimilarity(a: string | null, b: string | null): number {
   return shared / Math.max(left.size, right.size);
 }
 
-export function compare(a: Listing, b: Listing): Similarity {
+/**
+ * Two area names naming one district: `Al Quoz Industrial 3` and `Al Quoz
+ * Industrial 4`. The words match and only the number differs. Anything looser
+ * — sharing "Industrial" — is two districts, and would put every industrial
+ * area in the country next to every other.
+ */
+export function sameDistrict(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (!a || !b) return false;
+  const words = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^\p{Letter}\s]/gu, " ")
+      .split(/\s+/)
+      .filter(Boolean)
+      .join(" ");
+  const left = words(a);
+  return left.length > 0 && left === words(b) && a.trim().toLowerCase() !== b.trim().toLowerCase();
+}
+
+export function compare(a: Listing, b: Listing, bands: Bands = DEFAULT_BANDS): Similarity {
   const signals: Signal[] = [];
 
   const licenceA = licenceDigits(a.licenceNumber);
   const licenceB = licenceDigits(b.licenceNumber);
+  const rootA = licenceParts(a.licenceNumber);
+  const rootB = licenceParts(b.licenceNumber);
   if (licenceA.length >= 4 && licenceA === licenceB) {
     signals.push({
       key: "licence_number",
@@ -182,6 +267,13 @@ export function compare(a: Listing, b: Listing): Similarity {
         a.licenceAuthority === b.licenceAuthority
           ? `${a.licenceAuthority} ${licenceA}`
           : `${licenceA}, ${a.licenceAuthority} and ${b.licenceAuthority}`,
+    });
+  } else if (rootA.root.length >= 4 && rootA.root === rootB.root) {
+    const suffix = rootA.suffix ?? rootB.suffix;
+    signals.push({
+      key: "licence_root",
+      strength: 1,
+      detail: suffix ? `${rootA.root}, suffix ${suffix}` : rootA.root,
     });
   }
 
@@ -211,32 +303,66 @@ export function compare(a: Listing, b: Listing): Similarity {
 
   if (a.areaId && a.areaId === b.areaId) {
     signals.push({ key: "same_area", strength: 1, detail: "same area" });
+  } else if (a.emirate && a.emirate === b.emirate && sameDistrict(a.areaName, b.areaName)) {
+    signals.push({
+      key: "nearby_area",
+      strength: 1,
+      detail: `${a.areaName} and ${b.areaName}`,
+    });
+  }
+
+  if (a.activityKey && a.activityKey === b.activityKey) {
+    signals.push({ key: "activity", strength: 1, detail: a.activityKey });
   }
 
   const licenceSignal = signals.find((signal) => signal.key === "licence_number");
+  const rootSignal = signals.find((signal) => signal.key === "licence_root");
   const nameSignal = signals.find((signal) => signal.key === "trade_name");
+
+  const circumstance = signals.reduce(
+    (sum, signal) =>
+      signal.key === "licence_number" || signal.key === "licence_root"
+        ? sum
+        : sum + CIRCUMSTANTIAL[signal.key] * signal.strength,
+    0,
+  );
 
   /*
    * A licence match starts at the certain floor. The name lifts it from there,
    * so "same licence, different name" sits at 0.90 — certain, and still the
    * pair a careful person looks at first.
+   *
+   * The floor is the constant, not the tuned line: a licence match is an
+   * identifier whatever the band is set to, and `bands.ts` refuses a certain
+   * line below it, so this can never land a tuned identifier under "certain".
    */
   const score = licenceSignal
     ? CERTAIN + (1 - CERTAIN) * (nameSignal?.strength ?? 0)
-    : Math.min(
-        WITHOUT_LICENCE_CEILING,
-        signals.reduce(
-          (sum, signal) =>
-            signal.key === "licence_number"
-              ? sum
-              : sum + CIRCUMSTANTIAL[signal.key] * signal.strength,
-          0,
-        ),
-      );
+    : rootSignal
+      ? Math.min(WITHOUT_LICENCE_CEILING, ROOT_FLOOR + ROOT_LIFT * circumstance)
+      : Math.min(WITHOUT_LICENCE_CEILING, circumstance);
 
   const rounded = Number(Math.min(1, score).toFixed(4));
 
-  return { score: rounded, band: bandFor(rounded), signals };
+  return { score: rounded, band: bandFor(rounded, bands), signals };
+}
+
+/**
+ * A pair that shares something that identifies — a licence root, a phone or
+ * most of a name — whatever it scored.
+ *
+ * Board `12b` Q1 / B10: a real duplicate scoring under the floor never reaches
+ * a person, and nobody ever knows. These are counted, so a floor set too high
+ * shows up as a number that grows.
+ */
+export function isNearMiss(similarity: Similarity): boolean {
+  return similarity.signals.some(
+    (signal) =>
+      signal.key === "licence_number" ||
+      signal.key === "licence_root" ||
+      signal.key === "phone" ||
+      (signal.key === "trade_name" && signal.strength >= 0.5),
+  );
 }
 
 /**
@@ -249,6 +375,9 @@ export function compare(a: Listing, b: Listing): Similarity {
  */
 export function withoutIdentifiers(similarity: Similarity): boolean {
   return !similarity.signals.some(
-    (signal) => signal.key === "licence_number" || signal.key === "trade_name",
+    (signal) =>
+      signal.key === "licence_number" ||
+      signal.key === "licence_root" ||
+      signal.key === "trade_name",
   );
 }

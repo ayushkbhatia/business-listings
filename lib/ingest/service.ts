@@ -9,7 +9,13 @@ import { parseCsv } from "@/lib/import/csv";
 import { resolveEnquiryArea } from "@/lib/enquiry/area";
 import { buildBusinessSearchText } from "@/lib/search/index-text";
 import { normaliseLicenceNumber } from "@/lib/verification/licence/number";
+import { buildMatchIndex, bestMatch } from "@/lib/dedupe/match";
+import { licenceDigits } from "@/lib/dedupe/similarity";
+import { loadMatchListings, readBands, recordAsListing } from "@/lib/dedupe/source";
+import { runMergePlan, unwindRunTx, withdrawRunPairsTx } from "@/lib/dedupe/resolve";
+import { can } from "@/lib/auth/can";
 import { $Enums, Prisma } from "@/lib/db/generated/client";
+import { runCounts } from "./counts";
 import {
   activityKey,
   classify,
@@ -162,6 +168,42 @@ export interface StageInput {
 }
 
 /**
+ * Licence digits a person has said are not a given listing — board 12b B2.
+ *
+ * From a record kept separate, the record's digits against the listing it was
+ * paired with. From two listings kept separate, each listing's digits against
+ * the other, because next month's file re-sends one of them.
+ */
+export async function separatedLicences(
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<Map<string, Set<string>>> {
+  const rows = await db.mergeCandidate.findMany({
+    where: { state: "separated" },
+    select: {
+      keepId: true,
+      absorbId: true,
+      keep: { select: { licenceNumber: true } },
+      absorb: { select: { licenceNumber: true } },
+      stagedListing: { select: { licenceNumber: true } },
+    },
+  });
+  const map = new Map<string, Set<string>>();
+  const add = (licence: string | null | undefined, listingId: string | null) => {
+    const digits = licenceDigits(licence ?? "");
+    if (!digits || !listingId) return;
+    const set = map.get(digits) ?? new Set<string>();
+    set.add(listingId);
+    map.set(digits, set);
+  };
+  for (const row of rows) {
+    add(row.stagedListing?.licenceNumber, row.keepId);
+    add(row.absorb?.licenceNumber, row.keepId);
+    add(row.keep.licenceNumber, row.absorbId);
+  }
+  return map;
+}
+
+/**
  * Parse, classify, stage. Publishes nothing.
  *
  * **Whole or not at all.** The run row and every staged record are written in
@@ -232,55 +274,82 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
     };
   });
 
-  const [categories, mappings, existing] = await Promise.all([
+  const [categories, mappings, listings, bands, areas, separations] = await Promise.all([
     prisma.category.findMany({ select: { id: true, slug: true } }),
     prisma.licenceActivityMapping.findMany({
       where: { activityKey: { in: [...new Set(records.map((r) => r.key).filter(Boolean))] } },
       select: { activityKey: true, categoryId: true },
     }),
     /*
-       B9, at its obvious answer: a licence the directory already holds. Q2's
-       harder case — a number that changed on renewal — is not a licence match
-       and is left to 12b's matcher, which compares names and phones.
+       B9, and then board 12b: a record is paired with the listing it most
+       resembles — the same licence, a branch of it (a shared root), or a shared
+       phone and most of a name — and a pair at or above the floor goes to a
+       person instead of becoming a second listing. The first version of this
+       matched licence numbers exactly and nothing else, so `DED-441908-01`
+       staged as a new company beside `DED-441908`.
     */
-    prisma.business.findMany({
-      where: {
-        mergedIntoId: null,
-        licenceAuthority: {
-          in: [
-            ...new Set(
-              records
-                .map((r) => r.licence?.split(":")[0])
-                .filter((code): code is string => !!code && KNOWN_AUTHORITIES.has(code)),
-            ),
-          ] as $Enums.Authority[],
-        },
-      },
-      select: { id: true, licenceAuthority: true, licenceNumber: true },
-    }),
+    loadMatchListings(),
+    readBands(),
+    prisma.area.findMany({ select: { id: true, name: true, emirate: true } }),
+    /*
+       B2: *keep as separate* teaches the matcher. A record a person said is
+       not a listing is not paired with that listing again when next month's
+       file re-sends it.
+    */
+    separatedLicences(),
   ]);
 
   const categoryBySlug = new Map(categories.map((category) => [category.slug, category.id]));
   const mappedCategory = new Map(mappings.map((m) => [m.activityKey, m.categoryId]));
-  const listed = new Map<string, string>();
-  for (const business of existing) {
-    const key = licenceKey(business.licenceAuthority, business.licenceNumber);
-    if (key && !listed.has(key)) listed.set(key, business.id);
-  }
+  const index = buildMatchIndex(listings);
+  const areaById = new Map(areas.map((area) => [area.id, area]));
 
   // The first row of the file carrying a licence keeps it; a later one repeats it.
   const firstRowFor = new Map<string, number>();
+  let belowFloor = 0;
 
   const staged = records.map((row) => {
     let duplicateOfId: string | null = null;
     let duplicateOfRow: number | null = null;
+    let pair: { score: number; band: "certain" | "probable"; signals: unknown } | null = null;
 
-    if (row.verdict.disposition !== "rejected" && row.licence) {
-      duplicateOfId = listed.get(row.licence) ?? null;
-      if (!duplicateOfId) {
-        const earlier = firstRowFor.get(row.licence);
-        if (earlier === undefined) firstRowFor.set(row.licence, row.rowNumber);
-        else duplicateOfRow = earlier;
+    if (row.verdict.disposition !== "rejected") {
+      const earlier = row.licence ? firstRowFor.get(row.licence) : undefined;
+      if (row.licence && earlier !== undefined) {
+        // An exact repeat inside one file is the file repeating itself, not a
+        // company to argue about. It does not reach the dedupe queue.
+        duplicateOfRow = earlier;
+      } else {
+        if (row.licence) firstRowFor.set(row.licence, row.rowNumber);
+        const emirate = normaliseEmirate(row.record.emirate);
+        const areaId = resolveEnquiryArea(row.record.areaName, emirate, areas);
+        const authority = effectiveAuthority(row.record.licenceAuthority, source, KNOWN_AUTHORITIES);
+        const result = bestMatch(
+          recordAsListing({
+            id: String(row.rowNumber),
+            tradeName: row.record.tradeName ?? null,
+            licenceNumber: row.record.licenceNumber ?? null,
+            authority: authority.code ?? authority.stated ?? source,
+            emirate,
+            areaId,
+            areaName: areaId ? (areaById.get(areaId)?.name ?? null) : (row.record.areaName ?? null),
+            phone: row.record.phone ?? null,
+            activityKey: row.key,
+          }),
+          index,
+          bands,
+          separations.get(licenceDigits(row.record.licenceNumber ?? "")) ?? new Set(),
+        );
+        if (result.match) {
+          duplicateOfId = result.match.listing.id;
+          pair = {
+            score: result.match.similarity.score,
+            band: result.match.similarity.band as "certain" | "probable",
+            signals: result.match.similarity.signals,
+          };
+        } else if (result.nearMiss) {
+          belowFloor += 1;
+        }
       }
     }
 
@@ -292,7 +361,7 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
       signalCategoryId: signalSlug ? (categoryBySlug.get(signalSlug) ?? null) : null,
     });
 
-    return { ...row, outcome, duplicateOfId, duplicateOfRow };
+    return { ...row, outcome, duplicateOfId, duplicateOfRow, pair };
   });
 
   const totals = tally(staged.map((row) => row.outcome));
@@ -323,6 +392,7 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
               queuedCount: totals.queued,
               rejectedCount: totals.rejected,
               duplicateCount: totals.duplicates,
+              belowFloorCount: belowFloor,
               headers,
             },
             select: { id: true },
@@ -334,9 +404,11 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
            * 40 is the whole reason criterion 1 names a real number.
            */
           const CHUNK = 500;
+          let pairs = 0;
           for (let i = 0; i < staged.length; i += CHUNK) {
-            await tx.stagedListing.createMany({
-              data: staged.slice(i, i + CHUNK).map((row) => ({
+            const slice = staged.slice(i, i + CHUNK);
+            const created = await tx.stagedListing.createManyAndReturn({
+              data: slice.map((row) => ({
                 runId,
                 rowNumber: row.rowNumber,
                 raw: row.raw,
@@ -356,7 +428,27 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
                 duplicateOfId: row.duplicateOfId,
                 duplicateOfRow: row.duplicateOfRow,
               })),
+              select: { id: true, rowNumber: true },
             });
+
+            // The pair each duplicate goes to board 12b as, in the same
+            // transaction: a record marked duplicate with no pair is a record
+            // no screen can ever resolve.
+            const idByRow = new Map(created.map((row) => [row.rowNumber, row.id]));
+            const candidates = slice
+              .filter((row) => row.pair && row.duplicateOfId)
+              .map((row) => ({
+                keepId: row.duplicateOfId!,
+                stagedListingId: idByRow.get(row.rowNumber)!,
+                sourceRunId: runId,
+                score: row.pair!.score,
+                band: row.pair!.band,
+                signals: row.pair!.signals as Prisma.InputJsonValue,
+              }));
+            if (candidates.length > 0) {
+              await tx.mergeCandidate.createMany({ data: candidates });
+              pairs += candidates.length;
+            }
           }
 
           // Staged only once every record is in. `parsing` is never visible
@@ -375,6 +467,8 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
               categorised: totals.categorised,
               queued: totals.queued,
               duplicates: totals.duplicates,
+              pairs,
+              belowFloor,
               rejected: totals.rejected,
               truncated,
             },
@@ -462,6 +556,7 @@ export async function publishRun(
       emirate: true,
       areaName: true,
       activity: true,
+      activityKey: true,
       phone: true,
       categoryId: true,
     },
@@ -472,27 +567,50 @@ export async function publishRun(
   );
   const held = open.length - candidates.length;
 
-  // Re-checked at publish, because another run may have published the same
-  // licence between this file being staged and this click.
-  const authorities = new Set(
-    candidates.map((row) => effectiveAuthority(row.licenceAuthority, run.source, KNOWN_AUTHORITIES).code!),
-  );
-  const existing = await prisma.business.findMany({
-    where: { mergedIntoId: null, licenceAuthority: { in: [...authorities] as $Enums.Authority[] } },
-    select: { id: true, licenceAuthority: true, licenceNumber: true },
-  });
-  const listed = new Map<string, string>();
-  for (const business of existing) {
-    const key = licenceKey(business.licenceAuthority, business.licenceNumber);
-    if (key && !listed.has(key)) listed.set(key, business.id);
-  }
+  /*
+     Re-matched at publish, because another run may have published this
+     company between the file being staged and this click — and a pair found
+     now goes to board 12b rather than becoming a second listing (B9).
+     Separations a person already made are honoured, so a record kept separate
+     is not sent straight back.
+  */
+  const [listings, bands, areas, separations] = await Promise.all([
+    candidates.length > 0 ? loadMatchListings() : Promise.resolve([]),
+    readBands(),
+    prisma.area.findMany({ select: { id: true, name: true, emirate: true } }),
+    candidates.length > 0 ? separatedLicences() : Promise.resolve(new Map<string, Set<string>>()),
+  ]);
+  const index = buildMatchIndex(listings);
+  const areaName = new Map(areas.map((area) => [area.id, area.name]));
 
-  const collided: { id: string; businessId: string }[] = [];
+  const collided: { id: string; businessId: string; score: number; band: string; signals: unknown }[] = [];
   const ready = candidates.filter((row) => {
     const authority = effectiveAuthority(row.licenceAuthority, run.source, KNOWN_AUTHORITIES).code!;
-    const match = listed.get(licenceKey(authority, row.licenceNumber)!);
+    const areaId = resolveEnquiryArea(row.areaName, row.emirate, areas);
+    const { match } = bestMatch(
+      recordAsListing({
+        id: row.id,
+        tradeName: row.tradeName,
+        licenceNumber: row.licenceNumber,
+        authority,
+        emirate: row.emirate,
+        areaId,
+        areaName: areaId ? (areaName.get(areaId) ?? null) : row.areaName,
+        phone: row.phone,
+        activityKey: row.activityKey,
+      }),
+      index,
+      bands,
+      separations.get(licenceDigits(row.licenceNumber ?? "")) ?? new Set(),
+    );
     if (match) {
-      collided.push({ id: row.id, businessId: match });
+      collided.push({
+        id: row.id,
+        businessId: match.listing.id,
+        score: match.similarity.score,
+        band: match.similarity.band,
+        signals: match.similarity.signals,
+      });
       return false;
     }
     return true;
@@ -517,8 +635,7 @@ export async function publishRun(
   }
 
   const categoryIds = [...new Set(ready.map((row) => row.categoryId!))];
-  const [areas, categories, takenSlugs] = await Promise.all([
-    prisma.area.findMany({ select: { id: true, name: true, emirate: true } }),
+  const [categories, takenSlugs] = await Promise.all([
     prisma.category.findMany({
       where: { id: { in: categoryIds } },
       select: { id: true, name: true, synonyms: true },
@@ -652,6 +769,17 @@ export async function publishRun(
                      "categorised_at" = NULL
                 FROM (VALUES ${Prisma.join(pairs)}) AS v(id, business_id)
                WHERE s."id" = v.id`;
+            await tx.mergeCandidate.createMany({
+              data: collided.map((item) => ({
+                keepId: item.businessId,
+                stagedListingId: item.id,
+                sourceRunId: run.id,
+                score: item.score,
+                band: item.band as "certain" | "probable",
+                signals: item.signals as Prisma.InputJsonValue,
+              })),
+              skipDuplicates: true,
+            });
           }
 
           const counts = await runCounts(tx, run.id);
@@ -695,32 +823,6 @@ export async function publishRun(
   );
 
   return { ok: true, created, held, duplicates: collided.length, withoutAddress };
-}
-
-/**
- * The stored figures, recounted from the records.
- *
- * `categorisedCount` and `queuedCount` were written once at staging and never
- * again, so a run whose queue had been worked still said 1,208 waiting.
- * Recounted inside every transaction that moves a record.
- */
-export async function runCounts(tx: Prisma.TransactionClient, runId: string) {
-  const grouped = await tx.stagedListing.groupBy({
-    by: ["disposition"],
-    where: { runId },
-    _count: { _all: true },
-  });
-  const of = (disposition: string) =>
-    grouped.find((row) => row.disposition === disposition)?._count._all ?? 0;
-  const categorised = of("ready") + of("published");
-  const queued = of("needs_category");
-  return {
-    stagedCount: categorised + queued,
-    categorisedCount: categorised,
-    queuedCount: queued,
-    rejectedCount: of("rejected"),
-    duplicateCount: of("duplicate"),
-  };
 }
 
 /* ── Discarding ──────────────────────────────────────────────────────────── */
@@ -776,7 +878,13 @@ export async function discardRun(
           },
         });
         if (count !== 1) throw new RunMovedError();
-        return { result: null, before: { status: "staged" }, after: { status: "discarded" } };
+        // A discarded run's duplicates are no longer anybody's question.
+        const withdrawn = await withdrawRunPairsTx(tx, run.id, "run_discarded");
+        return {
+          result: null,
+          before: { status: "staged" },
+          after: { status: "discarded", pairsWithdrawn: withdrawn },
+        };
       },
     ),
   );
@@ -794,8 +902,11 @@ export class RunMovedError extends Error {
 
 /* ── Rolling back ────────────────────────────────────────────────────────── */
 
-async function rollbackPlan(runId: string): Promise<RollbackManifest> {
-  const businesses = await prisma.business.findMany({
+async function rollbackPlan(
+  runId: string,
+  db: Prisma.TransactionClient | typeof prisma = prisma,
+): Promise<RollbackManifest> {
+  const businesses = await db.business.findMany({
     where: { licenceImportRunId: runId },
     select: {
       id: true,
@@ -833,24 +944,48 @@ export interface RollbackPreview {
   withdraw: number;
   kept: number;
   keptBecause: Record<KeptBecause, number>;
+  /**
+   * Board 12b B5: merges made from this run's records that the rollback puts
+   * back first, by the listing they went into.
+   */
+  unwind: string[];
+  /** Branches owners confirmed, which refuse the rollback by name. */
+  confirmed: string[];
 }
 
 /** What a rollback would do, now, for the confirm dialog. Writes nothing. */
 export async function rollbackPreview(runId: string): Promise<RollbackPreview> {
-  const plan = await rollbackPlan(runId);
+  const [plan, merges] = await Promise.all([rollbackPlan(runId), runMergePlan(runId)]);
   const keptBecause = Object.fromEntries(KEPT_BECAUSE.map((why) => [why, 0])) as Record<
     KeptBecause,
     number
   >;
-  for (const item of plan.kept) keptBecause[item.why] += 1;
-  return { withdraw: plan.withdrawn.length, kept: plan.kept.length, keptBecause };
+  /*
+     A listing kept only because it is part of a merge the rollback will put
+     back is not kept: once the merge unwinds it is an unclaimed listing from
+     this run like any other. Counted as withdrawn here so the dialog's figure
+     is what the rollback will actually do.
+  */
+  const unwinding = merges.unwind.length + merges.looseMerges.length > 0;
+  let withdraw = plan.withdrawn.length;
+  for (const item of plan.kept) {
+    if (item.why === "merged" && unwinding) withdraw += 1;
+    else keptBecause[item.why] += 1;
+  }
+  return {
+    withdraw,
+    kept: plan.kept.length - (withdraw - plan.withdrawn.length),
+    keptBecause,
+    unwind: merges.unwind.map((entry) => entry.parentName),
+    confirmed: merges.confirmed.map((entry) => entry.parentName),
+  };
 }
 
 export type RollbackResult =
-  | { ok: true; withdrawn: number; kept: number }
+  | { ok: true; withdrawn: number; kept: number; unwound: number }
   | {
       ok: false;
-      error: "not_found" | "not_approved" | "window_closed";
+      error: "not_found" | "not_approved" | "window_closed" | "merges_confirmed" | "merges_need_merge_role";
       message: string;
     };
 
@@ -897,9 +1032,33 @@ export async function rollbackRun(
     };
   }
 
-  const plan = await rollbackPlan(run.id);
+  /*
+     Board 12b B5 — two reversal windows that have to know about each other. A
+     merge consumes a record from a run, so rolling the run back on day 20
+     would leave a branch from a run that no longer exists inside somebody's
+     listing. The merges come out first. A branch its owner confirmed is theirs,
+     and the rollback refuses rather than take it, naming the listings.
+  */
+  const merges = await runMergePlan(run.id);
+  if (merges.confirmed.length > 0) {
+    const names = merges.confirmed.map((entry) => entry.parentName);
+    return {
+      ok: false,
+      error: "merges_confirmed",
+      message: `Records from this run became branches that their owners confirmed: ${names.join(", ")}. Those are the owners' now, so the run cannot be rolled back.`,
+    };
+  }
+  // Putting merges back is the merge role's work. A seat that may roll a run
+  // back but not merge is refused rather than allowed to undo merges by proxy.
+  if (merges.unwind.length + merges.looseMerges.length > 0 && !can(input.actor, "business.merge")) {
+    return {
+      ok: false,
+      error: "merges_need_merge_role",
+      message: `Records from this run were merged into ${merges.unwind.length + merges.looseMerges.length} listings. Rolling it back puts those merges back, which only an ops lead can do.`,
+    };
+  }
 
-  await prisma.$transaction(
+  const result = await prisma.$transaction(
     async (tx) =>
       staffMutation(
         {
@@ -910,6 +1069,11 @@ export async function rollbackRun(
           tx,
         },
         async () => {
+          const unwound = await unwindRunTx(tx, run.id, { actorId: input.actor.id, reason: input.reason, now });
+          // Planned after the merges come out, so a listing that was merged
+          // away and is now its own listing again is withdrawn with the rest.
+          const plan = await rollbackPlan(run.id, tx);
+
           const CHUNK = 1_000;
           let withdrawn = 0;
           for (let i = 0; i < plan.withdrawn.length; i += CHUNK) {
@@ -956,18 +1120,22 @@ export async function rollbackRun(
           if (count !== 1) throw new RunMovedError();
 
           return {
-            result: null,
+            result: { withdrawn: plan.withdrawn.length, kept: plan.kept.length, unwound: unwound.unwound },
             before: { status: "approved", live: plan.withdrawn.length + plan.kept.length },
             after: {
               status: "rolled_back",
               withdrawn: plan.withdrawn.length,
               kept: plan.kept.length,
+              mergesUnwound: unwound.unwound,
+              pairsWithdrawn: unwound.withdrawn,
             },
           };
         },
       ),
-    { timeout: 60_000, maxWait: 10_000 },
+    { timeout: 120_000, maxWait: 10_000 },
   );
 
-  return { ok: true, withdrawn: plan.withdrawn.length, kept: plan.kept.length };
+  return { ok: true, ...result };
 }
+
+export { runCounts };

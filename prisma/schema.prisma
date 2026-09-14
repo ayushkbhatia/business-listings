@@ -123,6 +123,11 @@ model User {
   viewAsSessions          ViewAsSession[]          @relation("ViewAsStaff")
   callsMade               CallOutcome[]            @relation("CallStaff")
   candidatesDismissed     MergeCandidate[]         @relation("CandidateDismissedBy")
+  candidatesResolved      MergeCandidate[]         @relation("CandidateResolvedBy")
+  candidatesReversed      MergeCandidate[]         @relation("CandidateReversedBy")
+  candidatesOwnerDecided  MergeCandidate[]         @relation("CandidateOwnerDecidedBy")
+  mergeBatches            MergeBatch[]             @relation("MergeBatchActor")
+  mergeBatchesReversed    MergeBatch[]             @relation("MergeBatchReverser")
   templateVersions        TemplateVersion[]
   specRevisions           SellerTemplateRevision[] @relation("TemplateRevisionAuthor")
   boostsCreated           ListingBoost[]
@@ -1261,6 +1266,14 @@ model Location {
 
   published Boolean @default(false)
 
+  /// The branch's own registry number — board `12b` B9. A branch added from a
+  /// licence export is a second location with its own identity, not a copy of
+  /// the parent's. Null on a location a seller added.
+  licenceNumber      String? @map("licence_number")
+  /// The dedupe pair that created this branch, where one did — what the owner's
+  /// confirm or reject acts on, and what a reversal removes.
+  addedByCandidateId String? @map("added_by_candidate_id")
+
   /// The first time this branch was shown to buyers, and never cleared.
   ///
   /// It exists to separate the two ways `published = false` can be true. A
@@ -1296,6 +1309,7 @@ model Location {
   seats               User[]            @relation("SeatBranch")
   teamInvites         TeamInvite[]      @relation("InviteBranch")
   closures            LocationClosure[]
+  addedByCandidate    MergeCandidate?   @relation("LocationAddedByCandidate", fields: [addedByCandidateId], references: [id], onDelete: SetNull)
 
   @@index([businessId])
   @@index([areaId])
@@ -3458,12 +3472,18 @@ model LicenceImportRun {
   /// The file's header row, in its order. `StagedListing.raw` is JSONB, which
   /// keeps the values and not the column order (B5).
   headers          String[]        @default([])
+  /// Records whose closest listing shared something that identifies — a
+  /// licence root, a phone, most of a name — and scored under the floor.
+  /// Board `12b` B10: a floor set too high shows up here.
+  belowFloorCount  Int             @default(0) @map("below_floor_count")
   createdAt        DateTime        @default(now()) @map("created_at")
 
   actor        User            @relation("IngestActor", fields: [actorId], references: [id], onDelete: Restrict)
   decidedBy    User?           @relation("IngestDecider", fields: [decidedById], references: [id], onDelete: Restrict)
   rolledBackBy User?           @relation("IngestRollbackActor", fields: [rolledBackById], references: [id], onDelete: Restrict)
   rows         StagedListing[]
+  pairs        MergeCandidate[]  @relation("CandidateRun")
+  merges       BusinessMerge[]   @relation("MergeRun")
   businesses   Business[]
 
   @@index([status, createdAt(sort: Desc)], map: "licence_import_run_status_created_at_idx")
@@ -3488,6 +3508,10 @@ enum StagedDisposition {
   /// Names a licence the directory already holds, or one earlier in the same
   /// file. Board `12b`'s, and never published from the importer.
   duplicate
+  /// Became a branch of the listing it duplicated, on board `12b`.
+  merged
+  /// A source error, discarded on board `12b`.
+  discarded
   published
 
   @@map("staged_disposition")
@@ -3563,6 +3587,8 @@ model StagedListing {
   business      Business?        @relation("StagedBusiness", fields: [businessId], references: [id], onDelete: SetNull)
   duplicateOf   Business?        @relation("StagedDuplicateOf", fields: [duplicateOfId], references: [id], onDelete: SetNull)
 
+  pairs          MergeCandidate[] @relation("CandidateRecord")
+
   @@unique([runId, rowNumber], map: "staged_listing_run_row_key")
   @@index([runId, disposition], map: "staged_listing_run_disposition_idx")
   @@map("staged_listing")
@@ -3606,28 +3632,116 @@ enum MergeBand {
   @@map("merge_band")
 }
 
-/// Two listings that might be one company.
+/// Two records that might be one company — board `12b`'s pair.
+///
+/// Either two listings (`absorbId`), or a record from an import run and the
+/// listing it may duplicate (`stagedListingId`). `keepId` is record A, the
+/// existing listing; which side survives a merge is not stored here, because
+/// B1 decides it at the moment of resolution from who has claimed and paid.
 model MergeCandidate {
-  id            String    @id @default(cuid())
-  keepId        String    @map("keep_id")
-  absorbId      String    @map("absorb_id")
+  id                String                @id @default(cuid())
+  keepId            String                @map("keep_id")
+  absorbId          String?               @map("absorb_id")
+  /// Record B, where it came from an import run rather than being a listing.
+  stagedListingId   String?               @map("staged_listing_id")
+  /// The run record B came from — the link a run rollback follows (B5).
+  sourceRunId       String?               @map("source_run_id")
   /// 0..1. Computed, never typed.
-  score         Float
-  band          MergeBand
+  score             Float
+  band              MergeBand
   /// Which signals agreed, so the number can be argued with.
-  signals       Json
-  dismissedAt   DateTime? @map("dismissed_at")
-  dismissedById String?   @map("dismissed_by_id") @db.Uuid
-  dismissReason String?   @map("dismiss_reason")
-  mergeId       String?   @map("merge_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
+  signals           Json
+  state             MergeCandidateState   @default(pending)
+  resolvedAt        DateTime?             @map("resolved_at")
+  resolvedById      String?               @map("resolved_by_id") @db.Uuid
+  resolutionReason  String?               @map("resolution_reason")
+  /// `merged_elsewhere`, `run_rolled_back`, `run_discarded`, `below_floor`.
+  withdrawnReason   String?               @map("withdrawn_reason")
+  dismissedAt       DateTime?             @map("dismissed_at")
+  dismissedById     String?               @map("dismissed_by_id") @db.Uuid
+  dismissReason     String?               @map("dismiss_reason")
+  mergeId           String?               @map("merge_id")
+  batchId           String?               @map("batch_id")
+  /// What a resolution changed beyond `BusinessMerge`, for its reversal.
+  manifest          Json?
+  reversibleUntil   DateTime?             @map("reversible_until")
+  reversedAt        DateTime?             @map("reversed_at")
+  reversedById      String?               @map("reversed_by_id") @db.Uuid
+  reverseReason     String?               @map("reverse_reason")
+  /// Q2: the owner's say over a branch added to a listing they have claimed.
+  ownerConfirmation OwnerConfirmation     @default(not_needed) @map("owner_confirmation")
+  ownerDecidedAt    DateTime?             @map("owner_decided_at")
+  ownerDecidedById  String?               @map("owner_decided_by_id") @db.Uuid
+  createdAt         DateTime              @default(now()) @map("created_at")
 
-  keep        Business       @relation("CandidateKeep", fields: [keepId], references: [id], onDelete: Cascade)
-  absorb      Business       @relation("CandidateAbsorb", fields: [absorbId], references: [id], onDelete: Cascade)
-  dismissedBy User?          @relation("CandidateDismissedBy", fields: [dismissedById], references: [id], onDelete: SetNull)
-  merge       BusinessMerge? @relation(fields: [mergeId], references: [id], onDelete: SetNull)
+  keep           Business          @relation("CandidateKeep", fields: [keepId], references: [id], onDelete: Cascade)
+  absorb         Business?         @relation("CandidateAbsorb", fields: [absorbId], references: [id], onDelete: Cascade)
+  stagedListing  StagedListing?    @relation("CandidateRecord", fields: [stagedListingId], references: [id], onDelete: Cascade)
+  sourceRun      LicenceImportRun? @relation("CandidateRun", fields: [sourceRunId], references: [id], onDelete: SetNull)
+  dismissedBy    User?             @relation("CandidateDismissedBy", fields: [dismissedById], references: [id], onDelete: SetNull)
+  resolvedBy     User?             @relation("CandidateResolvedBy", fields: [resolvedById], references: [id], onDelete: SetNull)
+  reversedBy     User?             @relation("CandidateReversedBy", fields: [reversedById], references: [id], onDelete: SetNull)
+  ownerDecidedBy User?             @relation("CandidateOwnerDecidedBy", fields: [ownerDecidedById], references: [id], onDelete: SetNull)
+  merge          BusinessMerge?    @relation(fields: [mergeId], references: [id], onDelete: SetNull)
+  batch          MergeBatch?       @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  addedLocations Location[]        @relation("LocationAddedByCandidate")
 
   @@map("merge_candidate")
+}
+
+enum MergeCandidateState {
+  pending
+  /// B became a branch of A, or two listings became one.
+  merged
+  /// Two companies. Resolves the pair, and it is not re-proposed (B2).
+  separated
+  /// B was a source error.
+  discarded
+  /// Stopped being a question before anybody decided: a side merged elsewhere,
+  /// its run was discarded or rolled back, or a re-tune put it under the floor.
+  withdrawn
+
+  @@map("merge_candidate_state")
+}
+
+enum OwnerConfirmation {
+  /// No owner to ask: record A is unclaimed.
+  not_needed
+  /// A manual-band branch added to a claimed listing, unpublished until the
+  /// owner says it is theirs.
+  awaiting
+  /// A bulk-merge branch added to a claimed listing: live, and the owner may
+  /// still say it is not theirs while the merge is reversible.
+  informed
+  confirmed
+  rejected
+
+  @@map("owner_confirmation")
+}
+
+/// A bulk merge above the certain line, as one unit — board `12b` B4.
+///
+/// One transaction, one audit row, one reversal. Its pairs point here, and so
+/// does every `BusinessMerge` it made.
+model MergeBatch {
+  id              String    @id @default(cuid())
+  actorId         String    @map("actor_id") @db.Uuid
+  reason          String
+  /// The certain line the batch was taken at.
+  certainLine     Float     @map("certain_line")
+  pairCount       Int       @map("pair_count")
+  reversibleUntil DateTime  @map("reversible_until")
+  reversedAt      DateTime? @map("reversed_at")
+  reversedById    String?   @map("reversed_by_id") @db.Uuid
+  reverseReason   String?   @map("reverse_reason")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  actor      User             @relation("MergeBatchActor", fields: [actorId], references: [id], onDelete: Restrict)
+  reversedBy User?            @relation("MergeBatchReverser", fields: [reversedById], references: [id], onDelete: Restrict)
+  candidates MergeCandidate[]
+  merges     BusinessMerge[]
+
+  @@map("merge_batch")
 }
 
 /// One merge, and everything it moved.
@@ -3647,12 +3761,18 @@ model BusinessMerge {
   reversibleUntil DateTime  @map("reversible_until")
   reversedAt      DateTime? @map("reversed_at")
   reverseReason   String?   @map("reverse_reason")
+  /// The bulk merge this was part of, where it was one (B4).
+  batchId         String?   @map("batch_id")
+  /// The run the absorbed listing came from (B5).
+  sourceRunId     String?   @map("source_run_id")
   createdAt       DateTime  @default(now()) @map("created_at")
 
   keep       Business         @relation("MergeKeep", fields: [keepId], references: [id], onDelete: Restrict)
   absorb     Business         @relation("MergeAbsorb", fields: [absorbId], references: [id], onDelete: Restrict)
   actor      User             @relation("MergeActor", fields: [actorId], references: [id], onDelete: Restrict)
   candidates MergeCandidate[]
+  batch      MergeBatch?       @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  sourceRun  LicenceImportRun? @relation("MergeRun", fields: [sourceRunId], references: [id], onDelete: SetNull)
 
   @@index([absorbId], map: "business_merge_absorb_idx")
   @@map("business_merge")

@@ -149,7 +149,8 @@ and it is the one that argues back.
 /admin/ingest/categorise                Categorisation queue, by activity    [12a]  built board pass
 /admin/ingest/categorise?run=:id        The same queue, one run              [12a]  built board pass
 /admin/ingest/records/:id               One staged record, raw row verbatim  [12a]  built board pass
-/admin/ingest/dedupe                    Dedupe & merge                       [12b]  built h4s2
+/admin/ingest/dedupe                    Dedupe queue, one pair at a time     [12b]  built h4s2, board pass
+/admin/ingest/dedupe?run=:id            The same queue, one run              [12b]  built board pass
 /admin/search                           Ranking, boosts, weight history      [12c]  built h4s8
 /admin/search?vector=services           The services vector, same board      [12c-s] built s19
 /admin/categories                       Taxonomy                              [4d]  rename h5s6

@@ -48,6 +48,8 @@ export interface RunOverview {
   /** Bucket counts. `newListings + duplicates + rejected === rowCount`. */
   newListings: number;
   duplicates: number;
+  /** Board 12b: this run's pairs by state, and its near misses under the floor. */
+  pairs: { pending: number; merged: number; separated: number; discarded: number; belowFloor: number };
   rejected: number;
   /** Inside `newListings`: filed under a category, published or not. */
   categorised: number;
@@ -92,6 +94,7 @@ export async function runOverview(runId: string, now = new Date()): Promise<RunO
       status: true,
       rowCount: true,
       truncatedCount: true,
+      belowFloorCount: true,
       decisionReason: true,
       decidedAt: true,
       reversibleUntil: true,
@@ -106,7 +109,7 @@ export async function runOverview(runId: string, now = new Date()): Promise<RunO
   });
   if (!run) return null;
 
-  const [dispositions, grounds, open, live] = await Promise.all([
+  const [dispositions, grounds, open, live, pairRows] = await Promise.all([
     prisma.stagedListing.groupBy({
       by: ["disposition"],
       where: { runId },
@@ -130,7 +133,16 @@ export async function runOverview(runId: string, now = new Date()): Promise<RunO
     prisma.business.count({
       where: { licenceImportRunId: runId, publishedAt: { not: null }, mergedIntoId: null },
     }),
+    prisma.mergeCandidate.groupBy({ by: ["state"], where: { sourceRunId: runId }, _count: { _all: true } }),
   ]);
+  const pairOf = (state: string) => pairRows.find((row) => row.state === state)?._count._all ?? 0;
+  const pairs = {
+    pending: pairOf("pending"),
+    merged: pairOf("merged"),
+    separated: pairOf("separated"),
+    discarded: pairOf("discarded"),
+    belowFloor: run.belowFloorCount,
+  };
 
   const of = (disposition: StagedDisposition) =>
     dispositions.find((row) => row.disposition === disposition)?._count._all ?? 0;
@@ -171,7 +183,10 @@ export async function runOverview(runId: string, now = new Date()): Promise<RunO
     rowCount: run.rowCount,
     truncatedCount: run.truncatedCount,
     newListings: of("ready") + of("needs_category") + of("published"),
-    duplicates: of("duplicate"),
+    // A duplicate stays in this bucket once board 12b resolves it — merged as a
+    // branch or discarded — so the three buckets still sum to the file.
+    duplicates: of("duplicate") + of("merged") + of("discarded"),
+    pairs,
     rejected: of("rejected"),
     categorised: of("ready") + of("published"),
     queued: of("needs_category"),
@@ -322,13 +337,14 @@ export const RECORD_FILTERS = [
 ] as const;
 export type RecordFilter = (typeof RECORD_FILTERS)[number];
 
-const FILTER_WHERE: Record<RecordFilter, StagedDisposition | null> = {
+const FILTER_WHERE: Record<RecordFilter, StagedDisposition[] | null> = {
   all: null,
-  queued: "needs_category",
-  ready: "ready",
-  published: "published",
-  duplicate: "duplicate",
-  rejected: "rejected",
+  queued: ["needs_category"],
+  ready: ["ready"],
+  published: ["published"],
+  // Resolved duplicates stay under the tab they arrived in.
+  duplicate: ["duplicate", "merged", "discarded"],
+  rejected: ["rejected"],
 };
 
 export function isRecordFilter(value: string | undefined): value is RecordFilter {
@@ -373,7 +389,7 @@ export async function runRecords(
   if (!run) return { rows: [], total: 0, counts: Object.fromEntries(RECORD_FILTERS.map((f) => [f, 0])) as Record<RecordFilter, number> };
 
   const disposition = FILTER_WHERE[filter];
-  const where = { runId, ...(disposition ? { disposition } : {}) };
+  const where = { runId, ...(disposition ? { disposition: { in: disposition } } : {}) };
 
   const [rows, grouped] = await Promise.all([
     prisma.stagedListing.findMany({
@@ -407,7 +423,7 @@ export async function runRecords(
       key,
       key === "all"
         ? grouped.reduce((sum, row) => sum + row._count._all, 0)
-        : count(FILTER_WHERE[key]!),
+        : FILTER_WHERE[key]!.reduce((sum, value) => sum + count(value), 0),
     ]),
   ) as Record<RecordFilter, number>;
 
@@ -503,6 +519,13 @@ export async function recordDetail(id: string) {
       business: { select: { displayName: true, slug: true, publishedAt: true } },
       duplicateOf: { select: { displayName: true, slug: true, claimStatus: true, publishedAt: true } },
       run: { select: { id: true, number: true, source: true, status: true, headers: true } },
+      // Board 12b: where the record's dedupe pair stands. The newest, because a
+      // reversed or withdrawn pair can be followed by another.
+      pairs: {
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 1,
+        select: { state: true, score: true, withdrawnReason: true, ownerConfirmation: true },
+      },
     },
   });
   if (!record) return null;
@@ -541,9 +564,10 @@ export async function recordDetail(id: string) {
     (record.run.status === "staged" || record.run.status === "approved") &&
     (record.disposition === "ready" || record.disposition === "needs_category");
 
-  const { tradeName: licenceName, ...rest } = record;
+  const { tradeName: licenceName, pairs, ...rest } = record;
   return {
     ...rest,
+    pair: pairs[0] ?? null,
     licenceName,
     raw,
     open,

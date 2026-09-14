@@ -17,6 +17,7 @@ import {
   type HideConsequence,
 } from "@/lib/locations/service";
 import type { Emirate } from "@/lib/db/generated/enums";
+import { decideBranch } from "@/lib/dedupe/resolve";
 import { getSellerSeat } from "../_shell";
 
 /**
@@ -294,4 +295,39 @@ export async function dropCoverage(formData: FormData): Promise<CoverageActionRe
   if (!result.ok) return { ok: false, error: t("locations.not_found"), fix: t("locations.not_found_fix") };
   revalidatePath("/dashboard/locations");
   return { ok: true };
+}
+
+export type AddedBranchResult = { ok: true; message: string } | ActionError;
+
+/**
+ * Board 12b Q2: the owner's say over a branch our team added.
+ *
+ * A branch merged into a claimed listing from the manual band waits here, not
+ * live, until the owner confirms it; one added by a bulk merge is live and can
+ * still be removed while the decision is reversible. `decideBranch` checks the
+ * location belongs to this seat's business and was added by a dedupe decision.
+ */
+export async function decideAddedBranch(formData: FormData): Promise<AddedBranchResult> {
+  const seat = await getSellerSeat();
+  if (!seat) return { ok: false, error: t("dev.no_seat_title"), fix: t("dev.no_seat_body") };
+  assertCanEditListing(seat.actor);
+
+  const decision = String(formData.get("decision") ?? "") === "reject" ? "reject" : "confirm";
+  const area = String(formData.get("area") ?? "");
+  const result = await decideBranch({
+    actor: seat.actor,
+    businessId: seat.businessId,
+    locationId: String(formData.get("locationId") ?? ""),
+    decision,
+  });
+  if (!result.ok) {
+    return { ok: false, error: t(`locations.added.error.${result.error}`), fix: t("locations.added.fix") };
+  }
+
+  revalidatePath("/dashboard/locations");
+  revalidatePath("/admin/ingest/dedupe");
+  return {
+    ok: true,
+    message: t(decision === "confirm" ? "locations.added.confirmed" : "locations.added.rejected", { area }),
+  };
 }

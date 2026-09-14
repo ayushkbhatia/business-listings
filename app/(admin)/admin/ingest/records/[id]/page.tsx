@@ -7,7 +7,7 @@ import { can } from "@/lib/auth/can";
 import { REJECTION_ACTION } from "@/lib/ingest/classify";
 import { categoryOptions, queuedRecordCount } from "@/lib/ingest/queue";
 import { recordDetail } from "@/lib/ingest/read";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatPercent } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { EMIRATES } from "@/lib/uae";
 import { AdminPage, getAdminNavBadges } from "../../../../_shell";
@@ -35,6 +35,8 @@ const OUTCOME_TONE: Record<string, "ok" | "warn" | "bad" | "neutral" | "info"> =
   needs_category: "warn",
   published: "ok",
   duplicate: "neutral",
+  merged: "ok",
+  discarded: "neutral",
   rejected: "bad",
 };
 
@@ -51,6 +53,7 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
   if (!record) notFound();
 
   const options = record.open ? await categoryOptions() : [];
+  const canMerge = can(seat.actor, "business.merge");
   const missing = <span className="text-body">{t("admin.records.not_provided")}</span>;
 
   const read: { key: string; label: string; value: React.ReactNode; mono?: boolean }[] = [
@@ -101,7 +104,7 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
         </StatusBadge>
       }
     >
-      <IngestTabs active="runs" queued={queued} showDedupe={can(seat.actor, "business.merge")} />
+      <IngestTabs active="runs" queued={queued} showDedupe={canMerge} />
 
       <div className="mt-[var(--gutter)] grid gap-[var(--gutter)] lg:grid-cols-2">
         <Panel title={t("admin.record.outcome_title")}>
@@ -115,19 +118,40 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
               </p>
             )}
 
-            {record.disposition === "duplicate" && (
+            {(record.disposition === "duplicate" || record.disposition === "merged" || record.disposition === "discarded") && (
               <div className="flex flex-col gap-1">
-                {record.duplicateOf && (
+                {record.disposition === "merged" && record.business ? (
                   <p>
-                    {t("admin.record.duplicate_of")}{" "}
-                    {record.duplicateOf.publishedAt ? (
-                      <Link href={`/b/${record.duplicateOf.slug}`} className={link}>
-                        {record.duplicateOf.displayName}
+                    {t("admin.record.merged_into")}{" "}
+                    {record.business.publishedAt ? (
+                      <Link href={`/b/${record.business.slug}`} className={link}>
+                        {record.business.displayName}
                       </Link>
                     ) : (
-                      <span className="text-ink">{record.duplicateOf.displayName}</span>
+                      <span className="text-ink">{record.business.displayName}</span>
                     )}
                   </p>
+                ) : record.disposition === "discarded" ? (
+                  <p>{t("admin.record.discarded")}</p>
+                ) : (
+                  record.duplicateOf && (
+                    <p>
+                      {t("admin.record.duplicate_of")}{" "}
+                      {record.duplicateOf.publishedAt ? (
+                        <Link href={`/b/${record.duplicateOf.slug}`} className={link}>
+                          {record.duplicateOf.displayName}
+                        </Link>
+                      ) : (
+                        <span className="text-ink">{record.duplicateOf.displayName}</span>
+                      )}
+                    </p>
+                  )
+                )}
+                {record.disposition === "merged" && record.pair?.ownerConfirmation === "awaiting" && (
+                  <p className="text-caption">{t("admin.record.merged_awaiting")}</p>
+                )}
+                {record.disposition === "merged" && record.pair?.ownerConfirmation === "confirmed" && (
+                  <p className="text-caption">{t("admin.record.merged_confirmed")}</p>
                 )}
                 {record.duplicateRow && (
                   <p>
@@ -136,11 +160,24 @@ export default async function RecordPage({ params }: { params: Promise<{ id: str
                     </Link>
                   </p>
                 )}
-                <p className="text-caption">{t("admin.record.duplicate_note")}</p>
+                {record.disposition === "duplicate" && record.pair?.state === "pending" && (
+                  <p>
+                    {t("admin.record.pair.pending", { percent: formatPercent(record.pair.score) })}{" "}
+                    {canMerge && (
+                      <Link href={`/admin/ingest/dedupe?run=${record.run.id}`} className={link}>
+                        {t("admin.record.pair.open_queue")}
+                      </Link>
+                    )}
+                  </p>
+                )}
+                {record.disposition === "duplicate" && record.pair?.state === "withdrawn" && (
+                  <p>{t("admin.record.pair.withdrawn")}</p>
+                )}
+                {record.disposition === "duplicate" && <p className="text-caption">{t("admin.record.duplicate_note")}</p>}
               </div>
             )}
 
-            {record.business && (
+            {record.business && record.disposition !== "merged" && (
               <p>
                 {t("admin.record.published_as")}{" "}
                 {record.business.publishedAt ? (
