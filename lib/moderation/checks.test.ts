@@ -10,7 +10,8 @@ import {
   type Check,
   type ClaimFacts,
 } from "./checks";
-import { DEFAULT_RULES, parseRules, parseTerms, rulesProblem, type CheckRules } from "./rules";
+import { DEFAULT_RULES, parseRules, parseTerms, RULES, rulesProblem, type CheckRules } from "./rules";
+import type { RegisterFetch } from "@/lib/credentials/register-fetch";
 
 /**
  * Board 4b — the checks, and the two derived facts the whole screen hangs on.
@@ -173,6 +174,71 @@ describe("the other kinds", () => {
   it("an expired credential is a rejection", () => {
     const checks = checksFor({ kind: "credential", displayName: "ISO 9001:2015", validUntil: new Date(NOW.getTime() - DAY), publishable: true }, DEFAULT_RULES, NOW);
     expect(rowAction("credential", checks)).toBe("reject");
+  });
+});
+
+describe("a credential against the register (board 4c-s)", () => {
+  const submitted = {
+    identifier: "20034512",
+    name: "Nexus Tax Consultancy LLC",
+    expiresOn: null,
+    licenceNumber: "DED-2298417",
+    licenceAuthority: "DED",
+  };
+  const found = (over: Partial<Extract<RegisterFetch, { outcome: "found" }>["record"]> = {}, at = NOW): RegisterFetch => ({
+    v: 1,
+    asked: "20034512",
+    fetchedAt: at.toISOString(),
+    source: "FTA tax agent register",
+    outcome: "found",
+    record: {
+      taan: "20034512",
+      name: "Nexus Tax Consultancy L.L.C.",
+      status: "active",
+      validUntil: "2027-12-31",
+      tradeLicence: { number: "2298417", authority: "DED" },
+      ...over,
+    },
+  });
+  const row = (read: RegisterFetch | null) =>
+    checksFor({ kind: "register_credential", submitted, read }, DEFAULT_RULES, NOW);
+
+  it("passes all four sentences on a fresh match, and names each field on its own", () => {
+    const checks = row(found());
+    expect(allPassed(checks)).toBe(true);
+    expect(checks.map((check) => check.rule)).toEqual(["register_number", "register_name", "register_status", "register_entity"]);
+    expect(checks.map(sentence)).toContain("Active on the register until 2027-12-31");
+  });
+
+  it("a near-match asks for a look, a lapse asks for a rejection", () => {
+    expect(rowAction("credential", row(found({ name: "Nexus Tax Consultants LLC" })))).toBe("review");
+    expect(rowAction("credential", row(found({ status: "expired" })))).toBe("reject");
+    expect(sentence(row(found({ status: "suspended" })).find((check) => check.rule === "register_status")!)).toBe(
+      "Register status: Suspended",
+    );
+  });
+
+  it("a different licence fails the join even with three matches", () => {
+    const checks = row(found({ tradeLicence: { number: "7713002", authority: "DED" } }));
+    expect(allPassed(checks)).toBe(false);
+    expect(sentence(checks.find((check) => check.rule === "register_entity")!)).toBe(
+      "Register names licence 7713002, not this listing's",
+    );
+  });
+
+  it("a stale read or a register that did not answer is never all passed", () => {
+    expect(allPassed(row(found({}, new Date(NOW.getTime() - 2 * 3_600_000))))).toBe(false);
+    expect(
+      allPassed(row({ v: 1, asked: "20034512", fetchedAt: NOW.toISOString(), source: "x", outcome: "unavailable", cause: "timeout" })),
+    ).toBe(false);
+    expect(allPassed(row(null))).toBe(false);
+  });
+
+  it("none of the register checks can be switched off (B3)", () => {
+    for (const id of ["register_answered", "register_number", "register_name", "register_status", "register_entity"] as const) {
+      expect(RULES.find((rule) => rule.id === id)!.switchable).toBe(false);
+      expect(rulesProblem({ ...DEFAULT_RULES, disabled: [id] })).toBe("rule_not_switchable");
+    }
   });
 });
 

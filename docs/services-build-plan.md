@@ -2155,6 +2155,74 @@ accepted-quote notice, the admin evidence page, and **the accepted record and it
 - **Q4** buyer-company visibility (`7b`) and **Q5** the seller's mirror (`3k`).
 - No reminder is sent when a review opens; the buyer finds it on the record.
 
+## 4w · Handoff `4c-s` — a credential against the register, not a photo judgement
+
+*The admin half of `8b-s`. A lookup with three fields that either match or do not, and a queue that
+holds only what the machine could not settle.*
+
+### What shipped
+
+- **`/admin/queue/credential/:id`** — what they submitted against the FTA register in a real table:
+  agent number, registered name and status, each with its verdict, and the trade licence in its own
+  `tbody` as the entity cross-check. The tally under it counts the three and never the join — the
+  export's *three fields, four ticks* correction kept in markup as well as copy (B4).
+- **The machine settles what it can.** `settleByRead` verifies at submission, and on the hourly
+  sweep's retry, where all three match and the licence names the same entity — `auto_verified`, no
+  person, no queue row. What reaches the queue is what did not match: no answer, a near-match on the
+  name, a number that resolves elsewhere, lapsed, a certificate contradicting an active entry
+  (§Flagged 2).
+- **B2 — the read is point-in-time and kept.** `credential.register_fetch` holds the whole answer and
+  when; a decision is refused against a read older than an hour, the screen offers the refetch, and
+  a refetch is evidence only — it verifies nothing and writes no audit row.
+- **B3 — Verify renders only where the read allows it**; otherwise the sentence that says why
+  (*2 of the three fields match*, *all three match, but the register names a different trade
+  licence*). The service repeats the rule, so a bulk approve cannot tick through either.
+- **B5 — four reasons, chosen against the read.** A reason the read contradicts is disabled; the one
+  it makes plain is pre-selected; a typed reason is still required. Bulk reject skips these rows.
+- **B6 — `more_info` is a state.** The row stays in the queue waiting on the seller (not late on us),
+  the clock is not reset, and `/dashboard/setup/credentials` shows the request with *Send it again*;
+  the answer is read at once and verifies on the spot if it now matches.
+- **A rejection comes off every public surface** — storefront table and tab count, proposal
+  comparison, setup points, strength — through one `STANDING_CREDENTIAL` filter; the seller still
+  sees it with the reason verbatim and what to do.
+- **B1 in the database.** A CHECK refuses a review state on any kind but `fta_tax_agent`; others pair
+  the review with the tier, a rejection with its reason, a decision with its note.
+- **Q1 was already answered by `4b`**: register checks join its Credentials chip as a sixth source
+  (`queue_subject` `register_credential`), with five unswitchable rules on the tuning screen.
+
+### Found on the way, and fixed
+
+- **`8b-s`'s check compared nothing.** `checkTaxAgent` returned verified on any 200 and threw the body
+  away, so a register answering for the number under another company's name would have verified it.
+  The adapter now returns the record, `compare.ts` decides, and the contract is a zod schema.
+
+### Decisions taken against the handoff
+
+- **No FTA register is connected, so on production nothing new enters this queue.** There is no
+  public FTA API; `FTA_REGISTER_URL` names a client speaking our contract and is blank. A queue of
+  rows nobody can decide is not a backlog, so without a register nothing enters review and the seller
+  is told it saved as their claim. `fixture` is a stand-in register honoured only against a loopback
+  database, which is how the screen is clicked, tested in CI and drawn in the gallery.
+- **B7 is not built: nothing is withheld.** `mayPublish()` returns `true` and a test asserts it; no
+  family prompts an FTA number. *What verifying this changes* says what does change — the storefront
+  and open proposals read it as verified — and that no service waits on it. Q2 stays open.
+- **The trade-licence half of B1 is the claim screen** (`4b`), not a credential row, per `8b-s`.
+- **The name compared is the licensed trade name**, the only name a register of entities could hold.
+  Legal-form spelling and punctuation are normalised; *trading* and *general* are not.
+- **Two tiers stay two.** A person's verification is `register_verified` like the machine's — the
+  register answered either way — and `review` records who settled it.
+- **The rail's first card is titled *A lookup, not a judgement*,** not *Why this is not 4c*; and the
+  registers card is told by the deployment, since *FTA agent is checkable* is false where none is
+  connected.
+
+### Still owed, and the owner's
+
+- **Q2** — whether a credential should gate a service. **Q3** answered as the handoff proposed: no
+  role, `queue.decide` covers it. **Q4** — submission, and review for what it could not settle.
+  **Q5** — the SLA is `4b`'s credential clock.
+- **An FTA register client.** Configuration once one exists; until then the queue path is dormant on
+  production.
+
 ## 4b · What the re-sequence opens up
 
 Three questions the new order forces, in the order they bite.
@@ -2332,7 +2400,7 @@ edit**.
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **All four shipped 13 Sep** (§4m–§4o, §4s) — the public storefront set is complete, and the builder's library is filtered by kind |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p), **`3j-s` and `1n-s` 14 Sep** (§4t, §4u) — the demand-side trio is complete |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
-| **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. `4c-s`, `12g-s` and `6g-s` remain. `1c-s` is unblocked on Q1, which `rankBlended` answers |
+| **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. **`4c-s` shipped 14 Sep** (§4w). `12g-s` and `6g-s` remain. `1c-s` is unblocked on Q1, which `rankBlended` answers |
 | — | **Q1 said families** | `4e-s` · `3h-s` | — | Both **shipped 13 Sep** — `3h-s` closed wave 2 (§4k) and `4e-s` authored the five families (§4l) |
 
 **What needs no handoff at all:**

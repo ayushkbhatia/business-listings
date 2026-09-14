@@ -103,9 +103,14 @@ describe("nothing on this screen is required — B1, AC1", () => {
 describe("the tier is the system's — B3, AC3", () => {
   it("saves an FTA number as a claim and says why, rather than blocking — Q2, AC10", async () => {
     const id = await makeSeller();
+    // No register connected — the production state. Board 4c-s's suite covers one that is.
+    const register = process.env.FTA_REGISTER_URL;
+    delete process.env.FTA_REGISTER_URL;
     const saved = await addCredential(owner(), id, {
       kind: "fta_tax_agent",
       identifier: "20034512",
+    }).finally(() => {
+      if (register !== undefined) process.env.FTA_REGISTER_URL = register;
     });
 
     expect(saved.ok).toBe(true);

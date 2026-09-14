@@ -36,7 +36,22 @@ export function queueHref(options: { kind?: QueueKind | null; mine?: boolean; tr
   return `/admin/queue${queueQuery(options)}`;
 }
 
-export async function QueuePosition({ actor, subject, params }: { actor: Actor; subject: string; params: QueueParams }) {
+export async function QueuePosition({
+  actor,
+  subject,
+  params,
+  skip = false,
+}: {
+  actor: Actor;
+  subject: string;
+  params: QueueParams;
+  /**
+   * Board 4c-s. `Skip` on every screen rather than only in a triage session:
+   * the next submission in the same list, with nothing written and nothing
+   * assigned. A lookup that takes seconds should not need a session to move on.
+   */
+  skip?: boolean;
+}) {
   const kind = params.kind && isQueueKind(params.kind) ? params.kind : null;
   const mine = params.mine === "1";
   const triage = params.triage === "1";
@@ -62,12 +77,12 @@ export async function QueuePosition({ actor, subject, params }: { actor: Actor; 
           ? t("admin.queue.position.left", { scope })
           : t("admin.queue.position.of", { position: formatCount(index + 1), total: formatCount(workable.length), scope })}
       </span>
-      {triage && next && (
+      {(triage || skip) && next && (
         <Link href={`${next.href}${query}`} className={buttonClassName({ size: "sm", variant: "secondary" })}>
-          {t("admin.queue.position.next")}
+          {t(skip && index !== -1 ? "admin.queue.position.skip" : "admin.queue.position.next")}
         </Link>
       )}
-      {triage && !next && <span>{t("admin.queue.position.done")}</span>}
+      {(triage || skip) && !next && <span>{t("admin.queue.position.done")}</span>}
     </nav>
   );
 }

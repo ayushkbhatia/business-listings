@@ -7,6 +7,7 @@ import { assertCan, can } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import type { QueueSubject } from "@/lib/db/generated/client";
 import { approveDocument, rejectDocument } from "@/lib/verification/review";
+import { requestClearerDocument, verifyCredential, type ReviewError } from "@/lib/credentials/review";
 import { approveClaim, rejectClaim } from "./claims";
 import { entriesFrom, loadPending, parseRef, queueItemStates, readRules, refFor, type QueueEntry } from "./queue";
 import { approveChange, rejectChange } from "./service";
@@ -44,7 +45,11 @@ export type DecisionError =
   | "in_conflict"
   | "business_closing"
   | "listing_claimed"
-  | "not_staff";
+  | "not_staff"
+  /* Board 4c-s: a credential checked against the register. */
+  | "register_unread"
+  | "register_disagrees"
+  | "reason_code_required";
 
 export type DecisionResult = { ok: true } | { ok: false; error: DecisionError };
 
@@ -71,6 +76,8 @@ async function subjectBusinessId(subject: QueueSubject, id: string): Promise<str
       return (await prisma.document.findUnique({ where: { id }, select: { businessId: true } }))?.businessId ?? null;
     case "location":
       return (await prisma.location.findUnique({ where: { id }, select: { businessId: true } }))?.businessId ?? null;
+    case "register_credential":
+      return (await prisma.credential.findUnique({ where: { id }, select: { businessId: true } }))?.businessId ?? null;
   }
 }
 
@@ -80,7 +87,25 @@ const AUDIT_SUBJECT: Record<QueueSubject, string> = {
   conflict: "ClaimConflict",
   credential: "Document",
   location: "Location",
+  register_credential: "Credential",
 };
+
+/** A credential review's refusal, in the queue's own words. */
+function reviewRefusal(error: ReviewError): DecisionError {
+  switch (error) {
+    case "not_found":
+      return "not_found";
+    case "not_pending":
+      return "not_pending";
+    case "register_disagrees":
+      return "register_disagrees";
+    case "reason_unsupported":
+      return "reason_code_required";
+    case "register_unread":
+    case "not_configured":
+      return "register_unread";
+  }
+}
 
 function auditSubject(subject: QueueSubject, id: string): `${string}:${string}` {
   return `${AUDIT_SUBJECT[subject]}:${id}`;
@@ -111,6 +136,11 @@ export async function approveRef(input: RefInput, now = new Date(), pending?: Re
     }
     case "location":
       return decideBranch(input.actor, parsed.id, "approved", input.reason, now, pending);
+    case "register_credential": {
+      // B3 is the service's rule, not the caller's: a fresh read where all three match.
+      const result = await verifyCredential({ actor: input.actor, credentialId: parsed.id, reason: input.reason }, now);
+      return result.ok ? { ok: true } : { ok: false, error: reviewRefusal(result.error) };
+    }
     case "conflict":
       // Who owns a company is settled four ways on its own screen, never by one button.
       return { ok: false, error: "conflict_screen" };
@@ -140,6 +170,10 @@ export async function rejectRef(input: RefInput, now = new Date(), pending?: Rea
     }
     case "location":
       return decideBranch(input.actor, parsed.id, "rejected", input.reason, now, pending);
+    case "register_credential":
+      // B5. One of four reasons, chosen against the read, on the credential's
+      // own screen. A reason typed into the bulk bar is not one of them.
+      return { ok: false, error: "reason_code_required" };
     case "conflict":
       return { ok: false, error: "conflict_screen" };
   }
@@ -213,7 +247,7 @@ async function decideBranch(
 
 /* ── Request documents ─────────────────────────────────────────────────────── */
 
-const REQUESTABLE: ReadonlySet<QueueSubject> = new Set(["claim", "change_request", "credential"]);
+const REQUESTABLE: ReadonlySet<QueueSubject> = new Set(["claim", "change_request", "credential", "register_credential"]);
 
 /**
  * Ask the seller for a document. Additive: nothing is decided and nothing is
@@ -233,6 +267,13 @@ export async function requestDocumentsRef(
   if (!REQUESTABLE.has(parsed.subject)) return { ok: false, error: "not_requestable" };
 
   if (!(pending ?? (await pendingRefs())).has(input.ref)) return { ok: false, error: "not_pending" };
+
+  // Board 4c-s B6: a state on the credential, which the seller's screen reads.
+  if (parsed.subject === "register_credential") {
+    const result = await requestClearerDocument({ actor: input.actor, credentialId: parsed.id, reason: input.reason }, now);
+    return result.ok ? { ok: true } : { ok: false, error: reviewRefusal(result.error) };
+  }
+
   const businessId = await subjectBusinessId(parsed.subject, parsed.id);
   if (!businessId) return { ok: false, error: "not_found" };
 

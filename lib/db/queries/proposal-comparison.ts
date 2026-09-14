@@ -4,6 +4,7 @@ import { familyFor } from "@/lib/services/service";
 import { PROPOSAL_RECORD_SELECT, toProposalRecord, type ProposalRecord } from "@/lib/quote/proposal";
 import { VERIFIED_TIER } from "@/lib/verification";
 import { ENQUIRY_BRIEF_SELECT, toEnquiryBrief, type EnquiryBrief } from "./enquiry-brief";
+import { STANDING_CREDENTIAL } from "@/lib/credentials/kinds";
 
 /**
  * Board `1n-s` — everything the buyer's comparison of proposals reads, for the
@@ -151,7 +152,7 @@ export async function getProposalComparison(
     businessIds.length === 0
       ? Promise.resolve([])
       : prisma.credential.findMany({
-          where: { businessId: { in: businessIds } },
+          where: { businessId: { in: businessIds }, ...STANDING_CREDENTIAL },
           // Checked first, then the order the credentials form offers them.
           orderBy: [{ trust: "asc" }, { kind: "asc" }, { createdAt: "asc" }, { id: "asc" }],
           select: { businessId: true, kind: true, issuer: true, identifier: true, trust: true },

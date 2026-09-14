@@ -34,6 +34,7 @@ const row = (over: Partial<BoardRow> & Pick<BoardRow, "ref" | "businessName">): 
   owner: null,
   href: "#approval-queue",
   canOpen: true,
+  decidesOnScreen: false,
   ...over,
 });
 

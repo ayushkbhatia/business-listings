@@ -16,6 +16,7 @@ import {
   type SetupLever,
   type SetupTaskRow,
 } from "./tasks";
+import { STANDING_CREDENTIAL } from "@/lib/credentials/kinds";
 
 /**
  * Everything board 8a renders, computed.
@@ -145,7 +146,7 @@ export async function setupHubState(
              that un-ticked itself on an expiry date would be the renewal
              chasing that board refuses, arriving as a silent regression.
           */
-          credentials: true,
+          credentials: { where: STANDING_CREDENTIAL },
         },
       },
     },
@@ -387,7 +388,7 @@ export async function setupChrome(businessId: string): Promise<SetupChrome | nul
              that un-ticked itself on an expiry date would be the renewal
              chasing that board refuses, arriving as a silent regression.
           */
-          credentials: true,
+          credentials: { where: STANDING_CREDENTIAL },
         },
       },
     },

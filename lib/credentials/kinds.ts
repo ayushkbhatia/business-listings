@@ -48,6 +48,22 @@ export function isCheckable(kind: CredentialKind): boolean {
 }
 
 /**
+ * The credentials that stand: every row but one a person checked against the
+ * register and rejected — board `4c-s`.
+ *
+ * A rejected credential is off the storefront, out of the comparison a buyer
+ * reads, out of every count that sits over those, and earns no setup points.
+ * It was the seller's claim until somebody looked it up and found it untrue.
+ *
+ * Spelled as an `OR` with the null, because `review: { not: "rejected" }` is
+ * SQL `review <> 'rejected'`, which is null — and so false — on every row that
+ * never entered review, and would silently drop them all.
+ */
+export const STANDING_CREDENTIAL = {
+  OR: [{ review: null }, { review: { not: "rejected" as const } }],
+};
+
+/**
  * What a credential says about itself, given what actually happened to it.
  *
  * Three labels over two stored tiers. `we_verify_this` is **not** a state a row

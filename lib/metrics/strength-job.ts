@@ -12,6 +12,7 @@ import {
   type ProductSpecs,
   type SpecFieldRule,
 } from "./spec-completeness";
+import { STANDING_CREDENTIAL } from "@/lib/credentials/kinds";
 
 /**
  * The profile-strength measurement job.
@@ -73,7 +74,8 @@ export async function measureProfileStrength(now: Date = new Date()): Promise<St
           serviceCoverage: { where: { serviceId: null } },
           // Board `8b-s`: the credential is the thing, the file is optional
           // evidence for it. Lapsed rows count — an expiry changes nothing.
-          credentials: true,
+          // Board `4c-s`: a credential a person rejected earns nothing.
+          credentials: { where: STANDING_CREDENTIAL },
         },
       },
     },

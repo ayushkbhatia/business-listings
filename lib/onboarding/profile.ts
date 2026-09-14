@@ -11,6 +11,7 @@ import {
   type ProfileRefusal,
   type ServiceProfileInput,
 } from "./service-profile";
+import { STANDING_CREDENTIAL } from "@/lib/credentials/kinds";
 
 /**
  * Board 2c — the first screen where a seller writes rather than proves.
@@ -213,7 +214,7 @@ async function profileFacts(
        counting files — so a firm with two credentials and no certificates read
        zero here and two on the hub, on the same afternoon.
     */
-    prisma.credential.count({ where: { businessId } }),
+    prisma.credential.count({ where: { businessId, ...STANDING_CREDENTIAL } }),
   ]);
 
   const filterable = productRows.filter((product) => {

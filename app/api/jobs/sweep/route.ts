@@ -4,6 +4,7 @@ import { sweepAlerts } from "@/lib/alerts/service";
 import { sweepEscalations } from "@/lib/enquiry/escalation-job";
 import { sweepFollowUps } from "@/lib/messaging/follow-up";
 import { authorizeJob, runSteps } from "@/lib/jobs/authorize";
+import { retryRegisterReads } from "@/lib/credentials/review";
 
 /**
  * The hourly sweep — the jobs whose value is in being timely, and whose cost
@@ -112,6 +113,14 @@ export async function GET(request: NextRequest) {
        measurements did not.
     */
     alerts: () => sweepAlerts(),
+    /*
+       Board 4c-s. An FTA read the register did not answer is asked again, and a
+       credential that now matches on all three is verified by the read — the
+       machine settling what it can, so the queue holds only what it could not.
+       Hourly because a seller is waiting on it; bounded by reads outstanding,
+       not by the directory. With no register connected it returns at once.
+    */
+    registerReads: () => retryRegisterReads(),
   });
 
   console.info("[jobs] sweep", outcome.steps);
