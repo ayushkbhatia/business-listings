@@ -29,6 +29,7 @@ const NOW = new Date();
 const LAST = lastClosedPeriod(NOW);
 let board: RevenueBoard;
 const madeSlots: string[] = [];
+const madeBusinesses: string[] = [];
 
 beforeAll(async () => {
   board = await revenueBoard(LAST, NOW);
@@ -36,6 +37,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (madeSlots.length > 0) await prisma.placementSlot.deleteMany({ where: { id: { in: madeSlots } } });
+  // Subscriptions, attempts and movements go with the business, by cascade.
+  if (madeBusinesses.length > 0) await prisma.business.deleteMany({ where: { id: { in: madeBusinesses } } });
 });
 
 async function idOf(slug: string): Promise<string> {
@@ -247,6 +250,92 @@ describe("criterion 8 — failed payments are excluded from churn until dunning 
     });
     expect(lastAttempt.succeeded).toBe(true);
     expect(figures.failedPayments.accounts).toBeLessThan(board.current.failedPayments.accounts + 50);
+  });
+
+  /*
+     The review's case. A seller who lapsed after failed payments and came back
+     through Change plan leaves no new payment attempt — the reactivation charges
+     through the provider and records a movement — so the last attempt on file is
+     still the failure before the drop.
+  */
+  async function account(label: string, movements: { kind: "new_business" | "churn" | "reactivation" | "expansion"; daysAgo: number; delta: number; after: number; cause: "plan_change" | "dunning_drop" }[], failedDaysAgo: number) {
+    const stamp = `${label}-${process.pid}-${Date.now()}`;
+    const category = await prisma.category.findFirstOrThrow({ where: { parentId: { not: null } }, orderBy: { id: "asc" }, select: { id: true } });
+    const business = await prisma.business.create({
+      data: {
+        tradeName: `Ledger Episode ${stamp}`,
+        displayName: `Ledger Episode ${stamp}`,
+        slug: `zz-ledger-episode-${stamp}`,
+        licenceNumber: `DED-${String(Date.now()).slice(-6)}`,
+        licenceAuthority: "DED",
+        licenceExpiry: new Date(Date.now() + 200 * 86_400_000),
+        primaryCategoryId: category.id,
+        claimStatus: "claimed",
+        planId: "basic",
+      },
+      select: { id: true },
+    });
+    madeBusinesses.push(business.id);
+    const ago = (days: number) => new Date(Date.now() - days * 86_400_000);
+    const subscription = await prisma.subscription.create({
+      data: { businessId: business.id, planId: "basic", status: "active", startedAt: ago(120), periodStartedAt: ago(10), renewsAt: new Date(Date.now() + 20 * 86_400_000) },
+      select: { id: true },
+    });
+    await prisma.paymentAttempt.create({
+      data: { subscriptionId: subscription.id, amountFils: 34_900, succeeded: false, attemptedAt: ago(failedDaysAgo) },
+    });
+    for (const movement of movements) {
+      await prisma.mrrMovement.create({
+        data: {
+          businessId: business.id,
+          kind: movement.kind,
+          cause: movement.cause,
+          toPlanId: movement.after === 0 ? "free" : "basic",
+          deltaFils: movement.delta,
+          mrrAfterFils: movement.after,
+          occurredAt: ago(movement.daysAgo),
+        },
+      });
+    }
+    return business.id;
+  }
+
+  it("stops counting a failure once the account lapsed, even after it came back", async () => {
+    const cameBack = await account(
+      "came-back",
+      [
+        { kind: "new_business", daysAgo: 100, delta: 34_900, after: 34_900, cause: "plan_change" },
+        { kind: "churn", daysAgo: 40, delta: -34_900, after: 0, cause: "dunning_drop" },
+        { kind: "reactivation", daysAgo: 2, delta: 34_900, after: 34_900, cause: "plan_change" },
+      ],
+      54,
+    );
+    const figures = await periodFigures(currentPeriod(new Date()));
+    // Paying again, so the MRR filter alone would let it through.
+    expect(figures.stateAtEnd.find((row) => row.businessId === cameBack)?.mrrFils).toBe(34_900);
+    const withIt = figures.failedPayments.accounts;
+    await prisma.business.deleteMany({ where: { id: cameBack } });
+    madeBusinesses.splice(madeBusinesses.indexOf(cameBack), 1);
+    const without = (await periodFigures(currentPeriod(new Date()))).failedPayments.accounts;
+    expect(withIt).toBe(without);
+  });
+
+  it("keeps counting a failure while dunning runs, whatever plan change came after", async () => {
+    const stillFailing = await account(
+      "still-failing",
+      [
+        { kind: "new_business", daysAgo: 100, delta: 34_900, after: 34_900, cause: "plan_change" },
+        { kind: "expansion", daysAgo: 1, delta: 55_000, after: 89_900, cause: "plan_change" },
+      ],
+      5,
+    );
+    const figures = await periodFigures(currentPeriod(new Date()));
+    const before = figures.failedPayments.accounts;
+    await prisma.business.deleteMany({ where: { id: stillFailing } });
+    madeBusinesses.splice(madeBusinesses.indexOf(stillFailing), 1);
+    const after = (await periodFigures(currentPeriod(new Date()))).failedPayments.accounts;
+    // An upgrade's proration does not pay the period that failed.
+    expect(before).toBe(after + 1);
   });
 
   it("does not count an account that already lapsed as at risk", async () => {

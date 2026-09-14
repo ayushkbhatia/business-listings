@@ -203,8 +203,8 @@ export async function periodFigures(period: RevenuePeriod): Promise<PeriodFigure
  */
 async function failingAt(instant: Date): Promise<Set<string>> {
   const [latest, pastDue] = await Promise.all([
-    prisma.$queryRaw<{ business_id: string; succeeded: boolean }[]>`
-      SELECT DISTINCT ON (a.subscription_id) s.business_id, a.succeeded
+    prisma.$queryRaw<{ business_id: string; succeeded: boolean; attempted_at: Date }[]>`
+      SELECT DISTINCT ON (a.subscription_id) s.business_id, a.succeeded, a.attempted_at
       FROM payment_attempt a
       JOIN subscription s ON s.id = a.subscription_id
       WHERE a.attempted_at < ${instant}
@@ -212,16 +212,40 @@ async function failingAt(instant: Date): Promise<Set<string>> {
     `,
     prisma.subscription.findMany({
       where: { status: "past_due", pastDueSince: { lt: instant } },
-      select: { businessId: true },
+      select: { businessId: true, pastDueSince: true },
     }),
   ]);
 
   const lastAttempt = new Map(latest.map((row) => [row.business_id, row.succeeded]));
-  const failing = new Set(latest.filter((row) => !row.succeeded).map((row) => row.business_id));
+  const candidates = new Map<string, Date>();
+  for (const row of latest) if (!row.succeeded) candidates.set(row.business_id, row.attempted_at);
   for (const row of pastDue) {
-    if (lastAttempt.get(row.businessId) !== true) failing.add(row.businessId);
+    if (lastAttempt.get(row.businessId) !== true && !candidates.has(row.businessId)) {
+      candidates.set(row.businessId, row.pastDueSince!);
+    }
   }
-  return failing;
+  if (candidates.size === 0) return new Set();
+
+  /*
+     An episode ends when the account churns, whatever comes after.
+
+     Nothing writes a payment attempt when a lapsed seller comes back through
+     Change plan: the reactivation charges through the provider and records a
+     movement, not an attempt. So the last attempt on file is still the one that
+     failed before the drop, and without this the account would read as at risk
+     for as long as it paid again. A churn movement after the failure and before
+     the instant closes it. A plan change without a churn does not: an upgrade's
+     proration does not pay the period that failed, and dunning is still running.
+  */
+  const closed = await prisma.mrrMovement.findMany({
+    where: { businessId: { in: [...candidates.keys()] }, kind: "churn", occurredAt: { lt: instant } },
+    select: { businessId: true, occurredAt: true },
+  });
+  for (const churn of closed) {
+    const failedAt = candidates.get(churn.businessId);
+    if (failedAt && churn.occurredAt.getTime() >= failedAt.getTime()) candidates.delete(churn.businessId);
+  }
+  return new Set(candidates.keys());
 }
 
 // ── The board ────────────────────────────────────────────────────────────────
