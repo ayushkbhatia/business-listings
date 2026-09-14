@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import type { Prisma } from "@/lib/db/generated/client";
 import { assertCan } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import { parseAedToFils } from "@/lib/quote/money";
@@ -174,12 +175,12 @@ export async function sendQuoteForBusiness(
      finished rather than a second quote beside it. `Quote` is unique on
      (enquiryId, businessId, revision), so promoting it is the only shape that
      does not leave a hole in the sequence the buyer reads.
+
+     Which draft is read here; whether it is still one is asked under the lock.
   */
   const draft = await findDraft(input.enquiryId, businessId);
-  const revision = draft?.revision ?? (await nextRevisionFor(input.enquiryId, businessId));
 
   const expiresAt = new Date(now.getTime() + validityDays * 24 * 3_600_000);
-  const ref = await nextQuoteRef(input.enquiryId, businessId, revision);
 
   const lineData = input.lines.map((line, i) => ({
     enquiryLineId: line.enquiryLineId,
@@ -202,7 +203,26 @@ export async function sendQuoteForBusiness(
     const refusal = quoteFence(locked, now);
     if (refusal) return { ok: false as const, error: quoteFenceMessage(refusal, locked.closesAt) };
 
+    /*
+       The revision and its reference are decided under the lock, not before it.
+       Two sends with no draft between them — two tabs, a double tap — would
+       otherwise both read the same next revision and the second would die on
+       the unique `(enquiry, business, revision)` as a 500. Serialised by the
+       lock, the second reads the first's commit and is the revision after it.
+       Board `3j-s` closed the same race in `sendProposal`.
+    */
+    const revision = draft?.revision ?? (await nextRevisionFor(input.enquiryId, businessId, tx));
+    const ref = await nextQuoteRef(tx, input.enquiryId, businessId, revision);
+
     if (draft) {
+      // Two sends from two tabs both found this draft. The first promoted it;
+      // the second must not write its lines over a quote the buyer already
+      // holds. A draft cleared with "Start again" in another tab is gone too.
+      const still = await tx.quote.findUnique({ where: { id: draft.id }, select: { status: true } });
+      if (still?.status !== "draft") {
+        return { ok: false as const, error: t("quote.error.already_sent") };
+      }
+
       // Promote. The draft's lines are replaced wholesale rather than merged:
       // what the seller is sending is what is on screen now, and a line they
       // removed must not survive in the quote a buyer receives.
@@ -321,11 +341,19 @@ export async function sendQuoteForBusiness(
  * revision because a revision is a new row rather than an edit. A numeric
  * suffix is appended in the rare case two suppliers share a mark on the same
  * enquiry — the ref column is unique and a clash must not lose a quote.
+ *
+ * Called inside the send's transaction, after the enquiry's row lock, so the
+ * revision it names is one no concurrent send is also about to write.
  */
-export async function nextQuoteRef(enquiryId: string, businessId: string, revision: number): Promise<string> {
+export async function nextQuoteRef(
+  db: Prisma.TransactionClient,
+  enquiryId: string,
+  businessId: string,
+  revision: number,
+): Promise<string> {
   const [enquiry, business] = await Promise.all([
-    prisma.enquiry.findUniqueOrThrow({ where: { id: enquiryId }, select: { ref: true } }),
-    prisma.business.findUniqueOrThrow({ where: { id: businessId }, select: { slug: true } }),
+    db.enquiry.findUniqueOrThrow({ where: { id: enquiryId }, select: { ref: true } }),
+    db.business.findUniqueOrThrow({ where: { id: businessId }, select: { slug: true } }),
   ]);
 
   const number = enquiry.ref.replace(/^ENQ-/, "");
@@ -334,7 +362,7 @@ export async function nextQuoteRef(enquiryId: string, businessId: string, revisi
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const candidate = attempt === 0 ? base : `${base}-${attempt + 1}`;
-    const taken = await prisma.quote.findUnique({ where: { ref: candidate }, select: { ref: true } });
+    const taken = await db.quote.findUnique({ where: { ref: candidate }, select: { ref: true } });
     if (!taken) return candidate;
   }
   throw new Error(`Could not allocate a quote reference for ${base}`);

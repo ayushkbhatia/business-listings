@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import type { Prisma } from "@/lib/db/generated/client";
 import { assertCan } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import { parseAedToFils } from "@/lib/quote/money";
@@ -74,11 +75,18 @@ export type SaveDraftResult =
  * Where a draft's revision number comes from.
  *
  * Sent quotes decide it; the draft takes the next one and holds it. Exported so
- * `sendQuoteForBusiness` computes the same number from the same rule rather than
- * its own copy of it.
+ * `sendQuoteForBusiness` and `sendProposal` compute the same number from the
+ * same rule rather than their own copies of it.
+ *
+ * A send passes the transaction that holds the enquiry's row lock, and must: a
+ * revision read before the lock is a guess two concurrent sends both make.
  */
-export async function nextRevisionFor(enquiryId: string, businessId: string): Promise<number> {
-  const previous = await prisma.quote.findFirst({
+export async function nextRevisionFor(
+  enquiryId: string,
+  businessId: string,
+  db: Prisma.TransactionClient = prisma,
+): Promise<number> {
+  const previous = await db.quote.findFirst({
     where: { enquiryId, businessId, status: { not: "draft" } },
     orderBy: { revision: "desc" },
     select: { revision: true },

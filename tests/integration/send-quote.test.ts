@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/db/client";
 import type { Actor } from "@/lib/auth/roles";
 import { PermissionError } from "@/lib/auth/errors";
+import { saveDraft } from "@/lib/quote/draft";
 import { sendQuoteForBusiness, type SendQuoteInput } from "@/lib/quote/send-quote";
 
 /**
@@ -325,6 +326,46 @@ describe("what a send refuses", () => {
        never accepted is refused as closed: tests/integration/accepted-record-7c.
     */
     expect(result).toEqual({ ok: false, error: expect.stringContaining("accepted your quote") });
+  });
+});
+
+describe("two sends racing from one draft", () => {
+  it("never write over each other, and never leave two sent quotes at one revision", async () => {
+    const saved = await saveDraft(owner, businessId, input());
+    expect(saved.ok).toBe(true);
+    /*
+       Two outcomes are correct and which one happens is the scheduler's: both
+       read the draft, and the second is refused under the lock rather than
+       writing its lines over a quote the buyer holds; or the first commits
+       before the second reads, and the second is simply revision 2. What must
+       never happen is an error, or two sent quotes at one revision.
+    */
+    const results = await Promise.all([send(), send({ note: "Second tab." })]);
+    const ok = results.filter((r) => r.ok);
+    expect(ok.length).toBeGreaterThanOrEqual(1);
+    for (const refused of results.filter((r) => !r.ok)) {
+      expect(refused).toMatchObject({ error: expect.stringMatching(/sent from another tab/) });
+    }
+    const sent = await prisma.quote.findMany({
+      where: { enquiryId, businessId, status: "sent" },
+      select: { revision: true },
+    });
+    expect(sent).toHaveLength(ok.length);
+    expect(new Set(sent.map((q) => q.revision)).size).toBe(sent.length);
+  });
+});
+
+describe("two sends with no draft between them", () => {
+  it("serialise under the lock into revisions 1 and 2, rather than one failing on the unique revision", async () => {
+    const results = await Promise.all([send(), send({ note: "Second tab." })]);
+    expect(results.every((r) => r.ok)).toBe(true);
+    const quotes = await prisma.quote.findMany({
+      where: { enquiryId, businessId },
+      select: { revision: true, ref: true },
+    });
+    expect(quotes.map((q) => q.revision).sort()).toEqual([1, 2]);
+    // The reference is decided under the lock too, so it names its own revision.
+    for (const quote of quotes) expect(quote.ref).toMatch(new RegExp(`R${quote.revision}$`));
   });
 });
 

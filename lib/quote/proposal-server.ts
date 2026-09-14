@@ -1,6 +1,5 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import type { Prisma } from "@/lib/db/generated/client";
 import { assertCan } from "@/lib/auth/can";
 import type { Actor } from "@/lib/auth/roles";
 import { descendantsOf } from "@/lib/enquiry/service";
@@ -326,8 +325,8 @@ export async function sendProposal(
        `(enquiry, business, revision)` as a 500. Serialised by the lock, the
        second reads the first's commit and is revision 2.
     */
-    const revision = draft?.revision ?? (await nextRevisionIn(tx, input.enquiryId, businessId));
-    const ref = await nextQuoteRef(input.enquiryId, businessId, revision);
+    const revision = draft?.revision ?? (await nextRevisionFor(input.enquiryId, businessId, tx));
+    const ref = await nextQuoteRef(tx, input.enquiryId, businessId, revision);
 
     let row: { id: string; ref: string; revision: number };
     if (draft) {
@@ -404,16 +403,6 @@ export async function sendProposal(
   });
 
   return sent;
-}
-
-/** `nextRevisionFor`, read inside the transaction that holds the enquiry's lock. */
-async function nextRevisionIn(tx: Prisma.TransactionClient, enquiryId: string, businessId: string): Promise<number> {
-  const previous = await tx.quote.findFirst({
-    where: { enquiryId, businessId, status: { not: "draft" } },
-    orderBy: { revision: "desc" },
-    select: { revision: true },
-  });
-  return (previous?.revision ?? 0) + 1;
 }
 
 /** The window, from the composer's own list; anything else is the proposal default. */
