@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/display/StatusBadge";
 import { t } from "@/lib/i18n";
 import { saveAlerts } from "./actions";
 import { escalationOptions } from "@/lib/team/escalation";
-import { CHANNELS, EVENTS, inAppLocked } from "./matrix";
+import { CHANNELS, EVENTS, floorLocked, inAppLocked } from "./matrix";
 
 /**
  * Board 7e — the seller's control panel for their own alerts.
@@ -133,7 +133,8 @@ export function AlertsForm({ value, whatsappPending, goesTo, available, hours }:
                     </th>
                     <td className="px-3 py-2 text-caption text-muted">{goesTo[event]}</td>
                     {CHANNELS.map((channel) => {
-                      const lockedHere = locked && channel === "in_app";
+                      const floorHere = floorLocked(event, channel);
+                      const lockedHere = (locked && channel === "in_app") || floorHere;
                       const unavailable = !available.includes(channel);
                       return (
                         <td key={channel} className="px-3 py-2">
@@ -145,7 +146,12 @@ export function AlertsForm({ value, whatsappPending, goesTo, available, hours }:
                                arrives" is what a screen reader should say, not
                                "checkbox" forty times. */
                             aria-label={
-                              lockedHere
+                              floorHere
+                                ? t("alerts.floor_locked_cell", {
+                                    channel: t(`alerts.channel.${channel}` as "alerts.channel.whatsapp"),
+                                    event: eventLabel,
+                                  })
+                                : lockedHere
                                 ? t("alerts.in_app_locked_cell", { event: eventLabel })
                                 : t("alerts.toggle", {
                                     channel: t(
@@ -168,6 +174,7 @@ export function AlertsForm({ value, whatsappPending, goesTo, available, hours }:
         <div className="mt-3 flex flex-col gap-1.5 border-t border-line pt-3">
           <p className="max-w-prose text-caption text-muted">{t("alerts.nothing_dropped")}</p>
           <p className="max-w-prose text-caption text-muted">{t("alerts.in_app_locked")}</p>
+          <p className="max-w-prose text-caption text-muted">{t("alerts.floor_locked")}</p>
           <p className="max-w-prose text-caption text-muted">{t("alerts.escalation_precedence")}</p>
           {/*
             §2.3: "the channel a buyer arrived on is not this matrix." Outbound

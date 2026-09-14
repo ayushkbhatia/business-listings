@@ -190,6 +190,170 @@ export const EVENT_PARAMS = {
 
 export type ParamsOf<E extends NotificationEvent> = (typeof EVENT_PARAMS)[E][number];
 
+/**
+ * Board 12g's `FIRED BY` column: the boards whose screens or jobs send each
+ * event.
+ *
+ * Code, not a column. The handoff draws `firedBy` as a field on the template
+ * row, and `B6` says it has to be maintained because it is the only record of a
+ * template's sender. A field staff type is a field that drifts from the call
+ * sites the moment one moves — the failure `B1` names for the send count — so
+ * the record lives beside `EVENT_PARAMS`, which is already bound to those call
+ * sites by type, and `params.test.ts` holds the two in step: an event that
+ * declares params has a sender here, and one that declares none has none.
+ *
+ * Board ids as the design canvas numbers them, so a row on the console names
+ * the board somebody can open.
+ */
+export const EVENT_SOURCES = {
+  // `lib/enquiry/service.ts` fans an RFQ out; `add-recipients.ts` adds suppliers to a brief.
+  enquiry_received: ["1h", "1h-s"],
+  quote_received: ["3k", "3j-s"],
+  quote_revised: ["3k", "3j-s"],
+  quote_accepted: ["7c", "7c-s"],
+  // `lib/quotes/expiry-job.ts`, which boards 7d and 7e added.
+  quote_expiring: ["7e"],
+  subscription_renewed: ["11f"],
+  setup_nudge: ["8a"],
+  enquiry_unanswered: [],
+  enquiry_escalated: ["8d"],
+  message_received: ["11b"],
+  // `submitReview`, which the buyer's review form on board 10f calls.
+  review_posted: ["10f"],
+  review_requested: ["11c"],
+  review_dispute_decided: ["11c"],
+  document_expiring: ["3e"],
+  product_alert_matched: [],
+  ramadan_dates_moved: ["3d"],
+  weekly_digest: [],
+} as const satisfies Record<NotificationEvent, readonly string[]>;
+
+/**
+ * Who receives each event.
+ *
+ * Every event goes to one side, and which side decides who can switch it off
+ * (`B7`): a seller on board 7e's matrix, a buyer on nothing yet — buyer-side
+ * events route through `BUYER_DEFAULT` in `routing.ts`.
+ */
+export const EVENT_AUDIENCE = {
+  enquiry_received: "seller",
+  quote_received: "buyer",
+  quote_revised: "buyer",
+  quote_accepted: "seller",
+  quote_expiring: "seller",
+  subscription_renewed: "seller",
+  setup_nudge: "seller",
+  enquiry_unanswered: "seller",
+  enquiry_escalated: "seller",
+  message_received: "buyer",
+  review_posted: "seller",
+  review_requested: "buyer",
+  review_dispute_decided: "seller",
+  document_expiring: "seller",
+  product_alert_matched: "buyer",
+  ramadan_dates_moved: "seller",
+  weekly_digest: "seller",
+} as const satisfies Record<NotificationEvent, "seller" | "buyer">;
+
+export type Audience = (typeof EVENT_AUDIENCE)[NotificationEvent];
+
+/**
+ * Placeholder names no template may use. Board 12g `B3`.
+ *
+ * *"No variable resolves to a buyer's contact details or quote count. Enforce it
+ * in the resolver, not by convention — `7c` is the only release point."*
+ *
+ * `render()` already refuses a **value** shaped like a phone number or an
+ * email, which catches a caller passing the wrong thing into a safe slot. This
+ * is the other half: a **name** that could only ever carry the wrong thing.
+ * `{buyerPhone}` is refused before anybody has written a value for it, and so is
+ * `{buyerQuoteCount}` — how many quotes a buyer holds is their negotiating position,
+ * and a seller told it before acceptance has been handed it by the platform.
+ *
+ * Substring matches, case-insensitive, so `buyerMobile` and `quotesReceived`
+ * are caught with `mobile` and `quotesreceived`. Nothing in `EVENT_PARAMS`
+ * matches, and `params.test.ts` says so.
+ */
+const FORBIDDEN_NAME = [
+  "phone",
+  "mobile",
+  "whatsapp",
+  "email",
+  "address",
+  "contact",
+  "buyername",
+  "buyercompany",
+  "companyname",
+  "iban",
+  // A buyer's count of quotes held. Not `quoteCount` alone: the weekly digest
+  // tells a seller how many *they* sent, which is theirs to know.
+  "buyerquote",
+  "quotesreceived",
+  "quotesheld",
+  "competingquote",
+] as const;
+
+/** Placeholders whose name could only carry contact details or a buyer's quote count. */
+export function forbiddenPlaceholders(...parts: (string | null | undefined)[]): string[] {
+  return placeholdersIn(...parts).filter((name) => isForbiddenParam(name));
+}
+
+export function isForbiddenParam(name: string): boolean {
+  const lower = name.toLowerCase();
+  return FORBIDDEN_NAME.some((fragment) => lower.includes(fragment));
+}
+
+/**
+ * What a template looks like filled in, for the editor's preview and for
+ * `Send test to me` (`B10`).
+ *
+ * Plausible and never real: no business, enquiry or person in here exists, and
+ * `render()` still checks every value, so a sample shaped like contact details
+ * would throw on the console exactly as it would at a carrier. Lengths are
+ * realistic rather than short, because `B8`'s 160 characters is measured
+ * against this — a sample `{area}` of "JLT" would let an SMS through that
+ * "Dubai Investments Park 2" overflows.
+ *
+ * `origin` is the site's own, so a test link is a link to this deployment.
+ */
+export function sampleParams<E extends NotificationEvent>(
+  event: E,
+  origin: string,
+): Record<ParamsOf<E>, string | number> {
+  const all = {
+    ref: "ENQ-48213",
+    summary: "Chilled water pumps for a residential tower",
+    neededBy: "4 Oct 2026",
+    closesAt: "21 Sep 2026",
+    area: "Dubai Investments Park 2",
+    lineCount: 3,
+    enquiryId: "sample-enquiry",
+    shortLink: `${origin}/dashboard/leads/sample-enquiry`,
+    businessName: "Gulf Pump Engineering",
+    businessSlug: "gulf-pump-engineering",
+    revision: 2,
+    quoteRef: "Q-48213-2",
+    amount: "AED 15,344",
+    planName: "Basic",
+    renewsAt: "14 Oct 2026",
+    taskList: "photos, opening hours and a second contact",
+    minutes: 12,
+    hours: 2,
+    preview: "We can deliver the pumps from stock in Jebel Ali next week if that suits.",
+    rating: 4,
+    outcome: "Upheld",
+    ground: "Not a real transaction",
+    expiresAt: "28 Oct 2026",
+    days: 14,
+    year: "2027",
+    from: "8 Feb 2027",
+    to: "9 Mar 2027",
+  } as const;
+  const params: Record<string, string | number> = {};
+  for (const name of EVENT_PARAMS[event]) params[name] = all[name as keyof typeof all];
+  return params as Record<ParamsOf<E>, string | number>;
+}
+
 /** True where something in the codebase actually sends this event. */
 export function isEmitted(event: NotificationEvent): boolean {
   return EVENT_PARAMS[event].length > 0;

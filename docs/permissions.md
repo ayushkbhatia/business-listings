@@ -73,6 +73,8 @@ reading `Business.leadEscalationMinutes` and sending once per enquiry.
 | Set verification tier | ✓ | — | — |
 | Edit taxonomy & spec templates | ✓ | — | — |
 | Edit storefront templates | ✓ | — | — |
+| Edit notification templates, record Meta's decision (board 12g) | ✓ | — | — |
+| Read notification templates and the delivery log (board 12g) | ✓ | ✓ | — |
 | Remove a review | ✓ | — | — |
 | Resolve a supplier report | ✓ | ✓ | — |
 | Suspend an account | ✓ | — | — |

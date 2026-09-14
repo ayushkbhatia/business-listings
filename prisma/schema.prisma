@@ -8167,8 +8167,35 @@ enum TemplateApproval {
   pending_meta
   live
   retired
+  /// WhatsApp only: Meta refused the wording. `metaNote` says why, and the live
+  /// version this was meant to replace carries on sending. Board 12g `B4`.
+  rejected
+  /// Replaced before it ever went live — a v5 saved while v4 was still with
+  /// Meta, or a draft overtaken by a newer save. Board 12g `Q1`: the newer one
+  /// takes its place in the queue, and this row says so rather than reading as
+  /// retired, which would claim it had once been sent.
+  superseded
 
   @@map("template_approval")
+}
+
+/// Which trade a template body speaks to. Board 12g `B5`.
+///
+/// `neutral` is *this body says nothing about trade kind* — a licence expiring
+/// or a plan renewing reads the same to a stockist and to a plumber. It is a
+/// different fact from a goods body that has no `services` twin yet, and one
+/// null doing both jobs is how the twins that need writing get lost among the
+/// ones that never will.
+///
+/// Not the spec's nullable column: `@@unique` over a nullable column treats
+/// every null as distinct in Postgres, so two neutral v3s of one template would
+/// both be accepted. An explicit value keeps the constraint meaning what it says.
+enum TemplateKind {
+  neutral
+  goods
+  services
+
+  @@map("template_kind")
 }
 
 model NotificationTemplate {
@@ -8176,6 +8203,10 @@ model NotificationTemplate {
   event   NotificationEvent
   channel NotificationChannel
   locale  String              @default("en")
+  /// Two lines per event and channel: the primary body (`goods` or `neutral`)
+  /// and its `services` twin. Versions count within a line — see
+  /// `lib/notify/template-lines.ts`.
+  kind    TemplateKind        @default(goods)
   version Int                 @default(1)
   status  TemplateApproval    @default(draft)
 
@@ -8189,13 +8220,24 @@ model NotificationTemplate {
 
   /// WhatsApp only: the Meta-approved template name this maps to.
   metaTemplateName String? @map("meta_template_name")
+  /// WhatsApp only: what Meta said when it refused the wording. Shown against
+  /// the rejected version while the live one carries on.
+  metaNote         String? @map("meta_note")
+  /// WhatsApp only: when this version went to Meta, and when Meta's answer was
+  /// recorded. The pair is how long a review took, measured rather than quoted.
+  submittedAt      DateTime? @map("submitted_at")
+  decidedAt        DateTime? @map("decided_at")
+
+  /// The staff member who wrote this version. Null for rows the seed and the
+  /// backfill migration wrote before anybody had edited them.
+  createdById String? @map("created_by_id") @db.Uuid
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   deliveries NotificationDelivery[]
 
-  @@unique([event, channel, locale, version])
+  @@unique([event, channel, locale, kind, version])
   @@index([event, channel, status])
   @@map("notification_template")
 }
@@ -8401,10 +8443,25 @@ model NotificationDelivery {
   sentAt       DateTime? @map("sent_at")
   createdAt    DateTime  @default(now()) @map("created_at")
 
+  /// The trade the message was about — a services brief or a goods enquiry —
+  /// and null where the event is about neither (a renewal, a licence).
+  ///
+  /// Board 12g's `SERVICES TWIN` column says a body has no services version;
+  /// this is what turns that into a measurement. A delivery about a services
+  /// brief that went out through a `goods` template is a plumber told about
+  /// "3 lines", and the count of those is the cost of the twin not existing.
+  tradeKind    TradeKind? @map("trade_kind")
+  /// Board 12g `B10`: `Send test to me`. A real send through the real carrier
+  /// to the staff member who asked, and not reach — so every volume on the
+  /// console leaves these out.
+  test         Boolean   @default(false)
+
   template NotificationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
   @@index([event, businessId, createdAt])
   @@index([status, scheduledFor])
+  /// Board 12g `B1`: `SENT 30D` is a query over this table, never a counter.
+  @@index([templateId, createdAt], map: "notification_delivery_template_created_idx")
   @@map("notification_delivery")
 }
 

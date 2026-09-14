@@ -37,6 +37,38 @@ export type NotificationChannel = "whatsapp" | "sms" | "email" | "in_app";
 export type { NotificationEvent } from "@/lib/db/generated/enums";
 import type { NotificationEvent } from "@/lib/db/generated/enums";
 
+/**
+ * What a seller cannot switch off. Board 12g `B7`.
+ *
+ * *"Opt-outs are honoured per channel, with two exceptions… Those are
+ * consequences, not marketing, and the exception list is short and stated."*
+ *
+ * The list is stated here, once, and read by three places: `route()` below,
+ * which adds these channels whatever the matrix says; board 7e's alerts form,
+ * which renders them ticked and locked; and the console's *who can turn this
+ * off* panel, which names them.
+ *
+ * - **`document_expiring`.** A licence that lapses takes the verified badge
+ *   with it on the day, with no grace period. A seller who unticked email on 7e
+ *   and learned of it from the badge going was told nothing because of a box
+ *   that looked like a preference for newsletters.
+ * - **`ramadan_dates_moved`.** The dates are the platform's, and board 3d's
+ *   card promises "we email you when they move". It was never in 7e's matrix, so
+ *   the event routed to no channel at all and the promise was kept by nobody.
+ *
+ * The handoff's second exception is *a reported problem*. There is no event for
+ * one — `4h` resolves reports without messaging the seller — so it is not on
+ * the list, and the console says so rather than naming a message that does not
+ * exist.
+ *
+ * Email and in-app only. Neither interrupts, so quiet hours still hold for
+ * whatever a seller has chosen on top.
+ */
+export const PLATFORM_FLOOR: Readonly<Partial<Record<NotificationEvent, readonly NotificationChannel[]>>> = {
+  document_expiring: ["email", "in_app"],
+  ramadan_dates_moved: ["email", "in_app"],
+};
+
 /** The channels quiet hours actually silence. */
 export const INTERRUPTING_CHANNELS: readonly NotificationChannel[] = ["whatsapp", "sms"];
 
@@ -166,7 +198,9 @@ export function route(
   context: RoutingContext,
 ): ChannelDecision[] {
   const timeZone = context.timeZone ?? UAE;
-  const channels = preference.matrix[context.event] ?? [];
+  const chosen = preference.matrix[context.event] ?? [];
+  const floor = PLATFORM_FLOOR[context.event] ?? [];
+  const channels = [...chosen, ...floor.filter((channel) => !chosen.includes(channel))];
   if (channels.length === 0) return [];
 
   const quiet = inQuietHours(preference.quiet, context.now, timeZone);
@@ -188,3 +222,29 @@ export function route(
     };
   });
 }
+
+/**
+ * Where a buyer is reached, and when. Buyers have no board 7e matrix, so every
+ * buyer-facing event routes through this. Here rather than in `events.ts` so the
+ * console can state it (board 12g `B7`) without importing a module that sends.
+ *
+ * Quiet hours apply — a WhatsApp at two in the morning is rude whoever receives
+ * it — and there is no high-value override, because a buyer set no threshold.
+ */
+export const BUYER_DEFAULT: RoutingPreference = {
+  matrix: {
+    quote_received: ["whatsapp", "in_app"],
+    quote_revised: ["in_app"],
+    quote_expiring: ["in_app"],
+    /*
+       In-app only, deliberately. Board 11b caps the seller at one follow-up
+       because a second loses more deals than it wins; putting that one on
+       WhatsApp would make the cap a formality — the interruption is the part
+       that costs the deal, not the message. A buyer weighing four quotes gets
+       it where they are already comparing them.
+    */
+    message_received: ["in_app"],
+  },
+  quiet: { enabled: true, fromHour: 21, toHour: 7, onSunday: true },
+  highValueOverrideAed: null,
+};

@@ -154,73 +154,112 @@ test.describe("board 12g — notification templates", () => {
     await page.goto("/admin/notifications");
   });
 
-  test("says how many events nothing sends yet", async ({ page }) => {
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Notification templates");
-    const header = page.getByRole("banner").or(page.locator("header")).first();
-    await expect(header).toContainText(/events nothing sends yet/);
+  test("names the screen and counts what it lists", async ({ page }) => {
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Notifications");
+    await expect(page.getByText(/\d+ templates · 4 channels/i)).toBeVisible();
+    for (const tab of ["Templates", "Channels", "Delivery log", "Quiet hours"]) {
+      await expect(page.getByRole("link", { name: tab, exact: true })).toBeVisible();
+    }
   });
 
-  test("marks the dormant events in the table", async ({ page }) => {
+  test("reads no trade-kind language and not written differently, and names who sends each", async ({ page }) => {
     /*
-     * Seven of the eleven are declared, seeded with templates, and emitted by
-     * nothing. That is not a bug, but staff should know before spending an
-     * afternoon on the copy.
+     * B5: the seven that need nothing and the ones that need writing must not
+     * share a state. And FIRED BY is a board id read from the code.
      */
-    const table = page.getByRole("table", { name: /Every notification template/ });
-    await expect(table.getByText("nothing sends this yet").first()).toBeVisible();
+    const table = page.getByRole("table", { name: /one row per event and channel/ });
+    await expect(table.getByText("No trade-kind language").first()).toBeVisible();
+    await expect(table.getByText("Not written").first()).toBeVisible();
+    const expiring = table.getByRole("row").filter({ has: page.getByRole("link", { name: "Open document_expiring on Email" }) });
+    await expect(expiring).toContainText("3e");
+    await expect(expiring).toContainText("No trade-kind language");
   });
 
-  test("names what the event supplies, and refuses a placeholder it does not", async ({ page }) => {
-    await page.getByRole("button", { name: /Edit enquiry_received on whatsapp/ }).first().click();
-    await expect(page.getByText(/This event supplies:/)).toBeVisible();
+  test("checks a body as it is typed, with the same rules the save runs", async ({ page }) => {
+    await page.getByRole("link", { name: "Open enquiry_received on In-app" }).click();
+    await expect(page.getByRole("heading", { name: "enquiry_received on In-app" })).toBeVisible();
 
-    const body = page.getByLabel("Body");
+    // By role: "Body" as a label substring also names the "Which body" nav and the neutral-body checkbox.
+    const body = page.getByRole("textbox", { name: /^Body/ });
     await body.fill("New enquiry {ref} worth {quotedValue}");
     await expect(page.getByText(/\{quotedValue\} — this event does not supply that/)).toBeVisible();
+    await page.getByRole("textbox", { name: /^Why/ }).fill("Trying a placeholder the event does not supply.");
+    await expect(page.getByRole("button", { name: /^Save as v\d+$/ })).toBeDisabled();
 
-    // And the save is dead while it would fail to send.
-    await page.getByLabel("Why").fill("Trying a placeholder the event does not supply.");
-    await expect(page.getByRole("button", { name: "Save as a new version" })).toBeDisabled();
+    // B3: a name that could only carry contact details is refused by name.
+    await body.fill("Call the buyer on {buyerPhone}");
+    await expect(page.getByText(/could only carry a buyer's contact details/)).toBeVisible();
   });
 
-  test("a WhatsApp draft goes to Meta and is never offered a straight publish", async ({
-    page,
-  }) => {
-    /*
-     * The rule board 12g exists to enforce: the provider rejects wording Meta
-     * has not approved, with an error nobody on this side can read.
-     *
-     * The draft is created here rather than assumed. An earlier version of this
-     * test asserted against the seeded template being live, and then failed on
-     * its own second run — because the save in the test below had left a draft
-     * behind. A test that depends on what a previous run did is a test that
-     * passes once.
-     */
-    await page.getByRole("button", { name: /Edit enquiry_received on whatsapp/ }).first().click();
-    await page.getByLabel("Body").fill("New enquiry {ref}: {summary}. Quote before {closesAt}.");
-    await page.getByLabel("Why").fill("Shortening the WhatsApp wording for the Meta resubmission.");
-    await page.getByRole("button", { name: "Save as a new version" }).click();
-    await expect(page.getByText(/Saved as version \d+, as a draft/)).toBeVisible();
-
-    /*
-     * Wait for the row, not just for the message. The save revalidates the
-     * table and clicking straight after lands on the row that was there
-     * before — which is why this passed on a second run and failed on a first.
-     */
-    const table = page.getByRole("table", { name: /Every notification template/ });
-    await expect(table.getByText("Draft").first()).toBeVisible();
-
-    // The newest version of that pair is the draft just written.
-    await page.getByRole("button", { name: /Edit enquiry_received on whatsapp/ }).first().click();
-    await expect(page.getByRole("button", { name: "Send to Meta" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Put it live" })).toHaveCount(0);
+  test("WhatsApp goes to Meta rather than live, and says the live copy keeps sending", async ({ page }) => {
+    await page.getByRole("link", { name: "Open enquiry_received on WhatsApp" }).click();
+    await expect(page.getByText("WhatsApp goes through Meta")).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Send v\d+ to Meta$/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Save as v\d+$/ })).toHaveCount(0);
+    await expect(page.getByText(/Email, SMS and in-app take effect on save/).first()).toBeVisible();
   });
 
-  test("says why an edit is a new version", async ({ page }) => {
-    await expect(page.getByText(/what a seller was sent last week/)).toBeVisible();
+  test("offers the services version where a goods body has none", async ({ page }) => {
+    await page.getByRole("link", { name: "Open quote_received on In-app" }).click();
+    await page.getByRole("link", { name: "Write the services version" }).click();
+    await expect(page.getByRole("link", { name: "Services twin" })).toHaveAttribute("aria-current", "page");
+    await expect(page.getByText(/The goods body it replaces/)).toBeVisible();
+  });
+
+  test("writes a services twin live on save", async ({ page }) => {
+    /*
+     * Straight to the twin's URL rather than through the red panel: the panel
+     * is gone once a twin exists, so a second local run would find no link to
+     * click. A unique body means that run writes v2 rather than being refused
+     * as unchanged.
+     */
+    await page.goto("/admin/notifications?t=quote_expiring.in_app&line=services");
+    await page.getByRole("textbox", { name: /^Body/ }).fill(`Proposal {quoteRef} runs out {expiresAt}. Extend the terms or let it lapse. ${Date.now()}`);
+    await page.getByRole("textbox", { name: /^Why/ }).fill("Service firms send proposals, not quotes.");
+    await page.getByRole("button", { name: /^Save as v\d+$/ }).click();
+    await expect(page.getByText(/Version \d+ is live/)).toBeVisible();
+  });
+
+  test("names who can turn a message off, and the two that ignore it", async ({ page }) => {
+    await page.getByRole("link", { name: "Open document_expiring on Email" }).click();
+    await expect(page.getByText("Who can turn this off")).toBeVisible();
+    await expect(page.getByText(/ignores that choice on email and in-app/)).toBeVisible();
   });
 
   test("is axe clean", async ({ page }) => {
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+test.describe("board 12g — the delivery log, channels and quiet hours", () => {
+  test("lists deliveries without an address, and filters by status", async ({ page }) => {
+    await page.goto("/admin/notifications/deliveries");
+    const table = page.getByRole("table", { name: /Every delivery attempt/ });
+    await expect(table).toBeVisible();
+    await page.getByRole("link", { name: "Suppressed", exact: true }).click();
+    await expect(page).toHaveURL(/status=skipped/);
+    const body = (await page.textContent("main")) ?? "";
+    expect(body).not.toMatch(/[\w.+-]+@[\w-]+\.[\w.]{2,}/);
+    expect(body).not.toMatch(/(?:\+|00)971[\s-]?\d/);
+  });
+
+  test("names a carrier or its absence for all four channels", async ({ page }) => {
+    await page.goto("/admin/notifications/channels");
+    const table = page.getByRole("table", { name: /Each channel's carrier/ });
+    for (const channel of ["WhatsApp", "Email", "SMS", "In-app"]) {
+      await expect(table.getByRole("rowheader", { name: channel, exact: true })).toBeVisible();
+    }
+  });
+
+  test("states the buyer default and the platform floor", async ({ page }) => {
+    await page.goto("/admin/notifications/quiet-hours");
+    await expect(page.getByText(/Licence expiry: always email and in-app/)).toBeVisible();
+    await expect(page.getByRole("table", { name: /Where each buyer message goes/ })).toBeVisible();
+  });
+
+  test("is axe clean on the log", async ({ page }) => {
+    await page.goto("/admin/notifications/deliveries");
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
   });

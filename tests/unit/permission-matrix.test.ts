@@ -232,6 +232,13 @@ describe("every row cites the document", () => {
        "sees the matrix read-only". §07 has no row for reading the roster. Every
        staff seat holds it and it is not audited, because reading who holds which
        role changes nothing — the write beside it, `staff.manage`, stays ops lead.
+
+       `notification.template.write` and `notification.read` joined on board 12g,
+       split out of `taxonomy.write`, which had gated the screen because it was
+       the nearest ops-lead row. The write follows "Edit taxonomy & spec
+       templates" to ops lead alone — a save changes what every recipient is
+       sent, and on WhatsApp it submits wording to Meta. The read adds the
+       moderator, who answers a seller asking why they were not told.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
@@ -240,6 +247,8 @@ describe("every row cites the document", () => {
       "business.close",
       "business.merge",
       "business.verification_tier.write",
+      "notification.read",
+      "notification.template.write",
       "question.remove",
       "queue.rules",
       "review.dispute",

@@ -13,8 +13,8 @@ import { formatAED, formatCount, formatDate, UAE_LOCALE } from "@/lib/format";
 */
 import type { Task } from "@/lib/onboarding/service";
 import { t } from "@/lib/i18n";
-import { notify, type NotifyOutcome } from "./service";
-import { route, type RoutingPreference } from "./routing";
+import { buyerAddress, notify, resolveLiveTemplates, type NotifyOutcome } from "./service";
+import { BUYER_DEFAULT, route } from "./routing";
 import { render } from "./render";
 import { resolveNotificationSenders } from "./senders";
 import { absoluteUrl } from "@/lib/site";
@@ -32,27 +32,21 @@ import { recordEvent } from "@/lib/telemetry/record";
  *
  * Sellers route through their matrix on board 7e. Buyers have no matrix: 7e is
  * the seller's control panel and nothing in this handoff gives a buyer one, so
- * buyer-facing events use the default below. Quiet hours still apply to them —
+ * buyer-facing events use `BUYER_DEFAULT` in `routing.ts`. Quiet hours still apply to them —
  * a WhatsApp at two in the morning is rude whoever receives it — and there is
  * no high-value override, because a buyer set no threshold to override.
  */
-const BUYER_DEFAULT: RoutingPreference = {
-  matrix: {
-    quote_received: ["whatsapp", "in_app"],
-    quote_revised: ["in_app"],
-    quote_expiring: ["in_app"],
-    /*
-       In-app only, deliberately. Board 11b caps the seller at one follow-up
-       because a second loses more deals than it wins; putting that one on
-       WhatsApp would make the cap a formality — the interruption is the part
-       that costs the deal, not the message. A buyer weighing four quotes gets
-       it where they are already comparing them.
-    */
-    message_received: ["in_app"],
-  },
-  quiet: { enabled: true, fromHour: 21, toHour: 7, onSunday: true },
-  highValueOverrideAed: null,
-};
+
+/**
+ * Which trade an enquiry is about. Board 12g `B5`: a brief for work is
+ * `services`, anything else `goods`. The same test `lib/enquiry/inbox.ts` makes
+ * — a `ServiceBrief` row — so a notification and the buyer's list cannot
+ * disagree about what a request was.
+ */
+async function tradeKindOf(enquiryId: string): Promise<"goods" | "services"> {
+  const brief = await prisma.serviceBrief.findUnique({ where: { enquiryId }, select: { enquiryId: true } });
+  return brief ? "services" : "goods";
+}
 
 /** Fire and forget. Never throws, never blocks the caller's transaction. */
 async function safely(what: string, run: () => Promise<unknown>): Promise<void> {
@@ -102,6 +96,7 @@ export async function onEnquiryDelivered(input: {
         neededBy: true,
         closesAt: true,
         _count: { select: { lines: true } },
+        serviceBrief: { select: { enquiryId: true } },
       },
     });
     if (!enquiry) return;
@@ -135,6 +130,7 @@ export async function onEnquiryDelivered(input: {
         businessId: owner.businessId,
         recipientUserId: target,
         enquiryId: enquiry.id,
+        tradeKind: enquiry.serviceBrief ? "services" : "goods",
         ...(input.valueAed === undefined ? {} : { valueAed: input.valueAed }),
         params: withParams("enquiry_received", {
           ref: enquiry.ref,
@@ -189,6 +185,7 @@ export async function onQuoteExpiring(input: {
       event: "quote_expiring",
       businessId: input.businessId,
       enquiryId: input.enquiryId,
+      tradeKind: await tradeKindOf(input.enquiryId),
       recipientUserId: await recipientFor(
         input.businessId,
         recipient?.assignedToId ?? null,
@@ -269,7 +266,7 @@ export async function onQuoteAccepted(input: {
        */
       prisma.enquiry.findUnique({
         where: { id: input.enquiryId },
-        select: { ref: true },
+        select: { ref: true, serviceBrief: { select: { enquiryId: true } } },
       }),
     ]);
     if (!owner || !enquiry) return;
@@ -279,6 +276,7 @@ export async function onQuoteAccepted(input: {
       businessId: input.businessId,
       recipientUserId: owner.id,
       enquiryId: input.enquiryId,
+      tradeKind: enquiry.serviceBrief ? "services" : "goods",
       /*
          A fee on a basis is not a value: `18,400 per month` summed beside a goods
          total means nothing. Null says the figure is not one this column holds.
@@ -310,7 +308,7 @@ export async function onQuoteSent(input: {
   await safely("quote_received", async () => {
     const enquiry = await prisma.enquiry.findUnique({
       where: { id: input.enquiryId },
-      select: { id: true, ref: true, buyer: {
+      select: { id: true, ref: true, serviceBrief: { select: { enquiryId: true } }, buyer: {
         select: {
           id: true,
           phone: true,
@@ -331,11 +329,11 @@ export async function onQuoteSent(input: {
     const decisions = route(BUYER_DEFAULT, { event, now: new Date() });
     const senders = resolveNotificationSenders();
 
+    const tradeKind = enquiry.serviceBrief ? "services" : "goods";
+    const templates = await resolveLiveTemplates(event, tradeKind);
+
     for (const decision of decisions) {
-      const template = await prisma.notificationTemplate.findFirst({
-        where: { event, channel: decision.channel, status: "live", locale: "en" },
-        orderBy: { version: "desc" },
-      });
+      const template = templates.get(decision.channel) ?? null;
       if (!template) continue;
 
       const rendered = render(
@@ -350,12 +348,11 @@ export async function onQuoteSent(input: {
         }),
       );
 
-      const status =
-        decision.action !== "send"
-          ? decision.action === "defer"
-            ? "deferred"
-            : "skipped"
-          : await deliver(decision.channel, senders, rendered, enquiry.buyer);
+      const outcome =
+        decision.action === "send"
+          ? await deliver(decision.channel, senders, rendered, enquiry.buyer, template.metaTemplateName)
+          : { status: decision.action === "defer" ? ("deferred" as const) : ("skipped" as const), reason: decision.reason };
+      const status = outcome.status;
 
       await prisma.notificationDelivery.create({
         data: {
@@ -364,9 +361,26 @@ export async function onQuoteSent(input: {
           channel: decision.channel,
           status,
           recipientUserId: enquiry.buyer.id,
+          tradeKind,
           enquiryId: enquiry.id,
-          reason: decision.action === "send" ? null : decision.reason,
+          reason: outcome.reason ?? null,
           scheduledFor: decision.action === "defer" ? decision.at : null,
+          /*
+             What a held message needs to go out when quiet hours lift. Board 12g
+             found buyer deferrals written without it, so `deliverQueued` marked
+             every one `failed / no_payload` at dawn: a quote received at 22:00
+             reached the buyer never, rather than at 07:00.
+          */
+          payload:
+            decision.action === "defer"
+              ? ({
+                  subject: rendered.subject,
+                  body: rendered.body,
+                  actionLabel: rendered.actionLabel,
+                  actionUrl: rendered.actionPath ? buyerActionUrl(rendered.actionPath, enquiry.buyer) : null,
+                  metaTemplateName: template.metaTemplateName,
+                } as never)
+              : undefined,
           sentAt: status === "sent" ? new Date() : null,
         },
       });
@@ -397,7 +411,7 @@ export async function onSellerMessage(input: {
   await safely("message_received", async () => {
     const enquiry = await prisma.enquiry.findUnique({
       where: { id: input.enquiryId },
-      select: { id: true, buyer: {
+      select: { id: true, serviceBrief: { select: { enquiryId: true } }, buyer: {
         select: {
           id: true,
           phone: true,
@@ -418,11 +432,11 @@ export async function onSellerMessage(input: {
     const decisions = route(BUYER_DEFAULT, { event, now: new Date() });
     const senders = resolveNotificationSenders();
 
+    const tradeKind = enquiry.serviceBrief ? "services" : "goods";
+    const templates = await resolveLiveTemplates(event, tradeKind);
+
     for (const decision of decisions) {
-      const template = await prisma.notificationTemplate.findFirst({
-        where: { event, channel: decision.channel, status: "live", locale: "en" },
-        orderBy: { version: "desc" },
-      });
+      const template = templates.get(decision.channel) ?? null;
       if (!template) continue;
 
       const rendered = render(
@@ -435,12 +449,11 @@ export async function onSellerMessage(input: {
         }),
       );
 
-      const status =
-        decision.action !== "send"
-          ? decision.action === "defer"
-            ? "deferred"
-            : "skipped"
-          : await deliver(decision.channel, senders, rendered, enquiry.buyer);
+      const outcome =
+        decision.action === "send"
+          ? await deliver(decision.channel, senders, rendered, enquiry.buyer, template.metaTemplateName)
+          : { status: decision.action === "defer" ? ("deferred" as const) : ("skipped" as const), reason: decision.reason };
+      const status = outcome.status;
 
       await prisma.notificationDelivery.create({
         data: {
@@ -449,9 +462,26 @@ export async function onSellerMessage(input: {
           channel: decision.channel,
           status,
           recipientUserId: enquiry.buyer.id,
+          tradeKind,
           enquiryId: enquiry.id,
-          reason: decision.action === "send" ? null : decision.reason,
+          reason: outcome.reason ?? null,
           scheduledFor: decision.action === "defer" ? decision.at : null,
+          /*
+             What a held message needs to go out when quiet hours lift. Board 12g
+             found buyer deferrals written without it, so `deliverQueued` marked
+             every one `failed / no_payload` at dawn: a quote received at 22:00
+             reached the buyer never, rather than at 07:00.
+          */
+          payload:
+            decision.action === "defer"
+              ? ({
+                  subject: rendered.subject,
+                  body: rendered.body,
+                  actionLabel: rendered.actionLabel,
+                  actionUrl: rendered.actionPath ? buyerActionUrl(rendered.actionPath, enquiry.buyer) : null,
+                  metaTemplateName: template.metaTemplateName,
+                } as never)
+              : undefined,
           sentAt: status === "sent" ? new Date() : null,
         },
       });
@@ -492,7 +522,7 @@ export async function onReviewRequested(input: {
   await safely("review_requested", async () => {
     const enquiry = await prisma.enquiry.findUnique({
       where: { id: input.enquiryId },
-      select: { id: true, ref: true, buyer: {
+      select: { id: true, ref: true, serviceBrief: { select: { enquiryId: true } }, buyer: {
         select: {
           id: true,
           phone: true,
@@ -516,11 +546,11 @@ export async function onReviewRequested(input: {
     );
     const senders = resolveNotificationSenders();
 
+    const tradeKind = enquiry.serviceBrief ? "services" : "goods";
+    const templates = await resolveLiveTemplates(event, tradeKind);
+
     for (const decision of decisions) {
-      const template = await prisma.notificationTemplate.findFirst({
-        where: { event, channel: decision.channel, status: "live", locale: "en" },
-        orderBy: { version: "desc" },
-      });
+      const template = templates.get(decision.channel) ?? null;
       /*
          Nothing to render on the one channel we chose.
 
@@ -537,6 +567,7 @@ export async function onReviewRequested(input: {
             channel: decision.channel,
             status: "skipped",
             recipientUserId: enquiry.buyer.id,
+            tradeKind,
             businessId: input.businessId,
             enquiryId: enquiry.id,
             reason: "no_template",
@@ -554,12 +585,11 @@ export async function onReviewRequested(input: {
         }),
       );
 
-      const status =
-        decision.action !== "send"
-          ? decision.action === "defer"
-            ? "deferred"
-            : "skipped"
-          : await deliver(decision.channel, senders, rendered, enquiry.buyer);
+      const outcome =
+        decision.action === "send"
+          ? await deliver(decision.channel, senders, rendered, enquiry.buyer, template.metaTemplateName)
+          : { status: decision.action === "defer" ? ("deferred" as const) : ("skipped" as const), reason: decision.reason };
+      const status = outcome.status;
 
       await prisma.notificationDelivery.create({
         data: {
@@ -568,10 +598,27 @@ export async function onReviewRequested(input: {
           channel: decision.channel,
           status,
           recipientUserId: enquiry.buyer.id,
+          tradeKind,
           businessId: input.businessId,
           enquiryId: enquiry.id,
-          reason: decision.action === "send" ? null : decision.reason,
+          reason: outcome.reason ?? null,
           scheduledFor: decision.action === "defer" ? decision.at : null,
+          /*
+             What a held message needs to go out when quiet hours lift. Board 12g
+             found buyer deferrals written without it, so `deliverQueued` marked
+             every one `failed / no_payload` at dawn: a quote received at 22:00
+             reached the buyer never, rather than at 07:00.
+          */
+          payload:
+            decision.action === "defer"
+              ? ({
+                  subject: rendered.subject,
+                  body: rendered.body,
+                  actionLabel: rendered.actionLabel,
+                  actionUrl: rendered.actionPath ? buyerActionUrl(rendered.actionPath, enquiry.buyer) : null,
+                  metaTemplateName: template.metaTemplateName,
+                } as never)
+              : undefined,
           sentAt: status === "sent" ? new Date() : null,
         },
       });
@@ -609,7 +656,7 @@ export async function onReviewPosted(input: { reviewId: string }): Promise<void>
         overall: true,
         businessId: true,
         enquiryId: true,
-        enquiry: { select: { ref: true } },
+        enquiry: { select: { ref: true, serviceBrief: { select: { enquiryId: true } } } },
       },
     });
     if (!review) return;
@@ -625,6 +672,7 @@ export async function onReviewPosted(input: { reviewId: string }): Promise<void>
       businessId: review.businessId,
       recipientUserId: owner.id,
       enquiryId: review.enquiryId,
+      tradeKind: review.enquiry.serviceBrief ? "services" : "goods",
       params: withParams("review_posted", {
         rating: review.overall,
         ref: review.enquiry.ref,
@@ -777,7 +825,7 @@ export async function onEnquiryEscalated(input: {
     const [enquiry, owner] = await Promise.all([
       prisma.enquiry.findUnique({
         where: { id: input.enquiryId },
-        select: { id: true, ref: true, closesAt: true },
+        select: { id: true, ref: true, closesAt: true, serviceBrief: { select: { enquiryId: true } } },
       }),
       prisma.user.findFirst({
         where: { businessId: input.businessId, roles: { has: "seller_owner" } },
@@ -790,6 +838,7 @@ export async function onEnquiryEscalated(input: {
       event: "enquiry_escalated",
       businessId: input.businessId,
       enquiryId: input.enquiryId,
+      tradeKind: enquiry.serviceBrief ? "services" : "goods",
       recipientUserId: owner.id,
       params: withParams("enquiry_escalated", {
         ref: enquiry.ref,
@@ -917,11 +966,23 @@ async function deliver(
     claimToken: string | null;
     isProvisional: boolean;
   },
-): Promise<"sent" | "failed" | "skipped"> {
+  /*
+     The Meta template the wording was approved under.
+
+     Omitted until board 12g, which made every buyer-side WhatsApp undeliverable
+     by construction: `BirdWhatsAppNotificationSender` refuses a send with no
+     template name, so a `quote_received` on WhatsApp would have been recorded
+     `failed` the day Meta approved it. `notify` has always passed it; the three
+     buyer emitters that write their own delivery rows did not.
+  */
+  metaTemplateName: string | null,
+): Promise<{ status: "sent" | "failed" | "skipped"; reason?: string }> {
   const sender = senders[channel];
-  if (!sender) return "skipped";
-  const to = channel === "email" ? buyer.email : channel === "in_app" ? buyer.id : buyer.phone;
-  if (!to) return "skipped";
+  // The reasons `notify` records for the same two dead ends, so the delivery log
+  // reads one vocabulary whichever side of the directory a message went to.
+  if (!sender) return { status: "skipped", reason: "no_carrier_configured" };
+  const to = buyerAddress(channel, buyer);
+  if (!to) return { status: "skipped", reason: "recipient_has_no_address_for_this_channel" };
 
   const result = await sender.send({
     channel,
@@ -930,9 +991,12 @@ async function deliver(
     body: rendered.body,
     actionLabel: rendered.actionLabel,
     actionUrl: rendered.actionPath ? buyerActionUrl(rendered.actionPath, buyer) : null,
+    metaTemplateName,
     recipientUserId: buyer.id,
   });
-  return result.delivered ? "sent" : "failed";
+  return result.delivered
+    ? { status: "sent" }
+    : { status: "failed", ...(result.detail ? { reason: result.detail } : {}) };
 }
 
 /** The first sentence of a requirement, for a one-line summary. */

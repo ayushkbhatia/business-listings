@@ -49,6 +49,8 @@ export const MATRIX_GROUPS = [
       "storefront.template.write",
       "search.ranking.write",
       "placement.boost",
+      "notification.template.write",
+      "notification.read",
     ],
   },
   {
