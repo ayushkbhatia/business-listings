@@ -13,6 +13,7 @@ import { inviteSeat } from "@/lib/team/service";
 import { changePlan } from "@/lib/billing/service";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Criteria 7 and 8.
@@ -62,9 +63,7 @@ async function removeFixtures() {
 
   if (ids.length > 0) {
     // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
-    await prisma.auditEvent.deleteMany({
-      where: { subject: { in: ids.map((id) => `Business:${id}`) } },
-    });
+    await purgeAuditRows({ subject: { in: ids.map((id) => `Business:${id}`) } });
     await prisma.business.deleteMany({ where: { slug: { startsWith: PREFIX } } });
   }
 
@@ -86,6 +85,7 @@ beforeAll(async () => {
   moderatorId = (
     await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_moderator" } },
+      orderBy: { id: "asc" },
       select: { id: true },
     })
   ).id;
@@ -188,16 +188,18 @@ describe("starting a view-as session", () => {
     await endViewAs(opsLeadId);
   });
 
-  it("refuses a field verifier — support.view_as is moderator or ops lead", async () => {
-    const business = await listing("Not Field");
-    const fieldOfficer = await prisma.user.findFirstOrThrow({
-      where: { roles: { has: "staff_field" } },
+  it("refuses finance — support.view_as is moderator or ops lead", async () => {
+    const business = await listing("Not Finance");
+    // By address rather than by role, so the lookup names one seeded account
+    // however many seats a role holds.
+    const finance = await prisma.user.findUniqueOrThrow({
+      where: { email: "finance@businesslistings.me" },
       select: { id: true },
     });
 
     await expect(
       startViewAs({
-        actor: actor(fieldOfficer.id, "staff_field"),
+        actor: actor(finance.id, "staff_finance"),
         businessId: business.id,
         ticketRef: TICKET,
         reason: REASON,

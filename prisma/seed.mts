@@ -50,6 +50,7 @@ import { seedCampaignLegal } from "./seed-campaign-legal.mjs";
 import { seedLicenceImports } from "./seed-licence-imports.mjs";
 import { seedDedupe } from "./seed-dedupe.mjs";
 import { seedQueue } from "./seed-queue.mjs";
+import { seedStaffRoster } from "./seed-staff-roster.mjs";
 
 const prisma = new PrismaClient({
   adapter: new PrismaPg({ connectionString: process.env.DIRECT_URL ?? process.env.DATABASE_URL! }),
@@ -671,8 +672,18 @@ async function main() {
   const moderator = await prisma.user.create({
     data: { id: uuid(2), email: "moderator@businesslistings.me", fullName: "Moderator", roles: ["staff_moderator"] },
   });
+  /*
+     The former field verifier, holding no staff role — board 4i.
+
+     This account held `staff_field` until the role was retired. Production's
+     one holder of it was this seeded row, and migration 20261022091000 moved it
+     to moderator (Q1's "reassign"). The seed offboards it instead, the other
+     answer Q1 allows, so the roster's deactivated state has a row and "the
+     moderator" stays one account for every test that looks one up.
+     `prisma/seed-staff-roster.mts` marks it deactivated and writes the reason.
+  */
   await prisma.user.create({
-    data: { id: uuid(3), email: "field@businesslistings.me", fullName: "Field Officer", roles: ["staff_field"] },
+    data: { id: uuid(3), email: "field@businesslistings.me", fullName: "Field Officer", roles: [] },
   });
   await prisma.user.create({
     data: { id: uuid(4), email: "finance@businesslistings.me", fullName: "Finance", roles: ["staff_finance"] },
@@ -1063,6 +1074,15 @@ async function main() {
   // Board 4b: one queue row per argument the board makes, on new unpublished
   // listings so no existing fixture becomes contested or counted.
   await seedQueue(prisma, NOW);
+  // Board 4i: invitations, a deactivated former field verifier, measured last
+  // activity and two acceptance fixtures. After every seed that writes audit
+  // rows, so the roster's decision counts read a finished log.
+  //
+  // The wall clock, not `NOW`. `NOW` is noon in Dubai — a day anchor, right for
+  // everything keyed by date — and this seed's times are minutes: "active 4 min
+  // ago", a 15-minute resend window, a 72-hour link. Anchored to noon, a morning
+  // seed renders last activity in the future and a resend blocked for hours.
+  await seedStaffRoster(prisma, new Date());
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
   await backfillSeatChannels(prisma);
@@ -6399,6 +6419,8 @@ main()
       claimConflicts: await prisma.claimConflict.count(),
       undecidedClaims: await prisma.claimSubmission.count({ where: { decidedAt: null } }),
       auditEvents: await prisma.auditEvent.count(),
+      staff: await prisma.user.count({ where: { roles: { hasSome: ["staff_ops_lead", "staff_moderator", "staff_finance"] } } }),
+      staffInvites: await prisma.staffInvite.count(),
       contactReveals: await prisma.contactReveal.count(),
       zeroResults: await prisma.zeroResultQuery.count(),
       boosts: await prisma.listingBoost.count(),

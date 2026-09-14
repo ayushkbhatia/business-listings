@@ -428,11 +428,12 @@ The pattern underneath all five: **a sale with no ledger row.**
 The epic feared `4i` was writers with no reader. It is the opposite: the audit log has a scoped
 reader and three levels of tests. **The staff half has nothing at all.**
 
-- [ ] **7.1 `4i`** — grant, revoke, invite, deactivate. Then: raw enum keys in the Action column
-  (19 of 27 actions have no label string), no filters though the service takes them, no
-  before/after diff though the service selects both, no pagination behind a 200-row cap rendered
-  as a total. `AuditRow.actorRoleLabel` is unfillable without a schema column — add it or drop the
-  field.
+- [x] **7.1 `4i`** — grant, revoke, invite, deactivate, on `/admin/staff`; the field verifier
+  retired from the enum. The log's defects: every action has a sentence (a unit test holds all
+  of them to it), filters by actor, action and subject, keyset pages with a true "showing 51–100
+  of N", a before/after line for scalar fields, an export carrying the filter, blast radius on
+  twelve bulk writers, and an append-only trigger. `AuditRow.actorRoleLabel` is left unfilled:
+  the role at the time needs a snapshot column, and the log's sentence names the person.
 - [ ] **7.2 `12d`** — `logCall`'s only caller is an integration test.
 - [ ] **7.3 `12f`** — export it; view-as is genuinely sound and is the best-guarded thing in the
   console.
@@ -493,7 +494,7 @@ the only large piece and the only one selling something it does not deliver.
 
 | Board | Name | State | Effort | The fact that decides the work | Step |
 |---|---|---|---|---|---|
-| `4i` | Staff, roles & audit | partial | medium | Audit log has a scoped reader and three levels of tests. The staff half has no route, service or writer. | 7.1 |
+| `4i` | Staff, roles & audit | built | medium | Staff screen, invitations, role changes and deactivation under one lock; the log filtered, paged, exported and append-only. | 7.1 |
 | `12e` | Plans, dunning, VAT | partial | medium | Seven caps are staff-editable with an audit row. Price is editable by nobody. | 6.1 |
 | `4d` | Category taxonomy | partial | large | `createCategory` does not exist; `parentId` is written by nothing outside the seed. | 5.1 |
 | `12a` | Licence-record importer | built | medium | Rows staged `needs_category` are terminal — nothing assigns them a category. Closed by 4.1. | 4.1 |

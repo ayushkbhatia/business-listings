@@ -1,6 +1,7 @@
 import "server-only";
 import { AdminShell, AppSidebar, PageHeader, resolveNav } from "@/components/structure";
 import { ADMIN_NAV } from "@/components/structure/nav-config";
+import { can } from "@/lib/auth/can";
 import { prisma } from "@/lib/db/client";
 import { queueCount } from "@/lib/moderation/queue";
 import type { StaffSeat } from "@/lib/auth/staff";
@@ -35,9 +36,15 @@ import { t } from "@/lib/i18n";
  * not theirs.
  */
 export async function getAdminNavBadges(seat: StaffSeat): Promise<Record<string, number>> {
+  /*
+     Asked of the matrix, not of role names. Board 4i `B5`: every consuming
+     screen reads the same capability table, and this compared role strings —
+     the one place in the console that would have kept showing a queue badge to
+     a role the matrix had stopped letting open the queue.
+  */
   const wanted = {
-    queue: seat.actor.roles.some((r) => r === "staff_moderator" || r === "staff_ops_lead"),
-    reports: seat.actor.roles.some((r) => r === "staff_moderator" || r === "staff_ops_lead"),
+    queue: can(seat.actor, "queue.decide"),
+    reports: can(seat.actor, "report.resolve"),
   };
 
   const [queue, reports] = await Promise.all([

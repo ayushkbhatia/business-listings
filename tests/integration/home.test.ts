@@ -20,6 +20,7 @@ import {
   readRecentlyVerified as getRecentlyVerified,
 } from "@/lib/db/queries/home";
 import { VERIFIED_TIER } from "@/lib/verification";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Board 1a's acceptance criteria, against a real database.
@@ -215,7 +216,7 @@ describe("criterion 4 — verified this week", () => {
        — the page drops the whole section.
     */
     const saved = await prisma.auditEvent.findMany({ where: { action: "tier_change" } });
-    await prisma.auditEvent.deleteMany({ where: { action: "tier_change" } });
+    await purgeAuditRows({ action: "tier_change" });
     try {
       expect(await getRecentlyVerified()).toEqual([]);
     } finally {

@@ -67,6 +67,20 @@ model User {
   /// reason is a note to staff, and the screen offers an appeal instead.
   suspendedAt DateTime? @map("suspended_at")
 
+  /// Board 4i. The last console request this person made, measured.
+  ///
+  /// Written by `requireStaff()` after the response, at most once every five
+  /// minutes — never by a form. The "Last active" column reads it, and a staff
+  /// seat nobody has used in months is a privilege nobody is watching.
+  staffLastActiveAt   DateTime? @map("staff_last_active_at")
+  /// Board 4i. When their staff roles were last taken away as a whole.
+  ///
+  /// No reason column, for the reason `suspendedAt` has none: the written reason
+  /// is on the `staff_deactivated` audit row. Cleared when an invitation to the
+  /// same person is accepted. Their audit rows stay under their name either way —
+  /// `AuditEvent.actorId` is `Restrict`.
+  staffDeactivatedAt  DateTime? @map("staff_deactivated_at")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -148,8 +162,14 @@ model User {
   quotesExtended          Quote[]                  @relation("QuoteExtender")
   channels                SeatChannel[]
   routingCursorFor        Business[]               @relation("RoutingCursor")
+  staffInvitesSent        StaffInvite[]            @relation("StaffInviteSender")
+  staffInvitesAccepted    StaffInvite[]            @relation("StaffInviteAcceptor")
 
   @@index([businessId])
+  /// Board 4i. "Who holds a staff role" is a containment test over every account
+  /// on the platform, most of them buyers; without this it is a sequential scan
+  /// on the one question the staff roster asks.
+  @@index([roles], type: Gin)
   @@map("user")
 }
 
@@ -198,7 +218,10 @@ enum Role {
   seller_sales
   seller_finance
   staff_moderator
-  staff_field
+  /// There is no `staff_field`. The field verifier was retired by the 5 Sep 2026
+  /// site-visit cut (decision 6) and removed from this enum by board 4i, rather
+  /// than left dormant: a value still in the type is a role a later migration
+  /// can grant by accident. Its holders were moved to `staff_moderator` first.
   staff_finance
   staff_ops_lead
 
@@ -3233,6 +3256,53 @@ model TeamInvite {
   @@map("team_invite")
 }
 
+/// Board 4i. An offer of one staff role, to one address, for a fixed window.
+///
+/// Not a `TeamInvite` with a null business. That table's every rule is a seller
+/// rule — a seat cap, a branch scope, a WhatsApp channel, an owner who may resend
+/// — and its accept path grants seller roles only. A staff invitation is the one
+/// way a person gains an audited capability, so it gets its own table and its own
+/// ceiling rather than a flag on somebody else's.
+///
+/// Four things differ from a team invite, all deliberately:
+///
+///   - **One role.** `role`, not `roles[]`. Finance must not also moderate (4i's
+///     separation of duties), and one column cannot express a combination.
+///     Staff-only by CHECK constraint in the migration.
+///   - **Email only, on a staff domain.** The domain is checked in the service;
+///     a mobile number proves nothing about employment.
+///   - **The token is stored hashed.** `token_hash` is SHA-256 of a 256-bit
+///     random token that exists only in the link. A row read out of a backup, a
+///     log or this console cannot be redeemed.
+///   - **Expired is not revoked.** An invitation that ran out stays outstanding,
+///     marked expired, and can be resent; revocation is a person deciding and
+///     writes an audit row. One outstanding row per address, by partial unique
+///     index in the migration.
+model StaffInvite {
+  id    String @id @default(cuid())
+  /// Lowercased and trimmed on the way in.
+  email String
+  role  Role
+
+  tokenHash    String    @unique @map("token_hash")
+  invitedById  String    @map("invited_by_id") @db.Uuid
+  expiresAt    DateTime  @map("expires_at")
+  /// When the link last went out. A resend mints a new token and resets this.
+  lastSentAt   DateTime  @map("last_sent_at")
+  sendCount    Int       @default(1) @map("send_count")
+  acceptedAt   DateTime? @map("accepted_at")
+  acceptedById String?   @map("accepted_by_id") @db.Uuid
+  revokedAt    DateTime? @map("revoked_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  invitedBy  User  @relation("StaffInviteSender", fields: [invitedById], references: [id], onDelete: Restrict)
+  acceptedBy User? @relation("StaffInviteAcceptor", fields: [acceptedById], references: [id], onDelete: Restrict)
+
+  @@index([email])
+  @@index([createdAt, id])
+  @@map("staff_invite")
+}
+
 /// Waiting for a sponsored slot somebody else holds.
 ///
 /// Board 11e: one slot per subcategory and emirate, not auctioned. Not
@@ -5559,6 +5629,14 @@ model AuditEvent {
   reason    String
   before    Json?
   after     Json?
+  /// Board 4i `B4`. How many things one decision touched, where it touched more
+  /// than its subject — 8,412 products under a republished template, 64 pairs in
+  /// a bulk merge. Null for a decision about one thing, never a zero.
+  blastRadius Int?    @map("blast_radius")
+  /// What `blastRadius` counts: `products`, `listings`, `pairs`… A number with no
+  /// noun is a number nobody can argue with. Set exactly when `blastRadius` is,
+  /// by CHECK constraint.
+  blastUnit   String? @map("blast_unit")
   createdAt DateTime @default(now()) @map("created_at")
 
   actor User @relation(fields: [actorId], references: [id], onDelete: Restrict)

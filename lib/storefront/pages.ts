@@ -325,6 +325,9 @@ export async function renamePage(input: RenameInput): Promise<PageResult<{ redir
       async () => {
         await tx.templatePage.update({ where: { id: page.id }, data: { slug } });
 
+        // B4: the per-store redirects this rename wrote, as `createMany`
+        // reports them — fewer than the stores where an older one was kept.
+        let written: number | null = null;
         if (stores.length > 0) {
           /*
            * `createMany` with `skipDuplicates`: a page renamed twice would
@@ -332,7 +335,7 @@ export async function renamePage(input: RenameInput): Promise<PageResult<{ redir
            * worth keeping — it is the address that has been out in the world
            * longest.
            */
-          await tx.redirect.createMany({
+          const created = await tx.redirect.createMany({
             data: stores.map((store) => ({
               fromPath: `/b/${store.slug}/${page.slug}`,
               toPath: `/b/${store.slug}/${slug}`,
@@ -341,12 +344,22 @@ export async function renamePage(input: RenameInput): Promise<PageResult<{ redir
             })),
             skipDuplicates: true,
           });
+          written = created.count;
         }
 
         return {
-          result: stores.length,
+          /*
+             What was written, not how many stores there were. A store whose
+             old address already redirects keeps that older row and gets no new
+             one, so `stores.length` told the screen — and the audit row — of
+             redirects that do not exist. `storeCount` stays for the difference.
+          */
+          result: written ?? 0,
           before: { slug: page.slug },
-          after: { slug, redirects: stores.length, storeCount: stores.length },
+          after: { slug, redirects: written ?? 0, storeCount: stores.length },
+          // No stores behind it — a draft page, or a sector with none published —
+          // and the rename touched the page row alone.
+          blastRadius: written === null ? null : { count: written, unit: "redirects" },
         };
       },
     ),

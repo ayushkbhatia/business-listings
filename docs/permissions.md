@@ -63,45 +63,63 @@ reading `Business.leadEscalationMinutes` and sending once per enquiry.
 
 ---
 
-## 3. Staff roles (board 4i) — four roles
+## 3. Staff roles (board 4i) — three roles, one retired
 
-| Capability | Ops lead | Moderator | Field verifier | Finance |
-|---|---|---|---|---|
-| Approve listings & edits | ✓ | ✓ | — | — |
-| Reject with reason | ✓ | ✓ | — | — |
-| Resolve claim conflicts | ✓ | — | — | — |
-| Set verification tier | ✓ | — | — | — |
-| Edit taxonomy & spec templates | ✓ | — | — | — |
-| Edit storefront templates | ✓ | — | — | — |
-| Remove a review | ✓ | — | — | — |
-| Resolve a supplier report | ✓ | ✓ | — | — |
-| Suspend an account | ✓ | — | — | — |
-| Issue a subscription credit | — | — | — | ✓ |
-| Edit plans & entitlements | ✓ | — | — | ✓ |
-| Export VAT / finance data | — | — | — | ✓ |
-| Adjust search ranking weights | ✓ | — | — | — |
-| Manual boost / demote a listing | ✓ | — | — | — |
-| View-as a business | ✓ | ✓ | — | — |
-| Read the audit log | ✓ | own actions | own actions | own actions |
+| Capability | Ops lead | Moderator | Finance |
+|---|---|---|---|
+| Approve listings & edits | ✓ | ✓ | — |
+| Reject with reason | ✓ | ✓ | — |
+| Resolve claim conflicts | ✓ | — | — |
+| Set verification tier | ✓ | — | — |
+| Edit taxonomy & spec templates | ✓ | — | — |
+| Edit storefront templates | ✓ | — | — |
+| Remove a review | ✓ | — | — |
+| Resolve a supplier report | ✓ | ✓ | — |
+| Suspend an account | ✓ | — | — |
+| Issue a subscription credit | — | — | ✓ |
+| Edit plans & entitlements | ✓ | — | ✓ |
+| Export VAT / finance data | — | — | ✓ |
+| Adjust search ranking weights | ✓ | — | — |
+| Manual boost / demote a listing | ✓ | — | — |
+| View-as a business | ✓ | ✓ | — |
+| See staff & roles | ✓ | ✓ | ✓ |
+| Invite staff, change roles, deactivate | ✓ | — | — |
+| Read the audit log | ✓ | own actions | own actions |
 
-Site visits were withdrawn as a product, and the two rows this table carried for them —
-"Request a site visit" and "Record a site visit" — went with them. So did the qualifier
-under this table: a `field verifier` could set a tier only as the result of a visit they
-recorded, enforced with a subject check rather than a role check. With no visit to read,
-that grant was **narrowed to the ops lead** rather than widened into an unconditional one,
-and `business.verification_tier.write` is a plain role check again. `staff_field` now holds
-nothing on this table beyond reading its own audit rows.
+**`field verifier` is retired, and retired means removed.** It existed only to record site
+visits and set the tier that followed; both are gone. Site visits were withdrawn on 5 Sep
+2026, and the grant that followed them was narrowed to the ops lead rather than widened into
+an unconditional one. Board 4i then removed `staff_field` from the `role` enum
+(migration `20261022091000_retire_field_verifier_4i`) after moving its one holder to
+moderator (Q1), so no claim, seed or form can grant it again. `RETIRED_STAFF_ROLES` in
+`lib/auth/roles.ts` keeps the history as a plain string, which is what the staff screen's
+"1 retired" counts.
+
+**The live matrix is `/admin/staff`.** It is drawn from `lib/auth/capabilities.ts` — the same
+table every console gate reads — so this document and the screen cannot disagree unless this
+document does. When they do, the code wins and this table is the one to correct.
+
+**One staff role per person.** Finance can move money and cannot moderate anything; a person
+holding both would be the combination the board separates. `lib/staff/policy.ts` grants staff
+roles one at a time, keeps any non-staff role (an ops lead who also buys stays a buyer), and
+refuses a staff role to a supplier seat.
+
+**Three rules a role check cannot express**, enforced in `lib/staff/service.ts` under one
+advisory lock: the last active ops lead cannot be demoted or deactivated (criterion 7);
+nobody changes their own staff role; and a suspended account gets no new role. Invitations go
+only to `STAFF_EMAIL_DOMAINS` (Q3 is open, so a contractor address is refused), expire after
+72 hours, and store only a SHA-256 of their token.
 
 **Every ✓ in this table that changes state writes an `AuditEvent` with a non-null reason.**
 Ops lead has no exemption.
 
 ### Rows this document does not contain
 
-Eight capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
+Nine capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
 row for them, or departs from the row it has. `tests/unit/permission-matrix.test.ts` names all
-eight, so adding a ninth is a deliberate edit rather than a quiet default. The five below are
-the ones with no row at all; `business.verification_tier.write`, `review.dispute` and
-`staff.manage` are explained where the test names them.
+nine, so adding a tenth is a deliberate edit rather than a quiet default. The five below are
+the ones with no row at all; `business.verification_tier.write`, `review.dispute`,
+`staff.manage` and `staff.read` are explained where the test names them.
 
 | Capability | Held at | Why, and which way it errs |
 |---|---|---|

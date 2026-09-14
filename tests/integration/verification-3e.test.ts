@@ -8,6 +8,7 @@ import { approveDocument, rejectDocument } from "@/lib/verification/review";
 import { EXPIRED_LICENCE_TIER, VERIFIED_TIER } from "@/lib/verification";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Board 3e — verification and documents.
@@ -42,9 +43,7 @@ async function removeFixtures() {
   });
   // `AuditEvent.subject` is a string rather than a foreign key, so nothing
   // cascades it — the same ordering trust.test.ts needs.
-  await prisma.auditEvent.deleteMany({
-    where: { subject: { in: documents.map((document) => `Document:${document.id}`) } },
-  });
+  await purgeAuditRows({ subject: { in: documents.map((document) => `Document:${document.id}`) } });
   await prisma.notificationDelivery.deleteMany({ where: { businessId: { in: ids } } });
   await prisma.notificationPreference.deleteMany({ where: { businessId: { in: ids } } });
   await prisma.document.deleteMany({ where: { businessId: { in: ids } } });
@@ -60,6 +59,7 @@ beforeAll(async () => {
 
   const staff = await prisma.user.findMany({
     where: { roles: { hasSome: ["staff_ops_lead", "staff_moderator"] } },
+    orderBy: { id: "asc" },
     select: { id: true, roles: true },
   });
   opsLeadId = staff.find((user) => user.roles.includes("staff_ops_lead"))!.id;

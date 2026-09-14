@@ -344,7 +344,8 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     key: "platform",
     labelKey: "nav.group.platform",
     items: [
-      { key: "staff", labelKey: "nav.staff", href: "/admin/staff", capability: "staff.manage", later: true },
+      // Board 4i. Every staff seat reads the roster and the matrix; `staff.manage` is checked on each control.
+      { key: "staff", labelKey: "nav.staff", href: "/admin/staff", capability: "staff.read" },
       { key: "audit", labelKey: "nav.audit", href: "/admin/audit", capability: "audit.read" },
       { key: "support", labelKey: "nav.support", href: "/admin/support", capability: "support.view_as" },
       { key: "users", labelKey: "nav.users", href: "/admin/users", capability: "staff.manage", later: true },

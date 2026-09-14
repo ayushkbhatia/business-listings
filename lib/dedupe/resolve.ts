@@ -635,6 +635,10 @@ export async function bulkMerge(
             },
           });
 
+          // B4: the pairs this batch resolved, counted from the statements that
+          // wrote them rather than from the lists planned before the transaction.
+          let pairsWritten = 0;
+
           const CHUNK = 500;
           for (let i = 0; i < records.length; i += CHUNK) {
             const slice = records.slice(i, i + CHUNK);
@@ -676,7 +680,7 @@ export async function bulkMerge(
               const owner = pair.keep.claimStatus !== "unclaimed" && !plan.alreadyListed ? "informed" : "not_needed";
               return Prisma.sql`(${pair.id}, ${JSON.stringify(manifest)}, ${owner})`;
             });
-            await tx.$executeRaw`
+            pairsWritten += await tx.$executeRaw`
               UPDATE "merge_candidate" AS c
                  SET "state" = 'merged'::"merge_candidate_state",
                      "resolved_at" = ${now},
@@ -724,6 +728,8 @@ export async function bulkMerge(
                 ownerConfirmation: parentClaimed ? "informed" : "not_needed",
               },
             });
+            // `update` writes exactly one row or throws, which aborts the batch.
+            pairsWritten += 1;
           }
 
           for (const runId of new Set(records.map(({ pair }) => pair.stagedListing!.runId))) {
@@ -742,6 +748,7 @@ export async function bulkMerge(
               skippedBothClaimed,
               certainLine: bands.certain,
             },
+            blastRadius: { count: pairsWritten, unit: "pairs" },
           };
         },
       ),
@@ -978,6 +985,9 @@ export async function reverseBatch(
             result: null,
             before: { merged: members.length },
             after: { restored: reversible.length, kept: members.length - reversible.length },
+            // B4: the pairs put back — each one the loop above rewrote to
+            // pending, or the whole reversal threw and nothing was logged.
+            blastRadius: { count: reversible.length, unit: "pairs" },
           };
         },
       ),

@@ -1,5 +1,12 @@
 import { AuditReasonError } from "@/lib/auth/errors";
-import type { AuditRow, AuditTransaction, AuditWriter, WriteAuditInput } from "./types";
+import {
+  BLAST_UNITS,
+  type AuditRow,
+  type AuditTransaction,
+  type AuditWriter,
+  type BlastRadius,
+  type WriteAuditInput,
+} from "./types";
 
 /**
  * A reason has to be a sentence somebody wrote, not a keystroke to get past a
@@ -40,7 +47,27 @@ export function assertReason(action: string, reason: unknown): string {
 }
 
 /**
- * `writeAudit({ actor, action, subject, reason, before, after })`.
+ * A blast radius is a whole, non-negative count with a known noun, or it is
+ * absent. Board 4i `B4`.
+ *
+ * Refused rather than coerced. A count of `NaN` or `12.5` is a service that
+ * counted the wrong thing, and writing it would put a number in an append-only
+ * log that nobody can correct afterwards. The CHECK constraint in the 4i
+ * migration refuses the same shapes; this says so before the transaction does.
+ */
+export function assertBlastRadius(action: string, radius: BlastRadius | null | undefined): BlastRadius | null {
+  if (radius === null || radius === undefined) return null;
+  if (!Number.isSafeInteger(radius.count) || radius.count < 0) {
+    throw new Error(`${action}: a blast radius must be a whole, non-negative count; got ${radius.count}`);
+  }
+  if (!(BLAST_UNITS as readonly string[]).includes(radius.unit)) {
+    throw new Error(`${action}: "${radius.unit}" is not a blast-radius unit`);
+  }
+  return radius;
+}
+
+/**
+ * `writeAudit({ actor, action, subject, reason, before, after, blastRadius })`.
  *
  * Every staff state change goes through here. Build it into the service layer,
  * never into a screen — a second screen doing the same mutation would otherwise
@@ -51,6 +78,7 @@ export async function writeAudit(
   tx?: AuditTransaction,
 ): Promise<AuditRow> {
   const reason = assertReason(input.action, input.reason);
+  const radius = assertBlastRadius(input.action, input.blastRadius);
 
   const row: AuditRow = {
     actorId: input.actor.id,
@@ -59,6 +87,8 @@ export async function writeAudit(
     reason,
     before: input.before ?? null,
     after: input.after ?? null,
+    blastRadius: radius?.count ?? null,
+    blastUnit: radius?.unit ?? null,
   };
 
   if (!writer) throw new AuditNotConfiguredError();

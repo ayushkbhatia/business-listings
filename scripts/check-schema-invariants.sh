@@ -267,4 +267,36 @@ if grep -qE '^[[:space:]]*model[[:space:]]+BusinessClosure[[:space:]]*\{' <<<"$C
   fi
 fi
 
+# Board 4i. The log is append-only by trigger (B6), a staff invitation offers a
+# staff role and nothing else, one invitation is outstanding per address, and the
+# retired field verifier is not a value the role type holds (B1). The first three
+# are SQL Prisma cannot express; the last is checked against the schema itself,
+# comments stripped, so a note explaining the retirement does not trip it.
+if grep -qE '^[[:space:]]*model[[:space:]]+AuditEvent[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE 'CREATE TRIGGER "audit_event_append_only"' prisma/migrations; then
+    echo "   pass — audit_event refuses UPDATE and DELETE, by trigger"
+  else
+    echo "   FAIL — AuditEvent exists without the audit_event_append_only trigger (board 4i B6)."
+    fail=1
+  fi
+fi
+
+if grep -qE '^[[:space:]]*model[[:space:]]+StaffInvite[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE 'CREATE UNIQUE INDEX[^;]*"staff_invite_one_outstanding_per_email"' prisma/migrations \
+     && grep -rqE '"staff_invite_role_is_staff"' prisma/migrations; then
+    echo "   pass — one outstanding staff invitation per address, for a staff role only"
+  else
+    echo "   FAIL — StaffInvite has lost its one-outstanding index or its staff-role check."
+    fail=1
+  fi
+fi
+
+ROLE_ENUM=$(awk '/^enum Role \{/,/^\}/' <<<"$CODE")
+if grep -qE '\bstaff_field\b' <<<"$ROLE_ENUM"; then
+  echo "   FAIL — staff_field is back in the Role enum. It was retired and removed (board 4i B1)."
+  fail=1
+else
+  echo "   pass — the Role enum holds no retired field verifier"
+fi
+
 exit $fail

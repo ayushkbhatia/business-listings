@@ -233,7 +233,13 @@ export function columnValues(parsed: ParsedCsv, index: number): string[] {
  * to the person who asked for it — but a correctness one.
  */
 export function csvField(value: string): string {
-  const risky = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  /*
+     Tab and carriage return lead the list too, since board 4i put free text —
+     an audit reason — through this writer. Spreadsheets strip a leading tab or
+     CR and then read what follows as a formula, so `\t=HYPERLINK(...)` in a
+     reason would be a live formula in the ops lead's export.
+  */
+  const risky = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   return /[",\n\r]/.test(risky) ? `"${risky.replace(/"/g, '""')}"` : risky;
 }
 

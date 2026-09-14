@@ -39,7 +39,9 @@ test.describe("what a moderator is not offered", () => {
      * should know exists, so they can ask for it rather than assume it is
      * missing.
      */
-    for (const locked of ["Plans & entitlements", "Invoices & credits", "Staff & roles"]) {
+    // "Staff & roles" left this list with board 4i: every staff seat reads the
+    // roster and the matrix (`staff.read`), and only an ops lead changes them.
+    for (const locked of ["Plans & entitlements", "Invoices & credits"]) {
       const row = sidebar.getByText(locked, { exact: true });
       await expect(row).toBeVisible();
       await expect(sidebar.getByRole("link", { name: locked })).toHaveCount(0);
@@ -96,6 +98,33 @@ test.describe("removing a review is not a moderator's row", () => {
       await expect(page.getByRole("button", { name: "Refuse" })).toBeVisible();
       await expect(page.getByText(/is an ops lead's decision/)).toBeVisible();
     }
+  });
+});
+
+test.describe("board 4i — the staff screen, read-only", () => {
+  test("shows who holds which role and offers nothing to change it", async ({ page }) => {
+    await page.goto("/admin/staff");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Staff & roles");
+    await expect(page.getByText(/Inviting, changing roles and deactivating are an ops lead's/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Invite staff" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Change role" })).toHaveCount(0);
+    await expect(page.getByRole("tab", { name: /Deactivated/ })).toHaveCount(0);
+    // Invitations are withheld, so they are not counted as zero either.
+    await expect(page.getByText(/Invitations are visible to ops leads/)).toBeVisible();
+    await expect(page.getByText(/and 0 invitations/)).toHaveCount(0);
+    // The matrix is the same table an ops lead reads.
+    await expect(page.getByRole("table", { name: "What each staff role may do" })).toBeVisible();
+  });
+
+  test("cannot invite or change anybody by posting to the actions directly", async ({ page }) => {
+    // The server action refuses a moderator whatever the screen offers; the
+    // integration suite proves the service half. Here: the export, which is a
+    // URL, returns only this seat's own rows.
+    const response = await page.request.get("/admin/audit/export");
+    expect(response.status()).toBe(200);
+    const lines = (await response.text()).trim().split("\r\n");
+    const actors = new Set(lines.slice(1).map((line) => line.split(",")[1]));
+    expect(actors.size).toBeLessThanOrEqual(1);
   });
 });
 

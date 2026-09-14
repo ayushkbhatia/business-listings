@@ -90,7 +90,37 @@ describe("writeAudit", () => {
       reason: "Trade licence checked with the issuing authority, promoted to tier 2.",
       before: { verificationTier: 2 },
       after: { verificationTier: 2 },
+      // Board 4i `B4`: a decision about one thing carries no radius, as null.
+      blastRadius: null,
+      blastUnit: null,
     });
+  });
+
+  it("carries a bulk decision's blast radius from the mutation to the row", async () => {
+    await staffMutation(
+      {
+        actor: opsLead,
+        capability: "business.merge",
+        action: "pairs_bulk_merged",
+        subject: "MergeBatch:clx9",
+        reason: "Sixty-four exact licence-number matches reviewed as a band.",
+      },
+      async () => ({ result: undefined, blastRadius: { count: 64, unit: "pairs" } }),
+    );
+    expect(rows[0]).toMatchObject({ blastRadius: 64, blastUnit: "pairs" });
+  });
+
+  it("refuses a blast radius that is not a whole count, before anything is written", async () => {
+    await expect(
+      writeAudit({
+        actor: opsLead,
+        action: "pairs_bulk_merged",
+        subject: "MergeBatch:clx9",
+        reason: "Sixty-four exact licence-number matches reviewed as a band.",
+        blastRadius: { count: 6.4, unit: "pairs" },
+      }),
+    ).rejects.toThrow(/whole, non-negative count/);
+    expect(rows).toHaveLength(0);
   });
 
   it("stores null rather than undefined when a side is absent", async () => {

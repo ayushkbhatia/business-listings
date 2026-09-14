@@ -13,6 +13,7 @@ import {
   requestReview,
 } from "@/lib/reviews/service";
 import { getReviewBoard, getReviewSummary } from "@/lib/db/queries";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Acceptance criterion 9:
@@ -28,7 +29,7 @@ let businessId: string;
 let acceptedEnquiryId: string;
 let openEnquiryId: string;
 let moderator: Actor;
-let fieldStaff: Actor;
+let financeStaff: Actor;
 
 const createdReviewIds: string[] = [];
 const spareEnquiryIds: string[] = [];
@@ -62,7 +63,12 @@ beforeAll(async () => {
     select: { id: true },
   });
   moderator = { id: staff?.id ?? buyerId, roles: ["staff_ops_lead"] };
-  fieldStaff = { id: staff?.id ?? buyerId, roles: ["staff_field"] };
+  // The refused staff seat: finance holds neither `review.remove` nor `review.hold`.
+  const finance = await prisma.user.findUniqueOrThrow({
+    where: { email: "finance@businesslistings.me" },
+    select: { id: true },
+  });
+  financeStaff = { id: finance.id, roles: ["staff_finance"] };
 });
 
 /**
@@ -132,11 +138,9 @@ async function acceptedEnquiry(): Promise<string> {
 afterEach(async () => {
   await prisma.reviewRequest.deleteMany({ where: { id: { in: createdRequestIds.splice(0) } } });
   await prisma.review.deleteMany({ where: { id: { in: createdReviewIds.splice(0) } } });
-  await prisma.auditEvent.deleteMany({
-    where: {
-      action: { in: ["review_removed", "review_held", "review_released"] },
-      reason: { contains: "integration test" },
-    },
+  await purgeAuditRows({
+    action: { in: ["review_removed", "review_held", "review_released"] },
+    reason: { contains: "integration test" },
   });
   await prisma.enquiry.deleteMany({ where: { id: { in: spareEnquiryIds.splice(0) } } });
   if (acceptedEnquiryId) {
@@ -257,10 +261,10 @@ describe("criterion 9 — removal", () => {
 
     await expect(
       removeReview({
-        actor: fieldStaff,
+        actor: financeStaff,
         reviewId: written.reviewId,
         ground: "abuse",
-        reason: "integration test — field staff should not be able to do this",
+        reason: "integration test — finance should not be able to do this",
       }),
     ).rejects.toBeInstanceOf(PermissionError);
   });
@@ -481,7 +485,7 @@ describe("board 1m — holding a review while a decision is made", () => {
   it("throws for staff without the capability", async () => {
     const reviewId = await held();
     await expect(
-      holdReview({ actor: fieldStaff, reviewId, reason: "integration test — field staff" }),
+      holdReview({ actor: financeStaff, reviewId, reason: "integration test — finance" }),
     ).rejects.toBeInstanceOf(PermissionError);
   });
 

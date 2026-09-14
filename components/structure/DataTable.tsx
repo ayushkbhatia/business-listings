@@ -306,7 +306,9 @@ export function DataTable<Row>({
                   type="button"
                   onClick={action.onSelect}
                   className={cn(
-                    "rounded-ctl border border-line bg-card px-2 py-1 text-caption text-body",
+                    // One line, always. A two-line button in a row of one-line
+                    // cells reads as two controls and doubles the row height.
+                    "whitespace-nowrap rounded-ctl border border-line bg-card px-2 py-1 text-caption text-body",
                     "transition-colors duration-120 ease-out",
                     "hover:border-line-strong hover:text-ink",
                     "focus-visible:outline-none focus-visible:shadow-focus",

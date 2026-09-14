@@ -33,7 +33,6 @@ const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 
 let opsLeadId: string;
 let moderatorId: string;
-let fieldOfficerId: string;
 let financeId: string;
 let sellerOwnerId: string;
 
@@ -55,13 +54,15 @@ let payingBusinessId: string;
 
 beforeAll(async () => {
   const staff = await prisma.user.findMany({
-    where: { roles: { hasSome: ["staff_ops_lead", "staff_moderator", "staff_field", "staff_finance"] } },
+    where: { roles: { hasSome: ["staff_ops_lead", "staff_moderator", "staff_finance"] } },
+    // Two ops leads and, since board 4i seated the former field verifier, two
+    // moderators — ordered, so `find` picks the same seat on every run.
+    orderBy: { id: "asc" },
     select: { id: true, roles: true },
   });
   const byRole = (role: Role) => staff.find((u) => u.roles.includes(role))!.id;
   opsLeadId = byRole("staff_ops_lead");
   moderatorId = byRole("staff_moderator");
-  fieldOfficerId = byRole("staff_field");
   financeId = byRole("staff_finance");
 
   const owner = await prisma.user.findFirstOrThrow({
@@ -221,25 +222,37 @@ describe("the other roles are refused what is not theirs", () => {
   });
 });
 
-describe("the field verifier no longer holds the tier grant at all", () => {
+describe("the tier grant is the ops lead's alone, on every business", () => {
   /*
-     It used to hold it conditionally: a field verifier could tier a business
+     A field verifier used to hold it conditionally: they could tier a business
      they had recorded a visit to, read off `Business.visitedByStaffId`. Site
      visits were withdrawn and that evidence with them, so rather than widen the
-     grant into an unconditional one the narrower half was removed. These cases
-     are the same refusals as before, now for a simpler reason.
+     grant into an unconditional one the narrower half was removed — and board 4i
+     then retired the role itself. What is left to prove is that no staff role
+     but the ops lead passes the gate, whichever business it is asked about.
   */
-  it("is refused whichever business it is asked about", async () => {
-    for (const businessId of [subjectBusinessId, otherBusinessId]) {
-      await expect(
-        setVerificationTier({
-          actor: actor(fieldOfficerId, "staff_field"),
-          businessId,
-          tier: 2,
-          reason: REASON,
-        }),
-      ).rejects.toBeInstanceOf(PermissionError);
+  it("refuses the other staff roles whichever business they ask about", async () => {
+    for (const [id, role] of [
+      [moderatorId, "staff_moderator"],
+      [financeId, "staff_finance"],
+    ] as const) {
+      for (const businessId of [subjectBusinessId, otherBusinessId]) {
+        await expect(
+          setVerificationTier({ actor: actor(id, role), businessId, tier: 2, reason: REASON }),
+          `${role} on ${businessId}`,
+        ).rejects.toBeInstanceOf(PermissionError);
+      }
     }
+  });
+
+  it("has no field verifier left in the database to hold it", async () => {
+    // Retired means removed (board 4i `B1`): the label is gone from the enum, so
+    // no seed, migration or form can grant it back without a migration of its own.
+    const [row] = await prisma.$queryRaw<{ labels: string[] }[]>`
+      SELECT enum_range(NULL::"role")::text[] AS labels
+    `;
+    expect(row!.labels).not.toContain("staff_field");
+    expect(row!.labels).toContain("staff_moderator");
   });
 
   it("is allowed for the ops lead, who holds it unconditionally", async () => {

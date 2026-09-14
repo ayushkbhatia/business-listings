@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { notFound } from "next/navigation";
+import { after } from "next/server";
+import { recordStaffActivity } from "@/lib/staff/activity";
 import { getActor } from "@/lib/auth/session";
 import { type Actor, isStaff, isStaffRole, type Role } from "@/lib/auth/roles";
 
@@ -32,7 +34,7 @@ export interface StaffSeat {
   actor: Actor;
   /** The staff roles they hold, in matrix order. Never empty. */
   roles: readonly Role[];
-  /** Ops lead reads the whole audit log; the other three read their own rows. */
+  /** Ops lead reads the whole audit log; the other two read their own rows. */
   isOpsLead: boolean;
   /**
    * Who this is, for the pinned sidebar footer — board 6f §1.
@@ -64,9 +66,23 @@ export async function getStaffSeat(): Promise<StaffSeat | null> {
   };
 }
 
-/** The seat, or a 404. Every admin page starts here. */
+/**
+ * The seat, or a 404. Every admin page starts here.
+ *
+ * It is also where board 4i's "Last active" is measured: every console page and
+ * action passes through, so it is the one place that sees staff use the console.
+ * Written after the response, at most once per five minutes per person — see
+ * `lib/staff/activity.ts`.
+ */
 export async function requireStaff(): Promise<StaffSeat> {
   const seat = await getStaffSeat();
   if (!seat) notFound();
+  const staffId = seat.actor.id;
+  try {
+    after(() => recordStaffActivity(staffId));
+  } catch {
+    // Outside a request — a script or a test calling this directly. There is no
+    // console visit to record, and no reason to refuse the seat over it.
+  }
   return seat;
 }

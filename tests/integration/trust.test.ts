@@ -4,6 +4,7 @@ import { auditLog, openReports, priorsFor, resolveReport } from "@/lib/reports/s
 import { setVerificationTier } from "@/lib/verification/service";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Step 3's checkpoint, and the two queues it drains.
@@ -14,7 +15,8 @@ import type { Actor, Role } from "@/lib/auth/roles";
  * that made the *other* half of the rule real: a field verifier may set a tier
  * only for a visit **they** recorded. Site visits were withdrawn and the grant
  * was narrowed to the ops lead rather than widened. The subject check was
- * reading a column no code path filled in.
+ * reading a column no code path filled in. Board 4i then retired the field
+ * verifier, so the refusals below are the staff roles that remain.
  */
 
 const PREFIX = "trust-";
@@ -23,7 +25,6 @@ const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 
 let opsLeadId: string;
 let moderatorId: string;
-let fieldOfficerId: string;
 let financeId: string;
 let categoryId: string;
 let areaId: string;
@@ -59,14 +60,12 @@ async function removeFixtures() {
   });
 
   // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
-  await prisma.auditEvent.deleteMany({
-    where: {
-      subject: {
-        in: [
-          ...ids.map((id) => `Business:${id}`),
-          ...reports.map((report) => `SupplierReport:${report.id}`),
-        ],
-      },
+  await purgeAuditRows({
+    subject: {
+      in: [
+        ...ids.map((id) => `Business:${id}`),
+        ...reports.map((report) => `SupplierReport:${report.id}`),
+      ],
     },
   });
 
@@ -82,14 +81,16 @@ async function removeFixtures() {
 beforeAll(async () => {
   const staff = await prisma.user.findMany({
     where: {
-      roles: { hasSome: ["staff_ops_lead", "staff_moderator", "staff_field", "staff_finance"] },
+      roles: { hasSome: ["staff_ops_lead", "staff_moderator", "staff_finance"] },
     },
+    // Two ops leads and, since board 4i seated the former field verifier, two
+    // moderators — ordered, so `find` picks the same seat on every run.
+    orderBy: { id: "asc" },
     select: { id: true, roles: true },
   });
   const byRole = (role: Role) => staff.find((u) => u.roles.includes(role))!.id;
   opsLeadId = byRole("staff_ops_lead");
   moderatorId = byRole("staff_moderator");
-  fieldOfficerId = byRole("staff_field");
   financeId = byRole("staff_finance");
 
   categoryId = (
@@ -163,7 +164,8 @@ describe("the checkpoint — a tier is nobody's but the ops lead's", () => {
 
      Narrowed rather than widened. The failure the subject check existed to
      prevent — one field verifier tiering a business somebody else checked — is
-     now impossible because no field verifier holds the row at all.
+     now impossible because no field verifier holds the row at all, and since
+     board 4i there is no field verifier.
   */
   it("lets the ops lead set a tier", async () => {
     const business = await listing("Ops Tier");
@@ -183,12 +185,12 @@ describe("the checkpoint — a tier is nobody's but the ops lead's", () => {
     expect(result).toMatchObject({ ok: true, tier: 2 });
   });
 
-  it("refuses a field verifier", async () => {
-    const business = await listing("Field Refused");
+  it("refuses finance", async () => {
+    const business = await listing("Finance Refused");
 
     await expect(
       setVerificationTier({
-        actor: actor(fieldOfficerId, "staff_field"),
+        actor: actor(financeId, "staff_finance"),
         businessId: business.id,
         tier: 2,
         reason: "Not my row any more.",
@@ -293,13 +295,13 @@ describe("supplier reports", () => {
     expect(again).toMatchObject({ ok: false, error: "already_resolved" });
   });
 
-  it("refuses a field verifier — report.resolve is moderator or ops lead", async () => {
-    const business = await listing("Not Field");
+  it("refuses finance — report.resolve is moderator or ops lead", async () => {
+    const business = await listing("Not Finance");
     const report = await reportOn(business.id, "wrong_details");
 
     await expect(
       resolveReport({
-        actor: actor(fieldOfficerId, "staff_field"),
+        actor: actor(financeId, "staff_finance"),
         reportId: report.id,
         outcome: "no_action",
         reason: "Not my queue.",

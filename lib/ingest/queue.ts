@@ -483,6 +483,9 @@ export async function categoriseRecords(
                 activities: [...new Set(runRows.map((row) => row.activity ?? ""))].slice(0, 20),
               },
               after: { ...after, records: updated },
+              // B4: this run's records filed by the decision, counted by the
+              // updateMany that filed them — not the selection it was given.
+              blastRadius: { count: updated, unit: "records" },
             };
           },
         );

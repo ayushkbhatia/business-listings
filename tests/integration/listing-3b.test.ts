@@ -6,6 +6,7 @@ import { pick, setCover, unpick } from "@/lib/listing/photos";
 import { approveChange, rejectChange } from "@/lib/moderation/service";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Board 3b — the listing profile, and the save model it exists to make legible.
@@ -35,9 +36,7 @@ async function removeFixtures() {
     where: { businessId: { in: ids } },
     select: { id: true },
   });
-  await prisma.auditEvent.deleteMany({
-    where: { subject: { in: requests.map((row) => `ListingChangeRequest:${row.id}`) } },
-  });
+  await purgeAuditRows({ subject: { in: requests.map((row) => `ListingChangeRequest:${row.id}`) } });
   await prisma.listingRevision.deleteMany({ where: { businessId: { in: ids } } });
   await prisma.listingChangeRequest.deleteMany({ where: { businessId: { in: ids } } });
   await prisma.media.deleteMany({ where: { businessId: { in: ids } } });
@@ -58,6 +57,7 @@ beforeAll(async () => {
   opsLeadId = (
     await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_ops_lead" } },
+      orderBy: { id: "asc" },
       select: { id: true },
     })
   ).id;

@@ -61,6 +61,7 @@ beforeAll(async () => {
   categoryId = (await prisma.category.findFirstOrThrow({ select: { id: true } })).id;
   const staff = await prisma.user.findFirstOrThrow({
     where: { roles: { has: "staff_ops_lead" } },
+    orderBy: { id: "asc" },
     select: { id: true },
   });
   opsLead = actor(staff.id, "staff_ops_lead");

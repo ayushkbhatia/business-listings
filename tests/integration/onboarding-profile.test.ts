@@ -231,6 +231,7 @@ describe("criterion 8 — a category the licence does not cover", () => {
 
     const staff = await prisma.user.findFirstOrThrow({
       where: { roles: { hasSome: ["staff_ops_lead", "staff_moderator"] } },
+      orderBy: { id: "asc" },
       select: { id: true },
     });
     await clearActivityFlag(seller.id, spare.id, staff.id);

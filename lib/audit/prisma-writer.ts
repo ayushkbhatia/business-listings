@@ -28,6 +28,8 @@ export function installAuditWriters(): void {
           reason: row.reason,
           before: (row.before ?? null) as never,
           after: (row.after ?? null) as never,
+          blastRadius: row.blastRadius,
+          blastUnit: row.blastUnit,
         },
       });
     },

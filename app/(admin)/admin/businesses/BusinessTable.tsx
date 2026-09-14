@@ -31,9 +31,10 @@ export interface BusinessRow {
   strength: number | null;
   state: "suspended" | "merged" | "closed" | "closing" | "unclaimed" | "live";
   /**
-   * Worked out on the server, per row and per seat. A field verifier holds
-   * `business.verification_tier.write` but may only tier a business they
-   * visited, so this is not the same for every row.
+   * Worked out on the server, per seat. `business.verification_tier.write` is
+   * ops lead alone since the field verifier was retired (board 4i), so today it
+   * is the same on every row — kept per row so a subject rule can return
+   * without reshaping the table.
    */
   mayTier: boolean;
   maySuspend: boolean;

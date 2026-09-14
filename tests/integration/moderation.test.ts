@@ -4,6 +4,7 @@ import { approveChange, rejectChange, submissionFor } from "@/lib/moderation/ser
 import { requestModeratedChange } from "@/lib/listing/service";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Draining the queue handoff 3 fills.
@@ -29,7 +30,7 @@ const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 
 let opsLeadId: string;
 let moderatorId: string;
-let fieldOfficerId: string;
+let financeId: string;
 let seq = 0;
 
 /**
@@ -80,9 +81,7 @@ async function removeFixtures() {
     ]);
 
     // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
-    await prisma.auditEvent.deleteMany({
-      where: { subject: { in: requests.map((row) => `ListingChangeRequest:${row.id}`) } },
-    });
+    await purgeAuditRows({ subject: { in: requests.map((row) => `ListingChangeRequest:${row.id}`) } });
     await prisma.redirect.deleteMany({ where: { id: { in: moved.map((row) => row.id) } } });
     await prisma.business.deleteMany({ where: { id: { in: ids } } });
   }
@@ -94,13 +93,16 @@ async function removeFixtures() {
 
 beforeAll(async () => {
   const staff = await prisma.user.findMany({
-    where: { roles: { hasSome: ["staff_ops_lead", "staff_moderator", "staff_field"] } },
+    where: { roles: { hasSome: ["staff_ops_lead", "staff_moderator", "staff_finance"] } },
+    // Two ops leads and, since board 4i seated the former field verifier, two
+    // moderators — ordered, so `find` picks the same seat on every run.
+    orderBy: { id: "asc" },
     select: { id: true, roles: true },
   });
   const byRole = (role: Role) => staff.find((u) => u.roles.includes(role))!.id;
   opsLeadId = byRole("staff_ops_lead");
   moderatorId = byRole("staff_moderator");
-  fieldOfficerId = byRole("staff_field");
+  financeId = byRole("staff_finance");
 
   await removeFixtures();
 });
@@ -359,13 +361,13 @@ describe("rejecting changes nothing but the request", () => {
 });
 
 describe("who may decide", () => {
-  it("refuses a field verifier — queue.decide is moderator or ops lead", async () => {
+  it("refuses finance — queue.decide is moderator or ops lead", async () => {
     const { business, ownerActor } = await listingWithOwner();
     const askedId = requested(await requestModeratedChange(ownerActor, business.id, "licence", "DED-700333"));
 
     await expect(
       approveChange({
-        actor: actor(fieldOfficerId, "staff_field"),
+        actor: actor(financeId, "staff_finance"),
         requestId: askedId,
         reason: REASON,
       }),

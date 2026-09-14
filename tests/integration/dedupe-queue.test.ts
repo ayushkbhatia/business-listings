@@ -15,6 +15,7 @@ import {
 import { BANDS_SETTING_KEY } from "@/lib/dedupe/source";
 import { applyTuning, previewTuning } from "@/lib/dedupe/tuning";
 import { mergeBusinesses } from "@/lib/dedupe/service";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Board 12b — the dedupe queue, against a real database.
@@ -57,15 +58,13 @@ async function removeFixtures() {
     select: { batchId: true },
   });
 
-  await prisma.auditEvent.deleteMany({
-    where: {
-      OR: [
-        { subject: { in: runIds.map((id) => `LicenceImportRun:${id}`) } },
-        { subject: { in: listingIds.map((id) => `Business:${id}`) } },
-        { subject: { in: batches.map((row) => `MergeBatch:${row.batchId}`) } },
-        { subject: `PlatformSetting:${BANDS_SETTING_KEY}`, reason: { contains: TAG } },
-      ],
-    },
+  await purgeAuditRows({
+    OR: [
+      { subject: { in: runIds.map((id) => `LicenceImportRun:${id}`) } },
+      { subject: { in: listingIds.map((id) => `Business:${id}`) } },
+      { subject: { in: batches.map((row) => `MergeBatch:${row.batchId}`) } },
+      { subject: `PlatformSetting:${BANDS_SETTING_KEY}`, reason: { contains: TAG } },
+    ],
   });
   await prisma.location.updateMany({ where: { businessId: { in: listingIds } }, data: { addedByCandidateId: null } });
   await prisma.mergeCandidate.deleteMany({

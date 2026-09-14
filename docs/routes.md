@@ -59,6 +59,7 @@ and it is the one that argues back.
 /for-buyers                             Buyer entry surface                         built h5s7
 /list-your-business                     Supplier entry surface                      built h5s7
 /staff                                  Staff sign in — noindex, unlinked         built h5s7
+/staff/invite/:token                    Accept a staff role — noindex         [4i]  built 4i
 /account/enquiries                      Buyer enquiry inbox                  [10e]  built h2s3
 /account/saved/shortlist                Saved suppliers                             built h8s1
 /invite/:token                          Accept a team seat                    [8d]  built h8s1
@@ -170,7 +171,7 @@ and it is the one that argues back.
 /admin/businesses                       Businesses & health                   [4f]  built h4s4
 /admin/crm                              Recruitment & accounts               [12d]  built h4s4
 /admin/users                            Users                                later
-/admin/staff                            Staff, roles & audit                  [4i]  built h4s3
+/admin/staff                            Staff, roles, invitations & matrix    [4i]  built 4i
 /admin/subscriptions                    Subscriptions                         [4g]  built h4s5
 /admin/invoices                         Invoices & credits                   [12e]  built h4s5
 /admin/plans                            Plans & entitlements                 [12e]  built h4s5
@@ -203,7 +204,8 @@ and it is the one that argues back.
 /admin/areas                            Emirates, areas, free zones          [12h]
 /admin/api                              API keys & webhooks                  [12h]
 /admin/compliance                       PDPL data requests                   [12h]
-/admin/audit                            Audit log                             [4i]  built h4s3
+/admin/audit                            Audit log, filtered and paged         [4i]  built 4i
+/admin/audit/export                     The log as CSV, carrying the filter   [4i]  built 4i
 ```
 
 ## Development surfaces

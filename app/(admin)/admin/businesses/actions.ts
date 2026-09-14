@@ -32,8 +32,8 @@ import { t } from "@/lib/i18n";
  * outside their own test file. The logic is theirs; this is the wire.
  *
  * Nothing here re-checks a capability. `staffMutation` inside each service
- * asserts it, and `setVerificationTier` additionally runs the subject check
- * that says a field verifier may only tier a business they have visited. A
+ * asserts it — `setVerificationTier` included, which is ops lead alone since
+ * board 4i retired the field verifier and the visit check went with it. A
  * second check here would be a second place to get it wrong — the screen gates
  * what it *offers*, the service decides what it *permits*, and the two are
  * allowed to disagree in exactly one direction.

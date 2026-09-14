@@ -50,7 +50,7 @@ export const CAPABILITIES = {
     roles: ["staff_ops_lead"],
     audited: true,
     source: "inferred",
-    why: "§07 staff table gave this to the ops lead unconditionally and to a field verifier as the result of a visit they recorded — a subject check rather than a role check. Site visits were withdrawn, and with them the only thing that ever licensed the field verifier's half: `canSetVerificationTier` read `Business.visitedByStaffId`, which no longer exists. Rather than widen it to an unconditional grant, the narrower half is gone and the capability is ops-lead only. CLAUDE.md non-negotiable 2 is unchanged and this tightens it: no seller, no API path, no self-service, and now no second staff role.",
+    why: "§07 staff table gave this to the ops lead unconditionally and to a field verifier as the result of a visit they recorded — a subject check rather than a role check. Site visits were withdrawn, and with them the only thing that ever licensed the field verifier's half: `canSetVerificationTier` read `Business.visitedByStaffId`, which no longer exists. Rather than widen it to an unconditional grant, the narrower half is gone and the capability is ops-lead only. Board 4i then retired the field verifier role outright (`B1`, `B2`) — an idle role that could still write `verificationTier` is the privilege nobody watches. Board 4i Q2 keeps this row as an ops-lead override: tier 2 normally follows from licence verification, and a manual change carries a mandatory reason like every other row here. CLAUDE.md non-negotiable 2 is unchanged and this tightens it: no seller, no API path, no self-service, and no second staff role.",
   },
   "business.suspend": {
     roles: OPS_LEAD_ONLY,
@@ -177,10 +177,16 @@ export const CAPABILITIES = {
     roles: OPS_LEAD_ONLY,
     audited: true,
     source: "inferred",
-    why: "Not a row in §07. /admin/staff — granting a role is how somebody else gets these capabilities, so it is held at the top. Still inferred.",
+    why: "Not a row in §07. /admin/staff — inviting, changing a role, revoking an invitation and deactivating are how somebody else gets or loses every capability in this table, so they are held at the top. Board 4i's states table agrees in the negative: a non-ops viewer \"cannot invite or change roles\". Two rules ride along in lib/staff/service.ts rather than here, because a role check cannot express them: the last ops lead cannot be removed or demoted (criterion 7), and nobody changes their own staff role. Still inferred.",
+  },
+  "staff.read": {
+    roles: ["staff_ops_lead", "staff_moderator", "staff_finance"],
+    audited: false,
+    source: "inferred",
+    why: "Board 4i's states table: a non-ops viewer \"sees the matrix read-only\". Every staff seat may read who holds which role and what each role may do — a moderator told a control is not theirs should be able to see whose it is. Reading changes nothing, so it is not audited. Not a row in §07.",
   },
   "audit.read": {
-    roles: ["staff_ops_lead", "staff_moderator", "staff_field", "staff_finance"],
+    roles: ["staff_ops_lead", "staff_moderator", "staff_finance"],
     audited: false,
     source: "stated",
     why: "§07 staff table: ops lead reads all of it, every other staff role reads their own actions. Was inferred as ops-lead-only, which is the wrong shape — a moderator being able to see what they themselves did is not a loosening of the check on staff, it is how somebody answers a question about their own work.",

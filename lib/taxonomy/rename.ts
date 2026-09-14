@@ -162,6 +162,12 @@ export async function renameCategory(
         result: null,
         before: { slug: category.slug },
         after: { slug, redirects: pairs.length },
+        /*
+           B4: the redirects written from this category's own addresses — one
+           upsert per entry of `pairs`, each exactly one row. Older redirects
+           re-pointed by the chain fix are not in the count.
+        */
+        blastRadius: { count: pairs.length, unit: "redirects" },
       };
     }),
   );

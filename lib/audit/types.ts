@@ -4,13 +4,17 @@ import type { Actor } from "@/lib/auth/roles";
 /**
  * Audit actions. The first seven are named in docs/data-model.md; the rest cover
  * the remaining audited capabilities. The column is a string in the schema so
- * this union can grow without a migration.
+ * this list can grow without a migration.
+ *
+ * A runtime list rather than a bare union since board 4i, so the log can prove
+ * every action it may meet has a sentence to be read back in — see
+ * `tests/unit/audit-describe.test.ts`.
  */
-export type AuditAction =
-  | "tier_change"
-  | "review_removed"
-  | "review_held"
-  | "review_released"
+export const AUDIT_ACTIONS = [
+  "tier_change",
+  "review_removed",
+  "review_held",
+  "review_released",
   /*
      Board 11c `B4` and `B5`.
 
@@ -24,65 +28,94 @@ export type AuditAction =
      `review_removed` under `Review:…`, so the log answers "how do we decide
      abuse disputes" and "what happened to that review" separately.
   */
-  | "review_reply_removed"
-  | "review_dispute_resolved"
-  | "incentive_logged"
-  | "question_removed"
-  | "credit_issued"
-  | "suspend"
-  | "merge"
-  | "boost"
-  | "view_as"
-  | "report_resolved"
-  | "queue_decided"
+  "review_reply_removed",
+  "review_dispute_resolved",
+  "incentive_logged",
+  "question_removed",
+  "credit_issued",
+  "suspend",
+  "merge",
+  "boost",
+  "view_as",
+  "report_resolved",
+  "queue_decided",
   /*
      Board 4b. Asking a seller for a document and handing a submission to a
      colleague are queue decisions too, and the log has to say which happened —
      neither approves or rejects anything, so filing them under `queue_decided`
      would read as a decision nobody made.
   */
-  | "queue_docs_requested"
-  | "queue_reassigned"
-  | "queue_rules_tuned"
-  | "taxonomy_changed"
-  | "staff_changed"
-  | "claim_resolved"
-  | "entitlements_changed"
-  | "ranking_changed"
-  | "storefront_template_changed"
-  | "cross_business_read"
+  "queue_docs_requested",
+  "queue_reassigned",
+  "queue_rules_tuned",
+  "taxonomy_changed",
+  "staff_changed",
+  "claim_resolved",
+  "entitlements_changed",
+  "ranking_changed",
+  "storefront_template_changed",
+  "cross_business_read",
   /*
      Board 6f's dual control over the publish rules. Four names rather than one
      "rule_changed", because the log has to say which of the four happened: a
      proposal nobody approved and an approval are different rows, and the whole
      point of the table is that they were made by different people.
   */
-  | "rule_proposed"
-  | "rule_approved"
-  | "rule_rejected"
-  | "rule_withdrawn"
+  "rule_proposed",
+  "rule_approved",
+  "rule_rejected",
+  "rule_withdrawn",
   /*
      Board 11i build note B8 and Q2. Three rows under one capability, because
      the log has to say which happened: a notice given is a business told it
      will close, a withdrawal undoes a notice or a closure inside its window,
      and a reopening restores a business whose closure was already final.
   */
-  | "closure_noticed"
-  | "closure_withdrawn"
-  | "closure_reopened"
+  "closure_noticed",
+  "closure_withdrawn",
+  "closure_reopened",
   /*
      Board 12b. The pair screen's three outcomes, a bulk merge, the reversals
      and a re-tune — each its own name, because the screen's "today" rail reads
      them back (B6) and "merged 64, kept separate 41, discarded 13" is three
      questions a single `merge` label cannot answer.
   */
-  | "pair_merged"
-  | "pair_separated"
-  | "pair_discarded"
-  | "pairs_bulk_merged"
-  | "pair_reversed"
-  | "batch_reversed"
-  | "matching_tuned";
+  "pair_merged",
+  "pair_separated",
+  "pair_discarded",
+  "pairs_bulk_merged",
+  "pair_reversed",
+  "batch_reversed",
+  "matching_tuned",
+  /*
+     Board 4i. Five outcomes under `staff.manage`, each its own name, because the
+     question the log exists to answer about a person is "when did they get this,
+     and who decided" — and `staff_changed`, which nothing ever wrote, answers
+     neither. It stays the capability's default so an unnamed call still logs.
+     A resend is its own row because it reopens an offer of a role with a new
+     link and a new window: a state change, so it carries a reason.
+  */
+  "staff_invited",
+  "staff_invite_resent",
+  "staff_invite_revoked",
+  "staff_role_changed",
+  "staff_deactivated",
+] as const;
+
+export type AuditAction = (typeof AUDIT_ACTIONS)[number];
+
+/**
+ * Actions production rows carry that no code writes any more.
+ *
+ * The log is append-only, so a retired action is not a mistake to clean up — it
+ * is history, and it still has to read as a sentence. `visit_recorded` is the
+ * site-visit feature the 5 Sep 2026 cut withdrew.
+ */
+export const RETIRED_AUDIT_ACTIONS = ["visit_recorded"] as const;
+
+export function isAuditAction(value: string): value is AuditAction {
+  return (AUDIT_ACTIONS as readonly string[]).includes(value);
+}
 
 /**
  * Every audited capability maps to exactly one action, so a staff mutation
@@ -173,6 +206,14 @@ export const PAIRED_ACTIONS = {
     "batch_reversed",
     "matching_tuned",
   ],
+  "staff.manage": [
+    "staff_changed",
+    "staff_invited",
+    "staff_invite_resent",
+    "staff_invite_revoked",
+    "staff_role_changed",
+    "staff_deactivated",
+  ],
   "taxonomy.write": [
     "taxonomy_changed",
     "rule_proposed",
@@ -189,6 +230,31 @@ export type PairedAction<C extends AuditedCapability> = C extends keyof typeof P
 /** `Business:clx123`. Entity type and id, so the log is greppable. */
 export type SubjectRef = `${string}:${string}`;
 
+/**
+ * What a bulk decision touched, beyond its subject. Board 4i `B4`.
+ *
+ * The unit is a closed list so the log can put a noun on the number in every
+ * locale — "affected 8,412 products" — rather than printing whatever string a
+ * service happened to choose.
+ */
+export const BLAST_UNITS = [
+  "products",
+  "listings",
+  "businesses",
+  "pairs",
+  "records",
+  "pages",
+  "subscriptions",
+  "redirects",
+] as const;
+
+export type BlastUnit = (typeof BLAST_UNITS)[number];
+
+export interface BlastRadius {
+  count: number;
+  unit: BlastUnit;
+}
+
 export interface WriteAuditInput {
   actor: Actor;
   action: AuditAction;
@@ -197,6 +263,8 @@ export interface WriteAuditInput {
   reason: string;
   before?: unknown;
   after?: unknown;
+  /** Set where one decision touched many things. Omit for a decision about one. */
+  blastRadius?: BlastRadius | null;
 }
 
 /** The row as it reaches persistence. */
@@ -207,6 +275,8 @@ export interface AuditRow {
   reason: string;
   before: unknown;
   after: unknown;
+  blastRadius: number | null;
+  blastUnit: BlastUnit | null;
 }
 
 /**
