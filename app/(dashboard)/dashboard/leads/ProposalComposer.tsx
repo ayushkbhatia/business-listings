@@ -66,6 +66,12 @@ export interface ProposalServiceOption {
   feeBasisLabel: string | null;
   /** `/dashboard/services/:id` — where the basis is changed. */
   editHref: string;
+  /**
+   * The sheet's turnaround and the family's word for it. Sent with the proposal
+   * as it stands, and shown here read-only for the reason the basis is: the
+   * buyer compares it, and it is changed on the sheet.
+   */
+  turnaround: { label: string; value: string | null };
   seed: { scope: string; deliverable: string; deliveredWhere: string; exclusions: string };
 }
 
@@ -385,6 +391,15 @@ export function ProposalComposer({
           </h3>
           <span className="text-caption text-muted">{t("proposal.from_sheet_edit")}</span>
         </div>
+        {service ? (
+          <dl className="mt-3 flex flex-wrap items-baseline gap-x-2 text-caption">
+            <dt className="text-muted">{service.turnaround.label}</dt>
+            <dd className={service.turnaround.value ? "text-ink" : "text-muted"}>
+              {service.turnaround.value ?? t("proposal.turnaround_none")}
+            </dd>
+            <dd className="text-muted">{t("proposal.turnaround_note")}</dd>
+          </dl>
+        ) : null}
         <div className="mt-3 space-y-1">
           <Label htmlFor={ids.scope} requirement="required" requirementLabel={t("field.required")}>
             {t("proposal.scope_label")}

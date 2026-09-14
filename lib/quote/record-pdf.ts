@@ -174,12 +174,13 @@ export function acceptedQuotePdf(record: AcceptedRecord, now: Date): RenderedQuo
     text(windowLine(record, now).toUpperCase(), A4.width - MARGIN.x, 7, "mono", { align: "right", grey: MUTED });
     y += 18;
 
-    // The same six terms the page prints, in the same order, from the same words.
+    // The same seven terms the page prints, in the same order, from the same words.
     const terms: [string, string][] = [
       [t("accepted.proposal.fee"), feeOnBasis(proposal)],
       [t("accepted.proposal.term"), termWords(proposal.termMonths)],
       [t("accepted.proposal.mobilisation"), mobilisationWords(proposal.mobilisationAed)],
       [t("accepted.proposal.service"), proposal.serviceName],
+      [t("accepted.proposal.turnaround"), proposal.turnaround ?? t("accepted.not_stated")],
       [t("accepted.proposal.deliverable"), proposal.deliverable ?? t("accepted.not_stated")],
       [t("accepted.proposal.delivered_where"), proposal.deliveredWhere ?? t("accepted.not_stated")],
     ];

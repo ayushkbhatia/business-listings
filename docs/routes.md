@@ -36,6 +36,7 @@ and it is the one that argues back.
 /rfq/new?from=:ref                      Send a sent enquiry to more suppliers [1i]  built h1i
 /enquiry/:id                            Enquiry sent + tracking               [1i]  built h2s3
 /enquiry/:id/compare                    Compare quotes                        [1n]  built h2s3
+                                        — an enquiry for work: proposals    [1n-s] built 14 Sep (not /account/rfq/:id)
 /enquiry/:id/accepted                   Accepted quote record                 [7c]  built h7c
 /enquiry/:id/accepted/pdf               Accepted quote as a PDF (route handler) [7c] built h7c
 /enquiry/:id/thread/:seller             Negotiation thread                   [10h]  built h2s4

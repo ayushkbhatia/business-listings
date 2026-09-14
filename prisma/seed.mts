@@ -149,13 +149,16 @@ const RECORD_REPORT_ID = "seedreport7cevidence00001";
  *   - `…01` a brief waiting on a proposal from Emirates Facilities Group;
  *   - `…02` two proposals in, on two different bases, not yet decided;
  *   - `…03` a proposal accepted, with the other firm's own decline beside it;
- *   - `…04` a brief the facilities seat declines in the acceptance shard.
+ *   - `…04` a brief the facilities seat declines in the acceptance shard;
+ *   - `…05` two proposals the buyer accepts from `1n-s`'s comparison.
  */
 const PROPOSAL_CLAIM_TOKEN = "seed-0000-4000-8000-provisional03";
 const PROPOSAL_OPEN_ENQUIRY_ID = "seedenquiryproposal000001";
 const PROPOSAL_COMPARE_ENQUIRY_ID = "seedenquiryproposal000002";
 const PROPOSAL_ACCEPTED_ENQUIRY_ID = "seedenquiryproposal000003";
 const PROPOSAL_DECLINE_ENQUIRY_ID = "seedenquiryproposal000004";
+/** Board `1n-s`: two proposals the buyer acceptance shard accepts from the comparison. */
+const PROPOSAL_ACCEPT_ENQUIRY_ID = "seedenquiryproposal000005";
 
 /** Deterministic v4-shaped uuids, so seeded users keep their ids between runs. */
 function uuid(n: number): string {
@@ -8061,7 +8064,7 @@ async function seedBriefMatchFirms(db: Db) {
 async function seedProposalReplies(db: Db) {
   console.log("→ briefs answered with proposals, for board 3j-s");
 
-  const [trade, efg, shirawi] = await Promise.all([
+  const [trade, efg, shirawi, khansaheb, alQuoz] = await Promise.all([
     db.category.findFirst({ where: { slug: "hard-fm" }, select: { id: true } }),
     db.business.findUnique({
       where: { slug: "emirates-facilities-group" },
@@ -8071,12 +8074,18 @@ async function seedProposalReplies(db: Db) {
       where: { slug: "al-shirawi-facilities" },
       select: { id: true, services: { select: { id: true, name: true } } },
     }),
+    db.business.findUnique({
+      where: { slug: "khansaheb-facilities" },
+      select: { id: true, services: { select: { id: true, name: true } } },
+    }),
+    db.area.findFirst({ where: { slug: "al-quoz-industrial-1" }, select: { id: true } }),
   ]);
-  if (!trade || !efg || !shirawi || !efg.services[0] || !shirawi.services[0]) {
+  if (!trade || !efg || !shirawi || !khansaheb || !efg.services[0] || !shirawi.services[0] || !khansaheb.services[0]) {
     throw new Error("Board 3j-s fixtures need seedBriefMatchFirms to have run.");
   }
   const efgService = efg.services[0];
   const shirawiService = shirawi.services[0];
+  const khansahebService = khansaheb.services[0];
 
   const SCOPE =
     "Quarterly PPM visits to a written schedule across the building, covering chillers, AHUs, pumps, LV distribution and BMS. 24/7 reactive callout with 4-hour attendance. Named account engineer.";
@@ -8101,6 +8110,21 @@ async function seedProposalReplies(db: Db) {
       deliverable: "Visit report with readings before and after",
       scope: "Call-out attendance to chillers and AHUs, fault finding and first-fix repair.",
       excluded: "Parts, refrigerant and compressor replacement, quoted on the visit.",
+    },
+  });
+  /*
+     Board `1n-s`'s third unit. Khansaheb covers Al Quoz Industrial 1 only, which
+     is why the comparison brief below is sited there: a recipient in a fixture
+     is still a firm the matcher would have routed to.
+  */
+  await db.service.update({
+    where: { id: khansahebService.id },
+    data: {
+      feeBasis: "per_sqft_yr",
+      turnaround: "6-hour attendance, 24/7",
+      deliverable: "Monthly report and a quarterly review meeting",
+      scope: "Planned maintenance of chillers, AHUs and pumps, and reactive attendance around the clock.",
+      excluded: "Chiller overhaul and BMS software licences.",
     },
   });
 
@@ -8158,25 +8182,32 @@ async function seedProposalReplies(db: Db) {
     },
   });
 
-  /* ── …02: two proposals in, two bases ───────────────────────────────────── */
+  /* ── …02: three proposals in, three bases ───────────────────────────────── */
+  /*
+     `1n-s`'s typical state: per month with mobilisation and a 24-month term, per
+     visit at the brief's quarterly cadence, and per sq ft a year — which the
+     comparison will not work out until the buyer states an area. The scale line
+     is words on purpose, and the words do not settle the area.
+  */
   const compare = await db.enquiry.create({
     data: {
       id: PROPOSAL_COMPARE_ENQUIRY_ID,
       ref: "ENQ-8852",
       buyerId: buyer.id,
       requirement:
-        "One office building, 9 floors. Chillers and AHUs need planned maintenance and somebody who answers at night.",
+        "One office building, 9 floors, plus the car park podium. Chillers and AHUs need planned maintenance and somebody who answers at night.",
       emirate: "dubai",
-      // Left empty on purpose: the comparison must not need it.
-      scale: null,
+      areaId: alQuoz?.id ?? null,
+      scale: "9 floors, about 60,000 sq ft, 2 chillers",
       closesAt: days(11),
-      createdAt: days(-3),
+      createdAt: hours(-72),
       lines: line("Hard FM & MEP maintenance"),
-      serviceBrief: brief(30, "Al Khail Gate"),
+      serviceBrief: brief(30, "Warehouse row 4"),
       recipients: {
         create: [
-          { businessId: efg.id, state: "quoted", openedAt: days(-3), firstReplyAt: days(-2), createdAt: days(-3) },
-          { businessId: shirawi.id, state: "quoted", openedAt: days(-3), firstReplyAt: days(-2), createdAt: days(-3) },
+          { businessId: efg.id, state: "quoted", openedAt: hours(-71), firstReplyAt: hours(-70), createdAt: hours(-72) },
+          { businessId: shirawi.id, state: "quoted", openedAt: hours(-70), firstReplyAt: hours(-66), createdAt: hours(-72) },
+          { businessId: khansaheb.id, state: "quoted", openedAt: hours(-66), firstReplyAt: hours(-60), createdAt: hours(-72) },
         ],
       },
     },
@@ -8200,6 +8231,7 @@ async function seedProposalReplies(db: Db) {
     deliverable: string | null;
     deliveredWhere: string | null;
     exclusions: string | null;
+    turnaround?: string | null;
   }) =>
     db.quote.create({
       data: {
@@ -8223,6 +8255,7 @@ async function seedProposalReplies(db: Db) {
             mobilisationAed: input.mobilisationAed,
             termMonths: input.termMonths,
             scope: input.scope,
+            turnaround: input.turnaround ?? null,
             deliverable: input.deliverable,
             deliveredWhere: input.deliveredWhere,
             exclusions: input.exclusions,
@@ -8236,7 +8269,8 @@ async function seedProposalReplies(db: Db) {
     businessId: efg.id,
     ref: "QT-8852-EMIR1",
     status: "sent",
-    sentAt: days(-2),
+    sentAt: hours(-70),
+    turnaround: "4-hour attendance on reactive calls",
     serviceId: efgService.id,
     serviceName: efgService.name,
     feeBasis: "per_month",
@@ -8254,7 +8288,8 @@ async function seedProposalReplies(db: Db) {
     businessId: shirawi.id,
     ref: "QT-8852-ALSR1",
     status: "sent",
-    sentAt: days(-2),
+    sentAt: hours(-66),
+    turnaround: "Same day for a chiller down",
     serviceId: shirawiService.id,
     serviceName: shirawiService.name,
     feeBasis: "per_visit",
@@ -8267,6 +8302,27 @@ async function seedProposalReplies(db: Db) {
     deliverable: "Visit report with readings before and after",
     deliveredWhere: "On site",
     exclusions: null,
+  });
+
+  await proposalQuote({
+    enquiryId: compare.id,
+    businessId: khansaheb.id,
+    ref: "QT-8852-KHAR1",
+    status: "sent",
+    sentAt: hours(-60),
+    serviceId: khansahebService.id,
+    serviceName: khansahebService.name,
+    feeBasis: "per_sqft_yr",
+    feeBasisLabel: "Per sq ft / yr",
+    feeAed: "5.40",
+    // Not stated — which the comparison names rather than reading as nothing.
+    mobilisationAed: null,
+    termMonths: 12,
+    turnaround: "6-hour attendance, 24/7",
+    scope: "Planned maintenance of chillers, AHUs and pumps across the building and podium, and reactive attendance around the clock.",
+    deliverable: "Monthly report and a quarterly review meeting",
+    deliveredWhere: "On site",
+    exclusions: "Chiller overhaul and BMS software licences.",
   });
 
   /* ── …03: accepted, and the other firm declined it themselves ───────────── */
@@ -8307,6 +8363,7 @@ async function seedProposalReplies(db: Db) {
     businessId: efg.id,
     ref: "QT-8853-EMIR1",
     status: "accepted",
+    turnaround: "4-hour attendance on reactive calls",
     sentAt: pre(10),
     acceptedAt: pre(2),
     serviceId: efgService.id,
@@ -8348,7 +8405,77 @@ async function seedProposalReplies(db: Db) {
     },
   });
 
-  console.log("   4 briefs: one to answer, two proposals on two bases, one accepted, one to decline");
+  /* ── …05: two proposals the buyer accepts from the comparison ─────────────── */
+  const toAccept = await db.enquiry.create({
+    data: {
+      id: PROPOSAL_ACCEPT_ENQUIRY_ID,
+      ref: "ENQ-8855",
+      buyerId: buyer.id,
+      requirement: "A retail unit in Al Quoz needs its AHUs looked after, monthly, from next month.",
+      emirate: "dubai",
+      areaId: alQuoz?.id ?? null,
+      scale: "One unit, 2 AHUs",
+      closesAt: days(8),
+      createdAt: hours(-30),
+      lines: line("Hard FM & MEP maintenance"),
+      serviceBrief: {
+        create: {
+          categoryId: trade.id,
+          engagementType: "ongoing_contract",
+          cadence: "monthly",
+          startMode: "asap",
+          building: "Unit 12",
+        },
+      },
+      recipients: {
+        create: [
+          { businessId: efg.id, state: "quoted", openedAt: hours(-29), firstReplyAt: hours(-28), createdAt: hours(-30) },
+          { businessId: shirawi.id, state: "quoted", openedAt: hours(-28), firstReplyAt: hours(-26), createdAt: hours(-30) },
+        ],
+      },
+    },
+    select: { id: true },
+  });
+  await proposalQuote({
+    enquiryId: toAccept.id,
+    businessId: efg.id,
+    ref: "QT-8855-EMIR1",
+    status: "sent",
+    sentAt: hours(-28),
+    serviceId: efgService.id,
+    serviceName: efgService.name,
+    feeBasis: "per_month",
+    feeBasisLabel: "Per month",
+    feeAed: "2400.00",
+    mobilisationAed: "0.00",
+    termMonths: 12,
+    turnaround: "4-hour attendance on reactive calls",
+    scope: "Monthly AHU service and filter change, with reactive attendance.",
+    deliverable: "Monthly written report with photographs",
+    deliveredWhere: "On site",
+    exclusions: "Motor replacement.",
+  });
+  await proposalQuote({
+    enquiryId: toAccept.id,
+    businessId: shirawi.id,
+    ref: "QT-8855-ALSR1",
+    status: "sent",
+    sentAt: hours(-26),
+    serviceId: shirawiService.id,
+    serviceName: shirawiService.name,
+    feeBasis: "per_visit",
+    feeBasisLabel: "Per visit",
+    feeAed: "650.00",
+    mobilisationAed: null,
+    termMonths: null,
+    turnaround: "Same day for a chiller down",
+    scope: "A monthly AHU visit, attendance to faults charged per visit.",
+    deliverable: "Visit report with readings before and after",
+    deliveredWhere: "On site",
+    exclusions: "Parts and filters.",
+  });
+
+  console.log("   5 briefs: one to answer, three proposals on three bases, one accepted, one to decline, one to accept");
 }
 
 /**

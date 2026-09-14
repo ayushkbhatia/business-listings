@@ -4223,6 +4223,10 @@ model QuoteProposal {
   termMonths      Int?     @map("term_months")
 
   scope          String  @default("")
+  /// The scope sheet's turnaround at send — board `1n-s`'s *Response time* row,
+  /// named by the family. Copied for the reason the basis is: the record of what
+  /// was proposed must not move when the sheet does. Null is *Not stated*.
+  turnaround     String?
   deliverable    String?
   /// Free text for this buyer — *On site, both towers* — seeded from the
   /// service's `DeliveredWhere`, which is one of three words.

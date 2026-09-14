@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { after } from "next/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -13,7 +14,9 @@ import { markQuotesRead } from "@/lib/messaging/receipts";
 import { resolveBuyerId, trackingTokenFor } from "../../_buyer";
 import { acceptQuoteAction } from "../../actions";
 import { acceptErrorMessage } from "../../_errors";
-import { feeOnBasis, mobilisationWords, termWords } from "@/lib/quote/proposal-words";
+import { getProposalComparison } from "@/lib/db/queries/proposal-comparison";
+import { AREA_MAX, VISITS_MAX, readFigure } from "@/lib/quote/proposal-footing";
+import { ProposalComparisonView } from "./_proposals";
 
 /**
  * Board 1n — the quotes side by side.
@@ -26,6 +29,12 @@ import { feeOnBasis, mobilisationWords, termWords } from "@/lib/quote/proposal-w
  * on a screen with four columns is a button that does not say what it does.
  */
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: t("compare.quotes_title"),
+  // Private to the buyer: a comparison of prices sent to them alone.
+  robots: { index: false, follow: false },
+};
 
 export default async function ComparePage({
   params,
@@ -40,6 +49,32 @@ export default async function ComparePage({
 
   const buyerId = await resolveBuyerId(one("t"));
   if (!buyerId) notFound();
+
+  /*
+     Board `1n-s`: an enquiry for work is compared as proposals — each fee in its
+     own unit, one labelled row of our arithmetic, and nothing ranked. It renders
+     with no replies yet too: the brief and who it went to, not a 404.
+  */
+  const comparison = await getProposalComparison(buyerId, id);
+  if (comparison) {
+    const token = await trackingTokenFor(buyerId);
+    if (comparison.columns.length > 0) after(() => markQuotesRead(comparison.enquiryId, buyerId));
+    return (
+      <PublicShell nav={<DirectoryNav />} footer={<DirectoryFooter />}>
+        <ProposalComparisonView
+          comparison={comparison}
+          now={new Date()}
+          token={token}
+          figures={{
+            areaSqFt: readFigure(one("area"), AREA_MAX),
+            visitsPerYear: readFigure(one("visits"), VISITS_MAX),
+          }}
+          error={acceptErrorMessage(one("error"))}
+          acceptAction={acceptQuoteAction}
+        />
+      </PublicShell>
+    );
+  }
 
   const enquiry = await getBuyerEnquiry(buyerId, id);
   if (!enquiry) notFound();
@@ -62,54 +97,6 @@ export default async function ComparePage({
 
   const error = acceptErrorMessage(one("error"));
   const accepted = enquiry.contactReleasedToBusinessId;
-
-  /*
-     Board `3j-s`: replies to an enquiry for work are proposals, and they are
-     compared as stated rather than line by line. `1n-s` owns the arithmetic
-     across bases — mobilisation in any normalised total (B6), and no figure
-     multiplied by a scale string nobody parsed (B7) — so this table does none.
-  */
-  if (quotes.some((quote) => quote.proposal !== null)) {
-    return (
-      <PublicShell nav={<DirectoryNav />} footer={<DirectoryFooter />}>
-        <div className="mx-auto w-full max-w-[64rem] px-[var(--section-pad)] py-8">
-          <p className="font-mono text-eyebrow uppercase text-faint">{t("enquiry.ref", { ref: enquiry.ref })}</p>
-          <h1 className="mt-2 font-serif text-h1-serif text-ink">{t("compare.proposals_title")}</h1>
-          <p className="mt-2 max-w-[var(--measure-prose)] text-body-sm text-muted">
-            {quotes.length === 1 ? t("compare.proposals_only_one") : t("compare.proposals_as_stated")}
-          </p>
-
-          {error ? (
-            <p role="alert" className="mt-4 rounded-ctl border border-bad-line bg-bad-surface px-3 py-2 text-body-sm text-bad-ink">
-              {error}
-            </p>
-          ) : null}
-
-          <ProposalTable
-            quotes={quotes}
-            enquiryId={enquiry.id}
-            accepted={accepted}
-            token={token}
-          />
-
-          <Card padded>
-            <p className="max-w-[var(--measure-prose)] text-body-sm text-muted">
-              {t("compare.what_accepting_a_proposal_means")}
-            </p>
-          </Card>
-
-          <p className="mt-4">
-            <Link
-              href={token ? `/enquiry/${enquiry.id}?t=${token}` : `/enquiry/${enquiry.id}`}
-              className="rounded-tag text-body-sm text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
-            >
-              {t("enquiry.track")}
-            </Link>
-          </p>
-        </div>
-      </PublicShell>
-    );
-  }
 
   const lowest = quotes.reduce((min, q) => (Number(q.totalAed) < Number(min.totalAed) ? q : min), quotes[0]!);
   const fastest = quotes.reduce((best, q) => {
@@ -292,155 +279,6 @@ export default async function ComparePage({
       </p>
       </div>
     </PublicShell>
-  );
-}
-
-/**
- * One column per supplier, one row per term — every term, including the ones a
- * supplier left unstated, which read *Not stated* in grey rather than dropping
- * out of the table. A missing mobilisation row would make a firm that charges
- * none and a firm that did not say look the same.
- */
-function ProposalTable({
-  quotes,
-  enquiryId,
-  accepted,
-  token,
-}: {
-  quotes: BuyerQuote[];
-  enquiryId: string;
-  accepted: string | null;
-  token: string | null;
-}) {
-  const rows: { key: string; label: string; cell: (quote: BuyerQuote) => { text: string; muted?: boolean; prose?: boolean } }[] = [
-    {
-      key: "fee",
-      label: t("compare.proposal.fee"),
-      cell: (q) => (q.proposal ? { text: feeOnBasis(q.proposal) } : { text: t("compare.proposal.not_a_proposal"), muted: true }),
-    },
-    {
-      key: "term",
-      label: t("compare.proposal.term"),
-      cell: (q) => ({ text: termWords(q.proposal?.termMonths ?? null), muted: q.proposal?.termMonths == null }),
-    },
-    {
-      key: "mobilisation",
-      label: t("compare.proposal.mobilisation"),
-      cell: (q) => ({
-        text: mobilisationWords(q.proposal?.mobilisationAed ?? null),
-        muted: q.proposal?.mobilisationAed == null,
-      }),
-    },
-    {
-      key: "valid",
-      label: t("compare.validity"),
-      cell: (q) => (q.expiresAt ? { text: formatDate(q.expiresAt) } : { text: t("accepted.not_stated"), muted: true }),
-    },
-    {
-      key: "service",
-      label: t("compare.proposal.service"),
-      cell: (q) => ({ text: q.proposal?.serviceName ?? t("accepted.not_stated"), muted: !q.proposal }),
-    },
-    {
-      key: "scope",
-      label: t("compare.proposal.scope"),
-      cell: (q) => ({ text: q.proposal?.scope || t("accepted.not_stated"), muted: !q.proposal?.scope, prose: true }),
-    },
-    {
-      key: "deliverable",
-      label: t("compare.proposal.deliverable"),
-      cell: (q) => ({ text: q.proposal?.deliverable ?? t("accepted.not_stated"), muted: !q.proposal?.deliverable }),
-    },
-    {
-      key: "where",
-      label: t("compare.proposal.delivered_where"),
-      cell: (q) => ({ text: q.proposal?.deliveredWhere ?? t("accepted.not_stated"), muted: !q.proposal?.deliveredWhere }),
-    },
-    {
-      key: "excluded",
-      label: t("compare.proposal.excluded"),
-      cell: (q) => ({
-        text: q.proposal?.exclusions ?? t("compare.proposal.none_stated"),
-        muted: !q.proposal?.exclusions,
-        prose: true,
-      }),
-    },
-  ];
-
-  return (
-    <div className="mt-6 overflow-x-auto rounded-card border border-line bg-card" tabIndex={0} role="group" aria-label={t("compare.proposals_caption")}>
-      <table className="w-full min-w-[48rem] border-collapse text-left">
-        <caption className="sr-only">{t("compare.proposals_caption")}</caption>
-        <thead>
-          <tr className="bg-paper-sunk">
-            <th scope="col" className="px-3 py-2 text-caption font-normal text-muted">
-              {t("compare.supplier")}
-            </th>
-            {quotes.map((quote) => (
-              <th key={quote.id} scope="col" className="px-3 py-2 align-top">
-                <SupplierHead quote={quote} lowest={false} fastest={false} />
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.key} className="border-t border-line">
-              <th scope="row" className="px-3 py-2 align-top text-left text-body-sm font-normal text-ink">
-                {row.label}
-              </th>
-              {quotes.map((quote) => {
-                const cell = row.cell(quote);
-                return (
-                  <td
-                    key={quote.id}
-                    className={[
-                      "px-3 py-2 align-top text-body-sm",
-                      cell.muted ? "text-muted" : "text-ink",
-                      row.key === "fee" ? "font-mono tabular-nums" : "",
-                      cell.prose ? "whitespace-pre-wrap" : "",
-                    ].join(" ")}
-                  >
-                    {cell.text}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
-        </tbody>
-        <tfoot>
-          <tr className="border-t border-line-strong">
-            <th scope="row" className="px-3 py-3 text-left font-normal">
-              <span className="sr-only">{t("compare.accept_row")}</span>
-            </th>
-            {quotes.map((quote) => (
-              <td key={quote.id} className="px-3 py-3 align-top">
-                {accepted ? (
-                  accepted === quote.business.id ? (
-                    <StatusBadge tone="ok" shape="chip">
-                      {t("quotes.state.accepted")}
-                    </StatusBadge>
-                  ) : (
-                    <StatusBadge tone="neutral" shape="chip">
-                      {t("quotes.state.lost")}
-                    </StatusBadge>
-                  )
-                ) : quote.proposal ? (
-                  <form action={acceptQuoteAction}>
-                    <input type="hidden" name="quoteId" value={quote.id} />
-                    <input type="hidden" name="enquiryId" value={enquiryId} />
-                    {token ? <input type="hidden" name="token" value={token} /> : null}
-                    <Button type="submit" size="sm" block>
-                      {t("compare.accept_proposal", { ref: `r${quote.revision}`, fee: feeOnBasis(quote.proposal) })}
-                    </Button>
-                  </form>
-                ) : null}
-              </td>
-            ))}
-          </tr>
-        </tfoot>
-      </table>
-    </div>
   );
 }
 

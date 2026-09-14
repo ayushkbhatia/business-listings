@@ -244,6 +244,7 @@ describe("an accepted proposal — board 3j-s", () => {
           mobilisationAed: null,
           termMonths: 24,
           serviceName: "Planned and reactive MEP maintenance",
+          turnaround: "4-hour attendance on reactive calls",
           scope: "Quarterly PPM across both towers.",
           deliverable: null,
           deliveredWhere: "On site, both towers",

@@ -28,6 +28,7 @@ const SERVICE: ProposalServiceOption = {
   basis: "ok",
   feeBasisLabel: "Per month",
   editHref: "#proposal-reply",
+  turnaround: { label: "Response time", value: "4-hour attendance on reactive calls" },
   seed: { scope: SCOPE, deliverable: "Monthly written report with photographs", deliveredWhere: "On site, both towers", exclusions: EXCLUDED },
 };
 
