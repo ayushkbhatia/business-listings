@@ -82,6 +82,7 @@ reading `Business.leadEscalationMinutes` and sending once per enquiry.
 | Adjust search ranking weights | ✓ | — | — |
 | Manual boost / demote a listing | ✓ | — | — |
 | View-as a business | ✓ | ✓ | — |
+| Work the call list (board 12d) | ✓ | ✓ | — |
 | See staff & roles | ✓ | ✓ | ✓ |
 | Invite staff, change roles, deactivate | ✓ | — | — |
 | Read the audit log | ✓ | own actions | own actions |

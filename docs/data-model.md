@@ -530,6 +530,51 @@ still has MRR. At risk, not lost; churn happens when the D14 drop writes its mov
 **Closures** (11i) are counted apart from churn (Q2). A closure cannot happen while a subscription
 charges, so its money has already left through a cancellation.
 
+## Ops CRM — board 12d
+
+```prisma
+model CrmTask {
+  businessId   String        // one open task per business, by partial unique index
+  signal       CrmSignal     // held_page | zero_result | unclaimed_demand | cap_reached | churn_risk
+  signalRef    String        // the scope, category, cap or renewal the signal is about
+  signalValue  Int           // the number the call opens with
+  signalFacts  Json          // what the row and the banner render from, snapshotted by the run
+  demandScore  Int           // sort key, recomputed every run — never a typed priority
+  state        CrmTaskState  // queued | called | callback | unreachable | won | lost | parked | cleared
+  assignedToId String?       // the lock
+  callBackAt   DateTime?     // set with callback, by CHECK
+  coolingUntil DateTime?     // a no-answer or a follow-up waits this long
+  closedAt     DateTime?     // with closeReason, by CHECK
+}
+
+model CallOutcome { taskId String?  scriptId String? }   // 12d adds the task and the script
+model CrmContactReveal { taskId  staffId  locationId }   // a number shown to staff (B9)
+model CrmSyncRun { startedAt  finishedAt  derived  created  won  cleared  triggeredById }
+```
+
+**Nobody types a task** (B1). `lib/crm/sync.ts` is the only code that creates one, and it and
+the call logger are the only code that closes one; `tests/unit/crm-writers.test.ts` scans the
+tree for it. The signals are derived in `lib/crm/derive.ts` from writers earlier boards
+shipped: 6f's area matrix (`recruit` status), `ZeroResultQuery`, `EnquiryRecipient`,
+`MissedEnquiry` and 4f's cap-refusal events, and 4f's `stateWhere("churn_risk")` with the
+renewal still ahead (B6). One signal per business, strongest first: churn risk, cap,
+unclaimed demand, held page, zero result.
+
+**A task leaves when its signal clears, whoever cleared it** (B7): `won` when the thing the
+call was for happened — claimed, verified, upgraded, reply rate recovered — and `cleared`
+with the reason otherwise (`signal_gone`, `renewal_passed`, `stopped_paying`,
+`business_gone`). A task opened for a business with call history starts where the last call
+left it; a no, a wrong number or a closure keeps it off the list for ninety days.
+
+**The run** is the daily job's last step, after reply rates, tiers and area pages have moved,
+or *Refresh signals* (refused inside five minutes of the last run).
+
+**6f's `recruit` status now includes a scope short only on verified share.** Before 12d, a
+scope past its listings need with too few verified listings read `queued_copy` and went to
+content ops, who cannot verify a licence. `supplyGap` in `lib/publish-threshold.ts` feeds
+`pageState` the verifications needed, and opportunity divides searches by every recruit —
+listings to add plus listings to verify — the same count the CRM banner states.
+
 ## Staff — board 4i
 
 ```prisma

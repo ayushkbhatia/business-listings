@@ -126,6 +126,12 @@ export const CAPABILITIES = {
     source: "stated",
     why: "§07 staff table, \"View-as a business\". Looking through a seller's eyes is a privacy event and is audited even though it changes nothing.",
   },
+  "crm.work": {
+    roles: ["staff_ops_lead", "staff_moderator"],
+    audited: false,
+    source: "stated",
+    why: "Board 12d B11: ops lead and moderator only, and the retired field verifier does not come back for call work. Not audited: claiming a call, logging what a seller said and revealing a lead's number change nothing about the directory, and each is its own record — the task's lock, `call_outcome` and `crm_contact_reveal` — rather than a decision the audit log exists to hold. Finance has no row: the call list is a lead list, and the asset most likely to walk out is one more seat can read.",
+  },
   "enquiry.read_other_business": {
     roles: ["staff_moderator", "staff_ops_lead"],
     audited: true,

@@ -294,6 +294,66 @@ export function isSupply(failure: PublishFailure): boolean {
   return failure.reason === "listings" || failure.reason === "verified_share";
 }
 
+const SHARE_PRECISION = 10_000;
+
+/**
+ * The smallest whole number of listings that is at least `share` of `of`.
+ *
+ * Integer arithmetic, because `0.3 × 60` is `18.000000000000004` as a double and
+ * a ceiling over it asks for a nineteenth verified listing the rule never needed.
+ */
+export function ceilShare(share: number, of: number): number {
+  return Math.ceil((Math.round(share * SHARE_PRECISION) * of) / SHARE_PRECISION);
+}
+
+export interface SupplyGap {
+  /** Listings the scope needs added before the listings condition passes. */
+  listingsToAdd: number;
+  /** Of those added, how many must arrive verified. */
+  addedVerified: number;
+  /** Unverified listings already here to verify. Asked for before new ones. */
+  toVerify: number;
+  /** Listings once the gap closes. */
+  listingsAfter: number;
+  /** Verified listings once the gap closes. */
+  verifiedAfter: number;
+  listingsPass: boolean;
+  sharePass: boolean;
+}
+
+/**
+ * What closes a held page's supply gate, and the figures after.
+ *
+ * Verifications of listings already in the scope come first, because those are
+ * the calls this list can make — the listing is there, the number is on it, and
+ * the ask is one upload. Listings the scope lacks come second, and only as many
+ * of them need to be verified as the share still needs. Converting every
+ * unverified listing takes the share to 100%, so when the listings condition
+ * passes, verifications alone always clear it.
+ *
+ * On the handoff's own figures: 8 verified of 78, against a need of 60, is 16
+ * verifications — 24 of 78, 30.8%. Against a need of 100 it is 22 listings
+ * added and 22 of the 70 unverified verified, 30 of 100 — the board's 30 of
+ * 100, reached by calls rather than by 22 new suppliers who each also have to
+ * be verified. Integer arithmetic throughout; see `ceilShare`.
+ */
+export function supplyGap(facts: { listings: number; verified: number; need: number; minVerifiedShare: number; unverified: number }): SupplyGap {
+  const listingsToAdd = Math.max(0, facts.need - facts.listings);
+  const listingsAfter = facts.listings + listingsToAdd;
+  const verifiedNeeded = Math.max(0, ceilShare(facts.minVerifiedShare, listingsAfter) - facts.verified);
+  const toVerify = Math.min(facts.unverified, verifiedNeeded);
+  const addedVerified = verifiedNeeded - toVerify;
+  return {
+    listingsToAdd,
+    addedVerified,
+    toVerify,
+    listingsAfter,
+    verifiedAfter: facts.verified + toVerify + addedVerified,
+    listingsPass: listingsToAdd === 0,
+    sharePass: facts.listings > 0 && facts.verified >= ceilShare(facts.minVerifiedShare, facts.listings),
+  };
+}
+
 export function countWords(text: string | null | undefined): number {
   if (!text) return 0;
   return text.trim().split(/\s+/).filter(Boolean).length;

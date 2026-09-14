@@ -28,6 +28,7 @@ import { sweepClosures } from "@/lib/closure/service";
 import { purgeRetainedDocuments } from "@/lib/closure/retention";
 import { revalidateClosure } from "@/lib/closure/revalidate";
 import { rebuildSectorIndex } from "@/lib/onboarding/sector-index";
+import { syncCrmTasks } from "@/lib/crm/sync";
 
 /**
  * The daily run — the jobs whose natural grain is a day.
@@ -390,6 +391,17 @@ export async function GET(request: NextRequest) {
        says why, rather than padding with a list we invented.
     */
     sectorIndex: () => rebuildSectorIndex(),
+    /*
+       Board 12d. The call list, derived again from every signal it reads.
+
+       Last, and the order is the point: it reads the reply rates `responseTimes`
+       measured, the tiers `expiredLicences` settled, and the pages `areaPages`
+       published or took down — so a page that published tonight takes its
+       recruitment calls off tomorrow morning's list rather than the morning
+       after. It walks the directory, which is why it is here and not in the
+       hourly sweep.
+    */
+    crmSignals: () => syncCrmTasks(),
   });
 
   console.info("[jobs] daily", outcome.steps);

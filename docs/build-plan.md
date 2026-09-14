@@ -455,7 +455,11 @@ reader and three levels of tests. **The staff half has nothing at all.**
   of N", a before/after line for scalar fields, an export carrying the filter, blast radius on
   twelve bulk writers, and an append-only trigger. `AuditRow.actorRoleLabel` is left unfilled:
   the role at the time needs a snapshot column, and the log's sentence names the person.
-- [ ] **7.2 `12d`** — `logCall`'s only caller is an integration test.
+- [x] **7.2 `12d`** — the call list is tasks a derivation run writes from five demand signals,
+  with a lock, call-backs, cooling, reveals that are logged, outcomes that move the task, and
+  rows that leave when their signal clears. Three tabs; *Users* (Q2) is not built. The banner
+  states a held page's supply gate so every figure derives, and 6f's `recruit` status learned
+  the verified-share gap it had been routing to content ops.
 - [ ] **7.3 `12f`** — export it; view-as is genuinely sound and is the best-guarded thing in the
   console.
 - [ ] **7.4 `12g` + `7f` + `10i`** — record that `/admin/strings` is a report by design, then fix
@@ -544,7 +548,7 @@ the only large piece and the only one selling something it does not deliver.
 | `6g` | Admin copy audit | not started | medium | The CI scan reads exactly one file; every word held in the database is invisible to it. | 7.5 |
 | `10c` | Search — products tab | scaffold ↓ | medium | No facet rail of any kind on `/search`. | 5.3 |
 | `10d` | Comparison tray | partial | medium | Compares ten fixed business attributes and touches the dictionary nowhere. | 5.4 |
-| `12d` | Ops CRM — supply gaps | partial | medium | `logCall`'s only caller in the tree is an integration test. | 7.2 |
+| `12d` | Ops CRM — supply gaps | built | medium | Tasks only a derivation writes; the lock is `assignedToId`; every rate carries its denominator. | 7.2 |
 | `12f` | Support desk & view-as | partial ↓ | small | View-as is the best-guarded thing in the console. | 7.3 |
 | `5a` | Builder shell | partial | medium | `createTemplate` has no route caller. | 8.4 |
 | `5b` | Theme presets | scaffold ↓ | medium | Five of eight theme columns reach no storefront. | 8.3 |

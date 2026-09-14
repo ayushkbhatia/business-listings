@@ -135,6 +135,24 @@ export default async function BusinessPage({ params }: { params: Promise<{ id: s
               </Link>
             </Alert>
           ) : null}
+          {(() => {
+            /*
+               Board 12d, States: a *closed down* call outcome closes the call
+               and raises the listing's state here, where closing a business is
+               somebody's decision with a reason. The call list does not delist
+               anybody by itself. Only while nothing has been decided since.
+            */
+            const reported = detail.calls.find((call) => call.kind === "closed_down");
+            if (!reported || detail.closure || row.state === "closed") return null;
+            return (
+              <Alert tone="warn">
+                {t("admin.businesses.detail.reported_closed", {
+                  who: reported.staff.fullName ?? "—",
+                  date: formatDate(reported.createdAt),
+                })}
+              </Alert>
+            );
+          })()}
           {detail.closure ? (
             <Alert tone="warn">
               {detail.closure.appliedAt
