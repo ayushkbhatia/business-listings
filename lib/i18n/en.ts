@@ -1649,7 +1649,7 @@ export const en = {
   "admin.crm.error.not_yours": "Only whoever holds the call, or an ops lead, can hand it back.",
 
   "admin.crm.refresh": "Refresh signals",
-  "admin.crm.refreshed_now": { one: "Built from {n} signal just now.", other: "Built from {n} signals just now." },
+  "admin.crm.refreshed_now": { one: "Built from {n} signal a moment ago.", other: "Built from {n} signals a moment ago." },
   "admin.crm.refreshed": { one: "Built {when} from {n} signal. Builds next {next}.", other: "Built {when} from {n} signals. Builds next {next}." },
   "admin.crm.never_refreshed": "It builds from demand signals every night, next at {next}, or now from Refresh signals.",
   "admin.crm.empty.title": "No calls on this list",

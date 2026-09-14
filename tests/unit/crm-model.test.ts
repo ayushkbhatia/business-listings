@@ -172,7 +172,7 @@ describe("one signal per business, and a score nobody typed", () => {
     monthlySearches: 3_940,
     failing: ["verified", "copy"],
     tradeSearchesWeek: 8,
-    tradeName: "Chiller AMC",
+    trade: "Chiller AMC",
     claimed: false,
   };
 

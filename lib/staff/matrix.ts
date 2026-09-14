@@ -39,6 +39,7 @@ export const MATRIX_GROUPS = [
       "question.remove",
       "support.view_as",
       "enquiry.read_other_business",
+      "crm.work",
     ],
   },
   {

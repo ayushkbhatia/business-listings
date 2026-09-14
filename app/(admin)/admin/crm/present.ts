@@ -77,7 +77,7 @@ function whyOf(row: CrmRow): { text: string; tone: Tone } {
     case "held_page":
       return {
         text: t(row.claimStatus === "claimed" ? "admin.crm.why.held_page_unverified" : "admin.crm.why.held_page_unclaimed", {
-          trade: f.tradeName,
+          trade: f.trade,
           area: f.areaName,
         }),
         tone: "neutral",
@@ -144,7 +144,7 @@ export function scriptText(row: CrmRow): string {
       return t(`admin.crm.script.${id}` as MessageKey, {
         count: f.tradeSearchesWeek,
         n: formatCount(f.tradeSearchesWeek),
-        trade: f.tradeName,
+        trade: f.trade,
         category: f.categoryName,
         area: f.areaName,
       });

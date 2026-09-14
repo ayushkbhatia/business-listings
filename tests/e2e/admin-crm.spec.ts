@@ -20,7 +20,7 @@ async function built(page: import("@playwright/test").Page) {
   const never = page.getByText("The list has not been built yet");
   if (await never.isVisible()) {
     await page.getByRole("button", { name: "Refresh signals" }).first().click();
-    await expect(page.getByText(/Built from \d+ signals? just now/)).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByText(/Built from \d+ signals? a moment ago/)).toBeVisible({ timeout: 60_000 });
     await page.reload();
   }
 }

@@ -270,7 +270,7 @@ async function heldPages(now: Date, week: Date): Promise<DerivedSignal[]> {
         tradeSearchesWeek:
           (searchesFor.get(`${candidate.category_id}:${candidate.emirate}`) ?? 0) +
           (searchesFor.get(`${candidate.category_id}:`) ?? 0),
-        tradeName: nameOf.get(candidate.category_id) ?? scope.categoryName,
+        trade: nameOf.get(candidate.category_id) ?? scope.categoryName,
         claimed: candidate.claimed,
       }),
     );

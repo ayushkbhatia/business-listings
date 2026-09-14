@@ -75,7 +75,7 @@ export type SignalFacts =
       failing: readonly string[];
       /** Zero-result searches in this business's own trade and emirate, last 7 days. */
       tradeSearchesWeek: number;
-      tradeName: string;
+      trade: string;
       /** Claimed when derived, so a claim afterwards can be told from one before. */
       claimed: boolean;
     }

@@ -38,7 +38,11 @@ describe("B1 — nobody types a task", () => {
   });
 
   it("offers no priority anybody could type — the score is written by the derivation alone", () => {
-    const scorers = source.filter((file) => /demandScore:\s*signal\.demandScore|demandScore:\s*\d/.test(file.text)).map((file) => file.path);
+    // Files that write the table and set the score. A gallery fixture sets a
+    // number on a plain object and writes nothing.
+    const scorers = source
+      .filter((file) => /crmTask\.(create|createMany|update|updateMany|upsert)\s*\(/.test(file.text) && /demandScore:\s*(?!true\b|"(?:asc|desc)")/.test(file.text))
+      .map((file) => file.path);
     expect(scorers).toEqual(["lib/crm/sync.ts"]);
   });
 });

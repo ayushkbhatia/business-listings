@@ -36,7 +36,7 @@ const held = (over: Partial<Extract<SignalFacts, { kind: "held_page" }>> = {}): 
   monthlySearches: 3_940,
   failing: ["verified", "copy"],
   tradeSearchesWeek: 8,
-  tradeName: "Chiller AMC",
+  trade: "Chiller AMC",
   claimed: false,
   ...over,
 });

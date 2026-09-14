@@ -133,11 +133,20 @@ describe("the matrix", () => {
   });
 
   it("marks every staff state change as audited", () => {
+    /*
+       Not a state change of the directory, named here so the exception is a
+       decision rather than a gap. Board 12d's call work — claiming a call,
+       logging what a seller said, revealing a number — moves no listing, plan or
+       tier, and each act is its own record (`crm_task`, `call_outcome`,
+       `crm_contact_reveal`). `scripts/check-audit-coverage.mts` exempts the
+       service with the same reason.
+    */
+    const NOT_DIRECTORY_STATE = new Set<string>(["crm.work"]);
     for (const capability of CAPABILITY_LIST) {
       const spec = CAPABILITIES[capability];
       const isRead = capability.endsWith(".read");
       const staffOnly = spec.roles.every((r) => (STAFF_ROLES as readonly string[]).includes(r));
-      if (staffOnly && !isRead) expect(spec.audited, capability).toBe(true);
+      if (staffOnly && !isRead && !NOT_DIRECTORY_STATE.has(capability)) expect(spec.audited, capability).toBe(true);
     }
   });
 });
