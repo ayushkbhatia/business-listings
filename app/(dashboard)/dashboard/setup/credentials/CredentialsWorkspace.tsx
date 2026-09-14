@@ -235,7 +235,7 @@ export function CredentialsWorkspace({
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h3 className="font-mono text-eyebrow uppercase text-faint">
+        <h3 id={`${form}-add`} className="font-mono text-eyebrow uppercase text-faint">
           {t("credentials.add_eyebrow")}
         </h3>
         <p className="mt-1 text-caption text-muted">{t("credentials.add_note")}</p>
@@ -290,6 +290,9 @@ export function CredentialsWorkspace({
       <form
         ref={formRef}
         action={onAdd}
+        // Named, so the form is a landmark a screen reader can tell from the
+        // "Correct and send again" form a request or rejection opens above it.
+        aria-labelledby={`${form}-add`}
         className="flex flex-col gap-3.5 rounded-card border border-line-strong bg-card px-5 py-4"
       >
         <div className="grid gap-3.5 sm:grid-cols-2">

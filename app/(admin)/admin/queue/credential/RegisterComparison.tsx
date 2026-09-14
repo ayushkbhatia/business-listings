@@ -74,7 +74,14 @@ export function RegisterComparison({
       )}
 
       {view.rows.length > 0 && (
-        <div className="overflow-x-auto rounded-card border border-line">
+        /*
+           Focusable because it scrolls: at phone width the four columns are
+           wider than the screen, and a scroll region a keyboard cannot reach
+           hides the verdict column from anyone not using a pointer. No role or
+           name — the table's caption names it, and a named region here would be
+           a landmark the gallery draws seven times.
+        */
+        <div tabIndex={0} className="overflow-x-auto rounded-card border border-line focus-visible:shadow-focus focus-visible:outline-none">
           <table className="w-full min-w-[40rem] border-collapse text-start">
             <caption className="sr-only">{t("admin.credential_review.table_caption")}</caption>
             <thead className="bg-paper-sunk">
