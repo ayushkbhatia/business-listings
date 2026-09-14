@@ -247,8 +247,78 @@ export function canDisputeReview(
   return { ok: true };
 }
 
-/** A seller may ask for a review about a deal this recent, and no older. */
-export const REQUEST_WINDOW_DAYS = 90;
+/**
+ * How long a review stays open, from the day it opened. Board 10f `Q1`.
+ *
+ * The board's band reads *90 days after acceptance* and its handoff says the
+ * number has no source on any board. It has one in the tree: board 11c's
+ * request window, which has let a seller ask about a deal this recent and no
+ * older since handoff 2. Two windows on one question — how long after a deal is
+ * a review of it still worth having — would let a seller send a request to a
+ * form that has already closed, so they are one number, and changing it is
+ * changing this constant.
+ */
+export const REVIEW_WINDOW_DAYS = 90;
+
+/** A seller may ask for a review about a deal this recent, and no older. The same window. */
+export const REQUEST_WINDOW_DAYS = REVIEW_WINDOW_DAYS;
+
+/**
+ * What the window runs from, which the band states in words.
+ *
+ *   `accepted`  the day the quote was accepted
+ *   `opened`    the day an engagement's reviews opened (board `7c-s` `B10`)
+ *   `replied`   the day this supplier first replied, on the enquiry rung
+ */
+export type WindowAnchor = "accepted" | "opened" | "replied";
+
+export interface ReviewWindow {
+  anchor: WindowAnchor;
+  /** Dubai calendar day the window opened, as UTC midnight (`dubaiDayStart`). */
+  from: Date;
+  /** The last Dubai calendar day a review can be written — "open until". */
+  closesOn: Date;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * The window for reviewing one supplier on one enquiry. Derived, never stored.
+ *
+ * Null where the enquiry cannot say when the supplier engaged — a reply with no
+ * timestamp is a row from before `firstReplyAt` was written, and a window
+ * invented for it would close a review on a guess.
+ */
+export function reviewWindowFor(
+  enquiry: Pick<EnquiryForReview, "contactReleasedToBusinessId" | "contactReleasedAt" | "reviewOpensOn" | "repliedAt">,
+  businessId: string,
+): ReviewWindow | null {
+  if (enquiry.contactReleasedToBusinessId === businessId) {
+    return acceptedWindow(enquiry.contactReleasedAt, enquiry.reviewOpensOn);
+  }
+  const replied = enquiry.repliedAt?.[businessId];
+  if (!replied) return null;
+  const from = dubaiDayStart(replied);
+  return { anchor: "replied", from, closesOn: new Date(from.getTime() + REVIEW_WINDOW_DAYS * DAY_MS) };
+}
+
+/** An accepted quote's window: from acceptance, or from the day reviews opened where that is later. */
+export function acceptedWindow(acceptedAt: Date | null, reviewOpensOn: Date | null): ReviewWindow | null {
+  if (!acceptedAt) return null;
+  const accepted = dubaiDayStart(acceptedAt);
+  const opened = reviewOpensOn && reviewOpensOn.getTime() > accepted.getTime() ? reviewOpensOn : null;
+  const from = opened ?? accepted;
+  return {
+    anchor: opened ? "opened" : "accepted",
+    from,
+    closesOn: new Date(from.getTime() + REVIEW_WINDOW_DAYS * DAY_MS),
+  };
+}
+
+/** Open through the whole of its last Dubai day. */
+export function windowOpen(window: ReviewWindow | null, now: Date): boolean {
+  return window === null || dubaiDayStart(now).getTime() <= window.closesOn.getTime();
+}
 
 export const DIMENSIONS = ["quotedAccurate", "onTime", "asDescribed", "responsiveness"] as const;
 export type Dimension = (typeof DIMENSIONS)[number];
@@ -268,6 +338,12 @@ export interface EnquiryForReview {
    * buyer has nothing to report on, so it is not on this list.
    */
   repliedBusinessIds: readonly string[];
+  /**
+   * When each of those first replied — the enquiry rung's window runs from it
+   * (board 10f `Q1`). Optional so a fixture that does not care about the window
+   * need not invent one; a missing entry is a window nobody can close.
+   */
+  repliedAt?: Readonly<Record<string, Date>>;
   /** True when a review already exists for this enquiry. */
   alreadyReviewed: boolean;
   /**
@@ -286,7 +362,12 @@ export type EligibilityVerdict =
       reason: "not_your_enquiry" | "no_confirmed_enquiry" | "ambiguous_subject" | "already_reviewed";
     }
   /** The accepted engagement has not run a cycle yet. Said with the day it opens. */
-  | { ok: false; reason: "not_yet_open"; opensOn: Date };
+  | { ok: false; reason: "not_yet_open"; opensOn: Date }
+  /**
+   * Board 10f: the window has passed. The form is absent, not disabled, and
+   * the page states the day it closed and what it ran from.
+   */
+  | { ok: false; reason: "window_closed"; businessId: string; window: ReviewWindow };
 
 /**
  * May this buyer review this enquiry, and about which supplier?
@@ -331,36 +412,64 @@ export function canReview(
       ? ({ ok: false, reason: "not_yet_open", opensOn: enquiry.reviewOpensOn } as const)
       : null;
 
+  /*
+     Board 10f `Q1`: open for REVIEW_WINDOW_DAYS from the day it opened, then
+     closed. Asked last, once the subject is known, because the window is a fact
+     about one supplier on this enquiry — an accepted supplier and one that only
+     replied can be in different windows.
+  */
+  const open = (subject: string, provenance: Provenance): EligibilityVerdict => {
+    const window = reviewWindowFor(enquiry, subject);
+    return windowOpen(window, now)
+      ? { ok: true, businessId: subject, provenance }
+      : { ok: false, reason: "window_closed", businessId: subject, window: window! };
+  };
+
   if (businessId) {
-    if (accepted === businessId) return notYet ?? { ok: true, businessId, provenance: "accepted_quote" };
-    if (replied.includes(businessId)) {
-      return { ok: true, businessId, provenance: "verified_enquiry" };
-    }
+    if (accepted === businessId) return notYet ?? open(businessId, "accepted_quote");
+    if (replied.includes(businessId)) return open(businessId, "verified_enquiry");
     return { ok: false, reason: "no_confirmed_enquiry" };
   }
 
   // Nobody named a supplier. An accepted quote answers it on its own.
-  if (accepted) return notYet ?? { ok: true, businessId: accepted, provenance: "accepted_quote" };
-  if (replied.length === 1) {
-    return { ok: true, businessId: replied[0]!, provenance: "verified_enquiry" };
-  }
+  if (accepted) return notYet ?? open(accepted, "accepted_quote");
+  if (replied.length === 1) return open(replied[0]!, "verified_enquiry");
   if (replied.length === 0) return { ok: false, reason: "no_confirmed_enquiry" };
   return { ok: false, reason: "ambiguous_subject" };
 }
 
+/**
+ * One review's scores. Board 10f `B3`/`B4`.
+ *
+ * `overall` is required and is the buyer's own verdict — never computed from
+ * the four. Each dimension is one to five, or null where the buyer skipped it
+ * as not applying; a null drops out of that dimension's average on board 1m.
+ */
 export interface Ratings {
   overall: number;
-  quotedAccurate: number;
-  onTime: number;
-  asDescribed: number;
-  responsiveness: number;
+  quotedAccurate: number | null;
+  onTime: number | null;
+  asDescribed: number | null;
+  responsiveness: number | null;
 }
 
-/** Every dimension is one to five. A zero is a missing answer, not a bad one. */
+function isScore(value: unknown): value is number {
+  return Number.isInteger(value) && (value as number) >= 1 && (value as number) <= 5;
+}
+
+/**
+ * Overall one to five; each dimension one to five or an explicit null.
+ *
+ * A zero is a missing answer, not a bad one, and an absent key is a caller that
+ * forgot the dimension exists rather than a buyer who skipped it — so both are
+ * refused, and skipping is said with null.
+ */
 export function ratingsAreValid(ratings: Partial<Ratings>): ratings is Ratings {
-  for (const key of ["overall", ...DIMENSIONS] as const) {
+  if (!isScore(ratings.overall)) return false;
+  for (const key of DIMENSIONS) {
     const value = ratings[key];
-    if (!Number.isInteger(value) || (value as number) < 1 || (value as number) > 5) return false;
+    if (value === null) continue;
+    if (!isScore(value)) return false;
   }
   return true;
 }
@@ -369,8 +478,28 @@ export function editableUntil(createdAt: Date): Date {
   return new Date(createdAt.getTime() + EDITABLE_DAYS * 86_400_000);
 }
 
-export function isEditable(review: { editableUntil: Date; removedAt: Date | null }, now: Date): boolean {
-  return review.removedAt === null && review.editableUntil.getTime() > now.getTime();
+/**
+ * Whether the buyer may still change what they wrote.
+ *
+ * Fourteen days, and closed early by three things (board 10f §States): a seller
+ * reply, because a reply to words that have since changed answers nothing and
+ * there is no counter-reply; a hold, because a moderator is deciding on the
+ * text as it stands; and a removal. `review_words_are_fixed` holds the same rule
+ * in the database.
+ */
+export function isEditable(
+  review: {
+    editableUntil: Date;
+    removedAt: Date | null;
+    heldAt?: Date | null;
+    sellerReply?: string | null;
+  },
+  now: Date,
+): boolean {
+  if (review.removedAt !== null) return false;
+  if ((review.heldAt ?? null) !== null) return false;
+  if ((review.sellerReply ?? null) !== null) return false;
+  return review.editableUntil.getTime() > now.getTime();
 }
 
 export interface RequestEligibility {
@@ -412,9 +541,9 @@ export function canRequestReview(
   */
   const opens = eligibility.reviewOpensOn;
   if (opens && dubaiDayStart(now).getTime() < opens.getTime()) return { ok: false, reason: "not_yet_open" };
-  const from = opens && opens.getTime() > eligibility.acceptedAt.getTime() ? opens : eligibility.acceptedAt;
-  const age = now.getTime() - from.getTime();
-  if (age > REQUEST_WINDOW_DAYS * 86_400_000) return { ok: false, reason: "too_old" };
+  // Board 10f: the buyer's own window, not a second count of ninety days. A
+  // request is never sent to a form that has closed.
+  if (!windowOpen(acceptedWindow(eligibility.acceptedAt, opens), now)) return { ok: false, reason: "too_old" };
 
   return { ok: true };
 }

@@ -370,8 +370,20 @@ is `7b`, and it is a tenancy question, not a screen.
   `decided` instead of writing a window onto the record. One seed fixture (ENQ-8846's revision 1)
   and two test helpers wrote the release before the quotes, an order acceptance never produces.
   Migration `20261026090000_quote_fence_7c`.
-- [ ] **3.5 `10f`** — the storefront computes eligibility for *this* business then links
+- [x] **3.5 `10f`** — the storefront computes eligibility for *this* business then links
   `/review/new?enq=` with no `&about=`. `?about=` has zero producers repo-wide.
+  *Done 15 Sep 2026:* the storefront's *Write a review* links `?enq=<ref>&about=<business>` and
+  asks the window too. The page is the board: the job named first, overall as its own input over
+  1m's four dimensions (one label map for the form, RATED ON and 11c — there were three), each
+  skippable to null (`Review` dimensions nullable), a grapheme-counted 40–800 body that refuses
+  contact details, up to six photos shrunk in the browser and stripped of EXIF on the server
+  (`lib/images/strip-metadata.ts`), the signing choice, and a live preview through 1m's own row
+  mapping. Autosaved drafts live in `review_draft`, which no review reader can see (`B9`). The
+  window is 90 days from acceptance — the 11c request window, now one constant (`Q1`). Edits
+  keep what they replace in `review_revision`; `review_words_are_fixed` holds the fortnight and
+  the freeze on a seller reply in the database. Posting lands on `/b/:slug/reviews#review-<id>`
+  (`B10`). Signed out with no token redirects to sign in rather than 404ing the review-request
+  email's link. Migration `20261030090000_write_a_review_10f`.
 - [ ] **3.6 `13a`** — redraw against D4. The `card` layout, the only one that masks, has no
   caller; `bar` never masks. Two other public surfaces print the numbers unmasked and record
   nothing.
@@ -610,7 +622,7 @@ the only large piece and the only one selling something it does not deliver.
 | `10h` | Negotiation thread | built | — | Built with board `10h`'s handoff (3.3). | 3.3 |
 | `1n` | Compare quotes | partial | small | The tracking page's own Compare button builds a reference the route cannot resolve. | 1.2 / 3.4 |
 | `7c` | Accepted quote record | **built** | small | Fenced, and rebuilt against its board-level handoff, 14 Sep 2026. Services variant owed (`7c-s`, see `docs/services-build-plan.md` §6). | 3.4 |
-| `10f` | Write a review — gated | partial | small | The live review-request email links a URL the e2e suite asserts returns 404. | 3.5 |
+| `10f` | Write a review — gated | built | small | Board built 15 Sep 2026: window, drafts, photos, edit history, the three label sets made one. Q2–Q5 open. | 3.5 |
 | `13a` | Contact reveal | partial | medium | The only layout that actually masks has no caller. | 3.6 |
 | `13b` | WhatsApp hand-off | not started | medium | Must be reconciled with a detector that reports sellers for off-platform steering. | 9.3 |
 | `12g` | Notification templates | built | 14 Sep 2026 | Versions per line, a services twin the carrier picks, Meta's queue recorded, volume queried, a delivery log. Strings moved to `12g-s`. | 7.4 |

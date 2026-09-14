@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Card, Panel } from "@/components/structure";
 import { ChipLink, Eyebrow, RatingMarks } from "@/components/display";
 import { DISPUTE_GROUNDS, REQUEST_WINDOW_DAYS } from "@/lib/reviews/eligibility";
+import { DIMENSION_LABEL } from "@/lib/reviews/write";
 import { parseTab, reviewsBoard, REVIEW_TABS, type ReviewTab } from "@/lib/reviews/board";
 import { formatCount, formatDate } from "@/lib/format";
 import { t } from "@/lib/i18n";
@@ -37,12 +38,6 @@ import { postReply, raiseDispute, sendRequests } from "./actions";
 export const metadata = { title: t("reviews.title") };
 export const dynamic = "force-dynamic";
 
-const DIMENSION_LABEL = {
-  quotedAccurate: "reviews.dimension.quotedAccurate",
-  onTime: "reviews.dimension.onTime",
-  asDescribed: "reviews.dimension.asDescribed",
-  responsiveness: "reviews.dimension.responsiveness",
-} as const;
 
 const PROVENANCE_TONE = { accepted_quote: "ok", verified_enquiry: "neutral" } as const;
 
@@ -332,14 +327,22 @@ export default async function SellerReviewsPage({
                           ) : null}
                         </dt>
                         <dd className="flex items-center gap-2">
-                          <RatingMarks
-                            value={dimension.average}
-                            size="sm"
-                            label={t("reviews.rated", { score: dimension.average })}
-                          />
-                          <span className="font-mono text-body-sm tabular-nums text-ink">
-                            {dimension.average.toFixed(1)}
-                          </span>
+                          {dimension.average === null ? (
+                            // Every review skipped it (10f `B4`). A zero here would be a
+                            // rating nobody gave.
+                            <span className="text-caption text-muted">{t("review.dimension_unscored")}</span>
+                          ) : (
+                            <>
+                              <RatingMarks
+                                value={dimension.average}
+                                size="sm"
+                                label={t("reviews.rated", { score: dimension.average })}
+                              />
+                              <span className="font-mono text-body-sm tabular-nums text-ink">
+                                {dimension.average.toFixed(1)}
+                              </span>
+                            </>
+                          )}
                         </dd>
                       </div>
                       {dimension.themes.map((theme) => (

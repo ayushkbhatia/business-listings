@@ -33,7 +33,8 @@ export interface SellerReviewView {
   at: string;
   replyBy: string;
   replyOpen: boolean;
-  dimensions: { label: string; score: number }[];
+  /** Null where the buyer skipped the dimension as not applying. */
+  dimensions: { label: string; score: number | null }[];
   sellerReply: string | null;
   repliedAt: string | null;
   replyRemoved: boolean;
@@ -160,7 +161,11 @@ export function ReviewCard({
             {review.dimensions.map((dimension) => (
               <div key={dimension.label} className="flex items-baseline justify-between gap-2">
                 <dt className="text-caption text-muted">{dimension.label}</dt>
-                <dd className="font-mono text-caption tabular-nums text-ink">{dimension.score}</dd>
+                {dimension.score === null ? (
+                  <dd className="text-caption text-muted">{t("review.dimension_skipped")}</dd>
+                ) : (
+                  <dd className="font-mono text-caption tabular-nums text-ink">{dimension.score}</dd>
+                )}
               </div>
             ))}
           </dl>

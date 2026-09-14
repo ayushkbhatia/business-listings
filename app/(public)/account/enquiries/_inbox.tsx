@@ -11,6 +11,7 @@ import type {
   NeedsYou,
   Tone,
 } from "@/lib/enquiry/inbox-status";
+import { requirementHeadline } from "@/lib/enquiry/inbox-status";
 import type { SavedSearchView } from "@/lib/saved-search/service";
 import { formatCloses, formatCount, formatDate, formatDuration, isWithinRelativeWindow } from "@/lib/format";
 import { t, type MessageKey } from "@/lib/i18n";
@@ -321,11 +322,7 @@ function closesText(row: InboxRow, now: Date): string {
   return closesWhen(row.closesAt, now);
 }
 
-/** The first sentence, or line, of what the buyer asked for. Never a paraphrase. */
-function headline(requirement: string): string {
-  const first = requirement.split(/\n|(?<=[.?!])\s/)[0]?.trim() ?? requirement;
-  return first.replace(/[.]$/, "") || requirement;
-}
+const headline = requirementHeadline;
 
 function subline(row: InboxRow): string {
   const parts = [row.ref];

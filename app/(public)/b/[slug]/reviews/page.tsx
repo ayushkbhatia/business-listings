@@ -138,7 +138,7 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
     getActor(),
   ]);
 
-  const eligibleEnquiryId = await eligibleEnquiry(actor?.id ?? null, business.id);
+  const writeReviewHref = await eligibleEnquiry(actor?.id ?? null, business.id);
 
   const shown = board.reviews.length;
   const remaining = Math.max(0, board.total - shown);
@@ -190,9 +190,9 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
                the platform — that reviews are open and you were refused, rather
                than that they are gated and you have not been through the gate.
             */
-            eligibleEnquiryId ? (
+            writeReviewHref ? (
               <Link
-                href={`/review/new?enq=${eligibleEnquiryId}`}
+                href={writeReviewHref}
                 className={buttonClassName({ size: "sm" })}
               >
                 {t("reviewpage.write")}
@@ -311,10 +311,10 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
            carries it from `md` up, exactly as the storefront's own action row
            does.
         */}
-        {eligibleEnquiryId && (
+        {writeReviewHref && (
           <div className="sticky bottom-0 z-10 border-t border-line bg-card/95 p-3 backdrop-blur-sm md:hidden">
             <Link
-              href={`/review/new?enq=${eligibleEnquiryId}`}
+              href={writeReviewHref}
               className={buttonClassName({ block: true })}
             >
               {t("reviewpage.write")}
@@ -327,14 +327,18 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
 }
 
 /**
- * The enquiry that earns this visitor a review form, if any.
+ * The link *Write a review* opens, for a buyer who may write one about this
+ * business — or null, and the button is absent.
  *
  * Deliberately narrow: signed in, their own enquiry, this supplier, and the
- * gate still open on it. The button is absent otherwise — see the header above
- * for why absent beats disabled.
+ * gate still open on it. `canReview` is asked rather than reimplemented, so the
+ * button and the page it opens cannot disagree about who is eligible.
  *
- * `canReview` is asked rather than reimplemented, so the button and the page it
- * opens cannot disagree about who is eligible.
+ * Board 10f: the page it opens resolves its own subject, and on a fan-out that
+ * several suppliers replied to it cannot tell which one the buyer means. This
+ * page already knows — it is the supplier's own — so it says so with `&about=`,
+ * which nothing produced before (build plan 3.5). The reference rather than the
+ * id, because that is what the buyer reads on the page it opens.
  */
 async function eligibleEnquiry(buyerId: string | null, businessId: string): Promise<string | null> {
   if (!buyerId) return null;
@@ -350,12 +354,17 @@ async function eligibleEnquiry(buyerId: string | null, businessId: string): Prom
     },
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 5,
-    select: { id: true },
+    select: { id: true, ref: true },
   });
 
+  const now = new Date();
   for (const candidate of candidates) {
     const gate = await enquiryForReview(candidate.id);
-    if (canReview(buyerId, gate, businessId).ok) return candidate.id;
+    // The window counts too: a link to a form that has closed is the disabled
+    // button this page promises never to show.
+    if (canReview(buyerId, gate, businessId, now).ok) {
+      return `/review/new?${new URLSearchParams({ enq: candidate.ref, about: businessId }).toString()}`;
+    }
   }
   return null;
 }

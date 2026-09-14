@@ -220,7 +220,7 @@ describe("criterion 9 — the gate", () => {
   it("refuses a rating with no words", async () => {
     const id = await acceptedEnquiry();
     const result = await createReview({ buyerId, enquiryId: id, ratings: RATINGS, body: "Good." });
-    expect(result).toEqual({ ok: false, error: "empty_body" });
+    expect(result).toEqual({ ok: false, error: "body_short" });
   });
 
   it("refuses a dimension outside one to five", async () => {
@@ -391,7 +391,7 @@ describe("editing", () => {
         ratings: { ...RATINGS, overall: 5 },
         body: "Revised after the second delivery, which was just as good as the first.",
       }),
-    ).toEqual({ ok: true });
+    ).toMatchObject({ ok: true });
   });
 
   it("is closed after fourteen days", async () => {

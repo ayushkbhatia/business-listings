@@ -699,8 +699,9 @@ describe("criterion 5 — every count reconciles", () => {
     const board = await reviewsBoard(actor, businessId);
     expect(board.total).toBeGreaterThan(0);
 
-    const lowest = Math.min(...board.dimensions.map((row) => row.average));
-    const highest = Math.max(...board.dimensions.map((row) => row.average));
+    const averaged = board.dimensions.flatMap((row) => (row.average === null ? [] : [row.average]));
+    const lowest = Math.min(...averaged);
+    const highest = Math.max(...averaged);
     for (const dimension of board.dimensions) {
       expect(dimension.weakest).toBe(lowest < highest && dimension.average === lowest);
     }

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { buttonClassName } from "@/components/primitives";
 import { Card } from "@/components/structure";
 import { StatusBadge } from "@/components/display";
+import { acceptedWindow, REVIEW_WINDOW_DAYS, windowOpen } from "@/lib/reviews/eligibility";
 import type { AcceptedRecord } from "@/lib/enquiry/accepted-record";
 import { windowExpired } from "@/lib/enquiry/accepted-record";
 import { formatAED, formatDate, formatPhone } from "@/lib/format";
@@ -354,7 +355,7 @@ export function AcceptedRecordView({
           ) : (
             <>
               <CommitmentsCard record={record} />
-              <ReviewCard record={record} reviewHref={links.review} />
+              <ReviewCard record={record} now={now} reviewHref={links.review} />
             </>
           )}
           <ProblemCard record={record} reportForm={reportForm} />
@@ -463,14 +464,22 @@ function CommitmentsCard({ record }: { record: AcceptedRecord }) {
   );
 }
 
-function ReviewCard({ record, reviewHref }: { record: AcceptedRecord; reviewHref: string }) {
+function ReviewCard({ record, now, reviewHref }: { record: AcceptedRecord; now: Date; reviewHref: string }) {
   const { review, supplier } = record;
+  // Board 10f: a review is open for REVIEW_WINDOW_DAYS from acceptance. After it
+  // the form is absent, so this offers no button to it — it says the day.
+  const window = acceptedWindow(record.acceptedAt, null);
+  const closed = window !== null && !windowOpen(window, now);
   return (
     <Card padded>
       <h2 className="font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
         {t("accepted.review.eyebrow")}
       </h2>
-      {review.kind === "none" ? (
+      {review.kind === "none" && closed ? (
+        <p className="mt-2 text-body-sm text-body">
+          {t("accepted.review.closed", { when: formatDate(window.closesOn), days: REVIEW_WINDOW_DAYS })}
+        </p>
+      ) : review.kind === "none" ? (
         <>
           <p className="mt-2 text-body-sm text-body">{t("accepted.review.body")}</p>
           <Link href={reviewHref} className={`mt-4 ${buttonClassName({ variant: "primary" })}`}>

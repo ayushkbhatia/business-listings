@@ -61,6 +61,8 @@ export interface StorefrontReview {
   overall: number;
   body: string;
   sellerReply: string | null;
+  /** Staff removed the reply (board 11c `B4`); `sellerReply` is null and a neutral line stands in. */
+  replyRemoved?: boolean;
   createdAt: Date;
 }
 

@@ -98,7 +98,12 @@ export type DownscaleResult =
  * portrait warehouse photograph arriving on its side is the classic version of
  * this bug.
  */
-export async function downscaleImage(file: File | Blob): Promise<DownscaleResult> {
+export async function downscaleImage(
+  file: File | Blob,
+  /** Board 10f passes its own, lower floor: a review photo is corroboration, not a hero. */
+  options: { minEdge?: number } = {},
+): Promise<DownscaleResult> {
+  const minEdge = options.minEdge ?? MIN_EDGE;
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
@@ -108,7 +113,7 @@ export async function downscaleImage(file: File | Blob): Promise<DownscaleResult
 
   try {
     const longEdge = Math.max(bitmap.width, bitmap.height);
-    if (longEdge < MIN_EDGE) return { ok: false, error: "too_small", longEdge };
+    if (longEdge < minEdge) return { ok: false, error: "too_small", longEdge };
 
     /*
        Never upscale. A photograph between the floor and the ceiling is already

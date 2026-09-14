@@ -1,27 +1,48 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
-import { Card, Panel, PublicShell } from "@/components/structure";
+import type { Metadata } from "next";
+import { redirect } from "next/navigation";
+import { PublicShell } from "@/components/structure";
 import { DirectoryFooter } from "@/app/(public)/_chrome";
 import { ViewerNav } from "@/app/(public)/_account-menu";
-import { prisma } from "@/lib/db/client";
-import { canReview, EDITABLE_DAYS } from "@/lib/reviews/eligibility";
-import { enquiryForReview } from "@/lib/reviews/service";
-import { formatDate } from "@/lib/format";
+import { signInHref } from "@/lib/auth/next-path";
 import { t } from "@/lib/i18n";
+import { loadReviewWrite } from "@/lib/reviews/write-server";
+import { buildReviewWrite, reviewHref } from "@/lib/reviews/write-view";
 import { resolveBuyerId, trackingTokenFor } from "@/app/(public)/enquiry/_buyer";
-import { ReviewForm } from "./ReviewForm";
+import {
+  ChooseBody,
+  NoticeBody,
+  OthersPanel,
+  ReviewBand,
+  ReviewedBody,
+  ReviewHeader,
+  RulesPanel,
+  StepsPanel,
+} from "./_parts";
+import { ReviewWriteForm } from "./ReviewWriteForm";
 
 /**
- * Board 10f — writing a review.
+ * Board 10f — `/review/new?enq=`. The only screen that creates a review, and the
+ * one that enforces the gate.
  *
- * Reached from the accepted-quote page and from a seller's request. Gated on
- * the server, not by whoever linked here: `canReview` is re-checked against the
- * database and the form is not rendered at all when it says no. A page that
- * shows a form it will refuse to accept is a page that wastes somebody's
- * evening.
+ * **`B1`**: who may review what is resolved on the server from the enquiry
+ * (`loadReviewWrite`), and a buyer the gate refuses is shown the reason and the
+ * way back — never a form that rejects on submit. The HTTP status of that
+ * refusal is 200 rather than the board's 403: `forbidden.tsx` takes no props in
+ * this Next, so a 403 could not carry the reason, and the reason is the part of
+ * `B1` a buyer reads. The page is `noindex` either way.
+ *
+ * Signed out and holding no claim token, there is nobody to check the gate for,
+ * so the visitor is sent to sign in and brought back — the review-request email
+ * lands a claimed buyer here, and a 404 is what that link used to get.
  */
-export const metadata = { title: t("review.meta_title") };
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: t("review.meta_title"),
+  robots: { index: false, follow: false },
+  // A claim token rides in the query string; it is not handed to the next site.
+  referrer: "no-referrer",
+};
 
 export default async function WriteReviewPage({
   searchParams,
@@ -31,115 +52,90 @@ export default async function WriteReviewPage({
   const params = await searchParams;
   const one = (key: string) => (typeof params[key] === "string" ? params[key] : undefined);
 
-  const enquiryId = one("enq");
-  if (!enquiryId) notFound();
+  const enquiryParam = one("enq");
+  const tokenParam = one("t") ?? null;
 
-  const buyerId = await resolveBuyerId(one("t"));
-  if (!buyerId) notFound();
+  const buyerId = await resolveBuyerId(tokenParam);
+  if (!buyerId) {
+    const here = enquiryParam ? `/review/new?enq=${encodeURIComponent(enquiryParam)}` : "/account/enquiries";
+    redirect(signInHref(here));
+  }
+  if (!enquiryParam) redirect("/account/enquiries");
 
-  /*
-     Two reads of one enquiry: the gate's view, and the reference the page
-     prints. `enquiryForReview` is the same function the service re-checks with,
-     so the form is never offered on a rule the write would then refuse.
-  */
-  const [gate, enquiry] = await Promise.all([
-    enquiryForReview(enquiryId),
-    prisma.enquiry.findUnique({
-      where: { id: enquiryId },
-      select: { ref: true, review: { select: { businessId: true } } },
-    }),
-  ]);
-
-  const verdict = canReview(buyerId, gate, one("about"));
-
-  /*
-   * From the enquiry, not from the verdict. Once a review is posted the verdict
-   * is `already_reviewed`, and looking the supplier up only on success meant the
-   * confirmation screen fell through to the gated one — the buyer wrote a
-   * review and was told they were not allowed to.
-   */
-  const subjectId = verdict.ok
-    ? verdict.businessId
-    : (enquiry?.review?.businessId ?? gate?.contactReleasedToBusinessId ?? null);
-
-  const supplier = subjectId
-    ? await prisma.business.findUnique({
-        where: { id: subjectId },
-        select: { displayName: true, slug: true },
-      })
-    : null;
-
+  const now = new Date();
   const token = await trackingTokenFor(buyerId);
-  const backHref = token ? `/enquiry/${enquiryId}?t=${token}` : `/enquiry/${enquiryId}`;
+  const data = await loadReviewWrite({
+    buyerId,
+    enquiry: enquiryParam,
+    about: one("about") ?? null,
+    edit: one("edit") === "1",
+    now,
+  });
+  const flash = one("posted") ? "posted" : one("saved") ? "saved" : null;
+  const view = buildReviewWrite(data, { now, token, flash });
+
+  const rules = <RulesPanel rules={view.rules} />;
+  const bottom = (
+    <>
+      {view.steps ? <StepsPanel steps={view.steps} /> : null}
+      <OthersPanel others={view.others} />
+    </>
+  );
 
   return (
-    <PublicShell nav={<ViewerNav />} footer={<DirectoryFooter />}>
-      <div className="mx-auto w-full max-w-[42rem] px-[var(--section-pad)] py-8">
-        <p className="font-mono text-eyebrow uppercase text-faint">
-          {t("enquiry.ref", { ref: enquiry?.ref ?? "" })}
-        </p>
-
-        {one("posted") && supplier ? (
-          <>
-            <h1 className="mt-2 font-serif text-h1-serif text-ink">{t("review.posted_title")}</h1>
-            <div className="mt-4">
-              <Card padded>
-                <p className="max-w-[var(--measure-prose)] text-body-sm text-prose">
-                  {t("review.posted_body", {
-                    supplier: supplier.displayName,
-                    days: EDITABLE_DAYS,
-                  })}
-                </p>
-              </Card>
-            </div>
-          </>
-        ) : !verdict.ok ? (
-          <>
-            <h1 className="mt-2 font-serif text-h1-serif text-ink">{t("review.title")}</h1>
-            <div className="mt-4">
-              <Card padded>
-                <p className="max-w-[var(--measure-prose)] text-body-sm text-prose">
-                  {verdict.reason === "not_yet_open"
-                    ? t("review.error.not_yet_open", { when: formatDate(verdict.opensOn) })
-                    : t(`review.error.${verdict.reason}` as "review.error.no_confirmed_enquiry")}
-                </p>
-                {/* The gate said out loud, because it is the product. */}
-                <p className="mt-2 max-w-[var(--measure-prose)] text-caption text-muted">
-                  {t("review.gated")}
-                </p>
-              </Card>
-            </div>
-          </>
+    <PublicShell bleed nav={<ViewerNav />} footer={<DirectoryFooter />}>
+      <ReviewBand view={view} />
+      <div className="mx-auto grid w-full max-w-7xl gap-[var(--gutter)] px-5 py-8 lg:grid-cols-[minmax(0,1fr)_22rem]">
+        {data.kind === "form" ? (
+          <ReviewWriteForm
+            mode={data.mode}
+            enquiryId={data.enquiry.id}
+            businessId={data.supplier.id}
+            reviewId={data.reviewId}
+            token={token}
+            initial={data.fields}
+            photoUrls={data.photoUrls}
+            company={data.company}
+            supplierName={data.supplier.displayName}
+            supplierListed={data.supplier.listed}
+            provenance={data.provenance}
+            postedAt={now.toISOString()}
+            draftSavedAt={data.draftSavedAt?.toISOString() ?? null}
+            cancelHref={data.mode === "edit" ? reviewHref(data.enquiry.ref, token) : null}
+            header={<ReviewHeader view={view} />}
+            railTop={rules}
+            railBottom={bottom}
+          />
         ) : (
           <>
-            <h1 className="mt-2 font-serif text-h1-serif text-ink">{t("review.title")}</h1>
-            <p className="mt-2 max-w-[var(--measure-prose)] text-prose text-prose">
-              {t("review.lede", {
-                supplier: supplier?.displayName ?? "",
-                ref: enquiry?.ref ?? "",
-              })}
-            </p>
-            <div className="mt-6">
-              <Panel title={t("review.title")}>
-                <ReviewForm
-                enquiryId={enquiryId}
-                businessId={verdict.ok ? verdict.businessId : undefined}
-                token={token}
-                editableDays={EDITABLE_DAYS}
-              />
-              </Panel>
+            <div className="min-w-0">
+              <ReviewHeader view={view} />
+              <div className="mt-5">
+                {view.body.kind === "notice" ? <NoticeBody body={view.body} /> : null}
+                {view.body.kind === "choose" ? <ChooseBody body={view.body} /> : null}
+                {view.body.kind === "reviewed" && data.kind === "reviewed" ? (
+                  <ReviewedBody
+                    body={view.body}
+                    copy={{
+                      fields: data.review.fields,
+                      photoUrls: data.review.photoUrls,
+                      company: data.company,
+                      supplierName: data.supplier.displayName,
+                      provenance: data.provenance,
+                      postedAt: data.review.createdAt,
+                      sellerReply: data.review.sellerReply,
+                      replyRemoved: data.review.replyRemoved,
+                    }}
+                  />
+                ) : null}
+              </div>
             </div>
+            <aside aria-label={t("reviewwrite.rail_label")} className="flex min-w-0 flex-col gap-4">
+              {rules}
+              {bottom}
+            </aside>
           </>
         )}
-
-        <p className="mt-4">
-          <Link
-            href={backHref}
-            className="rounded-tag text-body-sm text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
-          >
-            {t("review.back_to_enquiry")}
-          </Link>
-        </p>
       </div>
     </PublicShell>
   );

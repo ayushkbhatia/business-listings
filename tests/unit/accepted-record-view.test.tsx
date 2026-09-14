@@ -199,6 +199,13 @@ describe("the other documented states", () => {
     expect(screen.queryByRole("link", { name: t("accepted.review.write") })).not.toBeInTheDocument();
   });
 
+  it("review window closed: the day it closed, and no button to a form that is not offered — board 10f", () => {
+    // Accepted 21 Aug 2026; ninety days on is 19 Nov, so 20 Nov is closed.
+    renderRecord(fixture(), new Date("2026-11-20T08:00:00Z"));
+    expect(screen.queryByRole("link", { name: t("accepted.review.write") })).not.toBeInTheDocument();
+    expect(screen.getByText(/Reviews of this quote closed on 19 Nov 2026/)).toBeInTheDocument();
+  });
+
   it("problem reported: the case and its state, and no control offered again", () => {
     renderRecord(fixture({ report: { kind: "open", filedAt: new Date("2026-08-28T08:00:00Z") } }));
     expect(screen.getByText(/You reported this on 28 Aug 2026/)).toBeInTheDocument();

@@ -8,6 +8,7 @@ import {
   REMOVAL_GROUNDS,
   REPLY_WINDOW_DAYS,
   REQUEST_WINDOW_DAYS,
+  REVIEW_WINDOW_DAYS,
   canDisputeReview,
   canRequestReview,
   canReview,
@@ -19,6 +20,7 @@ import {
   ratingsAreValid,
   replyWindowEnds,
   replyWindowOpen,
+  reviewWindowFor,
   type EnquiryForReview,
 } from "./eligibility";
 
@@ -443,5 +445,79 @@ describe("who may dispute what", () => {
        day next year.
     */
     expect(canDisputeReview(review, "biz_1")).toEqual({ ok: true });
+  });
+});
+
+describe("board 10f Q1 — the review window", () => {
+  const accepted = (at: string) =>
+    enquiry({ contactReleasedAt: new Date(at), reviewOpensOn: null, repliedBusinessIds: [BUSINESS] });
+
+  it("runs ninety days from the Dubai day of acceptance, and is open through the last one", () => {
+    // Accepted 2 Aug 2026 — the board's AMC — reads "Open until 31 Oct 2026".
+    const gate = accepted("2026-08-02T15:30:00+04:00");
+    const window = reviewWindowFor(gate, BUSINESS)!;
+    expect(window.anchor).toBe("accepted");
+    expect(window.closesOn.toISOString().slice(0, 10)).toBe("2026-10-31");
+    expect(REVIEW_WINDOW_DAYS).toBe(REQUEST_WINDOW_DAYS);
+
+    expect(canReview(BUYER, gate, undefined, new Date("2026-10-31T23:59:00+04:00"))).toMatchObject({ ok: true });
+    expect(canReview(BUYER, gate, undefined, new Date("2026-11-01T00:01:00+04:00"))).toEqual({
+      ok: false,
+      reason: "window_closed",
+      businessId: BUSINESS,
+      window,
+    });
+  });
+
+  it("runs from the day an engagement's reviews opened, where that is later than acceptance", () => {
+    const gate = enquiry({
+      contactReleasedAt: new Date("2026-08-02T10:00:00+04:00"),
+      reviewOpensOn: new Date("2026-11-02T00:00:00Z"),
+    });
+    const window = reviewWindowFor(gate, BUSINESS)!;
+    expect(window.anchor).toBe("opened");
+    expect(window.closesOn.toISOString().slice(0, 10)).toBe("2027-01-31");
+  });
+
+  it("runs from a replying supplier's first reply on the enquiry rung", () => {
+    const gate = enquiry({
+      contactReleasedToBusinessId: null,
+      contactReleasedAt: null,
+      repliedBusinessIds: [REPLIED],
+      repliedAt: { [REPLIED]: new Date("2026-05-01T09:00:00+04:00") },
+    });
+    const window = reviewWindowFor(gate, REPLIED)!;
+    expect(window.anchor).toBe("replied");
+    expect(canReview(BUYER, gate, undefined, NOW)).toMatchObject({ ok: false, reason: "window_closed" });
+  });
+
+  it("does not close a window it cannot date", () => {
+    const gate = enquiry({ contactReleasedToBusinessId: null, contactReleasedAt: null, repliedBusinessIds: [REPLIED] });
+    expect(reviewWindowFor(gate, REPLIED)).toBeNull();
+    expect(canReview(BUYER, gate, undefined, new Date("2030-01-01T00:00:00Z"))).toMatchObject({ ok: true });
+  });
+
+  it("asks the seller's request the same question", () => {
+    expect(
+      canRequestReview(
+        { acceptedAt: new Date("2026-08-02T15:30:00+04:00"), reviewOpensOn: null, alreadyAsked: false, alreadyReviewed: false },
+        new Date("2026-11-01T08:00:00+04:00"),
+      ),
+    ).toEqual({ ok: false, reason: "too_old" });
+  });
+});
+
+describe("board 10f B3/B4 — skippable dimensions, required overall", () => {
+  it("takes null for a skipped dimension and refuses an absent overall", () => {
+    const skipped = { overall: 4, quotedAccurate: 5, onTime: null, asDescribed: null, responsiveness: 5 };
+    expect(ratingsAreValid(skipped)).toBe(true);
+    expect(ratingsAreValid({ ...skipped, overall: null as unknown as number })).toBe(false);
+  });
+
+  it("closes editing on a seller reply and on a hold, whatever the date says", () => {
+    const open = { editableUntil: new Date("2027-01-01T00:00:00Z"), removedAt: null };
+    expect(isEditable(open, NOW)).toBe(true);
+    expect(isEditable({ ...open, sellerReply: "Thank you." }, NOW)).toBe(false);
+    expect(isEditable({ ...open, heldAt: NOW }, NOW)).toBe(false);
   });
 });

@@ -284,7 +284,7 @@ async function sectionData(
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       take: 6,
       select: {
-        id: true, overall: true, body: true, sellerReply: true, createdAt: true,
+        id: true, overall: true, body: true, sellerReply: true, replyRemovedAt: true, createdAt: true,
         showCompanyName: true,
         buyer: { select: { fullName: true, buyerCompany: { select: { name: true } } } },
       },
@@ -398,7 +398,10 @@ async function sectionData(
       author: review.showCompanyName ? (review.buyer.buyerCompany?.name ?? "") : "",
       overall: review.overall,
       body: review.body,
-      sellerReply: review.sellerReply,
+      // Board 11c `B4`: a reply staff took down keeps its text on the row as the
+      // record, and no public reader renders it. This one did.
+      sellerReply: review.replyRemovedAt ? null : review.sellerReply,
+      replyRemoved: review.replyRemovedAt !== null,
       createdAt: review.createdAt,
     })),
     reviewSummary: {
