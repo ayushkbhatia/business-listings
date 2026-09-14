@@ -193,7 +193,7 @@ export function chipHref(query: string): string {
 
 /**
  * The six chips the page fell back to before this board, carried into the table
- * by migration `20261028090000_homepage_curation_6h` and re-written by the seed.
+ * by migration `20261028100000_homepage_curation_6h` and re-written by the seed.
  * A unit test holds the migration's rows equal to these.
  */
 export const CARRIED_OVER_CHIPS: readonly { label: string; query: string }[] = [

@@ -115,7 +115,7 @@ describe("chips (B8)", () => {
 
 describe("the chips the migration carried over", () => {
   it("are the six the code knows, in the same order, and no more than the cap", () => {
-    const sql = readFileSync(join(process.cwd(), "prisma/migrations/20261028090000_homepage_curation_6h/migration.sql"), "utf8");
+    const sql = readFileSync(join(process.cwd(), "prisma/migrations/20261028100000_homepage_curation_6h/migration.sql"), "utf8");
     const rows = [...sql.matchAll(/\('curated_query_6h_(\d)', '([^']+)', '([^']+)', (\d)\)/g)].map((match) => ({
       label: match[2],
       query: match[3],
