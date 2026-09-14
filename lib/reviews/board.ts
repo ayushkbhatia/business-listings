@@ -87,7 +87,8 @@ export interface BoardReview {
    * days the decision takes.
    */
   replyOpen: boolean;
-  dimensions: { key: Dimension; score: number }[];
+  /** Null where the buyer skipped the dimension as not applying (board 10f `B4`). */
+  dimensions: { key: Dimension; score: number | null }[];
   sellerReply: string | null;
   repliedAt: Date | null;
   replyRemoved: boolean;
@@ -136,7 +137,12 @@ function splitRemoval(reason: string | null): BoardReview["removal"] {
 
 export interface DimensionAverage {
   key: Dimension;
-  average: number;
+  /**
+   * Over the reviews that scored it. Null when none did — board 10f `B4` made a
+   * dimension skippable, and a skipped dimension is excluded from its average,
+   * never counted as a zero.
+   */
+  average: number | null;
   /** True on exactly one row, and only when the scores are not all equal. */
   weakest: boolean;
   themes: ThemeFinding[];
@@ -375,21 +381,23 @@ export async function reviewsBoard(
      stored average is a number that drifts from the rows it claims to describe
      the first time one is held.
   */
-  const dimensionAverages = DIMENSIONS.map((key) => ({
-    key,
-    average:
-      visible.length === 0
-        ? 0
-        : Math.round((visible.reduce((sum, row) => sum + row[key], 0) / visible.length) * 10) / 10,
-  }));
+  const dimensionAverages = DIMENSIONS.map((key) => {
+    const scored = visible.map((row) => row[key]).filter((score): score is number => score !== null);
+    return {
+      key,
+      average:
+        scored.length === 0 ? null : Math.round((scored.reduce((sum, score) => sum + score, 0) / scored.length) * 10) / 10,
+    };
+  });
 
   /*
      Read off the **rounded** figures, so the word always agrees with the number
      printed beside it. Comparing the raw means would let 4.06 wear the label
      while 4.14 sits next to it reading the same 4.1.
   */
-  const lowest = Math.min(...dimensionAverages.map((row) => row.average));
-  const highest = Math.max(...dimensionAverages.map((row) => row.average));
+  const averaged = dimensionAverages.map((row) => row.average).filter((average): average is number => average !== null);
+  const lowest = Math.min(...averaged);
+  const highest = Math.max(...averaged);
   const themes = themesIn(visible.map((row) => ({ id: row.id, body: row.body })));
 
   const dimensions: DimensionAverage[] = dimensionAverages.map((row) => ({
@@ -402,7 +410,7 @@ export async function reviewsBoard(
        every dimension scores the same — a "weakest" on four equal numbers is a
        label picked by sort order rather than by the data.
     */
-    weakest: visible.length > 0 && lowest < highest && row.average === lowest,
+    weakest: averaged.length > 1 && lowest < highest && row.average === lowest,
     themes: themes.filter((theme) => theme.dimension === row.key),
   }));
 

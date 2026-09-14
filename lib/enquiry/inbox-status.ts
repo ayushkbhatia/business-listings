@@ -294,3 +294,14 @@ export function inboxRow(meta: InboxRowMeta, facts: InboxFacts, now: Date): Inbo
     expiryNote: bucket === "expired" ? expiryNoteOf(facts) : null,
   };
 }
+
+/**
+ * The first sentence, or line, of what the buyer asked for. Never a paraphrase.
+ *
+ * The inbox's row title since board 10e, and board 10f's name for the job being
+ * reviewed — one function, so an enquiry is called the same thing on both.
+ */
+export function requirementHeadline(requirement: string): string {
+  const first = requirement.split(/\n|(?<=[.?!])\s/)[0]?.trim() ?? requirement;
+  return first.replace(/[.]$/, "") || requirement;
+}

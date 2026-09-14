@@ -51,6 +51,7 @@ export function Reviews({ data }: SectionProps) {
               date={formatDate(review.createdAt)}
               body={review.body}
               sellerReply={review.sellerReply}
+              replyRemovedLabel={review.replyRemoved ? t("storefront.seller_reply_removed") : null}
               replyLabel={t("storefront.seller_reply")}
             />
           ))}

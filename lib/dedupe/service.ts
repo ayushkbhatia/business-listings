@@ -42,6 +42,9 @@ type Db = PrismaClient | Prisma.TransactionClient;
 /** The tables whose rows move, in the order they move. */
 const MOVABLE = [
   "review",
+  // Board 10f: a draft follows the review it would become, or it is left
+  // pointing at a listing nobody can reach any more.
+  "reviewDraft",
   "quote",
   "product",
   "location",

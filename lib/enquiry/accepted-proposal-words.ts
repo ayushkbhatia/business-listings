@@ -14,6 +14,7 @@ import {
   type ProposalCommitment,
 } from "./accepted-proposal";
 import type { AcceptedRecord } from "./accepted-record";
+import { acceptedWindow, REVIEW_WINDOW_DAYS, windowOpen } from "@/lib/reviews/eligibility";
 
 /**
  * Board `7c-s` — the accepted proposal, in words.
@@ -234,8 +235,22 @@ export function reviewTiming(record: ProposalRecordValue, now: Date): ReviewTimi
     : t("accepted.review.eyebrow");
   const opens = reviewOpensOn(facts);
   // The gate's own rule, so the card never offers a form `canReview` refuses.
-  if (opens === null || reviewOpen(facts, now)) return { open: true, eyebrow };
-  return { open: false, eyebrow, body: t("accepted_proposal.review.opens", { when: formatDate(opens) }) };
+  if (opens !== null && !reviewOpen(facts, now)) {
+    return { open: false, eyebrow, body: t("accepted_proposal.review.opens", { when: formatDate(opens) }) };
+  }
+  // Board 10f: and until it closes — the form is absent after, so the button is too.
+  const window = acceptedWindow(facts.acceptedAt, opens, {
+    ongoing: isOngoing(facts),
+    termEndsOn: termDates(facts)?.end ?? null,
+  });
+  if (window && !windowOpen(window, now)) {
+    return {
+      open: false,
+      eyebrow,
+      body: t("accepted.review.closed", { when: formatDate(window.closesOn), days: REVIEW_WINDOW_DAYS }),
+    };
+  }
+  return { open: true, eyebrow };
 }
 
 export interface ContractCardWords {

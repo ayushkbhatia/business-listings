@@ -1,9 +1,15 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
-import { CONTRACT_FACTS_SELECT, reviewOpensOn, toContractFacts } from "@/lib/enquiry/accepted-proposal";
+import {
+  CONTRACT_FACTS_SELECT,
+  isOngoing,
+  reviewOpensOn,
+  termDates,
+  toContractFacts,
+} from "@/lib/enquiry/accepted-proposal";
 import "@/lib/audit/prisma-writer";
 import { assertReason, staffMutation } from "@/lib/audit";
-import type { Prisma } from "@/lib/db/generated/client";
+import { Prisma } from "@/lib/db/generated/client";
 import type { Actor } from "@/lib/auth/roles";
 import {
   canRequestReview,
@@ -19,6 +25,16 @@ import {
   type RemovalGround,
 } from "./eligibility";
 import { requestChannelFor, type RequestChannel } from "./channel";
+import { cleanReviewPhoto, reviewPhotoStorage, type ReviewPhotoStorage } from "./photos";
+import {
+  graphemeCount,
+  isReviewPhotoPath,
+  MAX_REVIEW_PHOTOS,
+  REVIEW_BODY_MAX,
+  reviewProblems,
+  type ReviewFields,
+  type ReviewPhotoRef,
+} from "./write";
 import { onReviewPosted, onReviewRequested } from "@/lib/notify/events";
 
 /**
@@ -47,10 +63,17 @@ export interface CreateReviewInput {
    * what comes back when nobody did.
    */
   businessId?: string;
+  /** Overall required; a dimension the buyer skipped is null (board 10f `B4`). */
   ratings: Ratings;
   body: string;
   showCompanyName?: boolean;
+  /** Board 10f `B6`: photographs already uploaded under this enquiry. Re-checked here. */
+  photos?: readonly ReviewPhotoRef[];
+  now?: Date;
 }
+
+/** Why a set of fields is refused. One code per `ReviewProblem`, in the words the form uses. */
+export type FieldsRefusal = "invalid_ratings" | "body_short" | "body_long" | "contact_details" | "photos_invalid";
 
 export type CreateReviewResult =
   | { ok: true; reviewId: string; businessId: string; provenance: Provenance }
@@ -62,42 +85,144 @@ export type CreateReviewResult =
         | "ambiguous_subject"
         | "already_reviewed"
         | "not_yet_open"
-        | "invalid_ratings"
-        | "empty_body";
+        | "window_closed"
+        | FieldsRefusal;
     };
 
-const MIN_BODY = 20;
+function fieldsOf(input: {
+  ratings: Partial<Ratings>;
+  body: string;
+  showCompanyName?: boolean;
+  photos?: readonly ReviewPhotoRef[];
+}): ReviewFields {
+  return {
+    overall: input.ratings.overall ?? null,
+    quotedAccurate: input.ratings.quotedAccurate ?? null,
+    onTime: input.ratings.onTime ?? null,
+    asDescribed: input.ratings.asDescribed ?? null,
+    responsiveness: input.ratings.responsiveness ?? null,
+    body: input.body,
+    showCompanyName: input.showCompanyName ?? true,
+    photos: [...(input.photos ?? [])],
+  };
+}
 
-export async function createReview(input: CreateReviewInput): Promise<CreateReviewResult> {
-  if (!ratingsAreValid(input.ratings)) return { ok: false, error: "invalid_ratings" };
+/** The first thing wrong with the fields, as the service reports it. Null when they can be posted. */
+export function fieldsRefusal(fields: ReviewFields, ratings?: Partial<Ratings>): FieldsRefusal | null {
+  if (ratings && !ratingsAreValid(ratings)) return "invalid_ratings";
+  const [first] = reviewProblems(fields);
+  if (!first) return null;
+  switch (first.code) {
+    case "overall_missing":
+    case "invalid_score":
+      return "invalid_ratings";
+    case "body_short":
+      return "body_short";
+    case "body_long":
+      return "body_long";
+    case "contact_details":
+      return "contact_details";
+    case "too_many_photos":
+      return "photos_invalid";
+  }
+}
 
-  const body = input.body.trim();
-  // A rating with no words is a number somebody clicked past. The floor is low
-  // enough for "Quick, correct, fair price" and high enough to stop a full stop.
-  if (body.length < MIN_BODY) return { ok: false, error: "empty_body" };
+/**
+ * Every photograph re-read from storage and cleaned, in the order given.
+ *
+ * Null when any path is not this review's to reference or does not survive
+ * the check — a review is posted with the photographs the buyer saw in the
+ * form or not at all, never with a silent subset.
+ */
+async function checkedPhotos(
+  storage: ReviewPhotoStorage,
+  businessId: string,
+  enquiryId: string,
+  photos: readonly ReviewPhotoRef[],
+): Promise<ReviewPhotoRef[] | null> {
+  if (photos.length > MAX_REVIEW_PHOTOS) return null;
+  if (new Set(photos.map((photo) => photo.path)).size !== photos.length) return null;
+  if (!photos.every((photo) => isReviewPhotoPath(businessId, enquiryId, photo.path))) return null;
+  const cleaned = await Promise.all(photos.map((photo) => cleanReviewPhoto(storage, photo.path)));
+  const out: ReviewPhotoRef[] = [];
+  for (const result of cleaned) {
+    if (!result.ok) return null;
+    out.push(result.photo);
+  }
+  return out;
+}
 
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+export async function createReview(
+  input: CreateReviewInput,
+  storage: ReviewPhotoStorage = reviewPhotoStorage,
+): Promise<CreateReviewResult> {
+  const fields = fieldsOf(input);
+  const refusal = fieldsRefusal(fields, input.ratings);
+  if (refusal) return { ok: false, error: refusal };
+
+  const now = input.now ?? new Date();
   const enquiry = await enquiryForReview(input.enquiryId);
-
-  const verdict = canReview(input.buyerId, enquiry, input.businessId);
+  const verdict = canReview(input.buyerId, enquiry, input.businessId, now);
   if (!verdict.ok) return { ok: false, error: verdict.reason };
 
-  const now = new Date();
-  const review = await prisma.review.create({
-    data: {
-      businessId: verdict.businessId,
-      buyerId: input.buyerId,
-      enquiryId: input.enquiryId,
-      overall: input.ratings.overall,
-      quotedAccurate: input.ratings.quotedAccurate,
-      onTime: input.ratings.onTime,
-      asDescribed: input.ratings.asDescribed,
-      responsiveness: input.ratings.responsiveness,
-      body,
-      showCompanyName: input.showCompanyName ?? true,
-      editableUntil: editableUntil(now),
-    },
-    select: { id: true, businessId: true },
+  const photos = await checkedPhotos(storage, verdict.businessId, input.enquiryId, fields.photos);
+  if (!photos) return { ok: false, error: "photos_invalid" };
+
+  // Board 10f: with no company on the account the review is signed anonymously
+  // whatever the form said, so a company added later does not put a name on a
+  // review whose author never chose one.
+  const buyer = await prisma.user.findUnique({
+    where: { id: input.buyerId },
+    select: { buyerCompanyId: true },
   });
+  const showCompanyName = Boolean(buyer?.buyerCompanyId) && fields.showCompanyName;
+
+  let review: { id: string; businessId: string };
+  try {
+    review = await prisma.$transaction(async (tx) => {
+      const created = await tx.review.create({
+        data: {
+          businessId: verdict.businessId,
+          buyerId: input.buyerId,
+          enquiryId: input.enquiryId,
+          overall: input.ratings.overall,
+          quotedAccurate: input.ratings.quotedAccurate,
+          onTime: input.ratings.onTime,
+          asDescribed: input.ratings.asDescribed,
+          responsiveness: input.ratings.responsiveness,
+          body: fields.body.trim(),
+          showCompanyName,
+          editableUntil: editableUntil(now),
+          createdAt: now,
+        },
+        select: { id: true, businessId: true },
+      });
+      if (photos.length > 0) {
+        await tx.media.createMany({
+          data: photos.map((photo, index) => ({
+            kind: "review" as const,
+            storagePath: photo.path,
+            width: photo.width,
+            height: photo.height,
+            bytes: photo.bytes,
+            sortOrder: index,
+            reviewId: created.id,
+          })),
+        });
+      }
+      // `B9`: the draft becomes the review, in the same commit.
+      await tx.reviewDraft.deleteMany({ where: { enquiryId: input.enquiryId } });
+      return created;
+    });
+  } catch (error) {
+    // Two tabs, one enquiry: the unique index answers the second.
+    if (isUniqueViolation(error)) return { ok: false, error: "already_reviewed" };
+    throw error;
+  }
 
   /*
      The seller has twenty-eight days to answer this, and the clock starts here.
@@ -107,7 +232,8 @@ export async function createReview(input: CreateReviewInput): Promise<CreateRevi
      11c specifies would have been running against a review the supplier had no
      way of knowing about until they next opened the page. Fire and forget:
      `onReviewPosted` swallows its own carrier errors, and a carrier being down
-     must not lose the buyer's review.
+     must not lose the buyer's review. Board 10f `B8`: once, on publish — never
+     on a draft save and never on an edit.
   */
   await onReviewPosted({ reviewId: review.id });
 
@@ -128,69 +254,324 @@ export async function createReview(input: CreateReviewInput): Promise<CreateRevi
  *
  * `firstReplyAt` is the confirmation for the second rung, and it is the same
  * column response time is measured from — so "this seller replied" is a fact
- * the platform already holds rather than one this gate invents.
+ * the platform already holds rather than one this gate invents. Since board
+ * 10f it is also where that rung's window runs from.
  */
 export async function enquiryForReview(enquiryId: string): Promise<EnquiryForReview | null> {
   const enquiry = await prisma.enquiry.findUnique({
     where: { id: enquiryId },
-    select: {
-      id: true,
-      buyerId: true,
-      ...CONTRACT_FACTS_SELECT,
-      review: { select: { id: true } },
-      recipients: {
-        where: { firstReplyAt: { not: null } },
-        select: { businessId: true },
-      },
-    },
+    select: ENQUIRY_FOR_REVIEW_SELECT,
   });
-  if (!enquiry) return null;
+  return enquiry ? toEnquiryForReview(enquiry) : null;
+}
 
+export const ENQUIRY_FOR_REVIEW_SELECT = {
+  id: true,
+  buyerId: true,
+  ...CONTRACT_FACTS_SELECT,
+  review: { select: { id: true } },
+  recipients: {
+    where: { firstReplyAt: { not: null } },
+    select: { businessId: true, firstReplyAt: true },
+  },
+} satisfies Prisma.EnquirySelect;
+
+export function toEnquiryForReview(
+  enquiry: Prisma.EnquiryGetPayload<{ select: typeof ENQUIRY_FOR_REVIEW_SELECT }>,
+): EnquiryForReview {
+  const facts = toContractFacts(enquiry);
   return {
     // Board `7c-s`: the same rule the record page prints the day from.
-    reviewOpensOn: reviewOpensOn(toContractFacts(enquiry)),
+    reviewOpensOn: reviewOpensOn(facts),
+    engagement: { ongoing: isOngoing(facts), termEndsOn: termDates(facts)?.end ?? null },
     id: enquiry.id,
     buyerId: enquiry.buyerId,
     contactReleasedToBusinessId: enquiry.contactReleasedToBusinessId,
     contactReleasedAt: enquiry.contactReleasedAt,
     repliedBusinessIds: enquiry.recipients.map((recipient) => recipient.businessId),
+    repliedAt: Object.fromEntries(
+      enquiry.recipients.map((recipient) => [recipient.businessId, recipient.firstReplyAt!]),
+    ),
     alreadyReviewed: enquiry.review !== null,
   };
 }
 
-export type EditReviewResult = { ok: true } | { ok: false; error: "not_yours" | "window_closed" | "invalid_ratings" | "empty_body" };
+export type SaveDraftResult =
+  | { ok: true; savedAt: Date; photos: ReviewPhotoRef[] }
+  | {
+      ok: false;
+      error:
+        | "not_your_enquiry"
+        | "no_confirmed_enquiry"
+        | "ambiguous_subject"
+        | "already_reviewed"
+        | "not_yet_open"
+        | "window_closed"
+        | "invalid_ratings"
+        | "body_long"
+        | "photos_invalid";
+    };
 
-/** Editable for fourteen days. After that it is the record. */
-export async function editReview(input: {
+/**
+ * Save the form as it stands. Board 10f `B9`: one draft per enquiry, autosaved,
+ * never visible to the seller.
+ *
+ * Nothing is required — a draft is the form half-filled — but nothing out of
+ * range is kept either: a score outside one to five, a body past the ceiling,
+ * or a photograph path this enquiry did not issue. The gate is asked on every
+ * save, so a window that closes while a draft is open stops taking saves
+ * rather than keeping text for a review that can no longer be posted.
+ *
+ * Never notifies. `onReviewPosted` is called from `createReview` only.
+ */
+export async function saveReviewDraft(input: {
   buyerId: string;
-  reviewId: string;
-  ratings: Ratings;
-  body: string;
+  enquiryId: string;
+  businessId?: string;
+  fields: ReviewFields;
   now?: Date;
-}): Promise<EditReviewResult> {
-  if (!ratingsAreValid(input.ratings)) return { ok: false, error: "invalid_ratings" };
-  const body = input.body.trim();
-  if (body.length < MIN_BODY) return { ok: false, error: "empty_body" };
+}): Promise<SaveDraftResult> {
+  const now = input.now ?? new Date();
+  const { fields } = input;
+
+  const scores = [fields.overall, fields.quotedAccurate, fields.onTime, fields.asDescribed, fields.responsiveness];
+  if (!scores.every((score) => score === null || (Number.isInteger(score) && score >= 1 && score <= 5))) {
+    return { ok: false, error: "invalid_ratings" };
+  }
+  if (graphemeCount(fields.body) > REVIEW_BODY_MAX * 2) return { ok: false, error: "body_long" };
+
+  const enquiry = await enquiryForReview(input.enquiryId);
+  const verdict = canReview(input.buyerId, enquiry, input.businessId, now);
+  if (!verdict.ok) return { ok: false, error: verdict.reason };
+
+  const photos = fields.photos;
+  if (
+    photos.length > MAX_REVIEW_PHOTOS ||
+    new Set(photos.map((photo) => photo.path)).size !== photos.length ||
+    !photos.every((photo) => isReviewPhotoPath(verdict.businessId, input.enquiryId, photo.path))
+  ) {
+    return { ok: false, error: "photos_invalid" };
+  }
+
+  const data = {
+    buyerId: input.buyerId,
+    businessId: verdict.businessId,
+    overall: fields.overall,
+    quotedAccurate: fields.quotedAccurate,
+    onTime: fields.onTime,
+    asDescribed: fields.asDescribed,
+    responsiveness: fields.responsiveness,
+    body: fields.body,
+    showCompanyName: fields.showCompanyName,
+    photos: photos.map((photo) => ({ ...photo })),
+  };
+  const saved = await prisma.reviewDraft.upsert({
+    where: { enquiryId: input.enquiryId },
+    create: { enquiryId: input.enquiryId, ...data },
+    update: data,
+    select: { updatedAt: true },
+  });
+  return { ok: true, savedAt: saved.updatedAt, photos };
+}
+
+export type WritableSubject =
+  | { ok: true; mode: "new"; businessId: string; provenance: Provenance }
+  | { ok: true; mode: "edit"; businessId: string; reviewId: string }
+  | {
+      ok: false;
+      error:
+        | "not_your_enquiry"
+        | "no_confirmed_enquiry"
+        | "ambiguous_subject"
+        | "not_yet_open"
+        | "window_closed"
+        | "frozen";
+    };
+
+/**
+ * Who a photograph upload for this enquiry is about, and whether one may be
+ * added at all: a new review inside the gate, or the buyer's own review inside
+ * its fourteen days.
+ */
+export async function writableSubject(
+  buyerId: string,
+  enquiryId: string,
+  businessId?: string,
+  now: Date = new Date(),
+): Promise<WritableSubject> {
+  const existing = await prisma.review.findUnique({
+    where: { enquiryId },
+    select: {
+      id: true,
+      buyerId: true,
+      businessId: true,
+      editableUntil: true,
+      removedAt: true,
+      heldAt: true,
+      sellerReply: true,
+    },
+  });
+  if (existing) {
+    if (existing.buyerId !== buyerId) return { ok: false, error: "not_your_enquiry" };
+    if (!isEditable(existing, now)) return { ok: false, error: "frozen" };
+    return { ok: true, mode: "edit", businessId: existing.businessId, reviewId: existing.id };
+  }
+  const verdict = canReview(buyerId, await enquiryForReview(enquiryId), businessId, now);
+  if (!verdict.ok) {
+    return { ok: false, error: verdict.reason === "already_reviewed" ? "frozen" : verdict.reason };
+  }
+  return { ok: true, mode: "new", businessId: verdict.businessId, provenance: verdict.provenance };
+}
+
+export type EditReviewResult =
+  | { ok: true; businessId: string }
+  | { ok: false; error: "not_yours" | "window_closed" | FieldsRefusal };
+
+/**
+ * Editable for fourteen days, and not after a reply or a staff action. After
+ * that it is the record.
+ *
+ * Board 1m: *"the edit history is not public but is retained."* The version an
+ * edit replaces is written to `review_revision` in the same transaction, with
+ * the photographs it carried; a photograph taken off the review keeps its
+ * stored object so that history can still point at it. The row is re-read and
+ * locked inside the transaction, so a seller reply landing between the check
+ * and the write cannot be answered by words that have since changed —
+ * `review_words_are_fixed` would refuse it anyway.
+ */
+export async function editReview(
+  input: {
+    buyerId: string;
+    reviewId: string;
+    ratings: Ratings;
+    body: string;
+    showCompanyName?: boolean;
+    photos?: readonly ReviewPhotoRef[];
+    now?: Date;
+  },
+  storage: ReviewPhotoStorage = reviewPhotoStorage,
+): Promise<EditReviewResult> {
+  const now = input.now ?? new Date();
 
   const review = await prisma.review.findUnique({
     where: { id: input.reviewId },
-    select: { buyerId: true, editableUntil: true, removedAt: true },
-  });
-  if (!review || review.buyerId !== input.buyerId) return { ok: false, error: "not_yours" };
-  if (!isEditable(review, input.now ?? new Date())) return { ok: false, error: "window_closed" };
-
-  await prisma.review.update({
-    where: { id: input.reviewId },
-    data: {
-      overall: input.ratings.overall,
-      quotedAccurate: input.ratings.quotedAccurate,
-      onTime: input.ratings.onTime,
-      asDescribed: input.ratings.asDescribed,
-      responsiveness: input.ratings.responsiveness,
-      body,
+    select: {
+      buyerId: true,
+      businessId: true,
+      enquiryId: true,
+      editableUntil: true,
+      removedAt: true,
+      heldAt: true,
+      sellerReply: true,
+      showCompanyName: true,
+      media: { select: { storagePath: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
+      buyer: { select: { buyerCompanyId: true } },
     },
   });
-  return { ok: true };
+  if (!review || review.buyerId !== input.buyerId) return { ok: false, error: "not_yours" };
+  if (!isEditable(review, now)) return { ok: false, error: "window_closed" };
+
+  const fields = fieldsOf({
+    ...input,
+    photos: input.photos ?? review.media.map((item) => ({ path: item.storagePath, width: null, height: null, bytes: null })),
+  });
+  const refusal = fieldsRefusal(fields, input.ratings);
+  if (refusal) return { ok: false, error: refusal };
+
+  const kept = new Set(review.media.map((item) => item.storagePath));
+  const added = fields.photos.filter((photo) => !kept.has(photo.path));
+  const checkedAdded = await checkedPhotos(storage, review.businessId, review.enquiryId, added);
+  if (!checkedAdded || !fields.photos.every((photo) => kept.has(photo.path) || isReviewPhotoPath(review.businessId, review.enquiryId, photo.path))) {
+    return { ok: false, error: "photos_invalid" };
+  }
+  const cleanByPath = new Map(checkedAdded.map((photo) => [photo.path, photo]));
+  const showCompanyName = Boolean(review.buyer.buyerCompanyId) && (input.showCompanyName ?? review.showCompanyName);
+
+  const outcome = await prisma.$transaction(async (tx) => {
+    const [current] = await tx.$queryRaw<
+      {
+        overall: number;
+        quoted_accurate: number | null;
+        on_time: number | null;
+        as_described: number | null;
+        responsiveness: number | null;
+        body: string;
+        show_company_name: boolean;
+        editable_until: Date;
+        removed_at: Date | null;
+        held_at: Date | null;
+        seller_reply: string | null;
+      }[]
+    >`select overall, quoted_accurate, on_time, as_described, responsiveness, body, show_company_name,
+             editable_until, removed_at, held_at, seller_reply
+        from "review" where id = ${input.reviewId} for update`;
+    if (
+      !current ||
+      !isEditable(
+        {
+          editableUntil: current.editable_until,
+          removedAt: current.removed_at,
+          heldAt: current.held_at,
+          sellerReply: current.seller_reply,
+        },
+        now,
+      )
+    ) {
+      return "window_closed" as const;
+    }
+
+    await tx.reviewRevision.create({
+      data: {
+        reviewId: input.reviewId,
+        overall: current.overall,
+        quotedAccurate: current.quoted_accurate,
+        onTime: current.on_time,
+        asDescribed: current.as_described,
+        responsiveness: current.responsiveness,
+        body: current.body,
+        showCompanyName: current.show_company_name,
+        photoPaths: review.media.map((item) => item.storagePath),
+        replacedAt: now,
+      },
+    });
+    await tx.review.update({
+      where: { id: input.reviewId },
+      data: {
+        overall: input.ratings.overall,
+        quotedAccurate: input.ratings.quotedAccurate,
+        onTime: input.ratings.onTime,
+        asDescribed: input.ratings.asDescribed,
+        responsiveness: input.ratings.responsiveness,
+        body: fields.body.trim(),
+        showCompanyName,
+      },
+    });
+
+    const wanted = fields.photos.map((photo) => photo.path);
+    await tx.media.deleteMany({ where: { reviewId: input.reviewId, storagePath: { notIn: wanted } } });
+    for (const [index, path] of wanted.entries()) {
+      if (kept.has(path)) {
+        await tx.media.updateMany({ where: { reviewId: input.reviewId, storagePath: path }, data: { sortOrder: index } });
+      } else {
+        const clean = cleanByPath.get(path)!;
+        await tx.media.create({
+          data: {
+            kind: "review",
+            storagePath: path,
+            width: clean.width,
+            height: clean.height,
+            bytes: clean.bytes,
+            sortOrder: index,
+            reviewId: input.reviewId,
+          },
+        });
+      }
+    }
+    return "ok" as const;
+  });
+
+  if (outcome !== "ok") return { ok: false, error: outcome };
+  return { ok: true, businessId: review.businessId };
 }
 
 export type ReplyResult =
@@ -548,8 +929,29 @@ export interface ModerationReview {
   replyRemovalReason: string | null;
 }
 
-export async function reviewsForModeration(limit = 200): Promise<ModerationReview[]> {
+export async function reviewsForModeration(
+  limit = 200,
+  /**
+   * A supplier's display name or slug, in part. The list is the two hundred
+   * most recent, and without a way to narrow it a review older than that was as
+   * unreachable as it was before this screen existed.
+   */
+  supplier?: string | null,
+): Promise<ModerationReview[]> {
+  const needle = supplier?.trim();
   const rows = await prisma.review.findMany({
+    ...(needle
+      ? {
+          where: {
+            business: {
+              OR: [
+                { displayName: { contains: needle, mode: "insensitive" as const } },
+                { slug: { contains: needle.toLowerCase() } },
+              ],
+            },
+          },
+        }
+      : {}),
     orderBy: [{ removedAt: { sort: "asc", nulls: "first" } }, { createdAt: "desc" }, { id: "desc" }],
     take: limit,
     select: {

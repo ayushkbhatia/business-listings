@@ -11,6 +11,7 @@ import { Eyebrow, RatingMarks } from "@/components/display";
 import { formatCount, formatRating } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { ReviewSummary } from "@/lib/db/queries";
+import { DIMENSION_LABEL } from "@/lib/reviews/write";
 
 /**
  * Board 1m section 3 — the 308px summary column.
@@ -131,12 +132,6 @@ function Distribution({ summary }: { summary: ReviewSummary }) {
  * them is more useful than one aggregate: a seller strong on responsiveness and
  * weak on lead times should read as exactly that rather than as 3.9.
  */
-const DIMENSION_LABEL = {
-  quotedAccurate: "storefront.rating_quoted",
-  onTime: "storefront.rating_on_time",
-  asDescribed: "storefront.rating_described",
-  responsiveness: "storefront.rating_responsive",
-} as const;
 
 export function RatedOnCard({ summary }: { summary: ReviewSummary }) {
   return (
@@ -144,21 +139,33 @@ export function RatedOnCard({ summary }: { summary: ReviewSummary }) {
       <Eyebrow as="h2">{t("reviewpage.rated_on")}</Eyebrow>
       <dl className="mt-3 flex flex-col gap-2.5">
         {summary.dimensions.map((dimension) => {
-          const value = dimension.average ?? 0;
+          const value = dimension.average;
           return (
             <div key={dimension.key} className="flex items-center justify-between gap-3">
               <dt className="min-w-0 text-body-sm text-body">
                 {t(DIMENSION_LABEL[dimension.key])}
               </dt>
               <dd className="flex shrink-0 items-center gap-2">
-                <RatingMarks
-                  value={value}
-                  size="sm"
-                  label={t("reviewpage.rating_label", { rating: formatRating(value) })}
-                />
-                <span className="w-5 text-end font-mono text-eyebrow tabular-nums text-muted">
-                  {formatRating(value)}
-                </span>
+                {value === null ? (
+                  /*
+                     Board 10f `B4`: every published review skipped this one. It
+                     used to draw 0.0 over five empty squares — a zero rendered as
+                     a rating, which the interface rules forbid, for a dimension
+                     nobody scored.
+                  */
+                  <span className="text-caption text-muted">{t("review.dimension_unscored")}</span>
+                ) : (
+                  <>
+                    <RatingMarks
+                      value={value}
+                      size="sm"
+                      label={t("reviewpage.rating_label", { rating: formatRating(value) })}
+                    />
+                    <span className="w-5 text-end font-mono text-eyebrow tabular-nums text-muted">
+                      {formatRating(value)}
+                    </span>
+                  </>
+                )}
               </dd>
             </div>
           );

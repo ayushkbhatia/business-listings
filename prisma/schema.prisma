@@ -101,6 +101,7 @@ model User {
   buyerCompany             BuyerCompany?            @relation(fields: [buyerCompanyId], references: [id], onDelete: SetNull)
   enquiries                Enquiry[]
   reviews                  Review[]
+  reviewDrafts             ReviewDraft[]
   disputesRaised           ReviewDispute[]          @relation("DisputeRaisedBy")
   disputesDecided          ReviewDispute[]          @relation("DisputeDecidedBy")
   auditEvents              AuditEvent[]
@@ -1251,6 +1252,7 @@ model Business {
   quotes                 Quote[]
   messages               Message[]
   reviews                Review[]
+  reviewDrafts           ReviewDraft[]
   reviewDisputes         ReviewDispute[]
   reports                SupplierReport[]         @relation("ReportSubject")
   subscription           Subscription?
@@ -3136,6 +3138,7 @@ model Enquiry {
   quotes         Quote[]
   messages       Message[]
   review         Review?
+  reviewDraft    ReviewDraft?
   reviewRequests ReviewRequest[]
   /// Board `7c` `B8`: the one supplier report a buyer may file from the
   /// accepted record, with this enquiry's thread as its evidence.
@@ -4827,11 +4830,18 @@ model Review {
   buyerId            String    @map("buyer_id") @db.Uuid
   /// Gating: one review per enquiry, and the enquiry must exist.
   enquiryId          String    @unique @map("enquiry_id")
+  /// The buyer's own verdict, 1–5. **An input, never the mean of the four
+  /// below** (board 10f `B3`): it is the one figure board 1m sorts and filters
+  /// on, and the board ships 4 against a dimension mean of 4.25 on purpose.
   overall            Int
-  quotedAccurate     Int       @map("quoted_accurate")
-  onTime             Int       @map("on_time")
-  asDescribed        Int       @map("as_described")
-  responsiveness     Int
+  /// The four dimensions board 1m averages, in its order. Null is a dimension
+  /// the buyer skipped as not applying (`B4`) — excluded from that dimension's
+  /// average, never scored zero. Nullable since `10f`.
+  quotedAccurate     Int?      @map("quoted_accurate")
+  onTime             Int?      @map("on_time")
+  asDescribed        Int?      @map("as_described")
+  responsiveness     Int?
+  /// 40–800 graphemes at write since `10f` (`B5`); rows before it hold 20 and up.
   body               String
   showCompanyName    Boolean   @default(true) @map("show_company_name")
   /// created + 14 days.
@@ -4874,9 +4884,10 @@ model Review {
   business Business         @relation(fields: [businessId], references: [id], onDelete: Cascade)
   buyer    User             @relation(fields: [buyerId], references: [id], onDelete: Cascade)
   enquiry  Enquiry          @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
-  media    Media[]
-  disputes ReviewDispute[]
-  reports  SupplierReport[]
+  media     Media[]
+  disputes  ReviewDispute[]
+  reports   SupplierReport[]
+  revisions ReviewRevision[]
 
   /// The public read: one business, published, newest first.
   ///
@@ -4886,6 +4897,77 @@ model Review {
   /// filter is on all six of those queries rather than on some of them.
   @@index([businessId, removedAt, heldAt, createdAt])
   @@map("review")
+}
+
+/// A review the buyer has started and not posted. Board 10f `B9`.
+///
+/// **Its own table, not a `status` on `Review`.** Every reader of `Review` —
+/// board 1m's six aggregates, 11c's seller page, 4f and 4g's quality counts,
+/// the JSON-LD — counts what is in it. A draft row in that table is a figure
+/// each of those would have to remember to exclude, and the one that forgot
+/// would show a seller a review the buyer never posted. Here nothing that
+/// reads reviews can reach a draft, which is `B9`'s *never visible to the
+/// seller* held by where the row lives rather than by a filter.
+///
+/// One per enquiry, like the review it becomes (`enquiryId` unique). The
+/// supplier is the one the gate resolved when the draft was saved, and the gate
+/// is asked again on post. Deleted in the transaction that writes the review.
+model ReviewDraft {
+  id                 String   @id @default(cuid())
+  enquiryId          String   @unique @map("enquiry_id")
+  buyerId            String   @map("buyer_id") @db.Uuid
+  businessId         String   @map("business_id")
+  overall            Int?
+  quotedAccurate     Int?     @map("quoted_accurate")
+  onTime             Int?     @map("on_time")
+  asDescribed        Int?     @map("as_described")
+  responsiveness     Int?
+  body               String   @default("")
+  showCompanyName    Boolean  @default(true) @map("show_company_name")
+  /// Uploaded, metadata-stripped photographs, in order:
+  /// `[{ path, width, height, bytes }]`. They become `Media` rows on post; a
+  /// draft file is not a `Media` row, so no gallery or count can see one.
+  photos             Json     @default("[]")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  enquiry  Enquiry  @relation(fields: [enquiryId], references: [id], onDelete: Cascade)
+  buyer    User     @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([buyerId])
+  @@index([businessId])
+  @@map("review_draft")
+}
+
+/// What a review said before an edit. Board 1m: *"the edit history is not
+/// public but is retained."*
+///
+/// `editReview` has rewritten the row in place since handoff 2, with no screen
+/// calling it — so the promise was never tested against a real edit. Board 10f
+/// ships the Edit button, and with it this: one row per edit, holding the
+/// version the edit replaced. Append-only by trigger
+/// (`review_revision_is_the_record`), like the audit log.
+model ReviewRevision {
+  id              String   @id @default(cuid())
+  reviewId        String   @map("review_id")
+  overall         Int
+  quotedAccurate  Int?     @map("quoted_accurate")
+  onTime          Int?     @map("on_time")
+  asDescribed     Int?     @map("as_described")
+  responsiveness  Int?
+  body            String
+  showCompanyName Boolean  @map("show_company_name")
+  /// Storage paths of the photographs that version carried. The objects are
+  /// kept when an edit takes one off the review.
+  photoPaths      String[] @default([]) @map("photo_paths")
+  /// When this version stopped being the review — the moment of the edit.
+  replacedAt      DateTime @default(now()) @map("replaced_at")
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([reviewId, replacedAt])
+  @@map("review_revision")
 }
 
 /// The four grounds a review comes down on, and no fifth.

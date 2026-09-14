@@ -55,6 +55,7 @@ import { seedCredentialReview } from "./seed-credential-review.mjs";
 import { seedBlendedSearch } from "./seed-blended-search.mjs";
 import { seedStaffRoster } from "./seed-staff-roster.mjs";
 import { seedNegotiationThreads } from "./seed-negotiation.mjs";
+import { seedReviewWrite } from "./seed-review-write.mjs";
 import { seedAccountHealth } from "./seed-account-health.mjs";
 import { seedRevenue } from "./seed-revenue.mjs";
 import { seedCrmCalls } from "./seed-crm.mjs";
@@ -1117,6 +1118,9 @@ async function main() {
   // for the reason `seedStaffRoster` takes it — the board's revision is minutes
   // old. Before `recomputeDerived`, which measures the replies it adds.
   await seedNegotiationThreads(prisma, new Date());
+  // Board 10f: a review in draft and one per state beside it. The wall clock —
+  // the window is Dubai days from acceptance, and its stated day must not move.
+  await seedReviewWrite(prisma, new Date());
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
   await backfillSeatChannels(prisma);

@@ -141,6 +141,36 @@ export async function statDocument(
   };
 }
 
+/**
+ * The bytes at a path in any bucket, or null.
+ *
+ * Board 10f reads a review photograph back after the browser's signed upload,
+ * to take its metadata out before anything points at it. One megabyte at most
+ * (the media bucket's ceiling), so a whole read is the honest size of the job.
+ */
+export async function readObject(bucket: string, path: string): Promise<Uint8Array | null> {
+  const admin = createAdminClient();
+  const { data, error } = await admin.storage.from(bucket).download(path);
+  if (error || !data) return null;
+  return new Uint8Array(await data.arrayBuffer());
+}
+
+/** Write bytes to a path, replacing what is there. For a file rewritten in place. */
+export async function replaceObject(
+  bucket: string,
+  path: string,
+  bytes: Uint8Array,
+  contentType: string,
+): Promise<PutResult> {
+  const admin = createAdminClient();
+  const { error } = await admin.storage.from(bucket).upload(path, bytes, { contentType, upsert: true });
+  if (error) {
+    console.error(`[storage] could not rewrite ${bucket}/${path}: ${error.message}`);
+    return { ok: false, reason: error.message };
+  }
+  return { ok: true, path };
+}
+
 export async function removeObject(bucket: string, path: string): Promise<void> {
   const admin = createAdminClient();
   await admin.storage.from(bucket).remove([path]);

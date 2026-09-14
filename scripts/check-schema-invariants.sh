@@ -331,6 +331,19 @@ if [[ -n "$MESSAGE_MODEL" ]]; then
   fi
 fi
 
+# Board 10f. A review's words are the buyer's for fourteen days and then the
+# record: the edit window, the freeze on a seller reply, and the identity of
+# the review are held by trigger, and the history an edit replaces is kept.
+if grep -qE '^[[:space:]]*model[[:space:]]+ReviewRevision[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE 'CREATE TRIGGER "review_words_are_fixed"' prisma/migrations \
+     && grep -rqE 'CREATE TRIGGER "review_revision_is_the_record"' prisma/migrations; then
+    echo "   pass — a review's words are fixed after its window, and its edit history is append-only, by trigger"
+  else
+    echo "   FAIL — review_words_are_fixed or review_revision_is_the_record is missing (board 10f)."
+    fail=1
+  fi
+fi
+
 ROLE_ENUM=$(awk '/^enum Role \{/,/^\}/' <<<"$CODE")
 if grep -qE '\bstaff_field\b' <<<"$ROLE_ENUM"; then
   echo "   FAIL — staff_field is back in the Role enum. It was retired and removed (board 4i B1)."

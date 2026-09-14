@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Button, Input } from "@/components/primitives";
 import { requireStaff } from "@/lib/auth/staff";
 import { can } from "@/lib/auth/can";
 import { prisma } from "@/lib/db/client";
@@ -26,12 +27,19 @@ import { logIncentive, remove, removeReply } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function ReviewsPage() {
+export default async function ReviewsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const seat = await requireStaff();
   if (!can(seat.actor, "review.remove")) notFound();
 
+  const params = await searchParams;
+  const supplier = typeof params["supplier"] === "string" ? params["supplier"].trim().slice(0, 120) : "";
+
   const [reviews, badges] = await Promise.all([
-    reviewsForModeration(),
+    reviewsForModeration(200, supplier || null),
     getAdminNavBadges(seat),
   ]);
 
@@ -99,6 +107,22 @@ export default async function ReviewsPage() {
         </span>
       }
     >
+      <form
+        method="get"
+        action="/admin/reviews"
+        role="search"
+        aria-label={t("admin.reviews.filter_label")}
+        className="mb-[var(--gutter)] flex flex-wrap items-end gap-3 rounded-card border border-line bg-card p-3"
+      >
+        <label className="flex min-w-56 flex-1 flex-col gap-1">
+          <span className="text-caption font-medium text-body">{t("admin.reviews.filter.supplier")}</span>
+          <Input name="supplier" defaultValue={supplier} spellCheck={false} autoComplete="off" />
+        </label>
+        <Button type="submit" variant="secondary">
+          {t("admin.reviews.filter.apply")}
+        </Button>
+      </form>
+
       <ReviewList
         rows={rows}
         remove={remove}

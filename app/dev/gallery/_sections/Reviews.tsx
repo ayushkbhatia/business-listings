@@ -26,10 +26,10 @@ const REFUSED = async () => ({ ok: false as const, error: t("dev.no_seat_title")
 const NO_REQUESTS = async () => ({ ok: false as const, error: t("dev.no_seat_title") });
 
 const DIMENSIONS = [
-  { label: t("reviews.dimension.quotedAccurate"), score: 5 },
-  { label: t("reviews.dimension.onTime"), score: 3 },
-  { label: t("reviews.dimension.asDescribed"), score: 4 },
-  { label: t("reviews.dimension.responsiveness"), score: 4 },
+  { label: t("review.dimension.quotedAccurate"), score: 5 },
+  { label: t("review.dimension.onTime"), score: 3 },
+  { label: t("review.dimension.asDescribed"), score: 4 },
+  { label: t("review.dimension.responsiveness"), score: 4 },
 ];
 
 const BASE: SellerReviewView = {

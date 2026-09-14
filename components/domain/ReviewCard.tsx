@@ -64,6 +64,13 @@ export interface ReviewCardProps {
   /** Mono eyebrow above the reply. Names the supplier by display name. */
   replyLabel: string;
   /**
+   * The neutral line in place of a reply staff took down (board 11c `B4`).
+   * Given only when that happened; the reply's text is never passed with it.
+   */
+  replyRemovedLabel?: string | null;
+  /** An `id` on the row, so board 10f can land the buyer on the review they posted. */
+  anchorId?: string;
+  /**
    * Heading level for the author line, where the surrounding page needs one.
    * Off by default: the reviews page has a list and a heading per row would be
    * a heading per row.
@@ -86,6 +93,8 @@ export function ReviewCard({
   replyLabel,
   as = "article",
   variant = "card",
+  replyRemovedLabel,
+  anchorId,
 }: ReviewCardProps) {
   const marks =
     ratingValue !== undefined && ratingLabel !== undefined ? (
@@ -162,15 +171,32 @@ export function ReviewCard({
           <p className="mt-1 text-body-sm text-body">{sellerReply}</p>
         </div>
       )}
+
+      {!sellerReply && replyRemovedLabel && (
+        <p className="mt-3 rounded-chip border-s-2 border-line-strong bg-paper-sunk p-3 text-body-sm text-muted">
+          {replyRemovedLabel}
+        </p>
+      )}
     </>
   );
 
   if (variant === "row") {
     const Tag = as;
-    return <Tag className="border-b border-line py-5 last:border-b-0">{inner}</Tag>;
+    return (
+      <Tag
+        id={anchorId}
+        className="scroll-mt-24 border-b border-line py-5 last:border-b-0 target:bg-paper-sunk"
+      >
+        {inner}
+      </Tag>
+    );
   }
 
-  return <Card as={as}>{inner}</Card>;
+  return (
+    <Card as={as} {...(anchorId ? { id: anchorId } : {})}>
+      {inner}
+    </Card>
+  );
 }
 
 /**
