@@ -247,11 +247,11 @@ test.describe("board 11h — cancel, step 1", () => {
     await expect(page.locator("main")).toContainText(/the oldest stay live/);
   });
 
-  test("names the fork without linking to a route that does not exist", async ({ page }) => {
-    // Build note B5. `11i` is not drawn and is blocked; a live link to it is
-    // the defect corrected on `11d` and `11g`.
+  test("names the fork and links to the close-account board", async ({ page }) => {
+    // Build note B5. This pinned the absence of a link while `11i` was unbuilt;
+    // board 11i built the route, so the fork now leads somewhere real.
     await expect(page.locator("main")).toContainText(/Closing the account removes it altogether/);
-    await expect(page.locator('main a[href*="/account/close"]')).toHaveCount(0);
+    await expect(page.locator('main a[href="/dashboard/account/close"]')).toHaveCount(1);
   });
 
   test("makes no retention offer", async ({ page }) => {
@@ -524,8 +524,10 @@ test.describe("board 11i — close account", () => {
     await expect(table.getByRole("columnheader")).toHaveCount(3);
     // Eight areas: three that leave, five that are kept. Counted, not trusted.
     await expect(table.getByRole("rowheader")).toHaveCount(8);
-    await expect(table.getByText("Retained")).toHaveCount(4);
-    await expect(table.getByText("Reserved")).toHaveCount(1);
+    // Exact: a row's body opens "Reserved, not released.", and a substring
+    // match counts the sentence as well as the badge.
+    await expect(table.getByText("Retained", { exact: true })).toHaveCount(4);
+    await expect(table.getByText("Reserved", { exact: true })).toHaveCount(1);
   });
 
   test("sends a blocked seller back from the confirmation step", async ({ page }) => {
