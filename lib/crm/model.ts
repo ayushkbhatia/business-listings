@@ -125,7 +125,7 @@ export function demandScoreOf(facts: SignalFacts): number {
     case "held_page":
       return facts.monthlySearches ?? 0;
     case "zero_result":
-      // A buyer waiting on an alert is a search that is still failing, counted once more.
+      // A saved search waiting for a listing is a search still failing, counted once more.
       return facts.searches30d + (facts.alertsWaiting ?? 0);
     case "unclaimed_demand":
       return facts.enquiries30d;

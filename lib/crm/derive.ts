@@ -288,7 +288,7 @@ async function heldPages(now: Date, week: Date): Promise<DerivedSignal[]> {
  * buyers failing to find them.
  */
 async function zeroResult(since: Date, week: Date): Promise<DerivedSignal[]> {
-  const [month, lastWeek, waiting] = await Promise.all([
+  const [top, lastWeek, waiting] = await Promise.all([
     prisma.zeroResultQuery.groupBy({
       by: ["categoryId"],
       where: { createdAt: { gte: since }, categoryId: { not: null } },
@@ -317,11 +317,11 @@ async function zeroResult(since: Date, week: Date): Promise<DerivedSignal[]> {
     }),
   ]);
   const categoryIds = [
-    ...new Set([...month, ...waiting].map((row) => row.categoryId).filter((id): id is string => id !== null)),
+    ...new Set([...top, ...waiting].map((row) => row.categoryId).filter((id): id is string => id !== null)),
   ];
   if (categoryIds.length === 0) return [];
 
-  const [businesses, categories] = await Promise.all([
+  const [businesses, categories, monthAll] = await Promise.all([
     prisma.business.findMany({
       where: { primaryCategoryId: { in: categoryIds }, claimStatus: "claimed", planId: "free", ...ALIVE },
       select: { id: true, primaryCategoryId: true },
@@ -329,8 +329,21 @@ async function zeroResult(since: Date, week: Date): Promise<DerivedSignal[]> {
       take: SIGNAL_SCAN,
     }),
     prisma.category.findMany({ where: { id: { in: categoryIds } }, select: { id: true, name: true } }),
+    /*
+       The month's count for every trade on the list, not only the twenty that
+       chose it. A trade that is here for its waiting alerts can still have empty
+       searches below the top twenty, and reading nought for it while
+       `searchesWeek` reads the week's real number is two figures on one row that
+       disagree.
+    */
+    prisma.zeroResultQuery.groupBy({
+      by: ["categoryId"],
+      where: { createdAt: { gte: since }, categoryId: { in: categoryIds } },
+      _count: { _all: true },
+      orderBy: [{ categoryId: "asc" }],
+    }),
   ]);
-  const monthBy = new Map(month.map((row) => [row.categoryId!, row._count._all]));
+  const monthBy = new Map(monthAll.map((row) => [row.categoryId!, row._count._all]));
   const weekBy = new Map(lastWeek.map((row) => [row.categoryId!, row._count._all]));
   const waitingBy = new Map(waiting.map((row) => [row.categoryId!, row._count._all]));
   const nameOf = new Map(categories.map((row) => [row.id, row.name]));

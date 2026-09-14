@@ -427,6 +427,25 @@ describe("saved searches (B6, B7)", () => {
     expect((await prisma.savedSearch.findUniqueOrThrow({ where: { id } })).newCount).toBe(0);
   });
 
+  it("stops waiting once a zero-result search matches anything, not only something new since the last look", async () => {
+    const { id } = await saveSearchFor({
+      userId: buyerId,
+      name: `${PREFIX} was empty`,
+      query: `q=${PREFIX}-zzqx-no-such-thing`,
+      categoryId,
+    });
+    // Something is listed, and the buyer opens the search before the sweep runs:
+    // stood in for by widening the query to the whole trade and looking just now.
+    await prisma.savedSearch.update({ where: { id }, data: { query: "", lastSeenAt: new Date() } });
+    expect((await savedSearchesFor(buyerId)).find((row) => row.id === id)).toMatchObject({ stillEmpty: true });
+
+    await sweepSavedSearches(new Date(Date.now() + 60_000));
+    const swept = await prisma.savedSearch.findUniqueOrThrow({ where: { id } });
+    expect(swept.newCount).toBe(0);
+    expect(swept.lastMatchAt).not.toBeNull();
+    expect((await savedSearchesFor(buyerId)).find((row) => row.id === id)).toMatchObject({ stillEmpty: false });
+  });
+
   it("waits out its cadence", async () => {
     const { id } = await saveSearchFor({ userId: buyerId, name: `${PREFIX} weekly`, query: "", categoryId });
     const now = new Date();

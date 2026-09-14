@@ -83,7 +83,7 @@ function whyOf(row: CrmRow): { text: string; tone: Tone } {
         tone: "neutral",
       };
     case "zero_result": {
-      // Board 10e B6: buyers waiting on an alert in this trade, said beside the searches.
+      // Board 10e B6: saved searches waiting on an alert in this trade, said beside the searches.
       const waiting = f.alertsWaiting ?? 0;
       const searches = t("admin.crm.why.zero_result", { count: f.searches30d, n: formatCount(f.searches30d), category: f.categoryName });
       if (waiting === 0) return { text: searches, tone: "neutral" };
@@ -157,8 +157,10 @@ export function scriptText(row: CrmRow): string {
         category: f.categoryName,
         area: f.areaName,
       });
-    case "zero_result":
-      return t(`admin.crm.script.${id}` as MessageKey, { count: f.searchesWeek, n: formatCount(f.searchesWeek), category: f.categoryName });
+    case "zero_result": {
+      const count = id === "zero_result.alerts.v1" ? (f.alertsWaiting ?? 0) : f.searchesWeek;
+      return t(`admin.crm.script.${id}` as MessageKey, { count, n: formatCount(count), category: f.categoryName });
+    }
     case "unclaimed_demand":
       return t(`admin.crm.script.${id}` as MessageKey, { count: f.enquiries30d, n: formatCount(f.enquiries30d), days: String(SIGNAL_WINDOW_DAYS) });
     case "cap_reached":

@@ -165,6 +165,8 @@ export async function sweepSavedSearches(now: Date = new Date(), limit = 200): P
       categoryId: true,
       createdAt: true,
       lastSeenAt: true,
+      zeroResult: true,
+      lastMatchAt: true,
       alertedCount: true,
       user: { select: { email: true, suspendedAt: true } },
     },
@@ -175,10 +177,21 @@ export async function sweepSavedSearches(now: Date = new Date(), limit = 200): P
 
   for (const search of due) {
     const since = search.lastSeenAt ?? search.createdAt;
-    const { count, newestAt } = await newMatchesSince(
-      { query: search.query, categoryId: search.categoryId, tab: search.tab === "products" ? "products" : "businesses" },
-      since,
-    );
+    const scope = {
+      query: search.query,
+      categoryId: search.categoryId,
+      tab: search.tab === "products" ? ("products" as const) : ("businesses" as const),
+    };
+    const { count, newestAt } = await newMatchesSince(scope, since);
+    /*
+       A search saved with nothing behind it stops waiting once it matches
+       anything, not only once something is new since the buyer last looked. A
+       listing published before they opened the search — and before this run —
+       is never "new since", and without this the search would read *nothing
+       exists yet* and count as demand in the CRM for good.
+    */
+    const stillWaiting = search.zeroResult && search.lastMatchAt === null;
+    const matchedAt = newestAt ?? (stillWaiting && (await countMatches(scope)) > 0 ? now : null);
     result.looked += 1;
     if (count > 0) result.withNew += 1;
 
@@ -206,7 +219,7 @@ export async function sweepSavedSearches(now: Date = new Date(), limit = 200): P
         lastRunAt: now,
         newCount: count,
         alertedCount: Math.min(alertedCount, count),
-        ...(newestAt ? { lastMatchAt: newestAt } : {}),
+        ...(matchedAt ? { lastMatchAt: matchedAt } : {}),
       },
     });
   }

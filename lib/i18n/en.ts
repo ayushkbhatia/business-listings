@@ -1777,8 +1777,8 @@ export const en = {
   "admin.crm.why.held_page_unclaimed": "{trade}, unclaimed, in a held page for {area}",
   "admin.crm.why.held_page_unverified": "{trade}, unverified, in a held page for {area}",
   "admin.crm.why.zero_result": { one: "{category}: {n} search found nobody", other: "{category}: {n} searches found nobody" },
-  "admin.crm.why.zero_result_alerts": { one: "{category}: {n} buyer waiting on an alert", other: "{category}: {n} buyers waiting on an alert" },
-  "admin.crm.why.alerts_waiting": { one: "{n} buyer waiting on an alert", other: "{n} buyers waiting on an alert" },
+  "admin.crm.why.zero_result_alerts": { one: "{category}: {n} saved search waiting for a listing", other: "{category}: {n} saved searches waiting for a listing" },
+  "admin.crm.why.alerts_waiting": { one: "{n} saved search waiting for a listing", other: "{n} saved searches waiting for a listing" },
   "admin.crm.why.zero_result_and_alerts": "{searches} · {alerts}",
   "admin.crm.why.unclaimed_demand": { one: "{n} enquiry to an unclaimed listing", other: "{n} enquiries to an unclaimed listing" },
   "admin.crm.why.enquiry_cap": { one: "{n} enquiry missed at the plan limit", other: "{n} enquiries missed at the plan limit" },
@@ -1917,6 +1917,10 @@ export const en = {
   "admin.crm.script.zero_result.v1": {
     one: "“{n} search for {category} came back empty last week. We would like to find out whether you supply what that buyer was looking for.”",
     other: "“{n} searches for {category} came back empty last week. We would like to find out whether you supply what those buyers were looking for.”",
+  },
+  "admin.crm.script.zero_result.alerts.v1": {
+    one: "“A buyer saved a search for {category} that found nobody, and asked to be told when a supplier is listed. We would like to find out whether you supply what they were looking for.”",
+    other: "“{n} searches for {category} that found nobody are saved, each waiting to be told when a supplier is listed. We would like to find out whether you supply what those buyers were looking for.”",
   },
   "admin.crm.script.zero_result.no_number.v1": "“Searches for {category} have been coming back empty this month. We would like to find out whether you supply what buyers were looking for.”",
   "admin.crm.script.unclaimed_demand.v1": {

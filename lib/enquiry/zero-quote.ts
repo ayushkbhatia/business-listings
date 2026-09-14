@@ -56,7 +56,7 @@ export async function recordZeroQuote(enquiryId: string): Promise<{ written: boo
   /*
      The category, or the row is written and never read.
 
-     `lib/crm/call-list.ts` groups these by `categoryId` and skips the nulls, so
+     `lib/crm/derive.ts` (`zeroResult`) groups these by `categoryId` and skips the nulls, so
      a zero-quote row with no category would land in the table and never reach
      the call list it exists to feed. `Enquiry` does not store its own category
      — the fan-out matched on one but only the recipients kept it — so it is
