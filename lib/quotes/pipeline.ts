@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { buyerForSeller, type SellerVisibleBuyer } from "@/lib/db/queries/seller-visibility";
 import type { LeadScope } from "@/lib/leads/inbox";
 import { quoteTotalAed } from "@/lib/quote/money";
+import { PROPOSAL_FIGURE_SELECT, toProposalFigure, type ProposalFigure } from "@/lib/quote/proposal";
 
 /**
  * Board 3k — the quotes pipeline.
@@ -66,6 +67,11 @@ export interface PipelineRow {
   deliverToArea: string | null;
   lineCount: number;
   totalAed: string;
+  /**
+   * Board `3j-s`: set when the quote is a proposal. Its lines total nothing, so
+   * every renderer of `totalAed` reads this first.
+   */
+  proposal: ProposalFigure | null;
   sentAt: Date | null;
   expiresAt: Date | null;
   state: PipelineState;
@@ -100,6 +106,15 @@ export interface PipelinePage {
    * page through a list is a total nobody can quote to anybody.
    */
   quotedTotalAed: string;
+  /**
+   * Proposals in the tab, which `quotedTotalAed` does not include.
+   *
+   * Board `3j-s`. A fee is on a basis — per month, per visit, per sq ft a
+   * year — and adding `18,400 per month` to a goods quote of `14,600` produces
+   * a number that is neither. So the strip adds up quotes, and says how many
+   * proposals it left out rather than letting the total look complete.
+   */
+  proposalCount: number;
   /** Rows in the active tab, so the footer can say what is shown. */
   total: number;
   page: number;
@@ -303,7 +318,7 @@ export async function getPipeline(input: {
 
   const page = Math.max(1, input.page ?? 1);
   const slice = inThisTab.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-  const [rows, quotedTotalAed] = await Promise.all([
+  const [rows, { quotedTotalAed, proposalCount }] = await Promise.all([
     hydrate(input.businessId, slice, now),
     totalOf(inThisTab),
   ]);
@@ -312,6 +327,7 @@ export async function getPipeline(input: {
     rows,
     counts,
     quotedTotalAed,
+    proposalCount,
     total: inThisTab.length,
     page,
     pageSize: PAGE_SIZE,
@@ -325,15 +341,20 @@ export async function getPipeline(input: {
  * figure over the whole tab, so it has to read the whole tab; keeping the select
  * to two columns is what makes that affordable.
  */
-async function totalOf(rows: readonly Bucketed[]): Promise<string> {
-  if (rows.length === 0) return "0.00";
+async function totalOf(
+  rows: readonly Bucketed[],
+): Promise<{ quotedTotalAed: string; proposalCount: number }> {
+  if (rows.length === 0) return { quotedTotalAed: "0.00", proposalCount: 0 };
   const quotes = await prisma.quote.findMany({
     where: { id: { in: rows.map((row) => row.quoteId) } },
-    select: { lines: { select: { qty: true, unitPrice: true } } },
+    select: { lines: { select: { qty: true, unitPrice: true } }, proposal: { select: { quoteId: true } } },
   });
-  return quoteTotalAed(
-    quotes.flatMap((q) => q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
-  );
+  return {
+    quotedTotalAed: quoteTotalAed(
+      quotes.flatMap((q) => q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
+    ),
+    proposalCount: quotes.filter((q) => q.proposal !== null).length,
+  };
 }
 
 /** The heavy select, for the page actually on screen. */
@@ -356,6 +377,7 @@ async function hydrate(
       extensionCount: true,
       lastExtendedAt: true,
       lines: { select: { qty: true, unitPrice: true } },
+      proposal: { select: PROPOSAL_FIGURE_SELECT },
       enquiry: {
         select: {
           ref: true,
@@ -399,6 +421,7 @@ async function hydrate(
         totalAed: quoteTotalAed(
           quote.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() })),
         ),
+        proposal: toProposalFigure(quote.proposal),
         sentAt: quote.sentAt,
         expiresAt: quote.expiresAt,
         state: row.state,

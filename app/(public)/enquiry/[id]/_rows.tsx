@@ -46,7 +46,12 @@ export function RecipientRow({
      Once a quote is accepted the other rows say why they ended, rather than
      leaving a buyer to wonder whether four suppliers went quiet on them.
   */
-  const passedOver = accepted && !chosen;
+  /*
+     Not a supplier who declined before the buyer chose (board `3j-s`): the
+     buyer did not pass them over, they bowed out, and their own reason is the
+     truer line.
+  */
+  const passedOver = accepted && !chosen && !row.declinedBySupplier;
 
   return (
     <li
@@ -138,6 +143,9 @@ function StateLine({
         return <>{t("track.state.superseded", { revision: row.quotedAgainstRevision })}</>;
       }
       const ms = latencyMs(row);
+      if (row.proposed) {
+        return <>{t("track.state.proposed", { latency: Number.isFinite(ms) ? formatDuration(ms) : "—" })}</>;
+      }
       return (
         <>
           {t("track.state.quoted", {

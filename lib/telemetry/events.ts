@@ -49,6 +49,8 @@ export const EVENT_NAMES = [
   "inbox_viewed",
   "lead_opened",
   "quote_sent",
+  "proposal_sent",
+  "lead_declined",
   "outcome_marked",
   "thread_viewed",
   "message_sent",
@@ -338,6 +340,43 @@ export const EVENT_SPECS = {
       termsStated: "boolean?",
       deliveryStated: "boolean?",
     },
+  },
+  /**
+   * Board `3j-s`: a reply to an enquiry for work — a fee on a basis, a scope and
+   * an exclusions list — reached the buyer.
+   *
+   * No amount and no basis key, for the reason `outcome_marked` carries none.
+   * What is worth counting is the shape of the reply: whether the seller stated
+   * the terms `1n-s` needs (Q1), whether they edited the scope sheet's words for
+   * this buyer or sent them as published (B3), and whether it went after the
+   * reply fell due — a late proposal is better than none, and how often they
+   * arrive late says whether the default escalation window fits work.
+   */
+  proposal_sent: {
+    emitter: "server",
+    session: "never",
+    props: {
+      revision: "number",
+      validityDays: "number",
+      termStated: "boolean",
+      mobilisationStated: "boolean",
+      scopeEdited: "boolean",
+      exclusionsEdited: "boolean",
+      late: "boolean",
+      hoursSinceReceipt: "number?",
+    },
+  },
+  /**
+   * Board `3j-s`: a supplier declined an enquiry before replying to it.
+   *
+   * `beforeOpening` separates a firm that read the brief and walked from one
+   * that declined off the rail. `hasReason` is whether the buyer got a sentence
+   * with it; the sentence itself stays on the recipient row.
+   */
+  lead_declined: {
+    emitter: "server",
+    session: "never",
+    props: { hasReason: "boolean", work: "boolean", hoursSinceReceipt: "number?" },
   },
   /**
    * A seller closed a lead.

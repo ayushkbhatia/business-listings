@@ -3,6 +3,7 @@ import type { AcceptedRecord } from "@/lib/enquiry/accepted-record";
 import { leadTime, totalLabel, windowLine } from "@/lib/enquiry/accepted-record-words";
 import { formatAED, formatDate, formatPhone } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { feeOnBasis, mobilisationWords, termWords } from "./proposal-words";
 
 /**
  * Board `7c` `B7` — the accepted quote as a PDF.
@@ -165,56 +166,115 @@ export function acceptedQuotePdf(record: AcceptedRecord, now: Date): RenderedQuo
   rule(y);
   y += 18;
 
-  /* ── What was quoted ─────────────────────────────────────────────────────── */
-  text(t("accepted.quoted.title"), MARGIN.x, 10.5, "bold");
-  text(windowLine(record, now).toUpperCase(), A4.width - MARGIN.x, 7, "mono", { align: "right", grey: MUTED });
-  y += 12;
-  tableHead();
+  /* ── What was proposed — board `3j-s` ────────────────────────────────────── */
+  if (quote.proposal) {
+    const proposal = quote.proposal;
+    const width = A4.width - MARGIN.x * 2;
+    text(t("accepted.proposal.title"), MARGIN.x, 10.5, "bold");
+    text(windowLine(record, now).toUpperCase(), A4.width - MARGIN.x, 7, "mono", { align: "right", grey: MUTED });
+    y += 18;
 
-  for (const line of quote.lines) {
-    const described = wrap(line.description, COL.lineWidth, 9, "regular");
-    const meta = line.manual ? t("accepted.line.manual") : line.sku;
-    const height = 15 + (described.length - 1) * 11 + (meta ? 11 : 0) + 10;
-    if (y + height > CONTENT_BOTTOM) {
-      newPage();
-      tableHead();
+    // The same six terms the page prints, in the same order, from the same words.
+    const terms: [string, string][] = [
+      [t("accepted.proposal.fee"), feeOnBasis(proposal)],
+      [t("accepted.proposal.term"), termWords(proposal.termMonths)],
+      [t("accepted.proposal.mobilisation"), mobilisationWords(proposal.mobilisationAed)],
+      [t("accepted.proposal.service"), proposal.serviceName],
+      [t("accepted.proposal.deliverable"), proposal.deliverable ?? t("accepted.not_stated")],
+      [t("accepted.proposal.delivered_where"), proposal.deliveredWhere ?? t("accepted.not_stated")],
+    ];
+    for (const [label, value] of terms) {
+      const parts = wrap(value, width - 140, 9, label === t("accepted.proposal.fee") ? "mono" : "regular");
+      if (y + parts.length * 11 + 6 > CONTENT_BOTTOM) newPage();
+      text(label.toUpperCase(), MARGIN.x, 7, "bold", { grey: MUTED, at: y });
+      parts.forEach((part, index) =>
+        text(part, MARGIN.x + 140, 9, label === t("accepted.proposal.fee") ? "mono" : "regular", { at: y + index * 11 }),
+      );
+      y += parts.length * 11 + 6;
     }
-
-    y += 15;
-    const rowTop = y;
-    described.forEach((part, index) => text(part, COL.line, 9, "regular", { at: rowTop + index * 11 }));
-    y = rowTop + (described.length - 1) * 11;
-    text(line.qty === null ? t("accepted.line.whole") : String(line.qty), COL.qty, 9, "regular", {
-      align: "right",
-      at: rowTop,
-    });
-    text(formatAED(line.unitPrice, { style: "quote" }), COL.unit, 9, "mono", { align: "right", at: rowTop });
-    text(formatAED(line.lineTotal, { style: "quote" }), COL.total, 9, "mono", { align: "right", at: rowTop });
-    text(leadTime(line.leadTimeDays), COL.lead, 8.5, "regular", { align: "right", at: rowTop });
-    if (meta) {
+    for (const part of wrap(t("accepted.proposal.fee_note", { supplier: supplier.displayName }), width, 8, "regular")) {
+      text(part, MARGIN.x, 8, "regular", { grey: MUTED });
       y += 11;
-      text(meta.toUpperCase(), COL.line, 6.5, "mono", { grey: MUTED });
     }
-    y += 10;
-    rule(y, 0.9);
-  }
 
-  if (y + 60 > CONTENT_BOTTOM) newPage();
-  y += 20;
-  ops.push({ kind: "rect", x: MARGIN.x, y: y - 13, w: A4.width - MARGIN.x * 2, h: 22, fill: 0.96 });
-  text(totalLabel(record), COL.line, 9.5, "bold");
-  text(formatAED(quote.totalAed, { style: "quote" }), COL.total, 10.5, "mono", { align: "right" });
-  y += 22;
-
-  if (quote.note) {
-    y += 8;
-    text(t("accepted.pdf.note").toUpperCase(), MARGIN.x, 7, "bold", { grey: MUTED });
-    for (const part of wrap(quote.note, A4.width - MARGIN.x * 2, 9, "regular")) {
-      y += 12;
+    const block = (label: string, body: string, grey?: number) => {
+      if (y + 30 > CONTENT_BOTTOM) newPage();
+      y += 10;
+      rule(y, 0.9);
+      y += 16;
+      text(label.toUpperCase(), MARGIN.x, 7, "bold", { grey: MUTED });
+      for (const paragraph of body.split("\n")) {
+        for (const part of wrap(paragraph, width, 9, "regular")) {
+          y += 12;
+          if (y > CONTENT_BOTTOM) newPage();
+          text(part, MARGIN.x, 9, "regular", grey === undefined ? {} : { grey });
+        }
+      }
+    };
+    block(t("accepted.proposal.scope"), proposal.scope);
+    block(
+      t("accepted.proposal.excluded"),
+      proposal.exclusions ?? t("accepted.proposal.excluded_none", { supplier: supplier.displayName }),
+    );
+    y += 6;
+    for (const part of wrap(t("accepted.proposal.excluded_note"), width, 8, "regular")) {
+      y += 11;
       if (y > CONTENT_BOTTOM) newPage();
-      text(part, MARGIN.x, 9, "regular");
+      text(part, MARGIN.x, 8, "regular", { grey: MUTED });
     }
     y += 8;
+  } else {
+    /* ── What was quoted ─────────────────────────────────────────────────────── */
+    text(t("accepted.quoted.title"), MARGIN.x, 10.5, "bold");
+    text(windowLine(record, now).toUpperCase(), A4.width - MARGIN.x, 7, "mono", { align: "right", grey: MUTED });
+    y += 12;
+    tableHead();
+
+    for (const line of quote.lines) {
+      const described = wrap(line.description, COL.lineWidth, 9, "regular");
+      const meta = line.manual ? t("accepted.line.manual") : line.sku;
+      const height = 15 + (described.length - 1) * 11 + (meta ? 11 : 0) + 10;
+      if (y + height > CONTENT_BOTTOM) {
+        newPage();
+        tableHead();
+      }
+
+      y += 15;
+      const rowTop = y;
+      described.forEach((part, index) => text(part, COL.line, 9, "regular", { at: rowTop + index * 11 }));
+      y = rowTop + (described.length - 1) * 11;
+      text(line.qty === null ? t("accepted.line.whole") : String(line.qty), COL.qty, 9, "regular", {
+        align: "right",
+        at: rowTop,
+      });
+      text(formatAED(line.unitPrice, { style: "quote" }), COL.unit, 9, "mono", { align: "right", at: rowTop });
+      text(formatAED(line.lineTotal, { style: "quote" }), COL.total, 9, "mono", { align: "right", at: rowTop });
+      text(leadTime(line.leadTimeDays), COL.lead, 8.5, "regular", { align: "right", at: rowTop });
+      if (meta) {
+        y += 11;
+        text(meta.toUpperCase(), COL.line, 6.5, "mono", { grey: MUTED });
+      }
+      y += 10;
+      rule(y, 0.9);
+    }
+
+    if (y + 60 > CONTENT_BOTTOM) newPage();
+    y += 20;
+    ops.push({ kind: "rect", x: MARGIN.x, y: y - 13, w: A4.width - MARGIN.x * 2, h: 22, fill: 0.96 });
+    text(totalLabel(record), COL.line, 9.5, "bold");
+    text(formatAED(quote.totalAed, { style: "quote" }), COL.total, 10.5, "mono", { align: "right" });
+    y += 22;
+
+    if (quote.note) {
+      y += 8;
+      text(t("accepted.pdf.note").toUpperCase(), MARGIN.x, 7, "bold", { grey: MUTED });
+      for (const part of wrap(quote.note, A4.width - MARGIN.x * 2, 9, "regular")) {
+        y += 12;
+        if (y > CONTENT_BOTTOM) newPage();
+        text(part, MARGIN.x, 9, "regular");
+      }
+      y += 8;
+    }
   }
 
   /* ── What this document is ───────────────────────────────────────────────── */

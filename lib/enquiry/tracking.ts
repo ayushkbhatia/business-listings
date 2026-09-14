@@ -25,8 +25,18 @@ export interface TrackedRecipient {
   /** Lines they priced, and the enquiry's own line count. */
   quotedLines: number;
   totalLines: number;
+  /**
+   * Board `3j-s`: the reply is a proposal — a fee on a basis, with no lines —
+   * so the row must not read *0 of 1 lines*.
+   */
+  proposed?: boolean;
   /** The seller's own words, when they gave a reason for declining. */
   declineReason: string | null;
+  /**
+   * Board `3j-s`: the supplier declined it themselves, rather than being
+   * declined by the buyer accepting somebody else.
+   */
+  declinedBySupplier?: boolean;
   /** True when the buyer revised the requirement after this quote was sent. */
   superseded: boolean;
   quotedAgainstRevision: number;

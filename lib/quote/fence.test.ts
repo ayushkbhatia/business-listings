@@ -71,4 +71,13 @@ describe("decidedReason", () => {
     expect(decidedReason({ ...open, recipientState: "declined" })).toBe("declined");
     expect(decidedReason({ ...open, outcome: "won" })).toBe("marked");
   });
+
+  it("tells a supplier's own decline apart from the buyer's (board 3j-s)", () => {
+    expect(decidedReason({ ...open, recipientState: "declined", declinedBySeller: true })).toBe("declined_by_you");
+    expect(quoteFence({ ...open, recipientState: "declined", declinedBySeller: true }, NOW)).toBe("declined_by_you");
+    // An acceptance still outranks it: the enquiry is, first of all, decided.
+    expect(
+      decidedReason({ ...open, recipientState: "declined", declinedBySeller: true, contactReleasedToBusinessId: "b-other" }),
+    ).toBe("accepted_elsewhere");
+  });
 });

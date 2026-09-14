@@ -23,10 +23,12 @@ import { getInbox, type LeadRailRow, type LeadScope, type LeadTab } from "@/lib/
 import { assignableSeats } from "@/lib/leads/assign";
 import { findDraft } from "@/lib/quote/draft";
 import { quoteFence } from "@/lib/quote/fence";
+import { workEnquiryOf } from "@/lib/quote/work-enquiry";
 import { getNavBadges, requireSellerSeat, SellerPage, type SellerSeat } from "../_shell";
 import { LeadRail, railHref } from "./_rail";
 import { Composer } from "./Composer";
 import { LeadActions } from "./LeadActions";
+import { ProposalLeadPane } from "./_proposal";
 import { ScopeFilter } from "./ScopeFilter";
 
 /**
@@ -108,7 +110,7 @@ export async function Inbox({ selectedId, search }: InboxProps) {
   const scope = parseScope(one(search, "scope"), seat);
   const cursor = one(search, "cursor") ?? null;
 
-  const [page, badges, seats, business] = await Promise.all([
+  const [page, badges, seats, business, work] = await Promise.all([
     getInbox({ businessId: seat.businessId, tab, scope, cursor }),
     getNavBadges(seat.businessId),
     assignableSeats(seat.actor, seat.businessId),
@@ -116,6 +118,13 @@ export async function Inbox({ selectedId, search }: InboxProps) {
       where: { id: seat.businessId },
       select: { responseTimeMedianMs: true, suspendedAt: true },
     }),
+    /*
+       Board `3j-s`: an enquiry for work opens as a proposal, full width. Read
+       before the layout because it decides the layout. Whether this seat
+       received it at all is decided by the pane, which 404s — nothing about a
+       layout says whether an id exists.
+    */
+    selectedId ? workEnquiryOf(prisma, selectedId) : Promise.resolve(null),
   ]);
 
   // Read once, at the top, so every relative label on this page measures from
@@ -191,6 +200,18 @@ export async function Inbox({ selectedId, search }: InboxProps) {
 
       {business.suspendedAt ? <SuspendedNotice /> : null}
 
+      {selectedId && work ? (
+        <ProposalLeadPane
+          seat={seat}
+          enquiryId={selectedId}
+          tab={tab}
+          scope={scope}
+          now={now}
+          seats={seats}
+          suspended={business.suspendedAt !== null}
+        />
+      ) : (
+      <>
       {/*
         Two panes that scroll independently inside the shell's own scroll
         region. `min-h-0` on both is what stops a flex child refusing to shrink
@@ -234,6 +255,8 @@ export async function Inbox({ selectedId, search }: InboxProps) {
           )}
         </div>
       </div>
+      </>
+      )}
     </SellerPage>
   );
 }

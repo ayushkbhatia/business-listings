@@ -35,6 +35,8 @@ export type QuoteFenceReason =
   | "accepted_elsewhere"
   /** Declined by the buyer, or by acceptance of someone else. */
   | "declined"
+  /** The supplier declined it themselves — board `3j-s`. Final, because the buyer was told. */
+  | "declined_by_you"
   /** The seller marked the lead won or lost themselves. Clearing it reopens it. */
   | "marked"
   /** The listing is suspended, and a suspended listing is read-only. */
@@ -51,6 +53,13 @@ export interface QuoteFenceState {
   recipientState: string;
   /** `EnquiryRecipient.outcome`, the seller's own mark. */
   outcome: string | null;
+  /**
+   * Whether `EnquiryRecipient.declinedAt` is set — the supplier's own decline,
+   * board `3j-s`. Optional so a caller that cannot know says nothing rather than
+   * false; a declined row without it reads as the buyer's decline, which is what
+   * every declined row meant before the supplier could write one.
+   */
+  declinedBySeller?: boolean;
   /** Whether `Business.suspendedAt` is set. */
   suspended: boolean;
   /** `Enquiry.closesAt`. */
@@ -86,12 +95,18 @@ export function quoteFence(state: QuoteFenceState, now: Date): QuoteFenceReason 
  * a quote that is history.
  */
 export function decidedReason(
-  state: Pick<QuoteFenceState, "businessId" | "contactReleasedToBusinessId" | "recipientState" | "outcome">,
-): Extract<QuoteFenceReason, "accepted_yours" | "accepted_elsewhere" | "declined" | "marked"> | null {
+  state: Pick<
+    QuoteFenceState,
+    "businessId" | "contactReleasedToBusinessId" | "recipientState" | "outcome" | "declinedBySeller"
+  >,
+): Extract<
+  QuoteFenceReason,
+  "accepted_yours" | "accepted_elsewhere" | "declined" | "declined_by_you" | "marked"
+> | null {
   if (state.contactReleasedToBusinessId !== null) {
     return state.contactReleasedToBusinessId === state.businessId ? "accepted_yours" : "accepted_elsewhere";
   }
-  if (state.recipientState === "declined") return "declined";
+  if (state.recipientState === "declined") return state.declinedBySeller ? "declined_by_you" : "declined";
   if (state.outcome !== null) return "marked";
   return null;
 }

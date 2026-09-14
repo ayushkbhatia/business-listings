@@ -94,6 +94,7 @@ export async function exportPipeline(input: {
       field(t("quotes.export.requirement_head")),
       field(t("quotes.col.lines")),
       field(t("quotes.export.total_head")),
+      field(t("quotes.export.basis_head")),
       field(t("quotes.col.sent")),
       field(t("quotes.col.valid_until")),
       field(t("quotes.col.status")),
@@ -114,7 +115,13 @@ export async function exportPipeline(input: {
         ),
         field(row.summary),
         field(row.lineCount),
-        field(row.totalAed),
+        /*
+           Board `3j-s`: a proposal's fee in the amount column and its basis in
+           the next one, so a spreadsheet summing the column can see which rows
+           are not a total. Empty for a quote, whose amount is one.
+        */
+        field(row.proposal ? row.proposal.feeAed : row.totalAed),
+        field(row.proposal ? row.proposal.feeBasisLabel : null),
         field(row.sentAt ? formatDate(row.sentAt) : null),
         field(row.expiresAt ? formatDate(row.expiresAt) : null),
         field(t(STATE_KEY[row.state])),

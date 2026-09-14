@@ -47,6 +47,7 @@ const TYPICAL: AcceptedRecord = {
     expiresAt: new Date("2026-09-04T06:00:00Z"),
     lines: BOARD.lines,
     totalAed: BOARD.totalAed,
+    proposal: null,
   },
   supplier: {
     id: "b-7c",
@@ -121,6 +122,42 @@ export function AcceptedRecordGallery() {
             ...TYPICAL,
             isBrief: true,
             supplier: { ...TYPICAL.supplier, person: null, phone: null, whatsapp: null, location: null },
+          }}
+        />
+      </States>
+
+      <States label="an accepted proposal · board 3j-s" stack>
+        <Record
+          record={{
+            ...TYPICAL,
+            isBrief: true,
+            declinedCount: 0,
+            quote: {
+              ...TYPICAL.quote,
+              revision: 1,
+              note: null,
+              paymentTerms: null,
+              delivery: null,
+              validityDays: 30,
+              lines: [],
+              totalAed: "0.00",
+              proposal: {
+                feeAed: "18400.00",
+                feeBasis: "per_month",
+                feeBasisLabel: "Per month",
+                mobilisationAed: "6000.00",
+                termMonths: 24,
+                serviceName: "Planned and reactive MEP maintenance",
+                scope:
+                  "Quarterly PPM visits to a written schedule across both towers, covering 3 chillers, AHUs, pumps, LV distribution and BMS. 24/7 reactive callout with 4-hour attendance.",
+                deliverable: "Monthly written report with photographs",
+                deliveredWhere: null,
+                exclusions:
+                  "Major plant replacement, refrigerant gas beyond 5 kg per annum, civil and builder's work, and works requiring a road closure permit.",
+              },
+            },
+            supplier: { ...TYPICAL.supplier, displayName: "Emirates Facilities Group" },
+            commitments: [],
           }}
         />
       </States>

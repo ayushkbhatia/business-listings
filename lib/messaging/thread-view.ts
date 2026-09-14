@@ -16,6 +16,17 @@ export interface QuoteForThread {
   ref: string;
   revision: number;
   lines: readonly { qty: number | null; unitPrice: string }[];
+  /**
+   * Board `3j-s`: the fee, when this revision is a proposal. It has no lines,
+   * so its figure is the fee — and two revisions compare only on the same basis.
+   */
+  proposal?: { feeAed: string; feeBasis: string; feeBasisLabel: string } | null;
+}
+
+/** The figure a revision stands for, and the basis it is on (null for a sum of lines). */
+function figureOf(quote: QuoteForThread): { fils: bigint; basis: string | null } {
+  if (quote.proposal) return { fils: parseAedToFils(quote.proposal.feeAed), basis: quote.proposal.feeBasis };
+  return { fils: quoteTotalFils(quote.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice }))), basis: null };
 }
 
 export interface DeltaLabels {
@@ -32,26 +43,35 @@ export function toThreadQuotes(
   quotes: readonly QuoteForThread[],
   formatAed: (aed: string) => string,
   labels: DeltaLabels,
+  /** How a proposal's fee reads — `AED 18,400 · Per month`. Defaults to the amount alone. */
+  feeLabel?: (proposal: NonNullable<QuoteForThread["proposal"]>) => string,
 ): Map<string, ThreadQuoteView> {
   const ordered = [...quotes].sort((a, b) => a.revision - b.revision);
   const views = new Map<string, ThreadQuoteView>();
+  const labelOf = (quote: QuoteForThread, fils: bigint) =>
+    quote.proposal && feeLabel ? feeLabel(quote.proposal) : formatAed(filsToDecimal(fils));
 
   ordered.forEach((quote, index) => {
-    const total = quoteTotalFils(quote.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice })));
+    const { fils: total, basis } = figureOf(quote);
     const previous = index === 0 ? null : ordered[index - 1]!;
+    const before = previous ? figureOf(previous) : null;
 
-    if (!previous) {
+    /*
+       Nothing to compare against: the first revision, or a previous one on a
+       different basis. `18,400 per month` after `210,000 fixed fee` is not
+       *191,600 lower*, and a struck-through figure in another unit would say it
+       was.
+    */
+    if (!previous || !before || before.basis !== basis) {
       views.set(quote.id, {
         ref: quote.ref,
         revision: quote.revision,
-        totalLabel: formatAed(filsToDecimal(total)),
+        totalLabel: labelOf(quote, total),
       });
       return;
     }
 
-    const previousTotal = quoteTotalFils(
-      previous.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice })),
-    );
+    const previousTotal = before.fils;
     const change = delta(previousTotal, total);
     const amount = formatAed(filsToDecimal(change.fils < 0n ? -change.fils : change.fils));
     const percent = change.percent === null ? "" : String(Math.abs(change.percent));
@@ -59,8 +79,8 @@ export function toThreadQuotes(
     views.set(quote.id, {
       ref: quote.ref,
       revision: quote.revision,
-      totalLabel: formatAed(filsToDecimal(total)),
-      previousTotalLabel: formatAed(filsToDecimal(previousTotal)),
+      totalLabel: labelOf(quote, total),
+      previousTotalLabel: labelOf(previous, previousTotal),
       deltaLabel:
         change.direction === "same"
           ? labels.same

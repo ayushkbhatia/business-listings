@@ -7,6 +7,7 @@ import { can } from "@/lib/auth/can";
 import { cn } from "@/lib/cn";
 import { prisma } from "@/lib/db/client";
 import { formatAED, formatCount, formatDate } from "@/lib/format";
+import { feeOnBasis, feeOnBasisInColumn } from "@/lib/quote/proposal-words";
 import { t } from "@/lib/i18n";
 import type { LeadScope } from "@/lib/leads/inbox";
 import {
@@ -157,7 +158,12 @@ export async function PipelineScreen({
 
       <div className="space-y-[var(--gutter)]">
         <Tabs counts={pipeline.counts} active={tab} />
-        <Strip counts={pipeline.counts} quotedTotalAed={pipeline.quotedTotalAed} total={pipeline.total} />
+        <Strip
+          counts={pipeline.counts}
+          quotedTotalAed={pipeline.quotedTotalAed}
+          proposalCount={pipeline.proposalCount}
+          total={pipeline.total}
+        />
 
         {pipeline.rows.length === 0 ? (
           <EmptyPipeline tab={tab} />
@@ -246,19 +252,27 @@ function Tabs({
 function Strip({
   counts,
   quotedTotalAed,
+  proposalCount,
   total,
 }: {
   counts: Awaited<ReturnType<typeof getPipeline>>["counts"];
   quotedTotalAed: string;
+  proposalCount: number;
   total: number;
 }) {
   return (
     <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted">
       <span className="font-mono tabular-nums text-ink">
-        {t("quotes.strip", {
-          total: formatAED(quotedTotalAed),
-          count: formatCount(total),
-        })}
+        {/*
+           A tab of nothing but proposals has no quoted total to state, and
+           *AED 0 quoted across 3 sent* would say they were sent for nothing.
+        */}
+        {proposalCount > 0 && proposalCount === total
+          ? t("quotes.strip_all_proposals", { count: total, formatted: formatCount(total) })
+          : t("quotes.strip", {
+              total: formatAED(quotedTotalAed),
+              count: formatCount(total),
+            })}
       </span>
       <span>
         {t("quotes.strip_won", {
@@ -266,6 +280,11 @@ function Strip({
           count: formatCount(counts.all),
         })}
       </span>
+      {proposalCount > 0 && proposalCount < total ? (
+        <span>
+          {t("quotes.strip_proposals", { count: proposalCount, formatted: formatCount(proposalCount) })}
+        </span>
+      ) : null}
       {/* §8.3: every outcome here is the seller's own record. */}
       <span className="text-faint">{t("quotes.strip_caveat")}</span>
     </p>
@@ -448,7 +467,8 @@ function Row({
       </td>
 
       <td className="px-3 py-3 text-right font-mono tabular-nums text-body-sm text-ink">
-        {formatAED(row.totalAed, { style: "quote" })}
+        {/* Board `3j-s`: a proposal's fee with its basis, never a sum of no lines. */}
+        {row.proposal ? feeOnBasisInColumn(row.proposal) : formatAED(row.totalAed, { style: "quote" })}
       </td>
 
       <td className="px-3 py-3 text-body-sm text-muted">
@@ -706,7 +726,7 @@ function ExpiringPanel({ rows, now }: { rows: readonly PipelineRow[]; now: Date 
                       ? row.buyer.companyName
                       : row.buyer.firstName}
                     {" · "}
-                    {formatAED(row.totalAed)}
+                    {row.proposal ? feeOnBasis(row.proposal) : formatAED(row.totalAed)}
                   </span>
                 </span>
                 <span className="font-mono text-caption tabular-nums text-warn-ink">

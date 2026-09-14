@@ -72,6 +72,21 @@ if grep -qE '^[[:space:]]*model[[:space:]]+QuoteLine[[:space:]]*\{' <<<"$CODE"; 
   fi
 fi
 
+# Board 3j-s. `QuoteProposal.feeAed` is the other price, under the same rule:
+# private, on a quote, never on a public model. And the two rules the board puts
+# in the database — a proposal carries no line, a sent proposal is not edited —
+# are triggers, which Prisma cannot express and a regeneration would never know.
+if grep -qE '^[[:space:]]*model[[:space:]]+QuoteProposal[[:space:]]*\{' <<<"$CODE"; then
+  if grep -rqE 'CREATE TRIGGER "quote_line_not_on_proposal"' prisma/migrations \
+     && grep -rqE 'CREATE TRIGGER "quote_proposal_immutable"' prisma/migrations; then
+    echo "   pass — a proposal carries no line, and a sent one is not edited, by trigger"
+  else
+    echo "   FAIL — QuoteProposal exists without quote_line_not_on_proposal or quote_proposal_immutable."
+    echo "     Prisma cannot express a trigger; both live in the 3j-s migration."
+    fail=1
+  fi
+fi
+
 # Invariants Prisma has no syntax for, so a regeneration cannot express them and
 # would quietly drop them. Each is asserted against the migration that owns it.
 #

@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/client";
 import { getThread } from "@/lib/messaging/service";
 import { toThreadQuotes } from "@/lib/messaging/thread-view";
 import { formatAED, formatDateTime } from "@/lib/format";
+import { feeOnBasis } from "@/lib/quote/proposal-words";
 import { t } from "@/lib/i18n";
 import { markSellerQuotesRead } from "@/lib/messaging/receipts";
 import { resolveBuyerId, trackingTokenFor } from "../../../_buyer";
@@ -55,7 +56,13 @@ export default async function BuyerThreadPage({
     prisma.quote.findMany({
       where: { enquiryId: id, businessId: business.id, status: { not: "draft" } },
       orderBy: { revision: "asc" },
-      select: { id: true, ref: true, revision: true, lines: { select: { qty: true, unitPrice: true } } },
+      select: {
+        id: true,
+        ref: true,
+        revision: true,
+        lines: { select: { qty: true, unitPrice: true } },
+        proposal: { select: { feeAed: true, feeBasis: true, feeBasisLabel: true } },
+      },
     }),
   ]);
   if (!messages) notFound();
@@ -74,6 +81,14 @@ export default async function BuyerThreadPage({
       ref: q.ref,
       revision: q.revision,
       lines: q.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() })),
+      proposal:
+        q.proposal?.feeAed && q.proposal.feeBasis && q.proposal.feeBasisLabel
+          ? {
+              feeAed: q.proposal.feeAed.toString(),
+              feeBasis: q.proposal.feeBasis,
+              feeBasisLabel: q.proposal.feeBasisLabel,
+            }
+          : null,
     })),
     (aed) => formatAED(aed),
     {
@@ -81,6 +96,7 @@ export default async function BuyerThreadPage({
       up: (amount, percent) => t("thread.delta_up", { amount, percent }),
       same: t("thread.delta_same"),
     },
+    feeOnBasis,
   );
 
   const carry = await trackingTokenFor(buyerId);

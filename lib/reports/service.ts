@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { PROPOSAL_RECORD_SELECT, toProposalRecord } from "@/lib/quote/proposal";
 import "@/lib/audit/prisma-writer";
 import { staffMutation } from "@/lib/audit/staff-mutation";
 import { auditScopeFor } from "@/lib/auth/subject";
@@ -254,6 +255,9 @@ export async function reportEvidence(reportId: string) {
           orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
           select: { id: true, description: true, qty: true, unitPrice: true, leadTimeDays: true },
         },
+        // Board `3j-s`: a report about an accepted proposal is judged against the
+        // scope and the exclusions, which are the whole of what was agreed.
+        proposal: { select: PROPOSAL_RECORD_SELECT },
       },
     }),
     prisma.message.findMany({
@@ -273,7 +277,7 @@ export async function reportEvidence(reportId: string) {
   return {
     report,
     enquiry: report.enquiry,
-    quote,
+    quote: quote ? { ...quote, proposal: toProposalRecord(quote.proposal) } : null,
     messages: messages.map((message) => ({
       id: message.id,
       body: message.body,

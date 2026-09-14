@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import type { Prisma } from "@/lib/db/generated/client";
 import { buyerForSeller, type SellerVisibleBuyer } from "@/lib/db/queries/seller-visibility";
 import { quoteTotalAed } from "@/lib/quote/money";
+import { PROPOSAL_FIGURE_SELECT, toProposalFigure, type ProposalFigure } from "@/lib/quote/proposal";
 
 /**
  * Board 3j — the list rail, and the four tabs above it.
@@ -87,7 +88,14 @@ export interface LeadRailRow {
   buyerBudgetAed: string | null;
   /** How many suppliers the buyer fanned this out to. The buyer disclosed it. */
   competing: number;
-  latestQuote: { ref: string; revision: number; totalAed: string; sentAt: Date | null } | null;
+  latestQuote: {
+    ref: string;
+    revision: number;
+    totalAed: string;
+    sentAt: Date | null;
+    /** Board `3j-s`: the fee and its basis, when the reply was a proposal. */
+    proposal: ProposalFigure | null;
+  } | null;
   assignedTo: { id: string; name: string } | null;
   outcome: "won" | "lost" | null;
   /** True when the outcome is the buyer's decision rather than the seller's note. */
@@ -253,6 +261,17 @@ export function bandOf(
   return "waiting";
 }
 
+/**
+ * When the first reply falls due — the instant `bandOf` calls a lead breached.
+ *
+ * Board `3j-s`'s *Reply due in 2h* chip, read off the same floor and the same
+ * setting the rail bands by, so the chip on the lead and the band on its row
+ * cannot disagree about whether it is late.
+ */
+export function replyDueAt(receivedAt: Date, escalationMinutes: number): Date {
+  return new Date(receivedAt.getTime() + Math.max(MIN_MINUTES, escalationMinutes) * 60_000);
+}
+
 /** The first sentence of the requirement, for a rail row that must not wrap twice. */
 function summarise(requirement: string): string {
   const flat = requirement.replace(/\s+/g, " ").trim();
@@ -350,6 +369,7 @@ export async function getInbox(input: {
                 revision: true,
                 sentAt: true,
                 lines: { select: { qty: true, unitPrice: true } },
+                proposal: { select: PROPOSAL_FIGURE_SELECT },
               },
             },
           },
@@ -418,6 +438,7 @@ export async function getInbox(input: {
             totalAed: quoteTotalAed(
               quote.lines.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() })),
             ),
+            proposal: toProposalFigure(quote.proposal),
           }
         : null,
       assignedTo: r.assignedTo

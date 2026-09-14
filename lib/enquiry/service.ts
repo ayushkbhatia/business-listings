@@ -951,15 +951,28 @@ export async function acceptQuote(
   });
 
   if (accepted.ok) {
-    const total = await prisma.quoteLine.findMany({
-      where: { quoteId: quote.id },
-      select: { qty: true, unitPrice: true },
-    });
+    const [total, proposal] = await Promise.all([
+      prisma.quoteLine.findMany({
+        where: { quoteId: quote.id },
+        select: { qty: true, unitPrice: true },
+      }),
+      prisma.quoteProposal.findUnique({
+        where: { quoteId: quote.id },
+        select: { feeAed: true, feeBasisLabel: true },
+      }),
+    ]);
     await onQuoteAccepted({
       enquiryId: accepted.enquiryId,
       businessId: accepted.businessId,
       quoteRef: quote.ref,
       totalAed: quoteTotalAed(total.map((l) => ({ qty: l.qty, unitPrice: l.unitPrice.toString() }))),
+      /*
+         Board `3j-s`: an accepted proposal's figure is its fee on its basis. The
+         line sum is `0.00` and would tell the supplier they won nothing.
+      */
+      ...(proposal?.feeAed && proposal.feeBasisLabel
+        ? { proposal: { feeAed: proposal.feeAed.toString(), feeBasisLabel: proposal.feeBasisLabel } }
+        : {}),
     });
   }
 

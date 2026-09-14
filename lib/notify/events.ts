@@ -1,4 +1,5 @@
 import "server-only";
+import { feeOnBasis } from "@/lib/quote/proposal-words";
 import { prisma } from "@/lib/db/client";
 import { formatAED, formatCount, formatDate, UAE_LOCALE } from "@/lib/format";
 /*
@@ -249,6 +250,8 @@ export async function onQuoteAccepted(input: {
   businessId: string;
   quoteRef: string;
   totalAed: string;
+  /** Board `3j-s`: set when the accepted reply was a proposal. */
+  proposal?: { feeAed: string; feeBasisLabel: string };
 }): Promise<void> {
   await safely("quote_accepted", async () => {
     const [owner, enquiry] = await Promise.all([
@@ -276,11 +279,15 @@ export async function onQuoteAccepted(input: {
       businessId: input.businessId,
       recipientUserId: owner.id,
       enquiryId: input.enquiryId,
-      valueAed: Number(input.totalAed),
+      /*
+         A fee on a basis is not a value: `18,400 per month` summed beside a goods
+         total means nothing. Null says the figure is not one this column holds.
+      */
+      valueAed: input.proposal ? null : Number(input.totalAed),
       params: withParams("quote_accepted", {
         ref: enquiry.ref,
         quoteRef: input.quoteRef,
-        amount: formatAED(input.totalAed),
+        amount: input.proposal ? feeOnBasis(input.proposal) : formatAED(input.totalAed),
         enquiryId: input.enquiryId,
         shortLink: absoluteUrl(`/dashboard/leads/${input.enquiryId}`),
       }),

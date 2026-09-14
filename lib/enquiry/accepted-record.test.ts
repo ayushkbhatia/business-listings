@@ -48,6 +48,7 @@ function record(overrides: Partial<AcceptedRecord["quote"]> = {}): AcceptedRecor
       expiresAt: new Date("2026-09-04T06:00:00Z"),
       lines,
       totalAed,
+      proposal: null,
       ...overrides,
     },
     supplier: {

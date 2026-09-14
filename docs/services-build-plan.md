@@ -1730,7 +1730,7 @@ services sections and one held, the placeholder and `comingSoon` both gone.
 | **6.3** | ~~`QuoteLine.qty`~~ | **Shipped in the same migration.** It was the harder half and neither planning document named it: `sendQuote` refused `qty < 1`, so it gated the **accepted quote** — the terminal state of the whole product |
 | **6.1b** | `Enquiry.areaId` | **Shipped #178.** The third migration, below |
 | **6.2** | ~~**`1h-s` / S2** — the brief~~ | **Shipped 13 Sep**, `20261014120000_service_brief_1hs`. See §4p |
-| **6.4** | `3j-s` Reply with a proposal | |
+| **6.4** | ~~`3j-s` Reply with a proposal~~ | **Shipped 14 Sep**, `20261019090000_proposal_reply_3js`. See §4t |
 | **6.5** | `1n-s` Compare proposals | Consecutive with `3j-s`. Four fee bases do not compare the way four unit prices do |
 
 ~~**`Enquiry.deliverToArea` is free text**, not an `areaId`~~ — **fixed #178**. It is a real
@@ -1945,6 +1945,99 @@ groups, the reasons and the no-price rule are the board's; only the address and 
 - Q1 — process steps. Q3 — a preview of the default storefront inside the builder.
 - The `Nexus` fixture sweep the README asks for is a design-canvas task: the tree has no `Nexus`.
 
+## 4t · Handoff `3j-s` — reply to a brief with a proposal
+
+*The seller's side of `1h-s`. One fee on the scope sheet's basis, a scope, an exclusions list.*
+
+### A proposal is a quote, not a second entity
+
+The handoff sketched `Proposal` as the services counterpart of `Quote`. Built that way it would
+have needed its own reference, revision sequence, validity window, fence, acceptance, expiry sweep,
+extension, thread line and first-reply stamp — every one of which took a board to get right once
+(`7c` found the fence missing on three writers). So the proposal is **the same `Quote` row with a
+`QuoteProposal` beside it and no lines**, the same shape `ServiceBrief` takes beside `Enquiry`.
+Everything downstream that keys on a quote keeps working; everything that summed its lines was
+taught to read the fee instead.
+
+### What shipped
+
+- **`sendProposal` and `saveProposalDraft`** (`lib/quote/proposal-server.ts`): the goods send's
+  shape — fence first, again under the enquiry's row lock, draft promoted in place, recipient
+  `quoted`, first reply stamped once. A second send is revision 2; two sends racing from one draft
+  produce one proposal.
+- **The fee basis is read, never chosen (B1).** The seller picks which of their services in the
+  trade the proposal answers; the basis comes with it from `familyFor`, copied onto the row at send
+  with its words. A sheet with no basis, or a basis its family no longer offers, blocks the send
+  and links to `3g-s` (AC8).
+- **Scope, deliverable, delivered-where and exclusions seed from the sheet** and edit per buyer;
+  nothing writes back (B3). Switching service re-seeds only the fields the seller has not touched.
+- **Term, mobilisation and validity are fields** (B5). Mobilisation `0` and empty are different
+  answers — *No mobilisation charge* against *Not stated* — so `1n-s` can tell them apart (B6).
+- **The database holds B2 and B10**: a trigger refuses a line on a proposal, another refuses an
+  edit to a sent one.
+- **One way to answer work.** `sendQuoteForBusiness` and the goods autosave refuse a brief or a
+  service enquiry. Production had no brief, no service line and no quote on either when this was
+  written, so nothing needed converting.
+- **`Decline` has a writer** (`lib/leads/decline.ts`). `state = declined` had one — the buyer
+  accepting somebody else — while the tracking page already carried *DECLINED · {reason}* for a
+  supplier who walked, reading a column that held a lost-quote code. `declinedAt`, `declinedById`
+  and `declineReason` now tell the two apart everywhere a declined row is read: the fence
+  (`declined_by_you`), the tracking row, the record's *declined for you* count. Refused once a
+  proposal is with the buyer; final, behind a confirmation that quotes the buyer's row.
+- **The screen** is the render: header strip with *Ask a question first* before *Decline*, the
+  brief left, fee / scope / excluded right, laid out by container width. No rail — the two columns
+  need it. The basis is a definition list, not a control.
+
+### Downstream, taught to read a fee
+
+The pipeline row and CSV (*18,400.00 · Per month* and a basis column), the pipeline strip (proposals
+left out of the quoted total, and counted), both threads (a revision's change named only on the same
+basis), the buyer's tracking row (*PROPOSAL SENT*, not *0 of 1 lines*), the compare page, the
+accepted-quote notice, the admin evidence page, and **the accepted record and its PDF**.
+
+### The handoff's four findings, and what was done here
+
+1. **Mobilisation dropped by `1n-s`** and 2. **term with no column** — both are fields on every
+   proposal now. The compare page renders both as stated and **does no arithmetic across bases at
+   all**; `1n-s` owns normalisation and its B6/B7 rules. Q1's answer for that board is *yes, both*.
+3. **Scale string multiplied** — nothing in this board parses it; the lead renders an empty scale
+   as absent with *ask before you propose*.
+4. **The exclusions promise into `7c`** — kept rather than left owed: the accepted record renders
+   *What was proposed* (fee, term, mobilisation, service, deliverable, delivered-where, scope and
+   exclusions) from the immutable row, and the PDF prints the same from the same words. A designed
+   `7c-s` is still worth a board; the promise the seller reads is no longer false in the meantime.
+
+### Decisions taken against the handoff
+
+- **Route kept as `/dashboard/leads/:id`**, not `/dashboard/enquiries/:id`: nine call sites, both
+  notification deep links and the e2e landing hard-code it, and the nav already reads *Leads & RFQs*.
+- **The buyer card shows a first name**, not name, company and job title. Rule 1 at the query layer
+  (`seller-visibility.ts`); `1h-s` corrected the same card on the buyer's side. *TRN on file* is not
+  shown either — it is a fact about the buyer's company, and the masked select holds none.
+- **Validity defaults to 30 days** for a proposal, from the render; Q4's per-family default is a
+  column a family does not have yet.
+- **Late is marked to the seller, not the buyer.** *Your first reply was due…* under the send; the
+  proposal still sends, and `proposal_sent.late` counts how often.
+- **Compare renders proposals term by term** until `1n-s` ships: it is the only place a buyer
+  accepts, and a lines table over a proposal read *AED 0.00 · Lowest*.
+
+### Found on the way, and fixed
+
+- **A seller's first message wrote `state = opened` unconditionally**, so a supplier writing after
+  the buyer had accepted someone else turned their `declined` row back to *Opened* on the buyer's
+  page. It moves only `delivered` now.
+- **The tracking page read a decline reason from `quote.lostReason`**, a stable code, and labelled
+  every non-winner *you chose another supplier* after an acceptance — including one that had declined
+  first.
+- **`readAmount` read `18,4` as 184.** A comma is a group separator only where the groups are whole;
+  a draft saved mid-keystroke keeps the fee as not stated instead.
+
+### Still owed
+
+- `1n-s` — normalisation, with mobilisation in any total, the term, and an honest scale statement.
+- Q3 (a basis other than the service's) and Q4 (validity per family) — the owner's.
+- A designed `7c-s`, now a refinement of a record that renders rather than a gap.
+
 ## 4b · What the re-sequence opens up
 
 Three questions the new order forces, in the order they bite.
@@ -2082,6 +2175,9 @@ Ranked by what it cost.
   brief's accepted quote honestly today — lines as quoted, *Priced as a whole* where there is no
   quantity, and a note that scope lives in the thread — but the exclusions block, the one line that
   prevents the argument later, has nowhere to go. Place it with `3j-s` and `1n-s`, not after them.
+  **Since `3j-s` (§4t) the record renders an accepted proposal** — fee on its basis, term,
+  mobilisation, scope and exclusions, page and PDF — so the promise holds; a designed `7c-s` is a
+  refinement now rather than a gap.
 - **`2e-s` is an orphan.** It appears once, in D1's *Blocks* column
   (`docs/epic-2026-09-11.md:90`), and in no phase. A 29th `-s` id in a document that says 28.
 - **§5 says "72 boards, each placed once."** The phases hold **70**; `3b-s` and `3c-s` are placed
@@ -2117,7 +2213,7 @@ edit**.
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | **Complete.** `2b-s`, `2c-s`, `2d-s` shipped 11 Sep; `3b-s` and `3c-s` 13 Sep (§4r) |
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **All four shipped 13 Sep** (§4m–§4o, §4s) — the public storefront set is complete, and the builder's library is filtered by kind |
-| **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p). `3j-s` and `1n-s` must be consecutive, and both read the brief |
+| **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p), **`3j-s` 14 Sep** (§4t). `1n-s` is next and must read §4t's findings first |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. `4c-s`, `12g-s` and `6g-s` remain. `1c-s` is unblocked on Q1, which `rankBlended` answers |
 | — | **Q1 said families** | `4e-s` · `3h-s` | — | Both **shipped 13 Sep** — `3h-s` closed wave 2 (§4k) and `4e-s` authored the five families (§4l) |

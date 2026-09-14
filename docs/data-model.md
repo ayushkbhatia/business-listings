@@ -253,10 +253,40 @@ model QuoteLine {
   productId    String?          // null = free-text line, flagged for manual pricing
   description  String
   qty          Int
-  unitPrice    Decimal          // THE ONLY PRICE FIELD IN THE SCHEMA
+  unitPrice    Decimal          // a price — private to one buyer and one seller
   leadTimeDays Int?
 }
+
+model QuoteProposal {           // board 3j-s — a quote for work, in place of lines
+  quoteId         String  @id  // one per quote; its presence makes the quote a proposal
+  serviceId       String?      // SET NULL — the copies below are what the record keeps
+  serviceName     String       // copied at send
+  feeBasis        String?      // copied from the service's family at send, never chosen
+  feeBasisLabel   String?
+  feeAed          Decimal?     // the one amount, excl. VAT; private like every price
+  mobilisationAed Decimal?     // null = not stated, 0 = a stated nil
+  termMonths      Int?         // 1..120
+  scope           String       // seeded from the scope sheet, edited per buyer, never written back
+  deliverable     String?
+  deliveredWhere  String?
+  exclusions      String?
+}
 ```
+
+**A proposal is a quote** (board `3j-s`). The same `Quote` row — reference, revision, window,
+status, fence, acceptance, expiry, extension, thread and first-reply stamp — with one
+`QuoteProposal` beside it and **no `QuoteLine`**. Two database triggers hold the board's rules
+rather than the form: `quote_line_not_on_proposal` refuses a line on a quote that has a proposal,
+and `quote_proposal_immutable` refuses an edit to a proposal whose quote has left `draft` — a
+revision is a new quote. An enquiry for work (a brief, or a line naming a service) is answered only
+by `sendProposal`; `sendQuoteForBusiness` and the goods autosave refuse it. Nothing adds a fee up
+across bases: every reader that printed a quote's total prints the fee on its basis instead, and
+the pipeline's quoted total leaves proposals out and says how many.
+
+`EnquiryRecipient` gains `declinedAt`, `declinedById` and `declineReason` — a supplier's own
+decline, which the buyer's tracking page reads as *DECLINED · {reason}*. `state = declined` with
+`declinedAt` null is still the buyer accepting somebody else; a CHECK keeps the timestamp and the
+state agreeing.
 
 Accepting a quote sets `Enquiry.contactReleasedToBusinessId`, marks the other recipients
 `declined`, and creates nothing else. There is no order, no fulfilment record, no payment.
