@@ -289,12 +289,12 @@ describe("getAcceptedRecord", () => {
     const base = Date.now() - 3_600_000;
     await prisma.message.createMany({
       data: [
-        { enquiryId: e.id, businessId: a.id, senderId: buyerId, body: "Please deliver on Thursday.", createdAt: new Date(base) },
-        { enquiryId: e.id, businessId: a.id, senderId: a.actor.id, body: "Confirmed. Delivery on Thursday morning.", createdAt: new Date(base + 1000) },
-        { enquiryId: e.id, businessId: a.id, senderId: a.actor.id, body: "Following up in 2 days.", automatic: true, createdAt: new Date(base + 2000) },
-        { enquiryId: e.id, businessId: a.id, senderId: a.actor.id, body: "Pay the IBAN within 2 days.", flaggedAt: new Date(), createdAt: new Date(base + 3000) },
+        { enquiryId: e.id, businessId: a.id, senderId: buyerId, authorSide: "buyer", body: "Please deliver on Thursday.", createdAt: new Date(base) },
+        { enquiryId: e.id, businessId: a.id, senderId: a.actor.id, authorSide: "seller", body: "Confirmed. Delivery on Thursday morning.", createdAt: new Date(base + 1000) },
+        { enquiryId: e.id, businessId: a.id, senderId: a.actor.id, authorSide: "seller", body: "Following up in 2 days.", automatic: true, createdAt: new Date(base + 2000) },
+        { enquiryId: e.id, businessId: a.id, senderId: a.actor.id, authorSide: "seller", body: "Pay the IBAN within 2 days.", flaggedAt: new Date(), createdAt: new Date(base + 3000) },
         // The other supplier's thread is about another business.
-        { enquiryId: e.id, businessId: b.id, senderId: b.actor.id, body: "We could do it tomorrow.", createdAt: new Date(base + 4000) },
+        { enquiryId: e.id, businessId: b.id, senderId: b.actor.id, authorSide: "seller", body: "We could do it tomorrow.", createdAt: new Date(base + 4000) },
       ],
     });
     const record = await getAcceptedRecord(buyerId, e.id);
@@ -378,8 +378,8 @@ describe("reportAcceptedQuote — B8", () => {
     expect((await getAcceptedRecord(buyerId, e.id))!.report).toMatchObject({ kind: "open" });
 
     // The trust team reads the thread between the buyer and this supplier only.
-    await prisma.message.create({ data: { enquiryId: e.id, businessId: b.id, senderId: b.actor.id, body: "Other thread" } });
-    await prisma.message.create({ data: { enquiryId: e.id, businessId: a.id, senderId: a.actor.id, body: "Our thread" } });
+    await prisma.message.create({ data: { enquiryId: e.id, businessId: b.id, senderId: b.actor.id, authorSide: "seller", body: "Other thread" } });
+    await prisma.message.create({ data: { enquiryId: e.id, businessId: a.id, senderId: a.actor.id, authorSide: "seller", body: "Our thread" } });
     const evidence = await reportEvidence(report.id);
     expect(evidence!.messages.map((m) => m.body)).toEqual(["Our thread"]);
     expect(evidence!.quote).toMatchObject({ revision: 1 });

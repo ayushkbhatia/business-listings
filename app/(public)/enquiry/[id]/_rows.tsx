@@ -26,6 +26,7 @@ export function RecipientRow({
   acceptedBusinessId,
   isFirstQuoted,
   quoteHref,
+  threadHref,
   enquiryRef,
   token,
 }: {
@@ -37,6 +38,8 @@ export function RecipientRow({
   /** Only the first quoted row gets a primary action. One primary per view. */
   isFirstQuoted: boolean;
   quoteHref: string;
+  /** Board `10h`: the conversation with this supplier. Every row has one, silence included. */
+  threadHref: string;
   enquiryRef: string;
   token: string | null;
 }) {
@@ -76,6 +79,18 @@ export function RecipientRow({
         <p className="mt-0.5 font-mono text-eyebrow uppercase tracking-eyebrow text-faint">
           <StateLine row={row} state={state} passedOver={passedOver} />
         </p>
+        {/*
+           Board `10h`: the build plan's finding was that nothing in the product
+           linked to the thread at all — the buyer could only reach it from an
+           accepted record, after the negotiation it exists for was over.
+        */}
+        <a
+          href={threadHref}
+          aria-label={t("track.thread_named", { supplier: row.displayName })}
+          className="mt-1 inline-block rounded-tag text-caption text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+        >
+          {t("track.thread")}
+        </a>
       </div>
 
       <div className="shrink-0">

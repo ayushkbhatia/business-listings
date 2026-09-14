@@ -98,6 +98,13 @@ export default async function ComparePage({
 
   const error = acceptErrorMessage(one("error"));
   const accepted = enquiry.contactReleasedToBusinessId;
+  /*
+     Board `10e` `B3` and `10h`'s states: closed with nothing accepted is
+     terminal, and `acceptQuote` refuses it. The buttons were live on a closed
+     enquiry, so a buyer met the refusal only after pressing.
+  */
+  const closed = !accepted && enquiry.closesAt.getTime() <= new Date().getTime();
+  const carry = token ? `?t=${encodeURIComponent(token)}` : "";
 
   const lowest = quotes.reduce((min, q) => (Number(q.totalAed) < Number(min.totalAed) ? q : min), quotes[0]!);
   const fastest = quotes.reduce((best, q) => {
@@ -122,6 +129,12 @@ export default async function ComparePage({
         </p>
       ) : null}
 
+      {closed && !error ? (
+        <p className="mt-4 rounded-ctl border border-line bg-paper-sunk px-3 py-2 text-body-sm text-body">
+          {t("compare.error_enquiry_closed")}
+        </p>
+      ) : null}
+
       <div className="mt-6 overflow-x-auto rounded-card border border-line bg-card">
         <table className="w-full min-w-[48rem] border-collapse text-left">
           <caption className="sr-only">{t("compare.quotes_caption")}</caption>
@@ -132,7 +145,12 @@ export default async function ComparePage({
               </th>
               {quotes.map((quote) => (
                 <th key={quote.id} scope="col" className="px-3 py-2 align-top">
-                  <SupplierHead quote={quote} lowest={quote.id === lowest.id} fastest={quote.id === fastest.id && quote.maxLeadTimeDays !== null} />
+                  <SupplierHead
+                    quote={quote}
+                    lowest={quote.id === lowest.id}
+                    fastest={quote.id === fastest.id && quote.maxLeadTimeDays !== null}
+                    threadHref={`/enquiry/${encodeURIComponent(enquiry.ref)}/thread/${quote.business.slug}${carry}`}
+                  />
                 </th>
               ))}
             </tr>
@@ -243,6 +261,13 @@ export default async function ComparePage({
                         {t("quotes.state.lost")}
                       </StatusBadge>
                     )
+                  ) : closed ? (
+                    <Button type="button" size="sm" block disabled>
+                      {t("compare.accept", {
+                        ref: `r${quote.revision}`,
+                        total: formatAED(quote.totalAed),
+                      })}
+                    </Button>
                   ) : (
                     <form action={acceptQuoteAction}>
                       <input type="hidden" name="quoteId" value={quote.id} />
@@ -287,10 +312,13 @@ function SupplierHead({
   quote,
   lowest,
   fastest,
+  threadHref,
 }: {
   quote: BuyerQuote;
   lowest: boolean;
   fastest: boolean;
+  /** Board `10h`: push on this supplier before choosing between them. */
+  threadHref: string;
 }) {
   const spec = tierSpec(quote.business.verificationTier);
   return (
@@ -311,6 +339,13 @@ function SupplierHead({
           compact
         />
       </span>
+      <a
+        href={threadHref}
+        aria-label={t("track.thread_named", { supplier: quote.business.displayName })}
+        className="mt-1 inline-block rounded-tag text-caption text-moss underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
+      >
+        {t("track.thread")}
+      </a>
       <span className="mt-1 flex flex-wrap gap-1">
         {lowest ? (
           <StatusBadge tone="ok" size="sm" shape="chip">

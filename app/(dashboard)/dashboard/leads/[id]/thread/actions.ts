@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { t } from "@/lib/i18n";
-import { postSellerMessage } from "@/lib/messaging/service";
+import {
+  postSellerMessage,
+  signSellerThreadAttachment,
+  type PostMessageError,
+} from "@/lib/messaging/service";
 import {
   cancelFollowUp,
   scheduleFollowUp,
@@ -20,10 +24,34 @@ import { getSellerSeat } from "../../../_shell";
  * tests/integration/thread.test.ts and tests/integration/follow-up.test.ts.
  */
 
+function refusalWords(error: PostMessageError | "unavailable"): string {
+  switch (error) {
+    case "supplier_closed":
+      return t("thread.supplier_closed");
+    case "closed":
+      return t("thread.closed");
+    case "not_chosen":
+      return t("thread.not_chosen");
+    case "type":
+      return t("negotiation.attach.error_type");
+    case "size":
+      return t("negotiation.attach.error_size");
+    case "count":
+      return t("negotiation.attach.error_count");
+    case "attachment_missing":
+      return t("negotiation.attach.error_missing");
+    case "unavailable":
+      return t("negotiation.attach.error_unavailable");
+    default:
+      return t("thread.not_yours");
+  }
+}
+
 /** The seller's half of the thread. Same service as the buyer's. */
 export async function sendSellerMessage(input: {
   enquiryId: string;
   body: string;
+  attachments?: { path: string; filename: string }[];
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const seat = await getSellerSeat();
   if (!seat) return { ok: false, error: t("thread.not_yours") };
@@ -31,23 +59,36 @@ export async function sendSellerMessage(input: {
   const result = await postSellerMessage(seat.actor, seat.businessId, {
     enquiryId: input.enquiryId,
     body: input.body,
+    attachments: (input.attachments ?? []).slice(0, 10).map((file) => ({
+      path: String(file.path),
+      filename: String(file.filename),
+    })),
   });
 
-  if (!result.ok) {
-    return {
-      ok: false,
-      error:
-        result.error === "supplier_closed"
-          ? t("thread.supplier_closed")
-          : result.error === "closed"
-            ? t("thread.closed")
-            : t("thread.not_yours"),
-    };
-  }
+  if (!result.ok) return { ok: false, error: refusalWords(result.error) };
 
   revalidatePath(`/dashboard/leads/${input.enquiryId}/thread`);
   revalidatePath("/dashboard/leads");
   return { ok: true };
+}
+
+/** A signed upload for one file a seat is about to send — board `10h` Q5, the seller's side. */
+export async function signSellerAttachmentAction(input: {
+  enquiryId: string;
+  filename: string;
+  type: string;
+  bytes: number;
+}): Promise<{ ok: true; url: string; path: string } | { ok: false; error: string }> {
+  const seat = await getSellerSeat();
+  if (!seat) return { ok: false, error: t("thread.not_yours") };
+
+  const result = await signSellerThreadAttachment(seat.actor, seat.businessId, {
+    enquiryId: input.enquiryId,
+    filename: String(input.filename),
+    type: String(input.type),
+    bytes: Number(input.bytes),
+  });
+  return result.ok ? result : { ok: false, error: refusalWords(result.error) };
 }
 
 const FOLLOW_UP_ERROR = {

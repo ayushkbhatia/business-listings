@@ -26,7 +26,6 @@ import {
   type ListingCardBusiness,
   type ListingContext,
   type EnquiryComposerLabels,
-  type ThreadLabels,
   type ThreadMessageView,
   type QuoteLineDraft,
   type QuoteLineEditorLabels,
@@ -42,6 +41,9 @@ import type { DeliveryMode } from "@/lib/db/generated/enums";
 import type { RamadanHours, WeekHours } from "@/lib/trade/hours";
 import { formatAED, formatDate, formatDuration, formatSize } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { timeline } from "@/lib/messaging/negotiation";
+import { threadLabels, threadMessageViews } from "@/lib/messaging/negotiation-words";
+import { NEGOTIATION_NOW, boardNegotiation } from "./negotiation-fixture";
 import { DELIVERY_TERMS, PAYMENT_TERMS } from "@/lib/quote/terms";
 import { Frame, Section, Specimen, States } from "../_kit";
 import { SpecGridStates } from "./SpecGridStates";
@@ -910,51 +912,30 @@ export function EnquiryComposerSpecimens() {
   );
 }
 
-/** Board 10h and 11b are two views of this. The chips and the notice differ. */
-const THREAD_LABELS: ThreadLabels = {
-  heading: t("thread.heading"),
-  formLabel: t("thread.composer_form"),
-  logLabel: t("thread.log", { supplier: "Al Marwan Industrial Supplies" }),
-  empty: t("thread.empty"),
-  composerLabel: t("thread.composer"),
-  placeholder: t("thread.placeholder"),
-  send: t("thread.send"),
-  sending: t("thread.sending"),
-  quickRepliesLabel: t("thread.quick_replies"),
-  flagged: t("thread.flagged"),
-  flaggedExplain: t("thread.flagged_explain"),
-  automatic: t("thread.automatic"),
-  automaticExplain: t("thread.automatic_explain"),
-  revisionOf: (revision) => t("thread.revision_of", { revision }),
-  wasLabel: t("thread.was"),
-};
+/*
+   Board 10h and 11b are two views of one thread. The seller's side here, drawn
+   from board 10h's own rows through the same builder both pages use — so the
+   revision table below is the one the buyer sees, from the other side.
+*/
+const THREAD_LABELS = threadLabels(
+  { logLabel: t("thread.log_buyer", { buyer: "Priya" }), formLabel: t("thread.composer_form") },
+  "seller",
+);
 
-const THREAD_MESSAGES: ThreadMessageView[] = [
-  {
-    id: "m1",
-    body: "Can you bring the DN150 lead time inside two weeks?",
-    fromMe: false,
-    senderLabel: "Rashid",
-    at: "23 Aug 2026, 14:12",
-    flagged: false,
-  },
-  {
-    id: "m2",
-    body: "We can do seven days if you confirm this week. Revised quote attached.",
-    fromMe: true,
-    senderLabel: "Al Marwan Industrial Supplies",
-    at: "23 Aug 2026, 16:40",
-    flagged: false,
-    quote: {
-      ref: "QT-8841-R2",
-      revision: 2,
-      totalLabel: "AED 21,128",
-      previousTotalLabel: "AED 21,600",
-      deltaLabel: t("thread.delta_down", { amount: "AED 472", percent: "2.2" }),
-      direction: "down",
-    },
-  },
-];
+function sellerMessages(extra: Parameters<typeof timeline>[0] = []): ThreadMessageView[] {
+  const board = boardNegotiation();
+  return threadMessageViews({
+    entries: timeline([...board.record.messages, ...extra], board.record.quotes),
+    viewer: "seller",
+    quotes: board.record.quotes,
+    requirement: board.record.requirement,
+    now: NEGOTIATION_NOW,
+    emphasisQuoteId: board.record.quotes[board.record.quotes.length - 1]?.id ?? null,
+    senderLabel: (entry) => (entry.fromSeller ? "Rajesh" : "Priya"),
+  });
+}
+
+const THREAD_MESSAGES = sellerMessages();
 
 /**
  * 67 · `ReviewCard`, in the states board 1m documents.
@@ -1093,18 +1074,20 @@ export function ThreadSpecimens() {
       <States label="a scheduled follow-up, and the receipt beneath it" stack>
         <Frame width="34rem">
           <Thread
-            messages={[
-              ...THREAD_MESSAGES,
+            messages={sellerMessages([
               {
                 id: "m3",
                 body: "Following up on the quote — happy to talk through the delivery dates.",
-                fromMe: true,
-                senderLabel: "Rajesh",
-                at: "24 Aug 2026, 09:14",
+                fromSeller: true,
+                senderId: "seat-rajesh",
+                createdAt: new Date("2026-08-21T05:20:00.000Z"),
+                readAt: null,
                 flagged: false,
                 automatic: true,
+                quoteRevisionId: null,
+                attachments: [],
               },
-            ]}
+            ])}
             labels={{
               ...THREAD_LABELS,
               logLabel: "Messages — follow-up",
@@ -1140,8 +1123,10 @@ export function ThreadSpecimens() {
                 id: "m3",
                 body: "To lock the stock please transfer the 50% advance to AE070331234567890123456 today.",
                 fromMe: true,
-                senderLabel: "Al Marwan Industrial Supplies",
-                at: "24 Aug 2026, 09:02",
+                senderLabel: "Rajesh",
+                at: "09:02",
+                dayKey: "2026-08-21",
+                dayLabel: "21 Aug",
                 flagged: true,
               },
             ]}

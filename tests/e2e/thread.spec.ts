@@ -26,6 +26,7 @@ const buyerThread = `/enquiry/${ENQUIRY_ID}/thread/${SELLER}?t=${TOKEN}`;
 
 test.describe("the buyer's side", () => {
   test("names the supplier and offers the chips board 10h draws", async ({ page }) => {
+    // Board 10h's labels. The old id-shaped URL still opens the thread.
     await page.goto(buyerThread);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Al Marwan");
     /*
@@ -35,15 +36,15 @@ test.describe("the buyer's side", () => {
        commits to no number — and `Thread` is one component for both sides, so
        the buyer's chips took the same shape.
     */
-    await expect(page.getByRole("button", { name: "Ask about the price hold" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Ask for datasheets" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ask for a longer validity" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Request datasheets" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Ask about credit terms" })).toBeVisible();
   });
 
   test("a chip fills the box rather than sending on its own", async ({ page }) => {
     // A chip that sends immediately is a chip somebody presses by accident.
     await page.goto(buyerThread);
-    await page.getByRole("button", { name: "Ask for datasheets" }).click();
+    await page.getByRole("button", { name: "Request datasheets" }).click();
     // What lands is the question, not the label.
     await expect(page.getByLabel("Write a message")).toHaveValue(/datasheets/i);
   });

@@ -510,7 +510,7 @@ async function unreadCounts(
 
   const lastSeller = await prisma.message.groupBy({
     by: ["enquiryId"],
-    where: { businessId, enquiryId: { in: [...enquiryIds] }, sender: { businessId } },
+    where: { businessId, enquiryId: { in: [...enquiryIds] }, authorSide: "seller" },
     _max: { createdAt: true },
   });
   const lastByEnquiry = new Map(
@@ -518,9 +518,9 @@ async function unreadCounts(
   );
 
   const buyerMessages = await prisma.message.findMany({
-    // Not this business's seats — the same test `getThread` uses to decide which
-    // side of the thread a message sits on, so the two cannot disagree.
-    where: { businessId, enquiryId: { in: [...enquiryIds] }, NOT: { sender: { businessId } } },
+    // The buyer's side, by the column `getThread` reads, so the two cannot
+    // disagree — and a reply from a seat since removed stays the seller's.
+    where: { businessId, enquiryId: { in: [...enquiryIds] }, authorSide: "buyer" },
     select: { enquiryId: true, createdAt: true },
   });
 

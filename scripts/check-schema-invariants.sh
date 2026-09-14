@@ -316,6 +316,21 @@ if grep -qE '^[[:space:]]*model[[:space:]]+StaffInvite[[:space:]]*\{' <<<"$CODE"
   fi
 fi
 
+# Board 10h B10 and B5. The thread is the dispute record: its rows are fixed at
+# insert and removed only with their enquiry, and whose side a message is on is
+# a column written once, not a join against who the sender works for today.
+MESSAGE_MODEL=$(awk '/^[[:space:]]*model[[:space:]]+Message[[:space:]]*\{/,/^\}/' <<<"$CODE")
+if [[ -n "$MESSAGE_MODEL" ]]; then
+  if grep -rqE 'CREATE TRIGGER "message_is_the_record"' prisma/migrations \
+     && grep -rqE 'CREATE TRIGGER "message_attachment_is_the_record"' prisma/migrations \
+     && grep -qE '^[[:space:]]*authorSide[[:space:]]+MessageAuthorSide[[:space:]]' <<<"$MESSAGE_MODEL"; then
+    echo "   pass — a thread message is the record: author side stated, edits and deletes refused by trigger"
+  else
+    echo "   FAIL — Message lost its authorSide column or the message_is_the_record triggers (board 10h B5, B10)."
+    fail=1
+  fi
+fi
+
 ROLE_ENUM=$(awk '/^enum Role \{/,/^\}/' <<<"$CODE")
 if grep -qE '\bstaff_field\b' <<<"$ROLE_ENUM"; then
   echo "   FAIL — staff_field is back in the Role enum. It was retired and removed (board 4i B1)."

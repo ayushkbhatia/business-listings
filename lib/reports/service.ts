@@ -269,7 +269,7 @@ export async function reportEvidence(reportId: string) {
         automatic: true,
         flaggedAt: true,
         createdAt: true,
-        sender: { select: { businessId: true } },
+        authorSide: true,
       },
     }),
   ]);
@@ -284,7 +284,8 @@ export async function reportEvidence(reportId: string) {
       automatic: message.automatic,
       flagged: message.flaggedAt !== null,
       createdAt: message.createdAt,
-      fromSupplier: message.sender.businessId === report.subjectBusinessId,
+      // Board `10h` B5: the evidence reads as it was written, whoever has left the team since.
+      fromSupplier: message.authorSide === "seller",
     })),
   };
 }
