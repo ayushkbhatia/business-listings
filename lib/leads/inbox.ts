@@ -498,9 +498,9 @@ async function countTabs(
  * Buyer messages since the seller last wrote, per lead.
  *
  * Two queries rather than one per row: the seller's last message on each thread,
- * then a count of buyer messages after it. `Message` has no read state and is
- * not gaining one — board 11b's receipts are quote-level and symmetric, and a
- * per-message read flag would be a one-way receipt on the buyer's own words.
+ * then a count of buyer messages after it. Not `Message.readAt`, which board
+ * `10h` added: a message the seller opened and did not answer still waits on
+ * them, and this badge counts what needs a reply, not what went unseen.
  */
 async function unreadCounts(
   businessId: string,
