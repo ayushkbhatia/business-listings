@@ -1732,6 +1732,7 @@ services sections and one held, the placeholder and `comingSoon` both gone.
 | **6.2** | ~~**`1h-s` / S2** — the brief~~ | **Shipped 13 Sep**, `20261014120000_service_brief_1hs`. See §4p |
 | **6.4** | ~~`3j-s` Reply with a proposal~~ | **Shipped 14 Sep**, `20261019090000_proposal_reply_3js`. See §4t |
 | **6.5** | ~~`1n-s` Compare proposals~~ | **Shipped 14 Sep**, `20261020090000_proposal_turnaround_1ns`. See §4u |
+| **6.6** | ~~`7c-s` Accepted proposal~~ | **Shipped 14 Sep**, `20261022090000_accepted_proposal_7cs`. See §4v |
 
 ~~**`Enquiry.deliverToArea` is free text**, not an `areaId`~~ — **fixed #178**. It is a real
 `areaId` beside the free text now, so an area-level coverage match is computable from the enquiry
@@ -2091,7 +2092,68 @@ accepted-quote notice, the admin evidence page, and **the accepted record and it
 
 - Q2's persistence: the figures are per reading; storing a buyer-confirmed area on the brief is
   `1h-s` Q1's decision.
-- A designed `7c-s`.
+- ~~A designed `7c-s`.~~ Shipped, §4v.
+
+## 4v · Handoff `7c-s` — the accepted proposal: a basis, an exclusions list, and no total
+
+*The end of the services demand chain. One route with `7c`, chosen by what was accepted.*
+
+### What shipped
+
+- **What was agreed** replaces the lines table: the fee basis read-only (*set on their service, not
+  on this deal*), the fee at display scale, the term with both dates (B4), mobilisation, and the
+  brief's cadence — or, for a one-off job or a call-off, the start instead (§States). A foot says
+  there is no total and why (B3).
+- **Scope, then the exclusions** verbatim in their own warn panel (B2), on rows two triggers now
+  hold: `quote_proposal_immutable` (3j-s) and the new `quote_accepted_terms_fixed` and
+  `service_brief_fixed_once_accepted` (AC8).
+- **Where the work happens is the buyer's site**, from the brief, not the supplier's branch.
+- **Payment agreed is a proposal field now.** `3j-s` never collected it, so the column read *Not
+  stated* on every accepted proposal. The composer offers `PROPOSAL_PAYMENT_TERMS` (in advance,
+  in arrears, on completion, 15/30/60 days), never defaulted; the comparison gains a *Payment* row so
+  the buyer sees it before accepting; the seller's sent table and the record and PDF read it.
+- **The rail's commitments are proposal fields labelled by source** (B6): start *from your brief*,
+  mobilisation *from the proposal*, cadence, turnaround *from their scope sheet* under the family's
+  label, the deliverable, delivered-where. No thread extraction, one dot colour (B9).
+- **The review waits for the first cycle, at the write** (B10). `reviewOpensOn` — a month for a
+  monthly engagement, a quarter otherwise (annual capped at a quarter), from the later of the brief's
+  start and acceptance; the start date for a one-off job; acceptance for goods. `canReview`,
+  `createReview`, `requestReview`, the seller's review board and the storefront's review button all
+  read it; the request window runs from the day reviews open.
+- **An ongoing contract is not one event**: a calendar card — *covers 24 months*, then *the term
+  ends in N days* inside 90, then *the term has ended* — leads the rail once the term starts, and
+  offers *Brief {supplier} again* (`1h-s` pinned brief, its service while live) and *Brief other
+  firms* (Q3: a renewal is a new enquiry).
+- **The PDF carries the page's fields** (AC10) from the same word functions, and says *Accepted
+  proposal*. Seed `ENQ-8856` is a contract ending inside 90 days; `ENQ-8853` now states payment.
+- The record lays out by container queries, so the gallery's column renders the same states the page
+  does (goods `7c` included).
+
+### Decisions taken against the handoff
+
+- **Route kept** at `/enquiry/:id/accepted` — as for `7c`, claim-token buyers have no account.
+- **B5 — the basis is the copy made at send**, not a live read of the service. A live read would let a
+  `3g-s` edit rewrite a signed record, which AC8 forbids; the copy is immutable by trigger.
+- **No named account engineer.** The render invented one and no proposal field holds one; reading a
+  name out of the scope's prose is the thread extraction B6 replaces.
+- **No *by 1 Nov · first PPM visit*.** The start date is the brief's; *first visit* is a claim nobody
+  made. The rail says *Start of the term · 1 Nov 2026 · from your brief*.
+- **Unstated mobilisation stays visible, grey.** §States says omit it; the interface-honesty rule
+  says unfilled data stays visible. A stated nil reads *No mobilisation charge*, never *AED 0*.
+- **Copy made trade-neutral**: *a chiller fails in month fourteen*, *a missed visit*, *arbitrate a
+  callout* became *something fails that the scope does not cover*, *work that was not done*, *what
+  the scope covers* — the track's rule that screens fit every kind of service firm.
+- **The review label is the tree's** *Accepted quote*, not the render's *Verified enquiry*, which is
+  the weaker rung's badge.
+
+### Still owed, and the owner's
+
+- **Q1 — a contract value on the record.** Built as no total; a derived figure would need its
+  working and a treatment distinct from the agreed terms.
+- **Q2 — the services review prompt** (`12g-s`). The page uses *did the work match what was agreed?*;
+  the review form's dimensions still read goods-shaped (*It arrived when they said*).
+- **Q4** buyer-company visibility (`7b`) and **Q5** the seller's mirror (`3k`).
+- No reminder is sent when a review opens; the buyer finds it on the record.
 
 ## 4b · What the re-sequence opens up
 

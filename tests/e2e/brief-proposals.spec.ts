@@ -2,18 +2,20 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 
 /**
- * Boards `3j-s` and `1n-s`, the buyer's half: proposals compared in their own
- * units with one labelled row of our arithmetic, an accept that declines the
- * rest, and the accepted proposal as the record.
+ * Boards `3j-s`, `1n-s` and `7c-s`, the buyer's half: proposals compared in their
+ * own units with one labelled row of our arithmetic, an accept that declines the
+ * rest, and the accepted proposal as the record — a basis, a term with its dates,
+ * an exclusions list, and no total.
  *
- * Anonymous, through the claim token on `seedProposalReplies`' buyer. `…02` is
- * read-only here; `…05` is the one this file accepts.
+ * Anonymous, through the claim token on `seedProposalReplies`' buyer. `…02`,
+ * `…03` and `…06` are read-only here; `…05` is the one this file accepts.
  */
 
 const TOKEN = "seed-0000-4000-8000-provisional03";
 const COMPARE = `/enquiry/seedenquiryproposal000002/compare?t=${TOKEN}`;
 const ACCEPT = `/enquiry/seedenquiryproposal000005/compare?t=${TOKEN}`;
 const RECORD = `/enquiry/seedenquiryproposal000003/accepted?t=${TOKEN}`;
+const ENDING = `/enquiry/seedenquiryproposal000006/accepted?t=${TOKEN}`;
 
 const row = (page: import("@playwright/test").Page, name: RegExp) =>
   page.getByRole("row").filter({ has: page.getByRole("rowheader", { name }) });
@@ -38,6 +40,8 @@ test("compares proposals in their own units, with one row of our arithmetic that
   await expect(twelve.getByRole("cell").nth(2)).not.toContainText("AED");
 
   await expect(row(page, /^Term$/i)).toContainText("24 months");
+  // Board 7c-s: how the buyer would pay, seen before accepting. None of these three stated it.
+  await expect(row(page, /^Payment$/i)).toContainText("Not stated");
   await expect(row(page, /Response time/i)).toContainText("4-hour attendance on reactive calls");
 
   // B7: nothing ranked.
@@ -75,7 +79,9 @@ test("accepting one proposal declines the rest and freezes the comparison as the
     await accept.click();
     await page.waitForURL(/\/accepted/);
     await expect(page.getByRole("heading", { level: 1, name: "Emirates Facilities Group" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "What was proposed" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What was agreed" })).toBeVisible();
+    // An as-soon-as-possible brief: the term is stated, and its dates are not invented from today.
+    await expect(page.getByText("12 months · from a start date agreed with them")).toBeVisible();
   }
 
   await page.goto(ACCEPT);
@@ -84,22 +90,62 @@ test("accepting one proposal declines the rest and freezes the comparison as the
   await expect(page.getByText("Declined when you accepted another proposal.")).toBeVisible();
 });
 
-test("keeps the accepted proposal as the record: fee, term, turnaround, scope and exclusions", async ({ page }) => {
+test("keeps the accepted proposal as the record: a basis, a dated term, the exclusions, and no total — 7c-s AC1–AC5", async ({ page }) => {
   await page.goto(RECORD);
+  await expect(page).toHaveTitle(/Accepted proposal/);
   await expect(page.getByRole("heading", { level: 1, name: "Emirates Facilities Group" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "What was proposed" })).toBeVisible();
   const main = page.getByRole("main");
-  await expect(main.getByText("AED 18,400 · Per month").first()).toBeVisible();
-  await expect(main.getByText("24 months")).toBeVisible();
-  await expect(main.getByText("4-hour attendance on reactive calls")).toBeVisible();
+  await expect(main.getByRole("heading", { name: "What was agreed" })).toBeVisible();
+  await expect(main.getByText("Set on their service, not on this deal.")).toBeVisible();
+  await expect(main.getByText("18,400", { exact: true })).toBeVisible();
+  await expect(main.getByText("per month, excluding VAT")).toBeVisible();
+  await expect(main.getByText(/^24 months · \d{1,2} \w{3} \d{4} to \d{1,2} \w{3} \d{4}$/)).toBeVisible();
+  await expect(main.getByText("There is no total on this page, and that is deliberate.")).toBeVisible();
+  await expect(main.getByText("In arrears, after each period of work")).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Excluded from the fee" })).toBeVisible();
   await expect(main.getByText(/Major plant replacement, refrigerant gas beyond 5 kg/)).toBeVisible();
+  await expect(main.getByText("Response time · from their scope sheet")).toBeVisible();
+  // No lines, no total, no way to edit what was agreed.
   await expect(main.getByRole("table")).toHaveCount(0);
+  await expect(main.getByText(/Total excl\. VAT/)).toHaveCount(0);
+  await expect(main.getByRole("heading", { name: "What was agreed" }).locator("xpath=ancestor::div[contains(@class,'rounded-card')][1]").getByRole("textbox")).toHaveCount(0);
   // The other firm declined before the buyer chose; it was not declined for them.
   await expect(main.getByText("Only to this supplier.")).toBeVisible();
+  // The term has not started: the review waits for the first quarter, and says the day.
+  await expect(main.getByText(/Reviews of this engagement open on/)).toBeVisible();
+  await expect(main.getByRole("link", { name: "Write a review" })).toHaveCount(0);
 
   const pdf = await page.request.get(`/enquiry/seedenquiryproposal000003/accepted/pdf?t=${TOKEN}`);
   expect(pdf.status()).toBe(200);
   expect(pdf.headers()["content-type"]).toContain("application/pdf");
+  const bytes = (await pdf.body()).toString("latin1");
+  expect(bytes).toContain("ACCEPTED PROPOSAL");
+  expect(bytes).toContain("Excluded from the fee");
+});
+
+test("refuses a review of an engagement before its first cycle, at the form as well as on the record — 7c-s B10", async ({ page }) => {
+  await page.goto(`/review/new?enq=seedenquiryproposal000003&t=${TOKEN}`);
+  await expect(page.getByText(/Reviews of this engagement open on \d{1,2} \w{3} \d{4}/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /Publish|Post|Submit/i })).toHaveCount(0);
+});
+
+test("surfaces a term ending within 90 days and routes renewal to a new brief — 7c-s §States", async ({ page }) => {
+  await page.goto(ENDING);
+  const main = page.getByRole("main");
+  await expect(main.getByRole("heading", { name: /^The term ends in \d+ days$/ })).toBeVisible();
+  await expect(main.getByRole("link", { name: "Brief Emirates Facilities Group again" })).toHaveAttribute(
+    "href",
+    /^\/rfq\/new\?to=emirates-facilities-group/,
+  );
+  await expect(main.getByRole("link", { name: "Brief other firms" })).toHaveAttribute("href", "/rfq/new?category=hard-fm&kind=services");
+  // Mobilisation was not stated: grey words, never a zero.
+  await expect(main.getByText("Not stated on the proposal").first()).toBeVisible();
+  await expect(main.getByText("AED 0", { exact: false })).toHaveCount(0);
+  // A month into a monthly engagement long ago: the review is open, against the scope.
+  await expect(main.getByRole("link", { name: "Write a review" })).toBeVisible();
+  await expect(main.getByText(/did the work match what was agreed\?/)).toBeVisible();
+  // Nothing implies the platform tracks the work.
+  await expect(main.getByRole("progressbar")).toHaveCount(0);
 });
 
 test("shows the supplier's own decline on the tracking page, with their reason", async ({ page }) => {
@@ -116,7 +162,7 @@ test("is the brief and who it went to before anybody replies", async ({ page }) 
 
 test("has no axe violations", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  for (const path of [COMPARE, RECORD, `/enquiry/seedenquiryproposal000001/compare?t=${TOKEN}`]) {
+  for (const path of [COMPARE, RECORD, ENDING, `/enquiry/seedenquiryproposal000001/compare?t=${TOKEN}`]) {
     await page.goto(path);
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations, path).toEqual([]);

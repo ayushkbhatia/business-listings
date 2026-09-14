@@ -23,6 +23,7 @@ import {
   type ProposalRefusal,
 } from "@/lib/quote/proposal";
 import { proposalRefusalWords } from "@/lib/quote/proposal-words";
+import { PROPOSAL_PAYMENT_TERMS } from "@/lib/quote/terms";
 import { saveProposalDraftAction, sendProposalAction } from "./actions";
 
 /**
@@ -132,6 +133,7 @@ export function ProposalComposer({
     term: useId(),
     mobilisation: useId(),
     validity: useId(),
+    payment: useId(),
     scope: useId(),
     deliverable: useId(),
     deliveredWhere: useId(),
@@ -328,7 +330,7 @@ export function ProposalComposer({
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 @lg:grid-cols-3">
+        <div className="mt-4 grid gap-3 @lg:grid-cols-2 @4xl:grid-cols-4">
           <div className="space-y-1">
             <Label htmlFor={ids.term} requirement="optional" requirementLabel={t("field.optional")}>
               {t("proposal.term_label")}
@@ -377,6 +379,25 @@ export function ProposalComposer({
                 label: t("quote.validity_days", { count: days }),
               }))}
               onChange={(event) => change({ validityDays: Number(event.target.value) })}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label htmlFor={ids.payment} requirement="optional" requirementLabel={t("field.optional")}>
+              {t("proposal.payment_label")}
+            </Label>
+            {/*
+               *Not stated* first and selectable, as on the goods composer: a
+               select without it posts its first option, and the buyer's record
+               would then say they agreed to pay in advance.
+            */}
+            <Select
+              id={ids.payment}
+              value={value.paymentTerms}
+              options={[
+                { value: "", label: t("proposal.not_stated") },
+                ...PROPOSAL_PAYMENT_TERMS.map((terms) => ({ value: terms, label: t(`terms.${terms}` as "terms.net_30") })),
+              ]}
+              onChange={(event) => change({ paymentTerms: event.target.value })}
             />
           </div>
         </div>

@@ -71,6 +71,7 @@ function composer(services: Option[] = [SERVICE]) {
         mobilisation: "",
         termMonths: "",
         validityDays: 30,
+        paymentTerms: "",
         scope: SERVICE.seed.scope,
         deliverable: SERVICE.seed.deliverable,
         deliveredWhere: SERVICE.seed.deliveredWhere,
@@ -109,10 +110,13 @@ describe("the lead for work", () => {
     const basis = screen.getByText(t("proposal.basis_label"));
     expect(basis.tagName).toBe("DT");
     expect(basis.nextElementSibling).toHaveTextContent("Per month");
-    // The only select on the page is the validity window.
+    // The only selects are the validity window and, since 7c-s, the payment terms — never a basis.
     const selects = screen.getAllByRole("combobox");
-    expect(selects).toHaveLength(1);
+    expect(selects).toHaveLength(2);
     expect(selects[0]).toHaveAccessibleName(t("proposal.validity_label"));
+    expect(selects[1]).toHaveAccessibleName(new RegExp(t("proposal.payment_label")));
+    // Payment is never defaulted: the composer opens on *Not stated*.
+    expect(selects[1]).toHaveValue("");
   });
 
   it("puts Ask a question first before Decline (B4)", () => {
@@ -178,6 +182,7 @@ describe("the lead for work", () => {
               fee: "AED 18,400 · Per month",
               term: "24 months",
               mobilisation: "AED 6,000 one-off",
+              payment: "In arrears, after each period of work",
               validUntil: "14 Oct 2026",
               status: "Lost",
             },
@@ -189,7 +194,7 @@ describe("the lead for work", () => {
     );
     expect(screen.queryByRole("button", { name: t("proposal.send") })).toBeNull();
     const table = screen.getByRole("table");
-    expect(within(table).getAllByRole("columnheader")).toHaveLength(6);
+    expect(within(table).getAllByRole("columnheader")).toHaveLength(7);
     expect(within(table).getByRole("rowheader")).toHaveTextContent("QT-8851-EMIR1");
     await expectNoAxeViolations(container);
   });

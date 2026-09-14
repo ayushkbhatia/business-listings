@@ -2682,6 +2682,11 @@ enum PaymentTerms {
   net_30
   net_60
   lc
+  /// Board `7c-s`: invoiced after each period of work — a services proposal's
+  /// usual answer, which no goods term said. Offered only on a proposal.
+  in_arrears
+  /// Board `7c-s`: once, when the work is done. Offered only on a proposal.
+  on_completion
 
   @@map("payment_terms")
 }

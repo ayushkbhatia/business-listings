@@ -50,6 +50,7 @@ function fixture(overrides: Partial<AcceptedRecord> = {}): AcceptedRecord {
       totalAed,
       proposal: null,
     },
+    work: null,
     supplier: {
       id: "b1",
       slug: "al-waha",
@@ -226,47 +227,4 @@ describe("the other documented states", () => {
   });
 });
 
-describe("an accepted proposal — board 3j-s", () => {
-  const proposed = () =>
-    fixture({
-      isBrief: true,
-      declinedCount: 0,
-      quote: {
-        ...fixture().quote,
-        lines: [],
-        totalAed: "0.00",
-        paymentTerms: null,
-        delivery: null,
-        proposal: {
-          feeAed: "18400",
-          feeBasis: "per_month",
-          feeBasisLabel: "Per month",
-          mobilisationAed: null,
-          termMonths: 24,
-          serviceName: "Planned and reactive MEP maintenance",
-          turnaround: "4-hour attendance on reactive calls",
-          scope: "Quarterly PPM across both towers.",
-          deliverable: null,
-          deliveredWhere: "On site, both towers",
-          exclusions: "Major plant replacement",
-        },
-      },
-    });
-
-  it("renders the fee on its basis, the terms and the exclusions, and no line table or zero total", () => {
-    renderRecord(proposed());
-    expect(screen.queryByRole("table")).toBeNull();
-    expect(screen.queryByText(/0\.00/)).toBeNull();
-    expect(screen.getAllByText("AED 18,400 · Per month").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByRole("heading", { name: t("accepted.proposal.title") })).toBeInTheDocument();
-    expect(screen.getByText("Major plant replacement")).toBeInTheDocument();
-    expect(screen.queryByText(t("accepted.brief_note"))).toBeNull();
-  });
-
-  it("keeps unstated terms visible and grey", () => {
-    renderRecord(proposed());
-    const mobilisation = screen.getByText(t("accepted.proposal.mobilisation")).nextElementSibling!;
-    expect(mobilisation).toHaveTextContent(t("proposal.not_stated"));
-    expect(mobilisation).toHaveClass("text-muted");
-  });
-});
+// An accepted proposal renders the board `7c-s` shape: `accepted-proposal-view.test.tsx`.

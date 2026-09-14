@@ -9,6 +9,8 @@ import {
 } from "@/lib/enquiry/accepted-record";
 import { extractCommitments } from "@/lib/quote/commitments";
 import { PROPOSAL_RECORD_SELECT, toProposalRecord } from "@/lib/quote/proposal";
+import { familyFor } from "@/lib/services/service";
+import { ENQUIRY_BRIEF_SELECT, toEnquiryBrief } from "./enquiry-brief";
 
 /**
  * Board `7c` — read the accepted record for the buyer who accepted it.
@@ -41,7 +43,19 @@ export async function getAcceptedRecord(
       buyerReference: true,
       contactReleasedAt: true,
       contactReleasedToBusinessId: true,
-      serviceBrief: { select: { enquiryId: true } },
+      emirate: true,
+      area: { select: { name: true } },
+      // Board `7c-s`: the brief's site, engagement, cadence and start — the term's dates come from here.
+      serviceBrief: {
+        select: { ...ENQUIRY_BRIEF_SELECT, categoryId: true, category: { select: { name: true, slug: true } } },
+      },
+      // The trade of a service enquiry sent without a brief, from the service a line named.
+      lines: {
+        where: { serviceId: { not: null } },
+        orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+        take: 1,
+        select: { service: { select: { categoryId: true, category: { select: { slug: true } } } } },
+      },
       quotes: {
         where: { status: "accepted" },
         // One accepted quote per enquiry since `acceptQuote` claims the row
@@ -73,7 +87,12 @@ export async function getAcceptedRecord(
             },
           },
           business: { select: { id: true, slug: true, displayName: true } },
-          proposal: { select: PROPOSAL_RECORD_SELECT },
+          proposal: {
+            select: {
+              ...PROPOSAL_RECORD_SELECT,
+              service: { select: { slug: true, status: true, businessId: true } },
+            },
+          },
         },
       },
       recipients: {
@@ -97,7 +116,10 @@ export async function getAcceptedRecord(
   const quote = enquiry.quotes.find((q) => q.businessId === releasedTo);
   if (!quote) return null;
 
-  const [routed, locations, team, messages] = await Promise.all([
+  const proposal = toProposalRecord(quote.proposal);
+  const categoryId = enquiry.serviceBrief?.categoryId ?? enquiry.lines[0]?.service?.categoryId ?? null;
+
+  const [routed, locations, team, messages, family] = await Promise.all([
     prisma.enquiryRecipient.findUnique({
       where: { enquiryId_businessId: { enquiryId: enquiry.id, businessId: releasedTo } },
       select: { assignedTo: { select: { branchId: true } } },
@@ -138,6 +160,8 @@ export async function getAcceptedRecord(
       take: 60,
       select: { id: true, body: true, createdAt: true },
     }),
+    // Only a proposal reads the scope sheet's words, and only when a trade is known.
+    proposal && categoryId ? familyFor(categoryId) : Promise.resolve(null),
   ]);
 
   const location = chooseContactLocation(locations, routed?.assignedTo?.branchId ?? null);
@@ -179,8 +203,27 @@ export async function getAcceptedRecord(
       expiresAt: quote.expiresAt,
       lines,
       totalAed,
-      proposal: toProposalRecord(quote.proposal),
+      proposal,
     },
+    work: proposal
+      ? {
+          brief: toEnquiryBrief(enquiry.serviceBrief, enquiry),
+          site: {
+            building: enquiry.serviceBrief?.building ?? null,
+            areaName: enquiry.area?.name ?? null,
+            emirate: enquiry.emirate,
+          },
+          turnaroundLabel: family?.rows.find((row) => row.key === "turnaround")?.label ?? "",
+          tradeSlug: enquiry.serviceBrief?.category.slug ?? enquiry.lines[0]?.service?.category.slug ?? null,
+          // A link to brief the firm again only while the service is theirs and live.
+          serviceSlug:
+            quote.proposal?.service &&
+            quote.proposal.service.status === "live" &&
+            quote.proposal.service.businessId === releasedTo
+              ? quote.proposal.service.slug
+              : null,
+        }
+      : null,
     supplier: {
       id: quote.business.id,
       slug: quote.business.slug,

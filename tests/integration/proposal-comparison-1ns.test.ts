@@ -98,6 +98,7 @@ function proposal(f: Firm, fee: string): ProposalInput {
     mobilisation: "",
     termMonths: "12",
     validityDays: 30,
+    paymentTerms: "",
     scope: `${PREFIX} scope for this buyer`,
     deliverable: "",
     deliveredWhere: "",

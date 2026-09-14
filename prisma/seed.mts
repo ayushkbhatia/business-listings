@@ -161,6 +161,8 @@ const PROPOSAL_ACCEPTED_ENQUIRY_ID = "seedenquiryproposal000003";
 const PROPOSAL_DECLINE_ENQUIRY_ID = "seedenquiryproposal000004";
 /** Board `1n-s`: two proposals the buyer acceptance shard accepts from the comparison. */
 const PROPOSAL_ACCEPT_ENQUIRY_ID = "seedenquiryproposal000005";
+/** Board `7c-s`: an accepted contract whose term ends inside ninety days. Read-only in e2e. */
+const PROPOSAL_ENDING_ENQUIRY_ID = "seedenquiryproposal000006";
 
 /** Deterministic v4-shaped uuids, so seeded users keep their ids between runs. */
 function uuid(n: number): string {
@@ -8258,6 +8260,7 @@ async function seedProposalReplies(db: Db) {
     deliveredWhere: string | null;
     exclusions: string | null;
     turnaround?: string | null;
+    paymentTerms?: "advance" | "in_arrears" | "on_completion" | "net_15" | "net_30" | "net_60" | null;
   }) =>
     db.quote.create({
       data: {
@@ -8266,6 +8269,7 @@ async function seedProposalReplies(db: Db) {
         businessId: input.businessId,
         revision: 1,
         validityDays: 30,
+        paymentTerms: input.paymentTerms ?? null,
         status: input.status,
         sentAt: input.sentAt,
         createdAt: input.sentAt,
@@ -8389,6 +8393,8 @@ async function seedProposalReplies(db: Db) {
     businessId: efg.id,
     ref: "QT-8853-EMIR1",
     status: "accepted",
+    // Board `7c-s`: the record's *payment agreed*, which `3j-s` gave no field for.
+    paymentTerms: "in_arrears",
     turnaround: "4-hour attendance on reactive calls",
     sentAt: pre(10),
     acceptedAt: pre(2),
@@ -8501,7 +8507,68 @@ async function seedProposalReplies(db: Db) {
     exclusions: "Parts and filters.",
   });
 
-  console.log("   5 briefs: one to answer, three proposals on three bases, one accepted, one to decline, one to accept");
+  /* ── …06: a contract near the end of its term — board `7c-s` ───────────────── */
+  /*
+     Started 685 days ago on a 24-month term, so its last day is about 45 days
+     away whichever year this runs in: the record's *term ends in N days* state,
+     reachable without a clock. Monthly, so its review opened a month after the
+     start and is long open. Accepted before the start, as a contract is.
+  */
+  const endingStart = dayOnly(days(-685));
+  const ending = await db.enquiry.create({
+    data: {
+      id: PROPOSAL_ENDING_ENQUIRY_ID,
+      ref: "ENQ-8856",
+      buyerId: buyer.id,
+      requirement: "A two-floor clinic in Al Quoz needs its AHUs and chilled-water pumps maintained monthly, with a callout line.",
+      emirate: "dubai",
+      areaId: alQuoz?.id ?? null,
+      scale: "Two floors, 4 AHUs",
+      closesAt: days(-702),
+      createdAt: days(-712),
+      contactReleasedToBusinessId: efg.id,
+      contactReleasedAt: days(-700),
+      lines: line("Hard FM & MEP maintenance"),
+      serviceBrief: {
+        create: {
+          categoryId: trade.id,
+          engagementType: "ongoing_contract",
+          cadence: "monthly",
+          startMode: "from_date",
+          startsOn: endingStart,
+          building: "Clinic block B",
+        },
+      },
+      recipients: {
+        create: [{ businessId: efg.id, state: "quoted", openedAt: days(-711), firstReplyAt: days(-710), createdAt: days(-712) }],
+      },
+    },
+    select: { id: true },
+  });
+  await proposalQuote({
+    enquiryId: ending.id,
+    businessId: efg.id,
+    ref: "QT-8856-EMIR1",
+    status: "accepted",
+    sentAt: days(-705),
+    acceptedAt: days(-700),
+    serviceId: efgService.id,
+    serviceName: efgService.name,
+    feeBasis: "per_month",
+    feeBasisLabel: "Per month",
+    feeAed: "9800.00",
+    // Not stated — the record says so in grey rather than printing a zero.
+    mobilisationAed: null,
+    termMonths: 24,
+    paymentTerms: "net_30",
+    turnaround: "4-hour attendance on reactive calls",
+    scope: "Monthly service of 4 AHUs and 2 chilled-water pumps, filter changes, and reactive attendance around the clock.",
+    deliverable: "Monthly written report with photographs",
+    deliveredWhere: "On site, clinic block B",
+    exclusions: "Motor and pump replacement, and any work on the medical gas system.",
+  });
+
+  console.log("   6 briefs: one to answer, three proposals on three bases, one accepted, one to decline, one to accept, one near the end of its term");
 }
 
 /**

@@ -295,6 +295,18 @@ months, × visits at the brief's cadence, × an area the buyer states on the pag
 12-month term as proposed — mobilisation added and named in every case), and every other case
 returns a reason instead of a number. The brief's scale line is never parsed.
 
+**An accepted proposal is the record of what was agreed, and it is fixed** (board `7c-s`). It
+adds no table and stores no total: the page and its PDF read the accepted `Quote`, its
+`QuoteProposal` and the `ServiceBrief` the proposal answered. The term's dates are computed — the
+brief's `startsOn` to the day before the anniversary `termMonths` later — and when a review opens
+is computed too (`lib/enquiry/accepted-proposal.ts`: at acceptance for goods, one delivery cycle
+into an engagement). Two triggers keep the inputs still: `quote_accepted_terms_fixed` refuses a
+change to an accepted quote's payment terms, window, revision or parties, and
+`service_brief_fixed_once_accepted` refuses any change to the brief of an accepted enquiry.
+`PaymentTerms` gains `in_arrears` and `on_completion`, offered only on a proposal
+(`PROPOSAL_PAYMENT_TERMS`) — the proposal composer now states payment terms, on the same
+`Quote.paymentTerms` column the goods composer writes.
+
 Accepting a quote sets `Enquiry.contactReleasedToBusinessId`, marks the other recipients
 `declined`, and creates nothing else. There is no order, no fulfilment record, no payment.
 

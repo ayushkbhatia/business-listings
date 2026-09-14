@@ -51,6 +51,7 @@ function record(overrides: Partial<AcceptedRecord["quote"]> = {}): AcceptedRecor
       proposal: null,
       ...overrides,
     },
+    work: null,
     supplier: {
       id: "b1",
       slug: "al-waha",

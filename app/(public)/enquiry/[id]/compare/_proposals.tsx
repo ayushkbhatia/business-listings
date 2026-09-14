@@ -15,7 +15,7 @@ import {
   type Footing,
 } from "@/lib/quote/proposal-footing";
 import { notComputableWords, workingWords } from "@/lib/quote/proposal-footing-words";
-import { feeAmount, termWords } from "@/lib/quote/proposal-words";
+import { feeAmount, paymentTermsWords, termWords } from "@/lib/quote/proposal-words";
 
 /**
  * Board `1n-s` — proposals compared, and nothing ranked.
@@ -449,6 +449,12 @@ function ComparisonTable({
           ) : null}
 
           <TextRow label={t("compare_proposals.row.term")} columns={columns} value={(c) => (c.proposal.termMonths === null ? null : termWords(c.proposal.termMonths))} />
+          {/* Board `7c-s`: what the accepted record will call *payment agreed*, seen before agreeing. */}
+          <TextRow
+            label={t("compare_proposals.row.payment")}
+            columns={columns}
+            value={(c) => (c.quote.paymentTerms === null ? null : paymentTermsWords(c.quote.paymentTerms))}
+          />
           <TextRow
             label={comparison.turnaroundLabel || t("accepted.proposal.turnaround")}
             columns={columns}

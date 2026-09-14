@@ -13,7 +13,7 @@ import { replyDueAt, type LeadScope, type LeadTab } from "@/lib/leads/inbox";
 import { quoteFence, type QuoteFenceReason } from "@/lib/quote/fence";
 import { PROPOSAL_DEFAULT_VALIDITY_DAYS, type ProposalInput } from "@/lib/quote/proposal";
 import { findProposalDraft, proposalServicesFor, type ProposalService } from "@/lib/quote/proposal-server";
-import { feeOnBasis, mobilisationWords, termWords, typedAmount } from "@/lib/quote/proposal-words";
+import { feeOnBasis, mobilisationWords, paymentTermsWords, termWords, typedAmount } from "@/lib/quote/proposal-words";
 import { workEnquiryOf } from "@/lib/quote/work-enquiry";
 import type { SellerSeat } from "../_shell";
 import { railHref } from "./_rail";
@@ -136,6 +136,7 @@ export async function ProposalLeadPane({
               fee: feeOnBasis(quote.proposal),
               term: termWords(quote.proposal.termMonths),
               mobilisation: mobilisationWords(quote.proposal.mobilisationAed),
+              payment: paymentTermsWords(quote.paymentTerms),
               validUntil: quote.expiresAt ? formatDate(quote.expiresAt) : t("proposal.not_stated"),
               status: t(`quotes.state.${quote.status}` as "quotes.state.sent"),
             },
@@ -144,7 +145,7 @@ export async function ProposalLeadPane({
     ),
   };
 
-  const last = lead.quotes.find((quote) => quote.proposal !== null)?.proposal ?? null;
+  const lastQuote = lead.quotes.find((quote) => quote.proposal !== null) ?? null;
   const nextRevision = draft?.revision ?? (lead.quotes[0]?.revision ?? 0) + 1;
   const canAssign = can(seat.actor, "routing.manage");
   const canMark = can(seat.actor, "enquiry.respond") && (canAssign || recipient.assignedToId === seat.actor.id);
@@ -217,7 +218,7 @@ export async function ProposalLeadPane({
                   key={`${lead.enquiryId}-${nextRevision}`}
                   enquiryId={lead.enquiryId}
                   services={services.map(toOption)}
-                  initial={initialInput({ draft, last, services })}
+                  initial={initialInput({ draft, last: lastQuote, services })}
                   restoredAt={draft ? draft.updatedAt.getTime() : null}
                   revision={nextRevision}
                   others={others}
@@ -356,7 +357,8 @@ function initialInput({
   services,
 }: {
   draft: Awaited<ReturnType<typeof findProposalDraft>>;
-  last: LeadDetail["quotes"][number]["proposal"];
+  /** The last proposal sent, with the quote its payment terms sit on. */
+  last: LeadDetail["quotes"][number] | null;
   services: readonly ProposalService[];
 }): ProposalInput {
   const held = draft?.proposal ?? null;
@@ -375,6 +377,7 @@ function initialInput({
       mobilisation: amount(held.mobilisationAed),
       termMonths: held.termMonths === null ? "" : String(held.termMonths),
       validityDays: draft?.validityDays ?? PROPOSAL_DEFAULT_VALIDITY_DAYS,
+      paymentTerms: draft?.paymentTerms ?? "",
       scope: held.scope,
       deliverable: held.deliverable ?? "",
       deliveredWhere: held.deliveredWhere ?? "",
@@ -382,17 +385,19 @@ function initialInput({
     };
   }
 
-  if (last) {
+  if (last?.proposal) {
+    const sent = last.proposal;
     return {
       serviceId: service?.id ?? null,
-      fee: amount(last.feeAed),
-      mobilisation: amount(last.mobilisationAed),
-      termMonths: last.termMonths === null ? "" : String(last.termMonths),
+      fee: amount(sent.feeAed),
+      mobilisation: amount(sent.mobilisationAed),
+      termMonths: sent.termMonths === null ? "" : String(sent.termMonths),
       validityDays: PROPOSAL_DEFAULT_VALIDITY_DAYS,
-      scope: last.scope,
-      deliverable: last.deliverable ?? "",
-      deliveredWhere: last.deliveredWhere ?? "",
-      exclusions: last.exclusions ?? "",
+      paymentTerms: last.paymentTerms ?? "",
+      scope: sent.scope,
+      deliverable: sent.deliverable ?? "",
+      deliveredWhere: sent.deliveredWhere ?? "",
+      exclusions: sent.exclusions ?? "",
     };
   }
 
@@ -402,6 +407,9 @@ function initialInput({
     mobilisation: "",
     termMonths: "",
     validityDays: PROPOSAL_DEFAULT_VALIDITY_DAYS,
+    // Never defaulted: a Select that opened on *In arrears* would write a term
+    // into an agreement nobody chose. See `lib/quote/terms.ts`.
+    paymentTerms: "",
     scope: service?.scope ?? "",
     deliverable: service?.deliverable ?? "",
     deliveredWhere: service?.deliveredWhere ?? "",

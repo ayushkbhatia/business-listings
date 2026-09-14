@@ -1,9 +1,11 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { CONTRACT_FACTS_SELECT, reviewOpensOn, toContractFacts } from "@/lib/enquiry/accepted-proposal";
 import { firstNameOf } from "@/lib/db/queries/seller-visibility";
 import { mayReplyToReviews, mayRequestReviews, mayDisputeReviews } from "@/lib/auth/guards";
 import type { Actor } from "@/lib/auth/roles";
 import {
+  canRequestReview,
   cardStateOf,
   isRemovalGround,
   provenanceOf,
@@ -234,19 +236,29 @@ export async function reviewsBoard(
         buyer: { select: { fullName: true, buyerCompany: { select: { name: true } } } },
       },
     }),
-    // Accepted inside the window, and nobody has written one yet.
+    /*
+       Accepted inside the window, and nobody has written one yet.
+
+       Board `7c-s`: or an accepted proposal of any age, because an engagement's
+       review opens a cycle after it starts and its window runs from then — a
+       contract accepted in March whose review opened in August is askable in
+       September. The date rule is applied below, by the function the gate uses.
+    */
     prisma.enquiry.findMany({
       where: {
         contactReleasedToBusinessId: businessId,
-        contactReleasedAt: { gte: windowStart },
         review: null,
+        OR: [
+          { contactReleasedAt: { gte: windowStart } },
+          { quotes: { some: { businessId, status: "accepted", proposal: { isNot: null } } } },
+        ],
       },
-      orderBy: { contactReleasedAt: "desc" },
+      orderBy: [{ contactReleasedAt: "desc" }, { id: "desc" }],
       select: {
         id: true,
         ref: true,
         buyerId: true,
-        contactReleasedAt: true,
+        ...CONTRACT_FACTS_SELECT,
         buyer: { select: { fullName: true, phone: true, email: true } },
       },
     }),
@@ -397,10 +409,21 @@ export async function reviewsBoard(
   const askedIds = new Set(asked.map((row) => row.buyerId));
   const askable: AskableBuyer[] = eligible.flatMap((enquiry) => {
     if (askedIds.has(enquiry.buyerId)) return [];
-    // Non-null by the `gte` in the query above; narrowed rather than asserted,
-    // so a future change to that filter fails here instead of at render.
+    // Narrowed rather than asserted, so a future change to the filter fails
+    // here instead of at render.
     const acceptedAt = enquiry.contactReleasedAt;
     if (acceptedAt === null) return [];
+    // The rule `requestReview` refuses on, asked rather than restated.
+    const verdict = canRequestReview(
+      {
+        acceptedAt,
+        reviewOpensOn: reviewOpensOn(toContractFacts(enquiry)),
+        alreadyAsked: false,
+        alreadyReviewed: false,
+      },
+      now,
+    );
+    if (!verdict.ok) return [];
     return [
       {
         enquiryId: enquiry.id,

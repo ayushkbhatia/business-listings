@@ -40,6 +40,8 @@ export interface ComparisonColumn {
     status: string;
     sentAt: Date | null;
     expiresAt: Date | null;
+    /** Board `7c-s`: how the buyer would pay. Null is *Not stated*. */
+    paymentTerms: string | null;
   };
   proposal: ProposalRecord;
   /** When their first proposal arrived — the column order. */
@@ -130,6 +132,7 @@ export async function getProposalComparison(
           sentAt: true,
           createdAt: true,
           expiresAt: true,
+          paymentTerms: true,
           businessId: true,
           proposal: { select: PROPOSAL_RECORD_SELECT },
         },
@@ -191,6 +194,7 @@ export async function getProposalComparison(
         status: current.status,
         sentAt: current.sentAt,
         expiresAt: current.expiresAt,
+        paymentTerms: current.paymentTerms,
       },
       proposal,
       arrivedAt,

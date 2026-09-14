@@ -62,6 +62,16 @@ export function mobilisationWords(aed: string | null): string {
   return t("proposal.mobilisation_amount", { amount: feeAmount(aed) });
 }
 
+/**
+ * Board `7c-s` — how the buyer pays, as the proposal stated it, or *Not stated*.
+ *
+ * The same `terms.*` keys the goods quote reads, so an accepted record's
+ * *payment agreed* column names a term one way whichever reply it came from.
+ */
+export function paymentTermsWords(terms: string | null): string {
+  return terms === null ? t("proposal.not_stated") : t(`terms.${terms}` as "terms.net_30");
+}
+
 /** The sentence under a field the send refused. Says what correct looks like. */
 export function proposalRefusalWords(refusal: ProposalRefusal): string {
   switch (refusal.field) {
