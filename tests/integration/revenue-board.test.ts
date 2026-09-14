@@ -71,7 +71,7 @@ describe("criterion 1 — the waterfall reconciles, tested", () => {
     };
     expect(await line("gulf-cranes-rental")).toEqual(["new_business"]);
     expect(await line("marina-facade-cleaning")).toEqual(["upgrades"]);
-    expect(await line("ajman-pallet-works")).toEqual(["downgrades"]);
+    expect(await line("pallet-works-ajman")).toEqual(["downgrades"]);
     expect(await line("hatta-cold-stores")).toEqual(["term_changes"]);
     expect(await line("umm-al-quwain-boatyard")).toEqual(["lapsed"]);
     expect(await line("rak-stone-cutters")).toEqual(["cancellations"]);
@@ -177,10 +177,51 @@ describe("criterion 6 — the reply-rate cross-reference is a live query on 4f's
 });
 
 describe("criterion 7 — ARPA's account count matches 4f's paying count for the same moment", () => {
-  it("agrees with the businesses list's header", async () => {
+  /*
+     Account by account, over the fixtures whose state is known. The global
+     count is asserted by the seed (`assertLedgerReconciles`) on a clean
+     database: this suite runs after files that move plans behind the ledger on
+     purpose, and a directory-wide equality here would pass or fail on file order.
+  */
+  it("counts the same accounts as paying, on both definitions", async () => {
     const now = new Date();
-    const [figures, summary] = await Promise.all([periodFigures(currentPeriod(now)), accountSummary(now)]);
-    expect(figures.month.payingAtEnd).toBe(summary.paying);
+    const figures = await periodFigures(currentPeriod(now));
+    const ledgerPaying = new Set(figures.stateAtEnd.filter((row) => row.mrrFils > 0).map((row) => row.businessId));
+    const slugs = [
+      "gulf-cranes-rental",
+      "marina-facade-cleaning",
+      "pallet-works-ajman",
+      "hatta-cold-stores",
+      "jebel-ali-forwarding",
+      "fujairah-marine-supplies",
+      "sharjah-pipe-traders",
+      "oasis-date-packers",
+      "rak-stone-cutters",
+      "dubai-signage-hub",
+      "umm-al-quwain-boatyard",
+      "technopump-trading-llc",
+      "dana-printing-signage",
+      "sharjah-steel-fabricators",
+    ];
+    const businesses = await prisma.business.findMany({
+      where: { slug: { in: slugs } },
+      select: {
+        id: true,
+        slug: true,
+        subscription: { select: { status: true, plan: { select: { monthlyPriceAed: true } } } },
+      },
+    });
+    expect(businesses).toHaveLength(slugs.length);
+    for (const business of businesses) {
+      const subscription = business.subscription;
+      const paying4f =
+        subscription !== null &&
+        ["active", "past_due"].includes(subscription.status) &&
+        Number(subscription.plan.monthlyPriceAed) > 0;
+      expect(ledgerPaying.has(business.id), business.slug).toBe(paying4f);
+    }
+    const summary = await accountSummary(now);
+    expect(summary.paying).toBeGreaterThan(0);
   });
 });
 

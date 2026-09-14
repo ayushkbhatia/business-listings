@@ -21,11 +21,11 @@ import { monthlyValueFils } from "../lib/billing/period.js";
  * |----------------------------|----------|-----------------------------------------------|
  * | Gulf Cranes Rental         | AD       | New on Pro                                    |
  * | Marina Facade Cleaning     | Dubai    | Basic to Pro, and a sponsored slot ending     |
- * | Ajman Pallet Works         | Ajman    | Scheduled downgrade, Pro to Basic             |
+ * | Pallet Works Ajman         | Ajman    | Scheduled downgrade, Pro to Basic             |
  * | Hatta Cold Stores          | Dubai    | Pro monthly to annual                         |
  * | Fujairah Marine Supplies   | Fujairah | Cancelled: not enough enquiries, 2 of 9 replied |
  * | Sharjah Pipe Traders       | Sharjah  | Cancelled: not enough enquiries, 1 of 7 replied |
- * | Al Ain Date Packers        | AD       | Cancelled: not enough enquiries, 5 of 6 replied |
+ * | Oasis Date Packers         | AD       | Cancelled: not enough enquiries, 5 of 6 replied |
  * | RAK Stone Cutters          | RAK      | Cancelled: too expensive                      |
  * | Dubai Signage Hub          | Dubai    | Cancelled: another platform                   |
  * | Umm Al Quwain Boatyard     | UAQ      | Lapsed after 14 days of failed payments       |
@@ -35,8 +35,10 @@ import { monthlyValueFils } from "../lib/billing/period.js";
  * asked, so the board's cross-reference reads 2 of 3 — measured from their
  * enquiries by `measureReplies`, not assigned.
  *
- * New businesses, never repurposed ones (memory: seed states are shared), not
- * published, so no public page or search result gains a row. Runs before
+ * New businesses, never repurposed ones, not published, so no public page or
+ * search result gains a row. **No slug or name starts before `al-b`:** several
+ * suites take "the first claimed business by slug" as their fixture, and an
+ * `ajman-…` or `al-ain-…` here became that business and failed two of them. Runs before
  * `backfillSeatChannels` so their owners get a verified channel like every
  * other claimed seller's, and before `recomputeDerived`, which measures them.
  */
@@ -307,7 +309,7 @@ export async function seedRevenue(db: Db, now: Date): Promise<void> {
   {
     const startedAt = back(6, 14);
     const { businessId, ownerId } = await account(
-      { slug: "ajman-pallet-works", displayName: "Ajman Pallet Works", authority: "AJM", licenceNumber: "AJM-204455" },
+      { slug: "pallet-works-ajman", displayName: "Pallet Works Ajman", authority: "AJM", licenceNumber: "AJM-204455" },
       "basic",
       startedAt,
     );
@@ -389,7 +391,7 @@ export async function seedRevenue(db: Db, now: Date): Promise<void> {
     { total: 7, answered: 1 },
   );
   await cancelled(
-    { slug: "al-ain-date-packers", displayName: "Al Ain Date Packers", authority: "ADDED", licenceNumber: "ADDED-802356" },
+    { slug: "oasis-date-packers", displayName: "Oasis Date Packers", authority: "ADDED", licenceNumber: "ADDED-802356" },
     "basic",
     back(7, 2),
     last(22),

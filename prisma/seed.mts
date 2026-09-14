@@ -1153,7 +1153,24 @@ async function assertLedgerReconciles(db: Db) {
       `The MRR ledger (${ledgerFils} fils) does not reconcile with the subscription table (${liveFils} fils). A seeded subscription is missing its movement.`,
     );
   }
-  console.log(`   ledger reconciles with subscriptions at ${ledgerFils} fils a month`);
+
+  /*
+     Board 4g criterion 7: ARPA's account count is 4f's paying count. The board
+     counts accounts with ledger MRR; 4f counts subscriptions active or past due
+     on a priced plan. Asserted here, on a clean database, because the integration
+     suite runs files that move plans behind the ledger on purpose and a global
+     equality there would depend on file order.
+  */
+  const [ledgerPaying, livePaying] = await Promise.all([
+    db.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM (SELECT business_id FROM mrr_movement GROUP BY business_id HAVING sum(delta_fils) > 0) paying`,
+    db.subscription.count({ where: { status: { in: ["active", "past_due"] }, plan: { monthlyPriceAed: { gt: 0 } } } }),
+  ]);
+  if (Number(ledgerPaying[0]!.n) !== livePaying) {
+    throw new Error(
+      `The ledger has ${ledgerPaying[0]!.n} paying accounts and the subscription table ${livePaying}. Board 4g's ARPA and board 4f's header would disagree.`,
+    );
+  }
+  console.log(`   ledger reconciles with subscriptions at ${ledgerFils} fils a month, ${livePaying} paying accounts`);
 }
 
 /**
