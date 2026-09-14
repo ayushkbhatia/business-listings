@@ -220,7 +220,12 @@ export function BuyerNegotiation({
           description={accept.dialog.description}
           closeLabel={t("negotiation.accept.close")}
           footer={
-            <form action={acceptQuoteAction} className="flex items-center justify-end gap-2">
+            /*
+               A form only where it can post. The gallery draws this dialog in
+               several states with nothing to post to, and a page of unnamed
+               forms is a page of indistinguishable landmarks.
+            */
+            <AcceptForm live={live} className="flex items-center justify-end gap-2">
               <input type="hidden" name="quoteId" value={accept.quoteId} />
               <input type="hidden" name="enquiryId" value={enquiryId} />
               <input type="hidden" name="from" value={`thread:${supplierSlug}`} />
@@ -229,7 +234,7 @@ export function BuyerNegotiation({
                 {t("negotiation.accept.cancel")}
               </Button>
               <ConfirmAccept label={accept.dialog.confirm} live={live} />
-            </form>
+            </AcceptForm>
           }
         >
           <div className="space-y-3">
@@ -247,6 +252,16 @@ export function BuyerNegotiation({
         </Modal>
       ) : null}
     </>
+  );
+}
+
+function AcceptForm({ live, className, children }: { live: boolean; className: string; children: React.ReactNode }) {
+  return live ? (
+    <form action={acceptQuoteAction} className={className}>
+      {children}
+    </form>
+  ) : (
+    <div className={className}>{children}</div>
   );
 }
 
