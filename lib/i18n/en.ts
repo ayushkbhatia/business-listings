@@ -13103,6 +13103,60 @@ export const en = {
   "notfound.signin": "Sign in",
   "notfound.home": "Go to the directory",
 
+  // ── Board 13e · Scheduled maintenance ─────────────────────────────────────
+  // Served by proxy.ts as a whole document, so every string the page shows is
+  // here, including the state words and the column heads nobody sees (B7).
+  "maintenance.document_title": "Planned work — Business Listings",
+  "maintenance.wordmark.business": "Business",
+  "maintenance.wordmark.listings": "Listings",
+  "maintenance.eyebrow": "Planned work · 503",
+  "maintenance.when": "{time} GST",
+  "maintenance.when_on": "{time} GST on {day}",
+  "maintenance.heading.active": "Back at {when}",
+  "maintenance.heading.overrun": "Running past {when}",
+  "maintenance.heading.passed": "Due back at {when}",
+  "maintenance.lede.search_index": "Search is off while we work on its index.",
+  "maintenance.lede.notification_job": "Notifications are paused while we work on the job that sends them.",
+  "maintenance.lede.database": "The whole directory is off while we work on its database.",
+  "maintenance.work.search_index": "the search index",
+  "maintenance.work.notification_job": "the notification job",
+  "maintenance.work.database": "the database",
+  "maintenance.duration.minutes": { one: "{count} minute", other: "{count} minutes" },
+  "maintenance.duration.hours": { one: "{count} hour", other: "{count} hours" },
+  "maintenance.body.planned": "Planned work on {work}, about {duration}.",
+  "maintenance.body.overrun": "Planned work on {work} is taking longer than the {duration} we set aside.",
+  "maintenance.trust":
+    "Enquiries already sent are safe and suppliers are still being notified — nothing you submitted is waiting on this.",
+  "maintenance.retry.active": "This page does not reload itself. Try again after {when}.",
+  "maintenance.retry.overrun": {
+    one: "No new time is set yet. Try again in {count} minute.",
+    other: "No new time is set yet. Try again in {count} minutes.",
+  },
+  "maintenance.retry.passed": "That time has passed. Reload to see whether the work has finished.",
+  "maintenance.reload": "Reload page",
+  "maintenance.contact.title": "Something urgent?",
+  "maintenance.contact.body": "Our team is on WhatsApp through the window",
+  "maintenance.contact.label": "Message {number} on WhatsApp",
+  "maintenance.status.caption": "What is affected",
+  "maintenance.status.col_system": "Part of the directory",
+  "maintenance.status.col_state": "State",
+  "maintenance.system.search": "Search and filters",
+  "maintenance.system.requirements": "Posting a new requirement",
+  "maintenance.system.quotes": "Quotes already in flight",
+  "maintenance.system.notifications": "Seller notifications",
+  "maintenance.state.down": "Down",
+  "maintenance.state.running": "Running",
+
+  // ── The unplanned error. No board; drawn in 13e's grammar (build plan 9.2). ──
+  // It must never say "planned work": that is 13e's page, and using it for an
+  // incident is the lie 13e's states table names.
+  "errorpage.eyebrow": "Error on our side",
+  "errorpage.title": "This page did not load",
+  "errorpage.body": "Something failed on our side, not yours. Trying again usually works.",
+  "errorpage.reference_hint": "If it keeps failing, send us this reference and we can find the failure in our logs.",
+  "errorpage.reference": "Reference {digest}",
+  "errorpage.document_title": "This page did not load — Business Listings",
+
   // ── Board 11i · Close account ─────────────────────────────────────────────
   "closure.title": "Close account",
   "closure.eyebrow": "Account",

@@ -48,14 +48,17 @@
     "lighthouse:5": "./scripts/lighthouse-h5.sh",
     "dev:seat": "tsx --env-file=.env.local scripts/dev-seat.mts",
     "map:worker": "tsx scripts/copy-map-worker.mts",
-    "predev": "pnpm map:worker",
-    "prebuild": "pnpm map:worker"
+    "maintenance:assets": "tsx scripts/copy-maintenance-tokens.mts",
+    "maintenance:check": "tsx scripts/maintenance-check.mts",
+    "predev": "pnpm map:worker && pnpm maintenance:assets",
+    "prebuild": "pnpm map:worker && pnpm maintenance:assets"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.3",
+    "@vercel/global-config": "^1.5.1",
     "maplibre-gl": "^6.5.0",
     "next": "16.3.2",
     "pg": "^8.23.0",

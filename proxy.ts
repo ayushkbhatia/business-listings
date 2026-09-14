@@ -7,6 +7,7 @@ import {
   fromSearchParams,
 } from "@/lib/campaign/attribution";
 import { labelFromHost } from "@/lib/domains/label";
+import { maintenanceResponse } from "@/lib/maintenance/respond";
 
 /**
  * Session refresh, criterion 9's first half, and the one thing that has to
@@ -34,7 +35,28 @@ import { labelFromHost } from "@/lib/domains/label";
  */
 const PLATFORM_PREFIXES = ["/api", "/auth"];
 
+function isPlatformPath(pathname: string): boolean {
+  return PLATFORM_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
 export default async function proxy(request: NextRequest) {
+  const label = labelFromHost(request.headers.get("host"));
+  const { pathname } = request.nextUrl;
+  const storefrontPath =
+    label && !isPlatformPath(pathname) ? (pathname === "/" ? `/b/${label}` : `/b/${label}${pathname}`) : null;
+
+  /*
+     Board 13e. First, before the session refresh.
+
+     `updateSession` calls Supabase Auth, and a planned window is usually taken
+     for exactly the services that call depends on. A page whose job is to work
+     when the rest cannot must not wait on them, so a request the window covers
+     is answered here and nothing below runs. A seller's own address is judged as
+     the storefront it rewrites to.
+  */
+  const maintenance = await maintenanceResponse(request, storefrontPath ?? pathname);
+  if (maintenance) return maintenance;
+
   const { response } = await updateSession(request);
 
   // First touch wins, so an existing cookie is never overwritten.
@@ -71,24 +93,16 @@ export default async function proxy(request: NextRequest) {
      request — so search engines are told, on every one of these pages, that the
      directory holds the copy worth indexing.
   */
-  const label = labelFromHost(request.headers.get("host"));
-  if (label) {
-    const { pathname } = request.nextUrl;
-    const platform = PLATFORM_PREFIXES.some(
-      (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
-    );
+  if (storefrontPath) {
+    const url = request.nextUrl.clone();
+    url.pathname = storefrontPath;
 
-    if (!platform) {
-      const url = request.nextUrl.clone();
-      url.pathname = pathname === "/" ? `/b/${label}` : `/b/${label}${pathname}`;
-
-      // The rewrite is a new response, so the cookies the two steps above set
-      // have to be carried onto it. Dropping them would sign a visitor out on
-      // every storefront request and lose the campaign the click came from.
-      const rewritten = NextResponse.rewrite(url, { request });
-      for (const cookie of response.cookies.getAll()) rewritten.cookies.set(cookie);
-      return rewritten;
-    }
+    // The rewrite is a new response, so the cookies the two steps above set
+    // have to be carried onto it. Dropping them would sign a visitor out on
+    // every storefront request and lose the campaign the click came from.
+    const rewritten = NextResponse.rewrite(url, { request });
+    for (const cookie of response.cookies.getAll()) rewritten.cookies.set(cookie);
+    return rewritten;
   }
 
   return response;
@@ -96,7 +110,10 @@ export default async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Everything except static assets and image files.
-    "/((?!_next/static|_next/image|favicon.ico|fonts/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|woff2?)$).*)",
+    // Everything except static assets, image files and stylesheets. `.css` is
+    // here for board 13e: the maintenance page links its own stylesheets from
+    // `public/maintenance/`, and a site-wide window would otherwise answer the
+    // stylesheet request with the page.
+    "/((?!_next/static|_next/image|favicon.ico|fonts/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|woff2?|css)$).*)",
   ],
 };

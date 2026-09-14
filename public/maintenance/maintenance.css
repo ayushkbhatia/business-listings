@@ -1,0 +1,346 @@
+/* ==========================================================================
+   Board 13e — the maintenance page's stylesheet.
+
+   Loaded by the document lib/maintenance/document.ts assembles, which proxy.ts
+   serves before any route runs. It cannot use the Tailwind bundle (its filename
+   is a build hash the proxy never learns), so it is plain CSS reading only the
+   variables in /maintenance/tokens.css — a copy of docs/tokens.css made before
+   every build. Not one colour is written here, and
+   lib/maintenance/document.test.ts fails on a hex.
+
+   Logical properties throughout. Arabic mirrors this page, and the status
+   column has to flip side with the text (states table).
+   ========================================================================== */
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url("/fonts/geist-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/instrument-serif-latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Instrument Serif";
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/instrument-serif-latin-italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400 500;
+  font-display: swap;
+  src: url("/fonts/jetbrains-mono-latin.woff2") format("woff2");
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--paper);
+  color: var(--text-body);
+  font-family: var(--f-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.mw {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100dvh;
+  align-items: center;
+  justify-content: center;
+  padding-block: 40px;
+  padding-inline: 20px;
+}
+
+.mw-frame {
+  display: flex;
+  width: 100%;
+  max-width: 920px;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.mw-wordmark {
+  margin: 0;
+  font-family: var(--f-serif);
+  font-size: 20px;
+  letter-spacing: -0.01em;
+  color: var(--text-ink);
+}
+
+.mw-wordmark em {
+  font-style: italic;
+}
+
+.mw-columns {
+  display: flex;
+  align-items: flex-start;
+  gap: 44px;
+}
+
+.mw-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.mw-eyebrow {
+  margin: 0 0 14px;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  /* 4.66:1 on --paper. On --paper-sunk, the board's artboard, it is 4.46. */
+  color: var(--warn-ink);
+}
+
+.mw-heading {
+  margin: 0;
+  font-family: var(--f-serif);
+  font-size: 40px;
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text-ink);
+  text-wrap: balance;
+}
+
+.mw-lede {
+  margin: 11px 0 0;
+  font-size: 16px;
+  color: var(--text-body);
+}
+
+.mw-body {
+  margin: 17px 0 0;
+  max-width: 52ch;
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--text-body);
+  text-wrap: pretty;
+}
+
+.mw-retry {
+  margin: 12px 0 0;
+  max-width: 52ch;
+  font-size: var(--t-body-sm);
+  line-height: var(--lh-body-sm);
+  color: var(--text-body);
+}
+
+.mw-reload {
+  margin-block-start: 12px;
+  min-height: 36px;
+  padding-block: 0;
+  padding-inline: 14px;
+  border: 1px solid var(--moss);
+  border-radius: var(--r-ctl);
+  background: var(--moss);
+  color: var(--text-on-ink);
+  font: inherit;
+  font-size: var(--t-body-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--t-state), border-color var(--t-state);
+}
+
+.mw-reload:hover {
+  border-color: var(--moss-hover);
+  background: var(--moss-hover);
+}
+
+.mw-contact {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-block-start: 26px;
+  padding-block: 15px;
+  padding-inline: 18px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+.mw-contact-title {
+  margin: 0;
+  font-size: var(--t-body-sm);
+  font-weight: 500;
+  color: var(--text-ink);
+}
+
+.mw-contact-body {
+  margin: 3px 0 0;
+  font-size: var(--t-caption);
+  /* --text-body, not the board's --text-muted: muted is 4.46:1 on --card. */
+  color: var(--text-body);
+}
+
+.mw-number {
+  flex: none;
+  margin-inline-start: auto;
+  font-family: var(--f-mono);
+  font-size: 14px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--moss);
+  text-decoration: none;
+  border-radius: var(--r-tag);
+}
+
+.mw-number:hover {
+  color: var(--moss-hover);
+  text-decoration: underline;
+}
+
+.mw-number:focus-visible,
+.mw-reload:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.mw-panel {
+  width: 344px;
+  flex: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-card-lg);
+  background: var(--card);
+  overflow: hidden;
+}
+
+.mw-status {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.mw-status caption {
+  padding-block: 13px;
+  padding-inline: 17px;
+  border-block-end: 1px solid var(--line);
+  background: var(--paper-sunk);
+  caption-side: top;
+  font-family: var(--f-mono);
+  font-size: var(--t-eyebrow);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: var(--ls-eyebrow);
+  text-align: start;
+  text-transform: uppercase;
+  /* --text-body: --text-muted measures 4.05:1 on --paper-sunk. */
+  color: var(--text-body);
+}
+
+/* The status table has a caption for a heading, and its column heads exist for
+   a screen reader: the board draws none, and two words over two obvious columns
+   would be noise on screen. */
+.mw-status thead th {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.mw-status tbody th,
+.mw-status tbody td {
+  padding-block: 13px;
+  padding-inline: 17px;
+  border-block-start: 1px solid var(--fill);
+  vertical-align: middle;
+}
+
+.mw-status tbody tr:first-child th,
+.mw-status tbody tr:first-child td {
+  border-block-start: 0;
+}
+
+.mw-status tbody th {
+  font-size: var(--t-body-sm);
+  font-weight: 400;
+  text-align: start;
+  color: var(--text-ink);
+}
+
+.mw-status tbody td {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.04em;
+  text-align: end;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mw-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-inline-end: 11px;
+  border-radius: 50%;
+  vertical-align: 1px;
+}
+
+/* B8: the word carries the state. The dot repeats it for a glance. */
+tr[data-state="down"] td {
+  color: var(--warn-ink);
+}
+tr[data-state="down"] .mw-dot {
+  background: var(--warn-ink);
+}
+tr[data-state="running"] td {
+  color: var(--ok-ink);
+}
+tr[data-state="running"] .mw-dot {
+  background: var(--ok);
+}
+
+@media (max-width: 860px) {
+  .mw {
+    align-items: flex-start;
+  }
+  .mw-columns {
+    flex-direction: column;
+    gap: 28px;
+  }
+  .mw-panel {
+    width: 100%;
+  }
+  .mw-heading {
+    font-size: 34px;
+  }
+  .mw-contact {
+    flex-wrap: wrap;
+  }
+  .mw-number {
+    margin-inline-start: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mw-reload {
+    transition: none;
+  }
+}

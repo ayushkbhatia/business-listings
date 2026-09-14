@@ -30,6 +30,7 @@ import { BuilderSectionsGallery } from "./_sections/BuilderSections";
 import { BuyerInboxGallery } from "./_sections/BuyerInbox";
 import { BlendedSearchGallery } from "./_sections/BlendedSearch";
 import { NotificationTemplatesGallery } from "./_sections/NotificationTemplates";
+import { MaintenanceGallery } from "./_sections/Maintenance";
 import { HomeCurationGallery } from "./_sections/HomeCuration";
 import { NegotiationThreadGallery } from "./_sections/NegotiationThread";
 import { TaxonomyGallery } from "./_sections/Taxonomy";
@@ -211,6 +212,8 @@ const UNLISTED = [
   "blended-search",
   // Board `4d`: the category tree, the editor, and what a merge moves.
   "category-taxonomy",
+  // Board `13e`: the maintenance document in every state, and the unplanned error.
+  "maintenance",
 ] as const;
 
 export default function Gallery() {
@@ -330,6 +333,7 @@ export default function Gallery() {
       <BlendedSearchGallery />
       {/* After blended search, for the same axe-grid reason. */}
       <TaxonomyGallery />
+      <MaintenanceGallery />
     </main>
   );
 }
