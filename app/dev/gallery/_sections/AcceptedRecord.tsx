@@ -148,6 +148,7 @@ export function AcceptedRecordGallery() {
                 mobilisationAed: "6000.00",
                 termMonths: 24,
                 serviceName: "Planned and reactive MEP maintenance",
+                turnaround: "4-hour attendance on reactive calls",
                 scope:
                   "Quarterly PPM visits to a written schedule across both towers, covering 3 chillers, AHUs, pumps, LV distribution and BMS. 24/7 reactive callout with 4-hour attendance.",
                 deliverable: "Monthly written report with photographs",

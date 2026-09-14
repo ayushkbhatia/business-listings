@@ -3004,6 +3004,7 @@ export const en = {
   "accepted.proposal.term": "Term",
   "accepted.proposal.mobilisation": "Mobilisation",
   "accepted.proposal.service": "Proposing from",
+  "accepted.proposal.turnaround": "Turnaround",
   "accepted.proposal.deliverable": "Deliverable",
   "accepted.proposal.delivered_where": "Delivered where",
   "accepted.proposal.scope": "Scope",
@@ -10694,6 +10695,8 @@ export const en = {
   "proposal.scope_title": "Scope of this engagement",
   "proposal.from_sheet_edit": "From your scope sheet · edit for this buyer",
   "proposal.scope_label": "What this engagement includes",
+  "proposal.turnaround_none": "Not stated on the scope sheet",
+  "proposal.turnaround_note": "· from your scope sheet, sent with this proposal",
   "proposal.deliverable_label": "Deliverable",
   "proposal.delivered_where_label": "Delivered where",
   "proposal.exclusions_title": "Excluded",
@@ -10781,6 +10784,114 @@ export const en = {
   "decline.error.already_declined": "This enquiry is already declined.",
   "decline.error.closed": "This enquiry has closed, so there is nothing to decline.",
   "decline.error.reason_too_long": "Keep the reason under 200 characters. It is shown on one line.",
+
+  // ── Board 1n-s · Compare proposals ─────────────────────────────────────────
+  "compare_proposals.eyebrow": "{ref} · Sent {sent} · {replied} of {total} replied",
+  "compare_proposals.title_site": "{trade} — {site}",
+  "compare_proposals.first_back": "First proposal back in {duration}.",
+  "compare_proposals.waiting": {
+    one: "One supplier has not replied yet.",
+    other: "{formatted} suppliers have not replied yet.",
+  },
+  "compare_proposals.waiting_names": "Not replied yet: {names}.",
+  "compare_proposals.declined": "{name} declined.",
+  "compare_proposals.declined_reason": "{name} declined: “{reason}”",
+  "compare_proposals.caption": "Proposals side by side, in the order they arrived",
+  "compare_proposals.term_col": "Term",
+  "compare_proposals.from_service": "From their scope sheet for {service}",
+  "compare_proposals.state.accepted": "Accepted",
+  "compare_proposals.state.declined": "Declined",
+  "compare_proposals.state.expired": "Past validity",
+
+  "compare_proposals.row.as_proposed": "As proposed",
+  "compare_proposals.row.twelve_months": "Over 12 months",
+  "compare_proposals.row.twelve_months_note": "Our arithmetic, not their proposal",
+  "compare_proposals.row.term": "Term",
+  "compare_proposals.row.scope": "Scope",
+  "compare_proposals.row.deliverable": "Deliverable",
+  "compare_proposals.row.excluded": "Excluded",
+  "compare_proposals.row.credentials": "Credentials & reply",
+  "compare_proposals.row.decision": "Your decision",
+  "compare_proposals.uses_your_figure": "Worked on the figure you entered below.",
+  "compare_proposals.give_area": "Give the area to work it out",
+  "compare_proposals.give_visits": "Give the visits a year to work it out",
+
+  "compare_proposals.licence_verified": "Licence verified",
+  "compare_proposals.licence_unverified": "Licence not verified",
+  "compare_proposals.credential_checked": "{name} · checked",
+  "compare_proposals.credential_claim": "{name} · their own statement",
+  "compare_proposals.replied_in": "Replied in {duration}",
+  "compare_proposals.reply_unmeasured": "Reply time not measured",
+
+  "compare_proposals.accept_primary": "Accept this proposal",
+  "compare_proposals.accept": "Accept",
+  "compare_proposals.accept_named": "Accept the proposal from {supplier}, revision {revision}",
+  "compare_proposals.ask": "Ask a question",
+  "compare_proposals.ask_named": "Ask {supplier} a question",
+  "compare_proposals.valid_until": "Valid until {when}",
+  "compare_proposals.expired_on": "Past validity — ended {when}. It can no longer be accepted.",
+  "compare_proposals.open_record": "Open the accepted record",
+  "compare_proposals.declined_after_accept": "Declined when you accepted another proposal.",
+
+  "compare_proposals.figures_title": "Work the 12-month row on your figures",
+  "compare_proposals.figures_body":
+    "Some fees are per square foot or per visit, and we will not guess how many. Give the figure and those columns are worked on it; leave it empty and they say why they cannot be.",
+  "compare_proposals.area_label": "Area of the site, in sq ft",
+  "compare_proposals.area_note":
+    "Your brief gave the scale in words: “{scale}”. We never read a number out of them. If the area you enter covers part of the site, every column worked on it is out by the rest. Whole numbers up to {max}.",
+  "compare_proposals.area_note_none":
+    "Your brief did not give a scale, so there is nothing to check this against. Whole numbers up to {max}.",
+  "compare_proposals.visits_label": "Visits a year",
+  "compare_proposals.visits_note_cadence":
+    "Left empty, per-visit fees are counted at your brief's {cadence} cadence. Enter a number if the visits a supplier means are not that. Up to {max}.",
+  "compare_proposals.visits_note": "Your brief gives no cadence, so per-visit fees cannot be counted without a figure. Up to {max}.",
+  "compare_proposals.figures_submit": "Work it out",
+  "compare_proposals.figures_clear": "Clear my figures",
+
+  "compare_proposals.none_title": "No proposals yet",
+  "compare_proposals.none_body": {
+    one: "It went to one supplier. Their proposal will appear here, beside the brief it answers.",
+    other: "It went to {formatted} suppliers. Proposals appear here as they arrive, in that order.",
+  },
+  "compare_proposals.scale_label": "Scale, in your words",
+  "compare_proposals.scale_none": "Not given",
+  "compare_proposals.sent_to": "Sent to",
+
+  "compare_proposals.note.ours":
+    "The over-12-months row is ours, not theirs, and it is the only number on this page we made up. It includes mobilisation wherever a supplier stated one.",
+  "compare_proposals.note.term":
+    "The term row is theirs: the same monthly fee over 24 months and over 12 is not the same commitment, and the 12-month row cannot show that.",
+  "compare_proposals.note.visits":
+    "A fee per visit covers the visits and nothing between them, so a column counted in visits can read far below the others. Read what it excludes before you compare it.",
+  "compare_proposals.note.figures": "Columns worked on a figure you entered say so; change the figure and they change with it.",
+  "compare_proposals.note.no_year":
+    "This is not an ongoing contract, so there is no year to put the fees on; each is shown as its supplier stated it.",
+  "compare_proposals.note.same_basis": "Every proposal uses the same fee basis, so there is nothing to convert.",
+  "compare_proposals.note.read_excluded": "Read the excluded row before the fee row.",
+
+  "footing.join": ", ",
+  "footing.step.months": { one: "× {formatted} month", other: "× {formatted} months" },
+  "footing.step.visits_cadence": {
+    one: "× {formatted} visit, from your brief's {cadence} cadence",
+    other: "× {formatted} visits, from your brief's {cadence} cadence",
+  },
+  "footing.step.visits_entered": {
+    one: "× {formatted} visit, the figure you entered",
+    other: "× {formatted} visits, the figure you entered",
+  },
+  "footing.step.area": "× {formatted} sq ft, the area you entered",
+  "footing.step.as_proposed": "as proposed, a fixed fee over a 12-month term",
+  "footing.step.mobilisation": "plus {amount} mobilisation",
+  "footing.step.no_mobilisation": "no mobilisation stated",
+  "footing.step.term_shorter": { one: "though the term proposed is {formatted} month", other: "though the term proposed is {formatted} months" },
+  "footing.cadence.monthly": "monthly",
+  "footing.cadence.quarterly": "quarterly",
+  "footing.cadence.annually": "annual",
+  "footing.cannot.visits": "Not worked out: a fee per visit needs a number of visits, and your brief does not give one.",
+  "footing.cannot.area": "Not worked out: a fee per square foot needs an area, and we do not read one from your brief's words.",
+  "footing.cannot.fixed_fee":
+    "Not worked out: a fixed fee over a term other than 12 months is not a 12-month figure, and we do not split it.",
+  "footing.cannot.volume": "Not worked out: a fee {basis} depends on a quantity nobody has stated.",
 
   // ── Not found ─────────────────────────────────────────────────────────────
   "notfound.title": "That page is not here",

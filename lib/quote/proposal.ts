@@ -265,6 +265,8 @@ export function toProposalFigure(
 export interface ProposalRecord extends ProposalFigure {
   serviceName: string;
   scope: string;
+  /** The sheet's turnaround at send — board `1n-s`. Null is *Not stated*. */
+  turnaround: string | null;
   deliverable: string | null;
   deliveredWhere: string | null;
   exclusions: string | null;
@@ -274,6 +276,7 @@ export const PROPOSAL_RECORD_SELECT = {
   ...PROPOSAL_FIGURE_SELECT,
   serviceName: true,
   scope: true,
+  turnaround: true,
   deliverable: true,
   deliveredWhere: true,
   exclusions: true,
@@ -284,6 +287,7 @@ export function toProposalRecord(
     | (Parameters<typeof toProposalFigure>[0] & {
         serviceName: string;
         scope: string;
+        turnaround: string | null;
         deliverable: string | null;
         deliveredWhere: string | null;
         exclusions: string | null;
@@ -297,6 +301,7 @@ export function toProposalRecord(
     ...figure,
     serviceName: row.serviceName,
     scope: row.scope,
+    turnaround: row.turnaround,
     deliverable: row.deliverable,
     deliveredWhere: row.deliveredWhere,
     exclusions: row.exclusions,

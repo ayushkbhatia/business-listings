@@ -331,6 +331,7 @@ function toOption(service: ProposalService): ProposalServiceOption {
     basis: service.basis,
     feeBasisLabel: service.feeBasisLabel,
     editHref: `/dashboard/services/${service.id}`,
+    turnaround: { label: service.turnaroundLabel ?? t("accepted.proposal.turnaround"), value: service.turnaround },
     seed: {
       scope: service.scope ?? "",
       deliverable: service.deliverable ?? "",

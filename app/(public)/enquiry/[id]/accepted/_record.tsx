@@ -348,6 +348,12 @@ function ProposalRecordCard({
     },
     { key: "service", label: t("accepted.proposal.service"), value: proposal.serviceName, muted: false },
     {
+      key: "turnaround",
+      label: t("accepted.proposal.turnaround"),
+      value: proposal.turnaround ?? t("accepted.not_stated"),
+      muted: proposal.turnaround === null,
+    },
+    {
       key: "deliverable",
       label: t("accepted.proposal.deliverable"),
       value: proposal.deliverable ?? t("accepted.not_stated"),

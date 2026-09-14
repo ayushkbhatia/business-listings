@@ -1731,7 +1731,7 @@ services sections and one held, the placeholder and `comingSoon` both gone.
 | **6.1b** | `Enquiry.areaId` | **Shipped #178.** The third migration, below |
 | **6.2** | ~~**`1h-s` / S2** — the brief~~ | **Shipped 13 Sep**, `20261014120000_service_brief_1hs`. See §4p |
 | **6.4** | ~~`3j-s` Reply with a proposal~~ | **Shipped 14 Sep**, `20261019090000_proposal_reply_3js`. See §4t |
-| **6.5** | `1n-s` Compare proposals | Consecutive with `3j-s`. Four fee bases do not compare the way four unit prices do |
+| **6.5** | ~~`1n-s` Compare proposals~~ | **Shipped 14 Sep**, `20261020090000_proposal_turnaround_1ns`. See §4u |
 
 ~~**`Enquiry.deliverToArea` is free text**, not an `areaId`~~ — **fixed #178**. It is a real
 `areaId` beside the free text now, so an area-level coverage match is computable from the enquiry
@@ -2038,6 +2038,61 @@ accepted-quote notice, the admin evidence page, and **the accepted record and it
 - Q3 (a basis other than the service's) and Q4 (validity per family) — the owner's.
 - A designed `7c-s`, now a refinement of a record that renders rather than a gap.
 
+## 4u · Handoff `1n-s` — compare proposals, and nothing ranked
+
+*The buyer's side of the fan-out. No two replies need use the same unit.*
+
+### What shipped
+
+- **`lib/quote/proposal-footing.ts`** — the only code that multiplies a fee, pure, every result
+  carrying its working as structured steps. An ongoing contract gets a twelve-month figure: per month
+  × 12; per visit × the brief's cadence (monthly 12, quarterly 4, annually 1) or the buyer's figure;
+  per sq ft a year × an area **the buyer states**; a fixed fee as proposed over a 12-month term.
+  Mobilisation is added and named in every case (B3, correction 1). Everything else — no cadence, no
+  area, a fixed fee over 24 months, per hour, per return — returns a reason, not a number (B5).
+- **`getProposalComparison`** — columns in **arrival order** (B7), measured reply times, credentials
+  split checked / their own statement, the header's waiting and declined suppliers (B8), expired and
+  accepted states. A goods enquiry and another buyer both get null.
+- **The page** at `/enquiry/:id/compare` (the tree's route; `/account/rfq/:id` does not exist):
+  *As proposed* never converted (B1), *Over 12 months · our arithmetic, not their proposal* with the
+  operation in each cell (B2), term (B4), the family's turnaround row, scope, deliverable, excluded,
+  credentials & reply, then accept (B11). First accept primary by position; every accept and
+  *Ask a question* is named by its supplier. Accepted freezes the table; expired stays visible and
+  cannot be accepted (Q4); no replies renders the brief and who it went to.
+- **Q2, built as a plain GET form**: area and visits a year, in the address, never stored. The cell
+  that needs one links down to it; a cell worked on the buyer's figure says so.
+- **The footnote is built from the table** — the arithmetic sentence only when that row exists, the
+  per-visit warning only when a column was counted in visits, *read the excluded row before the fee
+  row* always.
+- **`quote_proposal.turnaround`**, copied at send, and shown read-only on the `3j-s` composer and in
+  the accepted record and PDF.
+
+### Decisions taken against the handoff
+
+- **The scale line is never parsed.** The board's data model says `scaleSqFt` is parsed from free
+  text; `1h-s` B6 and `3j-s` AC9 say never, and the board's own correction 2 is the case for them.
+  The page quotes the words beside an area box instead (B6, Q2).
+- **No reactive-callout row.** The proposal never collected one, and callout is facilities words a
+  tax practice or a customs broker has no use for. The row is the scope sheet's required turnaround
+  under the family's own label — *Response time* for on-site maintenance — which is the modular
+  answer the service track asks for. Callout terms live in scope and exclusions, in the supplier's words.
+- **The term row is built from the field** (Q1, B4) rather than left out as the render did.
+- **A fixed fee is not assumed annual.** The tree's basis is *Fixed fee* with no period; only a
+  12-month term makes it a 12-month figure.
+- **No automatic "conflict with the brief" flag** (B6): detecting one means reading numbers from
+  words. Every area box carries the warning instead.
+- **The cheapest-column sentence is generic.** The render's *Al Shirawi looks a tenth…* is editorial
+  judgement about one firm's exclusions; the page says what is true of any per-visit column.
+- **A claim is never green.** The render shows ISO 41001 in the verified colour; a seller-claimed
+  credential reads *their own statement*.
+- **Q5 was already answered by `3j-s`** — the accepted record renders proposals.
+
+### Still owed
+
+- Q2's persistence: the figures are per reading; storing a buyer-confirmed area on the brief is
+  `1h-s` Q1's decision.
+- A designed `7c-s`.
+
 ## 4b · What the re-sequence opens up
 
 Three questions the new order forces, in the order they bite.
@@ -2213,7 +2268,7 @@ edit**.
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | **Complete.** `2b-s`, `2c-s`, `2d-s` shipped 11 Sep; `3b-s` and `3c-s` 13 Sep (§4r) |
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **All four shipped 13 Sep** (§4m–§4o, §4s) — the public storefront set is complete, and the builder's library is filtered by kind |
-| **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p), **`3j-s` 14 Sep** (§4t). `1n-s` is next and must read §4t's findings first |
+| **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p), **`3j-s` and `1n-s` 14 Sep** (§4t, §4u) — the demand-side trio is complete |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · `6g-s` | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. `4c-s`, `12g-s` and `6g-s` remain. `1c-s` is unblocked on Q1, which `rankBlended` answers |
 | — | **Q1 said families** | `4e-s` · `3h-s` | — | Both **shipped 13 Sep** — `3h-s` closed wave 2 (§4k) and `4e-s` authored the five families (§4l) |

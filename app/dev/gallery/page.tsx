@@ -17,6 +17,7 @@ import { ServicesStorefrontGallery } from "./_sections/ServicesStorefront";
 import { ServiceBriefGallery } from "./_sections/ServiceBrief";
 import { AcceptedRecordGallery } from "./_sections/AcceptedRecord";
 import { ProposalReplyGallery } from "./_sections/ProposalReply";
+import { ProposalComparisonGallery } from "./_sections/ProposalComparison";
 import { BuilderSectionsGallery } from "./_sections/BuilderSections";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
@@ -178,6 +179,8 @@ const UNLISTED = [
   "dedupe",
   // Board `3j-s`: replying to a brief with a proposal.
   "proposal-reply",
+  // Board `1n-s`: proposals compared, nothing ranked.
+  "proposal-comparison",
 ] as const;
 
 export default function Gallery() {
@@ -266,6 +269,7 @@ export default function Gallery() {
       <ServiceBriefGallery />
       <AcceptedRecordGallery />
       <ProposalReplyGallery />
+      <ProposalComparisonGallery />
       <BuilderSectionsGallery />
       <Overlays />
       <Shells />

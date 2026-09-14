@@ -41,7 +41,7 @@ export function States({
   return (
     <div className="grid grid-cols-1 gap-2 md:grid-cols-[9rem_1fr] md:gap-4">
       <div className="pt-1.5 font-mono text-eyebrow uppercase text-faint">{label}</div>
-      <div className={cn("flex gap-3", stack ? "flex-col items-start" : "flex-wrap items-center")}>
+      <div className={cn("flex min-w-0 gap-3", stack ? "flex-col items-start" : "flex-wrap items-center")}>
         {children}
       </div>
     </div>

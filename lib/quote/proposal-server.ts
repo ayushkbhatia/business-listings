@@ -68,6 +68,10 @@ export interface ProposalService {
    */
   basis: "ok" | "no_basis" | "stale_basis";
   scope: string | null;
+  /** The sheet's turnaround, copied at send — `1n-s`'s response-time row. */
+  turnaround: string | null;
+  /** The family's word for it — *Response time*, *Clearance time*. */
+  turnaroundLabel: string | null;
   deliverable: string | null;
   deliveredWhere: string | null;
   excluded: string | null;
@@ -105,6 +109,7 @@ export async function proposalServicesFor(
       categoryId: true,
       feeBasis: true,
       scope: true,
+      turnaround: true,
       deliverable: true,
       deliveredWhere: true,
       excluded: true,
@@ -131,6 +136,8 @@ export async function proposalServicesFor(
       feeBasisLabel: basis?.label ?? null,
       basis: row.feeBasis === null ? "no_basis" : basis ? "ok" : "stale_basis",
       scope: row.scope,
+      turnaround: row.turnaround,
+      turnaroundLabel: families.get(row.categoryId)?.rows.find((r) => r.key === "turnaround")?.label ?? null,
       deliverable: row.deliverable,
       deliveredWhere: row.deliveredWhere ? t(`delivered.${row.deliveredWhere}` as "delivered.on_site") : null,
       excluded: row.excluded,
@@ -309,6 +316,7 @@ export async function sendProposal(
     serviceName: service.name,
     feeBasis: service.feeBasis,
     feeBasisLabel: service.feeBasisLabel,
+    turnaround: service.turnaround,
     ...checked.value,
   };
   const quoteData = {

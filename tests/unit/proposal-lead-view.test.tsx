@@ -36,6 +36,7 @@ const SERVICE: Option = {
   basis: "ok",
   feeBasisLabel: "Per month",
   editHref: "/dashboard/services/svc",
+  turnaround: { label: "Response time", value: "4-hour attendance on reactive calls" },
   seed: { scope: "Quarterly PPM", deliverable: "Monthly report", deliveredWhere: "On site", exclusions: "Major plant replacement" },
 };
 

@@ -267,6 +267,7 @@ model QuoteProposal {           // board 3j-s — a quote for work, in place of 
   mobilisationAed Decimal?     // null = not stated, 0 = a stated nil
   termMonths      Int?         // 1..120
   scope           String       // seeded from the scope sheet, edited per buyer, never written back
+  turnaround      String?      // board 1n-s — the sheet's turnaround, copied at send
   deliverable     String?
   deliveredWhere  String?
   exclusions      String?
@@ -287,6 +288,12 @@ the pipeline's quoted total leaves proposals out and says how many.
 decline, which the buyer's tracking page reads as *DECLINED · {reason}*. `state = declined` with
 `declinedAt` null is still the buyer accepting somebody else; a CHECK keeps the timestamp and the
 state agreeing.
+
+**Proposals are compared, never ranked** (board `1n-s`). `lib/quote/proposal-footing.ts` is the only
+code that multiplies a fee: an ongoing contract gets a twelve-month figure with its working (× 12
+months, × visits at the brief's cadence, × an area the buyer states on the page, a fixed fee over a
+12-month term as proposed — mobilisation added and named in every case), and every other case
+returns a reason instead of a number. The brief's scale line is never parsed.
 
 Accepting a quote sets `Enquiry.contactReleasedToBusinessId`, marks the other recipients
 `declined`, and creates nothing else. There is no order, no fulfilment record, no payment.
