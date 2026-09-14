@@ -77,7 +77,7 @@ export function HomeCuration({ view, landmark = true }: { view: CurationView; la
 
             <footer className="flex flex-col gap-3 border-t border-line px-4 py-3.5 sm:px-6">
               {view.canWrite ? (
-                <AddBusiness find={view.find} candidates={view.candidates} suggestions={view.suggestions} firstFree={view.firstFree} canWrite={view.canWrite} />
+                <AddBusiness find={view.find} candidates={view.candidates} suggestions={view.suggestions} firstFree={view.firstFree} canWrite={view.canWrite} landmark={landmark} />
               ) : null}
               <p className="text-caption text-body">
                 <Codes text={t("curation.eligibility")} />

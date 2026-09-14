@@ -66,13 +66,21 @@ export function AddBusiness({
   suggestions,
   firstFree,
   canWrite,
+  landmark = true,
 }: {
   find: string;
   candidates: readonly BusinessView[];
   suggestions: readonly BusinessView[];
   firstFree: number | null;
   canWrite: boolean;
+  /**
+   * Off in the gallery. A `<form>` is a landmark, and four specimens of this
+   * panel on one page would be four unnamed forms — `landmarks.spec.ts`
+   * refuses a page holding two. A specimen's search goes nowhere anyway.
+   */
+  landmark?: boolean;
 }) {
+  const Search = landmark ? "form" : "div";
   const ids = { find: useId(), reason: useId(), group: useId(), heading: useId() };
   const [picked, setPicked] = useState<string | null>(null);
   const [reason, setReason] = useState("");
@@ -105,15 +113,15 @@ export function AddBusiness({
       </summary>
 
       <div className="mt-3 rounded-card border border-line bg-card p-3 sm:p-4">
-        <form method="get" action="/admin/content/home" className="flex flex-wrap items-end gap-2">
+        <Search {...(landmark ? { method: "get", action: "/admin/content/home" } : {})} className="flex flex-wrap items-end gap-2">
           <div className="flex min-w-0 flex-1 basis-56 flex-col gap-1">
             <Label htmlFor={ids.find}>{t("curation.find_label")}</Label>
             <Input id={ids.find} name="find" defaultValue={find} minLength={2} autoComplete="off" />
           </div>
-          <Button type="submit" variant="secondary">
+          <Button type={landmark ? "submit" : "button"} variant="secondary">
             {t("curation.find_submit")}
           </Button>
-        </form>
+        </Search>
 
         <h3 id={ids.heading} className="mt-4 font-mono text-eyebrow uppercase text-muted">
           {searched ? t("curation.find_results", { find: find.trim() }) : t("curation.suggestions")}
