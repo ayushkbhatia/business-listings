@@ -64,6 +64,20 @@ export const STANDING_CREDENTIAL = {
 };
 
 /**
+ * The credentials a buyer may filter on and see a check mark beside — board
+ * `1c-s` B7: *register-checked per `4c-s`, never self-declared, and the facet
+ * filters on the checked state only.*
+ *
+ * Standing, and verified against the issuing register. Only `fta_tax_agent`
+ * can reach that tier, and on production nothing does until a register client
+ * exists, so the rail's accreditation group is absent there rather than a list
+ * of claims wearing a tick.
+ */
+export const CHECKED_CREDENTIAL = {
+  AND: [STANDING_CREDENTIAL, { trust: "register_verified" as const }],
+};
+
+/**
  * What a credential says about itself, given what actually happened to it.
  *
  * Three labels over two stored tiers. `we_verify_this` is **not** a state a row

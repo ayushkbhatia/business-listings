@@ -4,7 +4,7 @@ import type { SavedSearchCadence } from "@/lib/db/generated/client";
 import { resolveNotificationSenders } from "@/lib/notify/senders";
 import { absoluteUrl } from "@/lib/site";
 import { t } from "@/lib/i18n";
-import { countMatches, newMatchesSince, tabOf } from "./match";
+import { countMatches, newMatchesSince, storedTab, tabOf } from "./match";
 
 /**
  * Board 10e — saved searches and their alerts.
@@ -180,7 +180,7 @@ export async function sweepSavedSearches(now: Date = new Date(), limit = 200): P
     const scope = {
       query: search.query,
       categoryId: search.categoryId,
-      tab: search.tab === "products" ? ("products" as const) : ("businesses" as const),
+      tab: storedTab(search.tab),
     };
     const { count, newestAt } = await newMatchesSince(scope, since);
     /*

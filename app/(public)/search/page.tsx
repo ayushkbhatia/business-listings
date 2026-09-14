@@ -28,6 +28,9 @@ import { SaveSearch } from "@/app/(public)/_results/SaveSearch";
 import { ZeroResult } from "@/app/(public)/_results/ZeroResult";
 import { AlertForm } from "@/app/(public)/_results/AlertForm";
 import { setAlert } from "@/app/(public)/_results/alert-actions";
+import { serviceMatchCount } from "@/lib/db/queries/blended-search";
+import { compositionFor, forcedComposition } from "@/lib/search/blended";
+import { BlendedSearchPage } from "./_blended";
 
 /**
  * Board 1c — search results and the map.
@@ -70,6 +73,16 @@ interface Props {
 export default async function SearchPage({ searchParams }: Props) {
   const sp = await searchParams;
   const query = parseSearchQuery(sp);
+
+  /*
+     Board `1c-s`: words that find work sold by the job get the blended page —
+     services, businesses and products in one set — and everything else gets
+     this board's composition below. The URL decides when it can; otherwise one
+     count does. See `compositionFor` for the order of the rules.
+  */
+  const composition =
+    forcedComposition(query) ?? compositionFor(query, query.q.trim() ? await serviceMatchCount(query) : 0);
+  if (composition === "blended") return <BlendedSearchPage query={query} />;
 
   const [results, productTotal, products, mapData, freeZones, crossLink] = await Promise.all([
     searchBusinesses(query),

@@ -52,6 +52,7 @@ import { seedLicenceImports } from "./seed-licence-imports.mjs";
 import { seedDedupe } from "./seed-dedupe.mjs";
 import { seedQueue } from "./seed-queue.mjs";
 import { seedCredentialReview } from "./seed-credential-review.mjs";
+import { seedBlendedSearch } from "./seed-blended-search.mjs";
 import { seedStaffRoster } from "./seed-staff-roster.mjs";
 import { seedNegotiationThreads } from "./seed-negotiation.mjs";
 import { seedAccountHealth } from "./seed-account-health.mjs";
@@ -1089,6 +1090,9 @@ async function main() {
   // Board 4c-s: one FTA credential per review state, built from the fixture
   // register, on new unpublished listings for the same reason as 4b's.
   await seedCredentialReview(prisma);
+  // Board 1c-s: a VAT search that blends services, firms and a product. New
+  // businesses under their own trade, so no fixture another board counts moves.
+  await seedBlendedSearch(prisma, NOW);
   // Board 4i: invitations, a deactivated former field verifier, measured last
   // activity and two acceptance fixtures. After every seed that writes audit
   // rows, so the roster's decision counts read a finished log.

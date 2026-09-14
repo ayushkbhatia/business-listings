@@ -28,6 +28,7 @@ import { ProposalReplyGallery } from "./_sections/ProposalReply";
 import { ProposalComparisonGallery } from "./_sections/ProposalComparison";
 import { BuilderSectionsGallery } from "./_sections/BuilderSections";
 import { BuyerInboxGallery } from "./_sections/BuyerInbox";
+import { BlendedSearchGallery } from "./_sections/BlendedSearch";
 import { NotificationTemplatesGallery } from "./_sections/NotificationTemplates";
 import { HomeCurationGallery } from "./_sections/HomeCuration";
 import { NegotiationThreadGallery } from "./_sections/NegotiationThread";
@@ -205,6 +206,8 @@ const UNLISTED = [
   "notification-templates",
   // Board `6h`: the four homepage slots, the chips and the rails map.
   "home-curation",
+  // Board `1c-s`: blended search — the three result shapes, the tabs, the rail and its empty state.
+  "blended-search",
 ] as const;
 
 export default function Gallery() {
@@ -320,6 +323,8 @@ export default function Gallery() {
       {/* Last, for the axe-grid reason above: nothing new above Shells. */}
       <NegotiationThreadGallery />
       <HomeCurationGallery />
+      {/* After home curation, for the same reason: nothing new above Shells. */}
+      <BlendedSearchGallery />
     </main>
   );
 }

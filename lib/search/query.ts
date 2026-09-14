@@ -34,9 +34,62 @@ const SORTS: readonly SearchSort[] = ["best", "rating", "reply", "newest"];
 /** List or grid. The board draws the list; the grid is the denser view. */
 export type SearchView = "list" | "grid";
 
+/**
+ * The four tabs of board `1c-s`'s blended result set. `all` is the default and
+ * is only ever written explicitly by a saved search — see `kind` below.
+ */
+export type BlendedTab = "all" | "services" | "businesses" | "products";
+
+export const BLENDED_TABS = ["all", "services", "businesses", "products"] as const satisfies readonly BlendedTab[];
+
+/**
+ * The service-track facets — board `1c-s`'s rail, keyed by query-string name.
+ *
+ * Five of the six are rows of the scope sheet a family marks filterable
+ * (`ScopeSheetRow.filterable`, the single source `1g-s` B5 names). The sixth,
+ * `credential`, is not a scope row: it is the register-checked credential a
+ * firm holds, which `1c-s` B7 puts in the rail in place of the self-declared
+ * regulator row.
+ */
+export const SERVICE_FACET_KEYS = [
+  "engagement",
+  "turnaround",
+  "fee",
+  "delivered",
+  "credential",
+  "sector",
+] as const;
+export type ServiceFacetKey = (typeof SERVICE_FACET_KEYS)[number];
+export type ServiceFacets = Record<ServiceFacetKey, string[]>;
+
+export function emptyServiceFacets(): ServiceFacets {
+  return { engagement: [], turnaround: [], fee: [], delivered: [], credential: [], sector: [] };
+}
+
+/** The facets on a query, whether or not the caller built it with any. */
+export function serviceFacetsOf(query: Pick<SearchQuery, "services">): ServiceFacets {
+  return { ...emptyServiceFacets(), ...(query.services ?? {}) };
+}
+
+export function hasServiceFacets(query: Pick<SearchQuery, "services">): boolean {
+  const facets = serviceFacetsOf(query);
+  return SERVICE_FACET_KEYS.some((key) => facets[key].length > 0);
+}
+
 export interface SearchQuery {
   q: string;
   tab: SearchTab;
+  /**
+   * Board `1c-s` — which kind the blended result set is narrowed to.
+   *
+   * Absent means *All*. It narrows one result set after the query has run and
+   * never takes part in the query itself (B3), which is why it is its own key
+   * rather than a value of `tab`: `tab` chooses what the goods page counts, and
+   * this chooses nothing about what is counted.
+   */
+  kind?: BlendedTab;
+  /** Board `1c-s`'s service facets. Absent on every goods caller. */
+  services?: ServiceFacets;
   emirate?: string;
   area?: string;
   /** Minimum verification tier. Set explicitly by the buyer. */
@@ -105,7 +158,68 @@ const RESERVED = new Set([
   // facet and must never land in the spec bucket, or it becomes a filter on a
   // SpecField id that does not exist.
   "compare",
+  "kind",
+  ...SERVICE_FACET_KEYS,
 ]);
+
+/**
+ * The most values one service facet carries. A rail offers a handful; a URL
+ * with fifty is somebody generating URLs, and every value is re-emitted into
+ * every anchor on the page — the reflector `SPEC_KEY` below exists to close.
+ */
+const FACET_VALUES_MAX = 10;
+
+/** A fee-basis key as `ScopeSheetFeeBasis.key` stores them. */
+const FEE_KEY = /^[a-z][a-z0-9_]{0,39}$/;
+
+/**
+ * A free-text facet value — a turnaround or a sector — in its matching form.
+ *
+ * Case-folded and collapsed, the same form `sectorSlug` keys declared sectors
+ * by, so *Free zone entities* and *free zone  entities* are one option. Commas
+ * are the list separator in the URL, so the form replaces them; anything that
+ * does not survive its own normalisation unchanged is not a value this page
+ * wrote, and is dropped rather than echoed into every link.
+ */
+export function facetText(value: string): string {
+  return value.replace(/,/g, " ").trim().replace(/\s+/g, " ").toLowerCase().slice(0, 60).trim();
+}
+
+const ENGAGEMENT_VALUES: ReadonlySet<string> = new Set(["ongoing_contract", "one_off_job", "call_off"]);
+const DELIVERED_VALUES: ReadonlySet<string> = new Set(["remote", "at_our_office", "on_site"]);
+const CREDENTIAL_VALUES: ReadonlySet<string> = new Set([
+  "fta_tax_agent",
+  "mof_audit_approval",
+  "professional_body",
+  "indemnity_insurance",
+  "other",
+]);
+
+function facetValues(key: ServiceFacetKey, raw: string | string[] | undefined): string[] {
+  /*
+     Split on commas for the closed vocabularies, and not for the free-text
+     ones: a sector is one value per parameter because `facetText` has already
+     taken its commas out, and a hand-edited `sector=a,b` is two sectors either
+     way.
+  */
+  const values = list(raw);
+  const valid = values.filter((value) => {
+    switch (key) {
+      case "engagement":
+        return ENGAGEMENT_VALUES.has(value);
+      case "delivered":
+        return DELIVERED_VALUES.has(value);
+      case "credential":
+        return CREDENTIAL_VALUES.has(value);
+      case "fee":
+        return FEE_KEY.test(value);
+      case "turnaround":
+      case "sector":
+        return value.length > 0 && facetText(value) === value;
+    }
+  });
+  return [...new Set(valid)].slice(0, FACET_VALUES_MAX);
+}
 
 /**
  * The shape of a spec facet's query key: a `SpecField` id, which is a cuid.
@@ -226,7 +340,29 @@ export function parseSearchQuery(
     view: one(params.view) === "grid" ? "grid" : "list",
     page: Number.isFinite(page) && page > 1 ? page : 1,
     bounds: parseBounds(whole(params.bounds)),
+    ...blendedParts(params),
   };
+}
+
+/**
+ * The two board `1c-s` parts of a query, only where the URL carries them — so a
+ * goods query parses to exactly the object it did before this board.
+ */
+function blendedParts(
+  params: Record<string, string | string[] | undefined>,
+): Pick<SearchQuery, "kind" | "services"> {
+  const out: Pick<SearchQuery, "kind" | "services"> = {};
+  const kind = one(params.kind);
+  if (kind && (BLENDED_TABS as readonly string[]).includes(kind)) out.kind = kind as BlendedTab;
+
+  const services = emptyServiceFacets();
+  let any = false;
+  for (const key of SERVICE_FACET_KEYS) {
+    services[key] = facetValues(key, params[key]);
+    if (services[key].length > 0) any = true;
+  }
+  if (any) out.services = services;
+  return out;
 }
 
 /** Facets the buyer set, for the chip row and the drop-a-filter suggestion. */
@@ -261,6 +397,13 @@ export function toSearchParams(query: SearchQuery, overrides: Partial<SearchQuer
   if (merged.view !== "list") params.set("view", merged.view);
   if (merged.page > 1) params.set("page", String(merged.page));
   if (merged.bounds) params.set("bounds", formatBounds(merged.bounds));
+  if (merged.kind) params.set("kind", merged.kind);
+  if (merged.services) {
+    for (const key of SERVICE_FACET_KEYS) {
+      const values = merged.services[key] ?? [];
+      if (values.length > 0) params.set(key, values.join(","));
+    }
+  }
 
   return params.toString();
 }
@@ -323,6 +466,18 @@ export function withoutFacet(query: SearchQuery, key: string): SearchQuery {
        the buyer to the unbounded search, which is what the chip promises.
     */
     case "bounds": delete next.bounds; break;
+    /*
+       Board `1c-s`. Removing a service facet empties that one group; the tab the
+       buyer is on stays, because a tab is not a filter.
+    */
+    case "engagement":
+    case "turnaround":
+    case "fee":
+    case "delivered":
+    case "credential":
+    case "sector":
+      next.services = { ...serviceFacetsOf(query), [key]: [] };
+      break;
     default: delete next.spec[key];
   }
   return next;
@@ -356,5 +511,7 @@ export function appliedKeys(query: SearchQuery): string[] {
   if (query.replyWithinHours) keys.push("replyWithinHours");
   if (query.yearsTrading) keys.push("yearsTrading");
   keys.push(...Object.keys(query.spec));
+  const facets = serviceFacetsOf(query);
+  keys.push(...SERVICE_FACET_KEYS.filter((key) => facets[key].length > 0));
   return keys;
 }

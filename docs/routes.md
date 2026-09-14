@@ -18,6 +18,7 @@ and it is the one that argues back.
 /c/:category/:sub                       Subcategory                          [10a]  SEO'd h5s2
 /search?q&emirate&verified&tab          Results, businesses tab               [1c]
 /search?tab=products                    Results, products tab                [10c]
+/search?q (words find a service)        Blended — services, businesses, products [1c-s] built s1cs
 /compare?p=…                            Comparison tray                      [10d]
 /b/:slug                                Storefront overview                   [1d]
 /b/:slug (sells work)                   Storefront, catalogue taken out     [1d-s] built h1ds
