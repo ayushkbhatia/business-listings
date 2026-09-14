@@ -63,8 +63,10 @@ describe("the matrix", () => {
   });
 
   it("passes when any held role grants the capability", () => {
-    expect(can(actor("staff_field", "staff_ops_lead"), "business.merge")).toBe(true);
-    expect(can(actor("staff_field", "staff_moderator"), "business.merge")).toBe(false);
+    // An ops lead who also buys — a person holds at most one staff role since
+    // board 4i, so the second role here is a buyer's and not a second staff seat.
+    expect(can(actor("buyer", "staff_ops_lead"), "business.merge")).toBe(true);
+    expect(can(actor("buyer", "staff_moderator"), "business.merge")).toBe(false);
   });
 
   it("does not give ops_lead everything, and the exceptions are deliberate", () => {

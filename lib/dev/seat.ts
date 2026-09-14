@@ -78,7 +78,6 @@ export const SEAT_KINDS: readonly SeatKind[] = [
   */
   { key: "ops_lead_2", roles: ["staff_ops_lead"], needsBusiness: false, landing: "/admin/content/matrix" },
   { key: "moderator", roles: ["staff_moderator"], needsBusiness: false, landing: "/admin" },
-  { key: "field", roles: ["staff_field"], needsBusiness: false, landing: "/admin" },
   { key: "staff_finance", roles: ["staff_finance"], needsBusiness: false, landing: "/admin" },
   { key: "buyer", roles: ["buyer"], needsBusiness: false, landing: "/" },
 ];

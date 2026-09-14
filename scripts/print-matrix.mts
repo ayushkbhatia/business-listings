@@ -10,7 +10,6 @@ const SHORT: Record<string, string> = {
   seller_sales: "s.sal",
   seller_finance: "s.fin",
   staff_moderator: "mod",
-  staff_field: "field",
   staff_finance: "fin",
   staff_ops_lead: "ops",
 };

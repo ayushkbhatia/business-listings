@@ -51,7 +51,6 @@ const ROLES = {
   ops: { roles: ["staff_ops_lead"], name: "Dev Ops Lead", landing: "/admin" },
   moderator: { roles: ["staff_moderator"], name: "Dev Moderator", landing: "/admin" },
   finance: { roles: ["staff_finance"], name: "Dev Finance", landing: "/admin" },
-  field: { roles: ["staff_field"], name: "Dev Field Verifier", landing: "/admin" },
   seller: { roles: ["seller_owner"], name: "Dev Seller", landing: "/dashboard/leads" },
   /*
      The three non-owner seller seats.

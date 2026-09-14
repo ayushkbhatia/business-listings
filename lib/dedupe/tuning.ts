@@ -201,18 +201,26 @@ export async function applyTuning(
             update: { value: proposed as unknown as Prisma.InputJsonValue, updatedById: input.actor.id },
           });
 
-          await tx.mergeCandidate.updateMany({
+          /*
+             B4: every pair the new lines wrote — the pending ones re-banded or
+             withdrawn, counted by these three updates, and the pairs created
+             below. A pending pair whose band came out the same is still
+             rewritten by its update and is in the count.
+          */
+          let pairsWritten = 0;
+          const certain = await tx.mergeCandidate.updateMany({
             where: { ...PENDING, score: { gte: proposed.certain } },
             data: { band: "certain" },
           });
-          await tx.mergeCandidate.updateMany({
+          const probable = await tx.mergeCandidate.updateMany({
             where: { ...PENDING, score: { gte: proposed.floor, lt: proposed.certain } },
             data: { band: "probable" },
           });
-          await tx.mergeCandidate.updateMany({
+          const belowFloor = await tx.mergeCandidate.updateMany({
             where: { ...PENDING, score: { lt: proposed.floor } },
             data: { state: "withdrawn", withdrawnReason: "below_floor" },
           });
+          pairsWritten += certain.count + probable.count + belowFloor.count;
 
           const runs = new Set<string>();
           for (const pair of computed.recordPairs) {
@@ -237,6 +245,7 @@ export async function applyTuning(
                 signals: pair.signals as unknown as Prisma.InputJsonValue,
               },
             });
+            pairsWritten += 1;
             runs.add(pair.runId);
           }
           for (const runId of runs) {
@@ -246,7 +255,8 @@ export async function applyTuning(
           const listingPairs = computed.listingPairs.slice(0, LISTING_PAIR_CAP);
           const facts = await listingFacts(tx, listingPairs.flatMap((pair) => [pair.a, pair.b]));
           if (listingPairs.length > 0) {
-            await tx.mergeCandidate.createMany({
+            // `skipDuplicates`, so the pairs added are what the statement reports.
+            const { count: added } = await tx.mergeCandidate.createMany({
               data: listingPairs.map((pair) => {
                 const a = facts.get(pair.a);
                 const b = facts.get(pair.b);
@@ -262,6 +272,7 @@ export async function applyTuning(
               }),
               skipDuplicates: true,
             });
+            pairsWritten += added;
           }
 
           return {
@@ -274,6 +285,7 @@ export async function applyTuning(
               listingPairsCapped: Math.max(0, computed.listingPairs.length - LISTING_PAIR_CAP),
               at: now.toISOString(),
             },
+            blastRadius: { count: pairsWritten, unit: "pairs" },
           };
         },
       ),

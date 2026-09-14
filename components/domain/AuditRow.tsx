@@ -22,6 +22,20 @@ export interface AuditRowProps {
   /** `Review:clx123`. Mono, and greppable. */
   subject: string;
   subjectHref?: string;
+  /**
+   * The subject's own name — "Gulf Star Auto Spare Parts". Board 4i: the log
+   * reads as consequence, and a reference alone is a click nobody can follow.
+   * The reference still renders beside it, so the row stays greppable.
+   */
+  subjectName?: string | null;
+  /** "affected 8,412 products". Board 4i `B4`. Already formatted. */
+  blast?: string | null;
+  /**
+   * Replaces the action label and the actor line with one sentence —
+   * "R. Haddad removed a review". Used by the log; the gallery's older shape
+   * still passes `actionLabel` and `actorName` separately.
+   */
+  headline?: string;
   /** Who did it. A name, not a uuid. */
   actorName: string;
   /** Their role at the time, already localised. */
@@ -39,6 +53,9 @@ export function AuditRow({
   actionLabel,
   subject,
   subjectHref,
+  subjectName,
+  blast,
+  headline,
   actorName,
   actorRoleLabel,
   at,
@@ -49,8 +66,10 @@ export function AuditRow({
   return (
     <Element className="border-b border-line px-3 py-3 last:border-b-0">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="flex flex-wrap items-baseline gap-2">
-          <span className="text-body-sm text-ink">{actionLabel}</span>
+        <p className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <span className="text-body-sm text-ink">{headline ?? actionLabel}</span>
+          {subjectName ? <span className="text-body-sm text-ink">· {subjectName}</span> : null}
+          {blast ? <span className="text-body-sm text-ink">· {blast}</span> : null}
           {subjectHref ? (
             <a
               href={subjectHref}
@@ -63,8 +82,13 @@ export function AuditRow({
           )}
         </p>
         <span className="text-caption text-muted">
-          {actorName}
-          {actorRoleLabel ? ` · ${actorRoleLabel}` : ""} · {at}
+          {headline ? null : (
+            <>
+              {actorName}
+              {actorRoleLabel ? ` · ${actorRoleLabel}` : ""} ·{" "}
+            </>
+          )}
+          {at}
         </span>
       </div>
 

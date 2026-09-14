@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { resolveConflict, openConflictIfContested, conflictFor } from "@/lib/onboarding/conflict";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Handoff 4 criterion 3, and the step-1 checkpoint:
@@ -79,9 +80,7 @@ async function removeFixtures() {
     ];
 
     // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
-    await prisma.auditEvent.deleteMany({
-      where: { subject: { in: conflicts.map((row) => `ClaimConflict:${row.id}`) } },
-    });
+    await purgeAuditRows({ subject: { in: conflicts.map((row) => `ClaimConflict:${row.id}`) } });
     await prisma.business.deleteMany({ where: { id: { in: businessIds } } });
     await prisma.user.deleteMany({ where: { id: { in: userIds } } });
   }
@@ -105,6 +104,7 @@ beforeAll(async () => {
   moderatorId = (
     await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_moderator" } },
+      orderBy: { id: "asc" },
       select: { id: true },
     })
   ).id;

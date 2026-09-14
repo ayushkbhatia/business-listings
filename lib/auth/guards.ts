@@ -116,6 +116,10 @@ export const mayEditTaxonomy = (a: Actor) => can(a, "taxonomy.write");
 export const assertCanManageStaff = (a: Actor) => assertCan(a, "staff.manage");
 export const mayManageStaff = (a: Actor) => can(a, "staff.manage");
 
+/** Board 4i: every staff seat reads the roster and the matrix; only ops lead changes them. */
+export const assertCanReadStaff = (a: Actor) => assertCan(a, "staff.read");
+export const mayReadStaff = (a: Actor) => can(a, "staff.read");
+
 
 
 export const assertCanViewAs = (a: Actor) => assertCan(a, "support.view_as");

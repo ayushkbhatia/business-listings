@@ -9,6 +9,7 @@ import {
   tradeKindBulkImpact,
 } from "@/lib/taxonomy/service";
 import { resolveTradeKind } from "@/lib/taxonomy/trade-kind";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Board `4d-s` — the ops half of the fork, against a database.
@@ -30,7 +31,7 @@ let grandchild: string;
 let actor: Actor;
 
 async function removeFixtures() {
-  await prisma.auditEvent.deleteMany({ where: { subject: { startsWith: "Category:" }, reason: { startsWith: PREFIX } } });
+  await purgeAuditRows({ subject: { startsWith: "Category:" }, reason: { startsWith: PREFIX } });
   // Children first: `parentId` is `onDelete: Restrict`.
   await prisma.category.deleteMany({ where: { slug: { startsWith: `${PREFIX}g` } } });
   await prisma.category.deleteMany({ where: { slug: { startsWith: PREFIX } } });

@@ -278,6 +278,12 @@ export async function editPlanEntitlements(
             applyToExisting: input.applyToExisting,
             existingUpdated: updated,
           },
+          /*
+             B4: the live subscriptions whose snapshot was rewritten — read in
+             this transaction and each updated in the loop above. Without
+             "apply to existing" the edit touches the plan row alone.
+          */
+          blastRadius: input.applyToExisting ? { count: updated, unit: "subscriptions" } : null,
         };
       },
     ),

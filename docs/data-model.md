@@ -410,19 +410,65 @@ existing accounts unless "apply to existing" is explicitly set.
 
 ```prisma
 model AuditEvent {
-  id        String   @id @default(cuid())
-  actorId   String
-  action    String            // tier_change | review_removed | credit_issued | suspend | merge | boost | view_as
-  subject   String            // entity type + id
-  reason    String            // REQUIRED — no nullable
-  before    Json?
-  after     Json?
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  actorId     String            // Restrict: a person with log entries cannot be deleted
+  action      String            // AUDIT_ACTIONS in lib/audit/types.ts — each has a sentence
+  subject     String            // entity type + id
+  reason      String            // REQUIRED — no nullable
+  before      Json?
+  after       Json?
+  blastRadius Int?              // board 4i B4 — how many things a bulk decision touched
+  blastUnit   String?           // products | listings | pairs | … — set exactly when blastRadius is
+  createdAt   DateTime @default(now())
 }
 ```
 
 Write it in the service layer. A mutation that can reach the database without an audit row is
 a bug, and the test suite should prove it cannot.
+
+**Append-only, by trigger** (board 4i `B6`). `audit_event_append_only` refuses every UPDATE,
+and every DELETE unless the session has set `app.audit_maintenance` — which only integration
+test cleanup does, through `tests/integration/audit-cleanup.ts`. No screen offers an edit, and
+no path could make one.
+
+**Blast radius is a count the write returned**, never an estimate: an `updateMany().count`, a
+`createMany().count`, or the length of the list the same transaction wrote. A publish that
+changes what products *read* without writing them (a spec template version) has no radius.
+
+## Staff — board 4i
+
+```prisma
+enum Role { buyer, seller_owner, seller_manager, seller_sales, seller_finance,
+            staff_moderator, staff_finance, staff_ops_lead }   // staff_field RETIRED and removed
+
+model User {
+  roles              Role[]      // the decision; the JWT claim mirrors it
+  staffLastActiveAt  DateTime?   // measured by requireStaff(), at most every 5 min
+  staffDeactivatedAt DateTime?   // cleared when an invitation is accepted again
+}
+
+model StaffInvite {
+  email        String          // lowercased, on STAFF_EMAIL_DOMAINS
+  role         Role            // one staff role; CHECK refuses anything else
+  tokenHash    String @unique  // SHA-256 of a 256-bit token that exists only in the link
+  invitedById  String
+  expiresAt    DateTime        // 72 hours; an expired invitation is resendable, not revoked
+  lastSentAt   DateTime        // resend refused within 15 minutes
+  sendCount    Int
+  acceptedAt   DateTime?
+  acceptedById String?
+  revokedAt    DateTime?
+}
+```
+
+There is no staff table beside `User.roles`. Membership is the column `can()` decides from,
+so a person holding a staff role cannot be missing from the roster. One invitation is
+outstanding per address, by partial unique index.
+
+**Roles are decided by the record, not the claim.** `getActor` read roles from the JWT claim
+first, and compared a stale claim by length — so a revoke whose claim write failed never took
+effect, and a moderator moved to finance stayed a moderator. The profile row decides now, and
+the claim is repaired to match.
 
 ## Closing a business — board 11i
 

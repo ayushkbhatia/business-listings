@@ -90,7 +90,7 @@ export async function previewRuleChange(
      Gated explicitly, and not only by the screen.
 
      `previewRename` on the categories board calls `requireStaff()` and no
-     `can()`, so any staff seat — including a field verifier — can ask it how
+     `can()`, so any staff seat — a finance seat included — can ask it how
      many addresses a rename would move. This one asks first: a preview of a
      threshold change is a map of the whole index's soft spots.
 

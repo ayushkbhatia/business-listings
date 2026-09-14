@@ -10,6 +10,7 @@ import {
 import { logIncentiveFinding, openDispute, openDisputes, resolveDispute } from "@/lib/reviews/disputes";
 import { reviewsBoard } from "@/lib/reviews/board";
 import { REPLY_WINDOW_DAYS } from "@/lib/reviews/eligibility";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Board 11c, against a real database and through the same services the screens
@@ -62,12 +63,14 @@ beforeAll(async () => {
 
   const ops = await prisma.user.findFirstOrThrow({
     where: { roles: { has: "staff_ops_lead" } },
+    orderBy: { id: "asc" },
     select: { id: true, roles: true },
   });
   opsLead = { id: ops.id, roles: ops.roles };
 
   const mod = await prisma.user.findFirstOrThrow({
     where: { roles: { has: "staff_moderator" } },
+    orderBy: { id: "asc" },
     select: { id: true, roles: true },
   });
   moderator = { id: mod.id, roles: mod.roles };
@@ -82,7 +85,7 @@ afterEach(async () => {
   await prisma.reviewRequest.deleteMany({ where: { id: { in: requestIds.splice(0) } } });
   await prisma.review.deleteMany({ where: { id: { in: reviewIds.splice(0) } } });
   await prisma.enquiry.deleteMany({ where: { id: { in: enquiryIds.splice(0) } } });
-  await prisma.auditEvent.deleteMany({ where: { reason: { contains: "11c fixture" } } });
+  await purgeAuditRows({ reason: { contains: "11c fixture" } });
 });
 
 afterAll(async () => {

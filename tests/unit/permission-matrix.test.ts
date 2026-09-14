@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { CAPABILITIES, type Capability } from "@/lib/auth/capabilities";
 import { can } from "@/lib/auth/can";
-import type { Actor, Role } from "@/lib/auth/roles";
+import { isRole, STAFF_ROLES, type Actor, type Role } from "@/lib/auth/roles";
 
 /**
  * `lib/auth/capabilities.ts` against `docs/permissions.md`, row by row.
@@ -72,11 +72,10 @@ describe("seller roles match board 7d", () => {
 
 /* ── docs/permissions.md §3 — staff roles, board 4i ──────────────────────── */
 
-type Staff = "ops" | "moderator" | "field" | "finance";
+type Staff = "ops" | "moderator" | "finance";
 const STAFF: Record<Staff, Role> = {
   ops: "staff_ops_lead",
   moderator: "staff_moderator",
-  field: "staff_field",
   finance: "staff_finance",
 };
 
@@ -99,7 +98,7 @@ const STAFF_TABLE: [Capability, Staff[]][] = [
   ["search.ranking.write", ["ops"]],
   ["placement.boost", ["ops"]],
   ["support.view_as", ["ops", "moderator"]],
-  ["audit.read", ["ops", "moderator", "field", "finance"]],
+  ["audit.read", ["ops", "moderator", "finance"]],
 ];
 
 describe("staff roles match board 4i", () => {
@@ -112,6 +111,13 @@ describe("staff roles match board 4i", () => {
       }
     });
   }
+
+  it("has three staff roles, and the field verifier is not one of them", () => {
+    // Board 4i `B1`: retired means removed. A value `isRole()` still accepted
+    // would be one a claim, a seed or a form could grant.
+    expect([...STAFF_ROLES].sort()).toEqual(Object.values(STAFF).sort());
+    expect(isRole("staff_field")).toBe(false);
+  });
 
   it("does not give the ops lead the two rows that are finance's alone", () => {
     // The separation is the point: the role that can suspend an account and
@@ -146,9 +152,10 @@ describe("the cross-surface matrix", () => {
        CLAUDE.md non-negotiable 2. A field verifier used to hold the row as
        well, for a business they had recorded a visit to. Site visits were
        withdrawn and that evidence with them, so the grant was narrowed to the
-       ops lead rather than widened — `staff_field` is in the list below now.
+       ops lead rather than widened — and board 4i then retired `staff_field`
+       outright, so it is not in the list below because it is not a role.
     */
-    for (const role of ["buyer", "seller_owner", "seller_manager", "staff_moderator", "staff_finance", "staff_field"] as Role[]) {
+    for (const role of ["buyer", "seller_owner", "seller_manager", "staff_moderator", "staff_finance"] as Role[]) {
       expect(can(actor(role), "business.verification_tier.write"), role).toBe(false);
     }
   });
@@ -220,6 +227,11 @@ describe("every row cites the document", () => {
        `queue.rules` joined on board 4b, for "Tune auto-check rules". Moving a
        threshold changes what bulk approve may act on across the whole queue,
        so it sits a rung above `queue.decide`, at ops lead.
+
+       `staff.read` joined on board 4i, whose states table says a non-ops viewer
+       "sees the matrix read-only". §07 has no row for reading the roster. Every
+       staff seat holds it and it is not audited, because reading who holds which
+       role changes nothing — the write beside it, `staff.manage`, stays ops lead.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
@@ -233,6 +245,7 @@ describe("every row cites the document", () => {
       "review.dispute",
       "review.hold",
       "staff.manage",
+      "staff.read",
     ]);
   });
 });

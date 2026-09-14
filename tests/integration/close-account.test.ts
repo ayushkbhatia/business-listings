@@ -21,6 +21,7 @@ import { findClaimMatches, submitClaim } from "@/lib/onboarding/claim";
 import { goLive } from "@/lib/onboarding/service";
 import { postMessage } from "@/lib/messaging/service";
 import { acceptQuote } from "@/lib/enquiry/service";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Board 11i, against a real database — acceptance criteria 1–9.
@@ -57,7 +58,7 @@ afterAll(async () => {
     await prisma.businessClosure.deleteMany({ where: { businessId: { in: madeBusinesses } } });
   }
   if (madeUsers.length > 0) {
-    await prisma.auditEvent.deleteMany({ where: { actorId: { in: madeUsers } } });
+    await purgeAuditRows({ actorId: { in: madeUsers } });
     await prisma.businessClosure.deleteMany({ where: { requestedById: { in: madeUsers } } });
   }
   if (madeBusinesses.length > 0) {

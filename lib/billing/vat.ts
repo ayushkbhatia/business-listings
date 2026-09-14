@@ -162,7 +162,7 @@ function csvCell(value: string): string {
    * name beginning with `=` is a formula injection into whoever opens this in
    * Excel. Quote everything and prefix the four dangerous leaders.
    */
-  const guarded = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  const guarded = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
   return `"${guarded.replace(/"/g, '""')}"`;
 }
 

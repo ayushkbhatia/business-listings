@@ -6,6 +6,7 @@ import {
   PAIRED_ACTIONS,
   type AuditTransaction,
   type AuditedCapability,
+  type BlastRadius,
   type PairedAction,
   type SubjectRef,
 } from "./types";
@@ -73,6 +74,15 @@ export interface StaffMutationResult<T> {
   result: T;
   before?: unknown;
   after?: unknown;
+  /**
+   * Board 4i `B4`: how many things this decision touched beyond its subject.
+   *
+   * Returned from the mutation rather than passed in beside the reason, because
+   * the count is only known once the write has run — the products a template
+   * republished, the pairs a bulk merge resolved. Omit it for a decision about
+   * one thing.
+   */
+  blastRadius?: BlastRadius | null;
 }
 
 /**
@@ -118,7 +128,7 @@ export async function staffMutation<T>(
   assertReason(action, input.reason);
   assertCan(input.actor, input.capability);
 
-  const { result, before, after } = await run();
+  const { result, before, after, blastRadius } = await run();
 
   await writeAudit(
     {
@@ -128,6 +138,7 @@ export async function staffMutation<T>(
       reason: input.reason,
       before,
       after,
+      blastRadius: blastRadius ?? null,
     },
     input.tx,
   );

@@ -115,6 +115,9 @@ export async function generateDrafts(
           result: count,
           before: { drafts: 0 },
           after: { drafts: count, paths: scopes.map((scope) => scope.path) },
+          // B4: the draft pages created, counted one `create` at a time in the
+          // loop above — scopes that gained a page since the count are not in it.
+          blastRadius: { count, unit: "pages" },
         };
       },
     ),

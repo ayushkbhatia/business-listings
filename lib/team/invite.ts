@@ -365,13 +365,11 @@ export async function acceptInvite(
   /*
      The claim, immediately.
 
-     `getActor` reads roles from the JWT `app_metadata` first and only falls
-     back to the profile row when the claim is empty — so a seat written here
-     and left unsynced would be a seat that does not exist until the session is
-     rebuilt. The invitee's very next request is the dashboard they were just
-     sent to, and it would 404. `repairClaims` swallows its own failure, and
-     `getActor` re-syncs a stale claim on the request after that, so this is the
-     fast path rather than the only one.
+     `getActor` decides roles from the profile row since board 4i, so the seat
+     exists on the invitee's very next request whether or not this lands. The
+     claim is still the mirror other readers of the session see, and keeping it
+     true here saves `getActor` the repair write on that request. `repairClaims`
+     swallows its own failure, so this is the fast path rather than the only one.
   */
   await repairClaims(actor.id, nextRoles, offer.businessId);
 

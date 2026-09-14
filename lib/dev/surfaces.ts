@@ -105,6 +105,7 @@ export const SURFACE_GROUPS: readonly SurfaceGroup[] = [
       { href: "/admin/subscriptions", what: "Subscriptions" },
       { href: "/admin/revenue", what: "Revenue" },
       { href: "/admin/dunning", what: "Failed payments" },
+      { href: "/admin/staff", what: "Staff, roles and invitations" },
       { href: "/admin/audit", what: "Audit log" },
       { href: "/admin/notifications", what: "Notification templates" },
       { href: "/admin/content/home", what: "Home page content" },

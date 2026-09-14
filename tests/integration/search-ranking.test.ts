@@ -80,6 +80,7 @@ beforeAll(async () => {
   financeId = (
     await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_finance" } },
+      orderBy: { id: "asc" },
       select: { id: true },
     })
   ).id;

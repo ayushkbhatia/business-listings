@@ -387,6 +387,7 @@ describe("reportAcceptedQuote — B8", () => {
     // Resolved in the ordinary queue, with a reason — and the record shows it.
     const opsLead = await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_ops_lead" } },
+      orderBy: { id: "asc" },
       select: { id: true, roles: true },
     });
     const resolved = await resolveReport({

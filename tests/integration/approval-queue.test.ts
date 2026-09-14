@@ -10,6 +10,7 @@ import {
   rejectRef,
   requestDocumentsRef,
 } from "@/lib/moderation/decide";
+import { purgeAuditRows } from "./audit-cleanup";
 import { loadQueue, queueHealth, refFor, SLA_MS, type QueueEntry } from "@/lib/moderation/queue";
 import { DEFAULT_RULES, RULES_SETTING_KEY, type CheckRules } from "@/lib/moderation/rules";
 import { applyRules, previewRules } from "@/lib/moderation/tuning";
@@ -49,16 +50,14 @@ async function removeFixtures() {
       prisma.location.findMany({ where: { businessId: { in: ids } }, select: { id: true } }),
       prisma.claimConflict.findMany({ where: { businessId: { in: ids } }, select: { id: true } }),
     ]);
-    await prisma.auditEvent.deleteMany({
-      where: {
-        subject: {
-          in: [
-            ...claims.map((row) => `ClaimSubmission:${row.id}`),
-            ...requests.map((row) => `ListingChangeRequest:${row.id}`),
-            ...documents.map((row) => `Document:${row.id}`),
-            ...locations.map((row) => `Location:${row.id}`),
-          ],
-        },
+    await purgeAuditRows({
+      subject: {
+        in: [
+          ...claims.map((row) => `ClaimSubmission:${row.id}`),
+          ...requests.map((row) => `ListingChangeRequest:${row.id}`),
+          ...documents.map((row) => `Document:${row.id}`),
+          ...locations.map((row) => `Location:${row.id}`),
+        ],
       },
     });
     await prisma.claimConflict.deleteMany({ where: { id: { in: conflicts.map((row) => row.id) } } });
@@ -84,7 +83,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await removeFixtures();
-  await prisma.auditEvent.deleteMany({ where: { subject: `PlatformSetting:${RULES_SETTING_KEY}`, reason: { startsWith: "AQ4B" } } });
+  await purgeAuditRows({ subject: `PlatformSetting:${RULES_SETTING_KEY}`, reason: { startsWith: "AQ4B" } });
   if (previousRules === undefined) await prisma.platformSetting.deleteMany({ where: { key: RULES_SETTING_KEY } });
   else
     await prisma.platformSetting.update({

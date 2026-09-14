@@ -10,6 +10,7 @@ import {
 import { PENDING } from "@/lib/dedupe/queue";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Criterion 2, against a real database:
@@ -60,9 +61,7 @@ async function removeFixtures() {
 
   if (ids.length > 0) {
     // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
-    await prisma.auditEvent.deleteMany({
-      where: { subject: { in: ids.map((id) => `Business:${id}`) } },
-    });
+    await purgeAuditRows({ subject: { in: ids.map((id) => `Business:${id}`) } });
     await prisma.businessMerge.deleteMany({
       where: { OR: [{ keepId: { in: ids } }, { absorbId: { in: ids } }] },
     });
@@ -88,6 +87,7 @@ beforeAll(async () => {
   moderatorId = (
     await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_moderator" } },
+      orderBy: { id: "asc" },
       select: { id: true },
     })
   ).id;

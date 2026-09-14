@@ -59,6 +59,7 @@ beforeAll(async () => {
   moderatorId = (
     await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_moderator" } },
+      orderBy: { id: "asc" },
       select: { id: true },
     })
   ).id;

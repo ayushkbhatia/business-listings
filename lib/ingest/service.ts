@@ -405,6 +405,9 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
            */
           const CHUNK = 500;
           let pairs = 0;
+          // B4: the records this upload staged, counted from the rows each
+          // `createManyAndReturn` gave back.
+          let recordsStaged = 0;
           for (let i = 0; i < staged.length; i += CHUNK) {
             const slice = staged.slice(i, i + CHUNK);
             const created = await tx.stagedListing.createManyAndReturn({
@@ -430,6 +433,7 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
               })),
               select: { id: true, rowNumber: true },
             });
+            recordsStaged += created.length;
 
             // The pair each duplicate goes to board 12b as, in the same
             // transaction: a record marked duplicate with no pair is a record
@@ -472,6 +476,7 @@ export async function stageRun(input: StageInput, now = new Date()): Promise<Sta
               rejected: totals.rejected,
               truncated,
             },
+            blastRadius: { count: recordsStaged, unit: "records" },
           };
         },
       ),
@@ -814,6 +819,12 @@ export async function publishRun(
               newDuplicates: collided.length,
               withoutAddress,
             },
+            /*
+               B4: the listings this decision put live, counted from the rows
+               `createManyAndReturn` gave back. Zero is a real result here — a
+               monthly delta with nothing new is still a decision about a run.
+            */
+            blastRadius: { count, unit: "listings" },
           };
         },
       ),
@@ -884,6 +895,9 @@ export async function discardRun(
           result: null,
           before: { status: "staged" },
           after: { status: "discarded", pairsWithdrawn: withdrawn },
+          // B4: the open pairs the discard withdrew, counted by the updateMany in
+          // `withdrawRunPairsTx`. None withdrawn means it touched only the run.
+          blastRadius: withdrawn > 0 ? { count: withdrawn, unit: "pairs" } : null,
         };
       },
     ),
@@ -1129,6 +1143,9 @@ export async function rollbackRun(
               mergesUnwound: unwound.unwound,
               pairsWithdrawn: unwound.withdrawn,
             },
+            // B4: the listings taken off the directory, summed from the
+            // updateMany counts above — not the plan, which a claim can undercut.
+            blastRadius: { count: withdrawn, unit: "listings" },
           };
         },
       ),

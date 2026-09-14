@@ -19,7 +19,7 @@ import type { Actor } from "@/lib/auth/roles";
  * tested separately from the matrix rather than inside it.
  */
 
-const verifier: Actor = { id: "field_1", roles: ["staff_field"] };
+const finance: Actor = { id: "fin_1", roles: ["staff_finance"] };
 const opsLead: Actor = { id: "ops_1", roles: ["staff_ops_lead"] };
 
 describe("setting a verification tier is a plain role check again", () => {
@@ -33,11 +33,13 @@ describe("setting a verification tier is a plain role check again", () => {
      the conditional half had no evidence left to read. The grant was narrowed
      to the ops lead rather than widened to an unconditional one, which is the
      safe direction: the failure this suite guarded against is now impossible
-     because the role that could commit it no longer holds the row.
+     because the role that could commit it no longer holds the row. Board 4i
+     then retired `staff_field` itself, so the refusals below are the two staff
+     roles that remain.
   */
   it("is held by the ops lead and nobody else", () => {
     expect(can(opsLead, "business.verification_tier.write")).toBe(true);
-    expect(can(verifier, "business.verification_tier.write")).toBe(false);
+    expect(can(finance, "business.verification_tier.write")).toBe(false);
     expect(can({ id: "mod_1", roles: ["staff_moderator"] }, "business.verification_tier.write")).toBe(
       false,
     );
@@ -139,9 +141,9 @@ describe("reading another business's enquiries is audit-only", () => {
   });
 
   it("refuses a role that does not hold it, reason or no reason", () => {
-    const field: Actor = { id: "f1", roles: ["staff_field"] };
+    // Finance holds the audit log and not this row.
     expect(
-      canReadOtherBusinessEnquiries(field, { businessId: "b9", reason: "A very good reason." }),
+      canReadOtherBusinessEnquiries(finance, { businessId: "b9", reason: "A very good reason." }),
     ).toBe(false);
   });
 });
@@ -152,9 +154,10 @@ describe("the audit log is scoped too", () => {
   });
 
   it("gives every other staff role their own actions", () => {
-    // §07: "own actions" for moderator, field verifier and finance. A boolean
-    // would have shown a moderator the whole log.
-    for (const role of ["staff_moderator", "staff_field", "staff_finance"] as const) {
+    // §07: "own actions" for every staff role but the ops lead — moderator and
+    // finance, since board 4i retired the field verifier. A boolean would have
+    // shown a moderator the whole log.
+    for (const role of ["staff_moderator", "staff_finance"] as const) {
       expect(auditScopeFor({ id: "u1", roles: [role] }), role).toEqual({
         kind: "own",
         actorId: "u1",

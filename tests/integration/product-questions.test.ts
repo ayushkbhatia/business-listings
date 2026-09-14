@@ -45,6 +45,7 @@ beforeAll(async () => {
 
   const staff = await prisma.user.findMany({
     where: { roles: { hasSome: ["staff_ops_lead", "staff_moderator"] } },
+    orderBy: { id: "asc" },
     select: { id: true, roles: true },
   });
   opsLeadId = staff.find((u) => u.roles.includes("staff_ops_lead"))!.id;

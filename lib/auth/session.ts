@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/db/client";
 import { repairClaims } from "./flow";
-import { isRole, type Actor, type Role } from "./roles";
+import { isRole, sameRoles, type Actor, type Role } from "./roles";
 
 /**
  * Resolve the acting user from the request's session.
@@ -11,10 +11,10 @@ import { isRole, type Actor, type Role } from "./roles";
  * revalidating it against the auth server, and a permission decision must not
  * rest on a cookie the client could have written.
  *
- * Roles are read from the JWT app_metadata, which only the service role can
- * write. They are never read from user_metadata, which the user can edit.
- * The claim is populated by a Supabase auth hook backed by the profiles table
- * — wired in handoff 1, alongside the tables that hold it.
+ * Roles are decided by the profile row and mirrored into the JWT app_metadata,
+ * which only the service role can write — board 4i moved the decision from the
+ * mirror to the record; the note inside says why. They are never read from
+ * user_metadata, which the user can edit.
  */
 export async function getActor(): Promise<Actor | null> {
   const supabase = await createClient();
@@ -72,17 +72,30 @@ export async function getActor(): Promise<Actor | null> {
   });
 
   /*
-     Roles still come from the claim first.
+     Roles come from the record, the same as `businessId` — board 4i.
 
-     That is deliberate and unchanged: the claim is written by the service role
-     alone, and reading permissions from a second place is a second place to get
-     permissions wrong. The profile is the fallback for a session that has none
-     yet, which is the repair this function has always done.
+     They used to come from the claim first, with the record as a fallback for
+     a claim that was empty. That held while roles only ever grew. Board 4i is
+     the first screen that takes them away, and it exposed two ways the claim
+     outvoted the decision:
+
+       - **A revoke whose claim write failed never took effect.** `syncClaims`
+         swallows its own failure, so an ops lead could deactivate somebody,
+         see the row update, and leave that person holding every capability
+         until their session was rebuilt — and the "repair" below then wrote
+         the stale claim back over itself, because `roles` *was* the claim.
+       - **A swap was never noticed at all.** Staleness was a length comparison.
+         Moderator to finance is one role for one role, so a failed sync left a
+         person with the role they were moved off, indefinitely.
+
+     The record is the one place every writer writes — invitations, removals,
+     role changes, the retirement migration — and it is read on this request
+     regardless. So it decides, and the claim is a mirror that is repaired to
+     match. A session with no profile row gets no roles: that is an auth user
+     from another database or a half-finished cleanup, and failing closed is
+     the only safe reading of a claim nobody's record backs.
   */
-  const roles: Role[] =
-    claimedRoles.length > 0
-      ? claimedRoles
-      : (profile?.roles ?? []).filter((role): role is Role => isRole(role));
+  const roles: Role[] = (profile?.roles ?? []).filter((role): role is Role => isRole(role));
 
   const businessId = profile?.businessId ?? null;
 
@@ -91,9 +104,11 @@ export async function getActor(): Promise<Actor | null> {
      rewritten so the next request costs nothing extra. It never blocks — the
      answer this request returns is already correct, and `syncClaims` swallows
      its own failure.
+
+     Compared as sets. Two lists of the same length can hold different roles.
   */
   const claimIsStale =
-    claimedRoles.length !== roles.length || claimedBusinessId !== (businessId ?? undefined);
+    !sameRoles(claimedRoles, roles) || claimedBusinessId !== (businessId ?? undefined);
   if (profile && claimIsStale) {
     await repairClaims(user.id, roles, businessId);
   }

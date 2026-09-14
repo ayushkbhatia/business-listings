@@ -19,6 +19,7 @@ import { orderRaw, rejectsCsv, runOverview } from "@/lib/ingest/read";
 import { activityKey } from "@/lib/ingest/classify";
 import { AuditReasonError, PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
+import { purgeAuditRows } from "./audit-cleanup";
 
 /**
  * Board 12a — the licence importer, end to end against a real database.
@@ -58,7 +59,7 @@ const actor = (id: string, ...roles: Role[]): Actor => ({ id, roles });
 
 let opsLead: Actor;
 let moderator: Actor;
-let fieldOfficer: Actor;
+let finance: Actor;
 let valvesId: string;
 let gateValvesId: string;
 let csv8000: string;
@@ -75,13 +76,11 @@ async function removeFixtures() {
   const runIds = runs.map((row) => row.id);
 
   // `AuditEvent.subject` is a string, not a foreign key — nothing cascades it.
-  await prisma.auditEvent.deleteMany({
-    where: {
-      OR: [
-        { subject: { in: runIds.map((id) => `LicenceImportRun:${id}`) } },
-        { subject: { startsWith: "LicenceActivity:" }, reason: { contains: TAG } },
-      ],
-    },
+  await purgeAuditRows({
+    OR: [
+      { subject: { in: runIds.map((id) => `LicenceImportRun:${id}`) } },
+      { subject: { startsWith: "LicenceActivity:" }, reason: { contains: TAG } },
+    ],
   });
   await prisma.licenceActivityMapping.deleteMany({ where: { activityKey: { contains: TAG } } });
 
@@ -123,7 +122,8 @@ beforeAll(async () => {
     ).id;
   opsLead = actor(await staff("staff_ops_lead"), "staff_ops_lead");
   moderator = actor(await staff("staff_moderator"), "staff_moderator");
-  fieldOfficer = actor(await staff("staff_field"), "staff_field");
+  // Finance holds no part of `queue.decide`, which is every write this suite refuses.
+  finance = actor(await staff("staff_finance"), "staff_finance");
 
   valvesId = (await prisma.category.findUniqueOrThrow({ where: { slug: "valves-and-fittings" } })).id;
   gateValvesId = (await prisma.category.findUniqueOrThrow({ where: { slug: "gate-valves" } })).id;
@@ -308,12 +308,12 @@ describe("criterion 9 — the upload is logged", () => {
     expect(await prisma.licenceImportRun.count()).toBe(before);
   });
 
-  it("refuses a field verifier before reading the file", async () => {
+  it("refuses a finance seat before reading the file", async () => {
     await expect(
       stageRun({
-        actor: fieldOfficer,
+        actor: finance,
         source: "DED",
-        filename: `${PREFIX}field.csv`,
+        filename: `${PREFIX}finance.csv`,
         text: file([row()]),
         reason: "Not a decision this role holds.",
       }),
@@ -504,10 +504,10 @@ describe("criteria 4 and 6 — what publishes, and what it carries", () => {
     expect(run.reversibleUntil).toBeNull();
   });
 
-  it("refuses a field verifier and a blank reason, creating nothing", async () => {
+  it("refuses a finance seat and a blank reason, creating nothing", async () => {
     const { runId } = await stage([row()], "refusals");
     const before = await prisma.business.count();
-    await expect(publishRun({ actor: fieldOfficer, runId, reason: REASON })).rejects.toBeInstanceOf(PermissionError);
+    await expect(publishRun({ actor: finance, runId, reason: REASON })).rejects.toBeInstanceOf(PermissionError);
     await expect(publishRun({ actor: opsLead, runId, reason: "  " })).rejects.toThrow();
     expect(await prisma.business.count()).toBe(before);
   });
@@ -686,10 +686,10 @@ describe("criterion 7 — categorisation, as a screen-set decision", () => {
     expect(result).toMatchObject({ ok: false, error: "nothing_to_categorise" });
   });
 
-  it("refuses a field verifier", async () => {
+  it("refuses a finance seat", async () => {
     await expect(
       categoriseRecords({
-        actor: fieldOfficer,
+        actor: finance,
         categoryId: valvesId,
         reason: "Not a decision this role holds.",
         target: { kind: "activities", keys: ["general trading"] },

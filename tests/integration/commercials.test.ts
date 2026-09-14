@@ -102,6 +102,7 @@ beforeAll(async () => {
   financeId = (
     await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_finance" } },
+      orderBy: { id: "asc" },
       select: { id: true },
     })
   ).id;
@@ -118,6 +119,7 @@ beforeAll(async () => {
   moderatorId = (
     await prisma.user.findFirstOrThrow({
       where: { roles: { has: "staff_moderator" } },
+      orderBy: { id: "asc" },
       select: { id: true },
     })
   ).id;
@@ -494,12 +496,15 @@ describe("grandfathering, which did not work", () => {
 
     const row = await prisma.auditEvent.findFirstOrThrow({
       where: { action: "entitlements_changed", subject: `Plan:${planId}` },
-      orderBy: { createdAt: "desc" },
-      select: { after: true },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { after: true, blastRadius: true, blastUnit: true },
     });
     const after = row.after as { applyToExisting: boolean; existingUpdated: number };
     expect(after.applyToExisting).toBe(true);
     expect(after.existingUpdated).toBeGreaterThan(0);
+    // Board 4i B4: the same count, in the column the log reads it from.
+    expect(row.blastRadius).toBe(after.existingUpdated);
+    expect(row.blastUnit).toBe("subscriptions");
   }, 60_000);
 
   it("counts who is grandfathered, so an edit shows its blast radius", async () => {
