@@ -19,11 +19,16 @@ import type { PrismaClient } from "../lib/db/generated/client.js";
  * **The wall clock, not `NOW`.** The board's figure is *12 min ago*; anchored to
  * noon Dubai, a morning seed would date the revision in the future.
  *
- * Suppliers: claimed, published goods sellers on a paid plan — Pro has no
- * monthly cap and Basic's forty is far above what these rows add, so
- * `onlyOneSellerAtCap` never trims them — valves first (the trade the fixture's
- * lines are in), then the fewest recipient rows already, and never a seller
- * another spec signs in as or counts replies on.
+ * **Suppliers of its own.** Four fixture businesses, claimed, verified, on Pro,
+ * and never published. Borrowing existing sellers moved other boards' fixtures:
+ * every claimed goods seller on a paid plan already carries a measured fixture —
+ * 4f's health accounts, 12d's call history, the response-time and product-detail
+ * specs, the curated lists — and their enquiry and reply rows are what those
+ * numbers are measured from (the first version picked Dana Printing & Signage,
+ * and 4f's suspension spec met a second "off the directory" line). Unpublished,
+ * they reach no directory count, search order, category or area page; and a
+ * supplier whose listing came down after an enquiry reached it is a real state
+ * the thread handles — the storefront link is simply not offered.
  * PRNG-free.
  */
 
@@ -34,21 +39,19 @@ export const NEGOTIATION_ENQUIRY_ID = "seedenquirynegotiation001";
 export const NEGOTIATION_ACCEPT_ENQUIRY_ID = "seedenquirynegotiation002";
 
 const BUYER_ID = "00000000-0000-4000-8000-0000000010a0";
+/** The fixture suppliers, in the order the board draws them. */
+const SUPPLIERS = [
+  { slug: "khalidiya-valve-industrial-fixture", name: "Khalidiya Valve Industrial", licence: "DED-881101", seat: "Rajesh Nair" },
+  { slug: "emirates-valve-and-fitting-fixture", name: "Emirates Valve & Fitting", licence: "DED-881102", seat: "Sana Qureshi" },
+  { slug: "northern-gulf-trading-fixture", name: "Northern Gulf Trading", licence: "DED-881103", seat: "Imran Siddiqui" },
+  { slug: "gulf-pumpline-trading-fixture", name: "Gulf Pumpline Trading", licence: "DED-881104", seat: "Hassan Karimi" },
+] as const;
+
 const SEAT_IDS = [
   "00000000-0000-4000-8000-0000000010a1",
   "00000000-0000-4000-8000-0000000010a2",
   "00000000-0000-4000-8000-0000000010a3",
-];
-const SEAT_NAMES = ["Rajesh Nair", "Sana Qureshi", "Imran Siddiqui"];
-
-/** Slugs other specs sign in as or assert counts on. */
-const RESERVED = [
-  "al-marwan-industrial-supplies-llc",
-  "al-manara-equipment-trading-llc",
-  "al-waha-industrial-supplies",
-  "emirates-facilities-group",
-  // Board 4f's reply-rate fixture: "4 of 12 answered". A silent row here would move it.
-  "technopump-trading-llc",
+  "00000000-0000-4000-8000-0000000010a4",
 ];
 
 const MIN = 60_000;
@@ -65,41 +68,48 @@ export async function seedNegotiationThreads(db: Db, now: Date) {
   console.log("→ negotiation threads, for board 10h");
   const at = (ms: number) => new Date(now.getTime() + ms);
 
-  const candidates = await db.business.findMany({
-    where: {
-      claimStatus: "claimed",
-      publishedAt: { not: null },
-      suspendedAt: null,
-      closureRequestedAt: null,
-      planId: { in: ["pro", "basic"] },
-      sellsKind: { not: "services" },
-      slug: { notIn: RESERVED },
-    },
-    orderBy: [{ slug: "asc" }],
-    select: {
-      id: true,
-      slug: true,
-      displayName: true,
-      primaryCategory: { select: { slug: true, parent: { select: { slug: true } } } },
-      _count: { select: { recipients: true } },
-    },
-  });
-  const valves = (business: (typeof candidates)[number]) =>
-    Number(
-      business.primaryCategory?.slug === "valves-and-fittings" ||
-        business.primaryCategory?.parent?.slug === "valves-and-fittings",
-    );
-  const ordered = [...candidates].sort(
-    (a, b) =>
-      valves(b) - valves(a) ||
-      a._count.recipients - b._count.recipients ||
-      a.slug.localeCompare(b.slug),
-  );
-  if (ordered.length < 4) {
+  const category =
+    (await db.category.findFirst({ where: { slug: "butterfly-valves" }, select: { id: true } })) ??
+    (await db.category.findFirst({ where: { slug: "valves-and-fittings" }, select: { id: true } }));
+  if (!category) {
     // Loud rather than silent: a spec asserting on ENQ-8881 fails with a reason.
-    throw new Error(`Board 10h fixtures need 4 claimed goods suppliers on a paid plan; the seed has ${ordered.length}.`);
+    throw new Error("Board 10h fixtures need the valves category; the seed has none.");
   }
-  const [revised, partial, flat, silent] = ordered as [(typeof ordered)[number], (typeof ordered)[number], (typeof ordered)[number], (typeof ordered)[number]];
+
+  const created = [];
+  for (const [index, supplier] of SUPPLIERS.entries()) {
+    const business = await db.business.create({
+      data: {
+        tradeName: `${supplier.name} LLC`,
+        displayName: supplier.name,
+        slug: supplier.slug,
+        licenceNumber: supplier.licence,
+        licenceAuthority: "DED",
+        licenceExpiry: at(400 * DAY),
+        verificationTier: 2,
+        verifiedAt: at(-120 * DAY),
+        claimStatus: "claimed",
+        planId: "pro",
+        primaryCategoryId: category.id,
+        source: "self_added",
+        // Never published: see the file comment.
+        publishedAt: null,
+        createdAt: at(-500 * DAY),
+      },
+      select: { id: true, slug: true, displayName: true },
+    });
+    await db.user.create({
+      data: {
+        id: SEAT_IDS[index]!,
+        phone: `+97155704${String(1210 + index)}`,
+        fullName: supplier.seat,
+        roles: ["seller_sales"],
+        businessId: business.id,
+      },
+    });
+    created.push(business);
+  }
+  const [revised, partial, flat, silent] = created as [(typeof created)[number], (typeof created)[number], (typeof created)[number], (typeof created)[number]];
 
   const buyer = await db.user.create({
     data: {
@@ -113,28 +123,7 @@ export async function seedNegotiationThreads(db: Db, now: Date) {
     select: { id: true },
   });
 
-  /* A seat per answering supplier, so every message is attributable to a person. */
-  const seats = new Map<string, string>();
-  for (const [index, business] of [revised, partial, flat].entries()) {
-    const existing = await db.user.findFirst({
-      where: { businessId: business.id, roles: { hasSome: ["seller_sales", "seller_owner", "seller_manager"] } },
-      orderBy: { id: "asc" },
-      select: { id: true },
-    });
-    const seat =
-      existing ??
-      (await db.user.create({
-        data: {
-          id: SEAT_IDS[index]!,
-          phone: `+97155704${String(1210 + index)}`,
-          fullName: SEAT_NAMES[index]!,
-          roles: ["seller_sales"],
-          businessId: business.id,
-        },
-        select: { id: true },
-      }));
-    seats.set(business.id, seat.id);
-  }
+  const seats = new Map(created.map((business, index) => [business.id, SEAT_IDS[index]!]));
 
   /* ── ENQ-8881: as drawn ─────────────────────────────────────────────────── */
 

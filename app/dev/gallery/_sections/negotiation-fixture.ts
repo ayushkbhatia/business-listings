@@ -168,6 +168,7 @@ export function boardNegotiation(): Negotiation {
       slug: "al-waha-industrial-supplies",
       displayName: "Al Waha Industrial Supplies",
       categoryCode: "VF",
+      published: true,
       verificationTier: 2,
       verifiedAt: at("2026-06-11T08:00:00.000Z"),
       responseTimeMedianMs: 2 * HOUR,

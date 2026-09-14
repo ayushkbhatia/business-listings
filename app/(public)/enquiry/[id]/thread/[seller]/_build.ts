@@ -270,7 +270,7 @@ export function buildNegotiationView(
         badgeChecked: t(spec.checkedKey as never),
         ...(spec.dateField === "verifiedAt" && supplier.verifiedAt ? { badgeDate: formatDate(supplier.verifiedAt) } : {}),
         subline,
-        storefrontHref: `/b/${supplier.slug}`,
+        storefrontHref: supplier.published ? `/b/${supplier.slug}` : null,
         storefrontLabel: t("negotiation.view_storefront"),
       },
     },

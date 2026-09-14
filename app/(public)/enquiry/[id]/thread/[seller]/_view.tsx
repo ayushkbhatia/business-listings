@@ -49,7 +49,8 @@ export interface NegotiationLayoutProps {
     badgeDate?: string;
     /** `Rajesh Nair, Sales · replies in about 2 h`. */
     subline: string;
-    storefrontHref: string;
+    /** Null once the listing is unpublished — a link to a 404 is not a way in. */
+    storefrontHref: string | null;
     storefrontLabel: string;
   };
   /** The page's own `h1`; a gallery specimen, which sits under a section heading, takes `h3`. */
@@ -158,9 +159,11 @@ export function NegotiationLayout({ rail, header, headingAs = "h1", frame = "pag
             </div>
             <p className="mt-0.5 text-caption text-muted">{header.subline}</p>
           </div>
-          <a href={header.storefrontHref} className={buttonClassName({ variant: "secondary", size: "sm" })}>
-            {header.storefrontLabel}
-          </a>
+          {header.storefrontHref ? (
+            <a href={header.storefrontHref} className={buttonClassName({ variant: "secondary", size: "sm" })}>
+              {header.storefrontLabel}
+            </a>
+          ) : null}
         </div>
         {children}
       </div>

@@ -94,8 +94,11 @@ test.describe("as drawn", () => {
 
   test("a chip fills the box, and the revision PDF is a PDF", async ({ page, request }) => {
     await openFromEnquiry(page, DRAWN, /Revised quote/);
-    await page.getByRole("button", { name: "Request datasheets" }).click();
-    await expect(page.getByLabel("Write a message")).toHaveValue(/datasheets/i);
+    // Retried for the same reason as the accept: a chip pressed before hydration fills nothing.
+    await expect(async () => {
+      await page.getByRole("button", { name: "Request datasheets" }).click();
+      await expect(page.getByLabel("Write a message")).toHaveValue(/datasheets/i, { timeout: 1_000 });
+    }).toPass({ timeout: 15_000 });
     await expect(page.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
 
     const href = await page.getByRole("link", { name: /PDF · QT-/ }).last().getAttribute("href");

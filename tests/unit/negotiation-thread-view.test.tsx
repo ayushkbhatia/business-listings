@@ -131,6 +131,13 @@ describe("as drawn", () => {
 });
 
 describe("the states the spec lists", () => {
+  it("an unpublished supplier keeps the thread and loses the storefront link", () => {
+    const board = boardNegotiation();
+    renderNegotiation({ ...board, supplier: { ...board.supplier, published: false } });
+    expect(screen.queryByRole("link", { name: "View storefront" })).toBeNull();
+    expect(screen.getAllByRole("table").length).toBeGreaterThan(0);
+  });
+
   it("no reply: the row stays, the thread says so, and nothing is offered", () => {
     const { view } = renderNegotiation(noReplyNegotiation());
     expect(view.thread.accept.kind).toBe("none");

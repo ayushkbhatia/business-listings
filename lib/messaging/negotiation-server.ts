@@ -157,6 +157,8 @@ export interface Negotiation {
     slug: string;
     displayName: string;
     categoryCode: string | null;
+    /** A listing can come down after an enquiry reached it; the thread stays, the storefront does not. */
+    published: boolean;
     verificationTier: number;
     verifiedAt: Date | null;
     responseTimeMedianMs: number | null;
@@ -210,6 +212,7 @@ export async function loadNegotiation(
               verifiedAt: true,
               responseTimeMedianMs: true,
               closureRequestedAt: true,
+              publishedAt: true,
               primaryCategory: { select: { code: true } },
             },
           },
@@ -329,6 +332,7 @@ export async function loadNegotiation(
       slug: current.business.slug,
       displayName: current.business.displayName,
       categoryCode: current.business.primaryCategory?.code ?? null,
+      published: current.business.publishedAt !== null,
       verificationTier: current.business.verificationTier,
       verifiedAt: current.business.verifiedAt,
       responseTimeMedianMs: current.business.responseTimeMedianMs,
