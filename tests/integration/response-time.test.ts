@@ -193,6 +193,10 @@ describe("no writable path exists for a seller", () => {
     // is the version a reviewer looks at.
     const seed = readFileSync("prisma/seed.mts", "utf8");
     expect(seed).toContain("deriveResponseTimes");
+    // By calling the job's own derivation, not a copy. The copy only wrote
+    // businesses with rows in the window, so a fixture's claimed median on a
+    // firm with no enquiries survived the seed.
+    expect(seed).toMatch(/await measureResponseTimesIn\(db, NOW\)/);
     // No literal assignment at business creation.
     expect(seed).not.toMatch(/responseTimeMedianMs:\s*claimed\s*\?/);
   });
