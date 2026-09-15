@@ -56,6 +56,7 @@ import { seedBlendedSearch } from "./seed-blended-search.mjs";
 import { seedStaffRoster } from "./seed-staff-roster.mjs";
 import { seedNegotiationThreads } from "./seed-negotiation.mjs";
 import { seedReviewWrite } from "./seed-review-write.mjs";
+import { seedContactLeads } from "./seed-contact-leads.mjs";
 import { seedAccountHealth } from "./seed-account-health.mjs";
 import { seedRevenue } from "./seed-revenue.mjs";
 import { seedCrmCalls } from "./seed-crm.mjs";
@@ -282,7 +283,7 @@ async function main() {
   */
   await prisma.$executeRawUnsafe(`
     truncate table
-      "audit_event","auth_attempt","rate_limit_hit","contact_reveal","zero_result_query","search_query_log","saved_search","redirect","guide","area_page","curated_list","campaign","legal_page","string_entry",
+      "audit_event","auth_attempt","rate_limit_hit","contact_reveal","contact_lead","zero_result_query","search_query_log","saved_search","redirect","guide","area_page","curated_list","campaign","legal_page","string_entry",
       "notification_delivery","notification_template","notification_preference","review_request",
       "invoice_line","invoice","placement_slot","subscription",
       "supplier_report","review","message","quote_line","quote",
@@ -1125,6 +1126,7 @@ async function main() {
   // Board 10f: a review in draft and one per state beside it. The wall clock —
   // the window is Dubai days from acceptance, and its stated day must not move.
   await seedReviewWrite(prisma, new Date());
+  await seedContactLeads(prisma, new Date());
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
   await backfillSeatChannels(prisma);

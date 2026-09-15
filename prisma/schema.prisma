@@ -111,6 +111,7 @@ model User {
   reportsFiled             SupplierReport[]         @relation("ReportReporter")
   messages                 Message[]
   contactReveals           ContactReveal[]
+  contactLeads             ContactLead[]
   savedSearches            SavedSearch[]
   shortlist                Shortlist[]              @relation("BuyerShortlist")
   productEvents            ProductEvent[]           @relation("EventActor")
@@ -1263,6 +1264,7 @@ model Business {
   placements             PlacementSlot[]
   homepageSlot           HomepageSlot?
   contactReveals         ContactReveal[]
+  contactLeads           ContactLead[]
   redirectsFrom          Redirect[]
   notificationPreference NotificationPreference?
   reviewRequests         ReviewRequest[]
@@ -6216,14 +6218,68 @@ model ContactReveal {
   locationId String?       @map("location_id")
   channel    RevealChannel
   surface    String
+  /// Board `1d` amendment `B1`, `B6`. The browser session the reveal happened in,
+  /// from the `bl_rsid` session cookie. One row per (session, listing, channel):
+  /// re-revealing after a tab switch is the same reveal, and a seller's lead
+  /// count that grew with reloads would be a count of reloads. Null on rows from
+  /// before the amendment and on surfaces that keep no session.
+  sessionId  String?       @map("session_id")
+  /// The storefront phone reveal's lead — the name, work email and mobile the
+  /// buyer gave to see the number. Null for a WhatsApp open, which asks nothing.
+  leadId     String?       @map("lead_id")
+  /// `B9`. The page inside the platform the buyer came from, as a path. Null is
+  /// `direct`: an external referrer, or none.
+  sourcePath String?       @map("source_path")
   createdAt  DateTime      @default(now()) @map("created_at")
 
-  actor    User?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
-  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  location Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  actor    User?        @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  business Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  location Location?    @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  lead     ContactLead? @relation(fields: [leadId], references: [id], onDelete: SetNull)
 
+  @@unique([sessionId, businessId, channel])
   @@index([businessId, createdAt])
+  @@index([leadId])
   @@map("contact_reveal")
+}
+
+/// Board `1d` amendment — the details a buyer gave to see a supplier's landline.
+///
+/// One per (visitor, listing), which is the gate `B10` draws: a buyer who came
+/// back must not fill the form again. The reveals it unlocked are `ContactReveal`
+/// rows pointing here, one per session, so the seller's list shows a lead once
+/// and how many times it came back.
+///
+/// A lead, not an enquiry. No thread, no notification, no quote — the seller
+/// reads these on `/dashboard/leads/phone`, staff on `/admin/leads`, and the
+/// buyer was told on the form that the supplier receives them.
+model ContactLead {
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  /// The `bl_vid` cookie, set on the form's submit and on nothing before it.
+  visitorId  String   @map("visitor_id") @db.Uuid
+  /// The buyer's account where they were signed in. The gate also matches on
+  /// this, so a second device does not ask again.
+  actorId    String?  @map("actor_id") @db.Uuid
+  name       String
+  /// Lower-cased. Labelled *Work email*; not refused for a free mailbox.
+  email      String
+  /// E.164, a UAE mobile.
+  mobile     String
+  /// `B9` — the page inside the platform the buyer came from. Null is direct.
+  sourcePath String?  @map("source_path")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  actor    User?           @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  reveals  ContactReveal[]
+
+  @@unique([businessId, visitorId])
+  @@index([businessId, createdAt, id])
+  @@index([businessId, actorId])
+  @@index([visitorId, createdAt])
+  @@index([createdAt, id])
+  @@map("contact_lead")
 }
 
 /// The seller's first run through setup, as one row.

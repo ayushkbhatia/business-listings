@@ -385,9 +385,18 @@ is `7b`, and it is a tenancy question, not a screen.
   the freeze on a seller reply in the database. Posting lands on `/b/:slug/reviews#review-<id>`
   (`B10`). Signed out with no token redirects to sign in rather than 404ing the review-request
   email's link. Migration `20261030090000_write_a_review_10f`.
-- [ ] **3.6 `13a`** — redraw against D4. The `card` layout, the only one that masks, has no
-  caller; `bar` never masks. Two other public surfaces print the numbers unmasked and record
-  nothing.
+- [x] **3.6 `13a`** → **`1d-v`, contact revealed in place** (15 Sep 2026). `13a` was deleted from
+  the canvas; the reveal is a state of `1d`. The landline renders masked and nothing more — the
+  numbers come back in a server action's reply, and JSON-LD no longer carries `telephone` on the
+  overview, the services overview or the branches tab (`B2`). A first click on a listing opens a
+  three-field dialog (name, work email, UAE mobile) in the viewport; submitting writes a
+  `contact_lead` (once per visitor and listing, `B10`) and a `contact_reveal` (once per session,
+  listing and channel, `B1`/`B6`, with the source path, `B9`). WhatsApp is a `wa.me` link, recorded
+  and never gated (`B4`). The branches tab's numbers sit behind the same reveal — board 1f printed
+  them for free, which would have been the form with a side door. Leads are read on
+  `/dashboard/leads/phone` (owner, manager) and `/admin/leads` (ops lead) — the owner's answer to
+  `Q1`: the seller receives the three fields, and the form says so. The dead `card` layout is gone.
+  Migration `20261101090000_contact_reveal_leads_1d`.
 - [ ] **3.7 `7b`** — build it, or delete the columns. `BuyerCompany` has five relation readers and
   no writer; `approvalThresholdAed` has neither.
 
@@ -636,7 +645,7 @@ the only large piece and the only one selling something it does not deliver.
 | `1n` | Compare quotes | partial | small | The tracking page's own Compare button builds a reference the route cannot resolve. | 1.2 / 3.4 |
 | `7c` | Accepted quote record | **built** | small | Fenced, and rebuilt against its board-level handoff, 14 Sep 2026. Services variant owed (`7c-s`, see `docs/services-build-plan.md` §6). | 3.4 |
 | `10f` | Write a review — gated | built | small | Board built 15 Sep 2026: window, drafts, photos, edit history, the three label sets made one. Q2–Q5 open. | 3.5 |
-| `13a` | Contact reveal | partial | medium | The only layout that actually masks has no caller. | 3.6 |
+| `13a` → `1d-v` | Contact reveal, in place | built | 15 Sep 2026 | A state of `1d`: masked landline, three-field dialog, `contact_lead` + session-idempotent `contact_reveal`, seller and staff lead lists. Q5 (consent basis, retention) open. | 3.6 |
 | `13b` | WhatsApp hand-off | not started | medium | Must be reconciled with a detector that reports sellers for off-platform steering. | 9.3 |
 | `12g` | Notification templates | built | 14 Sep 2026 | Versions per line, a services twin the carrier picks, Meta's queue recorded, volume queried, a delivery log. Strings moved to `12g-s`. | 7.4 |
 | `6h` | Homepage curation | built | 14 Sep 2026 | Four slots chosen by a person with eligibility read live, chips typed not mined, a rails map whose counts are the page's own queries. | 7.4b |

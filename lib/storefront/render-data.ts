@@ -37,7 +37,14 @@ export interface StorefrontLocation {
   emirate: string;
   areaName: string | null;
   addressLine: string;
-  phone: string | null;
+  /**
+   * The landline, masked (`04 88• ••••`) — never the number.
+   *
+   * Board `1d` amendment `B2`: a storefront section is page payload, and the
+   * number behind the reveal form cannot be in it. The number comes back from
+   * the reveal, keyed by this location's id.
+   */
+  maskedPhone: string | null;
   lat: number | null;
   lng: number | null;
 }
@@ -109,8 +116,12 @@ export interface StorefrontTeamMember {
   id: string;
   name: string;
   role: string;
-  /** The branch line unless somebody chose otherwise. Never a sign-in number. */
-  phone: string | null;
+  /**
+   * The branch line unless somebody chose otherwise, masked. Never a sign-in
+   * number. Revealed with the listing's landlines, keyed `team:<id>` — it is
+   * usually the same number, and printing it here would be the form's side door.
+   */
+  maskedPhone: string | null;
   photoUrl: string | null;
 }
 

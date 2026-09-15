@@ -40,6 +40,7 @@ export const MATRIX_GROUPS = [
       "support.view_as",
       "enquiry.read_other_business",
       "crm.work",
+      "contact_lead.platform.read",
     ],
   },
   {

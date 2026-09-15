@@ -36,6 +36,7 @@ export async function StorefrontHeader({
   actions,
   photoHref,
   subline,
+  notice,
   now = new Date(),
 }: {
   business: PublicBusiness;
@@ -76,6 +77,14 @@ export async function StorefrontHeader({
    * supplier's identity, and this line is the tab's.
    */
   subline?: React.ReactNode;
+  /**
+   * A state of the page under the identity block, above the tab row.
+   *
+   * The `1d` amendment's reveal note is the one there is: the buyer's half of
+   * `contact_reveal`, which renders only once a number is revealed. A slot for
+   * the same reason `actions` is one — it reads client state.
+   */
+  notice?: React.ReactNode;
   /** A parameter, not a call in the body — the purity rule, and it is right. */
   now?: Date;
 }) {
@@ -393,6 +402,7 @@ export async function StorefrontHeader({
             */}
             {actions && <div className="hidden shrink-0 pt-2 md:block">{actions}</div>}
           </div>
+          {notice}
         </div>
       </div>
 

@@ -55,7 +55,7 @@ export const SPECIMEN_DATA: SectionData = {
       emirate: "dubai",
       areaName: "Al Quoz Industrial 3",
       addressLine: "Warehouse 7, Street 12",
-      phone: "+97143380192",
+      maskedPhone: "04 33• ••••",
       lat: 25.1268,
       lng: 55.2404,
     },
@@ -65,7 +65,7 @@ export const SPECIMEN_DATA: SectionData = {
       emirate: "sharjah",
       areaName: "Industrial Area 4",
       addressLine: "Shop 4, Al Wahda Street",
-      phone: "+97165331847",
+      maskedPhone: "06 53• ••••",
       lat: 25.3197,
       lng: 55.4083,
     },
@@ -117,8 +117,8 @@ export const SPECIMEN_DATA: SectionData = {
 
   team: [
     // The branch line, never a mobile. Both of these consented.
-    { id: "t1", name: "Rashid Al Mansoori", role: "Counter sales", phone: "+97143380192", photoUrl: null },
-    { id: "t2", name: "Priya Nair", role: "Estimation", phone: "+97143380192", photoUrl: null },
+    { id: "t1", name: "Rashid Al Mansoori", role: "Counter sales", maskedPhone: "04 33• ••••", photoUrl: null },
+    { id: "t2", name: "Priya Nair", role: "Estimation", maskedPhone: "04 33• ••••", photoUrl: null },
   ],
 
   specRows: [
@@ -187,7 +187,7 @@ export const SPECIMEN_WORK_DATA: SectionData = {
       emirate: "dubai",
       areaName: "Business Bay",
       addressLine: "Office 1406, Bay Square 3",
-      phone: "+97144219930",
+      maskedPhone: "04 42• ••••",
       lat: 25.1865,
       lng: 55.2797,
     },
@@ -198,8 +198,8 @@ export const SPECIMEN_WORK_DATA: SectionData = {
   brands: [],
   team: [
     // The office line, never a mobile. Both consented, as the stockist's did.
-    { id: "t-m1", name: "Farah Siddiqui", role: "Audit partner", phone: "+97144219930", photoUrl: null },
-    { id: "t-m2", name: "Omar Haddad", role: "Tax manager", phone: "+97144219930", photoUrl: null },
+    { id: "t-m1", name: "Farah Siddiqui", role: "Audit partner", maskedPhone: "04 42• ••••", photoUrl: null },
+    { id: "t-m2", name: "Omar Haddad", role: "Tax manager", maskedPhone: "04 42• ••••", photoUrl: null },
   ],
   specRows: [],
   documents: [],

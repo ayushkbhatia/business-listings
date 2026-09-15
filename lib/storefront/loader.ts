@@ -1,4 +1,5 @@
 import "server-only";
+import { maskPhone } from "@/lib/format/phone";
 import { prisma } from "@/lib/db/client";
 import { PUBLISHED } from "@/lib/db/queries/reviews";
 import { copiesFrom } from "@/lib/i18n/paired";
@@ -374,7 +375,7 @@ async function sectionData(
       emirate: location.emirate,
       areaName: location.area?.name ?? null,
       addressLine: location.addressLine,
-      phone: location.phone,
+      maskedPhone: location.phone ? maskPhone(location.phone) : null,
       lat: location.area?.lat ?? null,
       lng: location.area?.lng ?? null,
     })),
@@ -451,7 +452,7 @@ async function sectionData(
       id: member.id,
       name: member.name,
       role: member.role,
-      phone: member.phone,
+      maskedPhone: member.phone ? maskPhone(member.phone) : null,
       photoUrl: member.media ? publicUrl(MEDIA_BUCKET, member.media.storagePath) : null,
     })),
     specRows: [],

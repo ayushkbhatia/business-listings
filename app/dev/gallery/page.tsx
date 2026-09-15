@@ -35,6 +35,7 @@ import { HomeCurationGallery } from "./_sections/HomeCuration";
 import { PairedStringsGallery } from "./_sections/PairedStrings";
 import { NegotiationThreadGallery } from "./_sections/NegotiationThread";
 import { WriteReviewGallery } from "./_sections/WriteReview";
+import { ContactRevealGallery } from "./_sections/ContactRevealGallery";
 import { TaxonomyGallery } from "./_sections/Taxonomy";
 import { Shells } from "./_sections/Shells";
 import { Structure } from "./_sections/Structure";
@@ -344,6 +345,8 @@ export default function Gallery() {
       <WriteReviewGallery />
       {/* After write-review, for the same axe-grid reason: nothing new above Shells. */}
       <PairedStringsGallery />
+      {/* After paired strings, for the same axe-grid reason: nothing new above Shells. */}
+      <ContactRevealGallery />
     </main>
   );
 }

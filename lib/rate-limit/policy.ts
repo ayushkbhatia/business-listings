@@ -73,6 +73,15 @@ export const RATE_POLICIES = {
      button, and still refuses a loop.
   */
   closure_reopen: { limit: 10, windowMs: MINUTE, cooldownMs: 0 },
+  /*
+     Board `1d` amendment. A contact lead is three fields and a supplier's
+     landline, and inserting one is the only write on that path a script could
+     repeat to walk the directory's numbers — a returning visitor's reveal needs
+     a lead on that listing already. Twenty new listings an hour is more than a
+     buyer compares in a sitting and still refuses a loop. Keyed on the account
+     where there is one, so an office behind one address is not one buyer.
+  */
+  contact_lead: { limit: 20, windowMs: 60 * MINUTE, cooldownMs: 0 },
 } as const satisfies Record<string, RatePolicy>;
 
 export type RateBucket = keyof typeof RATE_POLICIES;

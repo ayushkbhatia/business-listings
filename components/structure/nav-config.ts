@@ -135,6 +135,13 @@ export const DASHBOARD_NAV: readonly NavGroup[] = [
       // No placeholder counts: these two screens exist, so the shell passes
       // the real numbers through resolveNav.
       { key: "leads", labelKey: "nav.leads", href: "/dashboard/leads", capability: "enquiry.respond" },
+      /*
+         Board `1d` amendment. Beside the RFQ inbox and not inside it: a phone
+         lead has no thread, no quote and no status to move, and a row in the
+         inbox that could not be answered there would be a row that never
+         leaves the open tab.
+      */
+      { key: "phone-leads", labelKey: "nav.phone_leads", href: "/dashboard/leads/phone", capability: "contact_lead.read" },
       { key: "quotes", labelKey: "nav.quotes", href: "/dashboard/quotes", capability: "quote.send" },
       { key: "reviews", labelKey: "nav.reviews", href: "/dashboard/reviews" },
       /*
@@ -292,6 +299,8 @@ export const ADMIN_NAV: readonly NavGroup[] = [
          the read impossible, which is the permission the table does not ask for.
       */
       { key: "search", labelKey: "nav.search_ranking", href: "/admin/search" },
+      // Board `1d` amendment — every phone lead a storefront's landline reveal recorded.
+      { key: "phone-leads", labelKey: "nav.phone_leads", href: "/admin/leads", capability: "contact_lead.platform.read" },
       {
         key: "storefront-templates",
         labelKey: "nav.storefront_templates",

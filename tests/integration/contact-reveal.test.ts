@@ -36,7 +36,9 @@ beforeAll(async () => {
 });
 
 afterEach(async () => {
-  await prisma.contactReveal.deleteMany({ where: { businessId, actorId: null } });
+  // This file's rows only: they carry no session and no lead, which every seeded
+  // phone lead's reveals do.
+  await prisma.contactReveal.deleteMany({ where: { businessId, actorId: null, sessionId: null, leadId: null } });
 });
 
 afterAll(async () => {
@@ -66,28 +68,30 @@ describe("the writer both public actions depend on", () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
-  it("writes a storefront reveal too", async () => {
+  it("writes a category-page reveal too", async () => {
     /*
        Not an independent guard on that file's own import, and it cannot be:
        the writer is a module-level global, so the import in the case above has
        already registered one by the time this runs. What this pins is the other
-       half — that a storefront reveal reaches the table with the right surface
-       and channel. If `b/[slug]/actions.ts` loses its side-effect import, the
-       case above still passes and this one still passes, and only the browser
-       shows it. Ordering-independent coverage would need a worker per file.
+       half — that a reveal reaches the table with the right surface and channel.
+
+       The storefront no longer writes through this port. Since the `1d`
+       amendment its landline reveal is `lib/contact/service.ts`, which writes
+       the session, the lead and the source beside the event, and is proven in
+       `contact-reveal-leads.test.ts`.
     */
-    await import("@/app/(public)/b/[slug]/actions");
+    await import("@/app/(public)/_results/reveal-actions");
 
     await recordContactReveal({
       actor: null,
       businessId,
       channel: "phone",
-      surface: "storefront",
+      surface: "category",
     });
 
     expect(
       await prisma.contactReveal.count({
-        where: { businessId, actorId: null, surface: "storefront", channel: "phone" },
+        where: { businessId, actorId: null, surface: "category", channel: "phone" },
       }),
     ).toBeGreaterThan(0);
   });
