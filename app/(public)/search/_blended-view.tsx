@@ -4,6 +4,7 @@ import { BlendedResultList } from "@/components/domain/BlendedResultRows";
 import { buttonClassName } from "@/components/primitives";
 import { FilterRail, Tabs } from "@/components/structure";
 import { cn } from "@/lib/cn";
+import type { PairedCopies } from "@/lib/i18n/paired";
 import {
   BLENDED_PAGE_SIZE,
   type BlendedSearchResult,
@@ -43,7 +44,7 @@ const BASE = "/search";
  * The body, from a query and a result — so the gallery renders the page's own
  * markup from a fixed result rather than a copy of it.
  */
-export function BlendedBody({ query, result }: { query: SearchQuery; result: BlendedSearchResult }) {
+export function BlendedBody({ query, result, copy }: { query: SearchQuery; result: BlendedSearchResult; copy: PairedCopies }) {
   const applied = appliedFilters(query, result.rail);
   const tabs = visibleTabs(result.counts, query.kind);
   const active: BlendedTab = query.kind ?? "all";
@@ -207,7 +208,7 @@ export function BlendedBody({ query, result }: { query: SearchQuery; result: Ble
                   {t("search_blended.zero_tab")}
                 </p>
               ) : (
-                <BlendedResultList rows={result.rows} />
+                <BlendedResultList rows={result.rows} copy={copy} />
               )}
 
               {/*

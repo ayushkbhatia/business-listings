@@ -1,3 +1,5 @@
+import { fill, type PairedCopy } from "@/lib/i18n/paired";
+import { pairedCopyFor } from "@/lib/strings/store";
 import Link from "next/link";
 import { buttonClassName } from "@/components/primitives";
 import { Alert, PlanBadge, StatCard, type PlanTier } from "@/components/display";
@@ -39,12 +41,13 @@ export default async function OverviewPage({
   searchParams: Promise<{ notice?: string; strength?: string }>;
 }) {
   const seat = await requireSellerSeat();
-  const [{ notice, strength }, overview, badges, setup, openClosure] = await Promise.all([
+  const [{ notice, strength }, overview, badges, setup, openClosure, copy] = await Promise.all([
     searchParams,
     getOverview(seat.businessId),
     getNavBadges(seat.businessId),
     getSetupProgress(seat.businessId),
     openClosureFor(seat.businessId),
+    pairedCopyFor(seat.sellsKind),
   ]);
   // A platform notice that has not taken effect yet. An owner closure revokes
   // this seat, so any other open closure cannot be seen from here.
@@ -147,7 +150,7 @@ export default async function OverviewPage({
           panel has nothing to argue and its absence is not a locked feature —
           it is a question that does not apply.
         */}
-        {enquiries.cap !== null && <MissedPanel overview={overview} />}
+        {enquiries.cap !== null && <MissedPanel overview={overview} copy={copy} />}
 
         <Standing overview={overview} />
         <WhereYouRank card={positions} plan={overview} />
@@ -283,7 +286,7 @@ function ReplyQueue({ overview }: { overview: Overview }) {
 
 /* ── Board 11a — the enquiries a cap cost them ───────────────────────────── */
 
-function MissedPanel({ overview }: { overview: Overview }) {
+function MissedPanel({ overview, copy }: { overview: Overview; copy: PairedCopy }) {
   const enquiries = usageOf(overview, "enquiries");
   const cap = enquiries.cap ?? 0;
   const next = cheapestPlanUnlocking(
@@ -305,14 +308,19 @@ function MissedPanel({ overview }: { overview: Overview }) {
     );
   }
 
+  /*
+     Board `12g-s`: a paired string. A firm that sells work has no catalogue, so
+     until its half is written on /admin/strings/paired it reads the goods words
+     — counted there as unpaired, never blank here.
+  */
   const body =
     overview.missedThisMonth === 1
-      ? t("overview.missed_body_one", { cap: String(cap), plan: overview.plan.name })
-      : t("overview.missed_body", {
-          n: formatCount(overview.missedThisMonth),
-          cap: String(cap),
-          plan: overview.plan.name,
-        });
+      ? fill(copy["overview.missed_body_one"], { cap: String(cap), plan: overview.plan.name }, "overview.missed_body_one")
+      : fill(
+          copy["overview.missed_body"],
+          { n: formatCount(overview.missedThisMonth), cap: String(cap), plan: overview.plan.name },
+          "overview.missed_body",
+        );
 
   return (
     <Panel

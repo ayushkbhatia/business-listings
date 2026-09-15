@@ -1,7 +1,6 @@
 import { ImagePlaceholder } from "@/components/display";
 import { buttonClassName } from "@/components/primitives";
 import { line, type SectionProps } from "@/lib/storefront/render-data";
-import { paired } from "@/lib/storefront/paired-copy";
 
 /**
  * Section 2 — the hero banner.
@@ -19,7 +18,7 @@ import { paired } from "@/lib/storefront/paired-copy";
 export function Hero({ data, content, enquireHref, enquireSlot }: SectionProps) {
   const eyebrow = line(content, "eyebrow");
   const headline = line(content, "headline", data.business.displayName);
-  const buttonLabel = line(content, "buttonLabel", paired("section.hero.enquire", data.kind));
+  const buttonLabel = line(content, "buttonLabel", data.copy["section.hero.enquire"]);
   const image = line(content, "image") || data.heroImageUrl;
 
   return (

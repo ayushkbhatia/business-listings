@@ -1,5 +1,6 @@
 import { BlendedResultList } from "@/components/domain/BlendedResultRows";
 import { Tabs } from "@/components/structure";
+import { CODE_COPIES } from "@/lib/i18n/paired";
 import { t } from "@/lib/i18n";
 import { facetRail, visibleTabs, type FacetVocabulary, type SearchDoc, type TabCounts } from "@/lib/search/blended";
 import type {
@@ -193,19 +194,19 @@ export function BlendedSearchGallery() {
     <Section id="blended-search" title="blended-search" note="board 1c-s · one set, three shapes, no price or stock facet">
       <States label="service row" stack>
         <div className="w-full">
-          <BlendedResultList rows={[SERVICE, THIN_SERVICE]} />
+          <BlendedResultList copy={CODE_COPIES} rows={[SERVICE, THIN_SERVICE]} />
         </div>
       </States>
 
       <States label="business row" stack>
         <div className="w-full">
-          <BlendedResultList rows={[FIRM, GOODS_FIRM]} />
+          <BlendedResultList copy={CODE_COPIES} rows={[FIRM, GOODS_FIRM]} />
         </div>
       </States>
 
       <States label="product row" stack>
         <div className="w-full">
-          <BlendedResultList rows={[PRODUCT]} />
+          <BlendedResultList copy={CODE_COPIES} rows={[PRODUCT]} />
         </div>
       </States>
 

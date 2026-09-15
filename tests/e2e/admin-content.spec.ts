@@ -266,14 +266,14 @@ test.describe("board 12g — the delivery log, channels and quiet hours", () => 
   });
 });
 
-test.describe("board 12g — localisation is a report, not an editor", () => {
+test.describe("board 12g — the All tab is a report, not an editor", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/admin/strings");
   });
 
   test("says what it is, and why, before somebody looks for a save button", async ({ page }) => {
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Localisation");
-    await expect(page.getByText("This is a report, not an editor.")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Strings");
+    await expect(page.getByText("This tab is a report, not an editor.")).toBeVisible();
     await expect(page.getByText(/a missing string a build failure/)).toBeVisible();
   });
 
@@ -450,6 +450,77 @@ test.describe("board 6h — homepage curation", () => {
 
   test("is axe clean, with the search open", async ({ page }) => {
     await page.goto("/admin/content/home?find=Al");
+    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
+    expect(results.violations).toEqual([]);
+  });
+});
+
+/*
+ * Board 12g-s — paired strings.
+ *
+ * Serial, because the write below is shared state every screen reads: it
+ * writes one services half, checks a live storefront speaks it, and restores
+ * the code's words before the next test.
+ */
+test.describe("board 12g-s — paired strings", () => {
+  test.describe.configure({ mode: "serial" });
+
+  const REASON = "Checking the paired store reaches a live storefront.";
+  const WORDS = "Tell this practice about the engagement";
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/admin/strings/paired");
+  });
+
+  test("shows the pairs, the gap as a count, and suppressed as a third state", async ({ page }) => {
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Strings");
+    await expect(page.getByRole("link", { name: /^Paired · \d+$/ })).toHaveAttribute("aria-current", "page");
+
+    const table = page.getByRole("table", { name: /goods value and a services value/ });
+    const rows = table.locator("tbody > tr");
+    const total = await rows.count();
+    const notWritten = await table.getByText("Not written", { exact: true }).count();
+    await expect(page.getByText(`${total - notWritten} / ${total}`, { exact: true })).toBeVisible();
+    await expect(table.getByText("Suppressed — the control is absent").first()).toBeVisible();
+    await expect(page.getByText(/Suppressed is a third value, not an empty string/)).toBeVisible();
+    await expect(page.getByText(/D9 said no string table/i)).toBeVisible();
+  });
+
+  test("refuses a placeholder the screen does not supply as it is typed", async ({ page }) => {
+    await page.getByRole("button", { name: "Change overview.missed_body", exact: true }).click();
+    const services = page.getByRole("group", { name: "Services half" });
+    await services.getByLabel("Words").fill("{qty} enquiries matched your services");
+    await expect(services.getByText("The screen does not supply {qty}. Use only the placeholders listed.")).toBeVisible();
+    await services.getByLabel(/Why/).fill(REASON);
+    await expect(services.getByRole("button", { name: "Save the services half" })).toBeDisabled();
+  });
+
+  test("writes a services half that a firm that sells work reads on its storefront, then restores the code's words", async ({ page }) => {
+    await page.getByRole("button", { name: "Change section.enquiry.title", exact: true }).click();
+    const services = page.getByRole("group", { name: "Services half" });
+    await services.getByLabel("Words").fill(WORDS);
+    const save = services.getByRole("button", { name: "Save the services half" });
+    await expect(save).toBeDisabled();
+    await services.getByLabel(/Why/).fill(REASON);
+    await save.click();
+    await expect(services.getByText(/^Saved\. Every screen that reads section\.enquiry\.title/)).toBeVisible();
+
+    await page.goto("/b/meridian-chartered-accountants");
+    await expect(page.getByRole("heading", { name: WORDS })).toBeVisible();
+
+    await page.goto("/admin/strings/paired");
+    await page.getByRole("button", { name: "Change section.enquiry.title", exact: true }).click();
+    const again = page.getByRole("group", { name: "Services half" });
+    await again.getByLabel(/Why/).fill("Putting the code's words back after the check.");
+    await again.getByRole("button", { name: "Restore the code's words" }).click();
+    await expect(again.getByText("Restored to the code's words.")).toBeVisible();
+
+    await page.goto("/b/meridian-chartered-accountants");
+    await expect(page.getByRole("heading", { name: "Enquire about your situation" })).toBeVisible();
+  });
+
+  test("is axe clean, with an editor open", async ({ page }) => {
+    await page.getByRole("button", { name: "Change setup.levers_title", exact: true }).click();
     const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
     expect(results.violations).toEqual([]);
   });

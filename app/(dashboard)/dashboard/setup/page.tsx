@@ -1,3 +1,5 @@
+import type { PairedCopy } from "@/lib/i18n/paired";
+import { pairedCopyFor } from "@/lib/strings/store";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { buttonClassName } from "@/components/primitives";
@@ -139,10 +141,11 @@ export default async function SetupPage({
   const seat = await requireSellerSeat();
   if (!mayFinishSetup(seat)) redirect("/dashboard/leads");
 
-  const [state, badges, concierge] = await Promise.all([
+  const [state, badges, concierge, copy] = await Promise.all([
     setupHubState(seat.businessId),
     getNavBadges(seat.businessId),
     conciergeOfferFor(seat.businessId),
+    pairedCopyFor(seat.sellsKind),
   ]);
   if (!state) redirect("/dashboard");
 
@@ -272,7 +275,7 @@ export default async function SetupPage({
 
           {done.length > 0 && <DoneSummary tasks={done} />}
 
-          <Levers state={state} />
+          <Levers state={state} copy={copy} />
         </div>
 
         <aside className="flex w-full shrink-0 flex-col gap-4 lg:w-[326px]">
@@ -414,7 +417,7 @@ const GOODS_PHOTO_WEIGHT = WEIGHTS.photos;
 
 /* ── The half of the meter the four cards do not cover ───────────────────── */
 
-function Levers({ state }: { state: SetupHubState }) {
+function Levers({ state, copy }: { state: SetupHubState; copy: PairedCopy }) {
   /*
      Not on board 8a's render, and here on purpose.
 
@@ -452,7 +455,8 @@ function Levers({ state }: { state: SetupHubState }) {
   return (
     <section aria-labelledby="setup-levers" className="mt-1">
       <h3 id="setup-levers" className="font-mono text-eyebrow uppercase text-faint">
-        {services ? t("setup.weights_title") : t("setup.levers_title")}
+        {/* Board `12g-s`: a paired string, the half this seller's kind reads. */}
+        {copy["setup.levers_title"]}
       </h3>
       <table className="mt-2.5 w-full border-collapse">
         <caption className="sr-only">{t("setup.levers_body")}</caption>
@@ -460,11 +464,7 @@ function Levers({ state }: { state: SetupHubState }) {
           {state.levers.map((lever) => (
             <tr key={lever.key}>
               <th scope="row" className="py-1 pe-3 text-start text-caption font-normal text-muted">
-                {t(
-                  (services && lever.key === "identity"
-                    ? "setup.lever.identity_services"
-                    : `setup.lever.${lever.key}`) as never,
-                )}
+                {lever.key === "identity" ? copy["setup.lever.identity"] : t(`setup.lever.${lever.key}` as never)}
               </th>
               <td className="w-px whitespace-nowrap py-1 text-end font-mono text-eyebrow tabular-nums text-faint">
                 {t("setup.lever.earned", {

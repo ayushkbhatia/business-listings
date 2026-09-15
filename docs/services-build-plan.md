@@ -1916,8 +1916,9 @@ groups, the reasons and the no-price rule are the board's; only the address and 
 - **Renderers reuse the shipped blocks.** The scope grid words its cells through
   `components/domain/service-views.ts`, which `1e-s` and `1f-s` now share instead of wording their
   own; the wall is `CredentialTable`; coverage is `CoverageTable`; sectors are `DeclaredSectors`.
-- **Shared sections speak by kind** through `lib/storefront/paired-copy.ts` (B5) until `12g-s`'s
-  table exists: *What clients said*, *Enquire about your situation*, *Request a quote*.
+- **Shared sections speak by kind** through `SectionData.copy`, the half `12g-s`'s paired-string
+  store resolves for the listing's kind (B5): *What clients said*, *Enquire about your situation*,
+  *Request a quote*. `lib/storefront/paired-copy.ts` was the stand-in and is gone.
 - **Seller content is sanitised at the read** (`seller-content.ts`): only opened keys, declared
   shapes and lengths, and no line or paragraph that states a price, a fee or a rate (B4,
   `no-price.ts`). The model promised validation on write; nothing writes, so the read is where it
@@ -2499,7 +2500,7 @@ edit**.
 | **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **All four shipped 13 Sep** (§4m–§4o, §4s) — the public storefront set is complete, and the builder's library is filtered by kind |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p), **`3j-s` and `1n-s` 14 Sep** (§4t, §4u) — the demand-side trio is complete |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
-| **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · ~~`6g-s`~~ | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. **`4c-s` shipped 14 Sep** (§4w). `12g-s` remains; `6g-s` was cut 14 Sep. `1c-s` is unblocked on Q1, which `rankBlended` answers |
+| **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · ~~`6g-s`~~ | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. **`4c-s` shipped 14 Sep** (§4w). **`12g-s` shipped 15 Sep** (`/admin/strings/paired`); `6g-s` was cut 14 Sep. `1c-s` is unblocked on Q1, which `rankBlended` answers |
 | — | **Q1 said families** | `4e-s` · `3h-s` | — | Both **shipped 13 Sep** — `3h-s` closed wave 2 (§4k) and `4e-s` authored the five families (§4l) |
 
 **What needs no handoff at all:**

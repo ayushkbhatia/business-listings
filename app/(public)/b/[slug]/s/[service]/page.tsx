@@ -1,3 +1,4 @@
+import { pairedCopies } from "@/lib/strings/store";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
@@ -106,7 +107,7 @@ export default async function ServiceDetailPage({ params }: Params) {
   const business = await getBusinessBySlug(slug);
   if (!business) notFound();
 
-  const [siblings, credentials, actor, coverage] = await Promise.all([
+  const [siblings, credentials, actor, coverage, copies] = await Promise.all([
     publicServicesFor(service.businessId),
     /*
        Board `8b-s`'s Feeds note. The file never travels: `publicCredentialsFor`
@@ -120,6 +121,7 @@ export default async function ServiceDetailPage({ params }: Params) {
     storefrontCredentials(service.businessId),
     getActor(),
     publicServiceCoverage(service.businessId, service.id),
+    pairedCopies(),
   ]);
 
   /*
@@ -326,6 +328,7 @@ export default async function ServiceDetailPage({ params }: Params) {
                   service={service.slug}
                   serviceName={service.name}
                   askForContact={!actor}
+                  title={copies.services["section.enquiry.title"]}
                   responseLine={
                     business.responseTimeMedianMs === null
                       ? t("storefront_services.composer.reply_unmeasured")

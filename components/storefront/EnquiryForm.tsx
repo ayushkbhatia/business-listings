@@ -1,6 +1,5 @@
 import { buttonClassName } from "@/components/primitives";
 import { line, type SectionProps } from "@/lib/storefront/render-data";
-import { paired } from "@/lib/storefront/paired-copy";
 
 /**
  * Section 10 — the enquiry form.
@@ -21,11 +20,11 @@ import { paired } from "@/lib/storefront/paired-copy";
  * section only knows which words go around it.
  */
 export function EnquiryForm({ data, content, enquireHref, enquireSlot }: SectionProps) {
-  const intro = line(content, "intro", paired("section.enquiry.default_intro", data.kind));
+  const intro = line(content, "intro", data.copy["section.enquiry.default_intro"]);
 
   return (
     <section className="rounded-card border border-brand-line bg-brand-wash p-6">
-      <h2 className="text-h2 text-brand-ink">{paired("section.enquiry.title", data.kind)}</h2>
+      <h2 className="text-h2 text-brand-ink">{data.copy["section.enquiry.title"]}</h2>
       <p className="mt-2 max-w-[var(--measure-prose)] text-body-sm text-prose">{intro}</p>
       <div className="mt-4">
         {/*
@@ -35,7 +34,7 @@ export function EnquiryForm({ data, content, enquireHref, enquireSlot }: Section
           */}
           {enquireSlot ?? (
             <a className={buttonClassName({ variant: "primary" })} href={enquireHref}>
-              {paired("section.hero.enquire", data.kind)}
+              {data.copy["section.hero.enquire"]}
             </a>
           )}
       </div>

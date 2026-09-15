@@ -1,3 +1,4 @@
+import { pairedCopyFor } from "@/lib/strings/store";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card } from "@/components/structure";
@@ -131,7 +132,15 @@ export default async function ChangePlanPage({
   const selected =
     plans.find((plan) => plan.id === selectedId && plan.id !== summary.plan.id) ?? null;
 
-  const grid = planGrid(plans, summary.usage);
+  /*
+     Board `12g-s`: CSV import is a paired string whose services half is
+     suppressed. A firm that sells work has nothing to import, so the row is
+     absent from its comparison rather than a feature it is choosing between.
+  */
+  const csvImport = (await pairedCopyFor(seat.sellsKind))["change.row.csv_import"];
+  const grid = planGrid(plans, summary.usage).flatMap((row) =>
+    row.key !== "csv_import" ? [row] : csvImport === null ? [] : [{ ...row, header: csvImport }],
+  );
   const quote = selected ? await quotePlanChange(seat.actor, seat.businessId, selected.id) : null;
 
   /*

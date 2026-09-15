@@ -1,3 +1,4 @@
+import { pairedCopies } from "@/lib/strings/store";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
@@ -233,6 +234,8 @@ async function ClaimedStorefront({
     );
   }
   const work = business.sellsKind === "both" ? await servicesStorefrontFor(business.id) : null;
+  // Board `12g-s`: the services composer's heading is the services half of a paired string.
+  const composerTitle = work ? (await pairedCopies()).services["section.enquiry.title"] : "";
 
   const plan = await storefrontPlan({
     id: business.id,
@@ -631,7 +634,13 @@ async function ClaimedStorefront({
                copy as well would put the same firm's services on it twice.
             */}
             {work && !plan.sections.some((section) => section.type === "scope_grid") && (
-              <ServicesSection business={business} data={work} mode="drawer" signedIn={Boolean(actor)} />
+              <ServicesSection
+                business={business}
+                data={work}
+                mode="drawer"
+                signedIn={Boolean(actor)}
+                composerTitle={composerTitle}
+              />
             )}
             {work && !plan.sections.some((section) => section.type === "credential_wall") && (
               <CredentialsSection business={business} data={work} />
