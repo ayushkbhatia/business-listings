@@ -27,7 +27,12 @@ export interface RevealApi {
 
 export const RevealContext = createContext<RevealApi | null>(null);
 
-export { teamNumberKey } from "@/lib/contact/number-keys";
+/*
+   `teamNumberKey` is deliberately not re-exported here. A function exported
+   from a "use client" module is a client reference on the server, and the Team
+   section calling it crashed the builder's specimens page — import it from
+   `lib/contact/number-keys` instead.
+*/
 
 /**
  * One masked number — a branch's landline, a team member's line — revealed

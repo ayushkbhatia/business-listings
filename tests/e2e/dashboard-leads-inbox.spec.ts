@@ -71,7 +71,8 @@ test.describe("board 3j — the rail", () => {
     // elements." The footer says what is shown against what exists.
     await page.goto("/dashboard/leads");
     const rows = await page.getByRole("listitem").filter({ hasText: /ENQ-/ }).count();
-    const footer = (await page.getByText(/lead(s)? *$|of \d+ shown/).first().textContent()) ?? "";
+    // Scoped to the page body: the sidebar's "Phone leads" also ends in "leads".
+    const footer = (await page.getByRole("main").getByText(/lead(s)? *$|of \d+ shown/).first().textContent()) ?? "";
     const shown = Number(footer.replace(/\D/g, "").slice(0, 3));
     expect(rows).toBeGreaterThan(0);
     expect(shown).toBe(rows);

@@ -1,5 +1,6 @@
 import { LogoTile } from "@/components/display";
-import { MaskedNumber, teamNumberKey } from "./MaskedNumber";
+import { teamNumberKey } from "@/lib/contact/number-keys";
+import { MaskedNumber } from "./MaskedNumber";
 import { picks, type SectionProps } from "@/lib/storefront/render-data";
 import { t } from "@/lib/i18n";
 
