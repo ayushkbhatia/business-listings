@@ -19,7 +19,6 @@ import type { BranchSchedule } from "@/lib/trade/closures";
 import type { RamadanCalendar } from "@/lib/trade/hours";
 import { formatDate, formatPhone, formatShifts, toE164 } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { navPages } from "@/lib/storefront/pages";
 import { JsonLd } from "@/app/(public)/_json-ld";
 import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
@@ -143,7 +142,6 @@ export default async function BranchesPage({ params }: Params) {
   const summary = emirateSummary(locations);
   const ramadan = ramadanActive(now);
   const coverage = coverageOf(locations, business.deliveryNote);
-  const pages = business.sectorId ? await navPages(business.sectorId) : [];
   /*
      Board `1d` amendment. Every landline here sits behind the same form as the
      overview's chip — see `BranchLandline`. This route stays cached for every
@@ -217,7 +215,7 @@ export default async function BranchesPage({ params }: Params) {
       }
       footer={<DirectoryFooter />}
     >
-      <div data-theme={business.themePreset ?? "default"}>
+      <div data-theme="default">
         <ContactReveal
           businessId={contact.businessId}
           supplierName={contact.supplierName}
@@ -231,7 +229,6 @@ export default async function BranchesPage({ params }: Params) {
         <StorefrontHeader
           business={business}
           active="branches"
-          pages={pages}
           now={now}
           subline={t("branches.subline", {
             count: locations.length,

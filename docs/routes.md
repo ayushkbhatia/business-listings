@@ -211,14 +211,7 @@ and it is the one that argues back.
 /admin/content/home                     Homepage curation                     [6h]  built 6h
 /admin/content/testimonials             Entry page testimonials                     built h5s7
 /admin/content/redirects                Redirects                            [12g]  built h4s7
-/admin/storefront-templates             Templates & section library      [5c]  built h4s6
-/admin/storefront-templates/specimens   Section specimens           [5g, 5h]  built h4s6
-/admin/storefront-templates/:id         Builder shell                    [5a]  built h4s6
-/b/:slug/d/:document                    Signed link to a published doc   [5c]  built h4s6
-/b/:slug/:page                          A template page on a storefront  [5d]  built h4s6
-/admin/storefront-templates/:id/theme   Theme presets                    [5b]  built h4s6
-/admin/storefront-templates/:id/pages   Page template editor             [5d]  built h4s6
-/admin/storefront-templates/:id/sections  Section library, by trade kind [5c-s]  built h5cs
+/b/:slug/d/:document                    Signed link to a published doc         built h4s6
 /admin/domains                          Custom domain verification       [5e]
 /admin/areas                            Emirates, areas, free zones          [12h]
 /admin/api                              API keys & webhooks                  [12h]

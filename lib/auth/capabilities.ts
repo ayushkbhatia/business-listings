@@ -249,12 +249,6 @@ export const CAPABILITIES = {
     source: "inferred",
     why: "Not a row in §07. Board 12g's delivery log is how anybody answers a seller asking why they were not told about an enquiry, which is a moderator's support conversation as often as an ops lead's; it shows the event, channel, status and reason and never an address. Finance has no row: nothing on it is about money. Reading changes nothing, so it is not audited.",
   },
-  "storefront.template.write": {
-    roles: OPS_LEAD_ONLY,
-    audited: true,
-    source: "stated",
-    why: "§07, both tables. A storefront builder is a superadmin tool and is explicitly out of scope for sellers — handoff 3's README says so too.",
-  },
   "staff.manage": {
     roles: OPS_LEAD_ONLY,
     audited: true,
@@ -280,7 +274,7 @@ export const CAPABILITIES = {
     roles: ["seller_owner", "seller_manager"],
     audited: false,
     source: "stated",
-    why: "Board 7d, \"Edit listing profile, locations, hours\" and \"Upload verification documents\" and \"Pick a theme preset\" — owner and manager. Sales and finance do not shape the public profile.",
+    why: "Board 7d, \"Edit listing profile, locations, hours\" and \"Upload verification documents\" — owner and manager. Board 7d's \"Pick a theme preset\" row went with the presets (board 5b, cut 15 Sep 2026). Sales and finance do not shape the public profile.",
   },
   "product.edit": {
     roles: ["seller_owner", "seller_manager"],

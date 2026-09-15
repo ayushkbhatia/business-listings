@@ -8,7 +8,6 @@ import { CoverageTable, type CoverageTableRow } from "@/components/domain/Servic
 import { coverageRowView } from "@/components/domain/service-views";
 import { getBusinessBySlug } from "@/lib/db/queries";
 import { absorbedInto, redirectIfClosed, redirectIfMoved } from "@/lib/listing/redirect";
-import { navPages } from "@/lib/storefront/pages";
 import {
   coveragePageFor,
   coveringFirmsByEmirate,
@@ -98,10 +97,7 @@ export default async function StorefrontCoveragePage({ params, searchParams }: P
   const emirate = emirateParam(await searchParams);
   const basePath = `/b/${business.slug}/coverage`;
 
-  const [data, pages] = await Promise.all([
-    coveragePageFor(business.id),
-    business.sectorId ? navPages(business.sectorId) : Promise.resolve([]),
-  ]);
+  const data = await coveragePageFor(business.id);
 
   const rows = data.rows.map((row) => ({ ...row, serviceId: row.service.id }));
   const shown = filterRowsByEmirate(rows, emirate);
@@ -174,11 +170,10 @@ export default async function StorefrontCoveragePage({ params, searchParams }: P
         />
       )}
 
-      <div data-theme={business.themePreset ?? "default"}>
+      <div data-theme="default">
         <StorefrontHeader
           business={business}
           active="coverage"
-          pages={pages}
           subline={t("storefront_services.coverage_subline", {
             count: rows.length,
             formatted: formatCount(rows.length),

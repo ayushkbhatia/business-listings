@@ -217,7 +217,6 @@ export async function dependentsOf(categoryId: string, db: Db = prisma) {
           products: true,
           services: true,
           serviceBriefs: true,
-          sectorTemplates: true,
           placements: true,
           curatedLists: true,
           areaPages: { where: { publishedAt: { not: null } } },
@@ -238,8 +237,7 @@ export async function dependentsOf(categoryId: string, db: Db = prisma) {
  * Board 4d found four more, each of which reached the database as a foreign-key
  * error — a 500 with nothing for the person to act on — or worse, as a cascade
  * nobody was told about: a product or a service filed here (`Restrict`), a
- * storefront template built for the sector (`Restrict`), a listing holding it as
- * a second category (`Cascade`, silently dropping the listing from a trade it
+ * listing holding it as a second category (`Cascade`, silently dropping the listing from a trade it
  * asked to be in), a paid placement slot (`Cascade`, silently ending something a
  * seller bought), a curated list, and a published emirate page.
  *
@@ -269,7 +267,6 @@ export async function deleteCategory(
       ["second_category", counts.businesses],
       ["products", counts.products],
       ["services", counts.services + counts.serviceBriefs],
-      ["storefront_templates", counts.sectorTemplates],
       ["placements", counts.placements],
       ["curated_lists", counts.curatedLists],
       ["area_pages", counts.areaPages],

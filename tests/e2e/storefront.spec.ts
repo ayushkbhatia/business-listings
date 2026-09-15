@@ -8,7 +8,7 @@ import { expect, test } from "@playwright/test";
  * fixed NOW. If the seed changes these fail loudly, which is the correct
  * outcome: the fixtures below encode the states the checkpoint asks for.
  */
-const CLAIMED = "al-marwan-industrial-supplies-llc"; // tier 3, themed, 3 branches
+const CLAIMED = "al-marwan-industrial-supplies-llc"; // tier 3, 3 branches
 const REVIEWED = "al-manara-equipment-trading-llc"; // the one business with a review
 const UNCLAIMED = "al-wadi-technical-services-llc"; // licence import, unpinned branch
 
@@ -36,19 +36,13 @@ test.describe("one route, two compositions", () => {
     await expect(page.getByText("has not been claimed")).toHaveCount(0);
   });
 
-  test("renders its sections from its sector's template, with the licence panel outside it", async ({
-    page,
-  }) => {
+  test("renders its sections, with the licence panel outside them", async ({ page }) => {
     /*
-     * The visible half of criterion 2. These sections come from
-     * `StorefrontTemplate`, resolved per sector, rather than from a fixed
-     * sequence of JSX in the route.
-     *
-     * The details panel and the verification panel are asserted in the same
-     * test on purpose: they are chrome, not sections, because non-negotiable 2
-     * says trust signals render identically on every storefront — so a template
-     * must not be able to reorder them or switch them off. A test that only
-     * checked the sections would not notice a rewrite quietly dropping them.
+     * The details panel and the verification panel are asserted beside a
+     * section on purpose: they are chrome, not sections, because non-negotiable
+     * 2 says trust signals render identically on every storefront. A test that
+     * only checked the sections would not notice a rewrite quietly dropping
+     * them.
      *
      * This caught exactly that when board 1d rebuilt the rail: the licence, the
      * authority and the masked TRN had moved to the left column and the ladder
@@ -57,35 +51,13 @@ test.describe("one route, two compositions", () => {
      */
     await page.goto(`/b/${CLAIMED}`);
 
-    // From the template.
+    // A section.
     await expect(page.getByRole("heading", { name: "Catalogue", exact: true })).toBeVisible();
 
-    // Chrome, whatever the template says.
+    // Chrome.
     await expect(page.getByRole("heading", { name: "What we checked" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Business details" })).toBeVisible();
     await expect(page.getByText("Trade licence", { exact: true })).toBeVisible();
-  });
-
-  test("serves the template's pages, and links them in the storefront nav", async ({ page }) => {
-    /*
-     * Board 5d, from the buyer's side. A page is authored once for the trade
-     * and appears on every storefront in it — the route that makes the editor
-     * worth having.
-     */
-    await page.goto(`/b/${CLAIMED}`);
-    const about = page.getByRole("link", { name: "About us" });
-    await expect(about).toBeVisible();
-
-    await about.click();
-    // An h2: the storefront header owns the h1, and it is the business name.
-    await expect(page.getByRole("heading", { level: 2, name: "About us" })).toBeVisible();
-    await expect(page.getByText(/Counter sales and site delivery/)).toBeVisible();
-  });
-
-  test("a page carries no price, like every other public surface", async ({ page }) => {
-    await page.goto(`/b/${CLAIMED}/about`);
-    const body = await page.locator("article").innerText();
-    expect(body).not.toMatch(/AED\s*[\d,]/);
   });
 
   test("an unclaimed business renders the 10g composition from the same route", async ({ page }) => {
@@ -318,30 +290,27 @@ test.describe("enquiry affordances", () => {
   });
 });
 
-test.describe("criterion 8 — a seller theme never reaches a trust signal", () => {
+test.describe("criterion 8 — the storefront palette never reaches a trust signal", () => {
   /**
-   * The gallery already proves the badge is theme-invariant across six themes,
-   * on synthetic scopes. This is the same claim on a real storefront, and it
-   * covers what the gallery cannot: board 1d's verification panel, which did
-   * not exist when that test was written.
+   * Non-negotiable 2: trust signals render identically on every storefront. The
+   * seller themes are gone, so no two storefronts differ in colour — but the
+   * claim this protects is narrower and still live: a verification badge and
+   * board 1d's verification panel draw nothing from the storefront palette. A
+   * badge given `text-brand` would pass every other test on the page.
    *
-   * An A/B on one page rather than a comparison between two businesses. Two
-   * suppliers differ in tier, in dates and in how much they have filled in, and
-   * a diff between them would be measuring those. Removing `data-theme` from
-   * the live DOM changes exactly one thing, so anything that moves moved
-   * because of the theme.
+   * An A/B on one page. Taking the palette's scope off the live DOM changes
+   * exactly one thing, so anything that moves moved because of the palette.
    */
-  test("the badge and the verification panel are identical themed and unthemed", async ({
+  test("the badge and the verification panel are identical inside and outside the palette", async ({
     page,
   }) => {
     await page.goto(`/b/${CLAIMED}`);
 
     const measure = () =>
       page.evaluate(() => {
-        const scope = document.querySelector("[data-theme]") as HTMLElement | null;
         const badge = document.querySelector("[data-verification-badge]") as HTMLElement | null;
         const panel = document.querySelector("[data-verification-panel]") as HTMLElement | null;
-        // Something the theme is supposed to recolour, as the control.
+        // Something the palette does colour, as the control.
         const heading = document.querySelector("h1") as HTMLElement | null;
 
         const paint = (el: HTMLElement | null) => {
@@ -351,33 +320,31 @@ test.describe("criterion 8 — a seller theme never reaches a trust signal", () 
         };
 
         return {
-          theme: scope?.getAttribute("data-theme") ?? null,
+          scoped: document.querySelector("[data-theme]") !== null,
           badge: paint(badge),
           panel: paint(panel),
           heading: paint(heading),
         };
       });
 
-    const themed = await measure();
+    const inside = await measure();
 
-    // The fixture has to actually carry a theme, or this test proves nothing.
-    expect(themed.theme, "the fixture storefront is not themed").toBeTruthy();
-    expect(themed.theme).not.toBe("default");
-    expect(themed.badge, "no verification badge on the page").toBeTruthy();
-    expect(themed.panel, "no verification panel on the page").toBeTruthy();
+    expect(inside.scoped, "the storefront carries no palette scope").toBe(true);
+    expect(inside.badge, "no verification badge on the page").toBeTruthy();
+    expect(inside.panel, "no verification panel on the page").toBeTruthy();
 
     await page.evaluate(() => {
-      document.querySelector("[data-theme]")?.setAttribute("data-theme", "default");
+      document.querySelector("[data-theme]")?.removeAttribute("data-theme");
     });
-    const plain = await measure();
+    const outside = await measure();
 
-    // The theme was live: the heading moved when it was removed.
-    expect(plain.heading, "the theme changed nothing, so this proves nothing").not.toBe(
-      themed.heading,
+    // The palette was live: the heading moved when its scope was removed.
+    expect(outside.heading, "the palette changed nothing, so this proves nothing").not.toBe(
+      inside.heading,
     );
 
     // And the two trust signals did not.
-    expect(plain.badge, "a seller theme recoloured the verification badge").toBe(themed.badge);
-    expect(plain.panel, "a seller theme recoloured the verification panel").toBe(themed.panel);
+    expect(outside.badge, "the storefront palette coloured the verification badge").toBe(inside.badge);
+    expect(outside.panel, "the storefront palette coloured the verification panel").toBe(inside.panel);
   });
 });

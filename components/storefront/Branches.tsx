@@ -4,7 +4,7 @@ import { MaskedNumber } from "./MaskedNumber";
 import type { SectionProps } from "@/lib/storefront/render-data";
 
 /**
- * Section 8 — branches and map.
+ * Branches and map — the last section of a goods storefront's overview.
  *
  * Derived entirely from published locations. No seller-fillable fields: an
  * address a seller can write freehand on a storefront is an address that

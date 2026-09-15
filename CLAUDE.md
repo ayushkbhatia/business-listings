@@ -22,7 +22,7 @@ These are architectural. Retrofitting any of them later is a migration, not a pa
    availability and an enquiry action where a price would sit.
 2. **Verification is platform-owned.** `verification_tier` is writable only by staff with
    the `ops_lead` role. No API path, no self-service, no seller-editable field. Badges never
-   take a seller theme colour — trust signals must render identically on every storefront.
+   take a storefront colour — trust signals must render identically on every storefront.
    The one non-staff writer is the licence-expiry sweep in `lib/verification/expiry-job.ts`,
    which drops a lapsed licence on a schedule and writes no audit row: `AuditEvent.actorId`
    is `NOT NULL` because the log records decisions, and a cron following a published sequence

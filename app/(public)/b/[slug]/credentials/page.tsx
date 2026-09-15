@@ -4,7 +4,6 @@ import { Breadcrumb, PublicShell } from "@/components/structure";
 import { CredentialTable } from "@/components/domain/CredentialTable";
 import { getBusinessBySlug } from "@/lib/db/queries";
 import { absorbedInto, redirectIfClosed, redirectIfMoved } from "@/lib/listing/redirect";
-import { navPages } from "@/lib/storefront/pages";
 import { storefrontCredentials } from "@/lib/storefront/services";
 import { storefrontTabs } from "@/lib/storefront/tabs";
 import { formatCount } from "@/lib/format";
@@ -69,10 +68,7 @@ export default async function StorefrontCredentialsPage({ params }: Params) {
   });
   if (!visible.includes("credentials")) notFound();
 
-  const [credentials, pages] = await Promise.all([
-    storefrontCredentials(business.id),
-    business.sectorId ? navPages(business.sectorId) : Promise.resolve([]),
-  ]);
+  const credentials = await storefrontCredentials(business.id);
   const verified = credentials.filter((row) => row.verified).length;
 
   return (
@@ -87,11 +83,10 @@ export default async function StorefrontCredentialsPage({ params }: Params) {
       }
       footer={<DirectoryFooter />}
     >
-      <div data-theme={business.themePreset ?? "default"}>
+      <div data-theme="default">
         <StorefrontHeader
           business={business}
           active="credentials"
-          pages={pages}
           subline={t("storefront_services.credentials_subline", {
             count: credentials.length,
             formatted: formatCount(credentials.length),

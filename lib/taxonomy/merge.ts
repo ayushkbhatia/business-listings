@@ -27,18 +27,17 @@ import { lockCategories } from "./write";
  * holding it as a second category, products, services and briefs, the spec
  * templates serving it, its landing pages and the demand recorded against them,
  * the day-by-day position history sellers read on `3a`, placements, alerts,
- * saved searches, import mappings, and — for a sector — its subcategories and
- * its storefront templates. Its synonyms and its own name join the target's
- * synonyms, because a buyer who typed the old name should still land (`B4`).
+ * saved searches, import mappings, and — for a sector — its subcategories. Its
+ * synonyms and its own name join the target's synonyms, because a buyer who
+ * typed the old name should still land (`B4`).
  *
  * Where both sides hold a row the target may only hold once, the two are
  * combined rather than one silently lost: position history keeps the better
  * position and sums impressions, recorded demand sums its searches. Where
- * combining is not honest — two live storefront templates for one sector, two
- * paid placement slots for one category, two authored landing pages for one
- * area — the merge is refused and says which, or keeps the target's page and
- * writes the source's copy into the audit row so nothing authored disappears
- * unrecorded.
+ * combining is not honest — two paid placement slots for one category, two
+ * authored landing pages for one area — the merge is refused and says which, or
+ * keeps the target's page and writes the source's copy into the audit row so
+ * nothing authored disappears unrecorded.
  *
  * ## What is refused
  *
@@ -47,8 +46,8 @@ import { lockCategories } from "./write";
  *   - Different trade kinds. Merging a trade sold by the job into one sold by
  *     the item flips what every listing moved renders, which is a `4d-s`
  *     decision with its own confirmation, not a side effect of tidying (`B8`).
- *   - Two paid placement slots, or two live storefront templates — each is a
- *     thing only one of can exist, and one of them was bought or published.
+ *   - Two paid placement slots — only one can exist, and one of them was
+ *     bought.
  *   - A publish-rule change still awaiting its second approver on the source.
  *   - Two subcategories of the same name when two sectors merge.
  *
@@ -69,7 +68,6 @@ export type MergeRefusal =
   | "level_mismatch"
   | "trade_kind_differs"
   | "placement_conflict"
-  | "storefront_template_conflict"
   | "rule_change_pending"
   | "child_name_clash";
 
@@ -160,7 +158,6 @@ export async function previewMerge(sourceId: string, targetId: string, db: Db = 
     targetEmiratePages,
     sourceSlots,
     targetSlots,
-    liveTemplates,
     pendingRules,
     kinds,
   ] = await Promise.all([
@@ -177,7 +174,6 @@ export async function previewMerge(sourceId: string, targetId: string, db: Db = 
     db.emiratePage.findMany({ where: { categoryId: target.id }, select: { emirate: true } }),
     db.placementSlot.count({ where: { categoryId: source.id, OR: [{ endsOn: null }, { endsOn: { gt: now } }] } }),
     db.placementSlot.count({ where: { categoryId: target.id, OR: [{ endsOn: null }, { endsOn: { gt: now } }] } }),
-    db.storefrontTemplate.count({ where: { sectorId: { in: [source.id, target.id] }, status: "live" } }),
     db.publishRuleChange.count({ where: { categoryId: source.id, state: "proposed" } }),
     loadTradeKinds(db),
   ]);
@@ -219,13 +215,11 @@ export async function previewMerge(sourceId: string, targetId: string, db: Db = 
           ? { error: "trade_kind_differs" }
           : sourceSlots > 0 && targetSlots > 0
             ? { error: "placement_conflict" }
-            : source.parentId === null && liveTemplates > 1
-              ? { error: "storefront_template_conflict" }
-              : pendingRules > 0
-                ? { error: "rule_change_pending" }
-                : clash
-                  ? { error: "child_name_clash", name: clash.name }
-                  : null;
+            : pendingRules > 0
+              ? { error: "rule_change_pending" }
+              : clash
+                ? { error: "child_name_clash", name: clash.name }
+                : null;
 
   return {
     source: {
@@ -456,7 +450,6 @@ async function moveEverything(tx: Tx, source: Side, target: Side, now: Date): Pr
        delete below would fail on it.
     */
     await tx.$executeRaw`UPDATE business SET sector_id = ${T} WHERE sector_id = ${S}`;
-    await tx.storefrontTemplate.updateMany({ where: { sectorId: S }, data: { sectorId: T } });
     await tx.$executeRaw`
       INSERT INTO sector_suggestion (category_id, slug, label, picked_by, computed_at)
       SELECT ${T}, s.slug, s.label, s.picked_by, s.computed_at FROM sector_suggestion s WHERE s.category_id = ${S}

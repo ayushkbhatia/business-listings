@@ -82,17 +82,6 @@ const STATUS: { tone: string; dot: string; wash: string; line: string; ink: stri
   { tone: "info", dot: "bg-info", wash: "bg-info-wash", line: "border-info-line", ink: "text-info-ink" },
 ];
 
-// One class list per theme so Tailwind can see them. A template literal would be
-// invisible to the scanner and the utilities would never be generated.
-const THEMES = [
-  "default",
-  "industrial",
-  "trade",
-  "mono",
-  "clinic",
-  "salon",
-] as const;
-
 const DENSITIES = ["roomy", "comfortable", "compact"] as const;
 
 /** The token sections predate the kit's Section; adapt rather than duplicate. */
@@ -176,36 +165,16 @@ export function Tokens() {
         </p>
       </Section>
 
-      <Section id="seller storefront themes">
+      <Section id="storefront palette">
         <div className="flex flex-wrap gap-2">
           <div data-theme="default" className="w-36 rounded-chip border border-brand-line p-1">
             <div className="h-8 rounded-tag bg-brand" />
             <p className="mt-1 font-mono text-caption text-brand-text">default</p>
           </div>
-          <div data-theme="industrial" className="w-36 rounded-chip border border-brand-line p-1">
-            <div className="h-8 rounded-tag bg-brand" />
-            <p className="mt-1 font-mono text-caption text-brand-text">industrial</p>
-          </div>
-          <div data-theme="trade" className="w-36 rounded-chip border border-brand-line p-1">
-            <div className="h-8 rounded-tag bg-brand" />
-            <p className="mt-1 font-mono text-caption text-brand-text">trade</p>
-          </div>
-          <div data-theme="mono" className="w-36 rounded-chip border border-brand-line p-1">
-            <div className="h-8 rounded-tag bg-brand" />
-            <p className="mt-1 font-mono text-caption text-brand-text">mono</p>
-          </div>
-          <div data-theme="clinic" className="w-36 rounded-chip border border-brand-line p-1">
-            <div className="h-8 rounded-tag bg-brand" />
-            <p className="mt-1 font-mono text-caption text-brand-text">clinic</p>
-          </div>
-          <div data-theme="salon" className="w-36 rounded-chip border border-brand-line p-1">
-            <div className="h-8 rounded-tag bg-brand" />
-            <p className="mt-1 font-mono text-caption text-brand-text">salon</p>
-          </div>
         </div>
         <p className="mt-2 text-caption text-muted">
-          six swatches, one <span className="font-mono">bg-brand</span> class — the scope does
-          the work. {THEMES.length} presets defined.
+          one palette, scoped to a storefront root — <span className="font-mono">bg-brand</span>{" "}
+          resolves only inside it
         </p>
       </Section>
 

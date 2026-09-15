@@ -60,7 +60,6 @@ export const AUDIT_ACTIONS = [
   "claim_resolved",
   "entitlements_changed",
   "ranking_changed",
-  "storefront_template_changed",
   "cross_business_read",
   /*
      Board 6f's dual control over the publish rules. Four names rather than one
@@ -198,7 +197,6 @@ export const ACTION_FOR_CAPABILITY = {
   "claim.resolve": "claim_resolved",
   "plan.entitlements.write": "entitlements_changed",
   "search.ranking.write": "ranking_changed",
-  "storefront.template.write": "storefront_template_changed",
   "enquiry.read_other_business": "cross_business_read",
   "business.close": "closure_noticed",
   "notification.template.write": "notification_template_saved",

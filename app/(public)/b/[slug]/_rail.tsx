@@ -230,7 +230,7 @@ export function LocationsPanel({ business }: { business: PublicBusiness }) {
  *
  * Board 1d calls the closing sentence "the most valuable copy on the page" and
  * says not to soften it. It is also the reason this panel is platform chrome
- * that no seller theme reaches: a trust signal a seller could restyle is a
+ * that no storefront colour reaches: a trust signal a page could restyle is a
  * trust signal worth nothing.
  *
  * Every row states its own state rather than implying the others. A tier 1

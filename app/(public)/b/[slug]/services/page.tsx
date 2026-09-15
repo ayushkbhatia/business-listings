@@ -13,7 +13,6 @@ import { getBusinessBySlug } from "@/lib/db/queries";
 import { absorbedInto, redirectIfClosed, redirectIfMoved } from "@/lib/listing/redirect";
 import { getActor } from "@/lib/auth/session";
 import { publicServicesFor, type PublicService } from "@/lib/services/service";
-import { navPages } from "@/lib/storefront/pages";
 import { serviceEnquiryVolume } from "@/lib/storefront/services";
 import {
   applyServicesFilters,
@@ -118,9 +117,8 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
   const query = parseServicesQuery(await searchParams);
   const basePath = `/b/${business.slug}/services`;
 
-  const [services, pages, actor, copies] = await Promise.all([
+  const [services, actor, copies] = await Promise.all([
     publicServicesFor(business.id),
-    business.sectorId ? navPages(business.sectorId) : Promise.resolve([]),
     getActor(),
     pairedCopies(),
   ]);
@@ -210,11 +208,10 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
         />
       )}
 
-      <div data-theme={business.themePreset ?? "default"}>
+      <div data-theme="default">
         <StorefrontHeader
           business={business}
           active="services"
-          pages={pages}
           subline={t("storefront_services.list_subline", {
             count: services.length,
             formatted: formatCount(services.length),

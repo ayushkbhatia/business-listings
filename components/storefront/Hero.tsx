@@ -1,25 +1,20 @@
 import { ImagePlaceholder } from "@/components/display";
 import { buttonClassName } from "@/components/primitives";
-import { line, type SectionProps } from "@/lib/storefront/render-data";
+import type { SectionProps } from "@/lib/storefront/render-data";
 
 /**
- * Section 2 — the hero banner.
+ * The hero banner — the first section of a goods storefront's overview.
  *
- * Four seller-fillable fields and not one of them is a number. A hero is where
- * "from AED 40 a metre" goes on every other trade directory, and non-negotiable
- * 1 is that a public surface shows availability and an enquiry action where a
- * price would sit. `section-types.ts` declares the fields and a test asserts
- * none of them is price-shaped.
+ * Not one word on it is a number. A hero is where "from AED 40 a metre" goes on
+ * every other trade directory, and non-negotiable 1 is that a public surface
+ * shows availability and an enquiry action where a price would sit.
  *
- * The headline falls back to the seller's own trade name rather than to a
- * slogan we wrote. A storefront that says "Quality you can trust" above a name
- * nobody recognises is worse than one that just says the name.
+ * The headline is the seller's own display name rather than a slogan we wrote.
+ * A storefront that says "Quality you can trust" above a name nobody recognises
+ * is worse than one that just says the name.
  */
-export function Hero({ data, content, enquireHref, enquireSlot }: SectionProps) {
-  const eyebrow = line(content, "eyebrow");
-  const headline = line(content, "headline", data.business.displayName);
-  const buttonLabel = line(content, "buttonLabel", data.copy["section.hero.enquire"]);
-  const image = line(content, "image") || data.heroImageUrl;
+export function Hero({ data, enquireHref, enquireSlot }: SectionProps) {
+  const image = data.heroImageUrl;
 
   return (
     <section className="relative overflow-hidden rounded-card border border-brand-line bg-brand-wash">
@@ -42,10 +37,9 @@ export function Hero({ data, content, enquireHref, enquireSlot }: SectionProps) 
         the seller uploaded.
       */}
       <div className="relative bg-ink/55 px-6 py-12 sm:px-10 sm:py-16">
-        {eyebrow && (
-          <p className="font-mono text-eyebrow uppercase text-on-ink/80">{eyebrow}</p>
-        )}
-        <h2 className="mt-2 max-w-[20ch] text-h1-serif font-serif text-on-ink">{headline}</h2>
+        <h2 className="mt-2 max-w-[20ch] text-h1-serif font-serif text-on-ink">
+          {data.business.displayName}
+        </h2>
         {data.business.description && (
           <p className="mt-3 max-w-[var(--measure-prose)] text-body-sm text-on-ink/85">
             {data.business.description}
@@ -59,7 +53,7 @@ export function Hero({ data, content, enquireHref, enquireSlot }: SectionProps) 
             */}
             {enquireSlot ?? (
               <a className={buttonClassName({ variant: "primary" })} href={enquireHref}>
-                {buttonLabel}
+                {data.copy["section.hero.enquire"]}
               </a>
             )}
         </div>

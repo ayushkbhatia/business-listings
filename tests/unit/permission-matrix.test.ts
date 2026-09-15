@@ -89,7 +89,6 @@ const STAFF_TABLE: [Capability, Staff[]][] = [
   // Board 4d. Inferred; named in the inferred list below.
   ["taxonomy.read", ["ops", "moderator"]],
   ["taxonomy.merge", ["ops"]],
-  ["storefront.template.write", ["ops"]],
   ["review.remove", ["ops"]],
   // Board 1m's reversible pause, one rung below the removal above it.
   ["review.hold", ["ops", "moderator"]],

@@ -137,18 +137,14 @@
 [data-density="comfortable"]  { --row-h: 46px;  --gutter: 14px; --section-pad: 24px; --card-pad: 18px; }
 [data-density="compact"]      { --row-h: 38px;  --gutter: 10px; --section-pad: 20px; --card-pad: 16px; }
 
-/* ---- Seller storefront themes ----------------------------------------
-   Applied to a storefront root as [data-theme="…"]. Recolours header,
+/* ---- Storefront palette ------------------------------------------------
+   Applied to a storefront root as [data-theme="default"]. Colours header,
    headings, buttons, links and form focus ONLY. Never verification badges,
-   never status tones, never platform chrome. A custom hex is contrast-checked
-   on save (>= 4.5:1 against white) and rejected with the reason shown.
+   never status tones, never platform chrome — which is why it is scoped
+   rather than set on :root. One palette: the five seller presets were cut
+   with board 5b on 15 Sep 2026.
    --------------------------------------------------------------------- */
-[data-theme="industrial"] { --brand: #2F4A5C; --brand-ink: #1F3140; --brand-wash: #EAF0F3; --brand-line: #E3EAEE; --brand-muted: #7C9AAD; --brand-text: #3F5A6B; }
-[data-theme="default"]    { --brand: #46584A; --brand-ink: #2F4033; --brand-wash: #E7ECE7; --brand-line: #DBE3DB; --brand-muted: #8FA892; --brand-text: #46433C; }
-[data-theme="trade"]      { --brand: #7A4A2F; --brand-ink: #5A3622; --brand-wash: #F2E9E2; --brand-line: #E8DBD1; --brand-muted: #B08D74; --brand-text: #5A4438; }
-[data-theme="mono"]       { --brand: #1F1F1F; --brand-ink: #141414; --brand-wash: #EEEEEC; --brand-line: #E2E2DE; --brand-muted: #8A8A85; --brand-text: #3D3D39; }
-[data-theme="clinic"]     { --brand: #3D5A3A; --brand-ink: #2A3F28; --brand-wash: #E8EFE6; --brand-line: #DCE6DA; --brand-muted: #87A283; --brand-text: #41503E; }
-[data-theme="salon"]      { --brand: #5C3B52; --brand-ink: #40283A; --brand-wash: #F1E8EE; --brand-line: #E6D9E2; --brand-muted: #A5879B; --brand-text: #4E3A48; }
+[data-theme="default"] { --brand: #46584A; --brand-ink: #2F4033; --brand-wash: #E7ECE7; --brand-line: #DBE3DB; --brand-muted: #8FA892; --brand-text: #46433C; }
 
 /* ---- Base ------------------------------------------------------------- */
 body {

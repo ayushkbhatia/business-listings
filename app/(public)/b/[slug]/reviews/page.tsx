@@ -15,7 +15,6 @@ import {
 } from "@/lib/db/queries";
 import { formatCount, formatRating } from "@/lib/format";
 import { t } from "@/lib/i18n";
-import { navPages } from "@/lib/storefront/pages";
 import { canReview } from "@/lib/reviews/eligibility";
 import { enquiryForReview } from "@/lib/reviews/service";
 import { getActor } from "@/lib/auth/session";
@@ -132,9 +131,8 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
   const query = parseReviewQuery(await searchParams);
   const basePath = `/b/${business.slug}/reviews`;
 
-  const [board, pages, actor] = await Promise.all([
+  const [board, actor] = await Promise.all([
     getReviewBoard(business.id, query),
-    business.sectorId ? navPages(business.sectorId) : Promise.resolve([]),
     getActor(),
   ]);
 
@@ -176,11 +174,10 @@ export default async function ReviewsPage({ params, searchParams }: Params) {
       }
       footer={<DirectoryFooter />}
     >
-      <div data-theme={business.themePreset ?? "default"}>
+      <div data-theme="default">
         <StorefrontHeader
           business={business}
           active="reviews"
-          pages={pages}
           subline={subline}
           actions={
             /*

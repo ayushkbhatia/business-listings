@@ -4,8 +4,8 @@ import { expect, test } from "@playwright/test";
 /**
  * Board 4a, from an ops lead's session.
  *
- * The console's one job each morning is answering which of the six jobs is
- * behind. So the assertions are about that: six panels, age before volume, and
+ * The console's one job each morning is answering which of the five jobs is
+ * behind. So the assertions are about that: five panels, age before volume, and
  * every number either a link into the queue that fixes it or visibly marked as
  * a screen that does not exist yet.
  */
@@ -15,13 +15,12 @@ test.describe("board 4a — the console overview", () => {
     await page.goto("/admin");
   });
 
-  test("opens on the six jobs", async ({ page }) => {
+  test("opens on the five jobs", async ({ page }) => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Platform overview");
 
     for (const job of [
       "Get listings in",
       "Keep the data comparable",
-      "Build what sellers fill",
       "Grow and keep accounts",
       "Take the money",
       "Protect the trust",
@@ -91,18 +90,6 @@ test.describe("board 4a — the console overview", () => {
       const response = await page.request.get(href);
       expect(response.status(), href).toBe(200);
     }
-  });
-
-  test("says 'not measurable yet' where the table does not exist, never zero", async ({ page }) => {
-    // Storefront templates and the call list have no table until later steps.
-    // Zero would mean the work is done. Licence records became measurable in
-    // step 2 and are no longer in this list.
-    // Scoped to main: the sidebar also names the storefront-templates route.
-    const row = page
-      .getByRole("main")
-      .getByRole("listitem")
-      .filter({ hasText: "Storefront templates" });
-    await expect(row).toContainText("Not measurable yet");
   });
 
   test("carries no fabricated badge counts in the sidebar", async ({ page }) => {

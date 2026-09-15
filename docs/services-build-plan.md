@@ -1889,6 +1889,12 @@ seller screen and the buyer pages cannot disagree about what a buyer sees.
 
 ## 4s · Handoff `5c-s` — the section library, filtered by trade kind
 
+> **Cut 15 Sep 2026.** The owner removed the storefront builder — `5a`, `5b`, `5c` — and `5c-s`
+> went with it. The library, the five services section types, their settings and the `Practice`
+> seed template are gone; a firm that sells work renders the `1d-s` storefront, as it always did,
+> and a firm that sells both keeps its fixed services and credentials sections. What follows is
+> the record of what was built, kept for the decisions in it.
+
 *Placed here rather than after §4o, where three sibling boards were appending at once.*
 
 ### The handoff drew a seller's builder; the tree has a staff one
@@ -2497,7 +2503,7 @@ edit**.
 | **1** | **The service editor, its list, and the buyer's page** | `3g-s` · `3f-s` · `1g-s` | Stages 3 and 5 | **shipped 12 Sep.** One handoff, three screens, and it was right: the editor fixed the field set, the list reported on it, the page rendered it. See §4g |
 | **2** | Creating a service | `8a-s` · `8c-s` · `8b-s` | Stage 4 | **All three shipped 12 Sep.** `8b-s` turned out not to be a refinement of `3e` after all (§4i), and `8c-s`'s D11 block had already been lifted (§4j). Wave 2 closes on `3h-s` |
 | **3** | The seller's own details | `2b-s` · `2c-s` · `2d-s` · `3b-s` · `3c-s` | Stage 4 | **Complete.** `2b-s`, `2c-s`, `2d-s` shipped 11 Sep; `3b-s` and `3c-s` 13 Sep (§4r) |
-| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **All four shipped 13 Sep** (§4m–§4o, §4s) — the public storefront set is complete, and the builder's library is filtered by kind |
+| **4** | The storefront | `1d-s` · `1e-s` · `5c-s` · `1f-s` | Stage 5 | **All four shipped 13 Sep** (§4m–§4o, §4s) — the public storefront set is complete. `5c-s` was cut with the builder on 15 Sep |
 | **5** | Asking, and answering | `1h-s` · `3j-s` · `1n-s` | Stage 6 | **`1h-s` shipped 13 Sep** (§4p), **`3j-s` and `1n-s` 14 Sep** (§4t, §4u) — the demand-side trio is complete |
 | **6** | Discovery | `1c-s` · `10c-s` · `6a-s` | Stage 7 | `6a-s` roughly doubles the `6f` page matrix |
 | **7** | Ranking and ops | `12c-s` · `4c-s` · `12g-s` · ~~`6g-s`~~ | Stage 8 | **`12c-s` shipped 13 Sep** (§4q) — the third ranking defect, the singleton, was its own first step. **`4c-s` shipped 14 Sep** (§4w). **`12g-s` shipped 15 Sep** (`/admin/strings/paired`); `6g-s` was cut 14 Sep. `1c-s` is unblocked on Q1, which `rankBlended` answers |

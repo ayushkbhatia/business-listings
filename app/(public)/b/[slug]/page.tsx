@@ -17,8 +17,8 @@ import { crawlRel } from "@/lib/seo/crawl-policy";
 import { StorefrontHeader, storefrontCrumbs } from "./_storefront";
 import { ClosedStorefront } from "./_closed";
 import { closedListing } from "@/lib/closure/public";
-import { renderSection } from "@/components/storefront";
-import { storefrontPlan } from "@/lib/storefront/loader";
+import { Branches, CatalogueGrid, Hero, Reviews, TrustStrip } from "@/components/storefront";
+import { storefrontData } from "@/lib/storefront/loader";
 import { openingHoursSchema } from "@/lib/trade/open-now";
 import { ContactActions, ContactReveal, RevealNote } from "./ContactReveal";
 import { storefrontContact } from "@/lib/contact/storefront";
@@ -33,7 +33,6 @@ import {
 import { EnquireButton } from "./EnquireDrawer";
 import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
-import { navPages } from "@/lib/storefront/pages";
 import { PageEvent } from "@/components/telemetry";
 import { ShortlistButton, shortlistLabels, toggleShortlistAction } from "@/app/(public)/_shortlist";
 import { isShortlisted } from "@/lib/shortlist/service";
@@ -238,25 +237,19 @@ async function ClaimedStorefront({
   // Board `12g-s`: the services composer's heading is the services half of a paired string.
   const composerTitle = work ? (await pairedCopies()).services["section.enquiry.title"] : "";
 
-  const plan = await storefrontPlan({
+  const data = await storefrontData({
     id: business.id,
     slug: business.slug,
-    sectorId: business.sectorId,
-    themePreset: business.themePreset,
     sellsKind: business.sellsKind,
   });
   /*
    * Still needed here for the structured data, which describes the business
-   * rather than the page. Schema.org wants a postal address whether or not a
-   * template happens to enable the branches section.
+   * rather than the page. Schema.org wants a postal address whether or not the
+   * business has any published branch to draw.
    */
   const head = business.locations[0];
   const crumbs = storefrontCrumbs(business);
-
-  // Template pages marked for the nav. Empty where the trade has no template.
-
-  const pages = business.sectorId ? await navPages(business.sectorId) : [];
-
+  const sectionEnquireHref = `/b/${business.slug}/products`;
 
   /*
      The action row, hoisted out of the rail and into the identity block.
@@ -397,20 +390,6 @@ async function ClaimedStorefront({
     />
   );
 
-  /*
-     Free plan, and what it does not get.
-
-     Board 1d: no plan chip, no featured products, three photos maximum, no
-     certificates. The composer stays — "that is the free tier's whole value",
-     and a directory that took the enquiry form away from its free listings
-     would be a directory with nothing to sell an upgrade against.
-
-     A listing with no plan row is treated as Free rather than as Pro. Most of
-     them are unclaimed imports; defaulting the other way would hand the best
-     storefront to every listing nobody has claimed.
-  */
-  const freePlan = (business.plan?.id ?? "free") === "free";
-
   // The photo cut is the plan row's, in one function both compositions share.
   const photos = storefrontPhotos(business.plan, business.media);
 
@@ -490,13 +469,7 @@ async function ClaimedStorefront({
       />
 
       {/*
-        Rendered from the sector's storefront template, not from this file.
-        Until now these sections were a fixed sequence of JSX here, which made
-        criterion 2 — "reordering, enabling or disabling a section changes every
-        live storefront on that template and nothing else" — a statement about a
-        function no route called.
-
-        The seller theme scopes here and nowhere above it. It recolours the
+        The storefront palette scopes here and nowhere above it. It colours the
         heading, links and buttons inside; the verification badge is drawn from
         the status palette and is unaffected by design.
       */}
@@ -513,7 +486,7 @@ async function ClaimedStorefront({
          Capped at the four the board draws. A page emitting a hundred Product
          objects is asking a crawler to treat a catalogue as a shop window.
       */}
-      {plan.data.products.slice(0, 4).map((product) => (
+      {data.products.slice(0, 4).map((product) => (
         <JsonLd
           key={product.id}
           data={{
@@ -534,7 +507,7 @@ async function ClaimedStorefront({
         />
       ))}
 
-      <div data-theme={plan.theme}>
+      <div data-theme="default">
         <ContactReveal
           businessId={contact.businessId}
           supplierName={contact.supplierName}
@@ -547,7 +520,6 @@ async function ClaimedStorefront({
         <StorefrontHeader
           business={business}
           active="overview"
-          pages={pages}
           actions={identityActions}
           notice={<RevealNote />}
           {...(photos.length > 0 ? { photoHref: "#photos" } : {})}
@@ -589,11 +561,10 @@ async function ClaimedStorefront({
             {/*
                The photos the cover's button points at.
 
-               Gallery media existed and the overview rendered none of it — it
-               was reachable only through a template page's gallery block, which
-               most storefronts do not have. So "View all 28 photos" had a count
-               and nowhere to go, and the honest options were to drop the button
-               or give it a destination. This is the destination.
+               Gallery media existed and the overview rendered none of it, so
+               "View all 28 photos" had a count and nowhere to go, and the
+               honest options were to drop the button or give it a destination.
+               This is the destination.
 
                Removed entirely at zero, like every other section on this page.
             */}
@@ -635,13 +606,7 @@ async function ClaimedStorefront({
                service composer in a drawer, because this rail's composer asks
                for quantities.
             */}
-            {/*
-               Unless the sector's template places them itself — board `5c-s`.
-               A template carrying a scope grid or a credential wall renders
-               those in its own order below, and this page drawing its fixed
-               copy as well would put the same firm's services on it twice.
-            */}
-            {work && !plan.sections.some((section) => section.type === "scope_grid") && (
+            {work && (
               <ServicesSection
                 business={business}
                 data={work}
@@ -650,89 +615,50 @@ async function ClaimedStorefront({
                 composerTitle={composerTitle}
               />
             )}
-            {work && !plan.sections.some((section) => section.type === "credential_wall") && (
+            {work && (
               <CredentialsSection business={business} data={work} />
             )}
 
             <BusinessDetails business={business} lastUpdated={formatDate(business.updatedAt)} />
 
-            {plan.sections
-              /*
-                Two sections are chrome and are drawn elsewhere.
+            {/*
+               The overview's sections, in a fixed order. The header is
+               `StorefrontHeader` above and the composer is the rail's, so
+               neither is drawn here a second time.
 
-                `header` was already filtered: `StorefrontHeader` draws it, and
-                rendering both would put the trade name on the page twice.
-                `enquiry_form` joins it now that board 1d puts a real composer
-                in the rail — a page offering the same form twice makes a buyer
-                choose between two identical doors, and the rail's copy is the
-                one carrying the measured reply time and the privacy line.
-
-                The section stays in the template and stays editable; it is this
-                composition that has somewhere better to put it.
-              */
-              .filter((section) => section.type !== "header" && section.type !== "enquiry_form")
-              /*
-                 Featured products and certificates are what a paid storefront
-                 buys. Gated here rather than in the template so the rule holds
-                 whatever a seller's sections say — a Free listing whose
-                 template still lists them would render them.
-              */
-              .filter(
-                (section) =>
-                  !freePlan ||
-                  (section.type !== "featured_products" && section.type !== "certifications"),
-              )
-              .map((section) => (
-                <div key={section.id}>
-                  {renderSection({
-                    section,
-                    data: plan.data,
-                    content: plan.content[section.id] ?? {},
-                    /*
-                       Criterion 3: a storefront contains no link to the
-                       fan-out. It is a single-seller surface — the buyer has
-                       chosen, and a picker would undo the choice. The section
-                       composes in place instead, through the same island the
-                       identity block uses.
-
-                       `enquireHref` stays pointed at this storefront's own
-                       catalogue for the sections that link rather than compose.
-                    */
-                    enquireHref: `/b/${business.slug}/products`,
-                    enquireSlot: enquireTrigger,
-                  })}
-                </div>
-              ))}
+               Criterion 3: a storefront contains no link to the fan-out. It is
+               a single-seller surface — the buyer has chosen, and a picker
+               would undo the choice. A section composes in place instead,
+               through the same island the identity block uses; `enquireHref`
+               stays pointed at this storefront's own catalogue for the ones
+               that link rather than compose.
+            */}
+            <div>
+              <Hero data={data} enquireHref={sectionEnquireHref} enquireSlot={enquireTrigger} />
+            </div>
+            <div>
+              <TrustStrip data={data} enquireHref={sectionEnquireHref} />
+            </div>
+            <div>
+              <CatalogueGrid data={data} enquireHref={sectionEnquireHref} />
+            </div>
+            <div>
+              <Reviews data={data} enquireHref={sectionEnquireHref} />
+            </div>
+            <div>
+              <Branches data={data} enquireHref={sectionEnquireHref} />
+            </div>
           </div>
 
           {/*
-            The aside is chrome, not a section, and that is not a shortcut.
-
-            It carries the licence number, the authority, the masked TRN and the
-            verification ladder — platform-owned facts. Non-negotiable 2 says
-            trust signals render identically on every storefront, which is an
-            argument that a template must not be able to reorder them, restyle
-            them or switch them off. A sector whose template dropped the licence
-            panel would be a sector where we quietly stopped showing what we
-            checked.
-
-            The contact actions sit in the identity block for the same reason:
-            the reveal is the event that proves the platform delivered the
-            enquiry, and it is not a seller's to compose away.
-          */}
-
-          {/*
             Board 1d's rail: the composer, the hours, where they are, and what
-            we checked. Chrome rather than template sections, and the reason is
-            unchanged from when the ladder sat here — non-negotiable 2 says
-            trust signals render identically on every storefront, which is an
-            argument that a seller's template must not be able to reorder them,
-            restyle them or switch them off. A sector whose template dropped the
-            licence panel would be a sector where we quietly stopped showing
-            what we checked.
+            we checked. Chrome, not a section: it carries the licence number,
+            the authority, the masked TRN and the checks — platform-owned facts
+            that non-negotiable 2 says render identically on every storefront.
 
-            The composer is here for the neighbouring reason: the enquiry is the
-            conversion event and it is not a seller's to compose away.
+            The composer and the contact actions in the identity block are
+            chrome for the neighbouring reason: the enquiry is the conversion
+            event, and the reveal is what proves the platform delivered it.
           */}
           <aside className="order-3 flex min-w-0 flex-col gap-3 lg:order-none lg:col-start-2 lg:row-start-2">
             <HoursPanel

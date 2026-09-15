@@ -13,7 +13,7 @@ import type { ConsoleJob } from "./overview";
  * overview showed a past-due count linking straight into a 404.
  *
  * A job whose metrics are all filtered away keeps its panel and loses its
- * numbers. The six jobs are what the platform has to do, not what the reader
+ * numbers. The five jobs are what the platform has to do, not what the reader
  * has to do, and quietly dropping one would tell an ops lead the money looks
  * after itself.
  */

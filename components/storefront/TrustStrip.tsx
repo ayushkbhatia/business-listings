@@ -4,16 +4,16 @@ import { t } from "@/lib/i18n";
 import type { SectionProps } from "@/lib/storefront/render-data";
 
 /**
- * Section 3 — the trust strip.
+ * The trust strip, under the hero.
  *
- * **No seller-fillable fields, and that is the section.** Every figure on it is
+ * **Nothing on it is seller-written, and that is the section.** Every figure is
  * derived: the tier from what staff checked, the reply time from enquiry-to-
  * first-reply timestamps, the branch count from published locations. A
  * seller-editable trust signal is not a trust signal, and non-negotiable 6 says
  * the same thing about response time in as many words.
  *
- * The badge takes no theme colour. A verification badge that renders differently
- * on a plum storefront than on a steel-blue one is a badge a buyer cannot
+ * The badge takes no storefront colour. A verification badge that renders
+ * differently on one storefront than on another is a badge a buyer cannot
  * compare across two suppliers, which is the only thing it is for.
  */
 export function TrustStrip({ data }: SectionProps) {

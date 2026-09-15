@@ -176,15 +176,13 @@ failure the `Thread` note above describes from the other direction. It renders i
 Why it is a component at all rather than page-local JSX: `2e` and `11f` compare the same plans,
 and a second copy of this markup is how two screens start disagreeing about one record.
 
-**The fourteen storefront sections are not in this list, deliberately.** Their catalogue is
-`lib/storefront/section-types.ts`, which declares each type's data source, its seller-fillable
-fields and whether it is a singleton — things a component inventory has no column for. Two
-lists of fourteen things is one list too many, and the `Thread` note above is what happens when
-a component lives in one list and not the other. `tests/unit/section-registry.test.ts` asserts
-the catalogue and the renderers are the same set, and
-`/admin/storefront-templates/specimens` is their gallery.
+**The storefront overview's sections are not in this list.** `components/storefront/` holds the
+five a goods storefront draws — hero, trust strip, catalogue, reviews, branches — in a fixed
+order that `/b/[slug]` owns. They are page parts rather than design-system components. The
+section catalogue, the fourteen-plus-five renderers and their specimens page went with the
+storefront builder (boards `5a`–`5c`, cut 15 Sep 2026).
 
 ## Naming
 
 PascalCase components. kebab-case CSS variables. `data-density` on the shell, never a size
-prop per component. `data-theme` on a storefront root only.
+prop per component. `data-theme="default"` on a storefront root only.

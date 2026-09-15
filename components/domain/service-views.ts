@@ -1,20 +1,23 @@
 import { formatList } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { coversEveryEmirate, rowQualifiers, type FreeZoneView, type PlaceView } from "@/lib/storefront/coverage-page";
-import type { ScopeColumn } from "@/lib/storefront/section-settings";
 import type { CoverageTableRow } from "./ServicesStorefront";
 import { scopeWords } from "./ScopeTable";
 
 /**
- * How a service's fields and coverage are worded — one place, three readers.
+ * How a service's fields and coverage are worded — one place, every reader.
  *
- * The services list (`1e-s`), the coverage page (`1f-s`) and the builder's
- * scope grid and coverage sections (`5c-s`) all print the same four fields and
- * the same row. Each used to word its own, which is how a column reads *Remote*
- * on one tab and *remote* on another. `5c-s`'s own rule — a template assembles
- * the blocks the default storefront uses, not a parallel set — is a rule about
- * this file.
+ * The services list (`1e-s`) and the coverage page (`1f-s`) print the same four
+ * fields and the same row. Each used to word its own, which is how a column
+ * reads *Remote* on one tab and *remote* on another.
  */
+
+/**
+ * `1e-s`'s four fields, in `1e-s`'s order. A column is a key and its heading is
+ * ours: a renamed *fee basis* column is how a fee ends up published under
+ * another word.
+ */
+export type ScopeColumn = "engagement" | "turnaround" | "fee_basis" | "delivered";
 
 /** The four scope-sheet values a comparison reads, raw. */
 export interface ServiceFieldSource {

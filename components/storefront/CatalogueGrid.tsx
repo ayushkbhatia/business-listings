@@ -4,10 +4,9 @@ import { t } from "@/lib/i18n";
 import type { SectionProps } from "@/lib/storefront/render-data";
 
 /**
- * Section 5 — the catalogue grid.
+ * The catalogue grid — the first twelve live products on the overview.
  *
- * The section that replaces what `/b/[slug]` renders by hand today. No price on
- * any card: `ProductCard` is availability-led by construction and there is no
+ * No price on any card: `ProductCard` is availability-led by construction and there is no
  * price field on `Product` to show even if somebody wanted one.
  */
 export function CatalogueGrid({ data, enquireHref }: SectionProps) {

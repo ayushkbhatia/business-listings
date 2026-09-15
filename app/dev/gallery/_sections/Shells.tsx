@@ -373,7 +373,7 @@ export function Shells() {
         <Viewport height={380}>
           <BuilderChrome
             contentAs="div"
-            title="Storefront template"
+            title="Full-screen editor"
             subtitle="AL-MARWAN / DRAFT"
             status={t("shell.saved", { when: "8 seconds ago" })}
             exit={

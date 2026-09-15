@@ -1812,8 +1812,8 @@ board 4a exists to answer.
 
 ### A metric with no table returns null, not zero
 
-Licence records staged, storefront templates and the CRM call list have no table
-until steps 2, 6 and 4. Each returns `null` and renders as "not measurable yet".
+Licence records staged, storefront templates and the CRM call list had no table
+until steps 2, 6 and 4 (storefront templates were later cut, with boards 5a–5c). Each returns `null` and renders as "not measurable yet".
 
 Zero on a queue means the work is done. On a queue that does not exist it is the
 one lie a console must never tell, and it is an easy one to tell by accident:

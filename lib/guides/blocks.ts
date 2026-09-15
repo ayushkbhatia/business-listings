@@ -3,11 +3,10 @@ import { countWords } from "@/lib/publish-threshold";
 /**
  * The block vocabulary for a guide — boards 10b and 6d.
  *
- * Six kinds, and deliberately not `lib/storefront/blocks.ts`. That vocabulary
- * has a `certifications` block that reads a seller's own documents and a `cta`
- * wired to a seller's catalogue, and staff edit it per storefront template — so
- * sharing it would mean an edit to the Industrial template could change an
- * article about payment terms. Same shape, same discipline, different words.
+ * Six kinds. A guide is its own vocabulary: the storefront template pages that
+ * once had a block list of their own were cut with boards `5a`–`5c`, and a
+ * guide never shared it — an edit to a sector template changing an article
+ * about payment terms was the reason.
  *
  * A guide is prose with a destination. Everything here is something a person
  * writes; nothing reads the catalogue.

@@ -8,13 +8,8 @@ import { contrastRatio as ratio } from "../lib/theme/contrast.js";
 import { readFileSync } from "node:fs";
 
 /*
- * The maths is `lib/theme/contrast.ts`, not a copy.
- *
- * It lived here alone while contrast was only ever audited. Criterion 5 made it
- * a rule the product enforces on a seller's own brand colour, and two
- * implementations of WCAG relative luminance is two implementations that
- * eventually disagree — with the audit saying one thing and the form saying
- * another about the same hex.
+ * The maths is `lib/theme/contrast.ts`, not a copy. Two implementations of WCAG
+ * relative luminance is two implementations that eventually disagree.
  */
 const css = readFileSync("docs/tokens.css", "utf8");
 

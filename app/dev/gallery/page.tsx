@@ -26,7 +26,6 @@ import { AcceptedRecordGallery } from "./_sections/AcceptedRecord";
 import { AcceptedProposalGallery } from "./_sections/AcceptedProposal";
 import { ProposalReplyGallery } from "./_sections/ProposalReply";
 import { ProposalComparisonGallery } from "./_sections/ProposalComparison";
-import { BuilderSectionsGallery } from "./_sections/BuilderSections";
 import { BuyerInboxGallery } from "./_sections/BuyerInbox";
 import { BlendedSearchGallery } from "./_sections/BlendedSearch";
 import { NotificationTemplatesGallery } from "./_sections/NotificationTemplates";
@@ -316,7 +315,6 @@ export default function Gallery() {
       <ProposalReplyGallery />
       <ProposalComparisonGallery />
       <AcceptedProposalGallery />
-      <BuilderSectionsGallery />
       <Overlays />
       <Shells />
       <Tokens />

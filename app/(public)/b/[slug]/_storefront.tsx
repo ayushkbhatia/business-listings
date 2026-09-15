@@ -21,7 +21,7 @@ import { storefrontCredentials } from "@/lib/storefront/services";
  * the catalogue tab needs the same name, the same badge and the same way to
  * enquire, and a header that changed between tabs would read as two sites.
  *
- * `data-theme` is applied by the page, not here, and it recolours the band,
+ * `data-theme` is applied by the page, not here, and it colours the band,
  * headings, links and buttons. It does not reach the verification badge — that
  * component draws only from the status palette, and a test measures it.
  */
@@ -32,7 +32,6 @@ const LOGO_OVERLAP = "-34px";
 export async function StorefrontHeader({
   business,
   active,
-  pages = [],
   actions,
   photoHref,
   subline,
@@ -40,16 +39,8 @@ export async function StorefrontHeader({
   now = new Date(),
 }: {
   business: PublicBusiness;
-  /** A page slug where a template page is the active tab. */
-  active: string;
-  /**
-   * Template pages marked for the nav, from `navPages`.
-   *
-   * Passed in rather than loaded here: this renders on five routes and a query
-   * inside it would be five queries nobody asked for. The routes that have the
-   * sector already loaded pass them; the ones that do not, do not.
-   */
-  pages?: readonly { slug: string; title: string }[];
+  /** The key of the tab this route is. */
+  active: StorefrontTabKey;
   /**
    * The action row — quote, WhatsApp, the masked number, save.
    *
@@ -413,7 +404,7 @@ export async function StorefrontHeader({
             as="a"
             label={t("gallery.tabs_label")}
             active={active}
-            items={tabsFor(business, pages)}
+            items={tabsFor(business)}
           />
         </div>
       </div>
@@ -438,10 +429,7 @@ export async function StorefrontHeader({
  * `1g-s`'s services tab stays the link surface for a service page, and `1e-s`
  * replaces the index behind it; the tab itself stays.
  */
-function tabsFor(
-  business: PublicBusiness,
-  pages: readonly { slug: string; title: string }[],
-) {
+function tabsFor(business: PublicBusiness) {
   const counts = {
     products: business._count.products,
     services: business._count.services,
@@ -484,24 +472,7 @@ function tabsFor(
     },
   };
 
-  const items: { key: string; label: string; href: string; badge?: number }[] = storefrontTabs(
-    business.sellsKind,
-    counts,
-  ).map((key) => ({ key, ...tab[key] }));
-
-  /*
-   * Template pages last, after the ones the storefront always has. A
-   * staff-authored About should not push the catalogue along.
-   */
-  for (const page of pages) {
-    items.push({
-      key: page.slug,
-      label: page.title,
-      href: `/b/${business.slug}/${page.slug}`,
-    });
-  }
-
-  return items;
+  return storefrontTabs(business.sellsKind, counts).map((key) => ({ key, ...tab[key] }));
 }
 
 /** The crumbs above every storefront page. */

@@ -9,7 +9,7 @@ import { Check } from "@/components/primitives/icons";
  * gets more verified suppliers, and a buyer seeing it understands that the
  * badge is a ladder rather than a badge somebody bought.
  *
- * No colour from the seller theme reaches this, for the same reason as the
+ * No colour from the storefront palette reaches this, for the same reason as the
  * badge.
  *
  * ## Read-only, and the absence is the feature

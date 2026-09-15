@@ -433,14 +433,6 @@ async function main() {
 
   console.log("→ categories");
   const catBySlug = new Map<string, string>();
-  /**
-   * Slug to top-level ancestor id.
-   *
-   * `Business.sectorId` is denormalised and every writer of `primaryCategoryId`
-   * writes it too. The seed is one of those writers, and a seed that skipped it
-   * would leave the whole directory outside every storefront template.
-   */
-  const sectorBySlug = new Map<string, string>();
   for (const [i, c] of CATEGORIES.entries()) {
     const row = await prisma.category.create({
       /*
@@ -459,7 +451,6 @@ async function main() {
       },
     });
     catBySlug.set(c.slug, row.id);
-    sectorBySlug.set(c.slug, row.id);
   }
 
   /*
@@ -488,7 +479,6 @@ async function main() {
       },
     });
     catBySlug.set(c.slug, row.id);
-    sectorBySlug.set(c.slug, row.id);
   }
 
   for (const [i, s] of SUBCATEGORIES.entries()) {
@@ -504,7 +494,6 @@ async function main() {
       },
     });
     catBySlug.set(s.slug, row.id);
-    sectorBySlug.set(s.slug, sectorBySlug.get(s.parent)!);
   }
 
   /*
@@ -531,7 +520,6 @@ async function main() {
       },
     });
     catBySlug.set(s.slug, row.id);
-    sectorBySlug.set(s.slug, sectorBySlug.get(s.parent)!);
   }
   console.log(
     `   ${CATEGORIES.length + EXTRA_CATEGORIES.length} sectors, ` +
@@ -862,7 +850,13 @@ async function main() {
         primaryCategoryId: catBySlug.get(categorySlug)!,
         source: claimed ? pick(["licence_import", "self_added"]) : "licence_import",
         publishedAt: days(-int(10, 400)),
-        themePreset: claimed && planId === "pro" ? pick(THEMES) : null,
+        /*
+         * `themePreset` was drawn here for a claimed Pro listing. The seller
+         * theme presets were cut with board `5b`, and the draw stays, discarded,
+         * for the reason the reply-time draw below gives: removing it renames
+         * every business generated after it.
+         */
+        ...(claimed && planId === "pro" ? (pick(THEMES), {}) : {}),
         /*
          * `responseTimeMedianMs` used to be invented here, which criterion 5
          * forbids — it is derived from real reply timestamps now, by the same
@@ -1022,7 +1016,7 @@ async function main() {
   await seedTrust(prisma, businesses, opsLead.id, moderator.id, buyer.id);
   await seedSignals(prisma, businesses, buyer.id, catBySlug);
   await seedQueues(prisma, businesses, catBySlug, opsLead.id, moderator.id);
-  await seedStorefrontTemplates(prisma, sectorBySlug, opsLead.id);
+  discardStorefrontTemplateDraws();
   await seedGuides(prisma);
   console.log("→ subcategories");
   await seedSubcategories(prisma);
@@ -4172,218 +4166,18 @@ async function deriveResponseTimes(db: Db) {
 }
 
 /**
- * Two sector templates, and they are deliberately different.
+ * Two sector templates and their About pages stood here, each dated with a draw.
  *
- * Criterion 2 — *"reordering, enabling or disabling a section changes every live
- * storefront on that template and nothing else"* — is only assertable with two,
- * so valves and pipes get different section lists. One template and the test
- * proves nothing: everything is on the same template, so everything changes.
- *
- * Both are `live`, which the partial unique index allows exactly once per
- * sector. Every other sector has no template, which is the honest starting
- * state — a directory where four trades out of six are still on the default
- * storefront is what this actually looks like before staff get to it.
+ * The storefront template model was cut with boards `5a`–`5c` on 15 Sep 2026,
+ * and nothing seeds it. The four draws stay, discarded, in the order they were
+ * made — a template's publish date, then its page's, for Industrial and then
+ * Stockist — because every guide, subcategory and landing page seeded after
+ * this reads the PRNG where it left off, and the acceptance suites pin those.
  */
-async function seedStorefrontTemplates(
-  db: Db,
-  sectorBySlug: Map<string, string>,
-  opsLeadId: string,
-) {
-  console.log("→ storefront templates");
-  const { sectionType } = await import("../lib/storefront/section-types.js");
-
-  /*
-     Board `5c-s` — a draft for a trade that sells only work.
-
-     So the section library has a services template to filter: *For service
-     listings*, *Shared*, and the goods sections disabled with their reasons.
-     A draft rather than live, on purpose — a live template would move every
-     storefront in the trade onto it, and the acceptance suites already assert
-     those pages as they are. No `rnd()` draw, so no slug below it moves.
-  */
-  const practiceSector = sectorBySlug.get("legal-audit-and-business-setup");
-  if (practiceSector) {
-    const types = [
-      "header", "hero", "scope_grid", "credential_wall", "coverage", "sectors_served",
-      "reviews", "enquiry_form",
-    ];
-    await db.storefrontTemplate.create({
-      data: {
-        sectorId: practiceSector,
-        name: "Practice",
-        status: "draft",
-        defaultTheme: "mono",
-        offeredThemes: ["mono", "default"],
-        sections: {
-          create: types.map((type, index) => {
-            const definition = sectionType(type)!;
-            return {
-              type,
-              sortOrder: index,
-              fixed: definition.fixed,
-              singleton: definition.singleton,
-              sellerEditableFields: definition.sellerFields.map((field) => field.key),
-            };
-          }),
-        },
-      },
-    });
-  }
-
-  const plans = [
-    {
-      sector: "valves-and-fittings",
-      name: "Industrial",
-      theme: "industrial",
-      offered: ["industrial", "mono", "default"],
-      // The full set: a trade where the catalogue is the sell.
-      types: [
-        "header", "hero", "trust_strip", "featured_products", "catalogue_grid",
-        "spec_comparison", "certifications", "branches", "reviews", "enquiry_form",
-      ],
-    },
-    {
-      sector: "pipes-and-tubing",
-      name: "Stockist",
-      theme: "trade",
-      offered: ["trade", "mono"],
-      // Shorter, and no spec comparison. Pipe is sold on stock and lead time.
-      types: ["header", "hero", "trust_strip", "catalogue_grid", "branches", "enquiry_form"],
-    },
-  ];
-
-  for (const plan of plans) {
-    const sectorId = sectorBySlug.get(plan.sector);
-    if (!sectorId) continue;
-
-    const template = await db.storefrontTemplate.create({
-      data: {
-        sectorId,
-        name: plan.name,
-        status: "live",
-        version: 1,
-        publishedAt: days(-int(5, 40)),
-        defaultTheme: plan.theme,
-        offeredThemes: plan.offered,
-        density: plan.sector === "pipes-and-tubing" ? "compact" : "comfortable",
-        sections: {
-          create: plan.types.map((type, index) => {
-            const definition = sectionType(type)!;
-            return {
-              type,
-              sortOrder: index,
-              fixed: definition.fixed,
-              singleton: definition.singleton,
-              sellerEditableFields: definition.sellerFields.map((field) => field.key),
-            };
-          }),
-        },
-      },
-      select: {
-        id: true,
-        version: true,
-        sections: {
-          select: {
-            id: true, type: true, sortOrder: true, enabled: true, fixed: true,
-            singleton: true, sellerEditableFields: true, showOnMobile: true, settings: true,
-          },
-          orderBy: { sortOrder: "asc" },
-        },
-      },
-    });
-
-    const storeCount = await db.business.count({
-      where: { sectorId, publishedAt: { not: null }, mergedIntoId: null, suspendedAt: null },
-    });
-
-    /*
-     * The published version, with the store count on it. The count is the
-     * decision — somebody confirmed "this affects N stores" — and a history
-     * that lost the number cannot say what was agreed.
-     */
-    await db.templateVersion.create({
-      data: {
-        templateId: template.id,
-        version: template.version,
-        storeCount,
-        publishedBy: opsLeadId,
-        reason: `First publish of the ${plan.name} template for ${plan.sector.replace(/-/g, " ")}.`,
-        snapshot: { name: plan.name, sections: template.sections } as object,
-      },
-    });
-
-    /*
-     * One page per template, so the public route has something real to render
-     * and the content check has something to score. Written to pass three of
-     * its four checks and fail the image one — a specimen where everything
-     * passes teaches nobody what the panel is for.
-     */
-    const trade = plan.sector.replace(/-/g, " ");
-    await db.templatePage.create({
-      data: {
-        templateId: template.id,
-        slug: "about",
-        title: "About us",
-        metaDescription: `Stockist and supplier of ${trade} for contractors across Dubai and Sharjah.`,
-        status: "live",
-        publishedAt: days(-int(2, 20)),
-        blocks: [
-          { id: "h1", kind: "heading", values: { text: "Counter sales and site delivery" } },
-          {
-            id: "t1",
-            kind: "text",
-            values: {
-              body:
-                `We have supplied ${trade} to contractors across Dubai, Sharjah and the Northern ` +
-                "Emirates since the trade licence in the footer was first issued. Counter sales " +
-                "run from the warehouse six days a week, and scheduled site delivery covers Al " +
-                "Quoz, Ras Al Khor, Jebel Ali and the Sharjah industrial areas. Most orders " +
-                "placed before midday go out the same afternoon. Where an item is not on the " +
-                "shelf we say so and quote a lead time rather than quoting a date we cannot " +
-                "hold — the counter staff would rather lose the order than lose the contractor. " +
-                "Quotes hold for the period stated on them. Nothing on this page is a price: " +
-                "prices come back on a quote against the sizes and quantities you send, because " +
-                "what a contractor pays depends on the quantity, the specification and the " +
-                "delivery, and a number on a web page is none of those. Our team speak English, " +
-                "Arabic, Hindi and Malayalam, which is what the counter actually needs.\n\n" +
-                "Everything we stock is bought from the manufacturer or their appointed agent " +
-                "in the Emirates, and the paperwork comes with it: mill certificates where the " +
-                "specification calls for them, test certificates on request, and the " +
-                "manufacturer datasheet for anything a consultant has to approve before it goes " +
-                "in the ground. If a consultant rejects a submittal we will find the equivalent " +
-                "that passes rather than argue about the one that did not. Accounts are opened " +
-                "against a trade licence and a signed order, and payment terms are agreed " +
-                "between us and you directly, as they always have been in this trade. We are " +
-                "not a marketplace and nothing passes through anybody else on the way. The " +
-                "counter opens early because contractors start early, and somebody answers the " +
-                "phone during working hours rather than a menu. If you send a schedule we will " +
-                "price it line by line and tell you which lines are on the shelf today.",
-            },
-          },
-          {
-            id: "n1",
-            kind: "numbers",
-            values: {
-              items: [
-                { label: "Trading since", value: "2009" },
-                { label: "Branches", value: "2" },
-                { label: "Same-day delivery", value: "Before midday" },
-              ],
-            },
-          },
-          {
-            id: "c1",
-            kind: "cta",
-            values: {
-              text: "Send the sizes and quantities and we will quote from stock.",
-              label: "See the catalogue",
-            },
-          },
-        ] as object[],
-      },
-    });
-
-    console.log(`   ${plan.name}: ${template.sections.length} sections, ${storeCount} stores, 1 page`);
+function discardStorefrontTemplateDraws() {
+  for (let template = 0; template < 2; template += 1) {
+    int(5, 40);
+    int(2, 20);
   }
 }
 
@@ -5855,7 +5649,6 @@ async function seedReviewDepth(db: Db) {
       primaryCategoryId: category.id,
       source: "self_added",
       publishedAt: days(-380),
-      themePreset: "industrial",
       paymentTerms: "30 days on approved account · 50% with order otherwise",
       ratingOverall: null,
       reviewCount: 0,

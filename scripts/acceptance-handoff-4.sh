@@ -192,84 +192,16 @@ if pnpm exec tsc --noEmit >"$LOG/c12b.log" 2>&1 && pnpm build >>"$LOG/c12b.log" 
 else
   bad "see $LOG/c12b.log"; fi
 
-# ── The storefront spec's own twelve, for step 6 ─────────────────────────────
+# ── Step 6, storefront templates ─────────────────────────────────────────────
+#
+# Nothing left to accept. The domain half (S8) became subdomains in `proxy.ts`
+# on 9 Sep 2026 and its tests went with the DNS code; the template half —
+# builder, theme presets, section library, template pages, specimens — was cut
+# with boards 5a, 5b and 5c on 15 Sep 2026. What survives of the storefront is
+# accepted by `tests/e2e/storefront.spec.ts`, including criterion 8.
 
-note "S1. A template edit shows the store count, and publishing confirms it"
-if pwstaff "board 5a" s1; then
-  ok "$(pcount s1) browser tests, including the checkpoint walk end to end"
-else
-  bad "see $LOG/s1.log"; fi
-
-note "S2. A section change reaches its own sector and no other"
-if vi tests/integration/storefront.test.ts "criterion 2" s2 -t "criterion 2"; then
-  ok "$(count s2) tests across two sectors, at the loader the storefront calls"
-  info "proved at the storefront rather than at a resolver nothing called — step 6e"
-else
-  bad "see $LOG/s2.log"; fi
-
-note "S3. A seller cannot reorder, add or remove a section by any path"
-# Runs under `staff`: admin-storefront.spec.ts is not in the moderator
-# project, and the test opens a moderator context itself.
-if pwstaff "storefront builder is staff-only" s3; then
-  ok "$(pcount s3) tests: a moderator gets a 404, and there is no seller route at all"
-else
-  bad "see $LOG/s3.log"; fi
-
-note "S4. A theme leaves verification badges and platform chrome unchanged"
-if pw "theme" s4; then
-  ok "$(pcount s4) tests across all six themes against the gallery's proof block"
-  info "the spec says 'visual test'; there is no screenshot infrastructure, and a computed-style assertion is stronger"
-else
-  bad "see $LOG/s4.log"; fi
-
-note "S5. A custom brand hex below 4.5:1 is rejected with the reason shown"
-if vu lib/theme/contrast.test.ts "the floor" s5; then
-  ok "$(count s5) unit tests, including that all six shipped presets clear their own floor"
-else
-  bad "see $LOG/s5.log"; fi
-if pwstaff "criterion 5" s5b; then
-  ok "$(pcount s5b) browser tests: the ratio appears as staff type"
-else
-  bad "see $LOG/s5b.log"; fi
-
-note "S6 and S7. The header cannot be disabled; a singleton cannot appear twice"
-if vi tests/integration/storefront.test.ts "criterion 6" s6 -t "criterion 6"; then
-  ok "$(count s6) tests, at the service and again at the database"
-else
-  bad "see $LOG/s6.log"; fi
-if vi tests/integration/storefront.test.ts "criterion 7" s7 -t "criterion 7"; then
-  ok "$(count s7) tests: a partial unique index refuses the second hero"
-else
-  bad "see $LOG/s7.log"; fi
-
-note "S8. Domain verification handles partial propagation and the revoked case"
-if vi tests/integration/domains.test.ts "criterion 8" s8 -t "criterion 8"; then
-  ok "$(count s8) tests: pending, partial, verified, failed with a named cause, revoked and back"
-  info "the certificate half reports that it issued nothing — there is no Vercel token, and the screen says so"
-else
-  bad "see $LOG/s8.log"; fi
-
-note "S9. A published page's slug is fixed, and renaming produces a 301"
-if vi tests/integration/template-pages.test.ts "criterion 9" s9 -t "criterion 9"; then
-  ok "$(count s9) tests: one redirect per store in the sector, and the older one survives a second rename"
-else
-  bad "see $LOG/s9.log"; fi
-
-note "S10. The specimens page renders all fourteen, with services visibly disabled"
-if pwstaff "criterion 10" s10; then
-  ok "$(pcount s10) browser tests over the acceptance surface for the whole step"
-else
-  bad "see $LOG/s10.log"; fi
-
-note "S11 and S12. Template mutations audit with the store count; publish is reversible"
-if vi tests/integration/storefront.test.ts "criterion 11" s11 -t "criterion 11"; then
-  ok "$(count s11) tests: the affected count is on the audit row"
-else
-  bad "see $LOG/s11.log"; fi
-if vi tests/integration/storefront.test.ts "criterion 12" s12 -t "criterion 12"; then
-  ok "$(count s12) tests: a restore keeps every section id, so seller content survives it"
-else
-  bad "see $LOG/s12.log"; fi
+note "S. Step 6 was cut — the storefront renders one fixed overview"
+info "boards 5a, 5b, 5c removed 15 Sep 2026; see docs/build-plan.md Phase 8"
 
 # ─────────────────────────────────────────────────────────────────────────────
 printf '\n\033[1m%s checks passed.\033[0m\n' "$pass"
