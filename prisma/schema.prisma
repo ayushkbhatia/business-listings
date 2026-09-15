@@ -164,7 +164,6 @@ model User {
   queueItemsAssignedBy     QueueItem[]              @relation("QueueItemAssigner")
   queueItemsDocsRequested  QueueItem[]              @relation("QueueItemDocsRequester")
   queueItemsDecided        QueueItem[]              @relation("QueueItemDecider")
-  templateVersions         TemplateVersion[]
   specRevisions            SellerTemplateRevision[] @relation("TemplateRevisionAuthor")
   boostsCreated            ListingBoost[]
   rankingDrafts            RankingDraft[]           @relation("RankingDraftAuthor")
@@ -634,7 +633,6 @@ model Category {
   campaignCtas      Campaign[]               @relation("CampaignCtaCategory")
   productAlerts     ProductAlert[]
   curatedLists      CuratedList[]
-  sectorTemplates   StorefrontTemplate[]     @relation("SectorTemplates")
   sectorSuggestions SectorSuggestion[]
 
   @@index([parentId])
@@ -1076,13 +1074,12 @@ model Business {
   primaryCategoryId  String        @map("primary_category_id")
   /// The top-level ancestor of `primaryCategoryId`, denormalised.
   ///
-  /// A storefront template belongs to a sector and the store count is the
-  /// number every builder screen shows before a save, so it has to be one
-  /// indexed column rather than a recursive walk per render.
+  /// Every sector-scoped count reads it, so it has to be one indexed column
+  /// rather than a recursive walk per render.
   ///
   /// `BusinessCategory` rows are deliberately ignored: a third of businesses
-  /// carry a second one, and a listing that belonged to two sectors would
-  /// belong to two templates. Kept in step with `primaryCategoryId` by
+  /// carry a second one, and a listing that belonged to two sectors would be
+  /// counted twice. Kept in step with `primaryCategoryId` by
   /// `lib/taxonomy/sector.ts`, and an integration test walks every row to check
   /// the two still agree.
   sectorId           String?       @map("sector_id")
@@ -1128,9 +1125,6 @@ model Business {
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
-  /// Storefront theme preset, or a validated custom hex. Recolours the header,
-  /// headings, buttons, links and form focus only. Never a verification badge,
-  /// never a status tone, never platform chrome.
   /// How an incoming enquiry is put in front of the team. Board 7d.
   ///
   /// Not "the setting that protects the response score", which is what this
@@ -1162,9 +1156,6 @@ model Business {
   /// The seller's own words, with `{buyer_name}`, `{next_open_time}` and
   /// `{whatsapp_number}` filled in at send. Null falls back to the default copy.
   autoReplyBody    String? @map("auto_reply_body")
-
-  themePreset String? @map("theme_preset")
-  themeHex    String? @map("theme_hex")
 
   // ── Derived. Computed by jobs, read-only everywhere else. No seller input;
   //    that is what makes them worth showing. See data-model.md.
@@ -1268,7 +1259,6 @@ model Business {
   redirectsFrom          Redirect[]
   notificationPreference NotificationPreference?
   reviewRequests         ReviewRequest[]
-  storefrontContent      StorefrontContent[]
   teamMembers            TeamMember[]
   customDomain           CustomDomain?
   closures               BusinessClosure[]
@@ -7120,9 +7110,8 @@ model ScopeDemand {
 /// migration rather than an `if` a refactor can drop.
 ///
 /// `impact` is written at propose time rather than recomputed at approval,
-/// following `TemplateVersion.storeCount`: the number is the decision. Recomputed
-/// later, the second approver would be approving a different change from the
-/// one they were shown.
+/// because the number is the decision. Recomputed later, the second approver
+/// would be approving a different change from the one they were shown.
 model PublishRuleChange {
   id         String          @id @default(cuid())
   categoryId String          @map("category_id")
@@ -8087,193 +8076,6 @@ model GuideRelated {
   @@unique([fromId, toId])
   @@index([toId])
   @@map("guide_related")
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Storefront templates
-//
-// Sellers do not build storefronts. We build templates per sector; sellers fill
-// the fields we opened. Ordering, adding, removing and composing sections is a
-// staff action, which makes every template edit a fan-out: changing the
-// Industrial template changes every live storefront in that sector.
-//
-// Three shapes carry that:
-//
-//   1. One live template per sector, enforced by a partial unique index. The
-//      store count is only well defined if a listing has one template.
-//   2. `TemplateSection.id` is stable across versions. `StorefrontContent` is
-//      keyed to it, so a version restore that replaced section rows would
-//      silently destroy seller content across every store on the template.
-//      Restore upserts by id; it never clones.
-//   3. Singletons are a column and an index, not a service remembering.
-// ─────────────────────────────────────────────────────────────────────────────
-
-// `TemplateStatus` is shared with `SpecTemplate` above. Draft, live and retired
-// mean the same three things here, and a second enum with the same members
-// would be a migration's worth of ceremony for no guarantee.
-
-enum TemplateDensity {
-  compact
-  comfortable
-  roomy
-
-  @@map("template_density")
-}
-
-enum TypePairing {
-  editorial
-  clean
-  technical
-
-  @@map("type_pairing")
-}
-
-model StorefrontTemplate {
-  id       String         @id @default(cuid())
-  /// A top-level category. Not any category: a sector is the unit a seller
-  /// recognises as their trade, and a template per subcategory would be a
-  /// hundred templates nobody maintains.
-  sectorId String         @map("sector_id")
-  name     String
-  status   TemplateStatus @default(draft)
-  /// Bumped on publish. The history lives in `TemplateVersion`.
-  version  Int            @default(1)
-
-  // ── Theme, board 5b ──
-  /// Which of the six presets sellers in this sector may pick.
-  offeredThemes  String[]        @default([]) @map("offered_themes")
-  defaultTheme   String          @default("default") @map("default_theme")
-  /// A hex outside the six. Contrast-checked on save, refused below 4.5:1.
-  allowCustomHex Boolean         @default(false) @map("allow_custom_hex")
-  typePairing    TypePairing     @default(clean) @map("type_pairing")
-  cornerRadius   Int             @default(6) @map("corner_radius")
-  density        TemplateDensity @default(comfortable)
-  darkHeader     Boolean         @default(false) @map("dark_header")
-  /// Pro entitlement. Whether a seller on this template may take our badge off.
-  badgeRemovable Boolean         @default(false) @map("badge_removable")
-
-  publishedAt DateTime? @map("published_at")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-
-  sector   Category          @relation("SectorTemplates", fields: [sectorId], references: [id], onDelete: Restrict)
-  sections TemplateSection[]
-  pages    TemplatePage[]
-  versions TemplateVersion[]
-
-  @@index([sectorId, status], map: "storefront_template_sector_idx")
-  @@map("storefront_template")
-}
-
-model TemplateSection {
-  id         String @id @default(cuid())
-  templateId String @map("template_id")
-  /// A `SectionType` key from `lib/storefront/section-types.ts`. Not an enum:
-  /// adding a type is a code change and the catalogue is the source of truth,
-  /// so a migration per section type would be ceremony with no guarantee.
-  type       String
-
-  sortOrder Int     @default(0) @map("sort_order")
-  enabled   Boolean @default(true)
-  /// Cannot be moved, disabled or removed. Only the header. Denormalised from
-  /// the catalogue so the check constraint below can see it.
-  fixed     Boolean @default(false)
-  /// Denormalised for the partial unique index. Criterion 7.
-  singleton Boolean @default(false)
-
-  /// Which of the type's declared fields this template lets a seller fill.
-  /// Always a subset of `sellerFieldKeys(type)`, checked at write time.
-  sellerEditableFields String[] @default([]) @map("seller_editable_fields")
-  showOnMobile         Boolean  @default(true) @map("show_on_mobile")
-  /// Staff settings for this instance — hero layout, background source. Shaped
-  /// by the type, validated in the service.
-  settings             Json     @default("{}")
-
-  template StorefrontTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  content  StorefrontContent[]
-
-  @@index([templateId, sortOrder], map: "template_section_order_idx")
-  @@map("template_section")
-}
-
-/// What one seller filled into one section.
-///
-/// The fifth object, which the specification does not name and cannot work
-/// without: ten of the fourteen types have a "Seller fills" column and there
-/// was nowhere to put what a specific seller filled in.
-///
-/// Keyed to `TemplateSection.id`, which survives a version restore. Keyed to a
-/// row that a restore replaced, a template rollback would wipe seller content
-/// across every store in the sector — silently, and with no way back.
-model StorefrontContent {
-  id         String   @id @default(cuid())
-  businessId String   @map("business_id")
-  sectionId  String   @map("section_id")
-  /// Only keys in the section's `sellerEditableFields`, only field types the
-  /// section type declares. Validated on write; a blob nobody checks is a blob
-  /// that eventually renders somebody's price.
-  values     Json     @default("{}")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-
-  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  section  TemplateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-
-  @@unique([businessId, sectionId])
-  @@index([sectionId], map: "storefront_content_section_idx")
-  @@map("storefront_content")
-}
-
-model TemplatePage {
-  id         String @id @default(cuid())
-  templateId String @map("template_id")
-  slug       String
-  title      String
-
-  metaDescription String?        @map("meta_description")
-  /// Heading, text, image+text, numbers row, timeline, gallery, certifications,
-  /// call to action. A smaller vocabulary than sections, because a page is
-  /// prose and a storefront home is data.
-  blocks          Json           @default("[]")
-  showInNav       Boolean        @default(true) @map("show_in_nav")
-  allowIndexing   Boolean        @default(true) @map("allow_indexing")
-  status          TemplateStatus @default(draft)
-  publishedAt     DateTime?      @map("published_at")
-  createdAt       DateTime       @default(now()) @map("created_at")
-
-  template StorefrontTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  @@unique([templateId, slug])
-  @@map("template_page")
-}
-
-/// A published version, kept whole.
-///
-/// Criterion 12: publish is reversible from version history. The snapshot is
-/// the section list and the theme settings as they were, and a restore writes
-/// them back by section id rather than recreating rows — see
-/// `StorefrontContent` for why that distinction is the whole ballgame.
-model TemplateVersion {
-  id         String @id @default(cuid())
-  templateId String @map("template_id")
-  version    Int
-  /// The sections and settings as published. Read by the restore path and by
-  /// the diff the publish confirmation shows.
-  snapshot   Json
-
-  /// How many live storefronts this publish changed. On the row because the
-  /// number is the decision — "this affects 1,842 stores" is what somebody
-  /// confirmed, and a history that lost it cannot say what was agreed.
-  storeCount  Int      @map("store_count")
-  publishedBy String   @map("published_by") @db.Uuid
-  /// Never null. Same rule as `AuditEvent`, for the same reason.
-  reason      String
-  createdAt   DateTime @default(now()) @map("created_at")
-
-  template StorefrontTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  author   User               @relation(fields: [publishedBy], references: [id], onDelete: Restrict)
-
-  @@unique([templateId, version])
-  @@map("template_version")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
