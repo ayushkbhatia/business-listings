@@ -8,7 +8,6 @@ import { getVerification, type CredentialDocument } from "@/lib/db/queries/verif
 import { formatCount, formatDate, formatMonth } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import {
-  CREDENTIAL_REVIEW_DAYS,
   LICENCE_NOTICE_DAYS,
   LICENCE_URGENT_DAYS,
   type LicenceStage,
@@ -16,9 +15,8 @@ import {
 import { documentRequestsFor } from "@/lib/moderation/seller";
 import { DocumentRequests } from "../_moderation";
 import { getNavBadges, requireSellerSeat, SellerPage } from "../_shell";
-import { deleteDocument, recordDocument, setVisibility, signDocumentUpload } from "./actions";
+import { deleteDocument, recordDocument, signDocumentUpload } from "./actions";
 import { DocumentUpload } from "./DocumentUpload";
-import { VisibilityControl } from "./VisibilityControl";
 
 /**
  * Board 3e — verification and documents.
@@ -352,9 +350,7 @@ function UploadedByYou({ credentials }: { credentials: readonly CredentialDocume
         </Link>
       }
       footer={
-        <p className="max-w-prose text-caption text-muted">
-          {t("verify_listing.uploaded_footer", { days: String(CREDENTIAL_REVIEW_DAYS) })}
-        </p>
+        <p className="max-w-prose text-caption text-muted">{t("verify_listing.uploaded_footer")}</p>
       }
     >
       {credentials.length === 0 ? (
@@ -379,11 +375,6 @@ function UploadedByYou({ credentials }: { credentials: readonly CredentialDocume
                 <tr key={document.id} className="border-b border-line last:border-b-0">
                   <th scope="row" className="px-3 py-2.5 text-left font-normal text-ink">
                     {document.name}
-                    {document.reviewReason && !document.isPublic && (
-                      <span className="mt-0.5 block text-caption text-bad-ink">
-                        {t("verify_listing.review_reason", { reason: document.reviewReason })}
-                      </span>
-                    )}
                   </th>
                   <td className="px-3 py-2.5 font-mono text-caption tabular-nums text-body">
                     {document.reference ?? (
@@ -391,9 +382,9 @@ function UploadedByYou({ credentials }: { credentials: readonly CredentialDocume
                     )}
                   </td>
                   {/*
-                     To the month, not the day. Board 1d's rule for a
-                     certificate, kept here so the seller reads the same
-                     precision a buyer will.
+                     To the month, not the day. A certificate's validity is
+                     the month it runs to; the day invites a row that looks
+                     wrong for the twenty-four hours around it.
                   */}
                   <td className="px-3 py-2.5 tabular-nums text-body">
                     {document.validUntil ? (
@@ -405,14 +396,21 @@ function UploadedByYou({ credentials }: { credentials: readonly CredentialDocume
                   <td className="px-3 py-2.5">
                     <CredentialState document={document} />
                   </td>
-                  <td className="px-3 py-2.5">
-                    <VisibilityControl
-                      documentId={document.id}
-                      name={document.name}
-                      isPublic={document.isPublic}
-                      onStorefront={document.onStorefront}
-                      action={setVisibility}
-                    />
+                  {/*
+                     A statement, not a control. There was a show-on-my-listing
+                     switch here; no public page names an uploaded certificate
+                     since the storefront builder was cut, so it was wired to
+                     nothing a buyer can see. The one way a certificate does
+                     reach a buyer is a product it is attached to, and that is
+                     counted rather than assumed.
+                  */}
+                  <td className="px-3 py-2.5 text-caption text-body">
+                    {document.onProducts > 0
+                      ? t("verify_listing.who_products", {
+                          count: document.onProducts,
+                          formatted: formatCount(document.onProducts),
+                        })
+                      : t("verify_listing.who_team_only")}
                   </td>
                 </tr>
               ))}
@@ -425,25 +423,16 @@ function UploadedByYou({ credentials }: { credentials: readonly CredentialDocume
 }
 
 /**
- * The state pill, and the four states never share a tone by accident.
+ * The state pill, and the three states never share a tone by accident.
  *
  * `Expiring` says the number of days rather than the date, because
- * `28 Sep 2026` in a table does not read as urgent. `In review` carries its SLA
- * and names the queue that owns it — the board left it with neither, which made
- * it indistinguishable from a stuck upload.
+ * `28 Sep 2026` in a table does not read as urgent.
  */
 function CredentialState({ document }: { document: CredentialDocument }) {
   if (document.state === "lapsed") {
     return (
       <StatusBadge tone="bad" size="sm" shape="chip">
         {t("verify_listing.state_lapsed")}
-      </StatusBadge>
-    );
-  }
-  if (document.state === "in_review") {
-    return (
-      <StatusBadge tone="info" size="sm" shape="chip">
-        {t("verify_listing.state_in_review", { days: String(CREDENTIAL_REVIEW_DAYS) })}
       </StatusBadge>
     );
   }
@@ -601,7 +590,7 @@ function ActionNeeded({ view }: { view: NonNullable<Awaited<ReturnType<typeof ge
 function WhatBuyersSee() {
   const rows = [
     { key: "badge", shown: true, label: t("verify_listing.buyers_badge") },
-    { key: "certs", shown: true, label: t("verify_listing.buyers_certs") },
+    { key: "certs", shown: false, label: t("verify_listing.buyers_no_certs") },
     { key: "files", shown: false, label: t("verify_listing.buyers_no_files") },
     { key: "trn", shown: false, label: t("verify_listing.buyers_no_trn") },
   ];

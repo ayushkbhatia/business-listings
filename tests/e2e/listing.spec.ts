@@ -272,6 +272,21 @@ test.describe("board 3e — verification", () => {
     ).toBeVisible();
   });
 
+  test("an uploaded certificate offers no control and claims no buyer it does not have", async ({ page }) => {
+    /*
+       There was a show-on-my-listing switch in this table, and the page said a
+       certificate was "Public · name and month" and put the seller "in the
+       filters buyers use". No public page names an uploaded certificate since
+       the storefront builder was cut, and no buyer filter reads one.
+    */
+    const uploaded = page.getByRole("table", { name: /Certificates and approvals/ });
+    await expect(uploaded.getByRole("button")).toHaveCount(0);
+    const body = page.locator("body");
+    await expect(body).not.toContainText("Show on my listing");
+    await expect(body).not.toContainText("Public · name and month");
+    await expect(body).not.toContainText("filters buyers use");
+  });
+
   test("criterion 7 — no full TRN reaches the page", async ({ page }) => {
     // Masked in the response, not in the view: `getVerification` returns the
     // masked string and there is no shape of that result carrying the digits.

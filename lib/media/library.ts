@@ -284,7 +284,7 @@ function applyFilters(files: readonly LibraryFile[], filters: LibraryFilters): L
     }
     if (filters.usedIn === "products" && file.productCount === 0) return false;
     if (filters.usedIn === "storefront") {
-      if (!file.references.some((r) => r.kind === "storefront" || r.kind === "certificate")) {
+      if (!file.references.some((r) => r.kind === "storefront")) {
         return false;
       }
     }
