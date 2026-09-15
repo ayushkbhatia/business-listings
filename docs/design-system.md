@@ -24,8 +24,8 @@ Chapter map:
 ## Tokens
 
 **The complete token block is `docs/tokens.css` in this folder.** Paste it into
-`app/globals.css` as-is — it carries every value, the density attributes, the six seller
-themes and the reduced-motion guard. Nothing else in the codebase may contain a raw hex.
+`app/globals.css` as-is — it carries every value, the density attributes, the storefront
+palette and the reduced-motion guard. Nothing else in the codebase may contain a raw hex.
 
 Summary of intent:
 
@@ -41,9 +41,10 @@ only accent permitted on dark surfaces; base moss fails contrast there.
 (expiring, pending, slow), bad (overdue, blocked, error), info (neutral state). Status never
 appears as a bare colour — always a word beside it.
 
-**Seller themes.** Six presets plus one validated hex. A theme recolours the storefront
-header, headings, buttons, links and form focus. It never recolours verification badges,
-status tones or platform chrome. Contrast-check on save and reject with a reason.
+**Storefront palette.** One, scoped to a storefront root as `data-theme="default"`. It colours
+the storefront header, headings, buttons, links and form focus. It never colours verification
+badges, status tones or platform chrome. The six seller presets and the validated custom hex
+were cut with board `5b` on 15 Sep 2026 — no seller picks a colour.
 
 ## Type
 
@@ -134,6 +135,6 @@ Naming: PascalCase components, kebab-case CSS variables, variants as props on on
 
 ## The three things that become migrations if ignored
 
-1. A verification badge must never take a seller theme colour.
+1. A verification badge must never take a storefront colour.
 2. A product must never gain a price field on a public surface.
 3. Every superadmin state change must write an audit row with a reason.

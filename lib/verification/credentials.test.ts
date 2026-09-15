@@ -5,8 +5,8 @@ import {
   isCheckedByUs,
   isCredential,
   isOnStorefront,
+  PUBLISHABLE_DOCUMENT_KINDS,
 } from "./credentials";
-import { PUBLISHABLE_DOCUMENT_KINDS } from "@/lib/storefront/section-types";
 
 const dubai = (iso: string) => new Date(`${iso}+04:00`);
 const now = dubai("2026-09-06T09:00:00");

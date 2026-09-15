@@ -1,6 +1,15 @@
 import { daysUntil, LICENCE_NOTICE_DAYS } from "@/lib/verification";
-import { PUBLISHABLE_DOCUMENT_KINDS } from "@/lib/storefront/section-types";
 import type { DocumentKind } from "@/lib/db/generated/enums";
+
+/**
+ * Document kinds a public surface may show.
+ *
+ * `trade_licence` and `vat_certificate` are absent and that is the whole point.
+ * They live in the same private bucket as everything else in `Document`, and
+ * `verify_listing.documents_hint` promises the seller they are never on their
+ * public listing. `/b/:slug/d/:document` serves nothing outside this list.
+ */
+export const PUBLISHABLE_DOCUMENT_KINDS = ["certificate", "catalogue", "datasheet"] as const;
 
 /**
  * The two kinds of document board 3e splits the screen down the middle for.

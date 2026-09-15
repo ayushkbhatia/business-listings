@@ -572,6 +572,18 @@ reader and three levels of tests. **The staff half has nothing at all.**
 
 ### Phase 8 · The storefront builder — 8 boards, mostly export
 
+**Cut 15 Sep 2026, except `5e`.** The owner removed the storefront builder from the console:
+`5a` (builder shell), `5b` (theme presets) and `5c` (section library), and with them the boards
+that only existed inside the builder — `5d` (page templates), `5f` (the published result) and
+`5g`/`5h` (section specimens), plus `5c-s`. What went: every `/admin/storefront-templates` route,
+`/b/:slug/:page`, the template service, the section catalogue and its fourteen renderers that no
+fixed layout draws, the six seller theme presets and the custom hex, and the
+`storefront.template.write` capability. What stayed: `/b/[slug]` draws one fixed run — hero, trust
+strip, catalogue, reviews, branches — which is what 110 of 123 published storefronts already
+rendered, in one palette. The tables (`storefront_template`, `template_section`,
+`storefront_content`, `template_page`, `template_version`) and `business.theme_preset` drop in a
+contract migration after the code that stopped reading them is live.
+
 **Invert the epic's order.** `5c`, `5g`, `5h` and most of `5d` are export-against-tree; `5e` is
 the only large piece and the only one selling something it does not deliver.
 
@@ -582,13 +594,10 @@ the only large piece and the only one selling something it does not deliver.
   causes, the hourly poll and a certificate we could not issue — is deleted rather than kept for a
   bring-your-own that may not return. **Still outside the repo:** the wildcard DNS record and the
   wildcard domain on Vercel.
-- [ ] **8.2 `5f`** — the public page filters `header` and `enquiry_form` out of the template run
-  and the builder canvas applies no such filter.
-- [ ] **8.3 `5b`** — five of eight theme columns reach no storefront, including a density
-  `globals.css` already defines.
-- [ ] **8.4 `5a` + `5d`** — no create, no delete, no unpublish. `TemplateStatus.retired` is set by
-  nothing. Template pages are absent from the sitemap despite carrying `allowIndexing`.
-- [ ] **8.5 `5c` + `5g` + `5h`** — export, and decide whether `5h` exists as a separate board.
+- ~~**8.2 `5f`**~~ — **cut 15 Sep 2026.** No template run, no canvas to reconcile against.
+- ~~**8.3 `5b`**~~ — **cut 15 Sep 2026.** One storefront palette remains.
+- ~~**8.4 `5a` + `5d`**~~ — **cut 15 Sep 2026.** The builder and template pages are gone.
+- ~~**8.5 `5c` + `5g` + `5h`**~~ — **cut 15 Sep 2026.** No section library, no specimens.
 
 ### Phase 9 · The four that do not exist, and the standing lane — 3 boards + hygiene
 
@@ -656,14 +665,14 @@ the only large piece and the only one selling something it does not deliver.
 | `10d` | Comparison tray | partial | medium | Compares ten fixed business attributes and touches the dictionary nowhere. | 5.4 |
 | `12d` | Ops CRM — supply gaps | built | medium | Tasks only a derivation writes; the lock is `assignedToId`; every rate carries its denominator. | 7.2 |
 | `12f` | Support desk & view-as | partial ↓ | small | View-as is the best-guarded thing in the console. | 7.3 |
-| `5a` | Builder shell | partial | medium | `createTemplate` has no route caller. | 8.4 |
-| `5b` | Theme presets | scaffold ↓ | medium | Five of eight theme columns reach no storefront. | 8.3 |
-| `5c` | Section library | partial ↓ | export only | ~~One dead helper~~ — `5c-s` gave `sectionLibrary` its callers: `/admin/storefront-templates/:id/sections` groups by trade kind and marks what the template carries. Still unexported. | 8.5 |
-| `5g` | Section specimens I | partial ↓ | export only | All nineteen types render; the services ones against a firm that sells work. | 8.5 |
-| `5h` | Section specimens II | partial ↓ | export only | A records gap: one surface where the epic counts two boards. | 8.5 |
-| `5d` | Page template editor | partial ↓ | small | No delete and no unpublish, so a page on 1,842 storefronts cannot be taken down. | 8.4 |
+| ~~`5a`~~ | ~~Builder shell~~ | **cut** | — | Cut 15 Sep 2026 with the rest of the builder; code and routes removed. | ~~8.4~~ |
+| ~~`5b`~~ | ~~Theme presets~~ | **cut** | — | Cut 15 Sep 2026. One storefront palette; no seller picks a colour. | ~~8.3~~ |
+| ~~`5c`~~ | ~~Section library~~ | **cut** | — | Cut 15 Sep 2026, with `5c-s`. `/b/[slug]` draws a fixed run of five sections. | ~~8.5~~ |
+| ~~`5g`~~ | ~~Section specimens I~~ | **cut** | — | Cut 15 Sep 2026 with the section catalogue. | ~~8.5~~ |
+| ~~`5h`~~ | ~~Section specimens II~~ | **cut** | — | Cut 15 Sep 2026 with the section catalogue. | ~~8.5~~ |
+| ~~`5d`~~ | ~~Page template editor~~ | **cut** | — | Cut 15 Sep 2026; `/b/:slug/:page` removed. | ~~8.4~~ |
 | `5e` | Domains & publishing | scaffold ↓ | large | No `middleware.ts` — a verified custom domain serves nothing. | 8.1 |
-| `5f` | The published result | partial ↓ | small | Staff publish against a canvas showing two sections the storefront never renders. | 8.2 |
+| ~~`5f`~~ | ~~The published result~~ | **cut** | — | Cut 15 Sep 2026; nothing left to reconcile. | ~~8.2~~ |
 | `12h` | Visits, areas, API | scaffold | large | At least two boards. None of the three routes exist. | 7.6 |
 | `10i` | Campaign landing | partial ↓ | export only | The model exists so content avoids a deploy; a second campaign costs one. | 7.4 |
 | `13e` | Scheduled maintenance | **built** | 14 Sep 2026 | A 503 the proxy serves per system, a window record in Global Config or the environment, and the unplanned error beside it. | 9.2 |

@@ -27,22 +27,14 @@ export interface RevealApi {
 
 export const RevealContext = createContext<RevealApi | null>(null);
 
-/*
-   `teamNumberKey` is deliberately not re-exported here. A function exported
-   from a "use client" module is a client reference on the server, and the Team
-   section calling it crashed the builder's specimens page — import it from
-   `lib/contact/number-keys` instead.
-*/
-
 /**
- * One masked number — a branch's landline, a team member's line — revealed
- * with the listing's.
+ * One masked number — a branch's landline — revealed with the listing's.
  *
  * Masked until the listing is revealed, then the number as a `tel:` link.
  * Clicking the mask opens the same form as the identity block's chip, and one
  * answer reveals every number on the listing for the session.
  *
- * Outside a provider — a template page, the builder's preview — it is the mask
+ * Outside a provider — a gallery specimen — it is the mask
  * and nothing else: a number with no reveal behind it stays hidden rather than
  * printing.
  */

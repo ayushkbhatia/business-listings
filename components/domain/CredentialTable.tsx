@@ -23,7 +23,7 @@ import { Check, Minus } from "@/components/primitives/icons";
  *    Meridian Chartered Accountants"* — which tells a buyer exactly what the line
  *    is worth.
  *
- * Neither mark is a seller theme colour. Trust signals come from the status
+ * Neither mark is a storefront colour. Trust signals come from the status
  * palette and render the same on every storefront — non-negotiable 2.
  *
  * ## Validity renders, and nothing tracks it

@@ -7,7 +7,7 @@ import { TOP_ACHIEVABLE_TIER, VERIFIED_TIER } from "@/lib/verification";
  * Board 4a's numbers, and the one that could never be non-zero.
  *
  * The console's whole claim is that it answers one question each morning —
- * which of the six jobs is behind — and every number on it links into the queue
+ * which of the five jobs is behind — and every number on it links into the queue
  * that fixes it. A metric that is structurally zero does not read as broken. It
  * reads as "nothing to do here", which is the most expensive way for a number
  * to be wrong.

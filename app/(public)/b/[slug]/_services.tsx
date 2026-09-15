@@ -17,7 +17,6 @@ import { formatCount, formatDate, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { absoluteUrl } from "@/lib/site";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
-import { navPages } from "@/lib/storefront/pages";
 import { storefrontPhotos } from "@/lib/storefront/photos";
 import { servicesStorefrontFor, type ServicesStorefront } from "@/lib/storefront/services";
 import {
@@ -78,9 +77,8 @@ export async function ServicesStorefrontPage({
   saved: boolean;
   requestedService: string | null;
 }) {
-  const [data, pages, copies] = await Promise.all([
+  const [data, copies] = await Promise.all([
     servicesStorefrontFor(business.id),
-    business.sectorId ? navPages(business.sectorId) : Promise.resolve([]),
     pairedCopies(),
   ]);
   // Board `12g-s`: the composer's heading is the services half of a paired string.
@@ -145,7 +143,7 @@ export async function ServicesStorefrontPage({
         }}
       />
 
-      <div data-theme={business.themePreset ?? "default"}>
+      <div data-theme="default">
         <ContactReveal
           businessId={contact.businessId}
           supplierName={contact.supplierName}
@@ -158,7 +156,6 @@ export async function ServicesStorefrontPage({
         <StorefrontHeader
           business={business}
           active="overview"
-          pages={pages}
           actions={identityActions}
           notice={<RevealNote />}
           {...(photos.length > 0 ? { photoHref: "#photos" } : {})}

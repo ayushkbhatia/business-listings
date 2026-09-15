@@ -301,12 +301,6 @@ export const ADMIN_NAV: readonly NavGroup[] = [
       { key: "search", labelKey: "nav.search_ranking", href: "/admin/search" },
       // Board `1d` amendment — every phone lead a storefront's landline reveal recorded.
       { key: "phone-leads", labelKey: "nav.phone_leads", href: "/admin/leads", capability: "contact_lead.platform.read" },
-      {
-        key: "storefront-templates",
-        labelKey: "nav.storefront_templates",
-        href: "/admin/storefront-templates",
-        capability: "storefront.template.write",
-      },
     ],
   },
   {
@@ -322,8 +316,8 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     ],
   },
   /*
-     Board 6f §1. The page matrix was filed under DEMAND, between search
-     ranking and storefront templates, and the four screens that report into it
+     Board 6f §1. The page matrix was filed under DEMAND, beside search
+     ranking, and the four screens that report into it
      were scattered across two other groups — so the board that decides which
      eight thousand pages exist was three headings away from the queues it
      works. Four items, in the order the header's tabs list them.

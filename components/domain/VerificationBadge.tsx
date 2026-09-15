@@ -8,10 +8,11 @@ import { tierSpec, type VerificationTier } from "./verification";
  *
  * Two rules make this component what it is, and both are architectural:
  *
- * 1. **It never takes a seller theme colour.** Every colour below comes from
+ * 1. **It never takes a storefront colour.** Every colour below comes from
  *    the status palette or the neutrals; none comes from `--brand`. A badge
- *    that recoloured per storefront would be a badge each seller controls, and
- *    a trust signal a seller controls is not a trust signal. Covered by a test.
+ *    that recoloured with the page it sat on would be a badge a page controls,
+ *    and a trust signal a page controls is not a trust signal. Covered by a
+ *    test.
  *
  * 2. **It states what was checked, and when.** "Verified" on its own is a claim.
  *    "Licence verified 14 Aug 2026" is a fact a buyer can weigh. There is no

@@ -1,8 +1,8 @@
 import { cn } from "@/lib/cn";
 
 /**
- * The frame for any full-screen editing surface — the storefront builder, the
- * CSV import mapper, the quote composer.
+ * The frame for any full-screen editing surface — the CSV import mapper, the
+ * quote composer.
  *
  * An ink bar and no sidebar. The point is that the surface below is the whole
  * job: nothing else on screen competes for attention, and the only ways out are

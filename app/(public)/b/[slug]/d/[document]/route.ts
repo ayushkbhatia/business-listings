@@ -1,14 +1,13 @@
 import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/db/client";
-import { PUBLISHABLE_DOCUMENT_KINDS } from "@/lib/storefront/section-types";
+import { PUBLISHABLE_DOCUMENT_KINDS } from "@/lib/verification/credentials";
 import { signedReadUrl } from "@/lib/storage";
 
 /**
  * A seller's published document, fetched through a link that expires.
  *
- * `business-documents` is a private bucket and stays private. The storefront's
- * Certifications and Downloads sections link here rather than to storage, and
- * this mints a signed URL at request time — which is the only way a link can
+ * `business-documents` is a private bucket and stays private. A product page's
+ * documents link here rather than to storage, and this mints a signed URL at request time — which is the only way a link can
  * appear on a page cached for five minutes without outliving its own expiry.
  *
  * Three things are checked, and each of them is the whole point:

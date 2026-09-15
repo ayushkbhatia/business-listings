@@ -15,8 +15,6 @@ reason and is visible in `/admin/audit`.
 | Send an enquiry / RFQ | ✓ | ✓ | — | — |
 | Edit own listing content | — | ✓ | ✓ | ✓ |
 | Set verification tier | — | — | — | ✓ |
-| Build or edit a storefront template | — | — | — | ✓ |
-| Pick a theme preset for own storefront | — | ✓ | — | ✓ |
 | Remove a review | — | — | — | ✓ |
 | Suspend an account | — | — | — | ✓ |
 | See another business's enquiries | — | — | audit only | audit only |
@@ -38,7 +36,6 @@ from the pre-pivot board is **deleted**, not renamed — there is no order entit
 | Edit products & specs | ✓ | ✓ | — | — |
 | Bulk import / export catalogue | ✓ | ✓ | — | — |
 | Edit listing profile, locations, hours | ✓ | ✓ | — | — |
-| Pick a theme preset | ✓ | ✓ | — | — |
 | Upload verification documents | ✓ | ✓ | — | — |
 | Reply to a review | ✓ | ✓ | — | — |
 | Request reviews from buyers | ✓ | ✓ | ✓ | — |
@@ -72,7 +69,6 @@ reading `Business.leadEscalationMinutes` and sending once per enquiry.
 | Resolve claim conflicts | ✓ | — | — |
 | Set verification tier | ✓ | — | — |
 | Edit taxonomy & spec templates | ✓ | — | — |
-| Edit storefront templates | ✓ | — | — |
 | Edit notification templates, record Meta's decision (board 12g) | ✓ | — | — |
 | Read notification templates and the delivery log (board 12g) | ✓ | ✓ | — |
 | Remove a review | ✓ | — | — |

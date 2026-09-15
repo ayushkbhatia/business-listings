@@ -226,45 +226,6 @@ test.describe("gallery", () => {
 });
 
 test.describe("verification is platform-owned", () => {
-  /**
-   * Handoff 1 acceptance criterion 8, and CLAUDE.md non-negotiable 2. A seller
-   * theme recolours the storefront header, headings, buttons, links and form
-   * focus. It must not reach a verification badge — a trust signal a seller
-   * controls is not a trust signal.
-   */
-  test("a seller theme leaves the verification badge unchanged", async ({ page }) => {
-    await page.goto("/dev/gallery");
-    await page.locator("#theme-proof").waitFor();
-
-    const measured = await page.evaluate(() => {
-      const scopes = [...document.querySelectorAll("#theme-proof [data-theme]")];
-      return scopes.map((scope) => {
-        const themed = scope.querySelector(".text-brand") as HTMLElement;
-        const badge = scope.querySelector("[data-theme-proof=badge] > span") as HTMLElement;
-        const style = getComputedStyle(badge);
-        return {
-          theme: scope.getAttribute("data-theme"),
-          // Proof the theme is actually live in this scope.
-          themedText: getComputedStyle(themed).color,
-          badgeColor: style.color,
-          badgeBackground: style.backgroundColor,
-          badgeBorder: style.borderTopColor,
-        };
-      });
-    });
-
-    expect(measured.length).toBe(6);
-
-    // The themes really are different from one another...
-    expect(new Set(measured.map((m) => m.themedText)).size).toBe(6);
-
-    // ...and the badge is identical across every one of them.
-    const badges = new Set(
-      measured.map((m) => `${m.badgeColor}|${m.badgeBackground}|${m.badgeBorder}`),
-    );
-    expect(badges.size, JSON.stringify(measured, null, 2)).toBe(1);
-  });
-
   test("no public surface renders a price on a product", async ({ page }) => {
     await page.goto("/dev/gallery");
     const cards = page.locator("#product-card");

@@ -283,10 +283,6 @@ const RESOLVERS: Record<string, Resolver> = {
         select: { id: true, name: true, version: true },
       })
     ).map((row) => [row.id, `${row.name} v${row.version}`]),
-  StorefrontTemplate: async (ids) =>
-    (
-      await prisma.storefrontTemplate.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })
-    ).map((row) => [row.id, row.name]),
   ScopeSheetFamily: async (ids) =>
     (await prisma.scopeSheetFamily.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })).map(
       (row) => [row.id, row.name],

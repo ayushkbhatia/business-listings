@@ -49,7 +49,6 @@ export const MATRIX_GROUPS = [
       "taxonomy.read",
       "taxonomy.write",
       "taxonomy.merge",
-      "storefront.template.write",
       "search.ranking.write",
       "placement.boost",
       "notification.template.write",

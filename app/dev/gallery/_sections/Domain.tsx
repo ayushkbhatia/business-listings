@@ -73,8 +73,6 @@ function ladderRungs(current: number) {
   }));
 }
 
-const THEMES = ["default", "industrial", "trade", "mono", "clinic", "salon"] as const;
-
 const BUSINESS: ListingCardBusiness = {
   slug: "al-marwan-trading",
   displayName: "Al Marwan Trading",
@@ -110,7 +108,7 @@ export function Domain() {
       <Section
         id="verification-badge"
         title="VerificationBadge"
-        note="states what was checked and when — and never takes a seller theme colour"
+        note="states what was checked and when — and never takes a storefront colour"
       >
         <States label="tiers" stack>
           {TIERS.map((spec) => (
@@ -153,33 +151,6 @@ export function Domain() {
           ))}
         </States>
 
-        {/*
-          Acceptance criterion 8. Six themes, one badge, and the badge must be
-          pixel-identical in all six. A test asserts the computed colours match.
-        */}
-        <States label="theme proof" stack>
-          <div id="theme-proof" className="flex flex-wrap gap-3">
-            {THEMES.map((theme) => (
-              <div
-                key={theme}
-                data-theme={theme}
-                className="rounded-card border border-brand-line bg-card p-3"
-              >
-                <p className="mb-2 font-mono text-eyebrow uppercase text-brand-text">{theme}</p>
-                <p className="mb-2 text-body-sm text-brand">Al Marwan Trading</p>
-                <span data-theme-proof="badge">
-                  <VerificationBadge
-                    compact
-                    tier={2}
-                    label={t("verify.t2")}
-                    checked={t("verify.t2.checked")}
-                  />
-                </span>
-              </div>
-            ))}
-          </div>
-          <p className="max-w-prose text-caption text-muted">{t("gallery.theme_proof")}</p>
-        </States>
       </Section>
 
       <Section

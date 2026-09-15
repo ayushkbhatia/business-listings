@@ -12,6 +12,8 @@ export { visibleTo } from "./visibility";
  *
  * The README: *"every number on it is a link into the queue that fixes it, and
  * it answers one question each morning — which of the six jobs is behind"*.
+ * Five now: the storefronts job went with the template builder (boards `5a`–`5c`,
+ * cut 15 Sep 2026).
  *
  * So this module computes, per job, the two numbers that answer it: how much is
  * waiting, and how much of it has been waiting too long. **Age before volume**
@@ -23,9 +25,8 @@ export { visibleTo } from "./visibility";
  * there must never be one: this is the screen whose entire job is saying what
  * is behind, and a number on it that nobody computed is worse than a blank.
  *
- * Where a job's queue has no table yet — ingestion has no licence-import run
- * until step 2, the builder has no templates until step 6 — the metric returns
- * `null` rather than zero. Zero means "nothing waiting". Null means "we cannot
+ * Where a job's queue has no table yet the metric returns `null` rather than
+ * zero. Zero means "nothing waiting". Null means "we cannot
  * see yet", and the screen says so in those words.
  */
 
@@ -55,7 +56,7 @@ export const SLA_DAYS = {
   credential: CREDENTIAL_REVIEW_DAYS,
 } as const;
 
-export type JobKey = "supply" | "comparable" | "storefronts" | "accounts" | "money" | "trust";
+export type JobKey = "supply" | "comparable" | "accounts" | "money" | "trust";
 
 export interface ConsoleMetric {
   key: string;
@@ -251,13 +252,6 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
         metric("subcategories", "console.metric.subcategories", "categories", "/admin/categories", thinCategories),
         metric("no_specs", "console.metric.no_specs", "spec-library", "/admin/spec-library", productsWithoutSpecs),
         metric("zero_results", "console.metric.zero_results", "search", "/admin/search", zeroResults),
-      ],
-    },
-    {
-      key: "storefronts",
-      labelKey: "console.job.storefronts",
-      metrics: [
-        metric("templates", "console.metric.templates", "storefront-templates", "/admin/storefront-templates", null),
       ],
     },
     {

@@ -66,7 +66,7 @@ describe("what an overview shows whom", () => {
 
   it("keeps the panel even when it has nothing to show", () => {
     /*
-     * The six jobs are what the platform has to do, not what the reader has to
+     * The five jobs are what the platform has to do, not what the reader has to
      * do. Dropping the panel would tell an ops lead the money looks after
      * itself.
      */

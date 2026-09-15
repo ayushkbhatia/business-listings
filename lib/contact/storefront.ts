@@ -89,8 +89,8 @@ export async function cachedStorefrontContact(
   const head = business.locations[0];
   /*
      Whether the reveal is live at all. Claimed is enough to ask: a listing's
-     numbers are its locations' landlines and its team section's lines, and the
-     team is not in this render's data. `landlinesFor` answers exactly, on click.
+     numbers are its locations' landlines, and this render reads no cookie.
+     `landlinesFor` answers exactly, on click.
   */
   const hasLandline = business.claimStatus !== "unclaimed";
   const copy = await pairedCopyFor(business.sellsKind);

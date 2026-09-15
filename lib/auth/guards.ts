@@ -61,10 +61,6 @@ export const mayEditEntitlements = (a: Actor) => can(a, "plan.entitlements.write
 export const assertCanEditRanking = (a: Actor) => assertCan(a, "search.ranking.write");
 export const mayEditRanking = (a: Actor) => can(a, "search.ranking.write");
 
-export const assertCanEditStorefrontTemplate = (a: Actor) =>
-  assertCan(a, "storefront.template.write");
-export const mayEditStorefrontTemplate = (a: Actor) => can(a, "storefront.template.write");
-
 export const assertCanReplyToReview = (a: Actor) => assertCan(a, "review.reply");
 export const mayReplyToReview = (a: Actor) => can(a, "review.reply");
 

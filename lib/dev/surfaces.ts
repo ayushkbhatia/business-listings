@@ -110,7 +110,6 @@ export const SURFACE_GROUPS: readonly SurfaceGroup[] = [
       { href: "/admin/notifications", what: "Notification templates" },
       { href: "/admin/content/home", what: "Home page content" },
       { href: "/admin/spec-library", what: "Spec templates and fields" },
-      { href: "/admin/storefront-templates", what: "Storefront templates" },
     ],
   },
   {

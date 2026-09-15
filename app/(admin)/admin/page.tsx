@@ -143,7 +143,7 @@ export default async function AdminOverviewPage() {
             <h2 className="text-body-sm font-medium text-ink">{t(job.labelKey as never)}</h2>
             {job.metrics.length === 0 ? (
               /*
-                The panel stays. The six jobs are what the platform has to do,
+                The panel stays. The five jobs are what the platform has to do,
                 not what this reader has to do, and dropping one would tell an
                 ops lead the money looks after itself.
               */

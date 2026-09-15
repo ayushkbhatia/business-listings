@@ -5,250 +5,28 @@ import { PUBLISHED } from "@/lib/db/queries/reviews";
 import { copiesFrom } from "@/lib/i18n/paired";
 import { readEntryRows } from "@/lib/strings/store";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
-import { PUBLISHABLE_DOCUMENT_KINDS, sectionType } from "./section-types";
-import { resolveSections, type ResolvedSection, type SectionRow } from "./sections";
-import type { SectionContent, SectionData, SectionWork } from "./render-data";
+import type { SectionData } from "./render-data";
 import type { Availability } from "@/components/domain";
-import { rendersFor, type ListingKind } from "./library";
-import { sanitiseContent } from "./seller-content";
-import { sellsWork, type SellsKindValue } from "./tabs";
-import { coveragePageFor, serviceEnquiryVolume, servicesStorefrontFor } from "./services";
-import { sortByVolume } from "./services-catalogue";
+import type { SellsKindValue } from "./tabs";
 
 /**
- * What a storefront renders, loaded once.
+ * What a goods storefront's overview renders, loaded once.
  *
- * This is the module that makes criterion 2 true rather than provable. Until it
- * existed, `resolveSections` and the fourteen renderers were a model no public
- * route called, and *"reordering a section changes every live storefront on
- * that template"* was a statement about a function nothing invoked.
- *
- * ## The fence
- *
- * Documents are filtered to `PUBLISHABLE_DOCUMENT_KINDS` **here**, in the
- * query, before anything is assembled. The Certifications and Downloads
- * components filter again, and that is not redundancy for its own sake — they
- * also render on the specimens page against hand-written data that never comes
- * through here. But this is the one that matters for a real seller: a trade
- * licence that never leaves the database cannot reach a page by any route.
+ * Every section on the overview reads from this bundle, so the page issues one
+ * set of queries however many sections it draws. A firm that sells only work
+ * never reaches here — `/b/[slug]` hands it to the services storefront first.
  */
-
-/** Sections used where a sector has no live template. */
-const DEFAULT_SECTION_TYPES = [
-  "header",
-  "hero",
-  "trust_strip",
-  "catalogue_grid",
-  "reviews",
-  "branches",
-  "enquiry_form",
-] as const;
-
-/**
- * A template's worth of sections for a business with no template.
- *
- * Four sectors out of six have none, and a directory where two thirds of
- * storefronts render nothing would be a worse outcome than one where they
- * render a sensible default. The ids are synthetic and stable per type, so
- * `StorefrontContent` keyed to a real section can never collide with one.
- */
-function defaultSections(): SectionRow[] {
-  return DEFAULT_SECTION_TYPES.map((type, index) => {
-    const definition = sectionType(type)!;
-    return {
-      id: `default:${type}`,
-      type,
-      sortOrder: index,
-      enabled: true,
-      fixed: definition.fixed,
-      singleton: definition.singleton,
-      // A default template opens nothing: there is no staff decision behind it,
-      // and a field opened by nobody is a field nobody chose to open.
-      sellerEditableFields: [],
-      showOnMobile: true,
-      settings: {},
-    };
-  });
-}
-
-export interface StorefrontPlan {
-  sections: ResolvedSection[];
-  data: SectionData;
-  /** Seller-filled values, by section id. */
-  content: Record<string, SectionContent>;
-  /** The template's theme, or the seller's own where there is no template. */
-  theme: string;
-  /** Null where the sector has no live template and the default was used. */
-  templateId: string | null;
-}
-
-interface BusinessRef {
-  id: string;
-  slug: string;
-  sectorId: string | null;
-  themePreset: string | null;
-  /**
-   * Decides which of a template's sections this storefront shows — board
-   * `5c-s`. A sector template can carry a scope grid and a catalogue grid at
-   * once, and each store renders the half it has something to put in.
-   */
-  sellsKind: SellsKindValue;
-}
-
-/** The words a shared section speaks for this listing. `both` leads with its catalogue. */
-export function listingKind(sellsKind: SellsKindValue): ListingKind {
-  return sellsKind === "services" ? "services" : "goods";
-}
-
-export async function storefrontPlan(business: BusinessRef): Promise<StorefrontPlan> {
-  const template = business.sectorId
-    ? await prisma.storefrontTemplate.findFirst({
-        where: { sectorId: business.sectorId, status: "live" },
-        select: {
-          id: true,
-          defaultTheme: true,
-          sections: {
-            select: {
-              id: true, type: true, sortOrder: true, enabled: true, fixed: true,
-              singleton: true, sellerEditableFields: true, showOnMobile: true, settings: true,
-            },
-            orderBy: { sortOrder: "asc" },
-          },
-        },
-      })
-    : null;
-
-  const sections = resolveSections(template ? template.sections : defaultSections()).filter(
-    (section) => rendersFor(section.definition, business.sellsKind),
-  );
-
-  const [data, content] = await Promise.all([
-    sectionData(business.id, business.slug, {
-      kind: listingKind(business.sellsKind),
-      work: needsWork(sections, business.sellsKind),
-    }),
-    template ? sellerContent(business.id, sections) : {},
-  ]);
-
-  return {
-    sections,
-    data,
-    content,
-    /*
-     * The template's theme wins over the seller's own.
-     *
-     * `Business.themePreset` predates the template model and was written only
-     * by the seed. Which of the two a seller may choose from is board 5b's
-     * per-template offered set — until that form exists, the template decides
-     * and a seller with no template keeps whatever they had.
-     */
-    theme: template?.defaultTheme ?? business.themePreset ?? "default",
-    templateId: template?.id ?? null,
-  };
-}
-
-/** Whether any section here reads a firm's work, and the firm has any to read. */
-function needsWork(sections: readonly ResolvedSection[], sellsKind: SellsKindValue): boolean {
-  return sellsWork(sellsKind) && sections.some((section) => section.definition.availableFor === "services");
-}
-
-/**
- * Seller-filled values, by section id — through `sanitiseContent`, so only a
- * key the template opened, in its declared shape, with no price in it, reaches
- * a renderer.
- */
-async function sellerContent(
-  businessId: string,
-  sections: readonly Pick<ResolvedSection, "id" | "type" | "sellerEditableFields">[],
-): Promise<Record<string, SectionContent>> {
-  if (sections.length === 0) return {};
-  const byId = new Map(sections.map((section) => [section.id, section]));
-  const rows = await prisma.storefrontContent.findMany({
-    where: { businessId, sectionId: { in: [...byId.keys()] } },
-    select: { sectionId: true, values: true },
-  });
-  return Object.fromEntries(
-    rows.map((row) => [row.sectionId, sanitiseContent(byId.get(row.sectionId)!, row.values)]),
-  );
-}
-
-/**
- * What a firm that sells work brings to a section — board `5c-s`.
- *
- * Every half comes from the loader its own storefront tab already uses, so a
- * section and the tab it mirrors cannot disagree about a firm: services and
- * per-service coverage from `coveragePageFor` (`1f-s`), credentials, sectors and
- * the union from `servicesStorefrontFor` (`1d-s`), and the order from the
- * 90-day volume `1e-s` sorts by (B8). None of them selects a fee amount.
- */
-export async function sectionWorkFor(businessId: string): Promise<SectionWork> {
-  const [page, storefront] = await Promise.all([
-    coveragePageFor(businessId),
-    servicesStorefrontFor(businessId),
-  ]);
-  const volume = await serviceEnquiryVolume(
-    businessId,
-    page.rows.map((row) => row.service.id),
-  );
-  const rows = page.rows.map((row) => ({
-    ...row,
-    id: row.service.id,
-    position: row.service.position,
-    engagementType: row.service.engagementType,
-    feeBasis: row.service.feeBasis,
-    feeBasisLabel: null,
-  }));
-
-  const value = (row: (typeof rows)[number], key: string) =>
-    row.service.rows.find((entry) => entry.key === key)?.value ?? null;
-
-  return {
-    services: sortByVolume(rows, volume).map((row) => ({
-      id: row.service.id,
-      slug: row.service.slug,
-      name: row.service.name,
-      scope: row.service.scope,
-      engagementType: row.service.engagementType,
-      turnaround: value(row, "turnaround"),
-      feeBasis: value(row, "fee_basis"),
-      deliveredWhere: value(row, "delivered_where"),
-      places: row.places.map((place) => ({ emirate: place.emirate, areaId: place.areaId, label: place.label })),
-    })),
-    credentials: storefront.credentials,
-    coverage: storefront.coverage.map((place) => ({
-      emirate: place.emirate,
-      areaId: place.areaId,
-      label: place.label,
-    })),
-    freeZones: page.freeZones,
-    sectors: storefront.sectors,
-    deliveryModes: storefront.deliveryModes,
-  };
-}
-
-/** The data a section preview reads for a real store, for the builder's library screen. */
-export async function sectionDataFor(business: {
+export async function storefrontData(business: {
   id: string;
   slug: string;
   sellsKind: SellsKindValue;
 }): Promise<SectionData> {
-  return sectionData(business.id, business.slug, {
-    kind: listingKind(business.sellsKind),
-    work: sellsWork(business.sellsKind),
-  });
-}
-
-/** Everything the section types can read, for one business. */
-async function sectionData(
-  businessId: string,
-  slug: string,
-  options: { kind: ListingKind; work: boolean },
-): Promise<SectionData> {
-  const [business, products, productCount, reviews, documents, media, team, work, copies] = await Promise.all([
+  const businessId = business.id;
+  const [row, products, productCount, reviews, cover, copies] = await Promise.all([
     prisma.business.findUniqueOrThrow({
       where: { id: businessId },
       select: {
-        displayName: true, tradeName: true, description: true, verificationTier: true,
+        displayName: true, description: true, verificationTier: true,
         verifiedAt: true, responseTimeMedianMs: true, establishedYear: true,
         locations: {
           where: { published: true },
@@ -292,56 +70,11 @@ async function sectionData(
         buyer: { select: { fullName: true, buyerCompany: { select: { name: true } } } },
       },
     }),
-    prisma.document.findMany({
-      /*
-       * The fence, in the query. A trade licence that never leaves the database
-       * cannot reach a page by any route — which is a stronger guarantee than
-       * a component that remembers to filter.
-       */
-      /*
-         And `isPublic`, which is the seller's own decision on top of the kind
-         fence. A document becomes public because somebody said so, never
-         because it was uploaded — the column defaults to false for exactly that
-         reason.
-
-         `reviewedAt` is the other half, added by board 3e. The seller's wish to
-         publish is not on its own a licence to publish: a certificate reaches
-         this block only once a moderator has looked at it, which is what makes
-         `In review · 2 working days` on the seller's screen a description of
-         where the file actually is rather than a courtesy. Two columns because
-         they record two people's decisions — collapsed into one, either the
-         seller publishes unreviewed or the moderator publishes something the
-         seller asked to hide.
-      */
-      where: {
-        businessId,
-        isPublic: true,
-        reviewedAt: { not: null },
-        kind: { in: [...PUBLISHABLE_DOCUMENT_KINDS] },
-      },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        filename: true,
-        displayName: true,
-        validUntil: true,
-        kind: true,
-      },
+    prisma.media.findFirst({
+      where: { businessId, kind: { in: ["storefront", "cover"] } },
+      orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
+      select: { storagePath: true },
     }),
-    prisma.media.findMany({
-      where: { businessId, kind: { in: ["storefront", "cover", "logo"] } },
-      orderBy: { sortOrder: "asc" },
-      select: { id: true, kind: true, storagePath: true, alt: true },
-    }),
-    prisma.teamMember.findMany({
-      where: { businessId },
-      orderBy: { sortOrder: "asc" },
-      select: {
-        id: true, name: true, role: true, phone: true,
-        media: { select: { storagePath: true } },
-      },
-    }),
-    options.work ? sectionWorkFor(businessId) : Promise.resolve(null),
     /*
        Board `12g-s`. Uncached, and on purpose: this loader runs outside a
        request in the storefront suites, where `unstable_cache` has no store,
@@ -351,25 +84,19 @@ async function sectionData(
     readEntryRows().then(copiesFrom),
   ]);
 
-  const cover = media.find((entry) => entry.kind === "storefront" || entry.kind === "cover");
-  const logo = media.find((entry) => entry.kind === "logo");
-
   return {
-    kind: options.kind,
-    copy: copies[options.kind],
-    work,
+    // A firm that sells both leads with its catalogue, so its shared sections speak goods.
+    copy: copies[business.sellsKind === "services" ? "services" : "goods"],
     business: {
-      slug,
-      displayName: business.displayName,
-      tradeName: business.tradeName,
-      description: business.description,
-      verificationTier: business.verificationTier,
-      verifiedAt: business.verifiedAt,
-      responseTimeMedianMs: business.responseTimeMedianMs,
-      establishedYear: business.establishedYear,
-      logoUrl: logo ? publicUrl(MEDIA_BUCKET, logo.storagePath) : null,
+      slug: business.slug,
+      displayName: row.displayName,
+      description: row.description,
+      verificationTier: row.verificationTier,
+      verifiedAt: row.verifiedAt,
+      responseTimeMedianMs: row.responseTimeMedianMs,
+      establishedYear: row.establishedYear,
     },
-    locations: business.locations.map((location) => ({
+    locations: row.locations.map((location) => ({
       id: location.id,
       type: location.type,
       emirate: location.emirate,
@@ -394,7 +121,6 @@ async function sectionData(
       imageUrl: null,
     })),
     productCount,
-    categories: [],
     reviews: reviews.map((review) => ({
       id: review.id,
       /*
@@ -422,40 +148,6 @@ async function sectionData(
           ? null
           : reviews.reduce((sum, review) => sum + review.overall, 0) / reviews.length,
     },
-    documents: documents.map((document) => ({
-      id: document.id,
-      /*
-         The name a buyer would use, never the filename.
-
-         This was `document.filename` — whatever came off the seller's desktop,
-         rendered onto their shop window. "scan_0043_final.pdf" is the polite
-         version; the impolite one is a filename containing their licence
-         number. A public document is now required by the database to carry a
-         display name, so the fallback here is for rows that predate that and
-         should not be public anyway.
-      */
-      title: document.displayName ?? document.filename,
-      validUntil: document.validUntil,
-      kind: document.kind,
-      // A route, never the storage path. The bucket is private and stays that
-      // way; the route signs a link at request time.
-      href: `/b/${slug}/d/${document.id}`,
-    })),
-    brands: media
-      .filter((entry) => entry.kind === "logo")
-      .map((entry) => ({
-        id: entry.id,
-        name: entry.alt ?? "",
-        logoUrl: publicUrl(MEDIA_BUCKET, entry.storagePath),
-      })),
-    team: team.map((member) => ({
-      id: member.id,
-      name: member.name,
-      role: member.role,
-      maskedPhone: member.phone ? maskPhone(member.phone) : null,
-      photoUrl: member.media ? publicUrl(MEDIA_BUCKET, member.media.storagePath) : null,
-    })),
-    specRows: [],
     heroImageUrl: cover ? publicUrl(MEDIA_BUCKET, cover.storagePath) : null,
   };
 }

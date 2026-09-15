@@ -69,22 +69,21 @@ export const PAIRED_STRINGS = [
     params: [],
     suppressible: false,
   },
-  // ── 5c-s · the shared storefront sections ──────────────────────────────────
+  // ── 1d · the goods storefront overview's sections ─────────────────────────
   {
     key: "section.hero.enquire",
     services: "storefront.request_quote",
-    surfaces: ["5c-s"],
-    consumers: ["components/storefront/Hero.tsx", "components/storefront/EnquiryForm.tsx"],
+    surfaces: ["1d"],
+    consumers: ["components/storefront/Hero.tsx"],
     params: [],
     suppressible: false,
   },
   {
     key: "section.enquiry.title",
     services: "storefront_services.composer.title",
-    // The shared section's heading, and the same composer's heading wherever a firm that sells work is enquired of.
-    surfaces: ["5c-s", "1d-s", "1e-s", "1f-s"],
+    // The composer's heading wherever a firm that sells work is enquired of.
+    surfaces: ["1d-s", "1e-s", "1f-s"],
     consumers: [
-      "components/storefront/EnquiryForm.tsx",
       "app/(public)/b/[slug]/_services.tsx",
       "app/(public)/b/[slug]/page.tsx",
       "app/(public)/b/[slug]/services/page.tsx",
@@ -94,17 +93,9 @@ export const PAIRED_STRINGS = [
     suppressible: false,
   },
   {
-    key: "section.enquiry.default_intro",
-    services: "section.enquiry.default_intro_services",
-    surfaces: ["5c-s"],
-    consumers: ["components/storefront/EnquiryForm.tsx"],
-    params: [],
-    suppressible: false,
-  },
-  {
     key: "section.reviews.title",
     services: "section.reviews.title_services",
-    surfaces: ["5c-s"],
+    surfaces: ["1d"],
     consumers: ["components/storefront/Reviews.tsx"],
     params: [],
     suppressible: false,

@@ -78,9 +78,8 @@ let seq = 0;
  * Everything the fixtures made, so it can be taken away again.
  *
  * This suite used to leave a top-level category behind on every run. A
- * top-level category is a **sector** — the unit the storefront template model
- * is organised around and the denominator of the store count every builder
- * screen shows before a save — so a suite that leaks one per run makes any
+ * top-level category is a **sector** — the unit `business.sector_id` and every
+ * sector-scoped count is organised around — so a suite that leaks one per run makes any
  * assertion about sectors flaky, in the same way the leaked listings made the
  * dedupe scan miss its own pair.
  */

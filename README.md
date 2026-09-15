@@ -165,7 +165,7 @@ in [docs/deployments.md](docs/deployments.md).
 
 ## The three things that become migrations if ignored
 
-1. A verification badge must never take a seller theme colour.
+1. A verification badge must never take a storefront colour.
 2. A product must never gain a price field on a public surface.
 3. Every superadmin state change must write an audit row with a written reason.
 

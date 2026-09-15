@@ -5,7 +5,6 @@ import { Prisma } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { formatPhone, toE164 } from "@/lib/format/phone";
 import { checkRate, recordHit, requesterKey, retryAfterSeconds } from "@/lib/rate-limit";
-import { teamNumberKey } from "@/lib/contact/number-keys";
 import {
   mobileFieldValue,
   readLeadFields,
@@ -114,9 +113,6 @@ export async function landlinesFor(businessId: string): Promise<Landlines | null
         select: { id: true, phone: true },
         orderBy: [{ type: "asc" }, { createdAt: "asc" }, { id: "asc" }],
       },
-      // The team section's lines default to the branch line, so they are
-      // masked with it and revealed with it (`teamNumberKey`).
-      teamMembers: { select: { id: true, phone: true }, orderBy: [{ sortOrder: "asc" }, { id: "asc" }] },
     },
   });
   if (!business) return null;
@@ -127,7 +123,6 @@ export async function landlinesFor(businessId: string): Promise<Landlines | null
     numbers[key] = { display: formatPhone(phone), tel: toE164(phone) ?? phone.replace(/[^\d+]/g, "") };
   };
   for (const location of business.locations) add(location.id, location.phone);
-  for (const member of business.teamMembers) add(teamNumberKey(member.id), member.phone);
   if (Object.keys(numbers).length === 0) return null;
 
   const head = business.locations[0];

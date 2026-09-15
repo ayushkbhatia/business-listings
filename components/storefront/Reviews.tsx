@@ -4,7 +4,7 @@ import { t } from "@/lib/i18n";
 import type { SectionProps } from "@/lib/storefront/render-data";
 
 /**
- * Section 9 — reviews.
+ * Reviews, on the overview.
  *
  * Composes `ReviewCard`, which was extracted from `/b/[slug]/reviews` for this
  * section rather than copied. The inventory's note on `Thread` says why: a
@@ -12,8 +12,8 @@ import type { SectionProps } from "@/lib/storefront/render-data";
  * thing a record must never do, and two copies of this markup would have
  * drifted the first time somebody changed one.
  *
- * No seller-fillable fields, and no way to hide a bad one. A review is removed
- * by staff with a written reason or it is shown.
+ * No way for a seller to hide a bad one. A review is removed by staff with a
+ * written reason or it is shown.
  */
 export function Reviews({ data }: SectionProps) {
   return (

@@ -31,7 +31,6 @@ import { SpecTable } from "@/components/domain";
 import Link from "next/link";
 import { EMIRATES } from "@/lib/uae";
 import { getActor } from "@/lib/auth/session";
-import { navPages } from "@/lib/storefront/pages";
 
 export const revalidate = 300;
 
@@ -175,10 +174,6 @@ export default async function CataloguePage({ params, searchParams }: Params) {
     view.products.length > 0 &&
     view.products.every((product) => product.availability === "out_of_stock");
 
-  // Template pages marked for the nav. Empty where the trade has no template.
-
-  const pages = business.sectorId ? await navPages(business.sectorId) : [];
-
   /*
      One recipient preview, built once. The tray, the price-list button and the
      zero-result composer all send to the same seller — criterion 3's whole
@@ -229,8 +224,8 @@ export default async function CataloguePage({ params, searchParams }: Params) {
       }
       footer={<DirectoryFooter />}
     >
-      <div data-theme={business.themePreset ?? "default"}>
-        <StorefrontHeader business={business} active="products" pages={pages} />
+      <div data-theme="default">
+        <StorefrontHeader business={business} active="products" />
 
         <div className="mx-auto mt-5 max-w-7xl px-5 pb-[var(--section-pad)]">
           {/*
