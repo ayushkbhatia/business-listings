@@ -12,7 +12,7 @@ import {
   signUpload,
 } from "@/lib/storage";
 import { t } from "@/lib/i18n";
-import { isCheckedByUs, isCredential, isPublishable } from "@/lib/verification/credentials";
+import { isCheckedByUs, isCredential } from "@/lib/verification/credentials";
 import { getSellerSeat } from "../_shell";
 
 /**
@@ -169,74 +169,4 @@ export async function deleteDocument(formData: FormData): Promise<DeleteResult> 
 
   revalidatePath("/dashboard/verification");
   return { ok: true };
-}
-
-export type VisibilityResult = { ok: true; isPublic: boolean } | { ok: false; error: string };
-
-/**
- * Public or hidden — the seller's own choice, and only for their own uploads.
- *
- * Board 3e's fourth correction: visibility was three values with no owner.
- * `Badge only` belongs to the licence and the TRN and is not a preference,
- * because the badge is what the platform says about a business rather than what
- * the business says about itself. What a seller does control is whether a
- * certificate they uploaded is named on their storefront.
- *
- * Turning it on does not publish it. `Document.reviewedAt` is the other half of
- * the storefront query, so a credential goes to `In review · 2 working days`
- * and reaches the shop window when somebody has looked. Turning it back off
- * clears the review, because the queue holds things a seller has asked for and
- * this is them withdrawing the ask.
- *
- * Never the tier, and there is no branch here that could reach it.
- */
-export async function setVisibility(formData: FormData): Promise<VisibilityResult> {
-  const seat = await getSellerSeat();
-  if (!seat) return { ok: false, error: t("dev.no_seat_title") };
-  assertCanEditListing(seat.actor);
-
-  const document = await prisma.document.findUnique({
-    where: { id: String(formData.get("id") ?? "") },
-    select: { id: true, kind: true, businessId: true, isPublic: true, displayName: true },
-  });
-  if (!document || document.businessId !== seat.businessId) {
-    return { ok: false, error: t("product.not_found") };
-  }
-
-  /*
-     A trade licence has no public form to choose between. The storefront query
-     fences it out by kind, so allowing the flag would set a column that decides
-     nothing and read, on this screen, as a choice the seller had made.
-  */
-  if (!isPublishable(document.kind)) {
-    return { ok: false, error: t("verify_listing.who_badge_only") };
-  }
-
-  const next = String(formData.get("public") ?? "") === "true";
-
-  /*
-     `document_public_has_a_name` refuses a public row with no display name, and
-     it is right to: the storefront lists the name and the month, so a
-     certificate published as `scan_0043_final.pdf` would be a public page
-     naming a file. Caught here so the seller reads a sentence about what to do
-     rather than a constraint violation.
-  */
-  if (next && !document.displayName) {
-    return { ok: false, error: t("verify_listing.name_required") };
-  }
-
-  await prisma.document.update({
-    where: { id: document.id },
-    data: {
-      isPublic: next,
-      // Asking again is a fresh ask. Withdrawing it takes the row out of the
-      // queue rather than leaving a decision pending on something nobody wants
-      // published any more.
-      ...(next ? { reviewedAt: null, reviewReason: null } : {}),
-    },
-  });
-
-  revalidatePath("/dashboard/verification");
-  revalidatePath(`/b/${seat.businessId}`);
-  return { ok: true, isPublic: next };
 }

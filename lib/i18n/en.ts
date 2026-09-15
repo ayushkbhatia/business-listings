@@ -6064,7 +6064,7 @@ export const en = {
   // badges, moved out of a lookup table in lib/media/references.ts that
   // check:tokens cannot see — it reads JSX under app and components, and never
   // looks in lib.
-  "media.surface.certificates": "Certificates on your listing",
+  "media.surface.certificates": "Verification · seen by our team",
   "media.surface.cover": "Storefront cover",
   "media.surface.logo": "Logo",
   "media.surface.gallery": "Listing profile",
@@ -6687,6 +6687,8 @@ export const en = {
   "verify_listing.no_expiry": "No expiry",
   "verify_listing.state_checked": "Checked {when}",
   "verify_listing.state_unchecked": "Not checked yet",
+  "verify_listing.who_team_only": "Our team · on file",
+  "verify_listing.who_products": { one: "Buyers · on {formatted} product", other: "Buyers · on {formatted} products" },
   // The badge is platform output, not a seller preference — which is why this
   // column states that it cannot be changed rather than offering a control
   // that would be refused.
@@ -6695,28 +6697,18 @@ export const en = {
 
   // ── Uploaded by you ──
   "verify_listing.uploaded_title": "Uploaded by you",
-  "verify_listing.uploaded_hint": "We hold these and show the name and expiry month. We do not check them, so they carry no badge.",
+  "verify_listing.uploaded_hint": "Kept on file and seen by our team. We do not check them, so they carry no badge.",
   "verify_listing.uploaded_caption": "Certificates and approvals you have uploaded",
-  "verify_listing.uploaded_empty": "Nothing uploaded yet. Certificates and approvals put you in the filters buyers use — they never change your tier.",
+  "verify_listing.uploaded_empty": "Nothing uploaded yet. Certificates and approvals stay on file with our team — they never change your tier.",
   "verify_listing.state_on_file": "On file",
   "verify_listing.state_expiring": { one: "Expiring · {formatted} day", other: "Expiring · {formatted} days" },
-  "verify_listing.state_in_review": "In review · {days} working days",
   "verify_listing.state_lapsed": "Lapsed",
-  "verify_listing.who_public": "Public · name and month",
-  "verify_listing.who_hidden": "Hidden",
-  "verify_listing.who_in_review": "Hidden while in review",
-  // The consequence, stated where the table ends. A credential is a filter, and
-  // nothing else — the board's version implied a lapse cost you standing
-  // generally, and it costs you one filter.
-  "verify_listing.uploaded_footer": "A credential here puts you in the filters buyers use — it never changes your tier or your badge. Reviewed by our moderation queue, {days} working days.",
-  "verify_listing.review_reason": "We could not publish this: {reason}",
+  // The consequence, stated where the table ends. This said a credential put
+  // the seller in "the filters buyers use"; no buyer filter reads one, and
+  // since the storefront builder was cut no public page names one either.
+  "verify_listing.uploaded_footer": "Buyers see a certificate only on a product you attach it to. It never changes your tier or your badge.",
 
   // ── Visibility, the seller's own choice ──
-  "verify_listing.visibility": "Who sees {name}",
-  "verify_listing.make_public": "Show on my listing",
-  "verify_listing.make_hidden": "Hide from my listing",
-  "verify_listing.withdraw": "Withdraw the request",
-  "verify_listing.public_hint": "We show the name and the expiry month. The file itself is never published or linked.",
 
   // ── The rail: when your licence expires ──
   "verify_listing.expiry_title": "When your licence expires",
@@ -6736,15 +6728,15 @@ export const en = {
   "verify_listing.action_title": "Action needed",
   "verify_listing.action_licence": "Your trade licence expires in {days} days. On the day it lapses your listing loses the licence-verified badge and stops matching the licence-verified filter.",
   "verify_listing.action_licence_lapsed": "Your trade licence expired on {when}. Your listing has dropped to tier 1 and lost the licence-verified badge.",
-  "verify_listing.action_credential": "Your {name} expires in {days} days. Buyers filtering for it stop seeing you the day it lapses. Your tier and badge are unaffected.",
-  "verify_listing.action_credential_lapsed": "Your {name} expired on {when}. Buyers filtering for it no longer see you. Your tier and badge are unaffected.",
+  "verify_listing.action_credential": "Your {name} expires in {days} days. Upload the renewal so the record we hold stays current. Your tier and badge are unaffected.",
+  "verify_listing.action_credential_lapsed": "Your {name} expired on {when}. Upload the renewal so the record we hold is current. Your tier and badge are unaffected.",
   "verify_listing.upload_renewal": "Upload renewal",
   "verify_listing.action_none": "Nothing needs your attention. Your licence has {days} days to run and no certificate is inside its notice window.",
 
   // ── The rail: what buyers see ──
   "verify_listing.buyers_title": "What buyers see",
   "verify_listing.buyers_badge": "The licence-verified badge, and the date we checked it",
-  "verify_listing.buyers_certs": "Certificate names and expiry months",
+  "verify_listing.buyers_no_certs": "The certificates you upload here, unless you attach one to a product",
   "verify_listing.buyers_no_files": "Never the document files themselves",
   "verify_listing.buyers_no_trn": "Never your full TRN or licence scan",
   "verify_listing.buyers_shown": "Shown",
@@ -6752,7 +6744,7 @@ export const en = {
 
   // ── Upload ──
   "verify_listing.documents": "Documents",
-  "verify_listing.documents_hint": "Your trade licence and VAT certificate are only ever seen by our team. They are never on your public listing and never linked from it. Certificates, catalogues and datasheets can be shown on your storefront if you choose.",
+  "verify_listing.documents_hint": "Your trade licence and VAT certificate are only ever seen by our team. They are never on your public listing and never linked from it. A certificate, catalogue or datasheet reaches buyers only on a product you attach it to.",
   "verify_listing.upload": "Upload a document",
   "verify_listing.upload_hint": "PDF, JPEG or PNG, up to 16 MB.",
   "verify_listing.kind": "What this is",
@@ -6760,11 +6752,11 @@ export const en = {
   // upload, because the name is also what `document_public_has_a_name`
   // requires before a row can be published — discovering that at the moment a
   // seller tries to publish would be a refusal with nothing to do about it.
-  "verify_listing.field_name": "What buyers should call it",
+  "verify_listing.field_name": "What it is called",
   "verify_listing.field_name_hint": "ISO 9001:2015",
   "verify_listing.field_reference": "Certificate number",
   "verify_listing.field_valid_until": "Valid until",
-  "verify_listing.name_required": "Give the certificate the name a buyer would recognise — \u201cISO 9001:2015\u201d, not the file name. It is what your listing shows.",
+  "verify_listing.name_required": "Give the certificate the name it is known by — \u201cISO 9001:2015\u201d, not the file name.",
   "verify_listing.kind.trade_licence": "Trade licence",
   "verify_listing.kind.vat_certificate": "VAT certificate",
   "verify_listing.kind.certificate": "Certificate or approval",

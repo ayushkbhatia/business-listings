@@ -340,17 +340,21 @@ describe("deleting a shared file", () => {
     }
   });
 
-  it("never says nothing references a file that is live on the listing", async () => {
+  it("never says nothing references a certificate held for verification", async () => {
     /*
-       The board's own failure mode, one level down. A published certificate has
-       no product attachment, and the first version of this preview asked only
-       about products — so it told the seller a document live on their
-       storefront was referenced by nothing.
+       The board's own failure mode, one level down. A certificate has no
+       product attachment, and the first version of this preview asked only
+       about products — so it told the seller a document in use was referenced
+       by nothing, and offered it up for deletion.
+
+       It read "live on the listing" until the storefront builder was cut. No
+       public page names an uploaded certificate now; it is still in use, on
+       file for verification, and still not "nothing".
     */
     const id = await document();
     await prisma.document.update({
       where: { id },
-      data: { isPublic: true, displayName: `${PREFIX} public cert` },
+      data: { kind: "certificate", displayName: `${PREFIX} public cert` },
     });
 
     const preview = await previewDelete(businessId, encodeFileId("document", id));

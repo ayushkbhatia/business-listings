@@ -27,7 +27,7 @@ export const PUBLISHABLE_DOCUMENT_KINDS = ["certificate", "catalogue", "datashee
  * kinds that can never be published, because a document that decides a badge is
  * a document we hold rather than one the seller shows.
  *
- * Stated as a constant rather than as `!isPublishable(kind)` so that adding a
+ * Stated as a constant rather than as "not publishable" so that adding a
  * kind forces a decision about which table it belongs in. A document in neither
  * list renders in neither table, which is visible; a document that silently
  * defaults into `Verified by us` would be a certificate claiming a check.
@@ -43,58 +43,37 @@ export function isCheckedByUs(kind: string): kind is CheckedByUsKind {
 /**
  * What a row in `Uploaded by you` says, and it is never `Verified`.
  *
- * Four states, and each one names a different consequence:
+ * Three states, and each one names a different consequence:
  *
- *  · `on_file`     we hold it and it is good. Nothing to do.
- *  · `in_review`   the seller asked to publish it and nobody has looked yet.
- *                  Two working days, in the moderation queue.
- *  · `expiring`    inside the notice window. It still counts; it will not.
- *  · `lapsed`      past its validity. Dropped from the filters that read it,
- *                  and **nothing else** — the tier and the badge are untouched,
- *                  which is the whole reason this is a different pill from the
- *                  licence's.
+ *  · `on_file`     we hold it and it is current. Nothing to do.
+ *  · `expiring`    inside the notice window. Time to upload the renewal.
+ *  · `lapsed`      past its validity, and **nothing else** follows — the tier
+ *                  and the badge are untouched, which is the whole reason this
+ *                  is a different pill from the licence's.
+ *
+ * There was a fourth, `in_review`, when a seller could ask for a certificate to
+ * be named on their storefront. No storefront names one since the builder cut
+ * (15 Sep 2026), so there is nothing to ask for and nothing to review.
  *
  * A lapsed credential is never deleted. Board 3e open question 5: it is
  * evidence of a past state, and deleting it makes the tier history unauditable.
  */
-export type CredentialState = "on_file" | "in_review" | "expiring" | "lapsed";
+export type CredentialState = "on_file" | "expiring" | "lapsed";
 
 export interface CredentialInput {
   validUntil: Date | null;
-  isPublic: boolean;
-  reviewedAt: Date | null;
 }
 
 /**
  * `now` is a parameter and never `Date.now()` in the body — the same rule as
  * `licenceExpired`, and for the same reason: this runs in render.
- *
- * Order matters. A lapsed document that is also waiting on a review reads
- * `Lapsed`, because that is the state with the consequence: publishing a
- * certificate that expired last month is not a decision worth queueing.
  */
 export function credentialState(document: CredentialInput, now: Date): CredentialState {
   if (document.validUntil) {
     if (document.validUntil.getTime() < now.getTime()) return "lapsed";
-    if (daysUntil(document.validUntil, now) <= LICENCE_NOTICE_DAYS) {
-      return document.isPublic && !document.reviewedAt ? "in_review" : "expiring";
-    }
+    if (daysUntil(document.validUntil, now) <= LICENCE_NOTICE_DAYS) return "expiring";
   }
-  if (document.isPublic && !document.reviewedAt) return "in_review";
   return "on_file";
-}
-
-/**
- * Is this document actually on the storefront?
- *
- * Two facts, because they are two people's decisions. The seller says whether
- * they want it public; a moderator says whether it may be. `lib/storefront/
- * loader.ts` asks the same question in SQL, and this is the copy of it the
- * seller's own screen reads so that the `WHO SEES IT` column cannot claim a
- * visibility the public query does not grant.
- */
-export function isOnStorefront(document: CredentialInput): boolean {
-  return document.isPublic && document.reviewedAt !== null;
 }
 
 /**
@@ -108,9 +87,8 @@ export function isOnStorefront(document: CredentialInput): boolean {
  * them here under a sentence about filters would be a sentence that is wrong
  * for two of its three rows.
  *
- * So two sets, not one. `isPublishable` governs review and visibility, because
- * anything reaching a storefront needs both. This governs what board 3e's
- * second table shows.
+ * So two sets, not one. `PUBLISHABLE_DOCUMENT_KINDS` fences what a public route
+ * may serve; this governs what board 3e's second table shows.
  */
 export const CREDENTIAL_KINDS = ["certificate"] as const;
 
@@ -119,11 +97,8 @@ export function isCredential(kind: DocumentKind): boolean {
 }
 
 /**
- * Anything a seller can put on their storefront.
- *
- * The fence the storefront query already applies, read from the same constant
- * so the seller's visibility control and the public query cannot disagree about
- * what is publishable.
+ * A kind `/b/:slug/d/:document` may serve. Staff review and the credential
+ * queue read the same fence to refuse a trade licence.
  */
 export function isPublishable(kind: DocumentKind): boolean {
   return (PUBLISHABLE_DOCUMENT_KINDS as readonly string[]).includes(kind);

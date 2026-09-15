@@ -46,6 +46,7 @@ async function removeFixtures() {
   await purgeAuditRows({ subject: { in: documents.map((document) => `Document:${document.id}`) } });
   await prisma.notificationDelivery.deleteMany({ where: { businessId: { in: ids } } });
   await prisma.notificationPreference.deleteMany({ where: { businessId: { in: ids } } });
+  await prisma.product.deleteMany({ where: { businessId: { in: ids } } });
   await prisma.document.deleteMany({ where: { businessId: { in: ids } } });
   await prisma.user.deleteMany({ where: { businessId: { in: ids } } });
   await prisma.business.deleteMany({ where: { slug: { startsWith: PREFIX } } });
@@ -217,8 +218,7 @@ describe("criterion 6 — a document we have not checked never sets the tier", (
     });
 
     const before = await getVerification(business.id);
-    expect(before!.credentials[0]!.state).toBe("in_review");
-    expect(before!.credentials[0]!.onStorefront).toBe(false);
+    expect(before!.credentials[0]!.state).toBe("on_file");
 
     const result = await approveDocument({
       actor: actor(moderatorId, "staff_moderator"),
@@ -230,7 +230,6 @@ describe("criterion 6 — a document we have not checked never sets the tier", (
     const after = await getVerification(business.id);
     expect(after!.tier).toBe(VERIFIED_TIER);
     expect(after!.credentials[0]!.state).toBe("on_file");
-    expect(after!.credentials[0]!.onStorefront).toBe(true);
 
     // Non-negotiable 3: the decision is in the log, with the words.
     const audit = await prisma.auditEvent.findFirst({
@@ -313,6 +312,55 @@ describe("criterion 6 — a document we have not checked never sets the tier", (
     expect(after.isPublic).toBe(false);
     expect(after.reviewedAt).not.toBeNull();
     expect(after.reviewReason).toContain("full page");
+  });
+});
+
+describe("who sees an uploaded certificate", () => {
+  it("counts the products a buyer can open that list it, and nothing else", async () => {
+    /*
+       The one public path left for an uploaded certificate. There was a
+       show-on-my-listing switch; since the storefront builder cut no public
+       page names one, so the column states where it is read rather than
+       offering a choice with no effect. Drafts are nobody's page yet.
+    */
+    const business = await listing(100);
+    const leaf = await prisma.category.findFirstOrThrow({
+      where: { parentId: { not: null } },
+      orderBy: { id: "asc" },
+      select: { id: true },
+    });
+    const document = await prisma.document.create({
+      data: {
+        businessId: business.id,
+        kind: "certificate",
+        storagePath: `${business.id}/certificate/wras.pdf`,
+        filename: "wras.pdf",
+        displayName: "WRAS approval",
+      },
+      select: { id: true },
+    });
+
+    const onFile = await getVerification(business.id);
+    expect(onFile!.credentials[0]!.onProducts).toBe(0);
+
+    const product = (status: "live" | "draft") =>
+      prisma.product.create({
+        data: {
+          businessId: business.id,
+          name: `WRAS ${status} valve`,
+          slug: `${business.slug}-${status}`,
+          categoryId: leaf.id,
+          availability: "in_stock",
+          status,
+          documents: { create: { documentId: document.id } },
+        },
+        select: { id: true },
+      });
+    await product("draft");
+    expect((await getVerification(business.id))!.credentials[0]!.onProducts).toBe(0);
+
+    await product("live");
+    expect((await getVerification(business.id))!.credentials[0]!.onProducts).toBe(1);
   });
 });
 
