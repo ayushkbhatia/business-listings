@@ -256,6 +256,13 @@ describe("every row cites the document", () => {
        `strings.write` joined on board 12g-s, split out of the same borrowed
        `taxonomy.write`: a paired half is what every business of one kind reads,
        written without a deploy. Ops lead alone.
+
+       `contact_lead.read` and `contact_lead.platform.read` joined on the `1d`
+       amendment, when the owner asked that a landline reveal register as a
+       lead in the seller's panel and the site owner's. Neither panel existed
+       when §07 or board 7d were drawn. The seller's list sits with owner and
+       manager, the seats that read the whole unassigned queue; staff's with the
+       ops lead alone, because every row is a buyer's contact details.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
@@ -264,6 +271,8 @@ describe("every row cites the document", () => {
       "business.close",
       "business.merge",
       "business.verification_tier.write",
+      "contact_lead.platform.read",
+      "contact_lead.read",
       "homepage.curate",
       "notification.read",
       "notification.template.write",

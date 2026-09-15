@@ -1,4 +1,4 @@
-import { formatPhone } from "@/lib/format";
+import { MaskedNumber } from "./MaskedNumber";
 import { t } from "@/lib/i18n";
 import type { SectionProps } from "@/lib/storefront/render-data";
 
@@ -26,13 +26,11 @@ export function Header({ data }: SectionProps) {
         )}
       </div>
 
-      {head?.phone && (
-        <a
-          href={`tel:${head.phone}`}
-          className="rounded-tag font-mono text-caption text-brand underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-        >
-          {formatPhone(head.phone)}
-        </a>
+      {head?.maskedPhone && (
+        // Board `1d` amendment: masked, and revealed with the listing's number.
+        <span className="text-caption text-brand">
+          <MaskedNumber numberKey={head.id} masked={head.maskedPhone} />
+        </span>
       )}
     </header>
   );

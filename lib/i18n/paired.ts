@@ -59,6 +59,16 @@ export interface PairedString {
 }
 
 export const PAIRED_STRINGS = [
+  // ── 1d amendment · the contact reveal ──────────────────────────────────────
+  {
+    key: "contact.reveal_note",
+    // Identical words today. Listed because an unpaired key is invisible to the count, not because the wording differs.
+    services: "contact.reveal_note_services",
+    surfaces: ["1d", "1d-s"],
+    consumers: ["lib/contact/storefront.ts"],
+    params: [],
+    suppressible: false,
+  },
   // ── 5c-s · the shared storefront sections ──────────────────────────────────
   {
     key: "section.hero.enquire",

@@ -13,7 +13,7 @@ import {
 import type { ServiceEnquiryOption } from "@/components/domain/ServiceEnquiryComposer";
 import type { PublicBusiness } from "@/lib/db/queries";
 import type { PublicService } from "@/lib/services/service";
-import { formatCount, formatDate, formatDuration, toE164 } from "@/lib/format";
+import { formatCount, formatDate, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import { absoluteUrl } from "@/lib/site";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
@@ -31,7 +31,8 @@ import { JsonLd } from "@/app/(public)/_json-ld";
 import { ShortlistButton, shortlistLabels, toggleShortlistAction } from "@/app/(public)/_shortlist";
 import { StorefrontHeader, storefrontCrumbs } from "./_storefront";
 import { BusinessDetails, HoursPanel, LocationsPanel, VerificationPanel } from "./_rail";
-import { ContactCard } from "./ContactCard";
+import { ContactActions, ContactReveal, RevealNote } from "./ContactReveal";
+import { storefrontContact } from "@/lib/contact/storefront";
 import { ServiceEnquiryForm } from "./ServiceEnquiryForm";
 import { ServiceEnquireDrawer } from "./ServiceEnquireDrawer";
 
@@ -102,13 +103,14 @@ export async function ServicesStorefrontPage({
     </a>
   );
 
+  // Board `1d` amendment — the same reveal the goods overview draws. See `lib/contact/storefront.ts`.
+  const contact = await storefrontContact(business, actor);
+
   const identityActions = (
-    <ContactCard
+    <ContactActions
       layout="row"
-      businessId={business.id}
-      businessSlug={business.slug}
-      phone={head?.phone ?? null}
-      whatsapp={head?.whatsapp ?? null}
+      masked={contact.masked}
+      whatsAppHref={contact.whatsAppHref}
       enquire={toComposer(t("storefront.request_quote"))}
       saveAction={
         <ShortlistButton
@@ -144,11 +146,21 @@ export async function ServicesStorefrontPage({
       />
 
       <div data-theme={business.themePreset ?? "default"}>
+        <ContactReveal
+          businessId={contact.businessId}
+          supplierName={contact.supplierName}
+          formRequired={contact.formRequired}
+          prefill={contact.prefill}
+          initial={contact.initial}
+          note={contact.note}
+          privacyHref={contact.privacyHref}
+        >
         <StorefrontHeader
           business={business}
           active="overview"
           pages={pages}
           actions={identityActions}
+          notice={<RevealNote />}
           {...(photos.length > 0 ? { photoHref: "#photos" } : {})}
         />
 
@@ -280,14 +292,13 @@ export async function ServicesStorefrontPage({
         </div>
 
         <div className="h-16 md:hidden" aria-hidden />
-        <ContactCard
+        <ContactActions
           layout="bar"
-          businessId={business.id}
-          businessSlug={business.slug}
-          phone={head?.phone ?? null}
-          whatsapp={head?.whatsapp ?? null}
+          masked={contact.masked}
+          whatsAppHref={contact.whatsAppHref}
           enquire={toComposer(t("listing.enquire"), true)}
         />
+        </ContactReveal>
       </div>
     </PublicShell>
   );
@@ -481,7 +492,7 @@ function ServicesJsonLd({ business, data }: { business: PublicBusiness; data: Se
               addressCountry: "AE",
             }
           : undefined,
-        telephone: head?.phone ? (toE164(head.phone) ?? head.phone) : undefined,
+        // No `telephone`: the landline is behind the `1d` amendment's form, and JSON-LD is in the page source (`B2`).
         openingHoursSpecification: openingHoursSchema(
           (head?.hours ?? null) as never,
           (head?.ramadanHours ?? null) as never,

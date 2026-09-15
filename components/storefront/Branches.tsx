@@ -1,6 +1,6 @@
 import { MapCanvas } from "@/components/display";
-import { formatPhone } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { MaskedNumber } from "./MaskedNumber";
 import type { SectionProps } from "@/lib/storefront/render-data";
 
 /**
@@ -62,13 +62,11 @@ export function Branches({ data }: SectionProps) {
               {location.areaName && (
                 <p className="text-caption text-muted">{location.areaName}</p>
               )}
-              {location.phone && (
-                <a
-                  href={`tel:${location.phone}`}
-                  className="mt-1 inline-block rounded-tag font-mono text-caption text-brand underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-                >
-                  {formatPhone(location.phone)}
-                </a>
+              {location.maskedPhone && (
+                // Board `1d` amendment: masked, and revealed with the listing's number.
+                <span className="mt-1 block text-caption text-brand">
+                  <MaskedNumber numberKey={location.id} masked={location.maskedPhone} />
+                </span>
               )}
             </li>
           ))}

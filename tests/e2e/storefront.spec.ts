@@ -258,27 +258,20 @@ test.describe("maps and masking", () => {
     expect(body).toMatch(/•/);
 
     /*
-     * Live from handoff 2 step 3. Masking is not a growth trick — the reveal is
-     * the event that proves the directory delivered the seller something, and
-     * it is what their subscription is ultimately judged on. So it is a real
-     * control now, and asking for it is recorded.
-     */
-    /*
-     * Board 1d moved this into the identity block, where the control *is* the
-     * masked number rather than a button beside it. The behaviour is unchanged
-     * and is the part worth testing: it renders masked, a click reveals it, and
-     * the reveal is recorded.
-     */
-    /*
      * Matched on behaviour, not on a label. Board 1d puts the masked number
      * itself on the control at desktop width and a "Call" button in the sticky
      * bar below `md`, so a fixed name would test one breakpoint and silently
      * skip the other.
+     *
+     * Since the `1d` amendment the click asks for three fields first; the whole
+     * flow is `storefront-contact-reveal.spec.ts`. What stays here is that the
+     * control exists, is masked, and opens the ask rather than a number.
      */
     const reveal = page.getByRole("button", { name: /•|^Call$/ });
     await expect(reveal.first()).toBeEnabled();
     await reveal.first().click();
-    expect(await page.textContent("body")).toMatch(/\+971|^0\d/m);
+    await expect(page.getByRole("dialog", { name: "Access phone number in 30 seconds" })).toBeVisible();
+    expect(await page.locator("main a[href^='tel:']").count()).toBe(0);
   });
 
   test("the TRN is masked to first three and last four", async ({ page }) => {

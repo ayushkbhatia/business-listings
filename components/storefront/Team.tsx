@@ -1,5 +1,6 @@
 import { LogoTile } from "@/components/display";
-import { formatPhone } from "@/lib/format";
+import { teamNumberKey } from "@/lib/contact/number-keys";
+import { MaskedNumber } from "./MaskedNumber";
 import { picks, type SectionProps } from "@/lib/storefront/render-data";
 import { t } from "@/lib/i18n";
 
@@ -39,13 +40,11 @@ export function Team({ data, content }: SectionProps) {
             <div className="min-w-0">
               <p className="text-body-sm text-ink">{member.name}</p>
               <p className="text-caption text-muted">{member.role}</p>
-              {member.phone && (
-                <a
-                  href={`tel:${member.phone}`}
-                  className="rounded-tag font-mono text-caption text-brand underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
-                >
-                  {formatPhone(member.phone)}
-                </a>
+              {member.maskedPhone && (
+                // Board `1d` amendment: usually the branch line, so masked with it.
+                <span className="block text-caption text-brand">
+                  <MaskedNumber numberKey={teamNumberKey(member.id)} masked={member.maskedPhone} />
+                </span>
               )}
             </div>
           </li>

@@ -624,3 +624,26 @@
      makes it beat a smaller named breakpoint. */
   --breakpoint-board: 90rem;
 }
+
+/*
+   Board `1d` amendment — the contact form's scrim (`B14`, `B16`).
+
+   The dialog is in the top layer, so its `::backdrop` covers the viewport rather
+   than the page box. Blurred where the browser can, and a scrim dark enough to
+   isolate the card on its own where it cannot: never an unblurred, unscrimmed
+   storefront behind a floating form.
+*/
+.lead-gate::backdrop {
+  background: color-mix(in srgb, var(--ink) 34%, transparent);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+@supports not ((backdrop-filter: blur(4px)) or (-webkit-backdrop-filter: blur(4px))) {
+  .lead-gate::backdrop {
+    background: color-mix(in srgb, var(--ink) 72%, transparent);
+  }
+}
+/* The storefront behind it does not scroll while it is open (`B13`). */
+html:has(dialog.lead-gate[open]) {
+  overflow: hidden;
+}

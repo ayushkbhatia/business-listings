@@ -156,7 +156,8 @@ test.describe("board 4f — one account, and the decisions on it", () => {
 
     await page.getByRole("textbox", { name: "Reason" }).fill(`Licence lapsed. ${stamp}`);
     await page.getByRole("button", { name: "Suspend", exact: true }).click();
-    await expect(page.getByText(/off the directory/)).toBeVisible();
+    // The whole confirmation: the health panel's own reason line also says "off the directory".
+    await expect(page.getByText("Suspended. The listing is off the directory.")).toBeVisible();
 
     await page.reload();
     // The reason is on the audit row, not inline (states table, "Suspended").

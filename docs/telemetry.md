@@ -171,6 +171,38 @@ The signed-in side is different and is not covered by the above. A seller's
 and the events are about their own listing. That is ordinary first-party
 product data, and it is what §5's retention window is for.
 
+## 4a. The contact reveal's two cookies (board `1d` amendment, 15 Sep 2026)
+
+Section 4 says a cookie on a public page is a consent question and may not be
+added without revisiting it in the same change. This is that revisit.
+
+The storefront's landline sits behind a three-field form. Two first-party,
+`SameSite=Lax` cookies make that form work, and **neither is set on a visit**:
+
+| Cookie | Set when | Lifetime | What it is for |
+|---|---|---|---|
+| `bl_rsid` | the buyer reveals a number (submits the form, or clicks the chip having answered it before) | browser session | keep the number the buyer asked for shown for the rest of the session, and count that reveal once (`B1`, `B6`) |
+| `bl_vid` | the buyer submits the form | 180 days, `HttpOnly` | do not ask the same browser for the same listing's form twice (`B10`) |
+
+Both answer something the buyer explicitly asked for — *show me this number*,
+*I have already told you who I am* — which is the strictly-necessary case rather
+than tracking. What keeps it there, and must stay true:
+
+1. **Nothing is set for a visitor who does not ask.** The masked page, the
+   dialog opening, a dismissal (`B11`) and a WhatsApp click all set no cookie. A
+   WhatsApp open is recorded with the session only where the buyer already has
+   one from a reveal, and otherwise with none — deduplicating a counter is not
+   something the buyer asked for, so it may not mint an identifier.
+2. **Neither cookie is read for anything else.** No analytics event, no
+   `product_event` row, no search ranking and no personalisation reads them.
+3. **`bl_rsid` is readable by script** so the cached branches tab can ask whether
+   the session revealed. It grants nothing: the server looks the reveal up.
+
+The form itself collects personal data — name, work email, mobile — and says on
+the form, before the tap that sends them, that the supplier receives them. That
+is a disclosure, not a consent basis or a retention window; both are the
+owner's open question (`Q5`) and `contact_lead` has no retention sweep yet.
+
 ## 5. Retention
 
 **`product_event`: 180 days**, deleted by `prunedProductEvents` in

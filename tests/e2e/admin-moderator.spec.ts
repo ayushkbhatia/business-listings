@@ -165,6 +165,17 @@ test.describe("board 12d — the call list is a moderator's to work", () => {
   });
 });
 
+test.describe("phone leads are not a moderator's row", () => {
+  /*
+     Board `1d` amendment. Every row on `/admin/leads` is a buyer's name, work
+     email and mobile; `contact_lead.platform.read` is the ops lead alone.
+  */
+  test("cannot reach /admin/leads", async ({ page }) => {
+    const response = await page.goto("/admin/leads");
+    expect(response?.status()).toBe(404);
+  });
+});
+
 test.describe("the commercial screens a moderator cannot reach", () => {
   /*
    * §07 gives `revenue.read` to finance and ops lead. A moderator's job is the

@@ -7,7 +7,7 @@ import { Button, buttonClassName } from "@/components/primitives";
 import { Breadcrumb, Card, KeyValuePanel, Panel, PublicShell } from "@/components/structure";
 import { ListingCard, tierSpec } from "@/components/domain";
 import { getBusinessBySlug, getSimilarClaimedBusinesses } from "@/lib/db/queries";
-import { formatDate, formatDuration, toE164 } from "@/lib/format";
+import { formatDate, formatDuration } from "@/lib/format";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { t } from "@/lib/i18n";
 import { absoluteUrl } from "@/lib/site";
@@ -20,7 +20,8 @@ import { closedListing } from "@/lib/closure/public";
 import { renderSection } from "@/components/storefront";
 import { storefrontPlan } from "@/lib/storefront/loader";
 import { openingHoursSchema } from "@/lib/trade/open-now";
-import { ContactCard } from "./ContactCard";
+import { ContactActions, ContactReveal, RevealNote } from "./ContactReveal";
+import { storefrontContact } from "@/lib/contact/storefront";
 import {
   BusinessDetails,
   CapabilityChips,
@@ -326,7 +327,7 @@ async function ClaimedStorefront({
      in lib/auth/flow.ts accepts and the sign-in screen will honour.
 
      No save control on the mobile bar. That bar is WhatsApp · Call · Enquire at
-     44px each and the slot is row-only — see `ContactCard`. Adding a fourth
+     44px each and the slot is row-only — see `ContactActions`. Adding a fourth
      control there is a layout decision, and it is in the follow-ups.
   */
   const saveAction = (
@@ -340,6 +341,14 @@ async function ClaimedStorefront({
   );
 
   /*
+     Board `1d` amendment — the landline masked, asked for and revealed in
+     place. Decided once for this render: whether this viewer already revealed
+     in this session, whether the form still stands between them and the
+     number, and what it opens with. See `lib/contact/storefront.ts`.
+  */
+  const contact = await storefrontContact(business, actor);
+
+  /*
      The same actions twice, at opposite breakpoints, hidden with `display`.
 
      Exactly one is in the accessibility tree at any width — `visibility` or
@@ -347,23 +356,19 @@ async function ClaimedStorefront({
      reader, which is the trap board 1b's filter rail already had to avoid.
   */
   const mobileActionBar = (
-    <ContactCard
+    <ContactActions
       layout="bar"
-      businessId={business.id}
-      businessSlug={business.slug}
-      phone={head?.phone ?? null}
-      whatsapp={head?.whatsapp ?? null}
+      masked={contact.masked}
+      whatsAppHref={contact.whatsAppHref}
       enquire={enquireTrigger}
     />
   );
 
   const identityActions = (
-    <ContactCard
+    <ContactActions
       layout="row"
-      businessId={business.id}
-      businessSlug={business.slug}
-      phone={head?.phone ?? null}
-      whatsapp={head?.whatsapp ?? null}
+      masked={contact.masked}
+      whatsAppHref={contact.whatsAppHref}
       enquire={
         <EnquireButton
           businessId={business.id}
@@ -438,22 +443,15 @@ async function ClaimedStorefront({
               ? { "@type": "GeoCoordinates", latitude: head.lat, longitude: head.lng }
               : undefined,
           /*
-             The real number, not the masked one.
+             No `telephone`, since the `1d` amendment.
 
-             The mask exists so that asking for a supplier's number is an event
-             we can count, and that reasoning does not apply to a crawler: it
-             will not send an enquiry, and a search result showing "04 88• ••••"
-             helps nobody. Board 1d says it in as many words — schema is for
-             machines.
+             Board 1d's spec put the real number here — "schema is for
+             machines" — when the number cost one click. Behind three fields it
+             cannot also sit in this page's source: the amendment's `B2` is
+             that a masked number is not in the payload, and JSON-LD is payload
+             every visitor and every scraper receives. A knowledge panel without
+             a phone number costs less than a form anybody can read past.
           */
-          /*
-             E.164, because a crawler cannot infer the country from `04 883
-             4120` and a knowledge panel offering an undialable number is worse
-             than one offering none. The visible `tel:` href has always used
-             `toE164` for exactly this reason; the markup was emitting the
-             stored local form beside it.
-          */
-          telephone: head?.phone ? (toE164(head.phone) ?? head.phone) : undefined,
           /*
              The week as the schema expects it, from the same source the rail
              renders — including the Ramadan override, because a machine reading
@@ -537,11 +535,21 @@ async function ClaimedStorefront({
       ))}
 
       <div data-theme={plan.theme}>
+        <ContactReveal
+          businessId={contact.businessId}
+          supplierName={contact.supplierName}
+          formRequired={contact.formRequired}
+          prefill={contact.prefill}
+          initial={contact.initial}
+          note={contact.note}
+          privacyHref={contact.privacyHref}
+        >
         <StorefrontHeader
           business={business}
           active="overview"
           pages={pages}
           actions={identityActions}
+          notice={<RevealNote />}
           {...(photos.length > 0 ? { photoHref: "#photos" } : {})}
         />
 
@@ -708,9 +716,9 @@ async function ClaimedStorefront({
             panel would be a sector where we quietly stopped showing what we
             checked.
 
-            The contact card sits here for the same reason: the reveal is the
-            event that proves the platform delivered the enquiry, and it is not
-            a seller's to compose away.
+            The contact actions sit in the identity block for the same reason:
+            the reveal is the event that proves the platform delivered the
+            enquiry, and it is not a seller's to compose away.
           */}
 
           {/*
@@ -744,6 +752,7 @@ async function ClaimedStorefront({
         */}
         <div className="h-16 md:hidden" aria-hidden />
         {mobileActionBar}
+        </ContactReveal>
       </div>
     </PublicShell>
   );

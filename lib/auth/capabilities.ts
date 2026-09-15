@@ -126,6 +126,12 @@ export const CAPABILITIES = {
     source: "stated",
     why: "§07 staff table, \"View-as a business\". Looking through a seller's eyes is a privacy event and is audited even though it changes nothing.",
   },
+  "contact_lead.platform.read": {
+    roles: OPS_LEAD_ONLY,
+    audited: false,
+    source: "inferred",
+    why: "Board `1d` amendment, `/admin/leads`: every phone lead on the platform, each a buyer's name, work email and mobile. The owner asked that a reveal be recorded in the superadmin's console, and superadmin in this matrix is the ops lead. Not a moderator: moderation acts on what was published, and a lead list is the asset most likely to walk out, which is 12d's reason for keeping finance off the call list. Not audited, because reading changes nothing — the same call `crm.work` makes about a lead's number. Not a row in \u00a707; flag it if \u00a707 gains one.",
+  },
   "crm.work": {
     roles: ["staff_ops_lead", "staff_moderator"],
     audited: false,
@@ -313,6 +319,12 @@ export const CAPABILITIES = {
     audited: false,
     source: "inferred",
     why: "Board 11c Q4, and not a row in \u00a707 or in board 7d's table \u2014 the matrix has \"Reply to a review\" and stops there. Owner alone, one rung above `review.reply`: a reply is the business answering in public and a dispute is a formal claim it makes about a named customer, sent to our moderators with a two-working-day decision attached. A manager who may answer a review may not accuse the person who wrote it. Flag it if \u00a707 gains a row.",
+  },
+  "contact_lead.read": {
+    roles: ["seller_owner", "seller_manager"],
+    audited: false,
+    source: "inferred",
+    why: "Board `1d` amendment, `/dashboard/leads/phone`: the buyers who gave a name, work email and mobile to see this seller's landline. Owner and manager — the two seats that see the whole enquiry queue, unassigned rows included (`routing.manage`). A phone lead is assigned to nobody, and a sales seat reads the leads assigned to them (board 3j §1), so the whole list is held at the rung that reads the whole queue. Finance has no row. Not a row in board 7d's table; flag it if 7d gains one.",
   },
   "analytics.read": {
     roles: ["seller_owner", "seller_manager", "seller_sales"],

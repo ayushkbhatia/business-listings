@@ -22,6 +22,7 @@ and it is the one that argues back.
 /compare?p=…                            Comparison tray                      [10d]
 /b/:slug                                Storefront overview                   [1d]
 /b/:slug (sells work)                   Storefront, catalogue taken out     [1d-s] built h1ds
+/b/:slug (contact revealed)             The landline asked for, in place     [1d-v] built 15 Sep — was 13a, never routed
 /b/:slug/credentials                    Credentials tab, with a count       [1d-s] built h1ds
 /b/:slug/coverage                       Coverage, one row per service       [1f-s] built h1fs
 /b/:slug/products                       Catalogue                             [1e]
@@ -119,6 +120,7 @@ and it is the one that argues back.
                                         — an enquiry for work: the proposal [3j-s] built 14 Sep, no rail
 /dashboard/leads/:id/thread             Seller message thread                [11b]  built h3 wave 1
 /dashboard/leads/:id/attachments/:doc   The buyer's file, signed for 2 min  [1d-s] built h1ds
+/dashboard/leads/phone                  Phone leads — buyers who revealed   [1d-v] built 15 Sep
 /dashboard/quotes                       Quotes sent pipeline                  [3k]  built h3 wave 1
 /dashboard/quotes/:ref                  One quote, highlighted                [3k]  built h3 wave 1
 /dashboard/quotes/:ref/extend           …with the extend dialog open          [3k]  built h3 wave 1
@@ -166,6 +168,8 @@ and it is the one that argues back.
 /admin/ingest/records/:id               One staged record, raw row verbatim  [12a]  built board pass
 /admin/ingest/dedupe                    Dedupe queue, one pair at a time     [12b]  built h4s2, board pass
 /admin/ingest/dedupe?run=:id            The same queue, one run              [12b]  built board pass
+/admin/leads                            Every phone lead (ops lead)         [1d-v] built 15 Sep
+/admin/leads?supplier=:name             The same, one supplier               [1d-v] built 15 Sep
 /admin/search                           Ranking, boosts, weight history      [12c]  built h4s8
 /admin/search?vector=services           The services vector, same board      [12c-s] built s19
 /admin/categories                       Categories — tree and editor          [4d]  built board pass

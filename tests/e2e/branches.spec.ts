@@ -73,42 +73,35 @@ test.describe("the page a buyer opens on a Thursday afternoon", () => {
     await expect(depot).toContainText("Roof repairs after the storm");
   });
 
-  test("every phone number is a tel: link", async ({ page }) => {
-    // Criterion 13. It read as a number and was not one on the compact rows.
+  test("every branch number is masked until asked for, and a tel: link after", async ({ page }) => {
+    /*
+       The `1d` amendment. Board 1f printed every number in full because the
+       reveal was written once on the overview; with three fields between a
+       buyer and the overview's number, the numbers here are the same reveal's.
+       Criterion 13 still holds once revealed: every number is a `tel:` link.
+    */
+    await expect(page.locator("main a[href^='tel:']")).toHaveCount(0);
+    const masked = page.locator("main").getByRole("button", { name: /^Show the number 0\d \d\d• ••••$/ });
+    await expect(masked.first()).toBeVisible();
+    const branches = await rows(page).count();
+    expect(await masked.count()).toBeGreaterThanOrEqual(branches - 1);
+
+    await masked.first().click();
+    const dialog = page.getByRole("dialog", { name: "Access phone number in 30 seconds" });
+    await dialog.getByLabel("Name").fill("Branches Acceptance");
+    await dialog.getByLabel("Work email").fill(`branches.${Date.now()}@acceptance.test`);
+    await dialog.getByLabel("Mobile").fill("50 000 1616");
+    await dialog.getByRole("button", { name: "Show the number" }).click();
+    await expect(dialog).toBeHidden();
+
     const numbers = page.locator("main a[href^='tel:']");
     await expect(numbers.first()).toBeVisible();
-    expect(await numbers.count()).toBeGreaterThanOrEqual(5);
-    for (const href of await numbers.evaluateAll((links) =>
-      links.map((l) => l.getAttribute("href")),
-    )) {
+    expect(await numbers.count()).toBeGreaterThanOrEqual(branches - 1);
+    for (const href of await numbers.evaluateAll((links) => links.map((l) => l.getAttribute("href")))) {
       // E.164 in the href, because a dialler needs the country code.
       expect(href).toMatch(/^tel:\+971\d+$/);
     }
-  });
-
-  test("shows the number on every branch that has one", async ({ page }) => {
-    /*
-       This page used to hide a number unless `Location.phoneVerified` was true,
-       and nothing writes that column outside the seed — so in production every
-       branch number was hidden from every buyer, while the seeded 80% made the
-       page look correct.
-
-       Asserted as "every branch with a number shows it" rather than a count, so
-       the test says the rule rather than pinning a fixture: a seed that adds a
-       branch should not need this edited, and a gate that came back would fail
-       it whatever the fixture holds.
-    */
-    const branches = await rows(page).count();
-    expect(branches).toBeGreaterThan(0);
-
-    // One `tel:` link per branch at least. `rows()` is the branch list rather
-    // than every `listitem` on the page — the nav and the breadcrumb are lists
-    // too, and counting those made the first version of this expect 33.
-    const numbers = await page.locator("main a[href^='tel:']").count();
-    expect(numbers).toBeGreaterThanOrEqual(branches);
-
-    // And none of them reads as absent. Before the gate came off, every branch
-    // on a production listing rendered this instead of the number.
+    // And none of them reads as absent.
     await expect(page.getByText("Not provided", { exact: true })).toHaveCount(0);
   });
 
@@ -130,12 +123,10 @@ test.describe("the page a buyer opens on a Thursday afternoon", () => {
     expect(blocks.filter((b) => !b["geo"])).toHaveLength(1);
     expect(blocks.every((b) => b["openingHoursSpecification"])).toBe(true);
     /*
-       And the number, on every branch that has one. Structured data that
-       omitted a telephone the page displays is the mismatch crawlers penalise,
-       and the storefront one level up has always marked its own up without a
-       verification gate.
+       And no number, since the `1d` amendment: the page shows a branch's number
+       only once it is asked for, and structured data is page source (`B2`).
     */
-    expect(blocks.every((b) => b["telephone"])).toBe(true);
+    expect(blocks.some((b) => b["telephone"])).toBe(false);
   });
 
   test("the branch list is a list", async ({ page }) => {

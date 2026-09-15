@@ -25,6 +25,9 @@ import { DirectoryFooter, DirectoryNav } from "@/app/(public)/_chrome";
 import { StorefrontHeader, storefrontCrumbs } from "../_storefront";
 import { sellsGoods } from "@/lib/storefront/tabs";
 import { BranchesClient, type ClientBranch } from "./_client";
+import { BranchCall, ContactReveal } from "../ContactReveal";
+import { MaskedNumber } from "@/components/storefront/MaskedNumber";
+import { cachedStorefrontContact, maskedLandlines } from "@/lib/contact/storefront";
 
 /**
  * Board 1f — branches & hours.
@@ -141,6 +144,14 @@ export default async function BranchesPage({ params }: Params) {
   const ramadan = ramadanActive(now);
   const coverage = coverageOf(locations, business.deliveryNote);
   const pages = business.sectorId ? await navPages(business.sectorId) : [];
+  /*
+     Board `1d` amendment. Every landline here sits behind the same form as the
+     overview's chip — see `BranchLandline`. This route stays cached for every
+     reader, so it renders masks only and a returning session is resolved in the
+     browser after load.
+  */
+  const { contact } = await cachedStorefrontContact(business);
+  const masks = maskedLandlines(locations);
 
   const pinned = locations.filter((l) => l.lat != null && l.lng != null);
   const excluded = locations.length - pinned.length;
@@ -175,6 +186,7 @@ export default async function BranchesPage({ params }: Params) {
     expanded: (
       <BranchCard
         location={location}
+        masked={masks[location.id] ?? null}
         now={now}
         expanded
         calendar={calendar}
@@ -184,6 +196,7 @@ export default async function BranchesPage({ params }: Params) {
     compact: (
       <BranchCard
         location={location}
+        masked={masks[location.id] ?? null}
         now={now}
         expanded={false}
         calendar={calendar}
@@ -205,6 +218,16 @@ export default async function BranchesPage({ params }: Params) {
       footer={<DirectoryFooter />}
     >
       <div data-theme={business.themePreset ?? "default"}>
+        <ContactReveal
+          businessId={contact.businessId}
+          supplierName={contact.supplierName}
+          formRequired={contact.formRequired}
+          prefill={contact.prefill}
+          initial={contact.initial}
+          note={contact.note}
+          privacyHref={contact.privacyHref}
+          resolveOnMount
+        >
         <StorefrontHeader
           business={business}
           active="branches"
@@ -265,6 +288,7 @@ export default async function BranchesPage({ params }: Params) {
             ) : undefined
           }
         />
+        </ContactReveal>
       </div>
 
       {/*
@@ -302,17 +326,10 @@ export default async function BranchesPage({ params }: Params) {
                   }
                 : undefined,
             /*
-               The real number, unmasked, for the reason board 1d gives: schema
-               is for machines, and a crawler will not send an enquiry.
-
-               Marked up whenever it is shown, which is the same rule the
-               storefront one level up already runs — it publishes `head.phone`
-               with no verification gate. Structured data that omitted a number
-               the page displays is the mismatch crawlers actually penalise.
+               No `telephone`, since the `1d` amendment: the page no longer
+               displays a branch's number until it is asked for, and a number in
+               the structured data is a number in the page source (`B2`).
             */
-            // E.164, matching the `tel:` href the page renders — a crawler
-            // cannot infer the country from the stored local form.
-            telephone: location.phone ? (toE164(location.phone) ?? location.phone) : undefined,
             openingHoursSpecification: openingHoursSchema(
               location.hours as never,
               location.ramadanHours as never,
@@ -389,12 +406,15 @@ function summarise(hours: unknown, days: readonly string[]): string {
  */
 function BranchCard({
   location,
+  masked,
   now,
   expanded,
   calendar,
   dates,
 }: {
   location: BranchLocation;
+  /** This branch's masked landline, or null where it has none. */
+  masked: string | null;
   now: Date;
   expanded: boolean;
   calendar: RamadanCalendar;
@@ -413,24 +433,22 @@ function BranchCard({
   const unpinned = location.lat == null || location.lng == null;
 
   /*
-     Shown in full, and shown whether or not anybody has checked it.
+     Shown whether or not anybody has checked it — and, since the `1d`
+     amendment, masked until asked for.
 
      This page used to hide a number unless `Location.phoneVerified` was true,
-     which made it stricter than the storefront one level up — that page marks
-     up `head.phone` with no such gate. Nothing has ever written the column
-     outside the seed, so in production the rule hid *every* branch number from
-     *every* buyer, and the seeded 80% made it look like it worked.
+     which made it stricter than the storefront one level up. Nothing has ever
+     written the column outside the seed, so in production the rule hid *every*
+     branch number from *every* buyer. That gate is gone rather than given a
+     writer.
 
-     The gate is gone rather than given a writer. A branch page only exists for
-     a claimed listing (see the `notFound` above), so this number was typed by
-     the business itself; and an unclaimed listing already says page-wide that
-     nothing on it has been confirmed. Neither case is improved by silence.
-
-     Unlike board 1d it is not masked: the buyer has navigated two levels to
-     reach a specific branch, the reveal event was written once on the overview,
-     and masking it a second time is friction that buys no signal.
+     Board 1f then printed every number in full, because "the reveal event was
+     written once on the overview". With three fields between a buyer and the
+     overview's number, a tab that printed the same number for nothing would be
+     the form with a side door, so the numbers here are the reveal's: masked,
+     one click to the same form, and revealed for the whole listing at once.
   */
-  const phone = location.phone;
+  const phone = masked;
 
   return (
     <>
@@ -466,14 +484,11 @@ function BranchCard({
             <Cell label={t("storefront.phone")}>
               {phone ? (
                 /*
-                   Criterion 13: every number is a `tel:` link. The href is
-                   E.164 because a dialler needs the country code, and the label
-                   is the local form because that is how it is written on the
-                   van.
+                   Criterion 13: every number is a `tel:` link — once revealed.
+                   The href is E.164 because a dialler needs the country code,
+                   and the label is the local form, as written on the van.
                 */
-                <a href={`tel:${toE164(phone) ?? phone}`} className="hover:underline">
-                  {formatPhone(phone)}
-                </a>
+                <MaskedNumber numberKey={location.id} masked={phone} />
               ) : (
                 t("table.not_provided")
               )}
@@ -514,9 +529,7 @@ function BranchCard({
               {t("storefront.directions")}
             </a>
             {phone && (
-              <a href={`tel:${toE164(phone) ?? phone}`} className={ACTION_SECONDARY}>
-                {t("branches.call_branch")}
-              </a>
+              <BranchCall locationId={location.id} label={t("branches.call_branch")} className={ACTION_SECONDARY} />
             )}
             {isCollectable(location) && (
               <StatusBadge tone="neutral" size="sm">
@@ -534,9 +547,7 @@ function BranchCard({
               {/* Criterion 13 applies to the compact row too. It read as a
                   number and was not one, which on a phone is the difference
                   between calling the branch and copying it out by hand. */}
-              <a href={`tel:${toE164(phone) ?? phone}`} className="text-ink hover:underline">
-                {formatPhone(phone)}
-              </a>
+              <MaskedNumber numberKey={location.id} masked={phone} />
             </>
           )}
         </p>
