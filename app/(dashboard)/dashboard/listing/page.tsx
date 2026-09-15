@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/db/client";
 import { fieldSetFor } from "@/lib/onboarding/service-profile";
+import { pairedCopyFor } from "@/lib/strings/store";
 import { sectorChipsFor } from "@/lib/onboarding/sector-index";
 import { getTradeKinds } from "@/lib/taxonomy/service";
 import { resolveTradeKind } from "@/lib/taxonomy/trade-kind";
@@ -77,6 +78,7 @@ export default async function ListingPage() {
      screens cannot disagree about which fields a seller is shown (B8).
   */
   const fieldSet = fieldSetFor(seat.sellsKind);
+  const copy = await pairedCopyFor(seat.sellsKind);
   const categoryIds = [
     ...new Set([profile.primaryCategoryId, ...profile.categories.map((row) => row.categoryId)]),
   ];
@@ -136,6 +138,7 @@ export default async function ListingPage() {
         pickAction={pickPhoto}
         coverAction={makeCover}
         fieldSet={fieldSet}
+        descriptionLabel={copy["listing.description"]}
         services={
           fieldSet.services
             ? {

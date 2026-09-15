@@ -7728,6 +7728,75 @@ model CuratedQuery {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Paired strings — board 12g-s
+//
+// One product speaks to two kinds of business by reading a different half of
+// the same key. The keys, their code defaults and the boards that read them are
+// declared in `lib/i18n/paired.ts`; a `StringEntry` row is a staff decision about
+// one half, written from `/admin/strings/paired` without a deploy.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Suppressed and missing both carry no value and mean opposite things: one is
+/// a decision to remove the control, the other a gap that falls back to the
+/// goods words and is counted (`B2`). An empty string could carry neither.
+enum StringState {
+  written
+  missing
+  suppressed
+
+  @@map("string_state")
+}
+
+/// Which half of a key a row is. `single` rather than the spec's nullable
+/// column: `@@unique` over a nullable column treats every null as distinct, so
+/// two single-valued `en` rows for one key would both be accepted — the defect
+/// `TemplateKind` was built to avoid.
+enum StringKind {
+  single
+  goods
+  services
+
+  @@map("string_kind")
+}
+
+/// A staff decision about one half of one string in one locale.
+///
+/// The spec calls this `Message`; that name has been the enquiry thread's since
+/// handoff 2, and one model name for two things is a join nobody meant.
+///
+/// No row means the code default in `lib/i18n/paired.ts` stands. A row
+/// overrides it; deleting the row restores it. `196 / 214` is a query over the
+/// registry and these rows, never a stored counter (`B3`).
+///
+/// No `surfaces` column: which boards read a key is a property of the code
+/// that reads it, so it lives in the registry beside the key and a unit test
+/// holds it to the consumers — the same call board 12g made for `FIRED BY`.
+model StringEntry {
+  id String @id @default(cuid())
+
+  /// The goods key the registry names, e.g. `section.reviews.title`.
+  key String
+
+  /// `en` today. Arabic is more rows, not a second table (`B8`).
+  locale String @default("en")
+
+  kind  StringKind
+  state StringState
+
+  /// Present exactly when `state` is `written` — a CHECK in the migration holds it.
+  value String?
+
+  /// The staff member who made the decision. Every change is also an audit row.
+  updatedById String   @map("updated_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([key, locale, kind])
+  @@index([state])
+  @@map("string_entry")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Legal pages — board 10j
 //
 // Four of them, one template. Content again: a change to the review policy

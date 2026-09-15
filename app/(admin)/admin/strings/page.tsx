@@ -1,19 +1,22 @@
 import { notFound } from "next/navigation";
-import { Alert } from "@/components/display";
+import { Alert, StatusBadge } from "@/components/display";
 import { Panel } from "@/components/structure";
 import { can } from "@/lib/auth/can";
 import { requireStaff } from "@/lib/auth/staff";
 import { catalogueCoverage, catalogueEntries } from "@/lib/i18n/coverage";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
+import { pairingCountNow } from "@/lib/strings/service";
 import { AdminPage, getAdminNavBadges } from "../../_shell";
 import { StringsBrowser, type StringRowView } from "./StringsBrowser";
+import { StringsTabs } from "./_tabs";
 
 /**
- * Board 12g — localisation.
+ * Board 12g — localisation, now the *All* tab of the string store (12g-s).
  *
  * A report rather than an editor, and the page says so in its own words rather
- * than leaving somebody to discover there is no save button.
+ * than leaving somebody to discover there is no save button. The strings that
+ * change with the kind of business are written on *Paired*.
  *
  * The reasoning is in `lib/i18n/coverage.ts`: `t()` is typed against this
  * catalogue, so a missing string is a build failure. A runtime override table
@@ -25,9 +28,9 @@ export const dynamic = "force-dynamic";
 
 export default async function StringsPage() {
   const seat = await requireStaff();
-  if (!can(seat.actor, "taxonomy.write")) notFound();
+  if (!can(seat.actor, "strings.write")) notFound();
 
-  const badges = await getAdminNavBadges(seat);
+  const [badges, pairing] = await Promise.all([getAdminNavBadges(seat), pairingCountNow()]);
   const coverage = catalogueCoverage();
   const rows: StringRowView[] = catalogueEntries();
 
@@ -39,15 +42,26 @@ export default async function StringsPage() {
       title={t("strings.title")}
       eyebrow={t("strings.eyebrow")}
       meta={
-        <span className="text-caption text-muted">
+        <span className="flex flex-wrap items-center gap-2 text-caption text-muted">
           {t("strings.meta", {
             keys: formatCount(coverage.keys),
             words: formatCount(coverage.words),
             locales: formatCount(coverage.locales.length),
           })}
+          {/*
+             Board 12g-s, correction 2. A services half is an English string too,
+             so the catalogue is not complete while one is unwritten — the chip
+             says so in amber rather than claiming the source is done.
+          */}
+          <StatusBadge tone={pairing.unpaired > 0 ? "warn" : "ok"} shape="chip" size="sm">
+            {pairing.unpaired > 0
+              ? t("strings.unpaired_chip", { count: pairing.unpaired, n: formatCount(pairing.unpaired) })
+              : t("strings.paired_chip", { paired: formatCount(pairing.paired), total: formatCount(pairing.total) })}
+          </StatusBadge>
         </span>
       }
     >
+      <StringsTabs active="all" all={coverage.keys} paired={pairing.total} />
       <Alert tone="info" live="off" fix={t("strings.arabic")}>
         <strong className="font-medium">{t("strings.read_only")}</strong>{" "}
         {t("strings.read_only_body")}

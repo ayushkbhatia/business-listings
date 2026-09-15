@@ -13,6 +13,7 @@ import { t } from "@/lib/i18n";
 import { sectionLibrary, type LibraryEntry } from "@/lib/storefront/library";
 import { sectionDataFor } from "@/lib/storefront/loader";
 import type { SectionData } from "@/lib/storefront/render-data";
+import { pairedCopies } from "@/lib/strings/store";
 import {
   isConfigurable,
   readSettings,
@@ -107,10 +108,15 @@ export default async function SectionLibraryPage({ params, searchParams }: Param
   const store = storeSlug ? (governed.find((candidate) => candidate.slug === storeSlug) ?? null) : null;
   const as = one(query.as) === "services" || (one(query.as) === null && scope === "services") ? "services" : "goods";
 
+  /*
+     A specimen carries the code's words; the preview swaps in the live ones, so
+     a half written on /admin/strings/paired shows here as it will on a store.
+  */
+  const specimen = selected && !store ? specimenFor(selected, as) : null;
   const data: SectionData | null = selected
     ? store
       ? await sectionDataFor(store)
-      : specimenFor(selected, as)
+      : { ...specimen!, copy: (await pairedCopies())[specimen!.kind] }
     : null;
 
   const row = selected

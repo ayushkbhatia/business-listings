@@ -2,7 +2,6 @@ import { ReviewCard } from "@/components/domain";
 import { formatCount, formatDate, formatDecimal } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { SectionProps } from "@/lib/storefront/render-data";
-import { paired } from "@/lib/storefront/paired-copy";
 
 /**
  * Section 9 — reviews.
@@ -20,7 +19,7 @@ export function Reviews({ data }: SectionProps) {
   return (
     <section>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-h2 text-brand-ink">{paired("section.reviews.title", data.kind)}</h2>
+        <h2 className="text-h2 text-brand-ink">{data.copy["section.reviews.title"]}</h2>
         {data.reviewSummary.average !== null && (
           <span className="font-mono text-eyebrow tabular-nums text-muted">
             {t("section.reviews.average", {

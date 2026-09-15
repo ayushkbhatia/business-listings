@@ -32,6 +32,7 @@ import { BlendedSearchGallery } from "./_sections/BlendedSearch";
 import { NotificationTemplatesGallery } from "./_sections/NotificationTemplates";
 import { MaintenanceGallery } from "./_sections/Maintenance";
 import { HomeCurationGallery } from "./_sections/HomeCuration";
+import { PairedStringsGallery } from "./_sections/PairedStrings";
 import { NegotiationThreadGallery } from "./_sections/NegotiationThread";
 import { WriteReviewGallery } from "./_sections/WriteReview";
 import { TaxonomyGallery } from "./_sections/Taxonomy";
@@ -217,6 +218,8 @@ const UNLISTED = [
   "maintenance",
   // Board `10f`: writing a review — the draft as drawn, the gate's refusals, the buyer's own copy.
   "write-review",
+  // Board `12g-s`: the paired strings, their count, and the editor for a half.
+  "paired-strings",
 ] as const;
 
 export default function Gallery() {
@@ -339,6 +342,8 @@ export default function Gallery() {
       <MaintenanceGallery />
       {/* Last, for the axe-grid reason above: nothing new above Shells. */}
       <WriteReviewGallery />
+      {/* After write-review, for the same axe-grid reason: nothing new above Shells. */}
+      <PairedStringsGallery />
     </main>
   );
 }

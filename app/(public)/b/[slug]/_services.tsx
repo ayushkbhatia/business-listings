@@ -1,3 +1,4 @@
+import { pairedCopies } from "@/lib/strings/store";
 import Link from "next/link";
 import { buttonClassName } from "@/components/primitives";
 import { Breadcrumb, Card, PublicShell } from "@/components/structure";
@@ -76,10 +77,13 @@ export async function ServicesStorefrontPage({
   saved: boolean;
   requestedService: string | null;
 }) {
-  const [data, pages] = await Promise.all([
+  const [data, pages, copies] = await Promise.all([
     servicesStorefrontFor(business.id),
     business.sectorId ? navPages(business.sectorId) : Promise.resolve([]),
+    pairedCopies(),
   ]);
+  // Board `12g-s`: the composer's heading is the services half of a paired string.
+  const composerTitle = copies.services["section.enquiry.title"];
 
   const head = business.locations[0];
   const crumbs = storefrontCrumbs(business);
@@ -164,7 +168,7 @@ export async function ServicesStorefrontPage({
             className="order-1 min-w-0 scroll-mt-20 lg:order-none lg:col-start-2 lg:row-start-1"
           >
             <Card>
-              <h2 className="text-h3 text-brand-ink">{t("storefront_services.composer.title")}</h2>
+              <h2 className="text-h3 text-brand-ink">{composerTitle}</h2>
               <div className="mt-2">
                 <ServiceEnquiryForm
                   businessId={business.id}
@@ -212,7 +216,7 @@ export async function ServicesStorefrontPage({
               </section>
             )}
 
-            <ServicesSection business={business} data={data} mode="anchor" signedIn={Boolean(actor)} />
+            <ServicesSection business={business} data={data} mode="anchor" signedIn={Boolean(actor)} composerTitle={composerTitle} />
 
             <CredentialsSection business={business} data={data} />
 
@@ -301,11 +305,14 @@ export function ServicesSection({
   data,
   mode,
   signedIn,
+  composerTitle,
 }: {
   business: PublicBusiness;
   data: ServicesStorefront;
   mode: "anchor" | "drawer";
   signedIn: boolean;
+  /** The services half of `section.enquiry.title`, from `pairedCopies()`. */
+  composerTitle: string;
 }) {
   const shown = data.services.slice(0, OVERVIEW_SERVICES);
   const options = composerOptions(data.services);
@@ -357,6 +364,7 @@ export function ServicesSection({
                           serviceName={service.name}
                           askForContact={!signedIn}
                           responseLine={replyLine(business.responseTimeMedianMs)}
+                          title={composerTitle}
                         />
                       ),
                     }

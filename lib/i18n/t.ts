@@ -21,7 +21,7 @@ function selectPlural(forms: PluralForms, count: number, locale: Locale): string
   return forms[category] ?? forms.other;
 }
 
-function interpolate(template: string, params: Params | undefined, key: string): string {
+export function interpolate(template: string, params: Params | undefined, key: string): string {
   return template.replace(PLACEHOLDER, (whole, name: string) => {
     const value = params?.[name];
     if (value === undefined) {

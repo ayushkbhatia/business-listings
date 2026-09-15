@@ -1,4 +1,5 @@
 import "server-only";
+import { readPairedCopyFor } from "@/lib/strings/store";
 import { Prisma, type CancelReason } from "@/lib/db/generated/client";
 import { prisma } from "@/lib/db/client";
 import { storageUsedBytes } from "@/lib/media/service";
@@ -192,6 +193,7 @@ export async function cancellationView(
         where: { id: businessId },
         select: {
           slug: true,
+          sellsKind: true,
           verificationTier: true,
           reviewCount: true,
           plan: { select: PLAN_SELECT },
@@ -327,7 +329,18 @@ export async function cancellationView(
       : null,
   };
 
-  const rows = consequenceTable(facts);
+  /*
+     Board `12g-s`: the CSV import row is a paired string whose services half is
+     suppressed. A firm that sells work has nothing to put through an importer,
+     so losing one is not a consequence worth a row — the control is absent,
+     not blank. The goods half is read from the store too, so a label written
+     from the console reaches this table.
+  */
+  const copy = await readPairedCopyFor(business.sellsKind);
+  const csvImport = copy["cancel.row.csv_import"];
+  const rows = consequenceTable(facts).flatMap((row) =>
+    row.key !== "csv_import" ? [row] : csvImport === null ? [] : [{ ...row, area: csvImport }],
+  );
 
   return {
     kind: "cancellable",

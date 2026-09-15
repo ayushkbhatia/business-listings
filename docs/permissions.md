@@ -124,9 +124,9 @@ deactivates it.
 
 ### Rows this document does not contain
 
-Twelve capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
+Fifteen capabilities in `lib/auth/capabilities.ts` carry `source: "inferred"` because §07 has no
 row for them, or departs from the row it has. `tests/unit/permission-matrix.test.ts` names all
-twelve, so adding a thirteenth is a deliberate edit rather than a quiet default. The six below
+fifteen, so adding a sixteenth is a deliberate edit rather than a quiet default. The nine below
 are the ones with no row at all; `business.verification_tier.write`, `review.dispute`,
 `staff.manage`, `staff.read` and board 12g's two notification rows (in the staff table above)
 are explained where the test names them.
@@ -139,6 +139,9 @@ are explained where the test names them.
 | `queue.rules` | ops lead | Board 4b's *Tune auto-check rules*. Switching a check off or moving a threshold changes which submissions bulk approve may act on across the whole queue, so it sits a rung above deciding one — erring **higher**. It writes `queue_rules_tuned`. |
 | `business.close` | ops lead | Board 11i's platform-initiated closure (build note B8): notice for a lapsed licence, withdrawing an open closure, and reopening a final one for a named owner. Closure takes a business out of the directory and ends every seat's session, so it sits with suspension — erring **higher**. It writes `closure_noticed`, `closure_withdrawn` and `closure_reopened`. |
 | `homepage.curate` | ops lead | Board 6h and its Q5, which names the gap: the four "Verified this week" slots and the popular-search chips had no row and borrowed `taxonomy.write`. Four slots against every business in the directory is the highest-leverage placement on the platform, and the cards assert the tier an ops lead owns — erring **higher**. It writes `homepage_slot_featured`, `homepage_slot_removed`, `homepage_slots_reordered`, `homepage_query_added` and `homepage_query_removed`. |
+| `strings.write` | ops lead | Board 12g-s. `/admin/strings` borrowed `taxonomy.write` while it was a report; the paired view writes the half of a string every business of one kind reads, on every screen carrying the key, the moment it is saved and without a deploy — and suppressing a half removes a control from all of them. Held where "Edit taxonomy & spec templates" is — erring **higher**. It writes `string_written`, `string_suppressed` and `string_restored`. |
+| `taxonomy.read` | ops lead · moderator | Board 4d. A non-ops-lead admin sees the taxonomy read-only — it is how other staff answer "why does this seller see that screen", and the moderator decides category changes in the approval queue against this tree. Reading changes nothing, so it is not audited — erring **lower** on a read. |
+| `taxonomy.merge` | ops lead | Board 4d Q4. A merge moves every listing, product and service under one category into another and writes a redirect for every address the absorbed one owned; it cannot be undone by editing a field. Its own capability so narrowing or widening it touches one row — erring **higher**. |
 
 If §07 gains a row for any of these, the row wins and the `source` becomes `stated`.
 

@@ -1,6 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
 import { PUBLISHED } from "@/lib/db/queries/reviews";
+import { copiesFrom } from "@/lib/i18n/paired";
+import { readEntryRows } from "@/lib/strings/store";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { PUBLISHABLE_DOCUMENT_KINDS, sectionType } from "./section-types";
 import { resolveSections, type ResolvedSection, type SectionRow } from "./sections";
@@ -241,7 +243,7 @@ async function sectionData(
   slug: string,
   options: { kind: ListingKind; work: boolean },
 ): Promise<SectionData> {
-  const [business, products, productCount, reviews, documents, media, team, work] = await Promise.all([
+  const [business, products, productCount, reviews, documents, media, team, work, copies] = await Promise.all([
     prisma.business.findUniqueOrThrow({
       where: { id: businessId },
       select: {
@@ -339,6 +341,13 @@ async function sectionData(
       },
     }),
     options.work ? sectionWorkFor(businessId) : Promise.resolve(null),
+    /*
+       Board `12g-s`. Uncached, and on purpose: this loader runs outside a
+       request in the storefront suites, where `unstable_cache` has no store,
+       and the page that calls it is regenerated at most every five minutes —
+       one small read per regeneration, not per visit.
+    */
+    readEntryRows().then(copiesFrom),
   ]);
 
   const cover = media.find((entry) => entry.kind === "storefront" || entry.kind === "cover");
@@ -346,6 +355,7 @@ async function sectionData(
 
   return {
     kind: options.kind,
+    copy: copies[options.kind],
     work,
     business: {
       slug,

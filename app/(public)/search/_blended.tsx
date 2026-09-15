@@ -1,3 +1,4 @@
+import { pairedCopies } from "@/lib/strings/store";
 import { PublicShell } from "@/components/structure";
 import { blendedSearch } from "@/lib/db/queries/blended-search";
 import { recordSearch, recordZeroResult } from "@/lib/db/queries";
@@ -26,7 +27,7 @@ import { BlendedBody } from "./_blended-view";
 const BASE = "/search";
 
 export async function BlendedSearchPage({ query }: { query: SearchQuery }) {
-  const result = await blendedSearch(query);
+  const [result, copy] = await Promise.all([blendedSearch(query), pairedCopies()]);
 
   /*
      The same two rows goods search writes. A blended search that found nothing
@@ -51,7 +52,7 @@ export async function BlendedSearchPage({ query }: { query: SearchQuery }) {
       }
       footer={<DirectoryFooter />}
     >
-      <BlendedBody query={query} result={result} />
+      <BlendedBody query={query} result={result} copy={copy} />
     </PublicShell>
   );
 }

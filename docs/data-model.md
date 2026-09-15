@@ -894,6 +894,34 @@ The home page has nine rails and these are the two a person chooses.
 - **A chip's query goes through `parseSearchQuery` and `toSearchParams`** on the way in, so it can
   carry only keys the results page understands.
 
+## Paired strings — board 12g-s
+
+```prisma
+enum StringState { written missing suppressed }
+enum StringKind  { single goods services }
+
+model StringEntry {          // the spec's `Message` — that name is the enquiry thread's
+  key         String         // a key declared in lib/i18n/paired.ts
+  locale      String @default("en")
+  kind        StringKind
+  state       StringState
+  value       String?        // present exactly when state = written (CHECK)
+  updatedById String @db.Uuid
+  @@unique([key, locale, kind])
+}
+```
+
+A row is a staff decision about one half of a paired string; no row means the code default in
+`lib/i18n/paired.ts` stands, and deleting the row restores it.
+
+- **Suppressed is a state, not an empty string.** A missing half renders the goods words and is
+  counted; a suppressed one removes the control.
+- **The pairing count is a query** over the registry and these rows, never stored.
+- **Which boards read a key lives in the registry**, beside the key, and a unit test holds each
+  named file to reading it — not in a `surfaces` column that would drift from the code.
+- **Arabic is more rows** (`locale` is in the key). Category names translate through the category
+  record and are not here.
+
 ## The Pro trial, and what a plan drop does to a catalogue
 
 ```prisma

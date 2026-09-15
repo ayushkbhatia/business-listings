@@ -196,7 +196,8 @@ and it is the one that argues back.
 /admin/notifications/channels           Carrier per channel, 30-day health   [12g]  built 12g
 /admin/notifications/deliveries         Delivery log, keyset-paged           [12g]  built 12g
 /admin/notifications/quiet-hours        Quiet hours as applied, read-only    [12g]  built 12g
-/admin/strings                          Localisation                         [12g]  built h4s7
+/admin/strings                          Strings — All (catalogue report)     [12g]  built h4s7
+/admin/strings/paired                   Strings — Paired                    [12g-s]  built 12g-s
 /admin/content/matrix                   Page matrix & content ops             [6f]  built h5s2
 /admin/content/lists                    Curated lists index               [6b, 6f]  built h5s2
 /admin/content/guide-subjects           Guide subjects                       [10b]  built h5s3

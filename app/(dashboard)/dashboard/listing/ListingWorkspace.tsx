@@ -108,6 +108,12 @@ export interface ListingWorkspaceProps {
    * the onboarding step uses, so the two screens are chosen by one rule.
    */
   fieldSet: { goods: boolean; services: boolean };
+  /**
+   * The description field's label — a paired string (board `12g-s`), resolved on
+   * the server for this seller's kind so a half written from the console reaches
+   * it. For a firm that sells work the description is the lead of its storefront.
+   */
+  descriptionLabel: string;
   /** The services field set's initial value and sector chips. Null for goods. */
   services: { initial: ServiceProfileValue; chips: SectorOption[] } | null;
   /** How the listing's categories resolve, for the explanation under them. */
@@ -470,9 +476,7 @@ function Basics(props: BasicsProps) {
                storefront, published verbatim under *What we take on*, and the
                label says so rather than calling it a description.
             */}
-            {props.fieldSet.services && !props.fieldSet.goods
-              ? t("listing.description_services")
-              : t("listing.description")}
+            {props.descriptionLabel}
           </span>
           <span
             className={`font-mono text-caption tabular-nums ${props.overLimit ? "text-warn-ink" : "text-body"}`}

@@ -54,6 +54,7 @@ export const MATRIX_GROUPS = [
       "notification.template.write",
       "notification.read",
       "homepage.curate",
+      "strings.write",
     ],
   },
   {

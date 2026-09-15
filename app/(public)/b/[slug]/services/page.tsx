@@ -1,3 +1,4 @@
+import { pairedCopies } from "@/lib/strings/store";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
@@ -117,10 +118,11 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
   const query = parseServicesQuery(await searchParams);
   const basePath = `/b/${business.slug}/services`;
 
-  const [services, pages, actor] = await Promise.all([
+  const [services, pages, actor, copies] = await Promise.all([
     publicServicesFor(business.id),
     business.sectorId ? navPages(business.sectorId) : Promise.resolve([]),
     getActor(),
+    pairedCopies(),
   ]);
   const volume = await serviceEnquiryVolume(
     business.id,
@@ -145,6 +147,8 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
           duration: formatDuration(business.responseTimeMedianMs),
         });
   const askForContact = !actor;
+  // Board `12g-s`: the drawer's heading is the services half of a paired string.
+  const composerTitle = copies.services["section.enquiry.title"];
 
   const catchAll = (label: string, className: string) => (
     <ServiceEnquireDrawer
@@ -157,6 +161,7 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
       responseLine={responseLine}
       triggerLabel={label}
       triggerClassName={className}
+      title={composerTitle}
     />
   );
 
@@ -293,6 +298,7 @@ export default async function StorefrontServicesPage({ params, searchParams }: P
                           serviceName={service.name}
                           askForContact={askForContact}
                           responseLine={responseLine}
+                          title={composerTitle}
                           triggerClassName={buttonClassName({ block: true })}
                         />
                       }

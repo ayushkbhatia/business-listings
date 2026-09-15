@@ -137,6 +137,15 @@ export const AUDIT_ACTIONS = [
   */
   "category_created",
   "category_merged",
+  /*
+     Board 12g-s. Three acts on one half of a paired string: words written, the
+     control suppressed for that kind, and the half handed back to the code's
+     default. Separate names because "who hid CSV import from every practice"
+     and "who wrote that label" are different questions of the log.
+  */
+  "string_written",
+  "string_suppressed",
+  "string_restored",
 ] as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
@@ -194,6 +203,7 @@ export const ACTION_FOR_CAPABILITY = {
   "business.close": "closure_noticed",
   "notification.template.write": "notification_template_saved",
   "homepage.curate": "homepage_slot_featured",
+  "strings.write": "string_written",
   "taxonomy.merge": "category_merged",
 } as const satisfies Partial<Record<Capability, AuditAction>>;
 
@@ -263,6 +273,7 @@ export const PAIRED_ACTIONS = {
     "notification_meta_rejected",
     "notification_template_published",
   ],
+  "strings.write": ["string_written", "string_suppressed", "string_restored"],
   "homepage.curate": [
     "homepage_slot_featured",
     "homepage_slot_removed",

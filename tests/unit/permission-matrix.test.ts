@@ -252,6 +252,10 @@ describe("every row cites the document", () => {
        gated on the write, so the moderator deciding a category change could not
        see the tree it was deciding against. The merge is split out of the write
        for Q4, "who may merge", so the answer is one row.
+
+       `strings.write` joined on board 12g-s, split out of the same borrowed
+       `taxonomy.write`: a paired half is what every business of one kind reads,
+       written without a deploy. Ops lead alone.
     */
     const inferred = (Object.keys(CAPABILITIES) as Capability[]).filter(
       (c) => CAPABILITIES[c].source === "inferred",
@@ -269,6 +273,7 @@ describe("every row cites the document", () => {
       "review.hold",
       "staff.manage",
       "staff.read",
+      "strings.write",
       "taxonomy.merge",
       "taxonomy.read",
     ]);

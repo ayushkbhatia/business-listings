@@ -259,7 +259,7 @@ async function main() {
      for twenty-odd more. They are absent from this list because they are
      unreachable by hand, not because they survive.
 
-     Three tables have no relations at all and so are reached by nothing:
+     Some tables have no relations at all and so are reached by nothing:
 
        - `auth_attempt` is named below. It is the throttle counter, and left
          alone it is one of the tables a reseed does not clear — 933 rows on the
@@ -272,13 +272,17 @@ async function main() {
          reseed left thirteen rows of a previous afternoon's searches behind —
          which on a tighter policy is a developer wondering why the first search
          after a fresh database refuses them.
+       - `string_entry` is named below. Board 12g-s's paired-string decisions
+         have no foreign key, so a half written on one afternoon's console would
+         otherwise outlive the reseed and every screen would read it — the seed
+         state is every half at its code default.
        - `ranking_weights` is deliberately NOT named. Its singleton `current`
          row is inserted by migration 20260827220000 and never by the seed, so
          truncating it would leave `liveWeights()` returning null for good.
   */
   await prisma.$executeRawUnsafe(`
     truncate table
-      "audit_event","auth_attempt","rate_limit_hit","contact_reveal","zero_result_query","search_query_log","saved_search","redirect","guide","area_page","curated_list","campaign","legal_page",
+      "audit_event","auth_attempt","rate_limit_hit","contact_reveal","zero_result_query","search_query_log","saved_search","redirect","guide","area_page","curated_list","campaign","legal_page","string_entry",
       "notification_delivery","notification_template","notification_preference","review_request",
       "invoice_line","invoice","placement_slot","subscription",
       "supplier_report","review","message","quote_line","quote",

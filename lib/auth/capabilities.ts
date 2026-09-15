@@ -226,6 +226,17 @@ export const CAPABILITIES = {
     source: "inferred",
     why: "Not a row in §07. Board 6h Q5: four \"Verified this week\" cards against every business in the directory, and six search chips under the hero, are the highest-leverage placement on the platform and the most-cached surface on the site. Held at ops lead — the rung that owns the tier those cards assert — rather than at every content role. Every feature, removal, reorder and chip change writes an audit row with a reason (B3).",
   },
+  /*
+     Board 12g-s. `/admin/strings` borrowed `taxonomy.write` as the nearest
+     ops-lead row, which was harmless while the screen was a report. The paired
+     view writes the words a whole kind of business reads, so it has its own.
+  */
+  "strings.write": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "inferred",
+    why: "Not a row in §07. Board 12g-s: writing a half of a paired string changes what every business of that kind reads on every screen that carries the key, the moment it is saved and without a deploy; suppressing one removes a control from all of them. The nearest §07 row is \"Edit taxonomy & spec templates\" — ops lead only — and the grant follows it. Reading the store sits here too, because the screen is where the writes are.",
+  },
   "notification.read": {
     roles: ["staff_ops_lead", "staff_moderator"],
     audited: false,

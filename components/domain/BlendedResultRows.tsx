@@ -3,6 +3,7 @@ import { Tag } from "@/components/display";
 import { buttonClassName } from "@/components/primitives";
 import { Check } from "@/components/primitives/icons";
 import { cn } from "@/lib/cn";
+import type { PairedCopies } from "@/lib/i18n/paired";
 import { formatDate, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type {
@@ -214,7 +215,7 @@ function sentence(text: string): string {
   return /[.!?…]$/.test(text) ? text : `${text}.`;
 }
 
-export function BusinessResultRow({ row }: { row: BusinessResultView }) {
+export function BusinessResultRow({ row, copy }: { row: BusinessResultView; copy: PairedCopies }) {
   const headingId = `result-business-${row.id}`;
   const href = `/b/${row.businessSlug}`;
   const chips = row.services
@@ -248,7 +249,8 @@ export function BusinessResultRow({ row }: { row: BusinessResultView }) {
             {t("listing.enquire")}
           </Link>
           <Link href={href} className={buttonClassName({ variant: "secondary", block: true })}>
-            {row.sellsWork ? t("search_blended.view_firm") : t("search_blended.view_storefront")}
+            {/* Board `12g-s`: one link, the half the firm's own kind reads. */}
+            {copy[row.sellsWork ? "services" : "goods"]["search_blended.view_storefront"]}
           </Link>
           <Reply ms={row.replyMs} />
         </>
@@ -320,25 +322,28 @@ export function ProductResultRow({ row }: { row: ProductResultView }) {
   );
 }
 
-export function BlendedResultRow({ row }: { row: BlendedResultView }) {
+export function BlendedResultRow({ row, copy }: { row: BlendedResultView; copy: PairedCopies }) {
   if (row.kind === "service") return <ServiceResultRow row={row} />;
-  if (row.kind === "business") return <BusinessResultRow row={row} />;
+  if (row.kind === "business") return <BusinessResultRow row={row} copy={copy} />;
   return <ProductResultRow row={row} />;
 }
 
 /** The list, as a list — the order is the product. */
 export function BlendedResultList({
   rows,
+  copy,
   className,
 }: {
   rows: readonly BlendedResultView[];
+  /** Both halves of the paired strings, from `pairedCopies()` — a row reads the one its firm's kind picks. */
+  copy: PairedCopies;
   className?: string;
 }) {
   return (
     <ol className={cn("flex list-none flex-col gap-3 p-0", className)}>
       {rows.map((row) => (
         <li key={`${row.kind}:${row.id}`} data-result-kind={row.kind}>
-          <BlendedResultRow row={row} />
+          <BlendedResultRow row={row} copy={copy} />
         </li>
       ))}
     </ol>

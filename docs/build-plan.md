@@ -534,6 +534,18 @@ reader and three levels of tests. **The staff half has nothing at all.**
   `20261027091000_notification_template_backfill` wrote the rest — and `ramadan_dates_moved` had
   no template **and** no routing row; it is on the platform floor with licence expiry now.
   `/admin/strings` stays a report and belongs to `12g-s`. `7f` and `10i` are still owed.
+- [x] **7.4c `12g-s`** — paired strings, shipped against its split handoff (15 Sep 2026).
+  `/admin/strings/paired` lists the keys one screen renders for both kinds of business, declared in
+  `lib/i18n/paired.ts` with the files that read them (a test holds each file to reading its key),
+  and the count of services halves nobody has written — a query over the registry and
+  `string_entry` rows, never a counter. A half is written, suppressed or restored from the console
+  with a reason on the audit log, checked against placeholders the screen supplies and the
+  vocabulary scan's own patterns, and reaches the storefront, dashboard, setup hub, listing, search,
+  plan change and cancellation on the next render. The registry holds this codebase's twelve pairs,
+  not the canvas's 214: the services track mostly forked screens rather than swapping words. Two are
+  real gaps (the dashboard's missed-enquiry line) and CSV import is suppressed for a firm that sells
+  work. Q1 is half answered (a banned word is refused on save; a wrong meaning is not), Q2 is
+  answered by pointing at Templates' own twin count, Q3 is the owner's.
 - [x] **7.4b `6h`** — homepage curation, split out of `12g` and shipped against its board-level
   handoff (14 Sep 2026). `/admin/content/home` is the four "Verified this week" slots
   (`HomepageSlot`, eligibility read live through `featureBlock`, a lapsed or suspended business
@@ -628,6 +640,7 @@ the only large piece and the only one selling something it does not deliver.
 | `13b` | WhatsApp hand-off | not started | medium | Must be reconciled with a detector that reports sellers for off-platform steering. | 9.3 |
 | `12g` | Notification templates | built | 14 Sep 2026 | Versions per line, a services twin the carrier picks, Meta's queue recorded, volume queried, a delivery log. Strings moved to `12g-s`. | 7.4 |
 | `6h` | Homepage curation | built | 14 Sep 2026 | Four slots chosen by a person with eligibility read live, chips typed not mined, a rails map whose counts are the page's own queries. | 7.4b |
+| `12g-s` | Paired strings | built | 15 Sep 2026 | A registry of pairs held to their consumers, halves written and suppressed from the console, a count that is a query. | 7.4c |
 | `7f` | Notification specimens | partial ↓ | export only | All four channels render; SMS has no carrier and records a skip with a reason. | 7.4 |
 | ~~`6g`~~ | ~~Admin copy audit~~ | **cut** | — | Cut 14 Sep 2026, unbuilt. The CI scan still reads exactly one file; every word held in the database is invisible to it. | ~~7.5~~ |
 | `10c` | Search — products tab | scaffold ↓ | medium | No facet rail of any kind on `/search`. | 5.3 |

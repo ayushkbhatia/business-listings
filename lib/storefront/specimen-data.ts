@@ -1,3 +1,4 @@
+import { CODE_COPIES } from "@/lib/i18n/paired";
 import type { SectionData } from "./render-data";
 
 /**
@@ -28,6 +29,7 @@ const day = (offset: number) => new Date(ANCHOR + offset * 86_400_000);
 
 export const SPECIMEN_DATA: SectionData = {
   kind: "goods",
+  copy: CODE_COPIES.goods,
   work: null,
   business: {
     slug: "al-waha-valves-and-fittings",
@@ -165,6 +167,7 @@ export const SPECIMEN_CONTENT: Record<string, Record<string, unknown>> = {
 export const SPECIMEN_WORK_DATA: SectionData = {
   ...SPECIMEN_DATA,
   kind: "services",
+  copy: CODE_COPIES.services,
   business: {
     slug: "meridian-chartered-accountants",
     displayName: "Meridian Chartered Accountants",

@@ -1,3 +1,4 @@
+import type { PairedCopy } from "@/lib/i18n/paired";
 import type { Availability } from "@/components/domain";
 import type { CredentialKind } from "@/lib/db/generated/enums";
 import type { ResolvedSection } from "./sections";
@@ -187,6 +188,13 @@ export interface SectionData {
    * speak goods; the services half renders in its own sections beside them.
    */
   kind: ListingKind;
+  /**
+   * The words the shared sections speak, already resolved for `kind` — board
+   * `12g-s`. Read through `lib/strings/store.ts` for a real store, so a half
+   * written on `/admin/strings/paired` reaches it without a deploy; a specimen
+   * carries the code defaults.
+   */
+  copy: PairedCopy;
   work: SectionWork | null;
   business: StorefrontIdentity;
   locations: StorefrontLocation[];

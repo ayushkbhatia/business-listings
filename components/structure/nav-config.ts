@@ -339,7 +339,7 @@ export const ADMIN_NAV: readonly NavGroup[] = [
     key: "content",
     labelKey: "nav.group.content",
     items: [
-      { key: "strings", labelKey: "nav.strings", href: "/admin/strings", capability: "taxonomy.write" },
+      { key: "strings", labelKey: "nav.strings", href: "/admin/strings", capability: "strings.write" },
       { key: "content-attribution", labelKey: "nav.content_attribution", href: "/admin/content/attribution", capability: "taxonomy.write" },
       { key: "content-home", labelKey: "nav.content_home", href: "/admin/content/home", capability: "homepage.curate" },
       { key: "content-testimonials", labelKey: "nav.content_testimonials", href: "/admin/content/testimonials", capability: "taxonomy.write" },

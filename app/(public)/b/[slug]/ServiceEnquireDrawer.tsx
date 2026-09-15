@@ -31,7 +31,14 @@ export function ServiceEnquireDrawer({
   triggerLabel,
   triggerClassName = ENQUIRE_LINK,
   triggerAriaLabel,
+  title,
 }: {
+  /**
+   * The composer's heading — the services half of `section.enquiry.title`, a
+   * paired string (board `12g-s`), resolved by the server page so a half
+   * written from the console reaches every drawer.
+   */
+  title: string;
   businessId: string;
   businessName: string;
   services: readonly ServiceEnquiryOption[];
@@ -66,7 +73,7 @@ export function ServiceEnquireDrawer({
         open={open}
         onClose={() => setOpen(false)}
         size="lg"
-        title={t("storefront_services.composer.title")}
+        title={title}
         description={serviceName ?? t("storefront_services.composer.service_other")}
         closeLabel={t("action.cancel")}
       >
