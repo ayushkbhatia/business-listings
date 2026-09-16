@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import { Button, buttonClassName, Input, Label, Select } from "@/components/primitives";
 import { DataTable, Modal, type Column } from "@/components/structure";
 import { Alert, StatusBadge, Tag } from "@/components/display";
+import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type { ReportBoardRow } from "./board";
 import type { ActionResult } from "./actions";
@@ -39,6 +40,14 @@ const MIN_REASON = 4;
 /** The option that takes the owner off, rather than an empty value. */
 const NOBODY = "nobody";
 
+/**
+ * The design system's floor: pagination above fifty rows, and never infinite
+ * scroll. The board's own flag 3 — *"46 items, six drawn, no filter, no sort,
+ * no pagination"* — is the third of those, and a queue that renders four
+ * hundred rows is one nobody reaches the bottom of.
+ */
+const PAGE_SIZE = 25;
+
 export function ReportQueue({
   rows,
   staff,
@@ -51,6 +60,7 @@ export function ReportQueue({
   assign: (formData: FormData) => Promise<ActionResult>;
 }) {
   const ids = { assignee: useId(), reason: useId() };
+  const [page, setPage] = useState(1);
   const [open, setOpen] = useState<ReportBoardRow | null>(null);
   const [assigneeId, setAssigneeId] = useState("");
   const [reason, setReason] = useState("");
@@ -73,6 +83,16 @@ export function ReportQueue({
       }
     });
   }
+
+  /*
+     The order is the server's — over service level first, then oldest — and
+     this only takes a window of it. A page that re-sorted would put a moderator
+     on page two of a different queue from the one page one was cut from.
+  */
+  const shown = useMemo(
+    () => rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [rows, page],
+  );
 
   const columns: Column<ReportBoardRow>[] = [
     {
@@ -185,9 +205,28 @@ export function ReportQueue({
       <DataTable
         caption={t("admin.reports.caption")}
         columns={columns}
-        rows={rows}
+        rows={shown}
         rowKey={(row) => row.ref}
         stickyHeader
+        {...(rows.length > PAGE_SIZE
+          ? {
+              pagination: {
+                page,
+                pageSize: PAGE_SIZE,
+                total: rows.length,
+                onPageChange: setPage,
+                rangeLabel: (from: number, to: number, total: number) =>
+                  t("table.range", {
+                    from: formatCount(from),
+                    to: formatCount(to),
+                    total: formatCount(total),
+                  }),
+                previousLabel: t("table.previous"),
+                nextLabel: t("table.next"),
+                pageLabel: (n: number) => t("table.page", { page: formatCount(n) }),
+              },
+            }
+          : {})}
         rowTone={(row) => (row.late ? "attention" : "default")}
         rowMenu={(row) => [
           {
