@@ -94,6 +94,12 @@ export default async function ReportsPage({
 
   // The filter travels into the row's screen, so Back returns to the same list.
   const carried = search({}).replace("/admin/reports", "");
+  /*
+     How many of the nine have anything in them, not how many exist. A header
+     reading "9 types" over a queue holding three would be the same defect this
+     board was corrected for, from the other direction.
+  */
+  const typesInPlay = REPORT_TYPES.filter((key) => view.counts[key] > 0).length;
   const rows = reportBoardRows(view.rows, { query: carried });
 
   /*
@@ -137,18 +143,15 @@ export default async function ReportsPage({
       meta={
         view.total === 0 ? undefined : (
           <span className="flex flex-wrap items-center gap-3 text-body-sm text-body">
-            {/*
-               One taxonomy, counted once. `types` is how many of the nine have
-               anything in them, not how many exist — a header that said "9
-               types" over a queue holding three would be the same defect this
-               board was corrected for, from the other direction.
-            */}
+            {/* One taxonomy, counted once. */}
             <span>
-              {t("admin.reports.meta", {
-                open: formatCount(view.total),
-                types: formatCount(REPORT_TYPES.filter((key) => view.counts[key] > 0).length),
-                auto: formatPercent(view.autoDetected / view.total),
-              })}
+              {[
+                t("admin.reports.meta.open", { n: formatCount(view.total) }),
+                t("admin.reports.meta.types", { count: typesInPlay, n: formatCount(typesInPlay) }),
+                t("admin.reports.meta.auto", {
+                  auto: formatPercent(view.autoDetected / view.total),
+                }),
+              ].join(" · ")}
             </span>
             {view.overSla > 0 && (
               <StatusBadge tone="bad">

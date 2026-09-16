@@ -89,9 +89,17 @@ export function ReportQueue({
      this only takes a window of it. A page that re-sorted would put a moderator
      on page two of a different queue from the one page one was cut from.
   */
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  /*
+     Clamped, because the list shrinks under the pager: resolving the last row
+     on page two revalidates to a queue that has no page two, and an unclamped
+     window would render an empty table under a header saying there are
+     twenty-six rows.
+  */
+  const current = Math.min(Math.max(1, page), pages);
   const shown = useMemo(
-    () => rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [rows, page],
+    () => rows.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE),
+    [rows, current],
   );
 
   const columns: Column<ReportBoardRow>[] = [
@@ -211,7 +219,7 @@ export function ReportQueue({
         {...(rows.length > PAGE_SIZE
           ? {
               pagination: {
-                page,
+                page: current,
                 pageSize: PAGE_SIZE,
                 total: rows.length,
                 onPageChange: setPage,

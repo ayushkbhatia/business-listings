@@ -1963,7 +1963,15 @@ export const en = {
 
   "admin.reports.title": "Reports & flags",
   "admin.reports.eyebrow": "Moderation",
-  "admin.reports.meta": "{open} open · {types} types · {auto} auto-detected",
+  /*
+     Three strings rather than one sentence with three numbers in it. The middle
+     one pluralises, and a key can only pluralise on one `count` — "8 open · 1
+     types · 38% auto-detected" is the header this board was corrected for, in
+     miniature.
+  */
+  "admin.reports.meta.open": "{n} open",
+  "admin.reports.meta.types": { one: "{n} type", other: "{n} types" },
+  "admin.reports.meta.auto": "{auto} auto-detected",
   "admin.reports.caption": "Complaints waiting for a decision, the ones past their service level first, then oldest",
   "admin.reports.col.what": "Reported",
   "admin.reports.col.detail": "What was said",

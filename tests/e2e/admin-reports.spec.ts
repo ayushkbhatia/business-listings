@@ -27,7 +27,9 @@ test.describe("the queue", () => {
        corrected for: every count in the header reconciles with the list
        beneath it. The header's open figure is the sum of the type chips.
     */
-    const header = await page.getByText(/\d+ open · \d+ types · \d+% auto-detected/).innerText();
+    const header = await page
+      .getByText(/\d+ open · \d+ types? · \d+% auto-detected/)
+      .innerText();
     const open = Number(/(\d+) open/.exec(header)![1]);
 
     const chips = page.getByRole("navigation", { name: "Filter by type" });
