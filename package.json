@@ -51,7 +51,8 @@
     "maintenance:assets": "tsx scripts/copy-maintenance-tokens.mts",
     "maintenance:check": "tsx scripts/maintenance-check.mts",
     "predev": "pnpm map:worker && pnpm maintenance:assets",
-    "prebuild": "pnpm map:worker && pnpm maintenance:assets"
+    "prebuild": "pnpm map:worker && pnpm maintenance:assets",
+    "audit:private-docs": "tsx scripts/audit-private-documents.mts"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.9.1",

@@ -3,6 +3,7 @@ import { cache } from "react";
 import { prisma } from "@/lib/db/client";
 import { resolveTemplate } from "@/lib/spec/resolve";
 import { VERIFIED_TIER } from "@/lib/verification";
+import { PUBLISHABLE_DOCUMENT_KINDS } from "@/lib/verification/credentials";
 import { hostnameFor } from "@/lib/domains/label";
 import { STANDING_CREDENTIAL } from "@/lib/credentials/kinds";
 
@@ -181,7 +182,25 @@ export async function getProductBySlug(businessSlug: string, productSlug: string
     include: {
       category: true,
       media: { orderBy: { sortOrder: "asc" }, include: { media: true } },
-      documents: { orderBy: { sortOrder: "asc" }, include: { document: true } },
+      /*
+         Publishable kinds only, and the `where` is the point of this line.
+
+         The page renders each row's `displayName ?? t("document.<kind>")` as a
+         link to `/b/:slug/d/:id`. That route fences on the same constant, so a
+         trade licence has always 404'd there — but the name and the link still
+         reached the markup, and `verify_listing.documents_hint` promises the
+         seller their licence is "never on your public listing and never linked
+         from it". A 404 behind the link does not make the link not exist.
+
+         `attachToProduct` and the catalogue importer now refuse to write such a
+         row at all. This is the layer that holds for the rows written before
+         they did, and for anything a future writer forgets.
+      */
+      documents: {
+        where: { document: { kind: { in: [...PUBLISHABLE_DOCUMENT_KINDS] } } },
+        orderBy: { sortOrder: "asc" },
+        include: { document: true },
+      },
       business: {
         include: {
           primaryCategory: true,

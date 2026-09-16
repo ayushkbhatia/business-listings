@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/client";
 import { effectiveFor } from "@/lib/billing/entitlements-service";
 import { allowance, type Allowance, type PlanCaps } from "@/lib/plan/entitlements";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
+import { CHECKED_BY_US_KINDS } from "@/lib/verification/credentials";
 import { referencesFor } from "./references";
 import { badgesFor, needsAlt, stateOf, type BadgeKind, type Reference } from "./state";
 
@@ -133,7 +134,27 @@ export async function mediaLibrary(
       },
     }),
     prisma.document.findMany({
-      where: { businessId },
+      /*
+         The two kinds the platform holds rather than the seller shows.
+
+         Every control this screen offers a file is a publishing control —
+         attach to a product, make it primary, describe it for a buyer using a
+         screen reader. A trade licence and a VAT certificate can take none of
+         them: `attachToProduct` refuses them, the product page filters them and
+         `/b/:slug/d/:id` 404s them, because the seller was promised on the
+         upload screen that those two are "never on your public listing and
+         never linked from it". Offering them in the picker and then refusing
+         every use of them is a screen arguing with itself.
+
+         They have a home, and it is the one that can say something true about
+         them: `/dashboard/verification` lists both with their state, their
+         expiry and whether they can be deleted. Nothing is hidden from the
+         seller — it is shown where the words fit.
+
+         Same shape as `reviewId: null` above, and the same reasoning: a row in
+         `Document` is not automatically a file in the seller's library.
+      */
+      where: { businessId, kind: { notIn: [...CHECKED_BY_US_KINDS] } },
       select: {
         id: true,
         storagePath: true,
