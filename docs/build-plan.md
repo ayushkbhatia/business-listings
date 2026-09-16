@@ -527,8 +527,22 @@ The pattern underneath all five: **a sale with no ledger row.**
   never inside it. The subscription list's unmapped fields are untouched and still owed.
 - [ ] **6.3 `11e`** — build the sale D2 defines: plan gate, billing line, ender on cancel and
   downgrade, waitlist writer, the emirate dimension.
-- [ ] **6.4 `4h`** — the off-platform panel has no control and no outcome path. Four of seven
-  report kinds have no producer.
+- [x] **6.4 `4h`** — shipped against its board-level handoff (16 Sep 2026). One queue over two
+  tables: the header, the chips, the over-SLA badge and the auto-detected share are all counted
+  off one array, which closes the board's own correction 3 — three buckets over five types, with
+  Dispute, Fraud and Content homeless. A service level per type in `lib/reports/sla.ts`, and the
+  age colour derived from it rather than set by hand, which is where the render's red `6 h` over
+  an amber `2 d 4 h` came from. Three buyers reporting one telephone number collapse to one work
+  item, and deciding it closes the rest as `duplicate` — the fourth outcome the closed set of
+  three had nowhere to put. `Suspend` and `Archive` are not on this board: `12c` refused the
+  first in writing and `11i` owns the second, so the row escalates and the detail screen links to
+  where each decision lives. `/admin/reports/:id` answers for every kind rather than for the one
+  carrying an enquiry, and `/admin/reports/disputes/:id` is its twin. Two producers landed with
+  it: a nightly shared-number sweep and a licence-long-expired sweep, both tunable on
+  `/admin/reports/detectors` (no confidence — the platform has no scoring detector), and
+  `/report/:slug`, the form the storefront's two *Report this listing* links had been opening a
+  policy page instead of. `11c`'s `B4`, `B5`, `B6` and `B9` are answered. `Q5` is answered too:
+  `report_resolved` writes back to every reporter in the group who has an account.
 - [x] **6.5 `11i`** — the closure and retention promises the legal pages already publish.
   Closure is a reversible status transition with a 14-day window; the platform half (B8) runs
   nightly. Two retention halves are not built — see `docs/platform-state.md`.
@@ -660,7 +674,7 @@ the only large piece and the only one selling something it does not deliver.
 | `10g` | Unclaimed listing | partial | small | Both calls to action render `disabled`; the claim destination exists and only the href is absent. | 1.1 / 4.6 |
 | `10a` | Subcategory page | partial ↓ | export only | Two definitions of "suppliers in this trade" render on one page. | 5.2 |
 | `13c` | Report a listing | not started | medium | The admin queue is built; both live entry points go to the verification policy. | 9.1 |
-| `4h` | Reports, flags & disputes | partial | medium | The off-platform panel has no control and no outcome path. | 6.4 |
+| `4h` | Reports, flags & disputes | built | — | One queue, one taxonomy, a service level per type, and two detectors filling it. | 6.4 |
 | `4g` | Subscriptions & revenue | built | small | One Dubai month from the ledger; every ratio prints its formula, NRR excludes new business, placement stays out of MRR. | 6.2 |
 | `11e` | Sponsored placement | scaffold ↓ | medium | A slot is created at 450 AED with no invoice, no charge, no ledger row — and no plan gate. | 6.3 |
 | `11i` | Close account | scaffold | large | Terms and privacy publish a closure promise and eight retention windows; nothing implements either. | 6.5 |

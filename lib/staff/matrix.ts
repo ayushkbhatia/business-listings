@@ -34,6 +34,12 @@ export const MATRIX_GROUPS = [
       "queue.decide",
       "queue.rules",
       "report.resolve",
+      /*
+         Board 4h `B11`. Beside `queue.rules` and for the same reason: both are
+         the line a queue's contents are decided by, one rung above deciding a
+         row of it.
+      */
+      "report.detectors",
       "review.hold",
       "review.remove",
       "question.remove",

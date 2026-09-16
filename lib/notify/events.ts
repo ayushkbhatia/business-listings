@@ -737,6 +737,120 @@ export async function onReviewDisputeDecided(input: { disputeId: string }): Prom
 }
 
 /**
+ * A supplier report was decided, and the person who filed it is told.
+ *
+ * Board 4h `Q5`: *"46 open items, a 2.4-day median, and no notification in the
+ * model. `12g` holds 34 templates; none of them is we looked at what you
+ * reported."* A directory that asks the public to tell it when a telephone
+ * number is wrong, and then never answers, gets told once.
+ *
+ * ## Everybody in the group, not only the row a moderator opened
+ *
+ * `resolveReport` closes the rest of a collapsed group as `duplicate` in the
+ * same transaction, and passes every id here. Three people reported that number
+ * and three people are owed the answer — telling only the first would make the
+ * collapse a thing that costs the other two their reply.
+ *
+ * ## Only where there is somebody to tell
+ *
+ * A report filed by a signed-out visitor has no account and no address, and a
+ * detector's finding has no reporter at all. Both are skipped silently, which
+ * is honest as long as the form says so at the point of filing — it does.
+ *
+ * Buyer-side, so it routes through `BUYER_DEFAULT` rather than a seller's
+ * matrix: the reporter is a buyer or a member of the public, and the business
+ * the report is *about* has no say in whether it is sent.
+ */
+export async function onReportResolved(input: { reportIds: readonly string[] }): Promise<void> {
+  if (input.reportIds.length === 0) return;
+  await safely("report_resolved", async () => {
+    const reports = await prisma.supplierReport.findMany({
+      where: { id: { in: [...input.reportIds] }, reporterId: { not: null } },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        outcome: true,
+        kind: true,
+        subjectBusiness: { select: { displayName: true, slug: true } },
+        reporter: {
+          select: { id: true, phone: true, email: true, claimToken: true, isProvisional: true },
+        },
+      },
+    });
+    if (reports.length === 0) return;
+
+    const event = "report_resolved" as const;
+    const senders = resolveNotificationSenders();
+    /*
+       No trade kind. A report is about a listing rather than about a request
+       for work, so there is no goods/services twin to pick and nothing to
+       measure a fallback against — `12g`'s twin column answers a question this
+       event does not ask.
+    */
+    const templates = await resolveLiveTemplates(event, null);
+
+    for (const report of reports) {
+      const reporter = report.reporter;
+      if (!reporter || !report.outcome) continue;
+      /*
+         Our own finding about a review is filed by a moderator against the
+         account. Writing back to say we decided our own report would be the
+         platform sending itself a letter.
+      */
+      if (report.kind === "review_integrity") continue;
+
+      const decisions = route(BUYER_DEFAULT, { event, now: new Date() });
+      for (const decision of decisions) {
+        const template = templates.get(decision.channel) ?? null;
+        if (!template) continue;
+
+        const rendered = render(
+          template,
+          withParams(event, {
+            businessName: report.subjectBusiness.displayName,
+            businessSlug: report.subjectBusiness.slug,
+            outcome: t(`admin.reports.outcome.${report.outcome}` as "admin.reports.outcome.upheld"),
+          }),
+        );
+
+        const outcome =
+          decision.action === "send"
+            ? await deliver(decision.channel, senders, rendered, reporter, template.metaTemplateName)
+            : {
+                status: decision.action === "defer" ? ("deferred" as const) : ("skipped" as const),
+                reason: decision.reason,
+              };
+
+        await prisma.notificationDelivery.create({
+          data: {
+            templateId: template.id,
+            event,
+            channel: decision.channel,
+            status: outcome.status,
+            recipientUserId: reporter.id,
+            reason: outcome.reason ?? null,
+            scheduledFor: decision.action === "defer" ? decision.at : null,
+            payload:
+              decision.action === "defer"
+                ? ({
+                    subject: rendered.subject,
+                    body: rendered.body,
+                    actionLabel: rendered.actionLabel,
+                    actionUrl: rendered.actionPath
+                      ? buyerActionUrl(rendered.actionPath, reporter)
+                      : null,
+                    metaTemplateName: template.metaTemplateName,
+                  } as never)
+                : undefined,
+            sentAt: outcome.status === "sent" ? new Date() : null,
+          },
+        });
+      }
+    }
+  });
+}
+
+/**
  * Enough of a message to decide whether to open it, and no more.
  *
  * Cut on a word boundary rather than mid-syllable, and never padded — a preview

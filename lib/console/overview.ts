@@ -2,6 +2,15 @@ import "server-only";
 import { prisma } from "@/lib/db/client";
 import { zeroResultCount } from "@/lib/search/zero-results";
 import { CREDENTIAL_REVIEW_DAYS, VERIFIED_TIER } from "@/lib/verification";
+import { reportQueueHealth } from "@/lib/reports/queue";
+import { SLOWEST_REPORT_SLA_DAYS } from "@/lib/reports/sla";
+/*
+   Re-exported so `/admin`'s one-line service-level summary has a single import
+   for both ends of the range it quotes. The figures themselves live in
+   `lib/reports/sla.ts`, per type, and this file states no report clock of its
+   own.
+*/
+export { FASTEST_REPORT_SLA_DAYS } from "@/lib/reports/sla";
 
 // Re-exported so callers keep one import. The function itself lives outside
 // this module because it is pure and `server-only` is not testable in jsdom.
@@ -43,8 +52,16 @@ export const SLA_DAYS = {
   moderation: 2,
   /** Two companies both think they own a listing, and buyers are enquiring. */
   claim: 3,
-  /** Somebody reported a supplier. Conduct queues age badly. */
-  report: 5,
+  /**
+   * Somebody reported a supplier. Conduct queues age badly.
+   *
+   * The slowest of board 4h's per-type clocks, which is what the console's
+   * one-line service-level summary can honestly quote for a queue holding nine
+   * types. The per-type figures — a day for off-platform payment, two for a
+   * review dispute — are in `lib/reports/sla.ts`, and the lateness on this
+   * board's own metric is computed from those rather than from this.
+   */
+  report: SLOWEST_REPORT_SLA_DAYS,
   /** A payment failed. D14 is when the plan drops, so 14 is the deadline. */
   dunning: 14,
   /**
@@ -114,9 +131,7 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
     freeAtCap,
     unclaimedListings,
     stagedRecords,
-    reportsOpen,
-    reportsLate,
-    reportsOldest,
+    reports,
     pastDue,
     unpaidInvoices,
     expiringLicences,
@@ -172,15 +187,19 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
       },
     }),
 
-    prisma.supplierReport.count({ where: { outcome: null } }),
-    prisma.supplierReport.count({
-      where: { outcome: null, createdAt: { lt: cutoff(now, SLA_DAYS.report) } },
-    }),
-    prisma.supplierReport.findFirst({
-      where: { outcome: null },
-      orderBy: { createdAt: "asc" },
-      select: { createdAt: true },
-    }),
+    /*
+       Board 4h. One read of the board's own queue rather than three counts of
+       one of its two tables.
+
+       This counted `supplier_report` alone against a single service level, so
+       it could say four were waiting while the board said six — review disputes
+       are in that queue and were in neither count — and it called a fraud
+       report healthy at three days. `reportQueueHealth` is the same array the
+       board renders, with the per-type clock from `lib/reports/sla.ts`, which
+       is the rule `SLA_MS` states for board 4b: the overview and the queue
+       cannot disagree about what late means.
+    */
+    reportQueueHealth(now),
 
     prisma.subscription.count({ where: { status: "past_due" } }),
     prisma.invoice.count({ where: { status: "issued", paidAt: null } }),
@@ -282,7 +301,7 @@ export async function consoleOverview(now = new Date()): Promise<ConsoleJob[]> {
       key: "trust",
       labelKey: "console.job.trust",
       metrics: [
-        metric("reports", "console.metric.reports", "reports", "/admin/reports", reportsOpen, reportsLate, reportsOldest?.createdAt ?? null),
+        metric("reports", "console.metric.reports", "reports", "/admin/reports", reports.open, reports.late, reports.oldestAt),
         metric("expiring", "console.metric.expiring", "businesses", "/admin/businesses", expiringLicences),
       ],
     },

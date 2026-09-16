@@ -105,6 +105,15 @@ describe("what an event supplies", () => {
       */
       "ramadan_dates_moved",
       /*
+         Board 4h `Q5`, and the first event in this list that goes to somebody
+         who is not a party to an enquiry at all. A directory that asks the
+         public to tell it when a telephone number is wrong, and then never
+         answers, gets told once. Sent only where the reporter has an account:
+         a signed-out visitor has nowhere to be written to, and the form says so
+         at the point of filing rather than implying a reply it cannot send.
+      */
+      "report_resolved",
+      /*
          Board 11c's two, which closed the loop the reply window runs on.
 
          Both were declared in the enum and seeded with **live** templates
@@ -132,7 +141,7 @@ describe("what an event supplies", () => {
   it("covers every event in the enum, so none is missing a row", () => {
     // `satisfies Record<NotificationEvent, …>` enforces this at compile time;
     // this fails loudly if somebody widens the enum and the type is loosened.
-    expect(Object.keys(EVENT_PARAMS)).toHaveLength(17);
+    expect(Object.keys(EVENT_PARAMS)).toHaveLength(18);
   });
 
   it("does not claim to emit the alert it only records", () => {

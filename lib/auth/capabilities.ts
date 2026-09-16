@@ -114,6 +114,23 @@ export const CAPABILITIES = {
     source: "stated",
     why: "§07 staff table, \"Approve listings & edits\" and \"Reject with reason\". This is the queue handoff 3's ListingChangeRequest fills.",
   },
+  /*
+     Board 4h `B11`. The thresholds the report detectors sweep on.
+
+     Held with `queue.rules` rather than with `report.resolve`, and for the same
+     reason: moving a threshold changes what lands in front of every moderator
+     tomorrow, which is a different act from deciding one report today. A
+     moderator drowning in false positives should be able to say so; the seat
+     that answers by moving the line is the one that answers for the queue.
+
+     Not a row in §07 — flag it if §07 gains one.
+  */
+  "report.detectors": {
+    roles: OPS_LEAD_ONLY,
+    audited: true,
+    source: "inferred",
+    why: "Board 4h B11. The detection thresholds — how many listings must share a telephone number, how long a licence must be past expiry — and which sweeps run. Changing one changes what the whole queue holds tomorrow, so it sits with `queue.rules` a rung above deciding a single report. Off-platform payment detection is deliberately not switchable here: a switch that turns off fraud detection is one nobody notices is off. Not a row in \u00a707 — flag it if \u00a707 gains one.",
+  },
   "queue.rules": {
     roles: OPS_LEAD_ONLY,
     audited: true,

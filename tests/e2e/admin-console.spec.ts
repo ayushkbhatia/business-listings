@@ -332,17 +332,24 @@ test.describe("board 12b — dedupe", () => {
 });
 
 test.describe("boards 4h, 4i and 12h — trust", () => {
-  test("the report queue offers three outcomes and never a fourth", async ({ page }) => {
+  test("the report queue never says the word this product does not use", async ({ page }) => {
     await page.goto("/admin/reports");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Supplier reports");
-    await expect(page.getByText(/Outcomes are corrected, upheld or no action/)).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Reports & flags");
     // The word this product does not use, anywhere a report can reach.
     await expect(page.getByRole("main")).not.toContainText(/refund/i);
   });
 
-  test("off-platform payment reports are outside the queue", async ({ page }) => {
+  test("off-platform payment is a type in the one queue, not a panel beside it", async ({ page }) => {
+    /*
+       Board 4h `B3`. It used to be a separate list under the table, on the
+       reading that the platform detected it and what a moderator decides is
+       about the account. It is still that — the row's next step is `Check` and
+       its decision is an escalation — but a second list was a second taxonomy,
+       and the header could not reconcile with a table that did not hold it.
+    */
     await page.goto("/admin/reports");
-    await expect(page.getByText("Off-platform payment, outside the queue")).toBeVisible();
+    await expect(page.getByText("Off-platform payment, outside the queue")).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /^Off-platform \d+$/ })).toBeVisible();
   });
 
   test("an ops lead sees the whole audit log", async ({ page }) => {

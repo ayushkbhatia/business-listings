@@ -293,6 +293,40 @@ export const TEMPLATES: TemplateSeed[] = [
     actionPath: "/dashboard/reviews",
     status: "live",
   },
+  /*
+     Board 4h `Q5` — the answer to a report.
+
+     Email and in-app, and deliberately no WhatsApp or SMS: this is the end of a
+     thing the reporter started, not something they have to act on, and
+     `INTERRUPTING_CHANNELS` exists to keep a closed case off somebody's phone.
+
+     The action opens the listing rather than the report. There is no
+     reporter-facing record of a report — one would be a second copy of a
+     moderator's decision on a surface the moderator never sees — and what the
+     person who told us the number was wrong actually wants is to look at the
+     number.
+  */
+  {
+    event: "report_resolved",
+    channel: "email",
+    kind: "neutral",
+    subject: "We looked at what you reported",
+    body:
+      "Thank you for telling us about {businessName}. We have finished looking at it. " +
+      "Outcome: {outcome}. If the listing still looks wrong, report it again and we will take another look.",
+    actionLabel: "Open the listing",
+    actionPath: "/b/{businessSlug}",
+    status: "live",
+  },
+  {
+    event: "report_resolved",
+    channel: "in_app",
+    kind: "neutral",
+    body: "Your report about {businessName} is closed. Outcome: {outcome}.",
+    actionLabel: "Open the listing",
+    actionPath: "/b/{businessSlug}",
+    status: "live",
+  },
   {
     event: "review_requested",
     channel: "whatsapp",

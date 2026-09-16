@@ -161,6 +161,15 @@ export const EVENT_PARAMS = {
   */
   document_expiring: ["expiresAt", "days"],
   /*
+     Board 4h `Q5`. Two params, and the reason is `review_dispute_decided`'s:
+     the outcome is what the reporter needs, and a moderator's written reason is
+     prose about a listing that may itself be a private-information complaint.
+     `render()` refuses a value that looks like contact details, so a reason
+     saying *"the address field held a residential flat number"* would throw in
+     a path where nobody is watching rather than send.
+  */
+  report_resolved: ["businessName", "businessSlug", "outcome"],
+  /*
      Declared, and deliberately empty — so `isEmitted` reports false and the
      notifications screen shows it as "nothing sends this yet", which is the
      affordance handoff 4 built for exactly this state.
@@ -223,6 +232,7 @@ export const EVENT_SOURCES = {
   review_requested: ["11c"],
   review_dispute_decided: ["11c"],
   document_expiring: ["3e"],
+  report_resolved: ["4h"],
   product_alert_matched: [],
   ramadan_dates_moved: ["3d"],
   weekly_digest: [],
@@ -250,6 +260,8 @@ export const EVENT_AUDIENCE = {
   review_requested: "buyer",
   review_dispute_decided: "seller",
   document_expiring: "seller",
+  /* The person who filed the report, who is a buyer or a member of the public. */
+  report_resolved: "buyer",
   product_alert_matched: "buyer",
   ramadan_dates_moved: "seller",
   weekly_digest: "seller",

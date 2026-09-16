@@ -52,7 +52,7 @@ and it is the one that argues back.
 /:emirate/:category                     Trade across one emirate — 84 of them [6a]  built h5s2
 /:emirate/:area/:category               Area landing page                     [6a]  built h5s3
 /lp/:campaign                           Campaign landing                     [10i]  built h5s5
-/report/:subject                        Report a listing (modal route)       [10j]
+/report/:slug                           Report a listing — the four public kinds [4h] built 4h
 /terms                                  Terms of use, 16 clauses             [13f]  built h7s1
 /privacy                                Privacy policy, 12 sections          [13g]  built h7s1
 /cookies                                Cookie policy + 9-cookie register    [13h]  built h7s1
@@ -192,8 +192,10 @@ and it is the one that argues back.
 /admin/dunning                          Failed payments — the one list       [12e]  built 12e
 /admin/revenue                          Revenue — one Dubai month, ?period=   [4g]  built 4g
 /admin/revenue/export                   The month as CSV, formulas and filter [4g]  built 4g
-/admin/reports                          Supplier reports & flags              [4h]  built h4s3
-/admin/reports/:id                      Report evidence — the thread attached [7c]  built h7c
+/admin/reports                          Reports & flags — one queue, ?type=    [4h]  built 4h
+/admin/reports/:id                      One report: evidence and the decision  [4h]  built 4h
+/admin/reports/disputes/:id             One review dispute, on its own screen  [4h]  built 4h
+/admin/reports/detectors                Detection thresholds, ops lead         [4h]  built 4h
 /admin/support                          Support desk & view-as               [12f]  built h4s4
 /admin/notifications                    Notification templates              [12g]  built 12g
 /admin/notifications/channels           Carrier per channel, 30-day health   [12g]  built 12g

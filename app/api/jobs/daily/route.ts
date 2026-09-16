@@ -19,6 +19,7 @@ import { sweepAreaPages } from "@/lib/seo/area";
 import { sweepEmiratePages } from "@/lib/seo/emirate";
 import { sweepCuratedLists } from "@/lib/seo/curated";
 import { sweepExpiredLicences } from "@/lib/verification/expiry-job";
+import { runReportDetectors } from "@/lib/reports/detector-job";
 import { sweepExpiringLicences } from "@/lib/verification/licence-notice-job";
 import { sweepZeroQuoteEnquiries } from "@/lib/enquiry/zero-quote";
 import { pruneProductEvents } from "@/lib/telemetry/record";
@@ -241,6 +242,24 @@ export async function GET(request: NextRequest) {
       }
       return result;
     },
+    /*
+       Board 4h `B11`. The two detectors that fill most of the reports queue: one
+       telephone number on several listings, and a trade licence long past
+       expiry on a listing still taking enquiries.
+
+       After the licence sweep and before the closures, and both edges matter.
+       `sweepExpiredLicences` is what reads `licenceExpiry` today, so running
+       first would report a business whose renewal had not yet been looked at;
+       `sweepClosures` below acts on businesses already under a closure notice,
+       and this deliberately skips those — reporting a listing we have already
+       written to would be a second route to a decision that has one.
+
+       No audit row, like everything else in this route: `AuditEvent.actorId` is
+       NOT NULL because the log holds decisions, and a threshold is not a
+       decision. What it produces is a queue item for a person to decide, and
+       that decision is audited where it is taken.
+    */
+    reportDetectors: () => runReportDetectors(),
     /*
        Board 11i. After the licence sweep, and that is load-bearing: a platform
        closure notice is withdrawn when the licence has been renewed, and the

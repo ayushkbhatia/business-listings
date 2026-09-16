@@ -60,6 +60,7 @@ import { seedContactLeads } from "./seed-contact-leads.mjs";
 import { seedAccountHealth } from "./seed-account-health.mjs";
 import { seedRevenue } from "./seed-revenue.mjs";
 import { seedCrmCalls } from "./seed-crm.mjs";
+import { seedReportDetectors, seedReports } from "./seed-reports.mjs";
 import { monthlyValueFils } from "../lib/billing/period.js";
 import { TEMPLATES } from "./seed-notification-templates.mjs";
 import { seedNotificationDeliveries } from "./seed-notification-deliveries.mjs";
@@ -1121,9 +1122,22 @@ async function main() {
   // the window is Dubai days from acceptance, and its stated day must not move.
   await seedReviewWrite(prisma, new Date());
   await seedContactLeads(prisma, new Date());
+  /*
+     Board 4h: a collapsed group, an escalated row, a row with an owner, and
+     ninety days of decisions behind the outcomes rail. `NOW` rather than the
+     wall clock — every figure on that rail is a window, and a fixture whose
+     ages move between runs makes the shares move with them.
+  */
+  await seedReports(prisma, NOW);
   // After the named fixtures, so an unverified channel written above is not
   // overwritten by the backfill's verified one.
   await backfillSeatChannels(prisma);
+  /*
+     Board 4h's two sweeps, after every listing and location above them: both
+     read the directory as it stands, and running earlier would have them sweep
+     half of it. The real job, not a copy of what it produces.
+  */
+  await seedReportDetectors(prisma, new Date(NOW.getTime() - 8 * 3_600_000));
   // Last, because everything above it can create a recipient row.
   await onlyOneSellerAtCap(prisma);
   await recomputeDerived(prisma);

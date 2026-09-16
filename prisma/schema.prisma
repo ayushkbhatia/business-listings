@@ -104,11 +104,17 @@ model User {
   reviewDrafts             ReviewDraft[]
   disputesRaised           ReviewDispute[]          @relation("DisputeRaisedBy")
   disputesDecided          ReviewDispute[]          @relation("DisputeDecidedBy")
+  disputesAssigned         ReviewDispute[]          @relation("DisputeAssignee")
+  disputesAssignedBy       ReviewDispute[]          @relation("DisputeAssigner")
   auditEvents              AuditEvent[]
   serviceRevisions         ServiceRevision[]
   invoiceEvents            InvoiceEvent[]
   cancellations            SubscriptionChange[]     @relation("ChangeRequestedBy")
   reportsFiled             SupplierReport[]         @relation("ReportReporter")
+  reportsAssigned          SupplierReport[]         @relation("ReportAssignee")
+  reportsAssignedBy        SupplierReport[]         @relation("ReportAssigner")
+  reportsEscalated         SupplierReport[]         @relation("ReportEscalator")
+  reportsResolved          SupplierReport[]         @relation("ReportResolver")
   messages                 Message[]
   contactReveals           ContactReveal[]
   contactLeads             ContactLead[]
@@ -5042,17 +5048,30 @@ model ReviewDispute {
   /// Who decided. Null while open.
   decidedById   String?               @map("decided_by_id") @db.Uuid
 
+  /// Board 11c `B5`, the half board 4h was waiting on: *"dispute outcomes need
+  /// a queue and an SLA owner."* The queue shipped with 11c and the owner did
+  /// not, so the promise of a decision in about two working days belonged to
+  /// nobody in particular. The same three columns as `SupplierReport`, because
+  /// the two row shapes share one screen and one moderator's morning.
+  assigneeId   String?   @map("assignee_id") @db.Uuid
+  assignedAt   DateTime? @map("assigned_at")
+  assignedById String?   @map("assigned_by_id") @db.Uuid
+
   createdAt DateTime @default(now()) @map("created_at")
 
-  review    Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
-  business  Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  raisedBy  User     @relation("DisputeRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
-  decidedBy User?    @relation("DisputeDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  review     Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  raisedBy   User     @relation("DisputeRaisedBy", fields: [raisedById], references: [id], onDelete: Cascade)
+  decidedBy  User?    @relation("DisputeDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  assignee   User?    @relation("DisputeAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignedBy User?    @relation("DisputeAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
 
   /// The queue: open first, oldest first. Age before volume, like every other
   /// queue in this console.
   @@index([outcome, createdAt])
   @@index([businessId, createdAt])
+  /// Board 4h `B4`. The owner column, and the `mine` filter over it.
+  @@index([assigneeId, outcome], map: "review_dispute_assignee_idx")
   /// One open dispute per review is a partial unique index in the migration —
   /// Prisma cannot express `WHERE resolved_at IS NULL`. A seller who disputed
   /// on one ground and was refused may not immediately re-file on another, but
@@ -5081,8 +5100,45 @@ enum ReportOutcome {
   seller_corrected
   upheld
   no_action
+  /// Board 4h `B6`. The same problem, reported again.
+  ///
+  /// Row 3 of the board is `Public x3` — three people reporting one wrong phone
+  /// number — and the three outcomes above have nowhere for the second and
+  /// third to land. Closing them as `no_action` would say the platform looked
+  /// and found nothing, which is the opposite of what happened, and it would
+  /// put two of the three into the rail's *no action needed* share.
+  ///
+  /// So a duplicate is resolved against the report it duplicates
+  /// (`duplicateOfId`), takes that report's decision as its reason, and is
+  /// counted separately on the rail. The work item is one; the records stay
+  /// three, because three people asked and three people are owed an answer.
+  duplicate
 
   @@map("report_outcome")
+}
+
+/// Board 4h `B11` — which detector filed a report, where one did.
+///
+/// Null means a person filed it. That distinction used to be read off
+/// `reporterId`: *"a report nobody filed is one the platform filed."* It stopped
+/// being true the moment the public report form landed — a visitor with no
+/// account files with a null reporter and is not a detector — so the inference
+/// moved to a column that states it.
+///
+/// Every value here is a rule, not a score. None of them carries a confidence,
+/// and the board's `88% CONFIDENCE` is a design fixture: the platform has no
+/// scoring detector, and a nullable `confidence` column with no writer would be
+/// a number a screen could one day render from nothing. What each detector
+/// carries instead is the count it actually measured, in `SupplierReport.evidence`.
+enum ReportDetector {
+  /// `lib/messaging/off-platform.ts`, at the moment the message is written.
+  off_platform_message
+  /// One telephone number published on several listings. Nightly.
+  shared_phone
+  /// A licence long past expiry on a listing still in the directory. Nightly.
+  licence_long_expired
+
+  @@map("report_detector")
 }
 
 /// The trust queue. Three reports on the same field auto-flag the listing.
@@ -5119,20 +5175,95 @@ model SupplierReport {
   /// `SetNull` for the reason `reviewId` gives: the report is a finding about a
   /// supplier, and it outlives the enquiry it was filed from.
   enquiryId         String?        @unique @map("enquiry_id")
+  /// What was said: a reporter's own words, or a detector's description of what
+  /// it matched. Null where neither has anything to add.
   detail            String?
+  /// What the platform already knows, in one line. Board 4h calls this the best
+  /// thing on the screen, and it is: `SAME NUMBER ON 4 LISTINGS` under a phone
+  /// report does the triage before anybody reads the complaint.
+  ///
+  /// Held apart from `detail` because they have different authors and different
+  /// standing. `detail` is a claim; this is a measurement, and a moderator
+  /// reading the row has to be able to tell which is which. Written by the
+  /// detector that filed the report, or by the producer that had a fact to hand
+  /// — three prior reports on the same field, a licence expiry, a flagged
+  /// message. Null where there is nothing to say; never a restatement of the
+  /// claim in capitals.
+  evidence          String?
+  /// Board 4h `B11`. Which detector filed this, or null for a person.
+  detector          ReportDetector?
+
+  /// Board 4h `B4` — the owner column. One moderator's name against one row.
+  ///
+  /// The same three columns `QueueItem` carries for board 4b, on this table
+  /// rather than in a shared one: a supplier report is a queue item in its own
+  /// right, and routing it through `QueueItem` would have meant a `QueueSubject`
+  /// value for a subject that is not a submission awaiting approval.
+  assigneeId        String?        @map("assignee_id") @db.Uuid
+  assignedAt        DateTime?      @map("assigned_at")
+  assignedById      String?        @map("assigned_by_id") @db.Uuid
+
+  /// Board 4h `B2` — escalated to an ops lead, and still open.
+  ///
+  /// The board draws a red `Suspend` on the fraud row. `12c` refused to put a
+  /// suspension here in writing, and this is the alternative it named: the row
+  /// escalates, and `business.suspend` is taken where it already lives, on
+  /// `/admin/businesses`, by the one role that holds it. Escalation is not an
+  /// outcome — the report is still open and still somebody's — so it is a
+  /// timestamp beside the queue state rather than a fourth `ReportOutcome`.
+  escalatedAt       DateTime?      @map("escalated_at")
+  escalatedById     String?        @map("escalated_by_id") @db.Uuid
+  /// Required when escalatedAt is set, by a check constraint. Every staff state
+  /// change in this schema carries its reason.
+  escalationReason  String?        @map("escalation_reason")
+
+  /// Board 4h `B6` — the report this one duplicates.
+  ///
+  /// Set only together with `outcome: duplicate`, by a check constraint, and it
+  /// points at an open report rather than at another duplicate: a chain would
+  /// make "how many people reported this" a graph walk instead of a count.
+  duplicateOfId     String?        @map("duplicate_of_id")
+
   outcome           ReportOutcome?
   outcomeReason     String?        @map("outcome_reason")
   resolvedAt        DateTime?      @map("resolved_at")
+  /// Who decided. Null while open, and `SetNull` when they leave: the audit row
+  /// is the record of who decided, and this is the queue's own copy for the
+  /// screen that reports on itself.
+  resolvedById      String?        @map("resolved_by_id") @db.Uuid
   createdAt         DateTime       @default(now()) @map("created_at")
 
   subjectBusiness Business @relation("ReportSubject", fields: [subjectBusinessId], references: [id], onDelete: Cascade)
   reporter        User?    @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: SetNull)
   review          Review?  @relation(fields: [reviewId], references: [id], onDelete: SetNull)
   enquiry         Enquiry? @relation(fields: [enquiryId], references: [id], onDelete: SetNull)
+  assignee        User?    @relation("ReportAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  assignedBy      User?    @relation("ReportAssigner", fields: [assignedById], references: [id], onDelete: SetNull)
+  escalatedBy     User?    @relation("ReportEscalator", fields: [escalatedById], references: [id], onDelete: SetNull)
+  resolvedBy      User?    @relation("ReportResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  /// `Cascade`, not `SetNull`, and the check constraint is why.
+  ///
+  /// A duplicate is a row whose whole meaning is the decision it points at: the
+  /// outcome is `duplicate` and the reason is the other report's. Nulling the
+  /// pointer would leave an outcome with nothing behind it, which the
+  /// `supplier_report_duplicate_points_somewhere` constraint refuses outright —
+  /// so a `SetNull` here made deleting a decided report impossible rather than
+  /// making it tidy. Both rows are about one business and go together anyway
+  /// when that business does.
+  duplicateOf     SupplierReport?  @relation("ReportDuplicates", fields: [duplicateOfId], references: [id], onDelete: Cascade)
+  duplicates      SupplierReport[] @relation("ReportDuplicates")
 
   @@index([subjectBusinessId, outcome])
   @@index([kind])
   @@index([reviewId])
+  /// The queue: open first, oldest first, the same key board 4b's sources use.
+  @@index([outcome, createdAt], map: "supplier_report_queue_idx")
+  /// The duplicate group, read from the report that holds it.
+  @@index([duplicateOfId], map: "supplier_report_duplicate_of_idx")
+  /// The collapse (`B6`): open reports about one business on one field.
+  @@index([subjectBusinessId, kind, subjectField, outcome], map: "supplier_report_collapse_idx")
+  /// The owner column, and the `mine` filter over it.
+  @@index([assigneeId, outcome], map: "supplier_report_assignee_idx")
   @@map("supplier_report")
 }
 
@@ -8301,6 +8432,23 @@ enum NotificationEvent {
   /// explaining that a review published somebody's mobile number would throw
   /// rather than send. It is on the review, where the seller reads it.
   review_dispute_decided
+  /// Board 4h `Q5`. *"Does the reporter ever hear back?"*
+  ///
+  /// Until this value, no: 46 open items, a 2.4-day median, and none of `12g`'s
+  /// templates said *we looked at what you reported*. A directory that asks the
+  /// public to report a wrong telephone number and never answers is one that
+  /// gets reported to once.
+  ///
+  /// The outcome travels and the moderator's prose does not, for the same
+  /// reason `review_dispute_decided` leaves it behind: a reason explaining that
+  /// a listing carried somebody's home address is a legitimate reason and a
+  /// `render()` refusal waiting to happen.
+  ///
+  /// Sent only where there is somebody to send to. A report filed by a
+  /// signed-out visitor has no account, no verified channel and nowhere to
+  /// write back; the form says so at the point of filing rather than implying
+  /// an answer that cannot come.
+  report_resolved
   document_expiring
   /// Criterion 8. A buyer whose search found nothing, told when it would not.
   product_alert_matched

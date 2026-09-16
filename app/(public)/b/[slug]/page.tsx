@@ -773,7 +773,24 @@ async function UnclaimedStorefront({ business }: { business: Business }) {
               >
                 {t("listing.claim_cta")}
               </Link>
-              <Link href="/verification-policy" className={buttonClassName({ variant: "link" })}>
+              {/*
+                 Board 4h. *Report this listing* opened the verification policy,
+                 which is the page that explains how a licence is checked rather
+                 than the one that takes a report. On an unclaimed listing this
+                 is the most likely thing on the page to be wrong, and the
+                 person who knows is standing in front of it.
+              */}
+              <Link
+                href={`/report/${business.slug}`}
+                /*
+                   `nofollow` outright rather than through `crawlRel`, which
+                   reads query strings and would call this one followable. The
+                   form has no query string and is still thirty thousand pages
+                   of nothing to rank — see `DISALLOWED_PATHS`.
+                */
+                rel="nofollow"
+                className={buttonClassName({ variant: "link" })}
+              >
                 {t("listing.report")}
               </Link>
             </div>
