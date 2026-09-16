@@ -6881,7 +6881,10 @@ model SavedSearch {
   /// loses that scope — a search saved on /c/valves replayed at /search is a
   /// different search — and `12d` reads it to know which trade the demand is in.
   categoryId String? @map("category_id")
-  /// `products` or `businesses`, as the page it was saved on showed.
+  /// `all`, `products` or `businesses`, as the page it was saved on showed —
+  /// `all` is the blended page, whose count is `countBlended` rather than one
+  /// kind's `where`. A CHECK holds the three; see
+  /// `20261104090000_saved_search_tab_all_10c` for why it once held two.
   tab        String  @default("businesses")
 
   cadence    SavedSearchCadence @default(weekly)

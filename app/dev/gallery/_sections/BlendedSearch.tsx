@@ -430,10 +430,20 @@ export function BlendedSearchGallery() {
         </div>
       </States>
 
-      <States label="sort" stack>
-        <div className="w-full">
-          <SortControl query={FILTERED} active="all" />
-        </div>
+      {/*
+         One specimen each for the sort strip, the pager and the total-zero
+         state, and not two.
+
+         Each of them is a landmark — a `nav` with a name, a titled `Panel` —
+         and `tests/e2e/landmarks.spec.ts` holds the gallery to one landmark per
+         role and name, because a screen reader's landmark list is otherwise a
+         row of identical entries. So each shows the variant that contains the
+         others: the Products scope carries every sort option, page eight
+         carries both directions, and the filtered zero state carries the
+         ladder. The variants they leave out are asserted in
+         `tests/integration/blended-search-1cs.test.ts`.
+      */}
+      <States label="sort — products scope, where the fifth option appears" stack>
         <div className="w-full">
           <SortControl query={ON_PRODUCTS} active="products" />
         </div>
@@ -456,10 +466,7 @@ export function BlendedSearchGallery() {
         </div>
       </States>
 
-      <States label="pager" stack>
-        <div className="w-full">
-          <Pager query={FILTERED} result={result({ pager: pagerFor(1, 20, 312) })} />
-        </div>
+      <States label="pager — mid-list, both directions" stack>
         <div className="w-full">
           <Pager
             query={parseSearchQuery({ q: "vat return filing", page: "8" })}
@@ -468,27 +475,9 @@ export function BlendedSearchGallery() {
         </div>
       </States>
 
-      <States label="zero — nothing at all" stack>
+      <States label="zero — nothing at all, with the ladder" stack>
         <div className="w-full">
           <ZeroNothing query={EMPTIED} result={ZERO_NOTHING} clearAllHref="/search?q=vat+return+filing" />
-        </div>
-        {/* The words found nobody: no ladder to climb, and an offer with no number on it. */}
-        <div className="w-full">
-          <ZeroNothing
-            query={parseSearchQuery({ q: "zirconium flange gasket" })}
-            result={result({
-              counts: { all: 0, products: 0, services: 0, suppliers: 0 },
-              breakdown: { products: 0, productSuppliers: 0, services: 0, serviceSuppliers: 0 },
-              rail: [],
-              narrowedTotal: 0,
-              unfilteredTotal: 0,
-              zero: "nothing",
-              escape: { href: "/rfq/new", suppliers: 0, cap: 8 },
-              pager: pagerFor(1, 0, 0),
-              specMatched: false,
-            })}
-            clearAllHref="/search?q=zirconium+flange+gasket"
-          />
         </div>
       </States>
 

@@ -174,11 +174,13 @@ test.describe("the storefront composer", () => {
    * they do rather than on one label.
    *
    * The board sets the verbs deliberately: "Request a quote" opens a composer
-   * the buyer has not filled in, "Enquire" is the compact control where there
-   * is no room for that, and "Send enquiry" is the submit *inside* a composer.
-   * The identity block carries the first; the mobile bar carries the second.
+   * the buyer has not filled in, "Ask for a quote" is the compact control where
+   * there is no room for that, and "Send enquiry" is the submit *inside* a
+   * composer. The identity block carries the first; the mobile bar carries the
+   * second, which read "Enquire" until boards `10c`/`10c-s` settled one string
+   * for both kinds.
    */
-  const OPENS_COMPOSER = /Request a quote|^Enquire$/;
+  const OPENS_COMPOSER = /Request a quote|^Ask for a quote$/;
   /* The masked number is the control on a wide screen; the bar says "Call". */
   const REVEALS_NUMBER = /•|^Call$/;
 
