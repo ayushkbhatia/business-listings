@@ -48,6 +48,16 @@ async function freshen(page: Page) {
 
 const comparison = (page: Page) => page.getByRole("table", { name: "What they submitted, against the FTA public register" });
 
+/**
+ * When a read was taken, in either rendering `fetchedAt` can produce: the clock
+ * alone for a read taken today in Dubai (`09:14`), the date and clock for one
+ * taken before that (`15 Sep 2026, 09:14`). The seed stamps the unreachable
+ * read thirty minutes back from the wall clock, so a shard that seeds between
+ * 00:00 and 00:30 Dubai gets the second form, and pinning the first failed
+ * twice on 2026-09-15. Both say when, which is what is being asserted.
+ */
+const didNotAnswer = /The FTA register did not answer at (?:\d{1,2} \w{3} \d{4}, )?\d{2}:\d{2}: it timed out/;
+
 test("register checks join the Credentials chip and open their own screen", async ({ page }) => {
   await page.goto("/admin/queue?kind=credential");
   const nexus = rowFor(page, "Nexus Tax Consultancy");
@@ -99,12 +109,12 @@ test("a number that does not resolve pre-selects the reason, and a different ent
 
 test("a register that did not answer offers no decision, only a refetch", async ({ page }) => {
   await openReview(page, "Gulfline VAT Partners");
-  await expect(page.getByText(/The FTA register did not answer at \d{2}:\d{2}: it timed out/)).toBeVisible();
+  await expect(page.getByText(didNotAnswer)).toBeVisible();
   await expect(page.getByRole("textbox", { name: /Reason/ })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /^Verify/ })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Fetch the register again" }).click();
-  await expect(page.getByText(/The FTA register did not answer at \d{2}:\d{2}: it timed out/)).toBeVisible();
+  await expect(page.getByText(didNotAnswer)).toBeVisible();
   await expect(page.getByText("Nothing can be decided until the register has answered, within the last hour.")).toBeVisible();
 });
 
