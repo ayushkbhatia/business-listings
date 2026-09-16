@@ -407,21 +407,32 @@ const EXPENDABLE = "Jebel Rock Trading";
 test.describe("board 11c B5 — the review-dispute queue on 4h", () => {
   /*
      The board promised a decision in "about 2 working days" and named no queue
-     to make it in. This is the type that was missing, rendered beside the
-     conduct reports rather than mixed into them: the two row shapes differ in
-     every field, so `subjectBusinessId` would have meant the complainant on
-     some rows and the accused on others.
+     to make it in. This is the type that was missing.
+
+     Board 4h moved the decision off the queue and onto the row's own screen —
+     `B5`, *"`Investigate` needs a destination"* — so a dispute is a type in one
+     queue with `/admin/reports/disputes/:id` behind it. The two tables stay
+     separate underneath, which is what `lib/reviews/disputes.ts` sets out at
+     length; what changed is that a moderator now sees one list.
   */
-  test("lists an open dispute with its ground and the words being disputed", async ({ page }) => {
+  async function openDispute(page: import("@playwright/test").Page) {
+    await page.goto("/admin/reports?type=review_dispute");
+    const row = page.getByRole("row").filter({ hasText: "Review dispute" }).first();
+    await row.getByRole("link", { name: "Review" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Review dispute from");
+  }
+
+  test("is a type in the one queue, with a screen behind it", async ({ page }) => {
     await page.goto("/admin/reports");
-    await expect(page.getByRole("heading", { name: "Review disputes" })).toBeVisible();
-    await expect(page.getByText("Review dispute").first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Decide" }).first()).toBeVisible();
+    // One taxonomy: the chip counts the same rows the TYPE column names.
+    await expect(page.getByRole("link", { name: /^Review disputes \d+$/ })).toBeVisible();
+    await openDispute(page);
+    await expect(page.getByText("What the supplier says")).toBeVisible();
+    await expect(page.getByText("The review", { exact: true })).toBeVisible();
   });
 
   test("will not decide either way without a written reason", async ({ page }) => {
-    await page.goto("/admin/reports");
-    await page.getByRole("button", { name: "Decide" }).first().click();
+    await openDispute(page);
 
     const uphold = page.getByRole("button", { name: "Uphold and remove" });
     const refuse = page.getByRole("button", { name: "Refuse", exact: true });
@@ -441,8 +452,7 @@ test.describe("board 11c B5 — the review-dispute queue on 4h", () => {
        the enquiry rather than stored, so it cannot disagree with the badge the
        buyer sees on the storefront.
     */
-    await page.goto("/admin/reports");
-    await page.getByRole("button", { name: "Decide" }).first().click();
+    await openDispute(page);
     await expect(
       page.getByText(/came from a quote this supplier accepted|came from an enquiry this supplier answered/),
     ).toBeVisible();
@@ -452,10 +462,10 @@ test.describe("board 11c B5 — the review-dispute queue on 4h", () => {
     // A listing can be corrected and a review cannot: it comes down or it
     // stands. `seller_corrected` is a supplier-report outcome and has no
     // meaning here.
-    await page.goto("/admin/reports");
-    await page.getByRole("button", { name: "Decide" }).first().click();
-    const panel = page.locator("div").filter({ hasText: /Upholding removes the review/ }).last();
-    await expect(panel.getByRole("button", { name: /corrected/i })).toHaveCount(0);
+    await openDispute(page);
+    await expect(page.getByRole("button", { name: /corrected/i })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Uphold and remove" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Refuse", exact: true })).toBeVisible();
   });
 });
 

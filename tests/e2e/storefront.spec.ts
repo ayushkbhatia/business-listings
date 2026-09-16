@@ -93,9 +93,15 @@ test.describe("one route, two compositions", () => {
 
     const report = page.getByRole("link", { name: "Report this listing" }).first();
     await expect(report).toBeVisible();
-    // Where its two siblings go — the footer's "Report a listing" and the
-    // storefront rail's "Report an issue". Board 13c replaces all three.
-    await expect(report).toHaveAttribute("href", "/verification-policy");
+    /*
+       Board 4h. This opened `/verification-policy` — the page explaining how a
+       licence is checked, not the one that takes a report — and this test held
+       it there. On an unclaimed listing the details are the most likely thing
+       on the page to be wrong, and the person who knows is standing in front of
+       it. `nofollow` for the same reason as the claim link above.
+    */
+    await expect(report).toHaveAttribute("href", `/report/${UNCLAIMED}`);
+    await expect(report).toHaveAttribute("rel", /nofollow/);
 
     await claim.click();
     await expect(page).toHaveURL(/\/onboarding\/claim\?q=/);

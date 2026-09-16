@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Card, PublicShell } from "@/components/structure";
+import { Breadcrumb, Card, PublicShell } from "@/components/structure";
 import { prisma } from "@/lib/db/client";
 import { getActor } from "@/lib/auth/session";
 import { getViewer } from "@/lib/auth/viewer";
 import { t } from "@/lib/i18n";
-import { MAX_DETAIL, MIN_DETAIL } from "@/lib/reports/file";
+import { MAX_DETAIL } from "@/lib/reports/file";
 import { FIELDS_FOR_KIND, PUBLIC_REPORT_KINDS } from "@/lib/reports/taxonomy";
 import { DirectoryFooter, DirectoryNav } from "../../_chrome";
 import { fileReport } from "./actions";
@@ -93,13 +92,22 @@ export default async function ReportListingPage({
     <PublicShell
       nav={<DirectoryNav viewer={viewer} />}
       footer={<DirectoryFooter />}
+      /*
+         A `Breadcrumb`, not a bare link.
+
+         `PublicShell` renders this slot in a plain div above `main`, so a link
+         on its own is page content outside every landmark — axe's `region` rule,
+         and it went red on the acceptance run. The shared component is a `nav`
+         with a name, which is what the slot has always expected.
+      */
       breadcrumb={
-        <Link
-          href={`/b/${business.slug}`}
-          className="rounded-tag text-caption text-muted underline-offset-2 hover:underline focus-visible:shadow-focus focus-visible:outline-none"
-        >
-          {t("report_listing.back", { business: business.displayName })}
-        </Link>
+        <Breadcrumb
+          label={t("report_listing.breadcrumb_label")}
+          items={[
+            { label: business.displayName, href: `/b/${business.slug}` },
+            { label: t("report_listing.crumb") },
+          ]}
+        />
       }
     >
       <div className="mx-auto flex w-full max-w-[var(--measure-prose)] flex-col gap-5 py-6">

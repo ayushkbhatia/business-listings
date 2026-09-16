@@ -2811,7 +2811,8 @@ export const en = {
   /* ── Board 4h · /report/:slug, the form behind that link ────────────────── */
   "report_listing.meta_title": "Report {business}",
   "report_listing.meta_title_generic": "Report a listing",
-  "report_listing.back": "Back to {business}",
+  "report_listing.breadcrumb_label": "Where you are",
+  "report_listing.crumb": "Report this listing",
   "report_listing.title": "Report {business}",
   "report_listing.lede": "Tell us what is wrong with this listing. A moderator reads every one, and most end with the supplier correcting it rather than with the listing coming down.",
   "report_listing.kind_legend": "What is wrong",

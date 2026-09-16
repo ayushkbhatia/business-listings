@@ -47,14 +47,22 @@ test.describe("the queue", () => {
   });
 
   test("shows a real table, with the evidence line under the claim", async ({ page }) => {
-    // Non-negotiable 4: real markup, not the canvas's div grid.
-    await expect(page.getByRole("table")).toBeVisible();
+    /*
+       Non-negotiable 4: real markup, not the canvas's div grid. Named, because
+       the outcomes rail is a real table too — a page with two of them is two
+       things counted rather than one drawn twice.
+    */
+    await expect(page.getByRole("table", { name: /Complaints waiting for a decision/ })).toBeVisible();
     for (const head of ["Type", "Reported", "Reporter", "Owner", "Waiting", "Next step"]) {
       await expect(page.getByRole("columnheader", { name: head })).toBeVisible();
     }
-    // The seeded shared-number sweep writes one, and it is what a moderator
-    // reads before the complaint under it.
-    await expect(page.getByText(/SAME NUMBER ON \d+ LISTINGS/).first()).toBeVisible();
+    /*
+       The seeded shared-number sweep writes one, and it is what a moderator
+       reads before the complaint under it. Matched case-insensitively: the
+       uppercase is `text-transform`, and a locator reads the DOM rather than
+       what the screen shows.
+    */
+    await expect(page.getByText(/same number on \d+ listings/i).first()).toBeVisible();
   });
 
   test("carries the service level beside the age, never the colour alone (B4)", async ({ page }) => {
@@ -126,9 +134,28 @@ test.describe("one report, filed and decided by this test", () => {
     const said = "Their own page says they do scaffolding hire, and this is filed under valves.";
     await page.getByLabel("What did you find").fill(said);
     await page.getByRole("button", { name: "Send the report" }).click();
+    /*
+       Wait for the server action to answer before reading which way it went.
+       `count()` does not auto-wait, so branching on it straight after the click
+       reads the form that is still on screen and calls a slow round trip a
+       refusal.
+    */
     const sent = page.getByText("Report sent");
-    if ((await sent.count()) === 0) {
-      test.skip(true, "A previous run of this spec left the report open.");
+    /*
+       By its words, not by `role="alert"`: the shell carries an empty live
+       region for announcements, and matching the role alone matched that on
+       every run — so the test skipped itself while the form was still working.
+    */
+    const refused = page.getByText(/already reported this|more reports than we take/);
+    await expect(sent.or(refused).first()).toBeVisible();
+    if ((await refused.count()) > 0) {
+      /*
+         One open report per person, business, kind and field — the form's own
+         guard. CI reseeds per job so this never fires there; locally it means a
+         previous run of this spec filed and did not get as far as deciding.
+         Reseed rather than reaching into the table.
+      */
+      test.skip(true, "This spec's report is still open from a previous local run. Reseed.");
     }
     await expect(sent).toBeVisible();
 
