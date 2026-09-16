@@ -1,5 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/db/client";
+import { t } from "@/lib/i18n";
+import { PUBLISHABLE_DOCUMENT_KINDS } from "@/lib/verification/credentials";
 import { DOCUMENT_BUCKET, MEDIA_BUCKET, removeObject } from "@/lib/storage";
 import { parseFileId, type FileKind } from "./library";
 import { referencesForFile } from "./references";
@@ -27,6 +29,7 @@ export type MediaError =
   | "quote_held"
   | "folder_exists"
   | "not_an_image"
+  | "not_publishable"
   | "empty_name";
 
 export type MediaResult<T = void> =
@@ -255,6 +258,51 @@ export async function attachToProduct(
   if (!product) return fail("not_found", "That product is not yours.");
 
   const parsed = fileIds.map(parseFileId).filter((row): row is NonNullable<typeof row> => !!row);
+
+  /*
+     The fence, before a single row is written.
+
+     A product page publishes the **name** of every document attached to it, as
+     a link to `/b/:slug/d/:id`. That route has fenced on
+     `PUBLISHABLE_DOCUMENT_KINDS` since handoff 1, so the file itself never
+     leaked — but a 404 behind a link is not the promise the seller was given.
+     `verify_listing.documents_hint` says a trade licence and a VAT certificate
+     are "never on your public listing and never linked from it", and a link
+     titled `Trade licence 2027.pdf` on a public page breaks that sentence
+     whatever the route does when a buyer clicks it.
+
+     Read from the same constant the public route reads, rather than from
+     `CHECKED_BY_US_KINDS`: an enquiry attachment and a thread attachment are
+     not publishable either, and they are somebody else's private file rather
+     than the seller's own. One fence covers both, and cannot drift from the one
+     the route applies.
+
+     Refused whole, not filtered. An unowned id is skipped below because a
+     stale selection is an ordinary thing; a licence in the selection is the
+     seller about to publish something they were promised was private, and
+     attaching the other four files while saying nothing is the wrong half to
+     keep. Same position as `assertNoPriceEscapes` on the importer: there is no
+     partial success worth having.
+  */
+  const documentIds = parsed.filter((file) => file.kind === "document").map((file) => file.id);
+  if (documentIds.length > 0) {
+    const refused = await prisma.document.findFirst({
+      where: {
+        id: { in: documentIds },
+        businessId,
+        kind: { notIn: [...PUBLISHABLE_DOCUMENT_KINDS] },
+      },
+      select: { kind: true, displayName: true, filename: true },
+      orderBy: { id: "asc" },
+    });
+    if (refused) {
+      return fail(
+        "not_publishable",
+        t("media.not_publishable", { name: refused.displayName ?? refused.filename }),
+      );
+    }
+  }
+
   let nextImage = product._count.media;
   let nextDoc = product._count.documents;
 

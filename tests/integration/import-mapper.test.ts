@@ -35,6 +35,7 @@ let valveSlug: string;
 let pumpSlug: string;
 const runIds: string[] = [];
 const mediaIds: string[] = [];
+const documentIds: string[] = [];
 
 beforeAll(async () => {
   const business = await prisma.business.findUniqueOrThrow({
@@ -84,6 +85,27 @@ beforeAll(async () => {
     });
     mediaIds.push(media.id);
   }
+
+  /*
+     And a trade licence, in the same library and named the same way.
+
+     `verify_listing.documents_hint` promises the seller it is "never on your
+     public listing and never linked from it", and a `Photo File` column is a
+     place a filename gets typed by a person. The importer used to resolve it
+     against every `Document` the seller owned.
+  */
+  const licence = await prisma.document.create({
+    data: {
+      businessId,
+      kind: "trade_licence",
+      storagePath: `${businessId}/trade_licence/${safeName(`${PREFIX}-licence.pdf`)}`,
+      filename: `${PREFIX}-licence.pdf`,
+      bytes: 2048,
+      mimeType: "application/pdf",
+    },
+    select: { id: true },
+  });
+  documentIds.push(licence.id);
 });
 
 afterAll(async () => {
@@ -94,6 +116,7 @@ afterAll(async () => {
   }
   await prisma.product.deleteMany({ where: { businessId, name: { startsWith: PREFIX } } });
   await prisma.media.deleteMany({ where: { id: { in: mediaIds } } });
+  await prisma.document.deleteMany({ where: { id: { in: documentIds } } });
   await prisma.$disconnect();
 });
 
@@ -294,6 +317,41 @@ describe("criteria 7 and 8 — photographs are references", () => {
     });
     expect(preview.photos.matched).toBe(1);
     expect(preview.photos.unmatched).toBe(0);
+  });
+
+  it("does not resolve a trade licence named in a photo column", async () => {
+    /*
+       The same fence `attachToProduct` applies, on the other route into
+       `product_document`. It reports as **unmatched** rather than being
+       skipped at the write: `405 of 412 filenames are in your media library` is
+       a sentence the seller can act on, and a silent drop would have claimed
+       412 and attached 411.
+    */
+    const t = tag();
+    const text = ["Item Name,Part No,Photo File", `${t} licence,${t}-L1,${PREFIX}-licence.pdf`].join("\n");
+
+    const preview = await analyseImport({ businessId, fallbackCategoryId, text, plan: PHOTO_PLAN });
+    expect(preview.photos.matched).toBe(0);
+    expect(preview.photos.unmatched).toBe(1);
+
+    const result = await applyImport(actor, {
+      businessId,
+      fallbackCategoryId,
+      filename: "licence-in-a-photo-column.csv",
+      text,
+      plan: PHOTO_PLAN,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    runIds.push(result.importRunId);
+
+    // The product imported. It just has no licence on it.
+    expect(result.created).toBe(1);
+    expect(
+      await prisma.productDocument.count({
+        where: { product: { importRunId: result.importRunId } },
+      }),
+    ).toBe(0);
   });
 
   it("imports a row whose filename resolves to nothing, without a photo", async () => {

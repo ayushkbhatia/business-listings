@@ -34,6 +34,7 @@ import { effectiveFor } from "@/lib/billing/entitlements-service";
 import { allowance } from "@/lib/plan/entitlements";
 import { hideOverPlanCap } from "@/lib/billing/plan-caps";
 import { t } from "@/lib/i18n";
+import { PUBLISHABLE_DOCUMENT_KINDS } from "@/lib/verification/credentials";
 
 /**
  * Board 11d — reading a spreadsheet, and what happens when it is applied.
@@ -142,7 +143,23 @@ async function contextFor(businessId: string, fallbackCategoryId: string): Promi
       select: { id: true, filename: true, storagePath: true },
     }),
     prisma.document.findMany({
-      where: { businessId },
+      /*
+         The same fence `attachToProduct` applies, because this is the other
+         way a `product_document` row gets written.
+
+         A photo column naming `trade-licence-2027.pdf` resolved against the
+         whole of `Document` and attached the licence to forty products, and the
+         product page then published its name. The seller was told on the upload
+         screen that their licence is "never on your public listing and never
+         linked from it", and a spreadsheet is not consent to the contrary.
+
+         Filtered here rather than at the write, so the mapper's own count stays
+         true: a licence named in a photo column now reports as one of the
+         filenames that are **not in your media library**, which is the sentence
+         the seller can act on. A silent skip at write time would have said
+         `412 of 412 matched` and attached 411.
+      */
+      where: { businessId, kind: { in: [...PUBLISHABLE_DOCUMENT_KINDS] } },
       select: { id: true, filename: true, storagePath: true },
     }),
   ]);

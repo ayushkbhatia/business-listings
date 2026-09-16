@@ -6089,6 +6089,7 @@ export const en = {
   "media.bulk.alt": "Add alt text",
   "media.bulk.delete": "Delete…",
   "media.bulk.clear": "Clear",
+  "media.not_publishable": "{name} is not a file a product page can carry. A trade licence, a VAT certificate and anything a buyer sent you stay private — a product page names every document on it, and naming one there would put it on a public page. Certificates, catalogues and datasheets can go on a product.",
 
   "media.delete.title": "Delete {name}?",
   "media.delete.refused": "This file cannot be deleted",
