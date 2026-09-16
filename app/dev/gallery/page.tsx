@@ -3,6 +3,7 @@ import { Actions } from "./_sections/Actions";
 import { Choice } from "./_sections/Choice";
 import { Display } from "./_sections/Display";
 import { Billing } from "./_sections/Billing";
+import { PlanConfigGallery } from "./_sections/PlanConfig";
 import { Domain } from "./_sections/Domain";
 import { Numeric } from "./_sections/Numeric";
 import { TextEntry } from "./_sections/TextEntry";
@@ -345,6 +346,8 @@ export default function Gallery() {
       <PairedStringsGallery />
       {/* After paired strings, for the same axe-grid reason: nothing new above Shells. */}
       <ContactRevealGallery />
+      {/* After contact reveal, for the same axe-grid reason: nothing new above Shells. */}
+      <PlanConfigGallery />
     </main>
   );
 }

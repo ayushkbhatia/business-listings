@@ -3,7 +3,13 @@ import { prisma } from "@/lib/db/client";
 import { runDunning } from "@/lib/billing/dunning-job";
 import { GRACE_AFTER_FINAL_DAYS, SCHEDULE } from "@/lib/billing/dunning";
 import { consoleProvider, setPaymentProvider, type PaymentProvider } from "@/lib/billing/provider";
-import { editPlanEntitlements, effectiveFor, planLibrary } from "@/lib/billing/entitlements-service";
+import {
+  createPlan,
+  editPlanConfig,
+  effectiveFor,
+  planLibrary,
+  previewPlanConfig,
+} from "@/lib/billing/entitlements-service";
 import { effectiveCaps, readSnapshot, snapshotOf } from "@/lib/plan/entitlements";
 import { PermissionError } from "@/lib/auth/errors";
 import type { Actor, Role } from "@/lib/auth/roles";
@@ -424,10 +430,9 @@ describe("grandfathering, which did not work", () => {
        was reachable only by writing the row by hand, which skips the audit row
        every other entitlement change writes.
     */
-    const result = await editPlanEntitlements({
+    const result = await editPlanConfig({
       actor: actor(financeId, "staff_finance"),
-      planId,
-      changes: { storageMb: 50 },
+      edits: [{ planId, values: { storageMb: 50 } }],
       applyToExisting: false,
       reason: "Setting the storage cap so the media library has a number to enforce.",
     });
@@ -441,10 +446,9 @@ describe("grandfathering, which did not work", () => {
     // Null is unlimited throughout, and it is what every plan carried before
     // this field had an editor. `capFor` guards on `=== null` for the same
     // reason: zero is a real cap and must not read as unlimited.
-    await editPlanEntitlements({
+    await editPlanConfig({
       actor: actor(financeId, "staff_finance"),
-      planId,
-      changes: { storageMb: null },
+      edits: [{ planId, values: { storageMb: null } }],
       applyToExisting: false,
       reason: "Lifting the storage cap while we decide what it should be.",
     });
@@ -458,10 +462,9 @@ describe("grandfathering, which did not work", () => {
     const before = await effectiveFor(businessId);
     expect(before).not.toBeNull();
 
-    const result = await editPlanEntitlements({
+    const result = await editPlanConfig({
       actor: actor(financeId, "staff_finance"),
-      planId,
-      changes: { productLimit: 7 },
+      edits: [{ planId, values: { productLimit: 7 } }],
       applyToExisting: false,
       reason: "Trimming the Basic catalogue cap for new accounts from next month.",
     });
@@ -478,10 +481,9 @@ describe("grandfathering, which did not work", () => {
   it("moves them when somebody does tick it, and says how many", async () => {
     const { businessId } = await payingListing("Applied");
 
-    const result = await editPlanEntitlements({
+    const result = await editPlanConfig({
       actor: actor(financeId, "staff_finance"),
-      planId,
-      changes: { productLimit: 9 },
+      edits: [{ planId, values: { productLimit: 9 } }],
       applyToExisting: true,
       reason: "Applying the new Basic cap to everybody, agreed with the founders.",
     });
@@ -494,10 +496,9 @@ describe("grandfathering, which did not work", () => {
   }, 60_000);
 
   it("records the count it moved on the audit row", async () => {
-    await editPlanEntitlements({
+    await editPlanConfig({
       actor: actor(financeId, "staff_finance"),
-      planId,
-      changes: { productLimit: 11 },
+      edits: [{ planId, values: { productLimit: 11 } }],
       applyToExisting: true,
       reason: "Second change, to check the audit row carries the blast radius.",
     });
@@ -524,10 +525,9 @@ describe("grandfathering, which did not work", () => {
 
   it("refuses a moderator — plan.entitlements.write is ops lead or finance", async () => {
     await expect(
-      editPlanEntitlements({
+      editPlanConfig({
         actor: actor(moderatorId, "staff_moderator"),
-        planId,
-        changes: { productLimit: 3 },
+        edits: [{ planId, values: { productLimit: 3 } }],
         applyToExisting: false,
         reason: "Not my row.",
       }),
@@ -535,10 +535,9 @@ describe("grandfathering, which did not work", () => {
   });
 
   it("lets an ops lead do it too", async () => {
-    const result = await editPlanEntitlements({
+    const result = await editPlanConfig({
       actor: actor(opsLeadId, "staff_ops_lead"),
-      planId,
-      changes: { photoLimit: 22 },
+      edits: [{ planId, values: { photoLimit: 22 } }],
       applyToExisting: false,
       reason: "Raising the Basic photo cap after the storefront work.",
     });
@@ -546,10 +545,9 @@ describe("grandfathering, which did not work", () => {
   });
 
   it("refuses a cap that is not a whole number in range", async () => {
-    const result = await editPlanEntitlements({
+    const result = await editPlanConfig({
       actor: actor(financeId, "staff_finance"),
-      planId,
-      changes: { productLimit: -1 },
+      edits: [{ planId, values: { productLimit: -1 } }],
       applyToExisting: false,
       reason: "Minus one products.",
     });
@@ -558,10 +556,9 @@ describe("grandfathering, which did not work", () => {
 
   it("refuses a change that changes nothing", async () => {
     const plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
-    const result = await editPlanEntitlements({
+    const result = await editPlanConfig({
       actor: actor(financeId, "staff_finance"),
-      planId,
-      changes: { productLimit: plan.productLimit },
+      edits: [{ planId, values: { productLimit: plan.productLimit } }],
       applyToExisting: false,
       reason: "Same number.",
     });
@@ -585,10 +582,9 @@ describe("the columns board 11f compares plans on, and could not change", () => 
   const staff = () => actor(financeId, "staff_finance");
 
   it("sets the fifth numeric cap", async () => {
-    const result = await editPlanEntitlements({
+    const result = await editPlanConfig({
       actor: staff(),
-      planId,
-      changes: { categoryLimit: 7 },
+      edits: [{ planId, values: { categoryLimit: 7 } }],
       applyToExisting: false,
       reason: "Holding this tier to seven categories while we watch how it is used.",
     });
@@ -601,20 +597,18 @@ describe("the columns board 11f compares plans on, and could not change", () => 
     // Off is the half that mattered: a checkbox posts nothing when unticked, so
     // reading the switches only when present would have made every one of them
     // a grant that could never be withdrawn.
-    await editPlanEntitlements({
+    await editPlanConfig({
       actor: staff(),
-      planId,
-      changes: { analytics: true, csvImport: true, sponsoredEligible: true },
+      edits: [{ planId, values: { analytics: true, csvImport: true, sponsoredEligible: true } }],
       applyToExisting: false,
       reason: "Opening analytics, the importer and placement on this tier.",
     });
     let plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
     expect([plan.analytics, plan.csvImport, plan.sponsoredEligible]).toEqual([true, true, true]);
 
-    await editPlanEntitlements({
+    await editPlanConfig({
       actor: staff(),
-      planId,
-      changes: { analytics: false, csvImport: false, sponsoredEligible: false },
+      edits: [{ planId, values: { analytics: false, csvImport: false, sponsoredEligible: false } }],
       applyToExisting: false,
       reason: "Closing all three again while the tier is repriced.",
     });
@@ -628,11 +622,9 @@ describe("the columns board 11f compares plans on, and could not change", () => 
        `isPurchasable`, the onboarding plan step, the trial gate, 11f's change
        screen and the plan-cohort metric — and no writer at all.
     */
-    const withdrawn = await editPlanEntitlements({
+    const withdrawn = await editPlanConfig({
       actor: staff(),
-      planId,
-      changes: {},
-      withdrawn: true,
+      edits: [{ planId, values: {}, onSale: false }],
       applyToExisting: false,
       reason: "Taking this tier off sale while the pricing is reworked.",
     });
@@ -644,11 +636,9 @@ describe("the columns board 11f compares plans on, and could not change", () => 
 
     // Saving again while it is still withdrawn moves nothing — the date is when
     // it was withdrawn, not when it was last edited.
-    const again = await editPlanEntitlements({
+    const again = await editPlanConfig({
       actor: staff(),
-      planId,
-      changes: {},
-      withdrawn: true,
+      edits: [{ planId, values: {}, onSale: false }],
       applyToExisting: false,
       reason: "Saving the same state again, which should change nothing.",
     });
@@ -656,11 +646,9 @@ describe("the columns board 11f compares plans on, and could not change", () => 
     plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
     expect(plan.withdrawnAt?.toISOString()).toBe(stampedAt.toISOString());
 
-    const restored = await editPlanEntitlements({
+    const restored = await editPlanConfig({
       actor: staff(),
-      planId,
-      changes: {},
-      withdrawn: false,
+      edits: [{ planId, values: {}, onSale: true }],
       applyToExisting: false,
       reason: "Back on sale now the pricing is settled.",
     });
@@ -670,11 +658,9 @@ describe("the columns board 11f compares plans on, and could not change", () => 
   }, 60_000);
 
   it("carries the withdrawal through to the screen that reads it", async () => {
-    await editPlanEntitlements({
+    await editPlanConfig({
       actor: staff(),
-      planId,
-      changes: {},
-      withdrawn: true,
+      edits: [{ planId, values: {}, onSale: false }],
       applyToExisting: false,
       reason: "Off sale, to check the console renders it.",
     });
@@ -682,13 +668,282 @@ describe("the columns board 11f compares plans on, and could not change", () => 
     const row = library.find((plan) => plan.id === planId);
     expect(row?.withdrawnAt).not.toBeNull();
 
-    await editPlanEntitlements({
+    await editPlanConfig({
       actor: staff(),
-      planId,
-      changes: {},
-      withdrawn: false,
+      edits: [{ planId, values: {}, onSale: true }],
       applyToExisting: false,
       reason: "And back, so the fixture leaves as it arrived.",
     });
+  }, 60_000);
+});
+
+/**
+ * Board 12e, the revision — the config the board widened this screen to hold.
+ *
+ * Four corrections came off that export and three of them are against specs
+ * that already shipped. Two reach this layer: the price becomes editable, and
+ * a change set is confirmed before it is written. The rest are copy, and copy
+ * is the e2e's to assert.
+ */
+describe("the whole config, not only the caps", () => {
+  const staff = () => actor(financeId, "staff_finance");
+
+  it("sets the monthly price, which was editable by nobody", async () => {
+    const result = await editPlanConfig({
+      actor: staff(),
+      edits: [{ planId, values: { monthlyPriceAed: 399 } }],
+      applyToExisting: false,
+      reason: "Repricing this tier after the placement work.",
+    });
+    expect(result).toMatchObject({ ok: true });
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(Number(plan.monthlyPriceAed)).toBe(399);
+  }, 60_000);
+
+  it("never freezes a price into an entitlement snapshot", async () => {
+    /*
+       Board 12e Q5, answered by what the snapshot is for. `effectiveCaps` takes
+       the name, the price and the ranking multiplier from the live plan on
+       purpose — those are facts about the plan today rather than about what
+       somebody bought — so a price change reaches every existing subscription
+       at its next renewal, and applying it to existing accounts must not be
+       what makes that happen.
+    */
+    const { businessId } = await payingListing("Repriced");
+
+    await editPlanConfig({
+      actor: staff(),
+      edits: [{ planId, values: { monthlyPriceAed: 409 } }],
+      applyToExisting: true,
+      reason: "Repricing, and applying it, to check the snapshot ignores a price.",
+    });
+
+    const snapshot = await prisma.subscription.findFirstOrThrow({
+      where: { businessId },
+      select: { entitlementSnapshot: true },
+    });
+    expect(JSON.stringify(snapshot.entitlementSnapshot)).not.toContain("monthlyPriceAed");
+
+    // And the seller is on the new price, because a price is not grandfathered.
+    const caps = await effectiveFor(businessId);
+    expect(caps!.monthlyPriceAed).toBe(409);
+  }, 60_000);
+
+  it("does not rewrite a snapshot for a price-only change", async () => {
+    /*
+       The sharp edge under Q5. "Apply to existing" rewrites the snapshot to the
+       plan's numbers *in full*, so running it for a change that moved no cap
+       would quietly end the grandfathering on caps nobody touched.
+    */
+    const { businessId } = await payingListing("PriceOnly");
+    await prisma.subscription.updateMany({
+      where: { businessId },
+      data: { entitlementSnapshot: { planId, capturedAt: "2026-01-01T00:00:00Z", teamSeats: 2, enquiriesPerMonth: 99, productLimit: 7, locationLimit: 1, photoLimit: 5, customDomain: false } },
+    });
+
+    const result = await editPlanConfig({
+      actor: staff(),
+      edits: [{ planId, values: { monthlyPriceAed: 419 } }],
+      applyToExisting: true,
+      reason: "A price change with apply ticked, which must leave the caps alone.",
+    });
+    expect(result).toMatchObject({ ok: true, existingUpdated: 0 });
+
+    const caps = await effectiveFor(businessId);
+    expect(caps!.enquiriesPerMonth).toBe(99);
+  }, 60_000);
+
+  it("sets the months charged for a year, which is the annual price", async () => {
+    // One price column and a multiplier, never two prices. `annualPriceAed` is
+    // the arithmetic, and `3m`'s "that number should come from the config" is
+    // satisfied by the config carrying the multiplier.
+    const result = await editPlanConfig({
+      actor: staff(),
+      edits: [{ planId, values: { annualMonthsCharged: 11 } }],
+      applyToExisting: false,
+      reason: "Trimming the annual discount on this tier to one month.",
+    });
+    expect(result).toMatchObject({ ok: true });
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.annualMonthsCharged).toBe(11);
+  }, 60_000);
+
+  it("refuses a year that is not a year", async () => {
+    for (const months of [0, 13]) {
+      const result = await editPlanConfig({
+        actor: staff(),
+        edits: [{ planId, values: { annualMonthsCharged: months } }],
+        applyToExisting: false,
+        reason: "Months that are not months.",
+      });
+      expect(result, String(months)).toMatchObject({ ok: false, error: "out_of_range" });
+    }
+  }, 60_000);
+
+  it("sets the custom-domain entitlement, which had five readers and no writer", async () => {
+    const result = await editPlanConfig({
+      actor: staff(),
+      edits: [{ planId, values: { customDomain: true } }],
+      applyToExisting: false,
+      reason: "Opening the custom domain on this tier.",
+    });
+    expect(result).toMatchObject({ ok: true });
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    expect(plan.customDomain).toBe(true);
+  }, 60_000);
+
+  it("writes one audit row per plan, in one commit", async () => {
+    /*
+       Two plans of this file's own, never a seeded one. A test that edits
+       `free` and puts it back leaves it moved whenever it fails in between,
+       and the sibling suites that read a Free cap fail somewhere else.
+    */
+    const source = await prisma.plan.findUniqueOrThrow({ where: { id: planId } });
+    const secondId = `${planId}-b`;
+    await prisma.plan.create({
+      data: { ...source, id: secondId, name: `Test ${secondId}`, sortOrder: 91 },
+    });
+
+    const before = await prisma.auditEvent.count({ where: { action: "entitlements_changed" } });
+    const result = await editPlanConfig({
+      actor: staff(),
+      edits: [
+        { planId, values: { photoLimit: 44 } },
+        { planId: secondId, values: { photoLimit: 45 } },
+      ],
+      applyToExisting: false,
+      reason: "One decision across two plans, which is two rows and one reason.",
+    });
+    expect(result).toMatchObject({ ok: true });
+    if (!result.ok) return;
+    expect([...result.plansChanged].sort()).toEqual([planId, secondId].sort());
+
+    const after = await prisma.auditEvent.count({ where: { action: "entitlements_changed" } });
+    expect(after - before).toBe(2);
+  }, 60_000);
+});
+
+describe("the confirm step refuses a stale change set", () => {
+  const staff = () => actor(financeId, "staff_finance");
+
+  it("commits a set whose numbers have not moved", async () => {
+    const edits = [{ planId, values: { locationLimit: 5 } }];
+    const preview = await previewPlanConfig(edits);
+    expect(preview.changes).toHaveLength(1);
+
+    const result = await editPlanConfig({
+      actor: staff(),
+      edits,
+      applyToExisting: false,
+      reason: "Committing the change that was reviewed.",
+      expect: preview.fingerprint,
+    });
+    expect(result).toMatchObject({ ok: true });
+  }, 60_000);
+
+  it("refuses one whose numbers moved while it was open", async () => {
+    /*
+       Two ops leads on one screen, or one who left the tab open. Without this
+       the diff somebody confirmed and the diff they wrote are different
+       documents, and the audit row records the second while the person
+       remembers the first.
+    */
+    const edits = [{ planId, values: { locationLimit: 6 } }];
+    const preview = await previewPlanConfig(edits);
+
+    // Somebody else moves the same row.
+    await editPlanConfig({
+      actor: staff(),
+      edits: [{ planId, values: { locationLimit: 8 } }],
+      applyToExisting: false,
+      reason: "The other ops lead, editing the same row.",
+    });
+
+    const result = await editPlanConfig({
+      actor: staff(),
+      edits,
+      applyToExisting: false,
+      reason: "Committing a set that was computed against numbers that have moved.",
+      expect: preview.fingerprint,
+    });
+    expect(result).toMatchObject({ ok: false, error: "stale" });
+  }, 60_000);
+});
+
+describe("adding a plan", () => {
+  const staff = () => actor(financeId, "staff_finance");
+  const newPlanId = `test-dunning-added-${Math.floor(Math.random() * 1_000_000)}`;
+
+  it("creates it withdrawn from sale, with the caps it copied", async () => {
+    const result = await createPlan({
+      actor: staff(),
+      id: newPlanId,
+      name: "Test added tier",
+      monthlyPriceAed: 599,
+      copyFromPlanId: planId,
+      reason: "Adding a tier to check it is born off sale.",
+    });
+    expect(result).toMatchObject({ ok: true });
+
+    const [added, source] = await Promise.all([
+      prisma.plan.findUniqueOrThrow({ where: { id: newPlanId } }),
+      prisma.plan.findUniqueOrThrow({ where: { id: planId } }),
+    ]);
+    // Nobody can choose it until somebody says so.
+    expect(added.withdrawnAt).not.toBeNull();
+    expect(added.productLimit).toBe(source.productLimit);
+    expect(added.teamSeats).toBe(source.teamSeats);
+    expect(Number(added.monthlyPriceAed)).toBe(599);
+    /*
+       And not the search position. `B2`: plan tier's weight is `12c`'s, and a
+       new plan inheriting Pro's place in the results by way of a copy button is
+       exactly the second writer correction 1 took off this board.
+    */
+    expect(Number(added.rankingMultiplier)).toBe(1);
+
+    const row = await prisma.auditEvent.findFirstOrThrow({
+      where: { action: "plan_created", subject: `Plan:${newPlanId}` },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { after: true, reason: true },
+    });
+    expect((row.after as { copiedFrom: string }).copiedFrom).toBe(planId);
+    expect(row.reason).toContain("born off sale");
+  }, 60_000);
+
+  it("refuses an id that is not a slug, and one already taken", async () => {
+    expect(
+      await createPlan({
+        actor: staff(),
+        id: "Pro Plus",
+        name: "Pro Plus",
+        monthlyPriceAed: 10,
+        copyFromPlanId: planId,
+        reason: "An id with a space in it.",
+      }),
+    ).toMatchObject({ ok: false, error: "bad_id" });
+
+    expect(
+      await createPlan({
+        actor: staff(),
+        id: newPlanId,
+        name: "Again",
+        monthlyPriceAed: 10,
+        copyFromPlanId: planId,
+        reason: "The same id twice.",
+      }),
+    ).toMatchObject({ ok: false, error: "taken" });
+  }, 60_000);
+
+  it("refuses a moderator", async () => {
+    await expect(
+      createPlan({
+        actor: actor(moderatorId, "staff_moderator"),
+        id: "test-dunning-nope",
+        name: "Nope",
+        monthlyPriceAed: 10,
+        copyFromPlanId: planId,
+        reason: "Not my row.",
+      }),
+    ).rejects.toBeInstanceOf(PermissionError);
   }, 60_000);
 });

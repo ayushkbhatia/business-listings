@@ -509,8 +509,16 @@ the screen is permanently empty above copy reading "Run the matcher after an imp
 
 The pattern underneath all five: **a sale with no ledger row.**
 
-- [ ] **6.1 `12e`** — five Plan columns including `monthlyPriceAed` are editable by nobody; no
-  plan creation; `VAT_RATE` is a module constant; `/admin/dunning` has no controls at all.
+- [x] **6.1 `12e`** — the board-level export of 16 Sep, and the four corrections on it. The screen
+  is the board's matrix: entitlements down, plans across, every cell an input, and a review step
+  between the table and the write that names which change, how many accounts and then commits.
+  `monthlyPriceAed` and `annualMonthsCharged` are editable and audited; `customDomain` gained the
+  writer its five readers never had; a plan can be added and is born withdrawn from sale. No
+  ranking field, which is correction 1. `DROPS TO FREE` replaces `SUSPENDS`, which is correction 4
+  and a different action under a different capability. The VAT return export is cut — `/admin/tax`,
+  its FTA route and `lib/billing/vat.ts` went with it — so `VAT_RATE` stays a constant with `11g`
+  stamping the rate on each invoice. `/admin/dunning` still has no controls: `12i` audits the
+  notices and `12j` sanctions a send, and neither is exported.
 - [x] **6.2 `4g`** — one Dubai month at a time: five figures that print their formulas, a
   waterfall that reconciles with cancellations and lapses as separate lines, reasons that sum to
   the cancellations line, the reply-rate cross-reference measured at the moment each seller
@@ -642,7 +650,7 @@ the only large piece and the only one selling something it does not deliver.
 | Board | Name | State | Effort | The fact that decides the work | Step |
 |---|---|---|---|---|---|
 | `4i` | Staff, roles & audit | built | medium | Staff screen, invitations, role changes and deactivation under one lock; the log filtered, paged, exported and append-only. | 7.1 |
-| `12e` | Plans, dunning, VAT | partial | medium | Seven caps are staff-editable with an audit row. Price is editable by nobody. | 6.1 |
+| `12e` | Plan config & failed payments | built | medium | The board's matrix, every cell a control, save/review/commit, add a plan. The VAT return is cut. | 6.1 |
 | `4d` | Category taxonomy | built | large | Tree, editor, add, merge with redirects, and one switch per public surface. Q1, Q4 and Q5 answered in code; the home-grid switch read-only per `6h`. | 5.1 |
 | `12a` | Licence-record importer | built | medium | Rows staged `needs_category` are terminal — nothing assigns them a category. Closed by 4.1. | 4.1 |
 | `12b` | Dedupe & merge | built | small | Pairs from the importer, three outcomes, bulk merge as a unit, tuning previewed, owner confirmation. Closed by 4.2. | 4.2 |

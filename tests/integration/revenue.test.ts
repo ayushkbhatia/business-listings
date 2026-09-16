@@ -6,10 +6,9 @@ import type { Actor } from "@/lib/auth/roles";
 import { mrrByMonth, mrrNow, reconcile } from "@/lib/billing/revenue";
 import { classify } from "@/lib/billing/mrr";
 import { monthlyValueFils } from "@/lib/billing/period";
-import { exportFilename, toCsv, vatReturn } from "@/lib/billing/vat";
 
 /**
- * Board 4g and the VAT half of 12e.
+ * Board 4g.
  *
  * The load-bearing test is the reconciliation. A revenue screen is believable
  * exactly as far as somebody can check it, and this codebase has already found
@@ -315,111 +314,3 @@ describe("classifying a change", () => {
   });
 });
 
-describe("the VAT export", () => {
-  it("adds VAT at the rate on the invoice, not a constant", async () => {
-    const summary = await vatReturn(new Date("2000-01-01"), new Date(Date.now() + 86_400_000));
-    expect(summary.rows.length).toBeGreaterThan(0);
-    for (const row of summary.rows) {
-      expect(row.vatFils).toBe(Math.round(row.netFils * row.vatRate));
-      expect(row.grossFils).toBe(row.netFils + row.vatFils);
-    }
-  });
-
-  it("keeps a credit note negative all the way through", async () => {
-    /*
-       A correction is its own document now.
-
-       This used to read an invoice carrying a subscription line and a credit
-       line together — 899.00 less 119.87 on one row — which is the edit board 3m
-       Q5 forbids: UAE VAT requires a credit note, and an issued invoice may not
-       be changed after it is sent. The seed issues the pair, and what the return
-       has to get right is unchanged and now easier to state: a credit note
-       reduces output VAT, so every figure on its row is negative. Dropping the
-       sign would have the return overstating what is owed.
-    */
-    const summary = await vatReturn(new Date("2000-01-01"), new Date(Date.now() + 86_400_000));
-    const note = summary.rows.find((row) => row.invoiceRef === "BL-INV-20099");
-    expect(note).toBeDefined();
-    expect(note!.netFils).toBe(-11_987);
-    expect(note!.vatFils).toBe(-599);
-    expect(note!.grossFils).toBe(-12_586);
-
-    // And the invoice it corrects is still whole. An issued document does not
-    // move because a later one refers to it.
-    const original = summary.rows.find((row) => row.invoiceRef === "BL-INV-20098");
-    expect(original?.netFils).toBe(89_900);
-  });
-
-  it("totals to the sum of its rows", async () => {
-    const summary = await vatReturn(new Date("2000-01-01"), new Date(Date.now() + 86_400_000));
-    expect(summary.netFils).toBe(summary.rows.reduce((sum, row) => sum + row.netFils, 0));
-    expect(summary.vatFils).toBe(summary.rows.reduce((sum, row) => sum + row.vatFils, 0));
-    const byEmirate = summary.byEmirate.reduce((sum, row) => sum + row.netFils, 0);
-    expect(byEmirate).toBe(summary.netFils);
-  });
-
-  it("leaves drafts and void invoices out", async () => {
-    const summary = await vatReturn(new Date("2000-01-01"), new Date(Date.now() + 86_400_000));
-    const refs = new Set(summary.rows.map((row) => row.invoiceRef));
-    const excluded = await prisma.invoice.findMany({
-      where: { status: { in: ["draft", "void"] } },
-      select: { ref: true },
-    });
-    for (const invoice of excluded) expect(refs.has(invoice.ref)).toBe(false);
-  });
-
-  it("quotes a comma and defuses a formula", () => {
-    const csv = toCsv({
-      from: new Date("2026-01-01"),
-      to: new Date("2026-04-01"),
-      rows: [
-        {
-          invoiceRef: "INV-1",
-          issuedAt: new Date("2026-02-03"),
-          businessName: "Al Quoz Trading, LLC",
-          businessId: "b1",
-          trn: "100123456700003",
-          emirate: "dubai",
-          netFils: 34_900,
-          vatFils: 1_745,
-          grossFils: 36_645,
-          vatRate: 0.05,
-        },
-        {
-          invoiceRef: "INV-2",
-          issuedAt: new Date("2026-02-04"),
-          businessName: "=cmd|'/c calc'!A1",
-          businessId: "b2",
-          trn: null,
-          emirate: null,
-          netFils: 0,
-          vatFils: 0,
-          grossFils: 0,
-          vatRate: 0.05,
-        },
-      ],
-      netFils: 34_900,
-      vatFils: 1_745,
-      grossFils: 36_645,
-      byEmirate: [{ emirate: "dubai", netFils: 34_900, vatFils: 1_745 }],
-      missingTrn: 1,
-    });
-
-    expect(csv).toContain('"Al Quoz Trading, LLC"');
-    // Excel would run the second one. Prefixed, it is text.
-    expect(csv).toContain(`"'=cmd|'/c calc'!A1"`);
-    expect(csv).toContain('"349.00"');
-    expect(csv).toContain('"2 invoices"');
-  });
-
-  it("names the file so a folder of them sorts", () => {
-    expect(exportFilename(new Date("2026-01-01"))).toBe("vat-2026-q1.csv");
-    expect(exportFilename(new Date("2026-10-01"))).toBe("vat-2026-q4.csv");
-  });
-
-  it("counts the sellers with no TRN rather than hiding them", async () => {
-    const summary = await vatReturn(new Date("2000-01-01"), new Date(Date.now() + 86_400_000));
-    const counted = summary.rows.filter((row) => !row.trn).length;
-    expect(summary.missingTrn).toBe(counted);
-  });
-});

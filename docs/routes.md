@@ -188,9 +188,8 @@ and it is the one that argues back.
 /admin/staff                            Staff, roles, invitations & matrix    [4i]  built 4i
 /admin/subscriptions                    Subscriptions                         [4g]  built h4s5
 /admin/invoices                         Invoices & credits                   [12e]  built h4s5
-/admin/plans                            Plans & entitlements                 [12e]  built h4s5
-/admin/dunning                          Failed payments                      [12e]  built h4s5
-/admin/tax                              VAT export                           [12e]  built h4s5
+/admin/plans                            Plan config — the matrix, add a plan [12e]  built 12e
+/admin/dunning                          Failed payments — the one list       [12e]  built 12e
 /admin/revenue                          Revenue — one Dubai month, ?period=   [4g]  built 4g
 /admin/revenue/export                   The month as CSV, formulas and filter [4g]  built 4g
 /admin/reports                          Supplier reports & flags              [4h]  built h4s3
@@ -262,6 +261,31 @@ anywhere counted a buyer looking at a product.
 - `Enquiry.emirate` is new. The composer always collected it and `fanout` always
   routed on it; the write kept only the free-text area beside it. A null renders
   as `Not stated` rather than a country guessed from an IP.
+
+### Board `12e` note — plan config, and the route that went with the VAT export
+
+The 12e board-level export of 16 Sep reshapes `/admin/plans` and removes one
+route. Four things are recorded above and here:
+
+- **`/admin/tax` is gone**, and so is `/admin/tax/export` and
+  `lib/billing/vat.ts`. The spec: *"the VAT return export — Q3 2026 totals and
+  the `Export FTA-format file` button. Out of scope — not needed. `/admin/tax`
+  left the route with it."* `11g` remains the per-invoice tax surface and is
+  unaffected: the platform still charges 5% VAT on subscriptions and placement,
+  every invoice still stores the rate it used, and `/admin/revenue/export` is
+  still the finance CSV. What is gone is the quarterly return, which the issuing
+  company has no TRN to file.
+- **`/admin/plans` is a matrix**, entitlements down and plans across, with every
+  cell editable and a review step between the table and the write. It was a row
+  per plan behind an Edit button — the transpose — which answered "what does Pro
+  allow" and not "what do the three allow, compared".
+- **The three commerce routes carry one tab strip**: Plans & entitlements,
+  Failed payments, Invoices & credits, gated per item because `/admin/invoices`
+  is finance's `subscription.credit` and the other two are not.
+- **`/admin/dunning` is the only list of failed payments.** The board drew a
+  second one on the plan screen over a different set of businesses; that panel is
+  a count and a link. There are still no controls on it: `12i` audits the notices
+  and `12j` sanctions a send, and neither is exported.
 
 ### Wave 4 note — the `11f` split
 
