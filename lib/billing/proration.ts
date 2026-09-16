@@ -48,19 +48,21 @@ const MS_PER_DAY = 86_400_000;
  * The default a new invoice is stamped with, and the figure a preview quotes
  * before an invoice exists. Once an invoice is issued the rate it carries is
  * `Invoice.vatRate` and nothing re-reads this — a rate change must not move a
- * document that has already been sent, which is why `vatReturn` reads the stored
- * column line by line.
+ * document that has already been sent, which is why every reader of an issued
+ * invoice takes the rate off the row rather than from here.
  *
- * It lives beside the fils arithmetic rather than in `vat.ts` because that
- * module is `server-only` and this one is pure: the change-plan preview needs
- * the number without reaching a database.
+ * It is a constant rather than a row on the plan-config table, and board 12e is
+ * where that was settled: the 5% is statutory, it changes by decree and not by
+ * an ops decision, and `11g` already stamps the rate it used on each invoice —
+ * so what a person would need to edit is what the *next* invoice charges, which
+ * is one deploy a decade against a config row nobody may touch in between.
  */
 export const VAT_RATE = 0.05;
 
 /**
  * VAT on a net figure, rounded once.
  *
- * Per invoice rather than per line, which is the convention `vatReturn` already
+ * Per invoice rather than per line, which is the convention every invoice reader
  * applies and the FTA allows: what the seller sees on their copy is what the
  * return is built from. Board 3m's worked example is this exact rounding —
  * `154.83 × 0.05` is `7.7415`, and the panel reads `7.74`.

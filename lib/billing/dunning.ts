@@ -48,6 +48,29 @@ export const GRACE_AFTER_FINAL_DAYS = 1;
 
 const DAY_MS = 86_400_000;
 
+/** Days from the first failure to the plan dropping to Free. */
+export const DROP_TO_FREE_DAY = SCHEDULE.final + GRACE_AFTER_FINAL_DAYS;
+
+/**
+ * When this subscription drops to Free — board 12e correction 4.
+ *
+ * The failed-payments column header was `SUSPENDS` — *in 4 days*, *in 11 days*,
+ * *tomorrow*. Two things were wrong with it. The policy is **drop to Free at
+ * D14: never delete a listing, never remove the verified badge**, which is what
+ * `PERMITTED_ACCOUNT_EFFECTS` enumerates and what `12i`'s equivalent column
+ * says — *Plan changes to Free on 19 Sep*. And **suspension is a real and
+ * different action**: `business.suspend`, ops-lead-only, audited, taken on
+ * `/admin/businesses`, honoured across storefronts, search, product counts and
+ * metrics, with its own reason codes and appeal path. Naming a billing lapse
+ * after it points staff at the wrong control.
+ *
+ * Measured from the first failure like every other step, so a missed run moves
+ * nothing: the date an account drops is fixed the moment its card fails.
+ */
+export function dropsToFreeAt(pastDueSince: Date): Date {
+  return new Date(pastDueSince.getTime() + DROP_TO_FREE_DAY * DAY_MS);
+}
+
 export function daysPastDue(pastDueSince: Date, now: Date): number {
   return Math.floor((now.getTime() - pastDueSince.getTime()) / DAY_MS);
 }

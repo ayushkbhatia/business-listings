@@ -144,41 +144,102 @@ test.describe("board 12d — finance does not work the call list", () => {
   });
 });
 
-test.describe("board 12e — plans and entitlements", () => {
+test.describe("board 12e — plan config", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/admin/plans");
   });
 
-  test("shows the caps and how many accounts an edit would move", async ({ page }) => {
+  test("is a matrix: entitlements down, plans across", async ({ page }) => {
     const table = page.getByRole("table", { name: /What each plan allows/ });
-    await expect(table).toBeVisible();
-    await expect(table.getByRole("columnheader", { name: "Accounts" })).toBeVisible();
-    await expect(table.getByRole("columnheader", { name: "On old numbers" })).toBeVisible();
+    await expect(table.getByRole("columnheader", { name: "Entitlement" })).toBeVisible();
+    for (const plan of ["Free", "Basic", "Pro"]) {
+      await expect(table.getByRole("columnheader", { name: plan, exact: true })).toBeVisible();
+    }
+    await expect(table.getByRole("rowheader", { name: /Monthly price/ })).toBeVisible();
   });
 
-  test("apply-to-existing is off until somebody ticks it, and says what it would move", async ({
-    page,
-  }) => {
-    await page.getByRole("button", { name: /Change Basic/ }).first().click();
-
-    const apply = page.getByRole("checkbox", { name: /Apply to the \d+ accounts/ });
-    await expect(apply).toBeVisible();
-    await expect(apply).not.toBeChecked();
+  test("says the price is ex-VAT, which is correction 3", async ({ page }) => {
+    // The `3m`/`11f` pair's largest correction was this exact ambiguity: a
+    // headline price against an inclusive footnote with nothing marking which
+    // was which. The label carries it rather than a note further down.
     await expect(
-      page.getByText(/keeps forty until somebody decides otherwise/),
+      page.getByRole("rowheader", { name: "Monthly price · AED, ex-VAT" }),
     ).toBeVisible();
   });
 
-  test("will not save without a reason", async ({ page }) => {
-    await page.getByRole("button", { name: /Change Basic/ }).first().click();
-    await expect(page.getByRole("button", { name: "Save the entitlements" })).toBeDisabled();
-    await page.getByRole("textbox", { name: "Why" }).fill("Raising the catalogue cap.");
-    await expect(page.getByRole("button", { name: "Save the entitlements" })).toBeEnabled();
+  test("carries no ranking field, and says where that lives (B2)", async ({ page }) => {
+    const table = page.getByRole("table", { name: /What each plan allows/ });
+    await expect(table.getByRole("rowheader", { name: /[Rr]anking/ })).toHaveCount(0);
+    await expect(page.getByText(/Plan tier is one of six weights/)).toBeVisible();
   });
 
-  test("does not offer the price on the same form as a cap", async ({ page }) => {
-    await page.getByRole("button", { name: /Change Basic/ }).first().click();
-    await expect(page.getByText(/Price is not editable here/)).toBeVisible();
+  test("never lets an admin type the word Unlimited (B6)", async ({ page }) => {
+    /*
+       Pro's enquiry allowance is unlimited. On the board that was the string
+       `Unlimited` inside a bordered mono field that otherwise holds numbers.
+       Here the box is disabled and a checkbox beside it is what holds the null,
+       so there is nothing to misspell into a cap of NaN.
+    */
+    const box = page.getByRole("textbox", { name: "Enquiries per month · Pro" });
+    await expect(box).toBeDisabled();
+    await expect(box).toHaveValue("Unlimited");
+  });
+
+  test("reviews before it writes, and the button carries the count (B7)", async ({ page }) => {
+    const review = page.getByRole("button", { name: /Review the change/ });
+    await expect(review).toBeDisabled();
+
+    /*
+       A value derived from what is there, never a literal.
+
+       The first version filled `151`, which armed the button until somebody ran
+       the suite twice: the cap was 151 by then and filling it again moved
+       nothing. A cap this screen can edit is a cap the previous run may have
+       edited.
+    */
+    const products = page.getByRole("textbox", { name: "Products · Basic" });
+    const now = Number(await products.inputValue());
+    await products.fill(String(now + 1));
+    await expect(review).toBeEnabled();
+    await review.click();
+
+    // Step three states the change before anything is written: which plan,
+    // which row, from what to what.
+    const diff = page.getByRole("table", { name: /what this change would move/i });
+    await expect(diff.getByRole("rowheader", { name: "Basic" })).toBeVisible();
+    await expect(diff.getByRole("cell", { name: "Products" })).toBeVisible();
+
+    // And it will not commit without a reason.
+    await expect(page.getByRole("button", { name: /^Save/ })).toBeDisabled();
+    await page.getByRole("textbox", { name: "Why" }).fill("Raising the Basic catalogue cap.");
+    await expect(page.getByRole("button", { name: /^Save/ })).toBeEnabled();
+  });
+
+  test("says separately that a price change reaches existing accounts (Q5)", async ({ page }) => {
+    /*
+       A price is not in the entitlement snapshot and never has been, so
+       grandfathering does not cover it. The preview says so on its own line
+       rather than letting the tick box below imply otherwise.
+    */
+    const price = page.getByRole("textbox", { name: "Monthly price · AED, ex-VAT · Basic" });
+    await price.fill(String(Number(await price.inputValue()) + 10));
+    await page.getByRole("button", { name: /Review the change/ }).click();
+    await expect(page.getByText(/renew at the new price/)).toBeVisible();
+  });
+
+  test("offers to add a plan, and says it starts off sale (Q3)", async ({ page }) => {
+    await page.getByRole("button", { name: "Add a plan" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByText(/withdrawn from sale/)).toBeVisible();
+    await expect(dialog.getByRole("button", { name: "Add the plan" })).toBeDisabled();
+  });
+
+  test("shows failed payments as a count and a link, not a third table (Q1)", async ({ page }) => {
+    // The board drew a third list of the same failed payments over a different
+    // set of businesses from `12i`'s. One query, one list.
+    await expect(page.getByRole("link", { name: /Open failed payments/ })).toBeVisible();
+    await expect(page.getByRole("table", { name: /past due/i })).toHaveCount(0);
   });
 
   test("is axe clean", async ({ page }) => {
@@ -203,6 +264,22 @@ test.describe("board 12e — failed payments, and criterion 10's negative", () =
     await expect(page.getByText(/The listing stays live/)).toBeVisible();
   });
 
+  test("calls the column Drops to Free, never Suspends (correction 4)", async ({ page }) => {
+    /*
+       Suspension is a real and different action — `business.suspend`, ops-lead
+       only, taken on `/admin/businesses` — and naming a billing lapse after it
+       points staff at a control this screen does not have.
+    */
+    const table = page.getByRole("table", { name: /past due/ });
+    await expect(table.getByRole("columnheader", { name: "Drops to Free" })).toBeVisible();
+    await expect(table.getByRole("columnheader", { name: /Suspend/i })).toHaveCount(0);
+  });
+
+  test("states the amount as a VAT-inclusive total (B3)", async ({ page }) => {
+    const table = page.getByRole("table", { name: /past due/ });
+    await expect(table.getByRole("columnheader", { name: /incl\. VAT/ })).toBeVisible();
+  });
+
   test("offers no control that could delete, unpublish or unverify", async ({ page }) => {
     /*
      * The negative half of criterion 10, asserted as an absence rather than
@@ -221,33 +298,6 @@ test.describe("board 12e — failed payments, and criterion 10's negative", () =
     // The console provider cannot take money. A screen that implied otherwise
     // is how a staging environment convinces somebody the billing works.
     await expect(page.getByText(/No payment gateway is configured/)).toBeVisible();
-  });
-
-  test("is axe clean", async ({ page }) => {
-    const results = await new AxeBuilder({ page }).disableRules(["color-contrast"]).analyze();
-    expect(results.violations).toEqual([]);
-  });
-});
-
-test.describe("board 12e — VAT export", () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto("/admin/tax");
-  });
-
-  test("scopes itself to our own invoices", async ({ page }) => {
-    await expect(page.getByText(/Our own subscription and placement invoices only/)).toBeVisible();
-  });
-
-  test("totals in a real tfoot", async ({ page }) => {
-    const table = page.getByRole("table", { name: /Issued invoices in the period/ });
-    await expect(table.locator("tfoot")).toBeAttached();
-  });
-
-  test("downloads a CSV named for the quarter", async ({ page }) => {
-    const download = page.waitForEvent("download");
-    await page.getByRole("link", { name: "Download the CSV" }).click();
-    const file = await download;
-    expect(file.suggestedFilename()).toMatch(/^vat-\d{4}-q[1-4]\.csv$/);
   });
 
   test("is axe clean", async ({ page }) => {

@@ -157,13 +157,13 @@ export const CAPABILITIES = {
     roles: ["staff_ops_lead", "staff_finance"],
     audited: true,
     source: "stated",
-    why: "§07 staff table, \"Edit plans & entitlements\". The only commercial row ops lead and finance share.",
+    why: "§07 staff table, \"Edit plans & entitlements\". The only commercial row ops lead and finance share, and board 12e Q2's answer — \"who may edit plan config?\" — which is this row rather than an open question. Adding a plan is the same grant: a new tier is born withdrawn from sale and nobody can be moved onto one by creating it.",
   },
   "revenue.read": {
     roles: ["staff_finance"],
     audited: false,
     source: "stated",
-    why: "§07 staff table, \"Export VAT / finance data\": finance only. Was inferred as finance + ops lead. Reading does not change state, so it is not audited — but it is not everybody's to read either.",
+    why: "§07 staff table, \"Export finance data\": finance only. Was inferred as finance + ops lead. Reading does not change state, so it is not audited — but it is not everybody's to read either. The row read \"Export VAT / finance data\" until board 12e cut the VAT return; what it still covers is the revenue export and every commercial screen.",
   },
   "placement.boost": {
     roles: OPS_LEAD_ONLY,

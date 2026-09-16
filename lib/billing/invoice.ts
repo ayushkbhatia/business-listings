@@ -14,7 +14,7 @@ import { FILS_PER_AED, VAT_RATE, filsToAed, vatOn } from "./proration";
  *
  * ## What is frozen, and why each one
  *
- * **The totals.** `invoiceList` and `vatReturn` each summed `InvoiceLine` and
+ * **The totals.** `invoiceList` and the finance export each summed `InvoiceLine` and
  * applied the rate themselves. Two readers, one invoice, and no guarantee they
  * agreed with each other or with what the card was actually charged. Now the
  * three figures are written once, at issue, and every reader reads them.
@@ -202,7 +202,8 @@ export async function issueInvoice(
      VAT per line, and the document total is the sum of them.
 
      `vatFils` above rounds once over the whole invoice, which is the convention
-     `vatReturn` already applied and what the seller's copy has always shown. The
+     the per-invoice rounding already applied and what the seller's copy has
+     always shown. The
      per-line figures have to add up to it or the document contradicts its own
      total, so the last line absorbs whatever the per-line rounding left over —
      at most one fil, and on the line rather than in a footnote.
@@ -328,7 +329,7 @@ export interface TotallableInvoice {
  * The totals, stored where there are stored ones.
  *
  * The one reader. Nothing else in the codebase may sum `InvoiceLine` and apply
- * a rate — `invoiceList`, `vatReturn`, the seller's list and the document all
+ * a rate — `invoiceList`, the finance export, the seller's list and the document all
  * come through here, so criterion 1 holds by construction rather than by four
  * places happening to agree.
  */

@@ -59,6 +59,14 @@ export const AUDIT_ACTIONS = [
   "staff_changed",
   "claim_resolved",
   "entitlements_changed",
+  /*
+     Board 12e Q3. A plan being added is not an entitlement changing: there is
+     no before, nothing is grandfathered, and the row it writes answers a
+     different question — which plan appeared, copied from what, and who said
+     so. Filing it under `entitlements_changed` would hide a new commercial tier
+     inside a list of cap edits.
+  */
+  "plan_created",
   "ranking_changed",
   "cross_business_read",
   /*
@@ -279,6 +287,7 @@ export const PAIRED_ACTIONS = {
     "homepage_query_added",
     "homepage_query_removed",
   ],
+  "plan.entitlements.write": ["entitlements_changed", "plan_created"],
   "taxonomy.write": [
     "taxonomy_changed",
     "category_created",

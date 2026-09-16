@@ -180,7 +180,7 @@ export function ImportQueue({
             fills in from the catalogue in front of them.
           */}
           <label className="flex w-40 flex-col gap-1">
-            <span className="text-body-sm text-ink">{t("admin.plans.col.products")}</span>
+            <span className="text-body-sm text-ink">{t("admin.catalogue_imports.products")}</span>
             <Input
               type="number"
               min={0}

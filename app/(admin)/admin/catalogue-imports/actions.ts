@@ -45,7 +45,7 @@ function settled(result: StaffMoveResult): ActionResult {
     case "out_of_range":
       return {
         ok: false,
-        error: t("error.required", { field: t("admin.plans.col.products") }),
+        error: t("error.required", { field: t("admin.catalogue_imports.products") }),
       };
     default:
       // Somebody else moved this row while the queue was open. Reloading is

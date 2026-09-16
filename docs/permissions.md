@@ -75,8 +75,8 @@ reading `Business.leadEscalationMinutes` and sending once per enquiry.
 | Resolve a supplier report | ✓ | ✓ | — |
 | Suspend an account | ✓ | — | — |
 | Issue a subscription credit | — | — | ✓ |
-| Edit plans & entitlements | ✓ | — | ✓ |
-| Export VAT / finance data | — | — | ✓ |
+| Edit plans & entitlements, and add a plan (board 12e) | ✓ | — | ✓ |
+| Export finance data | — | — | ✓ |
 | Adjust search ranking weights | ✓ | — | — |
 | Manual boost / demote a listing | ✓ | — | — |
 | View-as a business | ✓ | ✓ | — |
