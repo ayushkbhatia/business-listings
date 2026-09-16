@@ -5,7 +5,6 @@ import {
   credentialState,
   isCheckedByUs,
   isCredential,
-  isOnStorefront,
   type CredentialState,
 } from "@/lib/verification/credentials";
 import { daysUntil, licenceStage, type LicenceStage } from "@/lib/verification";
@@ -46,16 +45,18 @@ export interface CheckedDocument {
 export interface CredentialDocument {
   id: string;
   kind: DocumentKind;
-  /** What a buyer would call it, falling back to the file's own name. */
+  /** The name the seller gave it, falling back to the file's own name. */
   name: string;
   reference: string | null;
   validUntil: Date | null;
   state: CredentialState;
   /** Days left, computed. Null where the document does not expire. */
   daysLeft: number | null;
-  isPublic: boolean;
-  onStorefront: boolean;
-  reviewReason: string | null;
+  /**
+   * Products a buyer can open that list this file — the one way an uploaded
+   * certificate reaches a public page. Draft products are not counted.
+   */
+  onProducts: number;
 }
 
 export interface UploadedDocument {
@@ -114,10 +115,8 @@ export async function getVerification(
         displayName: true,
         reference: true,
         validUntil: true,
-        isPublic: true,
-        reviewedAt: true,
-        reviewReason: true,
         createdAt: true,
+        _count: { select: { products: { where: { product: { status: { not: "draft" } } } } } },
       },
     }),
   ]);
@@ -174,9 +173,7 @@ export async function getVerification(
       validUntil: document.validUntil,
       state: credentialState(document, now),
       daysLeft: document.validUntil ? daysUntil(document.validUntil, now) : null,
-      isPublic: document.isPublic,
-      onStorefront: isOnStorefront(document),
-      reviewReason: document.reviewReason,
+      onProducts: document._count.products,
     })),
   };
 }

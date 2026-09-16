@@ -130,22 +130,28 @@ export async function referencesFor(
     });
   }
 
-  const publicCertificates = await prisma.document.findMany({
-    where: { id: { in: ids }, businessId, isPublic: true },
+  const certificates = await prisma.document.findMany({
+    where: { id: { in: ids }, businessId, kind: "certificate" },
     select: { id: true },
   });
-  for (const doc of publicCertificates) {
+  for (const doc of certificates) {
     /*
        The label names **where it is read**, not what the file is called.
        A reference answers "who is using this?", and `WRAS approval` as the
-       answer to that about `WRAS approval` tells a seller nothing — the badge
-       on the tile is supposed to name the page a buyer sees it on.
+       answer to that about `WRAS approval` tells a seller nothing.
+
+       Every certificate, and read by our team only. This said "Certificates on
+       your listing" and linked the storefront for the ones a seller had asked
+       to show; no public page names an uploaded certificate since the
+       storefront builder was cut, so it is on file for verification, reachable
+       by no buyer, and never "unreferenced" — a certificate held for checking
+       is in use.
     */
     push(doc.id, {
       kind: "certificate",
       label: CERTIFICATE_SURFACE(),
-      ...(business?.slug ? { href: `/b/${business.slug}` } : {}),
-      live: businessLive,
+      href: "/dashboard/verification",
+      live: false,
     });
   }
 
@@ -182,7 +188,9 @@ export async function referencesFor(
 
   for (const member of teamMembers) {
     if (!member.mediaId) continue;
-    push(member.mediaId, { kind: "team_member", label: member.name, live: businessLive });
+    // Not live: the storefront's Team section went with the builder cut, and no
+    // public page shows a team member's photo.
+    push(member.mediaId, { kind: "team_member", label: member.name, live: false });
   }
 
   for (const doc of enquiryDocs) {

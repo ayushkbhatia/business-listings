@@ -4,7 +4,6 @@ import {
   credentialState,
   isCheckedByUs,
   isCredential,
-  isOnStorefront,
   PUBLISHABLE_DOCUMENT_KINDS,
 } from "./credentials";
 
@@ -34,47 +33,20 @@ describe("the two document classes", () => {
 });
 
 describe("credentialState", () => {
-  const base = { isPublic: false, reviewedAt: null, validUntil: null };
-
-  it("is on file when there is nothing to say", () => {
-    expect(credentialState({ ...base, reviewedAt: dubai("2026-01-01T00:00:00") }, now)).toBe("on_file");
-  });
+  const base = { validUntil: null };
 
   it("counts a document with no expiry as on file forever", () => {
-    expect(credentialState({ ...base, validUntil: null, isPublic: false }, now)).toBe("on_file");
+    expect(credentialState(base, now)).toBe("on_file");
   });
 
   it("is expiring inside the notice window and on file outside it", () => {
     // The render's own case: Civil Defence, 28 Sep 2026, 22 days out.
-    expect(credentialState({ ...base, validUntil: dubai("2026-09-28T00:00:00") }, now)).toBe("expiring");
+    expect(credentialState({ validUntil: dubai("2026-09-28T00:00:00") }, now)).toBe("expiring");
     // And ISO 9001, March 2027, which is not urgent and does not say so.
-    expect(credentialState({ ...base, validUntil: dubai("2027-03-01T00:00:00") }, now)).toBe("on_file");
+    expect(credentialState({ validUntil: dubai("2027-03-01T00:00:00") }, now)).toBe("on_file");
   });
 
-  it("is in review while the seller has asked to publish and nobody has looked", () => {
-    expect(credentialState({ ...base, isPublic: true, reviewedAt: null }, now)).toBe("in_review");
-  });
-
-  it("stops being in review once somebody has", () => {
-    expect(
-      credentialState({ ...base, isPublic: true, reviewedAt: dubai("2026-09-01T00:00:00") }, now),
-    ).toBe("on_file");
-  });
-
-  it("reads lapsed rather than in review, because that is the state with the consequence", () => {
-    expect(
-      credentialState({ isPublic: true, reviewedAt: null, validUntil: dubai("2026-08-01T00:00:00") }, now),
-    ).toBe("lapsed");
-  });
-});
-
-describe("isOnStorefront", () => {
-  it("needs both decisions", () => {
-    const reviewed = dubai("2026-09-01T00:00:00");
-    expect(isOnStorefront({ isPublic: true, reviewedAt: reviewed, validUntil: null })).toBe(true);
-    // The seller asked and nobody has looked.
-    expect(isOnStorefront({ isPublic: true, reviewedAt: null, validUntil: null })).toBe(false);
-    // Somebody looked and the seller has since withdrawn the ask.
-    expect(isOnStorefront({ isPublic: false, reviewedAt: reviewed, validUntil: null })).toBe(false);
+  it("is lapsed once its validity has passed", () => {
+    expect(credentialState({ validUntil: dubai("2026-08-01T00:00:00") }, now)).toBe("lapsed");
   });
 });
