@@ -91,20 +91,6 @@ export function tokens(q: string): string[] {
 export function businessWhere(
   query: SearchQuery,
   categoryIds?: string[],
-  /**
-   * Board `1c-s` — answer a place filter by where a firm works as well as where
-   * its branches are. Only the blended page asks. See `placeWhere` for why every
-   * other caller keeps the branch rule for now.
-   */
-  place?: {
-    coverage: true;
-    /**
-     * The emirate the `area` filter sits in. Coverage reads a place as a pair —
-     * an emirate-wide row reaches every area inside it — and a `where` cannot
-     * look the pair up.
-     */
-    areaEmirate?: Emirate;
-  },
 ): Prisma.BusinessWhereInput {
   const and: Prisma.BusinessWhereInput[] = [PUBLIC_BUSINESS];
 
@@ -179,7 +165,7 @@ export function businessWhere(
     and.push({ responseTimeMedianMs: { lte: query.replyWithinHours * 3_600_000 } });
   }
 
-  const where = placeWhere(query, place);
+  const where = placeWhere(query);
   if (where) and.push(where);
 
   if (query.availability?.length) {
@@ -214,33 +200,30 @@ function serviceTextBranches(token: string): Prisma.ServiceWhereInput[] {
 }
 
 /**
- * Where a firm is, for a place filter — its branches, or where it works.
+ * Where a firm is, for a place filter — its published branches.
  *
- * A goods supplier is in Dubai when it has a branch there. A firm that sells
- * work is in Dubai when its coverage reaches Dubai: a tax practice in Sharjah
- * that files for Dubai clients is a Dubai result, and a branch-only reading
- * leaves it absent from every emirate but its office's (`12c-s`'s *still owed*).
- * With `place.coverage` a place filter is answered by either — and the coverage
- * half resolves per service, the way `1h-s` routes a brief.
+ * ## Where the coverage reading went
  *
- * **Only the blended page asks, for now.** The nightly position snapshot
- * (`lib/search/directory.ts`) ranks emirate scopes by branch membership *because*
- * the landing pages filter by this function, so a seller is never told a rank on
- * a page that does not list them. Moving the landing pages without the snapshot
- * would break that promise from the other side; `6a-s` and `10c-s` move the two
- * together.
+ * Board `1c-s` added a second reading here: a firm that sells work is in Dubai
+ * when its **coverage** reaches Dubai, not only when a branch is. That reading
+ * is still the blended page's, and it has moved out of this `where` and onto
+ * the document (`PlaceValues` in `lib/search/blended.ts`).
+ *
+ * It had to. Boards `10c` + `10c-s` count *Dubai 198* **within the current
+ * results**, and a place applied in SQL has already removed the rows that count
+ * would have to count. One predicate over one set is the property those boards
+ * are built on, so a place is a facet like every other facet.
+ *
+ * What is left is the branch rule, which is what every caller here wants: the
+ * nightly position snapshot (`lib/search/directory.ts`) ranks emirate scopes by
+ * branch membership *because* the landing pages filter by this function, so a
+ * seller is never told a rank on a page that does not list them. `6a-s` moves
+ * the two together.
  *
  * A map viewport is branch-only either way. It asks *who is here*, in
  * coordinates, and coverage has none.
- *
- * A free zone is a registration for a firm that sells work (`2d-s` B4) and a
- * branch address for one that sells goods; with coverage on, either answers
- * the toggle.
  */
-function placeWhere(
-  query: SearchQuery,
-  place: { coverage: true; areaEmirate?: Emirate } | undefined,
-): Prisma.BusinessWhereInput | null {
+function placeWhere(query: SearchQuery): Prisma.BusinessWhereInput | null {
   const locationFilters: Prisma.LocationWhereInput = { published: true };
   /*
      The map viewport, when the buyer pressed "Search this area".
@@ -270,42 +253,7 @@ function placeWhere(
     locationFilters.area = { ...(locationFilters.area as object | undefined), isFreeZone: true };
   }
   if (Object.keys(locationFilters).length <= 1) return null;
-  const branch: Prisma.BusinessWhereInput = { locations: { some: locationFilters } };
-  if (query.bounds || !place?.coverage) return branch;
-
-  const coverage = coverageWhere(query, place.areaEmirate);
-  const registered: Prisma.BusinessWhereInput | null = query.freeZone
-    ? {
-        freeZoneRegistrations: {
-          some: {
-            area: {
-              isFreeZone: true,
-              ...(query.emirate ? { emirate: query.emirate as Emirate } : {}),
-              ...(query.area ? { slug: query.area } : {}),
-            },
-          },
-        },
-      }
-    : null;
-
-  const works: Prisma.BusinessWhereInput[] = [];
-  if (coverage) {
-    /*
-       Per service, not the union — `12c-s` B4, `3c-s` B8. A firm whose only
-       VAT service is narrowed to Sharjah does not work in Dubai because its
-       default still says Dubai: the default is what an un-narrowed service
-       inherits, and this firm has none. A firm with no live service yet is read
-       by its default, because nothing it offers disagrees with it.
-    */
-    works.push({
-      OR: [
-        { services: { some: { status: "live", ...effectiveCoverageWhere(coverage) } } },
-        { services: { none: { status: "live" } }, serviceCoverage: { some: { AND: [{ serviceId: null }, coverage] } } },
-      ],
-    });
-  }
-  if (registered) works.push(registered);
-  return works.length > 0 ? { OR: [branch, { AND: works }] } : branch;
+  return { locations: { some: locationFilters } };
 }
 
 /**

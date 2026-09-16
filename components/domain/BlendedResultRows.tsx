@@ -4,11 +4,11 @@ import { buttonClassName } from "@/components/primitives";
 import { Check } from "@/components/primitives/icons";
 import { cn } from "@/lib/cn";
 import type { PairedCopies } from "@/lib/i18n/paired";
-import { formatDate, formatDuration } from "@/lib/format";
+import { formatCount, formatDate, formatDuration } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import type {
   BlendedResultView,
-  BusinessResultView,
+  SupplierResultView,
   ProductResultView,
   ResultFirmFacts,
   ServiceResultView,
@@ -18,16 +18,23 @@ import { VerificationBadge } from "./VerificationBadge";
 import { tierSpec } from "./verification";
 
 /**
- * Board `1c-s` — the three result shapes, and the argument each one makes.
+ * Boards `1c-s`, `10c` and `10c-s` — the three result shapes, and the argument
+ * each one makes.
  *
- * | Shape    | Carries                                        | Because |
- * |----------|------------------------------------------------|---------|
- * | Service  | turnaround, fee basis, delivered, sectors      | the scope sheet, surfaced |
- * | Business | why it matched, the services named, size band  | the firm ranks, not the single service |
- * | Product  | availability, place, *Price on enquiry*        | goods vocabulary, deliberately unchanged |
+ * | Shape    | Carries                                          | Because |
+ * |----------|--------------------------------------------------|---------|
+ * | Service  | turnaround, fee basis, delivered, sectors         | the scope sheet, surfaced |
+ * | Supplier | its trade, what it returned, the services named   | the firm ranks, not the single service |
+ * | Product  | spec chips, availability, place                   | goods vocabulary, deliberately unchanged |
  *
  * Presentational and server-safe: the page and the gallery render the same
  * markup from the same values, and nothing here fetches.
+ *
+ * **One CTA string, both kinds** (`B6`). `listing.enquire` reads *Ask for a
+ * quote* on every row of every kind, and on the cards and shelves the rest of
+ * the buyer surface draws — one concept with two names is the defect the same
+ * handoff opens with, and a row that says *Enquire* on `/c/valves` and *Ask for
+ * a quote* on `/search` is that defect at a smaller scale.
  *
  * **Identity is `displayName`**, on every shape, and it links to the storefront
  * the name belongs to — a row whose words and destination disagree is the
@@ -39,6 +46,28 @@ import { tierSpec } from "./verification";
  * storefront's table, where their words say whose claim they are, and nowhere
  * on this row.
  */
+
+/**
+ * `B8`/`Q1` — a row's comparison tick, where the row has one.
+ *
+ * A value rather than a callback, because these cross into a client island and
+ * a function does not: the page knows the tray, the row knows nothing about it.
+ * **A service row is never handed one.** `/compare` sets a supplier's ten fixed
+ * attributes side by side (decision D3), a service has no comparable sheet, and
+ * what a buyer compares for a service is the proposals that come back on
+ * `1n-s` — so the tick belongs to the two shapes whose subject is a supplier.
+ */
+export interface CompareTick {
+  href: string;
+  selected: boolean;
+}
+
+/** The ticks a list is drawn with, keyed `kind:id`. */
+export type CompareTicks = Record<string, CompareTick>;
+
+export function compareKey(row: BlendedResultView): string {
+  return `${row.kind}:${row.id}`;
+}
 
 /** The kind label a row leads with — `SERVICE`, `SUPPLIER`, `PRODUCT`. */
 export function ResultKindBadge({ kind }: { kind: BlendedResultView["kind"] }) {
@@ -67,6 +96,48 @@ export function CheckedCredentialBadge({ kind }: { kind: string }) {
       <span className="sr-only">{t("search_blended.credential_checked", { credential: name })}</span>
       <span aria-hidden>{name}</span>
     </span>
+  );
+}
+
+/**
+ * The comparison tick, as a link.
+ *
+ * A link because the tray lives in the query string — the same reason every
+ * facet is one. It carries its own state in the accessible name rather than in
+ * `aria-pressed`, which belongs to a button: adding a supplier to the tray is a
+ * navigation.
+ */
+function CompareLink({ tick, name }: { tick: CompareTick; name: string }) {
+  return (
+    <a
+      href={tick.href}
+      rel="nofollow"
+      aria-current={tick.selected ? "true" : undefined}
+      className={cn(
+        "inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-tag py-0.5 text-caption",
+        "transition-colors duration-120 ease-out focus-visible:outline-none focus-visible:shadow-focus",
+        tick.selected ? "text-ink" : "text-muted hover:text-ink",
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn(
+          "flex size-4 items-center justify-center rounded-tag border",
+          tick.selected ? "border-moss bg-moss text-on-ink" : "border-line-strong bg-card",
+        )}
+      >
+        {tick.selected && <Check size={11} />}
+      </span>
+      {/*
+         The name is in the accessible name and not in the visible one. Four
+         *Compare* links down a column are unambiguous to read and hopeless to
+         hear, and the row is 13rem wide — the firm's name wraps to three lines
+         where it is drawn. Same trade `FacetOptionLink` makes with its state
+         word.
+      */}
+      {tick.selected ? t("compare.in_tray") : t("action.compare")}
+      <span className="sr-only"> {name}</span>
+    </a>
   );
 }
 
@@ -145,8 +216,8 @@ function Frame({
   );
 }
 
-function Chips({ chips }: { chips: readonly string[] }) {
-  if (chips.length === 0) return null;
+function Chips({ chips, stock }: { chips: readonly string[]; stock?: string | null }) {
+  if (chips.length === 0 && !stock) return null;
   return (
     <ul className="mt-3 flex list-none flex-wrap gap-1.5 p-0">
       {chips.map((chip) => (
@@ -154,6 +225,18 @@ function Chips({ chips }: { chips: readonly string[] }) {
           <Tag>{chip}</Tag>
         </li>
       ))}
+      {/*
+         The one chip either board draws in colour. Everything else is neutral
+         and the badge carries the kind — a second coloured chip would make the
+         row's own hierarchy a guess.
+      */}
+      {stock && (
+        <li>
+          <span className="inline-flex items-center whitespace-nowrap rounded-tag border border-ok-line bg-ok-wash px-2 py-0.5 text-caption text-ok-ink">
+            {stock}
+          </span>
+        </li>
+      )}
     </ul>
   );
 }
@@ -168,7 +251,7 @@ export function ServiceResultRow({ row }: { row: ServiceResultView }) {
       headingId={headingId}
       aside={
         <>
-          {/* B8 — a scope sheet prices a job, not a line item. */}
+          {/* `1c-s` B8 — a scope sheet prices a job, not a line item. */}
           <p className="text-body-sm font-medium text-ink">{t("storefront_services.fee_on_enquiry")}</p>
           <Link
             href={`/b/${row.businessSlug}?service=${encodeURIComponent(row.slug)}#enquire`}
@@ -208,15 +291,33 @@ export function ServiceResultRow({ row }: { row: ServiceResultView }) {
   );
 }
 
-/* ── Business ────────────────────────────────────────────────────────────── */
+/* ── Supplier ────────────────────────────────────────────────────────────── */
 
 /** A seller's headline often has no full stop, and a count sentence follows it. */
 function sentence(text: string): string {
   return /[.!?…]$/.test(text) ? text : `${text}.`;
 }
 
-export function BusinessResultRow({ row, copy }: { row: BusinessResultView; copy: PairedCopies }) {
-  const headingId = `result-business-${row.id}`;
+/**
+ * `Q2` — the row neither board drew, and the largest hole in the screen.
+ *
+ * Both offered a Suppliers count and neither said what a supplier row is. It is
+ * the firm, its trade, and **what it returned on this query** — *3 products and
+ * 1 service match "chiller"* — because a row that repeats the storefront card
+ * says nothing to someone who has just searched. Where the firm matched on its
+ * own name and nothing it lists did, the line says so instead, which is also
+ * the reason that firm has a row in Everything at all.
+ */
+export function SupplierResultRow({
+  row,
+  copy,
+  compare,
+}: {
+  row: SupplierResultView;
+  copy: PairedCopies;
+  compare?: CompareTick | undefined;
+}) {
+  const headingId = `result-supplier-${row.id}`;
   const href = `/b/${row.businessSlug}`;
   const chips = row.services
     ? [
@@ -232,6 +333,26 @@ export function BusinessResultRow({ row, copy }: { row: BusinessResultView; copy
   ]
     .filter(Boolean)
     .join(" ");
+
+  const returned =
+    row.matched.products > 0 || row.matched.services > 0
+      ? [
+          row.matched.products > 0
+            ? t("search_blended.matched_products", {
+                count: row.matched.products,
+                formatted: formatCount(row.matched.products),
+              })
+            : null,
+          row.matched.services > 0
+            ? t("search_blended.matched_services", {
+                count: row.matched.services,
+                formatted: formatCount(row.matched.services),
+              })
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · ")
+      : t("search_blended.matched_name_only");
 
   return (
     <Frame
@@ -253,25 +374,34 @@ export function BusinessResultRow({ row, copy }: { row: BusinessResultView; copy
             {copy[row.sellsWork ? "services" : "goods"]["search_blended.view_storefront"]}
           </Link>
           <Reply ms={row.replyMs} />
+          {compare && <CompareLink tick={compare} name={row.businessName} />}
         </>
       }
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <ResultKindBadge kind="business" />
+        <ResultKindBadge kind="supplier" />
         <h3 id={headingId} className="text-h3 text-ink">
           <Link href={href} className={NAME_LINK}>
             {row.businessName}
           </Link>
         </h3>
+        {/*
+           The trade, beside the name. An Arabic query reaches an English
+           listing through its category's synonyms, and without the trade on the
+           row the buyer has no way to see why the firm is an answer.
+        */}
+        {row.trade && <span className="text-body-sm text-muted">{row.trade}</span>}
       </div>
       <FirmLine firm={row} extra={row.teamLabel} />
+      <p className="mt-2 text-body-sm text-body">{returned}</p>
       {summary && (
-        <p className="mt-3 line-clamp-2 max-w-[var(--measure-prose)] text-body-sm text-body">{summary}</p>
+        <p className="mt-2 line-clamp-2 max-w-[var(--measure-prose)] text-body-sm text-body">{summary}</p>
       )}
       <Chips chips={chips} />
       {/*
-         B5. Without this sentence a buyer reads the firm as a duplicate of the
-         service row above it; with it, a firm worth asking about several things.
+         `1c-s` B5. Without this sentence a buyer reads the firm as a duplicate
+         of the service row above it; with it, a firm worth asking about several
+         things.
       */}
       {row.matchedOnService && (
         <p className="mt-3 text-caption text-muted">{t("search_blended.matched_on_service")}</p>
@@ -282,24 +412,33 @@ export function BusinessResultRow({ row, copy }: { row: BusinessResultView; copy
 
 /* ── Product ─────────────────────────────────────────────────────────────── */
 
-export function ProductResultRow({ row }: { row: ProductResultView }) {
+export function ProductResultRow({
+  row,
+  compare,
+}: {
+  row: ProductResultView;
+  compare?: CompareTick | undefined;
+}) {
   const headingId = `result-product-${row.id}`;
   const href = `/b/${row.businessSlug}/p/${row.slug}`;
-  const chips = [row.availability, row.place].filter((chip): chip is string => Boolean(chip));
+  const chips = [...row.chips, ...(row.inStock ? [] : [row.availability]), ...(row.place ? [row.place] : [])];
   return (
     <Frame
       headingId={headingId}
       aside={
         <>
-          {/* B4 — goods vocabulary, unchanged. */}
+          {/* `1c-s` B4 — goods vocabulary, unchanged. */}
           <p className="text-body-sm font-medium text-ink">{t("product.no_price")}</p>
           <Link
             href={`/rfq/new?to=${encodeURIComponent(row.businessSlug)}&products=${encodeURIComponent(row.id)}`}
             aria-label={t("search_blended.enquire_named", { name: row.name })}
-            className={buttonClassName({ variant: "secondary", block: true })}
+            className={buttonClassName({ block: true })}
           >
             {t("listing.enquire")}
           </Link>
+          {/* B5 — reply time is on every row of both kinds, measured. */}
+          <Reply ms={row.replyMs} />
+          {compare && <CompareLink tick={compare} name={row.businessName} />}
         </>
       }
     >
@@ -317,33 +456,44 @@ export function ProductResultRow({ row }: { row: ProductResultView }) {
       {row.summary && (
         <p className="mt-3 line-clamp-2 max-w-[var(--measure-prose)] text-body-sm text-body">{row.summary}</p>
       )}
-      <Chips chips={chips} />
+      <Chips chips={chips} stock={row.inStock ? row.availability : null} />
     </Frame>
   );
 }
 
-export function BlendedResultRow({ row, copy }: { row: BlendedResultView; copy: PairedCopies }) {
+export function BlendedResultRow({
+  row,
+  copy,
+  compare,
+}: {
+  row: BlendedResultView;
+  copy: PairedCopies;
+  compare?: CompareTick | undefined;
+}) {
   if (row.kind === "service") return <ServiceResultRow row={row} />;
-  if (row.kind === "business") return <BusinessResultRow row={row} copy={copy} />;
-  return <ProductResultRow row={row} />;
+  if (row.kind === "supplier") return <SupplierResultRow row={row} copy={copy} compare={compare} />;
+  return <ProductResultRow row={row} compare={compare} />;
 }
 
 /** The list, as a list — the order is the product. */
 export function BlendedResultList({
   rows,
   copy,
+  compare,
   className,
 }: {
   rows: readonly BlendedResultView[];
   /** Both halves of the paired strings, from `pairedCopies()` — a row reads the one its firm's kind picks. */
   copy: PairedCopies;
+  /** `B8` — the tray's ticks, keyed `kind:id`. Absent while the Services tab is active. */
+  compare?: CompareTicks | undefined;
   className?: string;
 }) {
   return (
     <ol className={cn("flex list-none flex-col gap-3 p-0", className)}>
       {rows.map((row) => (
-        <li key={`${row.kind}:${row.id}`} data-result-kind={row.kind}>
-          <BlendedResultRow row={row} copy={copy} />
+        <li key={compareKey(row)} data-result-kind={row.kind}>
+          <BlendedResultRow row={row} copy={copy} compare={compare?.[compareKey(row)]} />
         </li>
       ))}
     </ol>

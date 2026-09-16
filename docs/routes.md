@@ -16,9 +16,9 @@ and it is the one that argues back.
 /                                       Directory home                        [1a]
 /c/:category                            Category browse + filters             [1b]
 /c/:category/:sub                       Subcategory                          [10a]  SEO'd h5s2
-/search?q&emirate&verified&tab          Results, businesses tab               [1c]
-/search?tab=products                    Results, products tab                [10c]
-/search?q (words find a service)        Blended — services, businesses, products [1c-s] built s1cs
+/search?q&emirate&kind&…                One blended set, four filtering tabs [1c-s, 10c, 10c-s] built h10c
+/search (no words, or ?bounds=)         The directory on a map                [1c]
+/search?tab=products                    Legacy — resolves to ?kind=products  [10c]
 /compare?p=…                            Comparison tray                      [10d]
 /b/:slug                                Storefront overview                   [1d]
 /b/:slug (sells work)                   Storefront, catalogue taken out     [1d-s] built h1ds

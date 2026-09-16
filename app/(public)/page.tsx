@@ -349,7 +349,7 @@ export default async function HomePage() {
                 {t("home.catalogue_title")}
               </h2>
               <Link
-                href="/search?tab=products"
+                href="/search?kind=products"
                 className="rounded-tag text-body-sm font-medium text-moss underline-offset-2 hover:underline focus-visible:outline-none focus-visible:shadow-focus"
               >
                 {t("home.catalogue_all")}

@@ -25,9 +25,13 @@ test.describe("acceptance criterion 3 — spec-aware matching", () => {
   });
 
   test("an Arabic query reaches English listings through category synonyms", async ({ page }) => {
-    // صمامات is a synonym on the valves category. No supplier record contains
-    // a word of Arabic; they match because their category does.
-    await page.goto("/search?q=%D8%B5%D9%85%D8%A7%D9%85%D8%A7%D8%AA");
+    /*
+       صمامات is a synonym on the valves category. No supplier record contains a
+       word of Arabic; they match because their category does — which is why the
+       supplier row names the trade. Read on the Suppliers tab, where every firm
+       the words found has a row whether or not something it listed matched.
+    */
+    await page.goto("/search?q=%D8%B5%D9%85%D8%A7%D9%85%D8%A7%D8%AA&kind=suppliers");
     const results = page.locator('a[href^="/b/"]');
     expect(await results.count()).toBeGreaterThan(0);
     await expect(page.getByText("Valves & fittings").first()).toBeVisible();
@@ -44,13 +48,24 @@ test.describe("acceptance criterion 3 — spec-aware matching", () => {
  * the viewport.
  */
 async function openRail(page: import("@playwright/test").Page) {
-  const trigger = page.getByRole("button", { name: /^Filters/ });
-  if (await trigger.isVisible().catch(() => false)) {
-    await trigger.click();
-    return page.locator("dialog[open]").getByRole("complementary", { name: "Filters" });
-  }
-  // Above 1024 both exist in the DOM; the column is the visible one.
-  return page.getByRole("complementary", { name: "Filters" }).first();
+  // Above 1024 both exist in the DOM; the column is the visible one. Asked
+  // about first, because the drawer trigger resolves before CSS has hidden it
+  // and a click on a button about to go invisible waits out the whole timeout.
+  const column = page.getByRole("complementary", { name: "Filters" }).first();
+  if (await column.isVisible().catch(() => false)) return column;
+  /*
+     The drawer needs JavaScript to open, and a click that lands before the
+     island has hydrated does nothing at all — which is what a second call on a
+     freshly navigated page does. Retry the click until the dialog is actually
+     open. The facet links inside it are anchors either way, so this is the
+     harness waiting for hydration, not the page needing it.
+  */
+  const dialog = page.locator("dialog[open]");
+  await expect(async () => {
+    await page.getByRole("button", { name: /^Filters/ }).click();
+    await expect(dialog).toBeVisible({ timeout: 1_000 });
+  }).toPass({ timeout: 15_000 });
+  return dialog.getByRole("complementary", { name: "Filters" });
 }
 
 test.describe("acceptance criterion 4 — the rail comes from the template", () => {
@@ -152,20 +167,19 @@ test.describe("acceptance criterion 6 — zero results is a designed state", () 
   });
 });
 
-test.describe("two tabs, one query", () => {
+test.describe("one list, four tabs — D1", () => {
   /*
-     Scoped to the results tabs. Board 1a puts a "Products" item in the top bar
-     — it goes to /search?tab=products with no query — so an unscoped
-     `name: /Products/` now matches two links and resolves to neither. The tab
-     is the one carrying a count.
+     Scoped to the results tabs. Board 1a puts a "Products" item in the top bar,
+     so an unscoped `name: /Products/` matches two links and resolves to neither.
+     The tab is the one carrying a count.
   */
   const productsTab = (page: import("@playwright/test").Page) =>
-    page.getByRole("link", { name: /Products \d/ });
+    page.getByLabel("Result kinds").getByRole("link", { name: /Products \d/ });
 
   test("the tab is in the URL and the query survives switching", async ({ page }) => {
     await page.goto("/search?q=valve");
     await productsTab(page).click();
-    await expect(page).toHaveURL(/tab=products/);
+    await expect(page).toHaveURL(/kind=products/);
     await expect(page).toHaveURL(/q=valve/);
   });
 
@@ -173,6 +187,13 @@ test.describe("two tabs, one query", () => {
     await page.goto("/search?q=valve&emirate=dubai");
     await productsTab(page).click();
     await expect(page).toHaveURL(/emirate=dubai/);
+  });
+
+  test("the legacy products tab resolves to the Products tab of the one list", async ({ page }) => {
+    await page.goto("/search?q=valve&tab=products");
+    const tabs = page.getByLabel("Result kinds");
+    await expect(tabs).toBeVisible();
+    await expect(tabs.getByRole("link", { name: /Products \d/ })).toHaveAttribute("aria-current", /page|true/);
   });
 });
 

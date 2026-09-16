@@ -724,46 +724,53 @@ export function rankBlended<T>(
 }
 
 /**
- * Board `1c-s` — services, businesses and products in one ordered list.
+ * Boards `1c-s`, `10c` and `10c-s` — services, suppliers and products in one
+ * ordered list.
  *
- * **This is the single documented sort B10 asks for, and it is `12c-s` Q1's
- * answer carried one level up.** `rankBlended` refuses to compare a goods score
- * with a services score; this refuses to compare a service with a business or a
- * product, for the same reason and a second one:
+ * **This is `12c-s` Q1's answer carried one level up, and `10c`+`10c-s` Q6's.**
+ * Both ask the same thing — *nothing ranks the two kinds against each other* —
+ * and the answer is that nothing should: `rankBlended` refuses to compare a
+ * goods score with a services score, and this refuses to compare a service with
+ * a supplier or a product, for the same reason and a second one:
  *
  *   · the three kinds are not scored on the same things — a service's coverage
  *     is its own, a firm's is the union of its services, a product's is a
  *     warehouse's distance — so their numbers are no more comparable than two
  *     vectors' are;
  *   · and ordering by kind — services above firms above products — would turn
- *     the tabs into a partition, which the board names as the one thing this
- *     screen exists not to do.
+ *     the tabs into a partition, which D1 names as the one thing this screen
+ *     exists not to do.
  *
  * So each kind is ranked in its own group — a service on the services vector,
- * a product on the goods vector, and a business through `rankBlended`, because
+ * a product on the goods vector, and a supplier through `rankBlended`, because
  * a firm's vector is its matched category's — and the three orders are merged
  * by relevance band and, inside a band, in proportion to how many of each
  * there are. Within a kind the order is exactly that kind's ranking, asserted.
  *
- * The drawn order of the board's four rows is not this and is not meant to be:
- * the handoff says not to read the algorithm off them. When Q1 is decided
+ * Interleaving by band is a ranking decision rather than the presentation rule
+ * Q6 warns about standing in for one: the band is the relevance the ranker
+ * computed, so a product that matches the words exactly is above a service that
+ * matches them loosely, whichever kind the buyer had in mind.
+ *
+ * The drawn order of the boards' rows is not this and is not meant to be: the
+ * handoff says not to read the algorithm off them. When Q1 is decided
  * differently, this function and `rankBlended` are what change.
  */
 export function rankResultSet<T>(
   rows: readonly T[],
-  groupOf: (row: T) => "service" | "business" | "product",
+  groupOf: (row: T) => "service" | "supplier" | "product",
   signalsOf: (row: T) => RankSignals,
   vectorOf: (row: T) => RankingKind,
   vectors: VectorSet,
 ): T[] {
-  const byGroup = { service: [] as T[], business: [] as T[], product: [] as T[] };
+  const byGroup = { service: [] as T[], supplier: [] as T[], product: [] as T[] };
   for (const row of rows) byGroup[groupOf(row)].push(row);
 
   const servicesLive = vectors.services !== null;
-  const ranked = (["service", "business", "product"] as const)
+  const ranked = (["service", "supplier", "product"] as const)
     .filter((group) => byGroup[group].length > 0)
     .map((group) => {
-      if (group === "business") return rankBlended(byGroup.business, signalsOf, vectorOf, vectors);
+      if (group === "supplier") return rankBlended(byGroup.supplier, signalsOf, vectorOf, vectors);
       const vector = group === "service" ? appliedVector("services", servicesLive) : "goods";
       const weights = vector === "services" ? vectors.services! : vectors.goods;
       return rank(byGroup[group], signalsOf, weights, vector);

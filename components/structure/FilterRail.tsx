@@ -25,6 +25,20 @@ export interface FilterSection {
   /** The controls. Checkboxes, a RangeSlider, a MultiSelect. */
   children: React.ReactNode;
   defaultOpen?: boolean;
+  /**
+   * The heading this section opens a group under — board `10c-s`'s three-part
+   * rail: *Applies to everything*, *Narrows to products 148*, *Narrows to
+   * services 164*.
+   *
+   * Set on the first section of each part and left off the rest, so the rail
+   * still renders one flat list of sections and a shelf that has no parts —
+   * every category page — passes nothing and looks exactly as it did.
+   *
+   * `note` is the part's own rule, stated in the rail rather than discovered:
+   * *choosing one of these implies the Products tab. We switch it for you
+   * rather than returning nothing.*
+   */
+  eyebrow?: { label: string; count?: number | undefined; note?: string | undefined };
 }
 
 export interface FilterRailProps {
@@ -95,6 +109,21 @@ function FilterSectionBlock({ section }: { section: FilterSection }) {
 
   return (
     <div className="border-b border-line">
+      {section.eyebrow && (
+        <div className="pb-1 pt-4 first:pt-0">
+          <p className="flex items-center gap-1.5 font-mono text-eyebrow uppercase tracking-wide text-muted">
+            {section.eyebrow.label}
+            {section.eyebrow.count !== undefined && (
+              <span className="rounded-pill border border-line px-1.5 py-px tabular-nums text-body">
+                {section.eyebrow.count}
+              </span>
+            )}
+          </p>
+          {section.eyebrow.note && (
+            <p className="pt-1 text-caption text-muted">{section.eyebrow.note}</p>
+          )}
+        </div>
+      )}
       <h3>
         <button
           type="button"

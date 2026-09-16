@@ -60,7 +60,11 @@ buy, purchase, payout, refund, dispatch, POD, GMV, "Get quote", "Price: low to h
 on request", "Download price list". "Price on enquiry" is the correct one.
 
 **Which enquiry verb, where:** "Request a quote" opens an empty composer · "Send enquiry"
-submits a filled one · "Enquire" is the compact form on cards and rows.
+submits a filled one · "Ask for a quote" is the compact form on cards and rows. It replaced
+"Enquire" on 16 Sep 2026 with boards `10c`/`10c-s`: it names what the buyer gets back, it works
+for a service as well as a product, and it matches the record the button creates (`10e`, `10h`).
+One string, `listing.enquire`, on every surface — a row that says one thing on a shelf and
+another in search is the same defect as one concept with two names.
 
 `pnpm check:vocabulary` enforces this against `lib/i18n/en.ts`, where every user-visible
 string lives.
