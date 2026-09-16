@@ -33,7 +33,7 @@ export function directoryFooterColumns(): FooterColumn[] {
       links: [
         { key: "categories", label: t("home.link_browse_categories"), href: "/categories" },
         { key: "rfq", label: t("home.link_post_rfq"), href: "/rfq/new" },
-        { key: "products", label: t("home.link_browse_products"), href: "/search?tab=products" },
+        { key: "products", label: t("home.link_browse_products"), href: "/search?kind=products" },
         { key: "enquiries", label: t("home.link_my_enquiries"), href: "/account/enquiries" },
       ],
     },

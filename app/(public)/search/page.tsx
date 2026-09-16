@@ -1,14 +1,13 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { PublicShell } from "@/components/structure";
-import { ListingCard, ProductCard } from "@/components/domain";
+import { ListingCard } from "@/components/domain";
 import { t } from "@/lib/i18n";
 import { MEDIA_BUCKET, publicUrl } from "@/lib/storage";
 import { formatCount, formatDuration, formatKm } from "@/lib/format";
 import { parseSearchQuery, toSearchParams } from "@/lib/search/query";
 import {
   searchBusinesses,
-  searchProducts,
   countResults,
   getMapPins,
   getFreeZoneMarks,
@@ -16,7 +15,6 @@ import {
   recordZeroResult,
   suggestFilterToDrop,
 } from "@/lib/db/queries";
-import { primarySize } from "@/lib/spec";
 import { appliedFacetLabels } from "@/lib/search/applied";
 import { crossLinkFor } from "@/lib/seo/cross-link";
 import { nearestKm } from "@/lib/geo/distance";
@@ -28,26 +26,31 @@ import { SaveSearch } from "@/app/(public)/_results/SaveSearch";
 import { ZeroResult } from "@/app/(public)/_results/ZeroResult";
 import { AlertForm } from "@/app/(public)/_results/AlertForm";
 import { setAlert } from "@/app/(public)/_results/alert-actions";
-import { serviceMatchCount } from "@/lib/db/queries/blended-search";
-import { compositionFor, forcedComposition } from "@/lib/search/blended";
+import { adoptLegacyTab, compositionFor } from "@/lib/search/blended";
 import { BlendedSearchPage } from "./_blended";
 
 /**
- * Board 1c — search results and the map.
+ * `/search` — one route, and after D1 one result set.
  *
- * The primary action of the whole site: a buyer types what they need and gets
- * suppliers who can actually supply it. A directory that cannot find a DN100
- * valve is a phone book.
+ * ## What renders, and why there are still two compositions
  *
- * ## Why this page is not `Results`
+ * Boards `10c` and `10c-s` settle it: **the tab row filters one list; it does
+ * not partition the index.** So a query with words is the blended screen, every
+ * time, whatever the index happens to hold today — `_blended.tsx`. What is left
+ * here is board `1c`'s map composition, and it survives for exactly two things
+ * a blended list cannot do:
  *
- * `/c/:category` and `/search` shared one composition through handoff 1, on the
- * reasonable ground that a category page is a search with the category fixed.
- * That is still true of the *query*, and both still call `businessWhere`, so
- * there is exactly one predicate. It stopped being true of the *layout* at this
- * board: a 664px column beside a full-height map is not a rail beside a list
- * with a rail's breakpoints, and forcing one component to be both would mean a
- * dozen conditionals whose only job is to undo each other.
+ *   · **a viewport.** `?bounds=` asks *who is here*, in coordinates. A service
+ *     has coverage rather than a pin, and a box is a question only a branch can
+ *     answer;
+ *   · **a browse with no words.** `/search` on its own, or with only a place,
+ *     is the directory on a map. A result set nobody asked for is a browse.
+ *
+ * **The products tab is gone from this composition.** It was the other half of
+ * the partition D1 removes, and a map of products is a map of their suppliers
+ * with the wrong label on it. `?tab=products` still resolves — `adoptLegacyTab`
+ * turns it into the blended Products tab — so every link the nav, the footer,
+ * the home page and a two-year-old bookmark carry still lands somewhere true.
  *
  * ## noindex, follow
  *
@@ -70,42 +73,32 @@ interface Props {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+/** The comparison tray, straight off the URL — `compare` is not part of `SearchQuery`. */
+function trayFrom(value: string | string[] | undefined): string[] {
+  if (!value) return [];
+  return (Array.isArray(value) ? value : [value])
+    .flatMap((entry) => entry.split(","))
+    .map((slug) => slug.trim())
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 export default async function SearchPage({ searchParams }: Props) {
   const sp = await searchParams;
-  const query = parseSearchQuery(sp);
+  const query = adoptLegacyTab(parseSearchQuery(sp));
 
-  /*
-     Board `1c-s`: words that find work sold by the job get the blended page —
-     services, businesses and products in one set — and everything else gets
-     this board's composition below. The URL decides when it can; otherwise one
-     count does. See `compositionFor` for the order of the rules.
-  */
-  const composition =
-    forcedComposition(query) ?? compositionFor(query, query.q.trim() ? await serviceMatchCount(query) : 0);
-  if (composition === "blended") return <BlendedSearchPage query={query} />;
+  if (compositionFor(query) === "blended") {
+    return <BlendedSearchPage query={query} tray={trayFrom(sp.compare)} />;
+  }
 
-  const [results, productTotal, products, mapData, freeZones, crossLink] = await Promise.all([
+  const [results, mapData, freeZones, crossLink] = await Promise.all([
     searchBusinesses(query),
-    countResults({ ...query, tab: "products" }),
-    /*
-       The products tab.
-
-       Board 1c is the suppliers composition and hands the products one to board
-       10c, which is not built. That is a reason to leave the *layout* alone,
-       not a reason for the tab to render nothing — it has worked since handoff
-       1, and a tab that shows a live count of 63 and then an empty column is
-       worse than one that was never offered. So the rows render here in the
-       result column, in the grid they already had, and 10c can compose them
-       properly.
-    */
-    query.tab === "products" ? searchProducts(query) : Promise.resolve(null),
     getMapPins(query),
     getFreeZoneMarks(),
     crossLinkFor(query),
   ]);
 
-  // Whichever tab is showing decides the count the page reasons about.
-  const total = query.tab === "products" ? productTotal : results.total;
+  const total = results.total;
 
   /*
      Every search is logged, whatever it returned.
@@ -146,7 +139,7 @@ export default async function SearchPage({ searchParams }: Props) {
       : 0;
 
   const applied = appliedFacetLabels(query);
-  const shown = (query.page - 1) * 20 + (products?.rows.length ?? results.rows.length);
+  const shown = (query.page - 1) * 20 + results.rows.length;
   const remaining = Math.max(0, total - shown);
 
   return (
@@ -167,13 +160,7 @@ export default async function SearchPage({ searchParams }: Props) {
         {query.q ? t("search.results_for", { query: query.q }) : t("search.results_title")}
       </h1>
 
-      <SearchFilterBar
-        query={query}
-        basePath="/search"
-        businessTotal={results.total}
-        productTotal={productTotal}
-        appliedLabels={applied}
-      />
+      <SearchFilterBar query={query} basePath="/search" total={total} appliedLabels={applied} />
 
       {/*
          Board 10e — *Save current search*, which had no home on /search. The
@@ -303,51 +290,13 @@ export default async function SearchPage({ searchParams }: Props) {
              what `ListingCard` renders in every context, and the fix belongs
              here rather than in a card that is right about its own level.
           */}
-          <h2 className="sr-only">
-            {query.tab === "products" ? t("results.products_tab") : t("results.businesses_tab")}
-          </h2>
+          <h2 className="sr-only">{t("results.businesses_tab")}</h2>
 
-          {products ? (
-            /*
-               Board 10c's rows in board 1c's column. The grid is the one they
-               already had; only the surrounding layout is new.
-            */
-            <div className="grid gap-4 p-4 sm:grid-cols-2">
-              {products.rows.map((product) => (
-                <ProductCard
-                  key={product.id}
-                  enquireHref={`/rfq/new?to=${product.business.slug}`}
-                  product={{
-                    slug: product.slug,
-                    businessSlug: product.business.slug,
-                    name: product.name,
-                    sku: product.sku,
-                    availability: product.availability,
-                    stockQty: product.stockQty,
-                    leadTimeDays: product.leadTimeDays,
-                    minOrderQty: product.minOrderQty,
-                    /*
-                       No template loaded here, so no size label.
-
-                       `primarySize` needs the category's spec fields to know
-                       which value is the size, and /search spans every category
-                       at once — there is no single template to read. Board 10c
-                       composes this tab properly and can group by category
-                       first; guessing a field id would print the wrong number
-                       beside a part, which is the one mistake worth avoiding on
-                       a page about specifications.
-                    */
-                    sizeLabel: primarySize([], product.specValues),
-                  }}
-                />
-              ))}
-            </div>
-          ) : (
-          /*
+          {/*
              An ordered list, because the order is the product. A screen reader
              hears "3 of 218" from the list itself, which is why the rank chip
              beside each name is aria-hidden rather than repeating it.
-          */
+          */}
           <ol className="flex flex-col">
             {results.rows.map((business, index) => (
               <li
@@ -428,7 +377,6 @@ export default async function SearchPage({ searchParams }: Props) {
               </li>
             ))}
           </ol>
-          )}
 
           {/*
              An anchor, not infinite scroll. The board's render shows a skeleton

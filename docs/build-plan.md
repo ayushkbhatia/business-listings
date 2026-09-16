@@ -492,7 +492,16 @@ the screen is permanently empty above copy reading "Run the matcher after an imp
   is the sum of the tree and is held equal to `1a`'s hero count. Category redirects are now served
   on all four category routes — they had been written and never read.
 - [ ] **5.2 `10a`** — export-only. Two definitions of "suppliers in this trade" on one page.
-- [ ] **5.3 `10c`** — no facet rail of any kind on `/search`. Not a D3 problem.
+- [x] **5.3 `10c`** — built with `10c-s` as one handoff. D1 settled: the tab row filters one
+  list and never partitions the index, so every query with words is the blended screen and the
+  map composition survives only for a viewport or a browse with no words. The rail is in three
+  declared scopes — place and tier over everything, stock and the majority trade's spec fields
+  over products, the scope sheet over services — and a kind-specific facet switches the tab
+  rather than returning nothing. Three zero states, not one. `Suppliers` is a distinct count of
+  firms with a row that says what each returned (Q2). One cross-kind order plus *most complete
+  specs* in the products scope (Q3), a pager that states its window (Q5), and compare on the two
+  shapes whose subject is a supplier (Q1). **Not built:** a services-capable anonymous alert —
+  `ProductAlert` fires on a product, and the kind-agnostic watch is a saved search (Q4).
 - [ ] **5.4 `10d`** — decide what `/compare` compares. The spec machinery exists in
   `lib/db/queries/product-detail.ts:81`.
 
@@ -661,7 +670,7 @@ the only large piece and the only one selling something it does not deliver.
 | `12g-s` | Paired strings | built | 15 Sep 2026 | A registry of pairs held to their consumers, halves written and suppressed from the console, a count that is a query. | 7.4c |
 | `7f` | Notification specimens | partial ↓ | export only | All four channels render; SMS has no carrier and records a skip with a reason. | 7.4 |
 | ~~`6g`~~ | ~~Admin copy audit~~ | **cut** | — | Cut 14 Sep 2026, unbuilt. The CI scan still reads exactly one file; every word held in the database is invisible to it. | ~~7.5~~ |
-| `10c` | Search — products tab | scaffold ↓ | medium | No facet rail of any kind on `/search`. | 5.3 |
+| `10c` | Search — one blended set | **built** | medium | Three-part rail, three zero states, D1. | 5.3 |
 | `10d` | Comparison tray | partial | medium | Compares ten fixed business attributes and touches the dictionary nowhere. | 5.4 |
 | `12d` | Ops CRM — supply gaps | built | medium | Tasks only a derivation writes; the lock is `assignedToId`; every rate carries its denominator. | 7.2 |
 | `12f` | Support desk & view-as | partial ↓ | small | View-as is the best-guarded thing in the console. | 7.3 |

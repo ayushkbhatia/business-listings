@@ -105,7 +105,7 @@ export function DirectoryNav({
         // tab, and inventing /products for the nav's sake would be a second
         // canonical URL for a page that already has one.
         { key: "categories", label: t("chrome.categories"), href: "/categories" },
-        { key: "products", label: t("chrome.products"), href: "/search?tab=products" },
+        { key: "products", label: t("chrome.products"), href: "/search?kind=products" },
         { key: "suppliers", label: t("chrome.suppliers"), href: "/search" },
         { key: "pricing", label: t("chrome.pricing"), href: "/pricing" },
       ]}

@@ -27,20 +27,57 @@ const INT4_MAX = 2_147_483_647;
  * buyer who picks "Fastest reply" means fastest reply, not "mostly relevance
  * but sorted a bit by speed".
  */
-export type SearchSort = "best" | "rating" | "reply" | "newest";
+export type SearchSort = "best" | "rating" | "reply" | "newest" | "specs";
 
-const SORTS: readonly SearchSort[] = ["best", "rating", "reply", "newest"];
+const SORTS: readonly SearchSort[] = ["best", "rating", "reply", "newest", "specs"];
+
+/**
+ * Boards `10c` + `10c-s`, Q3 — which orders a blended list can offer.
+ *
+ * `best` is the only one that can rank a service against a product, because it
+ * is the only one computed from two vectors and merged by relevance band. The
+ * other three read a field every kind's firm has, so they cross the blend
+ * honestly. **`specs` does not**: `10c` draws *Sort: most complete specs* and a
+ * service has no spec sheet to complete, so it is offered only while the
+ * Products tab is the active one, and a URL asking for it anywhere else falls
+ * back to the ranking rather than ordering a list by a field half of it cannot
+ * hold.
+ */
+export const CROSS_KIND_SORTS: readonly SearchSort[] = ["best", "reply", "rating", "newest"];
+export const PRODUCT_ONLY_SORTS: readonly SearchSort[] = ["specs"];
+
+/** The orders offered while `tab` is the active one — Q3's answer, in one place. */
+export function sortsForTab(tab: BlendedTab): readonly SearchSort[] {
+  return tab === "products" ? [...CROSS_KIND_SORTS, ...PRODUCT_ONLY_SORTS] : CROSS_KIND_SORTS;
+}
+
+/** The order actually applied: the asked-for one where the tab can carry it, `best` otherwise. */
+export function sortInScope(sort: SearchSort, tab: BlendedTab): SearchSort {
+  return sortsForTab(tab).includes(sort) ? sort : "best";
+}
 
 /** List or grid. The board draws the list; the grid is the denser view. */
 export type SearchView = "list" | "grid";
 
 /**
- * The four tabs of board `1c-s`'s blended result set. `all` is the default and
- * is only ever written explicitly by a saved search — see `kind` below.
+ * The four tabs of the blended result set — boards `1c-s`, `10c` and `10c-s`.
+ *
+ * `all` is the default and is only ever written explicitly by a saved search —
+ * see `kind` below.
+ *
+ * **`suppliers`, not `businesses`.** `10c` drew this tab as *Businesses 218* and
+ * `10c-s` as *Suppliers 96*; the joint handoff's first correction settles it on
+ * `suppliers`, which is the word the rest of the buyer surface uses and the one
+ * `12c` ranks. *Businesses* is the admin word — `4f` *Businesses & health* — and
+ * a public tab that borrows the admin vocabulary is how one concept ends up
+ * with two names.
+ *
+ * The order is the row's: Everything, then the two kinds of thing, then who
+ * supplies them.
  */
-export type BlendedTab = "all" | "services" | "businesses" | "products";
+export type BlendedTab = "all" | "products" | "services" | "suppliers";
 
-export const BLENDED_TABS = ["all", "services", "businesses", "products"] as const satisfies readonly BlendedTab[];
+export const BLENDED_TABS = ["all", "products", "services", "suppliers"] as const satisfies readonly BlendedTab[];
 
 /**
  * The service-track facets — board `1c-s`'s rail, keyed by query-string name.
@@ -74,6 +111,43 @@ export function serviceFacetsOf(query: Pick<SearchQuery, "services">): ServiceFa
 export function hasServiceFacets(query: Pick<SearchQuery, "services">): boolean {
   const facets = serviceFacetsOf(query);
   return SERVICE_FACET_KEYS.some((key) => facets[key].length > 0);
+}
+
+/**
+ * The facets only a product can answer — availability and any spec field.
+ *
+ * `10c-s` draws the rail in three parts, and this is the middle one. A service
+ * has no stock state and no spec table, so a document that is not a product
+ * cannot satisfy either of these and must not be counted against them.
+ */
+export function hasProductFacets(query: Pick<SearchQuery, "availability" | "spec">): boolean {
+  if ((query.availability?.length ?? 0) > 0) return true;
+  return Object.values(query.spec ?? {}).some((values) => values.length > 0);
+}
+
+/**
+ * `B3` — the tab the page actually shows, after a kind-specific facet has had
+ * its say.
+ *
+ * *A legal facet must never return an empty set.* Selecting **In stock** while
+ * Everything is active switches the tab to Products and keeps the facet, rather
+ * than intersecting a service row with a stock field it does not have. The same
+ * in reverse for a scope-sheet facet.
+ *
+ * It resolves rather than redirects, so the rule holds for a URL somebody
+ * pasted as well as for a link this page drew — the two cannot disagree,
+ * because there is one function and the rail's hrefs are built from it.
+ *
+ * A tab the buyer chose explicitly still loses to the facet, because the facet
+ * is the narrower statement: someone on Services who ticks *In stock* has asked
+ * for something Services cannot hold, and showing them nothing is the answer
+ * this rule exists to refuse. With facets of both kinds set — only reachable by
+ * hand — products win, because that is the pair's more specific half.
+ */
+export function tabInEffect(query: SearchQuery): BlendedTab {
+  if (hasProductFacets(query)) return "products";
+  if (hasServiceFacets(query)) return "services";
+  return query.kind ?? "all";
 }
 
 export interface SearchQuery {
@@ -442,6 +516,97 @@ export function trayParams(query: SearchQuery, tray: readonly string[]): string 
 export function pathWithQuery(basePath: string, query: SearchQuery, overrides: Partial<SearchQuery> = {}): string {
   const params = toSearchParams(query, overrides);
   return params ? `${basePath}?${params}` : basePath;
+}
+
+/**
+ * The same query with one rail group set to exactly these values.
+ *
+ * The three-part rail of `10c-s` draws groups from three different homes — a
+ * column on `Business`, a column on `Product`, a row of the scope sheet — and
+ * every one of them has to produce a link. Written once here so the rail, the
+ * chip row and the drop-a-filter ladder cannot disagree about what a group is.
+ *
+ * `page` resets, because a filter changes which results exist and page four of
+ * the old set is a page nobody asked for.
+ */
+export function setFacet(query: SearchQuery, key: string, values: readonly string[]): SearchQuery {
+  const next: SearchQuery = { ...query, spec: { ...query.spec }, page: 1 };
+  switch (key) {
+    case "emirate":
+      next.emirate = values[0];
+      /*
+         An area sits inside an emirate, so leaving one behind while the other
+         moves states a place that does not exist — `?emirate=sharjah&area=al-quoz`
+         narrows to nothing and the rail offers no way to see why.
+      */
+      if (!values[0] || values[0] !== query.emirate) delete next.area;
+      return next;
+    case "area":
+      next.area = values[0];
+      return next;
+    case "tier":
+      next.tier = values[0] ? Number(values[0]) : undefined;
+      return next;
+    case "freeZone":
+      next.freeZone = values.length > 0;
+      return next;
+    case "availability":
+      next.availability = [...values];
+      return next;
+    case "engagement":
+    case "turnaround":
+    case "fee":
+    case "delivered":
+    case "credential":
+    case "sector":
+      next.services = { ...serviceFacetsOf(query), [key]: [...values] };
+      return next;
+    default:
+      if (values.length > 0) next.spec[key] = [...values];
+      else delete next.spec[key];
+      return next;
+  }
+}
+
+/** One value added to or removed from a group, by whether the group takes several. */
+export function toggleFacet(
+  query: SearchQuery,
+  key: string,
+  value: string,
+  options: { multi: boolean; selected: boolean },
+): SearchQuery {
+  if (options.selected) {
+    const remaining = options.multi
+      ? currentFacetValues(query, key).filter((held) => held !== value)
+      : [];
+    return setFacet(query, key, remaining);
+  }
+  return setFacet(query, key, options.multi ? [...currentFacetValues(query, key), value] : [value]);
+}
+
+/** Whatever a group holds on this query, whichever of the three homes it lives in. */
+export function currentFacetValues(query: SearchQuery, key: string): string[] {
+  switch (key) {
+    case "emirate":
+      return query.emirate ? [query.emirate] : [];
+    case "area":
+      return query.area ? [query.area] : [];
+    case "tier":
+      return query.tier ? [String(query.tier)] : [];
+    case "freeZone":
+      return query.freeZone ? ["1"] : [];
+    case "availability":
+      return query.availability ?? [];
+    case "engagement":
+    case "turnaround":
+    case "fee":
+    case "delivered":
+    case "credential":
+    case "sector":
+      return serviceFacetsOf(query)[key];
+    default:
+      return query.spec[key] ?? [];
+  }
 }
 
 /** The same query with one facet removed. Drives "drop this filter". */

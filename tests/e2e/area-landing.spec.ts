@@ -81,8 +81,12 @@ test.describe("a scope that clears all four conditions", () => {
 
   test("offers the compact enquiry verb, never a banned one", async ({ page }) => {
     await page.goto(LIVE);
-    // CLAUDE.md's verb table: "Enquire" is the compact form on cards and rows.
-    await expect(page.getByRole("link", { name: "Enquire" }).first()).toBeVisible();
+    /*
+       CLAUDE.md's verb table, amended with boards `10c`/`10c-s` on 16 Sep 2026:
+       "Ask for a quote" is the compact form on cards and rows. It names what
+       the buyer gets back and works for a service as well as a product.
+    */
+    await expect(page.getByRole("link", { name: "Ask for a quote" }).first()).toBeVisible();
     for (const banned of ["Get a quote", "Add to cart", "Buy now", "Price on request"]) {
       await expect(page.getByText(banned, { exact: false })).toHaveCount(0);
     }

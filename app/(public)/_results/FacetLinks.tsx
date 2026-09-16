@@ -88,6 +88,8 @@ export function FacetOptionLink({
   count,
   selected,
   selectedLabel,
+  disabled = false,
+  disabledLabel,
 }: {
   href: string;
   label: string;
@@ -95,7 +97,43 @@ export function FacetOptionLink({
   selected: boolean;
   /** Already localised, e.g. "selected — activate to remove". */
   selectedLabel: string;
+  /**
+   * `10c`+`10c-s` B9, third zero state — *disable the facet with its zero, do
+   * not let it be chosen.*
+   *
+   * Rendered rather than hidden: the option is a fact about these results, and
+   * a rail that quietly drops a value the buyer can see in the list is how a
+   * filter set becomes unexplainable. Not an `<a>` at all, so there is nothing
+   * to tab to and nothing to follow.
+   */
+  disabled?: boolean;
+  /** Already localised, e.g. "no results with the current filters". */
+  disabledLabel?: string | undefined;
 }) {
+  if (disabled) {
+    return (
+      <span
+        aria-disabled="true"
+        /*
+           `text-muted`, not `text-faint`. The nought is the point — *disable the
+           facet with its zero* — and a label nobody can read states nothing. The
+           affordance it loses is the box, the hover and the tab stop, which is
+           what makes it unchoosable without making it unreadable.
+        */
+        className="flex min-h-11 items-center gap-2 rounded-tag py-0.5 text-body-sm text-muted md:min-h-8"
+      >
+        <span
+          aria-hidden="true"
+          className="flex size-4 shrink-0 items-center justify-center rounded-tag border border-line bg-paper-sunk"
+        />
+        <span className="min-w-0 flex-1 truncate">
+          {label}
+          {disabledLabel && <span className="sr-only"> — {disabledLabel}</span>}
+        </span>
+        <span className="font-mono text-eyebrow tabular-nums text-faint">{formatCount(count)}</span>
+      </span>
+    );
+  }
   return (
     <a
       href={href}

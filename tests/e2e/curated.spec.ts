@@ -81,7 +81,7 @@ test.describe("the entries", () => {
     await expect(first.getByText(/Best for:/i)).toBeVisible();
     // Acceptance 13: every member links to its storefront and its composer.
     await expect(first.getByRole("link", { name: "View storefront" })).toBeVisible();
-    await expect(first.getByRole("link", { name: "Enquire" })).toBeVisible();
+    await expect(first.getByRole("link", { name: "Ask for a quote" })).toBeVisible();
   });
 
   test("acceptance 16 — no two entries are best for the same thing", async ({ page }) => {

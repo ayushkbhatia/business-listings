@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { ChipLink, Eyebrow, FilterChip } from "@/components/display";
-import { cn } from "@/lib/cn";
 import { formatCount } from "@/lib/format";
 import { t } from "@/lib/i18n";
 import {
@@ -19,6 +18,16 @@ import {
  * four dropdowns is how somebody ends up staring at eleven results wondering
  * where the other two hundred went.
  *
+ * ## The tab switch this used to carry
+ *
+ * `Businesses 218 · Products 1,046`, and it is gone. Boards `10c` + `10c-s`
+ * settle that a tab row filters one list and never partitions the index (D1),
+ * and this bar sits on the composition that survives for a map viewport and a
+ * browse with no words — a map of products is a map of their suppliers with the
+ * wrong label on it. Every query with words is the blended screen, whose four
+ * tabs filter rather than fork, and `?tab=products` resolves to its Products
+ * tab.
+ *
  * ## The chip the board draws that this does not build
  *
  * `Price ▾`. The spec calls it a pivot leftover and says to replace it with
@@ -33,8 +42,8 @@ import {
 export interface SearchFilterBarProps {
   query: SearchQuery;
   basePath: string;
-  businessTotal: number;
-  productTotal: number;
+  /** Suppliers in the result set — the only count this composition draws. */
+  total: number;
   /** Localised names for the facets a buyer has set, keyed by query-string key. */
   appliedLabels: { key: string; facet: string; value: string }[];
 }
@@ -42,15 +51,8 @@ export interface SearchFilterBarProps {
 /** The four availability values, as the board lists them. */
 const AVAILABILITY = ["in_stock", "made_to_order", "indent"] as const;
 
-export function SearchFilterBar({
-  query,
-  basePath,
-  businessTotal,
-  productTotal,
-  appliedLabels,
-}: SearchFilterBarProps) {
+export function SearchFilterBar({ query, basePath, total, appliedLabels }: SearchFilterBarProps) {
   const applied = appliedKeys(query);
-  const total = query.tab === "products" ? productTotal : businessTotal;
 
   const hrefFor = (over: Partial<SearchQuery>) =>
     `${basePath}?${toSearchParams(query, { ...over, page: 1 })}`;
@@ -99,43 +101,6 @@ export function SearchFilterBar({
               >
                 {t(`availability.${value}` as never)}
               </ChipLink>
-            );
-          })}
-        </div>
-
-        {/* ── Tab switch, right-aligned, both counts live ─────────────────── */}
-        <div className="ms-auto flex items-center gap-1 rounded-ctl bg-paper-sunk p-0.5">
-          {(
-            [
-              { tab: "businesses" as const, label: t("results.businesses_tab"), count: businessTotal },
-              { tab: "products" as const, label: t("results.products_tab"), count: productTotal },
-            ]
-          ).map((entry) => {
-            const active = query.tab === entry.tab;
-            return (
-              <Link
-                key={entry.tab}
-                href={hrefFor({ tab: entry.tab })}
-                {...(active ? { "aria-current": "page" as const } : {})}
-                className={cn(
-                  "rounded-ctl px-3 py-1.5 text-body-sm font-medium tabular-nums",
-                  "focus-visible:outline-none focus-visible:shadow-focus",
-                  active ? "bg-card text-ink shadow-sm" : "text-body hover:text-ink",
-                )}
-              >
-                {entry.label}{" "}
-                {/*
-                   The count as a bare number, not in brackets.
-
-                   `Tabs` renders its badge this way, so the accessible name is
-                   "Products 63" and the e2e locators that have always found the
-                   tab by its count still do. The board draws parentheses; an
-                   aria-label to keep both would make the accessible name differ
-                   from the visible text, which this codebase avoids on purpose
-                   — see the footer's `aria-labelledby`.
-                */}
-                <span className="text-muted">{formatCount(entry.count)}</span>
-              </Link>
             );
           })}
         </div>
