@@ -96,7 +96,16 @@ afterAll(async () => {
 
 async function listing(name: string, over: { phone?: string; licenceExpiry?: Date } = {}) {
   seq += 1;
-  const stamp = `${Date.now()}${String(seq).padStart(2, "0")}`;
+  /*
+     Base 36, not a raw millisecond stamp.
+
+     `render()` refuses a param whose value looks like contact details, and a
+     display name carrying fifteen consecutive digits looks exactly like a
+     telephone number — so a fixture named `Collapse 175873…` made every
+     `report_resolved` notification throw inside `safely()`, silently. Short and
+     still unique.
+  */
+  const stamp = `${Date.now().toString(36)}${String(seq).padStart(2, "0")}`;
   return prisma.business.create({
     data: {
       tradeName: `${name} ${stamp}`,
@@ -193,6 +202,34 @@ describe("B6 — three reports of one fact are one work item", () => {
     // Each duplicate points at the decision, which is where its reason lives.
     expect(rows.slice(1).every((row) => row.duplicateOfId === head.id)).toBe(true);
     expect(rows.every((row) => row.resolvedById === moderatorId)).toBe(true);
+  });
+
+  it("writes back to everybody in the group, not only the row that was opened (Q5)", async () => {
+    const business = await listing("Everyone Told");
+    const head = await report(business.id, { ago: 2 * 86_400_000, reporterId: buyerId });
+    await report(business.id, { ago: 86_400_000, reporterId: secondBuyerId });
+
+    const before = await prisma.notificationDelivery.count({ where: { event: "report_resolved" } });
+    await resolveReport({
+      actor: actor(moderatorId, "staff_moderator"),
+      reportId: head.id,
+      outcome: "seller_corrected",
+      reason: "Number corrected on the listing and confirmed by ringing it.",
+    });
+
+    /*
+       Both reporters, on both channels the buyer matrix routes this to. Three
+       people asked and three people are owed the answer — telling only the
+       first would make the collapse a thing that costs the other two a reply.
+    */
+    const after = await prisma.notificationDelivery.findMany({
+      where: { event: "report_resolved" },
+      select: { recipientUserId: true },
+    });
+    expect(after.length).toBeGreaterThan(before);
+    const told = new Set(after.map((row) => row.recipientUserId));
+    expect(told.has(buyerId)).toBe(true);
+    expect(told.has(secondBuyerId)).toBe(true);
   });
 
   it("writes one audit row for one decision, not one per record", async () => {

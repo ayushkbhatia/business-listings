@@ -771,6 +771,16 @@ export async function onReportResolved(input: { reportIds: readonly string[] }):
         id: true,
         outcome: true,
         kind: true,
+        /*
+           The decision this one was closed under, where it is a duplicate.
+
+           The second person to report a wrong telephone number is owed the
+           answer, not the bookkeeping: *Outcome: Duplicate* is true and tells
+           them nothing about the thing they reported. `duplicateOfId` points at
+           the report a moderator actually decided, and that outcome is what
+           travels.
+        */
+        duplicateOf: { select: { outcome: true } },
         subjectBusiness: { select: { displayName: true, slug: true } },
         reporter: {
           select: { id: true, phone: true, email: true, claimToken: true, isProvisional: true },
@@ -791,7 +801,8 @@ export async function onReportResolved(input: { reportIds: readonly string[] }):
 
     for (const report of reports) {
       const reporter = report.reporter;
-      if (!reporter || !report.outcome) continue;
+      const decided = report.duplicateOf?.outcome ?? report.outcome;
+      if (!reporter || !decided) continue;
       /*
          Our own finding about a review is filed by a moderator against the
          account. Writing back to say we decided our own report would be the
@@ -809,7 +820,7 @@ export async function onReportResolved(input: { reportIds: readonly string[] }):
           withParams(event, {
             businessName: report.subjectBusiness.displayName,
             businessSlug: report.subjectBusiness.slug,
-            outcome: t(`admin.reports.outcome.${report.outcome}` as "admin.reports.outcome.upheld"),
+            outcome: t(`admin.reports.outcome.${decided}` as "admin.reports.outcome.upheld"),
           }),
         );
 
